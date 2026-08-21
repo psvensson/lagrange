@@ -58,6 +58,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
               operation_id: 'op-local-1',
               type: 'ADD',
               partition_id: 'partition-1',
+              entity_type: 'partition',
+              entity_id: 'partition-1',
               replica_id: 'partition-1-r2',
               source_node_id: 'node-1',
               target_node_id: 'node-2',
@@ -111,19 +113,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         'should preserve the critical recovery timeout on authoritative visibility reads',
       );
       t.equal(
-        authoritativeReadCalls[0]?.options?.authoritativeReadMode,
+        authoritativeReadCalls[0]?.options?.readAuthority
+          ?.authoritativeReadMode,
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
         'replica_operations visibility reads should prefer owner RPC with SQL fallback',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.allowSqlFallback,
-        true,
-        'replica_operations visibility reads should allow bounded SQL fallback',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.allowOwnerRpcFallback,
-        true,
-        'replica_operations visibility reads should allow owner-RPC fallback',
       );
     } finally {
       await coordinator.shutdown();
@@ -226,8 +219,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
             'reservation cleanup should stay on the storage_reservations system table',
           );
           t.equal(
-            call.options.allowSqlFallback,
-            true,
+            call.options.authoritativeReadMode,
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+              .OWNER_RPC_PREFERRED_SQL_FALLBACK,
             `reservation cleanup should opt into routed authoritative SQL fallback for ${call.sql}`,
           );
           t.equal(
@@ -312,19 +306,10 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         'should execute one authoritative read through the canonical gateway',
       );
       t.equal(
-        authoritativeReadCalls[0]?.options?.authoritativeReadMode,
+        authoritativeReadCalls[0]?.options?.readAuthority
+          ?.authoritativeReadMode,
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
         'canonical replica_operations visibility reads should prefer owner RPC with SQL fallback',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.allowSqlFallback,
-        true,
-        'canonical replica_operations visibility reads should allow bounded SQL fallback',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.allowOwnerRpcFallback,
-        true,
-        'canonical replica_operations visibility reads should allow owner-rpc fallback',
       );
     } finally {
       await coordinator.shutdown();
@@ -957,6 +942,8 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
               operation_id: 'op-stale-cache',
               type: 'REPLACE',
               partition_id: 'control_plane_publications-p1',
+              entity_type: 'partition',
+              entity_id: 'control_plane_publications-p1',
               source_node_id: 'node-1',
               target_node_id: 'node-2',
               replica_id: 'control_plane_publications-p1-r4',

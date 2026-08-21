@@ -396,10 +396,9 @@ function normalizePublicationActiveGateHandoffContract(value) {
     pendingReconcileNodeIds: value.pendingReconcileNodeIds,
     retryAfterMs: value.retryAfterMs,
     snapshotCoverage: activeGateCatchupFence?.snapshotCoverage,
-    activeNodeViews: {
-      [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS]:
-        activeGateCatchupFence?.presence?.presentNodeIds,
-    },
+    nodeRows: normalizePublicationActiveGateHandoffNodeIdList(
+      activeGateCatchupFence?.presence?.presentNodeIds,
+    ).map((nodeId) => ({node_id: nodeId})),
   });
 }
 

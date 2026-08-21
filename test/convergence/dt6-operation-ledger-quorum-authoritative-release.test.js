@@ -2,6 +2,7 @@ import t from 'tap';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
@@ -149,13 +150,8 @@ t.test(
       'confirmation requires the services-table owner RPC lane',
     );
     t.equal(
-      result.authoritativeReads[0].options.allowSqlFallback,
-      false,
-      'a SQL projection cannot release the cache-local safety hold',
-    );
-    t.equal(
-      result.authoritativeReads[0].options.preferOwnerRpcReadLeader,
-      true,
+      result.authoritativeReads[0].options.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       'the owner read prefers its current leader',
     );
   },

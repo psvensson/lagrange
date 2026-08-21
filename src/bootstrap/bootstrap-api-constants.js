@@ -211,19 +211,6 @@ const BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR = Object.freeze({
 });
 
 const BOOTSTRAP_API_SQL = Object.freeze({
-  UPSERT_SERVICE: `INSERT OR REPLACE INTO services (
-        service_id, service_type, node_id, partition_id, group_id,
-        replica_id, raft_role, status, address, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  INSERT_REPLICA_OPERATION: `INSERT INTO replica_operations (
-        operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
-        status, workflow_step, created_at, updated_at, completed_at, lease_expires_at,
-        error_message, steps_history, entity_type, entity_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  UPDATE_REPLICA_OPERATION: `UPDATE replica_operations SET
-        status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-        lease_expires_at = ?, error_message = ?, steps_history = ?
-      WHERE operation_id = ?`,
   SELECT_REPLICA_OPERATION_BY_ID: `SELECT *
       FROM replica_operations
       WHERE operation_id = ?`,

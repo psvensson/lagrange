@@ -758,6 +758,78 @@ test('MessageGroupService - receiveMessage processes message', async (t) => {
     t.ok(receivedMessage, 'Should emit messageReceived event');
     t.equal(receivedMessage.messageId, 'msg-123', 'Event should have messageId');
 
+    let releaseCompletion = null;
+    const completionHandler = async () => {
+      await new Promise((resolve) => {
+        releaseCompletion = resolve;
+      });
+      return {completionKind: 'durable_state_publication'};
+    };
+    t.equal(
+      service.registerApplicationMessageCompletionHandler(completionHandler),
+      false,
+      'completion ownership requires an explicit message-type scope',
+    );
+    t.equal(
+      service.registerApplicationMessageCompletionHandler(
+        ['TEST_COMPLETION'],
+        completionHandler,
+      ),
+      true,
+      'one application owner can register the completion boundary',
+    );
+    receivedMessage = null;
+    await service.receiveMessage({
+      messageId: 'msg-unowned-interaction',
+      payload: {type: 'UNOWNED_INTERACTION'},
+      sourceGroup: 'mg-2',
+      sourceReplica: 'mg-2-r1',
+    });
+    t.equal(
+      receivedMessage?.messageId,
+      'msg-unowned-interaction',
+      'typed ownership does not swallow unrelated application interactions',
+    );
+    t.throws(
+      () => service.registerApplicationMessageCompletionHandler(
+        ['TEST_COMPLETION'],
+        () => {},
+      ),
+      /completion handler already registered/,
+      'a second subsystem cannot steal the completion boundary',
+    );
+    const completion = service.receiveMessage({
+      messageId: 'msg-owner-completion',
+      payload: {type: 'TEST_COMPLETION'},
+      sourceGroup: 'mg-2',
+      sourceReplica: 'mg-2-r1',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    let completionSettled = false;
+    completion.then(() => {
+      completionSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    t.equal(
+      completionSettled,
+      false,
+      'message delivery remains pending until the application owner finishes',
+    );
+    releaseCompletion();
+    t.match(
+      await completion,
+      {completionKind: 'durable_state_publication'},
+      'the owner completion is returned to the transport caller',
+    );
+    t.equal(
+      service.unregisterApplicationMessageCompletionHandler(
+        ['TEST_COMPLETION'],
+        completionHandler,
+      ),
+      true,
+      'the same owner releases its completion registration',
+    );
+
     await service.shutdown();
   } finally {
     await cleanup();

@@ -159,6 +159,12 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.hlcClock = new HLCClockService(this.replicaId);
     this.activeTransactions = /* @__PURE__ */ new Map();
     this.preparedTransactions = /* @__PURE__ */ new Map();
+    // Replica removal owns one irreversible serving fence: once raised,
+    // already-open transactions may finish but no new query, write, or
+    // transaction may enter. The node removal owner waits for both admitted
+    // requests and transaction maps to drain before teardown.
+    this.removalServingAdmissionFenced = false;
+    this.activeServingRequestCount = 0;
     this.preparedStateLostSessions = /* @__PURE__ */ new Set();
     this.committedWriteLog = [];
     this.rowCommitEpoch = /* @__PURE__ */ new Map();

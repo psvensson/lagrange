@@ -1,6 +1,6 @@
 // Audit finding 1 regression: the execution-time remove-safety floor is
-// UNIVERSAL. Before the fix, evaluateRemoveSafety returned SAFE immediately
-// for any non-system (ordinary user) partition — bypassing the voter-ready /
+// UNIVERSAL ACROSS PARTITIONS. Before the fix, evaluateRemoveSafety returned
+// SAFE immediately for any non-system (ordinary user) partition — bypassing the voter-ready /
 // min-replica floor, the distinct-node spread, the concurrent-operation lock,
 // and the peer-ping checks. These tests pin that a user-partition REMOVE is
 // now deferred when it would drop the post-removal voter-ready count below
@@ -19,6 +19,7 @@ import {
   OPERATION_WORKFLOW_OWNER_SHARED,
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION =
   OPERATION_WORKFLOW_OWNER_SHARED.REMOVE_SAFETY_EVALUATION_CLASSIFICATION;
@@ -100,6 +101,8 @@ function removeOperation(partitionId, replicaId) {
     operationId: `op-${replicaId}`,
     type: OperationType.REMOVE,
     partitionId,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: partitionId,
     replicaId,
   };
 }

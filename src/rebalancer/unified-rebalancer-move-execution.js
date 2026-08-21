@@ -1,5 +1,8 @@
 import {UnifiedRebalancerFollowUpMove} from './unified-rebalancer-follow-up-move.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
   MOVE_REASON,
@@ -25,12 +28,13 @@ const PRE_EXECUTION_MOVE_COUNT_FIELD_BY_TYPE = Object.freeze({
   [MoveType.REMOVE]: 'removeMoveCount',
 });
 
-function resolveCoordinatorMoveContext(rebalancer, move) {
-  const partitionId = move.partitionId || rebalancer.entityId;
+function resolveCoordinatorMoveContext(_rebalancer, move) {
+  const {entityType, entityId} =
+    assertCanonicalRebalancerEntityIdentity(move);
   return {
-    partitionId,
-    entityType: move.entityType || rebalancer.entityType,
-    entityId: move.entityId || partitionId,
+    partitionId: entityId,
+    entityType,
+    entityId,
   };
 }
 

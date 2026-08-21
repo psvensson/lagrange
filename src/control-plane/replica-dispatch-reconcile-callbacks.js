@@ -382,6 +382,9 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       this.clearDeferredNodeStateUpdateRetry(nodeId);
       this.clearNodeStateUpdateRetryState(nodeId);
     } catch (error) {
+      if (context?.requireDurableCompletion === true) {
+        throw error;
+      }
       if (!this.shouldDeferNodeStateUpdateRetry(error, payload)) {
         throw error;
       }

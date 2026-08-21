@@ -640,7 +640,6 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
           [{
             operationId: operation.operationId,
             options: {
-              requireOwnerRpcRead: false,
               allowPriorityRecoveryDeferredVisibility: true,
             },
           }],

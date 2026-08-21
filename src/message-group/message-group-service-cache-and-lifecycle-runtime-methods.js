@@ -182,6 +182,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
       this.initialized = false;
       this.pendingMessages.clear();
       this.messageCallbacks.clear();
+      this.applicationMessageCompletionHandlers.clear();
       this.emit(MESSAGE_GROUP_SERVICE_LITERAL.SHUTDOWN, {
         groupId: this.groupId,
         replicaId: this.replicaId,

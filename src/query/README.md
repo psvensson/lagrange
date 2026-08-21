@@ -12,7 +12,7 @@ budget enforcement.
 - `SqlRequest` owns normalized query ingress shape.
 - `QueryExecutor` owns execution over resolved partitions.
 - `PartitionResolver` owns partition lookup for query planning.
-- `QueryRouter` owns partition message routing and bounded retry.
+- `QueryExecutor` owns partition message routing and deadline-bounded retry.
 - `TableCreationService` owns normalized schema intent and composes
   `SchemaProvisioningJobOwner`: one atomic `schema_operations` outbox row,
   storage-fenced replay, deterministic metadata/child-operation identity, and
@@ -27,8 +27,8 @@ budget enforcement.
 - `index.js` for exported query/runtime surface.
 - `sql-request.js` before adding entrypoint input shape.
 - `sql-query-engine.js` before changing SQL semantics.
-- `query-executor.js` and `query-router.js` before changing execution or
-  routing behavior.
+- `query-executor.js` and its partition-delivery segments before changing
+  execution or routing behavior.
 - `canonical-leader-routing.js` for canonical leader-gap decisions.
 - `runtime-runner.js` and `execution-context.js` for runtime API changes.
 

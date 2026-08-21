@@ -1,19 +1,15 @@
 import {OperationType} from './replica-status.js';
+import {
+  entityServiceRowBelongsToIdentity,
+} from './entity-service-row-read.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_STATUS = 'status';
 const LOCAL_STR_NODE_ID = 'node_id';
 const LOCAL_STR_NODEID = 'nodeId';
-const LOCAL_STR_ID = 'id';
-const LOCAL_STR_GROUP_ID = 'group_id';
-const LOCAL_STR_GROUPID = 'groupId';
-const LOCAL_STR_PARTITION_ID = 'partition_id';
-const LOCAL_STR_PARTITIONID = 'partitionId';
 
 const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
 const REPLICA_OPERATION_STATUS_REMOVING = 'removing';
-const SERVICE_TYPE_PARTITION = 'partition';
-const SERVICE_TYPE_MESSAGE_GROUP = 'message_group';
 const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
 
 const REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = new Set([
@@ -65,32 +61,22 @@ function doesObservedTargetReplicaServiceRowMatch(
   if (serviceReplicaId !== replicaId) {
     return false;
   }
-  if (entityType === SERVICE_TYPE_PARTITION) {
-    return String(firstStringField(
-      serviceRow,
-      LOCAL_STR_PARTITION_ID,
-      LOCAL_STR_PARTITIONID,
-      LOCAL_STR_ID,
-    ) || '') === entityId;
-  }
-  if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
-    return String(firstStringField(
-      serviceRow,
-      LOCAL_STR_GROUP_ID,
-      LOCAL_STR_GROUPID,
-      LOCAL_STR_ID,
-    ) || '') === entityId;
-  }
-  return true;
+  return entityServiceRowBelongsToIdentity(
+    {
+      ...serviceRow,
+      service_type: serviceType || entityType,
+    },
+    {partitionId: entityId, entityType, entityId},
+  );
 }
 
 function buildObservedTargetReplicaIdentity(record) {
   const replicaId = firstStringField(record, 'replicaId') || '';
   const entityType = String(
-    firstStringField(record, 'entityType') || SERVICE_TYPE_PARTITION,
+    firstStringField(record, 'entityType') || '',
   ).toLowerCase();
   const entityId =
-    firstStringField(record, 'entityId', 'partitionGroupId') || '';
+    firstStringField(record, 'entityId') || '';
   const targetNodeId = firstStringField(record, 'targetNodeId') || '';
   const hasMissingIdentity = [replicaId, entityId, targetNodeId]
     .some((value) => value.length === 0);
@@ -218,23 +204,13 @@ function doesObservedSourceReplicaServiceRowBlockRetirement(
   if (serviceReplicaId !== sourceReplicaId) {
     return false;
   }
-  if (entityType === SERVICE_TYPE_PARTITION) {
-    return String(firstStringField(
-      serviceRow,
-      LOCAL_STR_PARTITION_ID,
-      LOCAL_STR_PARTITIONID,
-      LOCAL_STR_ID,
-    ) || '') === entityId;
-  }
-  if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
-    return String(firstStringField(
-      serviceRow,
-      LOCAL_STR_GROUP_ID,
-      LOCAL_STR_GROUPID,
-      LOCAL_STR_ID,
-    ) || '') === entityId;
-  }
-  return true;
+  return entityServiceRowBelongsToIdentity(
+    {
+      ...serviceRow,
+      service_type: serviceType || entityType,
+    },
+    {partitionId: entityId, entityType, entityId},
+  );
 }
 
 function hasObservedRetiredReplaceSourceReplica(record, options = {}) {
@@ -242,12 +218,8 @@ function hasObservedRetiredReplaceSourceReplica(record, options = {}) {
     return false;
   }
   const sourceReplicaId = String(record?.sourceReplicaId || '');
-  const entityType = String(
-    record?.entityType || SERVICE_TYPE_PARTITION,
-  ).toLowerCase();
-  const entityId = String(
-    record?.entityId || record?.partitionGroupId || '',
-  );
+  const entityType = String(record?.entityType || '').toLowerCase();
+  const entityId = String(record?.entityId || '');
   if (!sourceReplicaId || !entityId) {
     return false;
   }

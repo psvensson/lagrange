@@ -1,3 +1,7 @@
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 // Sanctioned local-only-truth seed literal for the priority control-plane
@@ -24,7 +28,6 @@ function assignReplicaOperationRepositoryRowMethods(
     REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_SEMANTIC_PHASE,
     ReplicaOperationField,
-    SERVICE_TYPE,
     SYSTEM_TABLE_NAME,
     WORKFLOW_STEP,
     buildReplicaOperationSemanticWitnesses,
@@ -56,12 +59,17 @@ function assignReplicaOperationRepositoryRowMethods(
           stepsHistory = [];
         }
       }
+      const {entityType, entityId} =
+        assertCanonicalRebalancerEntityIdentity({
+          entityType: row.entity_type,
+          entityId: row.entity_id,
+        });
       const operation = {
         operationId: row.operation_id,
         type: row.type,
         partitionId: row.partition_id,
-        entityType: row.entity_type || SERVICE_TYPE.PARTITION,
-        entityId: row.entity_id || row.partition_id,
+        entityType,
+        entityId,
         replicaId: row.replica_id,
         targetClaimKey: row.target_claim_key || null,
         sourceNodeId: row.source_node_id,
@@ -74,9 +82,18 @@ function assignReplicaOperationRepositoryRowMethods(
         errorMessage: row.error_message,
         stepsHistory,
       };
+      const membershipPublicationEpoch = Number(
+        row.membership_publication_epoch,
+      );
+      if (
+        Number.isInteger(membershipPublicationEpoch) &&
+        membershipPublicationEpoch >= 0
+      ) {
+        operation.membershipPublicationEpoch = membershipPublicationEpoch;
+      }
       // Durable owner lease (audit findings 5+14): the row's lease_expires_at
       // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
-      // the structural owner for legacy/unfenced rows.
+      // the structural owner for unfenced rows.
       const leaseExpiresAt = Number(row.lease_expires_at);
       if (Number.isFinite(leaseExpiresAt) && leaseExpiresAt > 0) {
         operation.ownerLeaseExpiresAt = leaseExpiresAt;

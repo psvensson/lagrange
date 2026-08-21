@@ -437,6 +437,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
           heartbeatOnly: true,
           nodeRow: payload.nodeRow,
           nodeStatePublicationMode: payload.nodeStatePublicationMode,
+          requireDurableCompletion:
+            payload.requireDurableCompletion === true,
         });
       });
     }

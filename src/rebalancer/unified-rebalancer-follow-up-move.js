@@ -685,6 +685,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
   }
 
   async executeMove(move) {
+    move = this.canonicalizeRebalancerMove(move);
     if (this.isShuttingDown) {
       return this.buildSkippedMoveResult(
         REBALANCER_RUNTIME_REASON.SHUTDOWN_IN_PROGRESS,
@@ -795,5 +796,4 @@ function normalizeAdmissionBlockingReasonCodes(outcome) {
 }
 
 applyUnifiedRebalancerFollowUpAugmentationMethods(UnifiedRebalancerFollowUpMove);
-
 export {UnifiedRebalancerFollowUpMove};

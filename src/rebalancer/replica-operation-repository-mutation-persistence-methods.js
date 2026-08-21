@@ -1,6 +1,8 @@
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
@@ -31,7 +33,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     SYSTEM_TABLE_NAME,
     buildControlPlaneFailurePayload,
     buildDivergenceEvent,
-    isOperationLedgerPartition,
+    classifySystemPartition,
   } = options;
 
   // Formation-time relief (quest formation-barrier-spread-release-oscillation):
@@ -45,9 +47,9 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
   // buildOperationTransitionPersistOptions); the insert stays OR-IGNORE
   // idempotent with authoritative-read outcome confirmation.
   function isLedgerSelfCoupledOperationInsert(operation) {
-    return isOperationLedgerPartition({
+    return classifySystemPartition({
       partitionId: operation?.partitionId,
-    }) === true;
+    }).operationLedger === true;
   }
 
   async function resolveNewOperationInsertCollision(
@@ -63,8 +65,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       await repository.queryAuthoritativeOperationById(operation.operationId, {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        requireOwnerRpcRead: true,
-        preferOwnerRpcReadLeader: true,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       });
     if (!existingOperation) {
       const conflictingTargetOperation =
@@ -175,6 +176,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                   JSON.stringify(operation.stepsHistory),
                   operation.entityType,
                   operation.entityId,
+                  operation.membershipPublicationEpoch ?? null,
                 ],
               },
             );
@@ -259,7 +261,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             ...observationOptions,
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            requireOwnerRpcRead: false,
           },
         );
       if (
@@ -278,8 +279,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE
                 .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-            requireOwnerRpcRead: false,
-            preferOwnerRpcReadLeader: true,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           },
         );
       if (authorityObservation?.operation) {
@@ -331,7 +331,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           {
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            requireOwnerRpcRead: false,
             allowPriorityRecoveryDeferredVisibility: false,
           },
         );
@@ -395,7 +394,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               allowPriorityRecoveryDeferredVisibility: true,
               allowOwnerPersistedTransitionDeferredVisibility: true,
               expectedOperation: operation,
-              preferOwnerRpcReadLeader: true,
+              leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
             },
           );
         if (

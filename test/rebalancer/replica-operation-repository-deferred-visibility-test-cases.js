@@ -1,3 +1,6 @@
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+
 export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   test,
   createTestRepository,
@@ -621,14 +624,14 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         'entity recovery observation should require the operation-ledger owner path',
       );
       t.equal(
-        entityRead?.preferOwnerRpcReadLeader,
-        true,
+        entityRead?.leaderMode,
+        CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
         'entity recovery observation should pin the read to the operation-ledger leader',
       );
       t.equal(
-        entityRead?.allowSqlFallback,
-        false,
-        'entity recovery observation must not fall back to an older SQL replica',
+        entityRead?.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'one strict mode prevents fallback to an older SQL replica',
       );
     },
   );

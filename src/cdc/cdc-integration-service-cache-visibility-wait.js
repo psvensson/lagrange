@@ -9,6 +9,10 @@ import {
 import {
   doesCacheRecordMatchExpectedFields,
 } from './cdc-integration-service-cache-divergence.js';
+import {buildControlPlaneReadAuthority} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const {
   AUTHORITATIVE_FALLBACK_OUTCOME,
@@ -36,6 +40,11 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
+const CACHE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+});
 
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
@@ -418,6 +427,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
       [key],
+      {readAuthority: CACHE_REPAIR_READ_AUTHORITY},
     );
     if (!queryResult?.success) {
       return false;
@@ -489,6 +499,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
       [key],
+      {readAuthority: CACHE_REPAIR_READ_AUTHORITY},
     );
     if (!queryResult?.success) {
       const retryAfterMs = getControlPlaneRetryAfterMs(queryResult);

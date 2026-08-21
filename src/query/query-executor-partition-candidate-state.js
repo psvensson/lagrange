@@ -33,9 +33,8 @@ function createPartitionCandidateDeliveryState({
   let deferPartitionRetryOnNextAttempt = false;
 
   const getRecoveryCandidateSelectionOptions = () => ({
-    readPurpose: executionOptions?.readAuthority?.purpose,
-    [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
-      executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true,
+    [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+      executionOptions?.readAuthority || null,
     recoveryCandidateSelectionKey:
       executionOptions.recoveryCandidateSelectionKey,
   });
@@ -48,9 +47,8 @@ function createPartitionCandidateDeliveryState({
       routingReadinessDimension,
       {
         allowReadinessAuthoritativeRefresh,
-        readPurpose: executionOptions?.readAuthority?.purpose,
-        [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
-          executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true,
+        [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+          executionOptions?.readAuthority || null,
         recoveryCandidateSelectionKey:
           executionOptions.recoveryCandidateSelectionKey,
       },

@@ -29,6 +29,8 @@ import {
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
 } from '../../src/raft/constants.js';
 import {
@@ -1011,7 +1013,9 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
 
   t.equal(result.reason, 'applied');
   t.equal(readCalls.length, 1);
-  t.equal(readCalls[0]?.options?.preferOwnerRpcRead, true,
+  t.equal(
+    readCalls[0]?.options?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
     'a remote replacement must confirm the CAS row through its owner');
   t.equal(readCalls[0]?.options?.deliveryPriority, 'critical');
   t.equal(readCalls[0]?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);

@@ -193,10 +193,11 @@ function resolveDeferredRepairMinNodeCoverage(
       snapshot.suspectedOrTransitioningNodes,
     ),
     ...normalizeControlSnapshotNodeIdList(
-      snapshot.controlPlaneDiagnostics?.activeNodeViews?.authoritativeNodeIds,
+      snapshot.controlPlaneDiagnostics?.activeNodeViews
+        ?.authoritativeActiveNodeIds,
     ),
     ...normalizeControlSnapshotNodeIdList(
-      snapshot.controlPlaneDiagnostics?.activeNodeViews?.effectiveNodeIds,
+      snapshot.controlPlaneDiagnostics?.activeNodeViews?.effectiveActiveNodeIds,
     ),
     ...normalizeControlSnapshotNodeIdList(
       snapshot.controlPlaneDiagnostics?.activeNodeViews?.locallyEligibleNodeIds,

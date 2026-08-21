@@ -33,6 +33,7 @@ import {
   ControlPlaneSystemTableGateway,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+  CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {AuthoritativeControlPlaneView} from
   '../../src/control-plane/authoritative-control-plane-view.js';
@@ -43,6 +44,8 @@ import {
 } from '../../src/cdc/cdc-integration-service-owner-rpc-read-execution.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL_TEXT = 'SELECT * FROM replica_operations WHERE operation_id = ?';
@@ -166,11 +169,11 @@ test('membership publication threads purpose through view, CDC, owner RPC, ' +
     authoritativeControlPlaneView: view,
   });
   const internalRead = coordinator.readTableRows(tableName, {
-    preferAuthoritativeRead: true,
-    readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+    readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
+    purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
   });
   const ordinaryRead = coordinator.readTableRows(tableName, {
-    preferAuthoritativeRead: true,
+    readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
   });
   const [internalRows, ordinaryRows] = await Promise.all([
     internalRead,
@@ -202,11 +205,15 @@ test('read coalescing identity distinguishes every authority field, ' +
   'in both key forms',
 async (t) => {
   const gateway = createGateway();
-  const base = {};
+  const buildOptions = (authority, options = {}) => ({
+    ...options,
+    readAuthority: buildControlPlaneReadAuthority(authority),
+  });
+  const base = buildOptions({});
   const variants = [
-    {preferOwnerRpcReadLeader: true},
-    {requireOwnerRpcReadLeader: true},
-    {readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
+    {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED},
+    {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED},
+    {purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
     {
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -220,7 +227,12 @@ async (t) => {
     gateway.buildReadRequestKey(TABLE, SQL_TEXT, ['op-1'], base);
   for (const variant of variants) {
     const variantKey =
-      gateway.buildReadRequestKey(TABLE, SQL_TEXT, ['op-1'], variant);
+      gateway.buildReadRequestKey(
+        TABLE,
+        SQL_TEXT,
+        ['op-1'],
+        buildOptions(variant),
+      );
     t.not(
       variantKey,
       baseKey,
@@ -230,7 +242,10 @@ async (t) => {
       TABLE, SQL_TEXT, ['op-1'], {...base, coalescingKey: 'shared'},
     );
     const explicitVariant = gateway.buildReadRequestKey(
-      TABLE, SQL_TEXT, ['op-1'], {...variant, coalescingKey: 'shared'},
+      TABLE,
+      SQL_TEXT,
+      ['op-1'],
+      buildOptions(variant, {coalescingKey: 'shared'}),
     );
     t.not(
       explicitVariant,
@@ -240,66 +255,95 @@ async (t) => {
   }
 });
 
-test('a pre-built token wins over conflicting field-level options, so an ' +
-  'intermediate layer rebuilding options cannot weaken authority',
+test('the authority constructor accepts one flat draft form and ignores the ' +
+  'retired nested-token form',
 async (t) => {
   const token = buildControlPlaneReadAuthority({
-    preferOwnerRpcReadLeader: true,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
     authoritativeReadMode:
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
   });
   const rebuilt = buildControlPlaneReadAuthority({
     readAuthority: token,
-    // A layer that re-enumerated options and lost the boolean:
-    preferOwnerRpcReadLeader: undefined,
   });
-  t.equal(rebuilt, token, 'token passes through by identity');
-  t.equal(rebuilt.preferOwnerRpcReadLeader, true, 'leader pin preserved');
+  t.not(rebuilt, token, 'constructor emits one fresh canonical token');
+  t.equal(Object.isFrozen(rebuilt), true, 'canonical token is immutable');
+  t.equal(rebuilt.leaderMode, CONTROL_PLANE_READ_LEADER_MODE.ANY,
+    'a nested token is not accepted as a second constructor form');
+  t.equal(
+    rebuilt.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    'nested authority policy is not silently imported',
+  );
   t.equal(rebuilt.purpose, CONTROL_PLANE_READ_PURPOSE.ORDINARY);
 });
 
-test('CDC owner-RPC execution pins the partition leader from the token ' +
-  'alone, with the legacy boolean entirely absent', async (t) => {
-  const executeCalls = [];
-  const service = {
-    nodeId: 'node-authority-token',
-    logger: {info: () => {}, warn: () => {}, error: () => {}},
-    sqlQueryEngine: {
-      queryExecutor: {
-        executeOnPartition: async (
-          partitionId, statement, params, isRead, preferLeader,
-        ) => {
-          executeCalls.push({partitionId, statement, params, preferLeader});
-          return {success: true, rows: [{operation_id: 'op-1'}]};
+test('CDC owner-RPC execution pins the partition leader from the token alone',
+  async (t) => {
+    const executeCalls = [];
+    const service = {
+      nodeId: 'node-authority-token',
+      logger: {info: () => {}, warn: () => {}, error: () => {}},
+      sqlQueryEngine: {
+        queryExecutor: {
+          executeOnPartition: async (
+            partitionId, statement, params, isRead, preferLeader,
+          ) => {
+            executeCalls.push({partitionId, statement, params, preferLeader});
+            return {success: true, rows: [{operation_id: 'op-1'}]};
+          },
+        },
+      },
+    };
+
+    const tokenOnlyOptions = {
+      readAuthority: buildControlPlaneReadAuthority({
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+      }),
+    };
+    await executeAuthoritativeOwnerRpcRead(
+      service, TABLE, SQL_TEXT, ['op-1'], tokenOnlyOptions, {},
+    );
+    t.equal(executeCalls.length, 1, 'owner-RPC read executed');
+    t.equal(
+      executeCalls[0].preferLeader,
+      true,
+      'leader pin honored from the structural token',
+    );
+
+    await executeAuthoritativeOwnerRpcRead(
+      service, TABLE, SQL_TEXT, ['op-1'],
+      {readAuthority: buildControlPlaneReadAuthority({})}, {},
+    );
+    t.equal(
+      executeCalls[1].preferLeader,
+      false,
+      'default routing stays un-pinned when the token does not request it',
+    );
+  });
+
+test('CDC owner-RPC execution rejects a field-level authority bag', async (t) => {
+  let deliveryCount = 0;
+  const result = await executeAuthoritativeOwnerRpcRead(
+    {
+      sqlQueryEngine: {
+        queryExecutor: {
+          async executeOnPartition() {
+            deliveryCount++;
+            return {success: true, rows: []};
+          },
         },
       },
     },
-  };
-
-  const tokenOnlyOptions = {
-    readAuthority: buildControlPlaneReadAuthority({
-      preferOwnerRpcReadLeader: true,
-    }),
-  };
-  await executeAuthoritativeOwnerRpcRead(
-    service, TABLE, SQL_TEXT, ['op-1'], tokenOnlyOptions, {},
-  );
-  t.equal(executeCalls.length, 1, 'owner-RPC read executed');
-  t.equal(
-    executeCalls[0].preferLeader,
-    true,
-    'leader pin honored from the structural token without the legacy field',
+    TABLE,
+    SQL_TEXT,
+    [],
+    {preferOwnerRpcReadLeader: true},
+    {},
   );
 
-  await executeAuthoritativeOwnerRpcRead(
-    service, TABLE, SQL_TEXT, ['op-1'],
-    {readAuthority: buildControlPlaneReadAuthority({})}, {},
-  );
-  t.equal(
-    executeCalls[1].preferLeader,
-    false,
-    'default routing stays un-pinned when the token does not request it',
-  );
+  t.equal(result, null, 'non-canonical authority fails closed');
+  t.equal(deliveryCount, 0, 'no owner delivery occurs without a token');
 });
 
 test('readiness-internal owner RPC routes without re-entering readiness',
@@ -405,7 +449,7 @@ test('readiness-internal owner RPC routes without re-entering readiness',
             const snapshot = productionExecutor.getPartitionRoutingSnapshot(
               routedPartitionId,
               executionOptions.routingReadinessDimension,
-              {readPurpose: executionOptions.readAuthority.purpose},
+              {readAuthority: executionOptions.readAuthority},
             );
             return {success: snapshot.routableServiceCount > 0, rows: []};
           },
@@ -420,7 +464,7 @@ test('readiness-internal owner RPC routes without re-entering readiness',
       ['op-1'],
       {
         readAuthority: buildControlPlaneReadAuthority({
-          readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+          purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
           routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
         }),
@@ -441,7 +485,7 @@ test('readiness-internal owner RPC routes without re-entering readiness',
     );
 
     const readinessReadAuthority = buildControlPlaneReadAuthority({
-      readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     });

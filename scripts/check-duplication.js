@@ -99,8 +99,14 @@ const RATCHET_TARGETS = [
     // outcome matrix consolidated duplicated cases.
     // 2026-08-20: tightened 826/31551 -> 824/31498 after measuring the
     // terminal-create lifecycle fence regression additions.
-    baselineCloneGroupCount: 824,
-    baselineDuplicatedLineCount: 31498,
+    // 2026-08-21: tightened 824/31498 -> 821/31393 after deleting duplicate
+    // runtime compatibility and alternate entity-identity test paths.
+    // 2026-08-21: tightened 821/31393 -> 820/31367 after deleting the
+    // bootstrap formation barrier's legacy placement-source matrix.
+    // 2026-08-21: tightened 820/31367 -> 818/31275 after deleting the
+    // test-only QueryRouter implementation and its duplicate routing suites.
+    baselineCloneGroupCount: 818,
+    baselineDuplicatedLineCount: 31275,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

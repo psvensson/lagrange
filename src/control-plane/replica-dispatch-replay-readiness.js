@@ -472,18 +472,6 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   }
 
   /**
-   * Compatibility alias for older tests/callers. Ready-node retry now
-   * re-enters both PENDING and SENDING rows, but the historical method name
-   * is kept to avoid a second compatibility seam.
-   *
-   * @param {string} nodeId
-   * @return {Promise<Array<Object>>}
-   */
-  async getPendingReplicaOpsForNode(nodeId) {
-    return this.getDispatchRetryRowsForNode(nodeId);
-  }
-
-  /**
    * Decide whether ready-node retry should bypass cache-only rediscovery for
    * unresolved priority control-plane recovery.
    * @param {string} nodeId

@@ -106,7 +106,7 @@ async function runInterlock({blockerPartitionId, authoritative}) {
     _operationId,
     options = {},
   ) => {
-    if (options.requireOwnerRpcRead === true) {
+    if (options.authoritativeReadMode === 'owner_rpc_required') {
       ownerRpcRequested = true;
     }
     return {

@@ -185,15 +185,11 @@ function assignReplicaOperationRepositoryVisibilityMethods(
           operation.entityType || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
         ).trim();
         const operationEntityId = String(
-          operation.entityId ||
-        operation.partitionId ||
-        REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
+          operation.entityId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
         ).trim();
         const entityMatches =
-        (operationEntityType === normalizedEntityType &&
-          operationEntityId === normalizedEntityId) ||
-        (operationEntityType.length === 0 &&
-          String(operation.partitionId || '').trim() === normalizedEntityId);
+          operationEntityType === normalizedEntityType &&
+          operationEntityId === normalizedEntityId;
         if (!entityMatches) {
           continue;
         }

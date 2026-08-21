@@ -4,6 +4,7 @@ import {
 } from '../../control-plane/owner-contract-outcome.js';
 import {
   CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
   ControlPlaneMessageType,
   getControlPlaneMessageRequiredTables,
@@ -382,31 +383,12 @@ class NodeStatePublicationOwner {
       return deferredOutcome;
     }
 
-    let targetCandidates =
+    const targetCandidates =
       this.resolveNodeStateUpdateTargetCandidates({
         state,
         heartbeatAt: options.heartbeatAt,
       });
-    if (!Array.isArray(targetCandidates)) {
-      targetCandidates = [];
-    }
-    if (targetCandidates.length === 0 &&
-        typeof this.delegates.resolveLegacyTargetCandidates ===
-          'function') {
-      const legacyTargetCandidates =
-        this.delegates.resolveLegacyTargetCandidates({
-          allowBootstrapHints: true,
-          allowSelfTarget: false,
-        });
-      if (Array.isArray(legacyTargetCandidates)) {
-        targetCandidates = legacyTargetCandidates.filter(
-          (candidate, index, list) => {
-            return list.indexOf(candidate) === index;
-          },
-        );
-      }
-    }
-    if (targetCandidates.length === 0) {
+    if (!Array.isArray(targetCandidates) || targetCandidates.length === 0) {
       const publicationDiagnostics = Object.freeze({
         publicationPath: NODE_STATE_UPDATE_PUBLICATION_PATH,
         nodeStatePublicationMode: publicationMode,
@@ -470,15 +452,16 @@ class NodeStatePublicationOwner {
             ),
           ) :
           deliveryTimeoutBudgetMs;
+        const rawDeliveryResult = await this.messageRouter().deliver(
+          targetAddress,
+          message,
+          {
+            deliveryPriority: publicationProfile.deliveryPriority,
+            timeoutMs: deliveryTimeoutMs,
+          },
+        );
         const deliveryResult = classifyTransportDeliveryOutcome(
-          await this.messageRouter().deliver(
-            targetAddress,
-            message,
-            {
-              deliveryPriority: publicationProfile.deliveryPriority,
-              timeoutMs: deliveryTimeoutMs,
-            },
-          ),
+          rawDeliveryResult,
         );
         if (!isDeliveredTransportDeliveryOutcome(deliveryResult) ||
             deliveryResult?.reasonCode ===
@@ -487,6 +470,17 @@ class NodeStatePublicationOwner {
             deliveryResult,
             targetAddress,
           );
+        }
+        const durableCompletion =
+          rawDeliveryResult?.completionKind ===
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
+          rawDeliveryResult?.completionCompleted === true;
+        if (options.requireDurableCompletion === true && !durableCompletion) {
+          const completionError = new Error(
+            NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
+          );
+          completionError.deferRetry = true;
+          throw completionError;
         }
 
         this.clearDeferredNodeStateUpdatePublication();
@@ -503,6 +497,9 @@ class NodeStatePublicationOwner {
         return buildNodeStateUpdatePublicationOutcome({
           publicationMode,
           publicationDiagnostics,
+          completionKind: rawDeliveryResult?.completionKind ||
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.NOT_OBSERVED,
+          completionCompleted: durableCompletion,
         });
       } catch (error) {
         error.publicationDiagnostics = publicationDiagnostics;

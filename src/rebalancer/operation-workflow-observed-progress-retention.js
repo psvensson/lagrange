@@ -225,7 +225,6 @@ function withObservedProgressRetention(Base) {
         await this.repository.getOperationByIdVisibilityObservation(
           operationId,
           {
-            requireOwnerRpcRead: false,
             allowPriorityRecoveryDeferredVisibility: true,
           },
         );

@@ -32,10 +32,12 @@ const FAILURE_TAIL =
 const STATIC_AUDIT_SCRIPTS = Object.freeze([
   'test:unused:prod',
   'test:deps',
+  'audit:file-size',
   'test:complexity',
   'test:complexity:cognitive',
   'test:metadata-gateway:audit',
   'audit:runtime-grammar',
+  'audit:operation-progress-authority',
   'audit:service-portability-claims',
   'audit:current-capabilities',
   'audit:cli-docs',

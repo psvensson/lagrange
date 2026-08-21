@@ -4,6 +4,9 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../control-plane/owner-contract-outcome.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
+} from '../../control-plane/control-plane-constants.js';
+import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   classifyTransportDeliveryOutcome,
 } from '../../transport/transport-semantic-outcome.js';
@@ -33,6 +36,8 @@ const NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET = Object.freeze({
 });
 
 const NODE_STATE_PUBLICATION_OWNER_LITERAL = Object.freeze({
+  DURABLE_COMPLETION_MISSING:
+    'Node-state publication did not reach its durable completion owner',
   FAILED: 'failed',
   SHUTTING_DOWN: 'shutting_down',
   STOPPED: 'stopped',
@@ -54,6 +59,8 @@ function createNodeStateUpdateDeferredPublicationState(overrides = {}) {
     message: null,
     publicationMode: null,
     publicationDiagnostics: null,
+    completionKind: CONTROL_PLANE_MESSAGE_COMPLETION_KIND.NOT_OBSERVED,
+    completionCompleted: false,
     ...overrides,
   };
 }

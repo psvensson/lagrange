@@ -1,6 +1,9 @@
 import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -22,6 +25,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
     }
 
     buildReplicaOperationRow(operation) {
+      const {entityType, entityId} =
+        assertCanonicalRebalancerEntityIdentity(operation);
       return {
         operation_id: operation.operationId,
         type: operation.type,
@@ -39,19 +44,25 @@ function assignReplicaOperationRepositoryMutationRowMethods(
           this.resolveOperationOwnerLeasePersistExpiry(operation),
         error_message: operation.errorMessage,
         steps_history: JSON.stringify(operation.stepsHistory),
-        entity_type: operation.entityType,
-        entity_id: operation.entityId,
+        entity_type: entityType,
+        entity_id: entityId,
+        membership_publication_epoch:
+          operation.membershipPublicationEpoch,
       };
     }
 
     buildReplicaOperationUpdateData(operation) {
+      const {entityType, entityId} =
+        assertCanonicalRebalancerEntityIdentity(operation);
       return {
         type: operation.type,
         partition_id: operation.partitionId,
         source_node_id: operation.sourceNodeId,
         target_node_id: operation.targetNodeId,
-        entity_type: operation.entityType,
-        entity_id: operation.entityId,
+        entity_type: entityType,
+        entity_id: entityId,
+        membership_publication_epoch:
+          operation.membershipPublicationEpoch,
         status: operation.status,
         workflow_step: operation.workflowStep,
         updated_at: operation.updatedAt,

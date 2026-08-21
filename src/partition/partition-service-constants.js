@@ -193,6 +193,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   PARTITION_TRANSITION_METADATA: 'partition_transition_metadata',
   PARTITION_VERSION: 'partition_version',
   TARGET_CLAIM_KEY: 'target_claim_key',
+  MEMBERSHIP_PUBLICATION_EPOCH: 'membership_publication_epoch',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
@@ -232,6 +233,8 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN partition_version INTEGER NOT NULL DEFAULT 1',
   ADD_TARGET_CLAIM_KEY:
     'ADD COLUMN target_claim_key TEXT',
+  ADD_MEMBERSHIP_PUBLICATION_EPOCH:
+    'ADD COLUMN membership_publication_epoch INTEGER',
   BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
     'SET connection_state = ws_connection_state ' +
     'WHERE ws_connection_state IS NOT NULL',
@@ -358,6 +361,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   ADDED_PARTITION_VERSION: 'Added partition_version column to partitions table',
   ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY:
     'Added target_claim_key column to replica_operations table',
+  ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH:
+    'Added membership_publication_epoch column to replica_operations table',
   RECEIVED_RAFT_PACKET: 'Received Raft packet',
   SENDING_RAFT_RESPONSE: 'Sending Raft response',
   FAILED_RAFT_RESPONSE: 'Failed to send Raft response',
@@ -487,6 +492,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
   TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
+  SERVING_ADMISSION_FENCED_FOR_REMOVAL:
+    'Serving admission fenced for replica removal',
   BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
   PREPARE_CONFLICT: 'Prepare failed due to write conflict',
   NO_ACTIVE_TRANSACTION_PREPARE: 'No active transaction to prepare',

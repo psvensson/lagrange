@@ -189,6 +189,10 @@ class MessageGroupService extends EventEmitter {
     this.pendingMessages = new Map();
     this.acknowledgedMessages = new Set();
     this.messageCallbacks = new Map();
+    // Application delivery has one completion owner. EventEmitter remains a
+    // compatibility notification surface, but it cannot represent when an
+    // async owner has actually finished its work.
+    this.applicationMessageCompletionHandlers = new Map();
     // System table cache - use shared cache from NodeService singleton
     // This ensures all services on the same node share the same cache
     this.systemTableCacheChangeListener =

@@ -445,7 +445,9 @@ class NodeJoiningReadySignalReadiness
         attempt,
       });
       try {
-        await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
+        await heartbeat.sendHeartbeat(heartbeatPayload, capabilities, {
+          requireDurableVisibility: true,
+        });
         this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
           nodeId: this.nodeId,
           attempt,

@@ -29,6 +29,10 @@ import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
 import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
+import {buildControlPlaneReadAuthority} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const CATCHUP_DEFAULT = Object.freeze({
   MAX_ATTEMPTS_PER_TABLE: 3,
@@ -74,26 +78,19 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
 
   const now = typeof options.now === 'function' ? options.now : Date.now;
-  // Read-consistency for the catch-up read. By default the authoritative read
-  // short-circuits to the LOCAL replica (local-wins), which is correct for the
-  // CL-014 join-time bulk hydrate. But a rejoined non-write-leader whose own
-  // local control_plane_publications replica has stopped applying committed
-  // entries (publications leadership/handler split) would read ITSELF a stale
-  // epoch forever. When the caller requests preferOwnerRpcRead, route the read
-  // through the authoritative OWNER (with local fallback preserved — prefer,
-  // not require — so a partitioned node still fails soft), which also enables
-  // the owner-read anti-entropy sweep. See CL-001 "VARIANT D DEEPER LAYER".
-  const readOptions = options.preferOwnerRpcRead === true ?
-    {
-      preferOwnerRpcRead: true,
-      // A caller (the variant-D publications catch-up) may additionally pin the
-      // owner-RPC read to the partition LEADER so it cannot be served by this
-      // node's own stale local replica.
-      ...(options.preferOwnerRpcReadLeader === true ?
-        {preferOwnerRpcReadLeader: true} :
-        {}),
-    } :
-    {};
+  // The catch-up interaction accepts exactly one authority token. Callers that
+  // need leader-pinned owner reads construct that token at their own boundary;
+  // the default remains the join-time local-first/owner-fallback policy.
+  const suppliedReadAuthority =
+    options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
+      options.readAuthority : null;
+  const readOptions = {
+    readAuthority: suppliedReadAuthority || buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+    }),
+  };
   const summary = {
     tablesAttempted: 0,
     tablesHydrated: 0,

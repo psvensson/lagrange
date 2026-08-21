@@ -13,7 +13,7 @@
  *  - A LIVE lease held by the recorded owner FENCES remote settlement even
  *    when the heuristic reports the owner unready (its state is
  *    FENCED_BY_LIVE_LEASE, not raw null).
- *  - An ABSENT (legacy row) or EXPIRED lease defers to the legacy
+ *  - An UNFENCED or EXPIRED lease defers to the routing-readiness
  *    routing-readiness heuristic (state HEURISTIC_UNAVAILABLE /
  *    HEURISTIC_AVAILABLE).
  *  - Local/self ownership is never "remote unavailable"
@@ -38,7 +38,7 @@ const OPERATION_DRAIN_OWNER_AVAILABILITY = Object.freeze({
  * @param {string|null} options.ownerNodeId - Recorded owner of the operation.
  * @param {string} options.nodeId - This node.
  * @param {Object|null} options.operation - Operation (lease fields read).
- * @param {Function} options.isOwnerRoutingReady - Legacy unfenced heuristic;
+ * @param {Function} options.isOwnerRoutingReady - Unfenced availability probe;
  *   called only when no live lease fences the decision.
  * @param {number} [options.nowMs]
  * @return {Object} Frozen typed verdict — never a raw null/empty outcome.

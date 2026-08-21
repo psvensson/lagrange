@@ -29,6 +29,23 @@ const CONTROL_PLANE_MESSAGE_REQUIRED_TABLES = Object.freeze({
   [ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH]: Object.freeze([]),
 });
 
+// Message-group delivery proves only admission to the remote application
+// lane.  Every control-plane payload must declare which later owner boundary
+// gives that admission meaning; adding a type without classifying it makes the
+// receiver reject it instead of silently treating an ACK as completion.
+const CONTROL_PLANE_MESSAGE_COMPLETION_KIND = Object.freeze({
+  NOT_OBSERVED: 'not_observed',
+  DURABLE_STATE_PUBLICATION: 'durable_state_publication',
+  OWNER_WAKE_ADMISSION: 'owner_wake_admission',
+});
+
+const CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT = Object.freeze({
+  [ControlPlaneMessageType.NODE_STATE_UPDATE]:
+    CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+  [ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH]:
+    CONTROL_PLANE_MESSAGE_COMPLETION_KIND.OWNER_WAKE_ADMISSION,
+});
+
 const ControlPlaneField = Object.freeze({
   TYPE: FIELD.TYPE,
   NODE_ID: FIELD.NODE_ID,
@@ -185,6 +202,10 @@ function getControlPlaneMessageRequiredTables(messageType) {
   return Array.isArray(requiredTables) ? [...requiredTables] : [];
 }
 
+function getControlPlaneMessageCompletionKind(messageType) {
+  return CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT[messageType] || null;
+}
+
 function normalizeControlPlaneNodeStatePublicationMode(mode) {
   if (mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY) {
     return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY;
@@ -250,6 +271,8 @@ function isHeartbeatEscalatedControlPlaneNodeStatePublicationMode(mode) {
 
 export {
   ControlPlaneMessageType,
+  CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT,
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   CONTROL_PLANE_MESSAGE_REQUIRED_TABLES,
   ControlPlaneField,
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
@@ -268,6 +291,7 @@ export {
   CONTROL_PLANE_ALLOWED_STATES,
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   getControlPlaneMessageRequiredTables,
+  getControlPlaneMessageCompletionKind,
   getControlPlaneNodeStatePublicationProfile,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   resolveReplayControlPlaneNodeStatePublicationMode,

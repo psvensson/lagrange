@@ -1,4 +1,7 @@
-import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowTransitionPersistence} from './operation-workflow-transition-persistence.js';
 import * as DISPATCH_WAKE_PREEMPTION
@@ -536,10 +539,8 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       }
       return this.executeOperationInternal(claimOutcome);
     }
-    if (
-      dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING &&
-      !createRearmDispatchPhase
-    ) {
+    if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(dispatchableWorkflowStep) &&
+      !createRearmDispatchPhase) {
       if (await this.reconcileDispatchWakeOperationProgress(operation)) {
         return this.buildSuccessfulOperationResult(operation.operationId);
       }

@@ -58,6 +58,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const hasTargetClaimKey = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.TARGET_CLAIM_KEY,
     );
+    const hasMembershipPublicationEpoch = columns.some(
+      (col) => col.name ===
+        PARTITION_SERVICE_COLUMN.MEMBERSHIP_PUBLICATION_EPOCH,
+    );
     if (!hasTargetClaimKey) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -66,6 +70,17 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG
           .ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    if (!hasMembershipPublicationEpoch) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_MEMBERSHIP_PUBLICATION_EPOCH,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH,
         {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
@@ -226,6 +241,80 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
       };
     }
+    const admission = this.resolveRemovalServingAdmission(payload);
+    if (admission.allowed !== true) {
+      return {
+        acknowledged: true,
+        success: false,
+        error: PARTITION_SERVICE_ERROR_MSG.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
+        deferRetry: true,
+        partitionId: this.partitionId,
+      };
+    }
+    if (admission.servingRequest) {
+      this.activeServingRequestCount += 1;
+    }
+    try {
+      return await this.handleAdmittedApplicationMessage(payload);
+    } finally {
+      if (admission.servingRequest) {
+        this.activeServingRequestCount -= 1;
+      }
+    }
+  }
+
+  /**
+   * Classify the complete serving ingress set in one place. Transaction
+   * controls remain admitted so an existing owner can finish; BEGIN is then
+   * rejected by the transaction owner when no session already exists.
+   * @param {Object} payload
+   * @return {{allowed: boolean, servingRequest: boolean}}
+   * @private
+   */
+  resolveRemovalServingAdmission(payload) {
+    const servingRequest = this.isRemovalServingRequestType(payload.type);
+    if (!servingRequest || this.removalServingAdmissionFenced !== true) {
+      return {allowed: true, servingRequest};
+    }
+    if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION) {
+      return {allowed: true, servingRequest};
+    }
+    const sessionId =
+      payload.sessionId || payload.operation?.sessionId || null;
+    return {
+      allowed: Boolean(
+        sessionId && this.resolveOpenTransactionState(sessionId),
+      ),
+      servingRequest,
+    };
+  }
+
+  /**
+   * @param {string} type
+   * @return {boolean}
+   * @private
+   */
+  isRemovalServingRequestType(type) {
+    switch (type) {
+    case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
+    case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
+    case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
+    case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  /**
+   * Dispatch one application message after the removal-serving owner admits
+   * it. Keeping the switch behind that single gate prevents new ingress paths
+   * from accidentally bypassing removal drain accounting.
+   * @param {Object} payload
+   * @return {Promise<Object>}
+   * @private
+   */
+  async handleAdmittedApplicationMessage(payload) {
     switch (payload.type) {
     case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
       if (payload.operation) {
@@ -271,32 +360,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       Math.floor(payload.transactionEpoch) :
       null;
     try {
-      let result;
-      switch (operation) {
-      case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
-      case PARTITION_SERVICE_LITERAL.BEGIN:
-        result = await this.beginTransaction(sessionId, transactionEpoch);
-        break;
-      case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
-      case PARTITION_SERVICE_LITERAL.PREPARE:
-        result = await this.prepareTransaction(sessionId);
-        break;
-      case PARTITION_SERVICE_OPERATION.COMMIT:
-        result = await this.commitTransaction(sessionId);
-        break;
-      case PARTITION_SERVICE_OPERATION.ROLLBACK:
-        result = await this.rollbackTransaction(sessionId);
-        break;
-      case PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME:
-        result = {
-          success: true,
-          outcome: this.resolveTransactionCommitOutcome(
-            sessionId,
-            transactionEpoch,
-          ),
-        };
-        break;
-      default:
+      const result = await this.executeTransactionControl(
+        operation,
+        sessionId,
+        transactionEpoch,
+      );
+      if (!result) {
         return {
           acknowledged: false,
           success: false,
@@ -309,7 +378,44 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         ...result,
       };
     } catch (error) {
-      return {acknowledged: true, success: false, error: error.message};
+      return {
+        acknowledged: true,
+        success: false,
+        error: error.message,
+        deferRetry: error?.deferRetry === true,
+      };
+    }
+  }
+
+  /**
+   * @param {string} operation
+   * @param {string|null} sessionId
+   * @param {number|null} transactionEpoch
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async executeTransactionControl(operation, sessionId, transactionEpoch) {
+    switch (operation) {
+    case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
+    case PARTITION_SERVICE_LITERAL.BEGIN:
+      return this.beginTransaction(sessionId, transactionEpoch);
+    case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
+    case PARTITION_SERVICE_LITERAL.PREPARE:
+      return this.prepareTransaction(sessionId);
+    case PARTITION_SERVICE_OPERATION.COMMIT:
+      return this.commitTransaction(sessionId);
+    case PARTITION_SERVICE_OPERATION.ROLLBACK:
+      return this.rollbackTransaction(sessionId);
+    case PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME:
+      return {
+        success: true,
+        outcome: this.resolveTransactionCommitOutcome(
+          sessionId,
+          transactionEpoch,
+        ),
+      };
+    default:
+      return null;
     }
   }
   /**

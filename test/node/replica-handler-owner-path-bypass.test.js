@@ -714,6 +714,123 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
   );
 
   await t.test(
+    'remove acceptance fences transaction admission synchronously and waits ' +
+    'for the partition-owned drain before deleting its service row',
+    async (t) => {
+      const cache = createSeededCache();
+      const cdcService = createMockCDCService(cache);
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'rh-removal-transaction-drain-'),
+      );
+      let fenceCount = 0;
+      let drainWaitCount = 0;
+      let releaseDrain;
+      const drainGate = new Promise((resolve) => {
+        releaseDrain = resolve;
+      });
+      const partitionService = {
+        partitionId: TEST_PARTITION_ID,
+        replicaId: TEST_REPLICA_ID,
+        initialized: true,
+        fenceServingAdmissionForRemoval() {
+          fenceCount += 1;
+        },
+        async waitForRemovalServingDrain() {
+          drainWaitCount += 1;
+          await drainGate;
+        },
+        async shutdown() {},
+        async syncFromLeader() {},
+      };
+      const handler = new ReplicaHandler({
+        nodeId: TEST_NODE_ID,
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: cdcService,
+        createPartitionService: async () => partitionService,
+      });
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        REPLICA_HANDLER_EVENT.CREATED,
+        REPLICA_HANDLER_EVENT.CREATION_FAILED,
+      );
+      await handler.handleMessage(buildEnvelope(
+        ReplicaOperationMessageType.CREATE_REPLICA,
+        {
+          operationId: TEST_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      ));
+      await created;
+      const partitionDir = path.join(
+        tempDir, 'partitions', TEST_PARTITION_ID,
+      );
+      fs.mkdirSync(partitionDir, {recursive: true});
+      cdcService.operations.length = 0;
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        'INSERT',
+        {
+          service_id: TEST_REPLICA_ID,
+          service_type: 'partition',
+          partition_id: TEST_PARTITION_ID,
+          node_id: TEST_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          address: `${TEST_NODE_ID}/partition/${TEST_REPLICA_ID}`,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        },
+      );
+
+      const removed = waitForReplicaEvent(
+        handler,
+        REPLICA_HANDLER_EVENT.REMOVED,
+        REPLICA_HANDLER_EVENT.REMOVAL_FAILED,
+      );
+      const response = await handler.handleMessage(buildEnvelope(
+        ReplicaOperationMessageType.REMOVE_REPLICA,
+        {
+          operationId: TEST_REMOVE_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      ));
+      t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+        'the removal is accepted after installing its serving fence');
+      t.equal(fenceCount, 1,
+        'transaction admission is fenced before acceptance returns');
+      await new Promise((resolve) => setImmediate(resolve));
+      t.equal(drainWaitCount, 1,
+        'the asynchronous removal delegates drain ownership to the partition');
+      t.equal(
+        cdcService.operations.some((operation) =>
+          operation.type === 'delete' &&
+          operation.tableName === SYSTEM_TABLE_NAME.SERVICES),
+        false,
+        'the routable service row remains until existing transactions drain',
+      );
+
+      releaseDrain();
+      await removed;
+      t.equal(
+        cdcService.operations.some((operation) =>
+          operation.type === 'delete' &&
+          operation.tableName === SYSTEM_TABLE_NAME.SERVICES),
+        true,
+        'the same removal owner deletes the service row after drain',
+      );
+
+      await handler.shutdown();
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, {recursive: true, force: true});
+      }
+    },
+  );
+
+  await t.test(
     'CREATE failure fences a started learner before publishing failure',
     async (t) => {
       const partitionId = 'schema_operations-p1';

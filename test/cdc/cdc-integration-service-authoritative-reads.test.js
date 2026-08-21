@@ -21,6 +21,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
@@ -61,6 +65,23 @@ const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ROW = Object.freeze({
   operation_id: LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID,
   workflow_step: 'LOCAL_ONLY_QUERY',
 });
+const DEFAULT_AUTHORITATIVE_READ_AUTHORITY = buildControlPlaneReadAuthority({
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+});
+
+function buildAuthoritativeReadOptions(authority = {}, operational = {}) {
+  return {
+    ...operational,
+    readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
+      ...authority,
+    }),
+  };
+}
 
 test('CDCIntegrationService - steady-state system table writes skip local followers and use routed SQL',
   async (t) => {
@@ -246,10 +267,11 @@ test('CDCIntegrationService - leader-only authoritative reads fall back to the o
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
       ['op-sql-fallback'],
-      {
+      buildAuthoritativeReadOptions({
         localReadConsistency: 'local_leader',
+      }, {
         queryOptions: {timeoutMs: 1234},
-      },
+      }),
     );
 
     t.equal(result.source, 'owner_rpc_lane', 'should fall back when no local leader is available');
@@ -281,14 +303,15 @@ test('CDCIntegrationService - owner-RPC authoritative reads preserve critical ex
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
       ['op-owner-critical'],
-      {
+      buildAuthoritativeReadOptions({
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         localReadConsistency: 'local_leader',
-        preferOwnerRpcRead: true,
-        requireOwnerRpcRead: true,
+      }, {
         workClass: 'critical',
         deliveryPriority: 'critical',
         queryOptions: {timeoutMs: 1234},
-      },
+      }),
     );
 
     t.equal(result.success, true, 'strict owner-rpc read should still succeed');
@@ -374,10 +397,10 @@ test('CDCIntegrationService - leader-only authoritative reads can fall back to l
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
       ['op-local-fallback'],
-      {
+      buildAuthoritativeReadOptions({
         localReadConsistency: 'local_leader',
         replicaFallbackConsistency: 'any_replica',
-      },
+      }),
     );
 
     t.equal(
@@ -469,9 +492,9 @@ test('CDCIntegrationService - leader-only authoritative reads honor live leader 
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
       ['op-live-method-leader'],
-      {
+      buildAuthoritativeReadOptions({
         localReadConsistency: 'local_leader',
-      },
+      }),
     );
 
     t.equal(
@@ -561,12 +584,15 @@ async (t) => {
     SYSTEM_TABLE_NAME.LOGS,
     'SELECT log_id AS ack_id FROM logs WHERE log_id IN (?, ?)',
     ['log-a', 'log-b'],
-    {
+    buildAuthoritativeReadOptions({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
       localReadConsistency: 'local_leader',
       replicaFallbackConsistency: 'any_replica',
-      confirmEmptyLocalReadWithOwnerRpc: true,
+    }, {
       queryOptions: {timeoutMs: 321},
-    },
+    }),
   );
 
   t.equal(ownerRpcReadCount, 1,
@@ -658,9 +684,9 @@ async (t) => {
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL,
     [LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID],
-    {
+    buildAuthoritativeReadOptions({
       localReadConsistency: 'local_leader',
-    },
+    }),
   );
 
   t.equal(
@@ -749,10 +775,11 @@ async (t) => {
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     'SELECT * FROM replica_operations WHERE operation_id = ?',
     ['op-owner-rpc-preferred'],
-    {
+    buildAuthoritativeReadOptions({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
       localReadConsistency: 'local_leader',
-      preferOwnerRpcRead: true,
-    },
+    }),
   );
 
   t.equal(localReadCount, 1,
@@ -825,11 +852,11 @@ async (t) => {
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     'SELECT * FROM replica_operations WHERE operation_id = ?',
     ['op-owner-rpc-required'],
-    {
+    buildAuthoritativeReadOptions({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       localReadConsistency: 'local_leader',
-      preferOwnerRpcRead: true,
-      requireOwnerRpcRead: true,
-    },
+    }),
   );
 
   t.equal(localReadCount, 1,
@@ -891,11 +918,10 @@ async (t) => {
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     'SELECT * FROM replica_operations WHERE operation_id = ?',
     ['op-owner-rpc-only'],
-    {
-      preferOwnerRpcRead: true,
-      requireOwnerRpcRead: true,
-      allowSqlFallback: false,
-    },
+    buildAuthoritativeReadOptions({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    }),
   );
 
   t.equal(ownerRpcReadCount, 1,
@@ -941,7 +967,10 @@ test('CDCIntegrationService - authoritative reads defer before owner RPC fallbac
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'SELECT * FROM replica_operations WHERE operation_id = ?',
       ['op-deferred'],
-      {allowOwnerRpcFallback: false},
+      buildAuthoritativeReadOptions({
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      }),
     );
 
     t.equal(result.success, false,
@@ -1013,7 +1042,9 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
       SYSTEM_TABLE_NAME.NODES,
       'SELECT * FROM nodes WHERE node_id = ?',
       ['node-merge-freshness'],
-      {localReadConsistency: 'any_replica'},
+      buildAuthoritativeReadOptions({
+        localReadConsistency: 'any_replica',
+      }),
     );
 
     t.equal(result.success, true, 'authoritative local read should succeed');
@@ -1096,6 +1127,8 @@ test('CDCIntegrationService - authoritative read re-seeds bootstrap ' +
   const result = await service.executeAuthoritativeSystemTableRead(
     tableName,
     `SELECT * FROM ${tableName}`,
+    [],
+    {readAuthority: DEFAULT_AUTHORITATIVE_READ_AUTHORITY},
   );
 
   t.equal(result.success, true,
@@ -1174,6 +1207,8 @@ test('CDCIntegrationService - authoritative read does not re-seed ' +
   const result = await service.executeAuthoritativeSystemTableRead(
     SYSTEM_TABLE_NAME.NODES,
     'SELECT * FROM nodes',
+    [],
+    {readAuthority: DEFAULT_AUTHORITATIVE_READ_AUTHORITY},
   );
 
   t.equal(result.success, false,

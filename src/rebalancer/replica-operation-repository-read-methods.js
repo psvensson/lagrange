@@ -1,6 +1,8 @@
 import {
   assignReplicaOperationRepositoryEntityReadMethods,
 } from './replica-operation-repository-entity-read-methods.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
@@ -278,7 +280,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
    * Query a single operation by ID from the authoritative owner path only.
    * @param {string} operationId
    * @param {object} [options]
-   * @param {boolean} [options.requireOwnerRpcRead]
+   * @param {string} [options.authoritativeReadMode]
    * @return {Promise<object|null>}
    */
     async queryAuthoritativeOperationVisibilityObservation(operationId, options = {}) {
@@ -304,8 +306,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       ) {
         readQueryOptions = REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS;
       } else if (
-        options?.requireOwnerRpcRead === true ||
-      options?.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
+        options?.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
       ) {
         readQueryOptions = REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS;
       }
@@ -315,9 +317,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         [operationId],
         {
           ...readQueryOptions,
-          ...(options?.preferOwnerRpcReadLeader === true ?
-            {preferOwnerRpcReadLeader: true} :
-            {}),
+          leaderMode: options?.leaderMode,
           retryOnRetryableFailure: true,
         },
       );
@@ -431,9 +431,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     async queryAuthoritativeOperationById(operationId, options = {}) {
       const observation = await this.queryAuthoritativeOperationVisibilityObservation(operationId, {
         authoritativeReadMode: options?.authoritativeReadMode,
-        requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
-        preferOwnerRpcReadLeader:
-          options?.preferOwnerRpcReadLeader === true,
+        leaderMode: options?.leaderMode,
         allowPriorityRecoveryDeferredVisibility: false,
       });
       return observation.operation;
@@ -457,7 +455,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         [targetClaimKey],
         {
           ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
-          preferOwnerRpcReadLeader: true,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           retryOnRetryableFailure: true,
         },
       );
@@ -479,9 +477,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         operationId,
         {
           authoritativeReadMode: options?.authoritativeReadMode,
-          requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
-          preferOwnerRpcReadLeader:
-          options?.preferOwnerRpcReadLeader === true,
+          leaderMode: options?.leaderMode,
           allowPriorityRecoveryDeferredVisibility:
           options?.allowPriorityRecoveryDeferredVisibility === true,
           allowOwnerPersistedTransitionDeferredVisibility:
@@ -559,12 +555,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         if (!row || row.partition_id !== partitionId || row.target_node_id !== targetNodeId) {
           return false;
         }
-        return (
-          (row.entity_type === entityType && row.entity_id === entityId) ||
-        row.entity_type === null ||
-        row.entity_type === undefined ||
-        row.entity_type === ''
-        );
+        return row.entity_type === entityType && row.entity_id === entityId;
       });
       if (cachedRows === null) {
         return null;

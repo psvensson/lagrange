@@ -568,10 +568,19 @@ test('AdminControlSnapshot exposes publication owner-truth active cohort in cont
     t.match(
       result.controlPlaneDiagnostics.activeNodeViews,
       {
-        effectiveNodeIds: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
-        projectedNodeIds: [...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS],
-        publishedNodeIds: [ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID],
-        effectiveSource: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
+        effectiveActiveNodeIds: [
+          ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+        ],
+        projectedActiveNodeIds: [
+          ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
+        ],
+        publishedActiveNodeIds: [
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_OWNER_TRUTH_LOCAL_NODE_ID,
+        ],
+        effectiveSource:
+          ACTIVE_GATE_SNAPSHOT_TEST_STATE
+            .ACTIVE_GATE_OWNER_TRUTH_EFFECTIVE_SOURCE,
       },
       'diagnostics should identify publication owner truth as the widened source',
     );
@@ -774,17 +783,17 @@ test('AdminControlSnapshot projects mixed selected-timeout handoff as owner reco
     const nodeIds = [
       ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_NODE_IDS,
     ];
-    const publishedNodeIds = nodeIds.slice(0, 3);
+    const publishedActiveNodeIds = nodeIds.slice(0, 3);
     const missingNodeIds = nodeIds.slice(3);
-    const selectedRecoveryNodeId = publishedNodeIds[1];
+    const selectedRecoveryNodeId = publishedActiveNodeIds[1];
     const handoff = selectPublicationActiveGateHandoffContract({
       publicationConvergence: {
         publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
         status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-        publishedActiveNodeIds: publishedNodeIds,
+        publishedActiveNodeIds: publishedActiveNodeIds,
         activeGate: {
           progress: {
-            selectedPublishedActiveNodeIds: publishedNodeIds,
+            selectedPublishedActiveNodeIds: publishedActiveNodeIds,
             selectedMissingPublishedNodeIds: missingNodeIds,
             selectedSnapshotNodeId: selectedRecoveryNodeId,
             selectedSnapshotSourceCause:
@@ -809,7 +818,7 @@ test('AdminControlSnapshot projects mixed selected-timeout handoff as owner reco
         publicationConvergence: {
           publicationEpoch: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_EPOCH,
           status: ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_OWNER_TRUTH_PUBLICATION_STATUS,
-          publishedActiveNodeIds: publishedNodeIds,
+          publishedActiveNodeIds: publishedActiveNodeIds,
         },
       });
 
@@ -817,7 +826,7 @@ test('AdminControlSnapshot projects mixed selected-timeout handoff as owner reco
       activeGateOwnerCohort,
       {
         expectedNodeIds: nodeIds,
-        publishedActiveNodeIds: publishedNodeIds,
+        publishedActiveNodeIds: publishedActiveNodeIds,
         missingPublishedNodeIds: missingNodeIds,
         pendingRecoveryNodeIds: [selectedRecoveryNodeId],
         pendingReconcileNodeIds: missingNodeIds,

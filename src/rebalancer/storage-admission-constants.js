@@ -49,9 +49,18 @@ const STORAGE_ADMISSION_DEFAULT = Object.freeze({
   SOURCE_QUORUM_COUNT: 0,
 });
 
+const STORAGE_ADMISSION_ERROR_MSG = Object.freeze({
+  ACCOUNTING_SERVICE_REQUIRED:
+    'StorageAdmissionService requires accountingService',
+  TARGET_NODE_REQUIRED: 'Admission check requires targetNodeId',
+  ESTIMATED_BYTES_REQUIRED: 'Admission check requires positive estimatedBytes',
+  OPERATION_TYPE_REQUIRED: 'Admission check requires a valid operationType',
+});
+
 export {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_DEFAULT,
+  STORAGE_ADMISSION_ERROR_MSG,
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
 };

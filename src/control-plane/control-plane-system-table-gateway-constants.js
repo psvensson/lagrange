@@ -5,7 +5,6 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   ACTIVE: 'active',
   ALLOWCOALESCING: 'allowCoalescing',
   ALLOWPENDINGVISIBILITY: 'allowPendingVisibility',
-  ALLOWSQLFALLBACK: 'allowSqlFallback',
   AUTHORITATIVEREADMODE: 'authoritativeReadMode',
   CANCELLATIONTOKEN: 'cancellationToken',
   COALESCINGKEY: 'coalescingKey',
@@ -41,16 +40,12 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   OWNER_RPC_LANE: 'owner_rpc_lane',
   PARTITION: 'partition',
   PHASESCOPE: 'phaseScope',
-  PREFERAUTHORITATIVEREAD: 'preferAuthoritativeRead',
-  PREFEROWNERRPCREAD: 'preferOwnerRpcRead',
   PRESSURERETRYAFTERMS: 'pressureRetryAfterMs',
   QUERY: 'query',
   READ: 'read',
   READOUTCOMECOUNTS: 'readOutcomeCounts',
   RECOVERYCANDIDATESELECTIONKEY: 'recoveryCandidateSelectionKey',
   REPLACEPENDINGKEY: 'replacePendingKey',
-  REQUIREAUTHORITATIVE: 'requireAuthoritative',
-  REQUIREOWNERRPCREAD: 'requireOwnerRpcRead',
   RESOURCEKEYS: 'resourceKeys',
   ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
   ROUTINGREADINESSDIMENSION: 'routingReadinessDimension',
@@ -114,11 +109,18 @@ const CONTROL_PLANE_READ_PROFILE = Object.freeze({
 });
 const CONTROL_PLANE_AUTHORITATIVE_READ_MODE = Object.freeze({
   OWNER_LOCAL_ONLY: 'owner_local_only',
+  OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK:
+    'owner_local_preferred_owner_rpc_fallback',
   OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC:
     'owner_local_confirm_empty_with_owner_rpc',
   OWNER_RPC_PREFERRED: 'owner_rpc_preferred',
   OWNER_RPC_PREFERRED_SQL_FALLBACK: 'owner_rpc_preferred_sql_fallback',
   OWNER_RPC_REQUIRED: 'owner_rpc_required',
+});
+const CONTROL_PLANE_READ_LEADER_MODE = Object.freeze({
+  ANY: 'any',
+  PREFERRED: 'preferred',
+  REQUIRED: 'required',
 });
 const CONTROL_PLANE_PHASE_SCOPE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
@@ -180,7 +182,11 @@ const CONTROL_PLANE_GATEWAY_ERROR_CODE = Object.freeze({
   MUTATION_TRACKING_SATURATED: 'CONTROL_PLANE_MUTATION_TRACKING_SATURATED',
 });
 const GATEWAY_ERROR_MSG = Object.freeze({
+  AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED:
+    'authoritative read request requires the frozen ingress authority token',
   CDC_REQUIRED: 'ControlPlaneSystemTableGateway requires cdcIntegrationService',
+  EXECUTION_IDENTITY_AUTHORITY_TOKEN_REQUIRED:
+    'control-plane read identity requires the frozen ingress authority token',
   SQL_ENGINE_REQUIRED: 'ControlPlaneSystemTableGateway requires sqlQueryEngine',
   MUTATION_OPERATION_REQUIRED:
     'ControlPlaneSystemTableGateway requires a supported mutation operation',
@@ -222,6 +228,7 @@ export {
   CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
   CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READ_OUTCOME,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,

@@ -5,7 +5,7 @@ import {
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 import {
-  runtimeServiceDispatchedReplicaBelongsToEntity,
+  runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
 
 const REPLACE_INTENT_ID_VERSION = 'rebalance-replace-v1';
@@ -125,11 +125,9 @@ function buildSuccessorReplaceIntentIdentity(identity, terminalOperationId) {
 }
 
 function replaceIntentEntityMatches(existing, entityType, entityId) {
-  const existingEntityType = existing.entityType || 'partition';
-  const existingEntityId = existing.entityId || existing.partitionId;
   return [
-    existingEntityType === entityType,
-    existingEntityId === entityId,
+    existing.entityType === entityType,
+    existing.entityId === entityId,
   ].every(Boolean);
 }
 
@@ -149,11 +147,11 @@ function replaceIntentCollisionMatches(context = {}) {
   const replicaIdentityMatches =
     entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ?
       [
-        runtimeServiceDispatchedReplicaBelongsToEntity(
+        runtimeServiceReplicaBelongsToEntity(
           existing.replicaId,
           entityId,
         ),
-        runtimeServiceDispatchedReplicaBelongsToEntity(
+        runtimeServiceReplicaBelongsToEntity(
           operation?.replicaId,
           entityId,
         ),

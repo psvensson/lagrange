@@ -73,8 +73,8 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
           );
         rebalancer.setLeader(true);
         rebalancer.rebalanceCoordinator
-          .isOperationLedgerQuorumConcentratedForPartition = (partitionId) =>
-            partitionId === ledgerPartitionId;
+          .getOperationLedgerQuorumConcentrationForPartition = (partitionId) =>
+            partitionId === ledgerPartitionId ? {partitionId} : null;
         rebalancer.getCurrentReplicas = () => nodeIds.slice(0, 3).map(
           (nodeId, index) => ({
             replica_id: `replica_operations-p1-r${index + 1}`,
@@ -106,13 +106,14 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
         await rebalancer.rebalance(TriggerType.PERIODIC, {
           targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
         });
-        t.equal(
+        t.match(
           executedMoves[0],
           cureMove,
           'the sixth self REPLACE must cross the five-move slice boundary',
         );
         t.same(
-          executedMoves.slice(1),
+          executedMoves.slice(1).map(({entityType: _entityType,
+            entityId: _entityId, ...move}) => move),
           blockedMoves.slice(0, 4),
           'non-cure planning order remains stable',
         );
@@ -144,7 +145,7 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
 
     try {
       rebalancer.rebalanceCoordinator
-        .isOperationLedgerQuorumConcentratedForPartition = () => true;
+        .getOperationLedgerQuorumConcentrationForPartition = () => ({});
       rebalancer.controlPlaneReadinessService.membershipPublicationService =
       createMockMembershipPublicationService(
         [

@@ -10,6 +10,33 @@ const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
 
+async function completeApplicationMessage(
+  service,
+  applicationEvent,
+  applicationStatus,
+  messageReceivedEvent,
+) {
+  const completionHandler =
+    service.applicationMessageCompletionHandlers.get(
+      applicationEvent.payload?.type,
+    );
+  if (typeof completionHandler === 'function') {
+    const completion = await completionHandler(applicationEvent);
+    return {
+      messageId: applicationEvent.messageId,
+      status: applicationStatus.RECEIVED,
+      acknowledged: false,
+      ...(completion && typeof completion === 'object' ? completion : {}),
+    };
+  }
+  service.emit(messageReceivedEvent, applicationEvent);
+  return {
+    messageId: applicationEvent.messageId,
+    status: applicationStatus.RECEIVED,
+    acknowledged: false,
+  };
+}
+
 function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,
@@ -42,6 +69,46 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
   };
 
   class MessageGroupServiceInboundIngressRuntimeMethods {
+    registerApplicationMessageCompletionHandler(messageTypes, handler) {
+      const ownedMessageTypes = Array.isArray(messageTypes) ?
+        [...new Set(messageTypes.filter((messageType) => {
+          return typeof messageType === 'string' && messageType.length > 0;
+        }))] :
+        [];
+      if (ownedMessageTypes.length === 0 || typeof handler !== 'function') {
+        return false;
+      }
+      for (const messageType of ownedMessageTypes) {
+        const currentHandler =
+          this.applicationMessageCompletionHandlers.get(messageType);
+        if (currentHandler && currentHandler !== handler) {
+          throw new Error(
+            MESSAGE_GROUP_APPLICATION_ERROR_MSG
+              .COMPLETION_HANDLER_ALREADY_REGISTERED,
+          );
+        }
+      }
+      for (const messageType of ownedMessageTypes) {
+        this.applicationMessageCompletionHandlers.set(messageType, handler);
+      }
+      return true;
+    }
+
+    unregisterApplicationMessageCompletionHandler(messageTypes, handler) {
+      const ownedMessageTypes = Array.isArray(messageTypes) ?
+        messageTypes :
+        [];
+      let released = false;
+      for (const messageType of ownedMessageTypes) {
+        if (this.applicationMessageCompletionHandlers.get(messageType) ===
+            handler) {
+          this.applicationMessageCompletionHandlers.delete(messageType);
+          released = true;
+        }
+      }
+      return released;
+    }
+
     /**
      * Receive a message from another service or replica.
      * Detects Raft packets and routes them directly to liferaft.
@@ -191,17 +258,18 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
             payload,
           );
         }
-        this.emit(MESSAGE_GROUP_SERVICE_LITERAL.MESSAGERECEIVED, {
+        const applicationEvent = {
           messageId,
           payload,
           sourceGroup,
           sourceReplica,
-        });
-        return {
-          messageId,
-          status: MESSAGE_GROUP_APPLICATION_STATUS.RECEIVED,
-          acknowledged: false,
         };
+        return completeApplicationMessage(
+          this,
+          applicationEvent,
+          MESSAGE_GROUP_APPLICATION_STATUS,
+          MESSAGE_GROUP_SERVICE_LITERAL.MESSAGERECEIVED,
+        );
       } catch (error) {
         this.logger.error(
           MESSAGE_GROUP_SERVICE_LITERAL.ERROR_PROCESSING_RECEIVED_MESSAGE,

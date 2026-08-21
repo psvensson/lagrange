@@ -34,7 +34,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     ADMIN_CACHE_DUMP,
     ADMIN_SERVICE_DISCOVERY_LITERAL,
     AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT,
-    AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT,
     AUTHORITATIVE_DISCOVERY_REPAIR,
     buildControlPlaneWorkloadProfile,
     COLUMN,
@@ -469,14 +468,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       const reason = String(options.reason || EMPTY_STRING);
       const controlSnapshotRepairRead =
         reason === AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT;
-      const tableScopedDiscoveryRepair =
-        reason ===
-          AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT &&
-        (typeof options.tableName === 'string' ||
-          typeof options.tableId === 'string');
-      const allowRoutedAuthoritativeFallback =
-        controlSnapshotRepairRead === true ||
-        tableScopedDiscoveryRepair === true;
       const transportProfile =
         this.resolveAuthoritativeDiscoveryReadTransportProfile(
           controlSnapshotRepairRead,
@@ -492,7 +483,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         readProfile: LOCAL_STR_REPAIR_REQUIRED,
         queryTimeoutMs,
         sessionId: `${reason || LOCAL_STR_REPAIR}:${tableName}:${now}`,
-        allowSqlFallback: allowRoutedAuthoritativeFallback,
         workloadClass: transportProfile.workloadClass,
         workClass: transportProfile.workClass,
         deliveryPriority: transportProfile.deliveryPriority,

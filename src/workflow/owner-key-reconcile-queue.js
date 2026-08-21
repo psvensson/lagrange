@@ -31,6 +31,23 @@ import {
   normalizeReconcileQueueRetryPolicy,
   wakeRetryWorkItem,
 } from './reconcile-queue-retry-ownership.js';
+import {
+  appendCompletionWaiter,
+  enqueueAndWaitForOwner,
+  mergeWorkItemCompletionWaiters,
+  rejectAllQueueCompletionWaiters,
+  rejectStaleFenceCompletionWaiter,
+  rejectStoppedCompletionWaiter,
+  rejectWorkItemCompletionWaiters,
+  resolveWorkItemCompletionWaiters,
+} from './owner-key-reconcile-completion.js';
+import {
+  appendSnapshotValue,
+  buildReconcileQueueDiagnostics,
+  defineSnapshotValue,
+  snapshotMapEntries,
+  snapshotSetValues,
+} from './owner-key-reconcile-queue-snapshots.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const MapConstructor = Map;
@@ -44,7 +61,6 @@ const mapSize = Function.call.bind(
   Object.getOwnPropertyDescriptor(Map.prototype, 'size').get,
 );
 const numberIsSafeInteger = Number.isSafeInteger;
-const objectDefineProperty = Object.defineProperty;
 const SetConstructor = Set;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setClear = Function.call.bind(Set.prototype.clear);
@@ -56,61 +72,6 @@ const setSize = Function.call.bind(
 );
 const DEFAULT_MAX_CONCURRENCY = 1;
 const DEFAULT_MAX_ITEMS_PER_DRAIN = Number.POSITIVE_INFINITY;
-
-function defineSnapshotValue(snapshot, index, value) {
-  objectDefineProperty(snapshot, index, {
-    configurable: true,
-    enumerable: true,
-    value,
-    writable: true,
-  });
-}
-
-function appendSnapshotValue(snapshot, value) {
-  defineSnapshotValue(snapshot, snapshot.length, value);
-}
-
-function copySnapshotValues(source) {
-  const copy = [];
-  for (let index = 0; index < source.length; index++) {
-    defineSnapshotValue(copy, index, source[index]);
-  }
-  return copy;
-}
-
-// Capturing an iterator-producing method is not enough: `for...of` and
-// `Array.from` still resolve the mutable iterator prototype's `next` and
-// `@@iterator` after module import. Materialize collection snapshots through
-// captured `forEach` instead, then consume only indexed arrays.
-function snapshotMapEntries(map) {
-  const entries = [];
-  let index = 0;
-  mapForEach(map, (value, key) => {
-    defineSnapshotValue(entries, index, [key, value]);
-    index++;
-  });
-  return entries;
-}
-
-function snapshotMapKeys(map) {
-  const keys = [];
-  let index = 0;
-  mapForEach(map, (_value, key) => {
-    defineSnapshotValue(keys, index, key);
-    index++;
-  });
-  return keys;
-}
-
-function snapshotSetValues(set) {
-  const values = [];
-  let index = 0;
-  setForEach(set, (value) => {
-    defineSnapshotValue(values, index, value);
-    index++;
-  });
-  return values;
-}
 
 function normalizeMaxConcurrency(value) {
   return numberIsSafeInteger(value) && value > 0 ?
@@ -178,6 +139,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.pending = new MapConstructor();
     /** @type {Set<string>} Owner keys with an active reconcile. */
     this.inFlight = new SetConstructor();
+    /** @type {Map<string, ReconcileWorkItem>} Claimed owner work. */
+    this.inFlightItems = new MapConstructor();
     /**
      * Current fence token (owner epoch) per owner key.
      * @type {Map<string, number>}
@@ -239,26 +202,35 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    *   or rejected.
    */
   enqueue(ownerKey, reason, context, options) {
-    if (!ownerKey) {
-      throw new Error(RECONCILE_QUEUE_ERROR_MSG.OWNER_KEY_REQUIRED);
-    }
-    if (this.stopped) {
+    const admission = this._resolveEnqueueAdmission(
+      ownerKey,
+      reason,
+      options,
+    );
+    if (!admission.accepted) {
       return false;
     }
-
-    const fenceToken = options?.fenceToken;
-    if (!this._acceptEnqueueFence(ownerKey, reason, fenceToken)) {
-      return false;
-    }
-
+    const {completionWaiter, fenceToken} = admission;
     const existing = mapGet(this.pending, ownerKey);
     if (existing) {
-      this._mergeEnqueuedWork(existing, reason, context, fenceToken);
+      this._mergeEnqueuedWork(
+        existing,
+        reason,
+        context,
+        fenceToken,
+        completionWaiter,
+      );
       this.scheduleDrain();
       return false;
     }
 
-    if (this._mergeDeferredWork(ownerKey, reason, context, fenceToken)) {
+    if (this._mergeDeferredWork(
+      ownerKey,
+      reason,
+      context,
+      fenceToken,
+      completionWaiter,
+    )) {
       return false;
     }
 
@@ -268,7 +240,9 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       ownerKey,
       reasons,
       context: context !== undefined ? context : null,
+      completionWaiters: [],
     };
+    appendCompletionWaiter(item, completionWaiter);
     if (fenceToken !== undefined && fenceToken !== null) {
       item.fenceToken = fenceToken;
     }
@@ -284,13 +258,64 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     return true;
   }
 
-  _mergeDeferredWork(ownerKey, reason, context, fenceToken) {
+  _resolveEnqueueAdmission(ownerKey, reason, options) {
+    if (!ownerKey) {
+      throw new Error(RECONCILE_QUEUE_ERROR_MSG.OWNER_KEY_REQUIRED);
+    }
+    const completionWaiter = options?.completionWaiter || null;
+    if (this.stopped) {
+      rejectStoppedCompletionWaiter(completionWaiter, this.name);
+      return {accepted: false, completionWaiter, fenceToken: null};
+    }
+    const fenceToken = options?.fenceToken;
+    const accepted = this._acceptEnqueueFence(
+      ownerKey,
+      reason,
+      fenceToken,
+      completionWaiter,
+    );
+    return {accepted, completionWaiter, fenceToken};
+  }
+
+  /**
+   * Enqueue through the same single-owner serialization path and resolve only
+   * after that owner has completed the accepted reconciliation.
+   *
+   * This is the commit-boundary form of enqueue. Callers must use it when an
+   * upstream acknowledgement would otherwise confuse queue admission with
+   * authoritative completion.
+   *
+   * @param {string} ownerKey
+   * @param {string} reason
+   * @param {*} [context]
+   * @param {Object} [options]
+   * @return {Promise<*>}
+   */
+  enqueueAndWait(ownerKey, reason, context, options = {}) {
+    return enqueueAndWaitForOwner(
+      this, ownerKey, reason, context, options,
+    );
+  }
+
+  _mergeDeferredWork(
+    ownerKey,
+    reason,
+    context,
+    fenceToken,
+    completionWaiter,
+  ) {
     const retrying = mapGet(this.retryWorkItems, ownerKey);
     if (retrying) {
       const reset = this._maybeResetRetryAttempts(
         ownerKey, retrying, reason, context,
       );
-      this._mergeEnqueuedWork(retrying, reason, context, fenceToken);
+      this._mergeEnqueuedWork(
+        retrying,
+        reason,
+        context,
+        fenceToken,
+        completionWaiter,
+      );
       if (reset) {
         mapSet(this.pending, ownerKey, retrying);
         this.scheduleDrain();
@@ -308,11 +333,17 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     )) {
       return false;
     }
-    this._mergeEnqueuedWork(exhausted, reason, context, fenceToken);
+    this._mergeEnqueuedWork(
+      exhausted,
+      reason,
+      context,
+      fenceToken,
+      completionWaiter,
+    );
     return true;
   }
 
-  _acceptEnqueueFence(ownerKey, reason, fenceToken) {
+  _acceptEnqueueFence(ownerKey, reason, fenceToken, completionWaiter = null) {
     if (fenceToken === undefined || fenceToken === null) {
       return true;
     }
@@ -335,10 +366,17 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this._pushStaleFenceSample(diagnostic);
     this.emit(RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_ENQUEUE, diagnostic);
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, diagnostic);
+    rejectStaleFenceCompletionWaiter(completionWaiter);
     return false;
   }
 
-  _mergeEnqueuedWork(item, reason, context, fenceToken) {
+  _mergeEnqueuedWork(
+    item,
+    reason,
+    context,
+    fenceToken,
+    completionWaiter = null,
+  ) {
     setAdd(item.reasons, reason);
     if (context !== undefined) {
       item.context = context;
@@ -346,6 +384,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     if (fenceToken !== undefined && fenceToken !== null) {
       item.fenceToken = fenceToken;
     }
+    appendCompletionWaiter(item, completionWaiter);
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.DEDUP_MERGED, {
       queue: this.name,
       ownerKey: item.ownerKey,
@@ -449,6 +488,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
 
   async _startReconcile(ownerKey, item) {
     setAdd(this.inFlight, ownerKey);
+    mapSet(this.inFlightItems, ownerKey, item);
     this.logger.debug(
       RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_CLAIMED, {
         queue: this.name,
@@ -457,15 +497,17 @@ class OwnerKeyReconcileQueue extends EventEmitter {
 
     const reasons = snapshotSetValues(item.reasons);
     try {
-      await this.reconcileFn(
+      const result = await this.reconcileFn(
         ownerKey, reasons, item.context,
       );
       this._clearRetryState(ownerKey);
+      resolveWorkItemCompletionWaiters(item, result);
     } catch (error) {
       const retryHandled =
         this._deferRetryableDrainFailure(ownerKey, item, reasons, error);
       if (!retryHandled) {
         this._clearRetryState(ownerKey);
+        rejectWorkItemCompletionWaiters(item, error);
         this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
           queue: this.name,
           ownerKey,
@@ -475,6 +517,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       }
     } finally {
       setDelete(this.inFlight, ownerKey);
+      mapDelete(this.inFlightItems, ownerKey);
       this.logger.debug(
         RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_RELEASED, {
           queue: this.name,
@@ -517,6 +560,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       if (item.context !== null && item.context !== undefined) {
         existing.context = item.context;
       }
+      mergeWorkItemCompletionWaiters(existing, item);
     } else {
       mapSet(this.pending, ownerKey, item);
     }
@@ -597,6 +641,10 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_DRAIN,
       diagnostic,
     );
+    rejectWorkItemCompletionWaiters(
+      item,
+      new Error(RECONCILE_QUEUE_ERROR_MSG.STALE_FENCE_TOKEN),
+    );
 
     this.logger.debug(
       RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, {
@@ -665,10 +713,22 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @return {boolean} Whether queued or deferred state was removed.
    */
   discard(ownerKey) {
+    const discardedItems = [
+      mapGet(this.pending, ownerKey),
+      mapGet(this.retryWorkItems, ownerKey),
+      mapGet(this.exhaustedWorkItems, ownerKey),
+    ];
     const removed = mapDelete(this.pending, ownerKey) ||
       mapHas(this.retryWorkItems, ownerKey) ||
       mapHas(this.exhaustedWorkItems, ownerKey);
     this._clearRetryState(ownerKey);
+    const discardError = new Error(`${this.name} discarded ${ownerKey}`);
+    for (let index = 0; index < discardedItems.length; index++) {
+      rejectWorkItemCompletionWaiters(
+        discardedItems[index],
+        discardError,
+      );
+    }
     return removed;
   }
 
@@ -701,40 +761,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @return {Object}
    */
   getDiagnostics() {
-    const fenceEntries = {};
-    mapForEach(this.fenceTokens, (token, key) => {
-      defineSnapshotValue(fenceEntries, key, token);
-    });
-    const retryStates = {};
-    mapForEach(this.retryStates, (retryState, key) => {
-      defineSnapshotValue(retryStates, key, {...retryState});
-    });
-    const exhaustedRetryStates = {};
-    mapForEach(this.exhaustedRetryStates, (retryState, key) => {
-      defineSnapshotValue(exhaustedRetryStates, key, {...retryState});
-    });
-    return {
-      queue: this.name,
-      maxConcurrency: this.maxConcurrency,
-      maxItemsPerDrain: this.maxItemsPerDrain,
-      pendingKeys: snapshotMapKeys(this.pending),
-      retryingKeys: snapshotMapKeys(this.retryWorkItems),
-      exhaustedRetryKeys: snapshotMapKeys(this.exhaustedWorkItems),
-      inFlightKeys: snapshotSetValues(this.inFlight),
-      fenceTokens: fenceEntries,
-      staleClaims: copySnapshotValues(this.staleClaims),
-      staleFenceRejectionCount: this._staleFenceRejectionCount,
-      staleInFlightDeferralCount: this._staleInFlightDeferralCount,
-      recentStaleFenceSamples: copySnapshotValues(this._staleFenceSamples),
-      retryStates,
-      exhaustedRetryStates,
-      retryableDrainFailureCount: this._retryableDrainFailureCount,
-      retryableDrainExhaustedCount: this._retryableDrainExhaustedCount,
-      recentRetryableDrainFailureSamples:
-        copySnapshotValues(this._retryableDrainFailureSamples),
-      draining: this.draining,
-      stopped: this.stopped,
-    };
+    return buildReconcileQueueDiagnostics(this);
   }
 
   /**
@@ -742,6 +769,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   shutdown() {
     this.stopped = true;
+    rejectAllQueueCompletionWaiters(this);
     mapClear(this.pending);
     mapClear(this.retryWorkItems);
     mapClear(this.retryStates);
@@ -752,6 +780,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     });
     mapClear(this.retryTimers);
     setClear(this.inFlight);
+    mapClear(this.inFlightItems);
     mapClear(this.fenceTokens);
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {
       queue: this.name,

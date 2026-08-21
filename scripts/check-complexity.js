@@ -28,7 +28,12 @@ const TARGET_THRESHOLD = 12;
 // user-table-leader-placement-spread; one-way-baseline rule).
 // 2026-08-14: tightened 1839 -> 1838 after authoritative readiness-repair
 // permission moved into its canonical reconciler owner.
-const BASELINE_COUNT = 1838;
+// 2026-08-21: tightened 1838 -> 1831 after deleting the runtime compatibility
+// reconciler, consolidating rebalancer entity/read-model ownership, and
+// removing the duplicate heartbeat/reconcile ownership path.
+// 2026-08-21: tightened 1831 -> 1826 after retiring the bootstrap formation
+// placement/drain re-derivation and duplicate read-authority paths.
+const BASELINE_COUNT = 1826;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -1,6 +1,8 @@
 import {
   buildControlPlaneMutationOwnerOutcomeEnvelope,
 } from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   registerControlPlaneSystemTableGatewayReadCoalescingTests,
 } from './control-plane-system-table-gateway-read-coalescing-test-cases.js';
@@ -744,8 +746,8 @@ export function registerControlPlaneSystemTableGatewayTailTests({
           options,
         ) {
           t.equal(
-            options.allowSqlFallback,
-            false,
+            options.readAuthority.authoritativeReadMode,
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
             'pressure degrade should disable routed SQL fallback',
           );
           return {

@@ -41,6 +41,8 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       operation_id: 'op-stopping-timeout',
       type: 'REMOVE',
       partition_id: 'partition-1',
+      entity_type: 'partition',
+      entity_id: 'partition-1',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -141,6 +143,8 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       operation_id: 'op-owner-rpc-fallback-timeout',
       type: 'REMOVE',
       partition_id: 'partition-1',
+      entity_type: 'partition',
+      entity_id: 'partition-1',
       replica_id: 'partition-1-r1',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -173,7 +177,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
           options: {...options},
         });
         if (tableName === 'replica_operations' &&
-            options.requireOwnerRpcRead === true) {
+            options.authoritativeReadMode === 'owner_rpc_required') {
           return {
             success: false,
             error: 'owner-rpc-read-failed',
@@ -283,7 +287,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
     t.ok(
       authoritativeReadCalls.some((call) =>
         call.tableName === 'replica_operations' &&
-        call.options.requireOwnerRpcRead !== true,
+        call.options.authoritativeReadMode !== 'owner_rpc_required',
       ),
       'timeout reconciliation should query authoritative rows without requiring strict owner-rpc reads',
     );
@@ -480,6 +484,8 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       operation_id: 'op-priority-syncing-timeout',
       type: 'REPLACE',
       partition_id: 'sql_write_operations-p1',
+      entity_type: 'partition',
+      entity_id: 'sql_write_operations-p1',
       replica_id: 'sql_write_operations-p1-r4',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -580,6 +586,8 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       operation_id: 'op-deferred-transition-retry-timeout',
       type: 'ADD',
       partition_id: 'replica_operations-p1',
+      entity_type: 'partition',
+      entity_id: 'replica_operations-p1',
       replica_id: 'replica_operations-p1-r4',
       source_node_id: 'node-source',
       target_node_id: 'node-local',
@@ -697,6 +705,8 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       operation_id: 'op-stale-priority-pending',
       type: 'REPLACE',
       partition_id: 'control_plane_publications-p1',
+      entity_type: 'partition',
+      entity_id: 'control_plane_publications-p1',
       replica_id: 'control_plane_publications-p1-r4',
       source_node_id: 'node-1',
       target_node_id: 'node-2',
@@ -709,8 +719,6 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       steps_history: JSON.stringify([
         {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
       ]),
-      entity_type: 'partition',
-      entity_id: 'control_plane_publications-p1',
     };
     let dispatchDeliveries = 0;
 

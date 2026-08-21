@@ -105,7 +105,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       messageRouter,
       systemCache,
     });
-    executor.leaderRetryAttempts = 1;
+    executor.queryTimeoutMs = 5;
     executor.leaderRetryDelayMs = 1;
 
     const result = await executor.executeOnPartition(
@@ -615,7 +615,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       messageRouter,
       systemCache,
     });
-    executor.leaderRetryAttempts = 1;
+    executor.queryTimeoutMs = 5;
     executor.leaderRetryDelayMs = 1;
 
     const routingSnapshot = executor.getPartitionRoutingSnapshot(partitionId);
@@ -709,7 +709,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       messageRouter,
       systemCache,
     });
-    executor.leaderRetryAttempts = 1;
+    executor.queryTimeoutMs = 5;
     executor.leaderRetryDelayMs = 1;
 
     const result = await executor.executeOnPartition(
@@ -1376,7 +1376,7 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       messageRouter,
       systemCache,
     });
-    executor.leaderRetryAttempts = 1;
+    executor.queryTimeoutMs = 5;
     executor.leaderRetryDelayMs = 1;
 
     const result = await executor.executeOnPartition(

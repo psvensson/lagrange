@@ -8,9 +8,12 @@ import {
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT,
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
   ControlPlaneMessageType,
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
+  getControlPlaneMessageCompletionKind,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -33,6 +36,34 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+
+test('every control-plane application message declares its completion owner', (t) => {
+  t.same(
+    Object.keys(CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT).sort(),
+    Object.values(ControlPlaneMessageType).sort(),
+    'adding an accepted message type requires a completion-owner classification',
+  );
+  t.equal(
+    getControlPlaneMessageCompletionKind(
+      ControlPlaneMessageType.NODE_STATE_UPDATE,
+    ),
+    CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+    'node-state delivery is completed by durable publication',
+  );
+  t.equal(
+    getControlPlaneMessageCompletionKind(
+      ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+    ),
+    CONTROL_PLANE_MESSAGE_COMPLETION_KIND.OWNER_WAKE_ADMISSION,
+    'operation dispatch delivery admits a wake but does not complete workflow',
+  );
+  t.equal(
+    getControlPlaneMessageCompletionKind('UNCLASSIFIED_FUTURE_MESSAGE'),
+    null,
+    'unclassified future messages fail closed',
+  );
+  t.end();
+});
 
 
 test('ReplicaDispatchService dispatches direct wake-up payload rows before ' +
@@ -514,7 +545,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
     };
 
     const now = Date.now();
-    await service.handleMessageReceived(mgService, {
+    const slowCompletion = service.handleMessageReceived(mgService, {
       messageId: 'slow-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
@@ -524,7 +555,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
         [ControlPlaneField.HEARTBEAT_AT]: now,
       },
     });
-    await service.handleMessageReceived(mgService, {
+    const fastCompletion = service.handleMessageReceived(mgService, {
       messageId: 'fast-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
@@ -553,11 +584,11 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
     );
 
     resolveSlowUpdate?.();
-    await Promise.resolve();
+    await Promise.all([slowCompletion, fastCompletion]);
     service.stop();
   });
 
-test('ReplicaDispatchService acknowledges NODE_STATE_UPDATE before slow write completes',
+test('ReplicaDispatchService acknowledges READY only after its owner write commits',
   async (t) => {
     initEnv();
 
@@ -595,35 +626,106 @@ test('ReplicaDispatchService acknowledges NODE_STATE_UPDATE before slow write co
     };
 
     const now = Date.now();
+    const completion = service.handleMessageReceived(mgService, {
+      messageId: 'msg-1',
+      payload: {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.NODE_ID]: 'node-5',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: now,
+      },
+    });
     const outcome = await Promise.race([
-      service.handleMessageReceived(mgService, {
-        messageId: 'msg-1',
-        payload: {
-          [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-          [ControlPlaneField.NODE_ID]: 'node-5',
-          [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
-          [ControlPlaneField.STATE]: STATE.READY,
-          [ControlPlaneField.HEARTBEAT_AT]: now,
-        },
-      }).then(() => 'completed'),
+      completion.then(() => 'completed'),
       new Promise((resolve) => setTimeout(() => resolve('timed_out'), 50)),
     ]);
 
     t.equal(
       outcome,
-      'completed',
-      'node-state message handling should not wait on the slow write path',
+      'timed_out',
+      'READY handling must remain pending while the authoritative write is pending',
     );
     t.same(
       acknowledgements,
-      ['msg-1'],
-      'node-state message should be acknowledged once enqueued',
+      [],
+      'queue admission alone must not acknowledge READY',
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     t.equal(updates.length, 1, 'should still process the queued write');
 
     resolveUpdate?.();
-    await Promise.resolve();
+    const completedPublication = await completion;
+    t.same(
+      acknowledgements,
+      ['msg-1'],
+      'READY is acknowledged only after the owner write commits',
+    );
+    t.same(
+      completedPublication,
+      {
+        completionKind:
+          CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+        completionCompleted: true,
+      },
+      'the receiver returns the declared durable-publication boundary',
+    );
+    service.stop();
+  });
+
+test('ReplicaDispatchService refuses READY acknowledgement when its owner write fails',
+  async (t) => {
+    initEnv();
+
+    const acknowledgements = [];
+    const service = createService({
+      cdcIntegrationService: {},
+      cacheNode: {
+        node_id: 'node-ready-failure',
+        node_address: 'localhost:8087',
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.CONNECTED,
+        capabilities: '[]',
+        created_at: Date.now() - 10000,
+      },
+      controlPlaneSystemTableGateway: {
+        async updateSystemTableRow() {
+          throw new Error('injected authoritative READY write failure');
+        },
+      },
+    });
+    const mgService = {
+      acknowledgeMessage: async (messageId) => {
+        acknowledgements.push(messageId);
+      },
+      isLeaderReplica: () => true,
+      getMetadataIngressReadiness: () => ({ready: true}),
+    };
+
+    await t.rejects(
+      service.handleMessageReceived(mgService, {
+        messageId: 'ready-failure-msg',
+        payload: {
+          [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+          [ControlPlaneField.NODE_ID]: 'node-ready-failure',
+          [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
+          [ControlPlaneField.STATE]: STATE.READY,
+          [ControlPlaneField.HEARTBEAT_AT]: Date.now(),
+        },
+      }),
+      /injected authoritative READY write failure/,
+      'the transport path observes the owner failure',
+    );
+    t.same(
+      acknowledgements,
+      [],
+      'failed authoritative READY publication is never acknowledged',
+    );
+    t.equal(
+      service.nodeStateUpdateDeferredRetries.size,
+      0,
+      'the transport caller owns retry instead of creating a hidden success',
+    );
     service.stop();
   });
 
@@ -698,7 +800,7 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
     isLeaderReplica: () => true,
     getMetadataIngressReadiness: () => ({ready: true}),
   };
-  await service.handleMessageReceived(mgService, {
+  const maintenanceCompletion = service.handleMessageReceived(mgService, {
     messageId: 'maintenance-msg',
     payload: {
       ...steadyPayload,
@@ -709,16 +811,6 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
     },
   });
 
-  t.same(
-    acknowledgements,
-    ['maintenance-msg'],
-    'transport should acknowledge the maintenance update after queue ownership is accepted',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    0,
-    'non-deferrable maintenance ingress should cancel the older deferred slot',
-  );
   for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
@@ -726,6 +818,16 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
     writes.length,
     2,
     'maintenance ingress should re-enter the production write owner immediately',
+  );
+  t.same(
+    acknowledgements,
+    [],
+    'critical maintenance is not acknowledged before its owner write commits',
+  );
+  t.equal(
+    service.nodeStateUpdateDeferredRetries.size,
+    0,
+    'non-deferrable maintenance ingress should cancel the older deferred slot',
   );
   t.match(
     writes[1]?.options,
@@ -737,7 +839,12 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
   );
 
   resolveMaintenanceWrite?.();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await maintenanceCompletion;
+  t.same(
+    acknowledgements,
+    ['maintenance-msg'],
+    'transport acknowledges maintenance after the owner write commits',
+  );
   service.stop();
 });
 

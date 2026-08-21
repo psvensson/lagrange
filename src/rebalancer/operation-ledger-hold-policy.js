@@ -35,6 +35,7 @@ import {isOperationLedgerPartition} from '../bootstrap/system-partition-classifi
 import {isPriorityRecoveryEmergencyPartition} from '../control-plane/priority-recovery-admission-constants.js';
 import {
   evaluateOperationLedgerQuorumConcentration,
+  getConcentratedOperationLedgerPartition,
   isConcentratedOperationLedgerPartition,
 } from './operation-ledger-quorum-concentration.js';
 
@@ -271,6 +272,16 @@ function isLedgerQuorumConcentratedPartition(systemTableCache, partitionId) {
   );
 }
 
+function resolveLedgerQuorumConcentratedPartition(
+  systemTableCache,
+  partitionId,
+) {
+  return getConcentratedOperationLedgerPartition(
+    evaluateOperationLedgerQuorumConcentration(systemTableCache),
+    partitionId,
+  );
+}
+
 /**
  * The bounded post-completion extension of the ledger self-move hold. A
  * recently completed REPLACE still represents a formation episode whose
@@ -391,6 +402,7 @@ export {
   isLedgerQuorumConcentratedPartition,
   orderLedgerQuorumCureMovesFirst,
   resolveEngagedLedgerQuorumSpreadHold,
+  resolveLedgerQuorumConcentratedPartition,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,
   shouldLeaseRecentCompletedLedgerSelfMove,

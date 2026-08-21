@@ -183,6 +183,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       }
       // Check idempotency - already removing
       if (replica.status === ReplicaStatus.REMOVING) {
+        this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
           this.startRemoveReplicaAsync(request);
@@ -253,6 +254,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
+      // Install the partition-owned admission fence before acknowledging the
+      // request. The asynchronous removal may wait for existing transactions,
+      // but no later transaction can overtake the removal turn.
+      this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
       // Track in-progress operation
       this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
       const removalIngressStatus =

@@ -1,6 +1,10 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {COLUMN} from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {buildControlPlaneReadAuthority} from
+  './control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  './control-plane-system-table-gateway-constants.js';
 import {
   buildNodeHeartbeatStructuralSignature,
   buildNodeHeartbeatUtilizationSignature,
@@ -223,6 +227,7 @@ class HeartbeatServiceReporterVisibilityMethods {
    * @param {string|null} [options.expectedStatus]
    * @param {string|null} [options.expectedConnectionState]
    * @param {boolean} [options.expectedReadyLeaseCleared]
+   * @param {boolean} [options.requireReadableAuthority]
    * @return {Promise<boolean>}
    * @private
    */ async verifyReporterHeartbeatVisibility(expectedHeartbeatAt, options = {}) {
@@ -232,16 +237,36 @@ class HeartbeatServiceReporterVisibilityMethods {
       typeof authoritativeControlPlaneView.canRead !== 'function' ||
       authoritativeControlPlaneView.canRead() !== true
     ) {
-      return true;
+      return options.requireReadableAuthority !== true;
+    }
+    const requireReadableAuthority =
+      options.requireReadableAuthority === true;
+    if (
+      requireReadableAuthority &&
+      typeof authoritativeControlPlaneView.readReadinessOwnerRows !==
+        'function'
+    ) {
+      return false;
+    }
+    const readRows = requireReadableAuthority ?
+      authoritativeControlPlaneView.readReadinessOwnerRows :
+      authoritativeControlPlaneView.readRows;
+    if (typeof readRows !== 'function') {
+      return false;
     }
     try {
-      const result = await authoritativeControlPlaneView.readRows(
+      const result = await readRows.call(
+        authoritativeControlPlaneView,
         SYSTEM_TABLE_NAME.NODES,
         `SELECT * FROM ${SYSTEM_TABLE_NAME.NODES} WHERE node_id = ?`,
         [this.nodeId],
         {
-          readProfile: HEARTBEAT_REPORTER_VISIBILITY_READ.PROFILE,
-          routingReadinessDimension: HEARTBEAT_REPORTER_VISIBILITY_READ.ROUTINGREADINESSDIMENSION,
+          readAuthority: buildControlPlaneReadAuthority({
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            routingReadinessDimension:
+              HEARTBEAT_REPORTER_VISIBILITY_READ.ROUTINGREADINESSDIMENSION,
+          }),
           queryTimeoutMs: this.reporterVisibilityQueryTimeoutMs,
         },
       );

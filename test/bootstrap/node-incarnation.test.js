@@ -172,14 +172,16 @@ test('the publication owner stamps the boot incarnation onto every node ' +
     bootIncarnation: 9,
     delegates: {
       getNodeCapabilities: () => [],
-      resolveLegacyTargetCandidates: () => ['control-plane:9000'],
       getMessageRouter: () => ({
         async deliver(_target, msg) {
           captured = msg;
           return {acknowledged: true};
         },
       }),
-      getControlPlaneKernelIngress: () => null,
+      getControlPlaneKernelIngress: () => ({
+        resolveNodeStateUpdateTargetCandidates: () =>
+          ['control-plane:9000'],
+      }),
     },
   });
   await owner.sendControlPlaneNodeStateUpdate({

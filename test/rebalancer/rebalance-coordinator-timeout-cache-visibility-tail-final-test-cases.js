@@ -82,7 +82,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         });
 
         if (tableName === 'replica_operations') {
-          if (options.requireOwnerRpcRead === true) {
+          if (
+            options.authoritativeReadMode === 'owner_rpc_required'
+          ) {
             return {
               success: false,
               error: 'owner-rpc-read-failed',
@@ -246,14 +248,16 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     t.ok(
       authoritativeReadCalls.some((call) =>
         call.tableName === 'replica_operations' &&
-      call.options.requireOwnerRpcRead !== true,
+      call.options.readAuthority?.authoritativeReadMode !==
+        'owner_rpc_required',
       ),
       'observed progress should stay on the non-strict local owner read path',
     );
     t.ok(
       authoritativeReadCalls.every((call) =>
         call.tableName !== 'replica_operations' ||
-      call.options.requireOwnerRpcRead !== true,
+      call.options.readAuthority?.authoritativeReadMode !==
+        'owner_rpc_required',
       ),
       'observed progress should not widen replica_operations reads to strict owner-rpc',
     );
@@ -1198,7 +1202,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     t.ok(
       authoritativeReadCalls.some((call) =>
         call.tableName === 'replica_operations' &&
-      call.options.requireOwnerRpcRead !== true,
+      call.options.authoritativeReadMode !== 'owner_rpc_required',
       ),
       'observed progress should still attempt the bounded non-strict ' +
       'owner observation before giving up',
@@ -1206,7 +1210,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     t.ok(
       authoritativeReadCalls.every((call) =>
         call.tableName !== 'replica_operations' ||
-      call.options.requireOwnerRpcRead !== true,
+      call.options.authoritativeReadMode !== 'owner_rpc_required',
       ),
       'observed progress should not widen ACTIVE replace reconciliation into ' +
       'strict owner-rpc while remove safety is still blocked',

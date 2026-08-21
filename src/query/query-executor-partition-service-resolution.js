@@ -138,7 +138,9 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         readinessSummary: null,
       };
     } else if (
-      routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_PURPOSE] ===
+      routingOptions?.[
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
+      ]?.purpose ===
         CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL
     ) {
       routabilityResult = this.evaluateReadinessInternalRoutability(service);

@@ -65,7 +65,7 @@ function createReadinessService(options = {}) {
       publishedReadOptions.push({...readOptions});
       if (
         throwOnAuthoritativePublishedRead &&
-        readOptions.preferAuthoritativeRead === true
+        readOptions.readSource === 'authoritative_preferred'
       ) {
         throw new Error('unexpected_authoritative_published_membership_read');
       }
@@ -166,7 +166,7 @@ test(
       [
         {readProfile: 'diagnostics'},
         {
-          preferAuthoritativeRead: true,
+          readSource: 'authoritative_preferred',
           readProfile: 'diagnostics',
           deliveryPriority: 'readiness',
         },

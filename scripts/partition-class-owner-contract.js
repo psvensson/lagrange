@@ -40,6 +40,13 @@ const LOCAL_STR_OWNED_030 = 'find';
 const LOCAL_STR_OWNED_031 = 'canonical partitionClass must come from the selected row';
 const LOCAL_STR_OWNED_032 = 'classifySystemPartition must select from SYSTEM_PARTITION_CLASS_ROWS';
 const LOCAL_STR_OWNED_033 = 'classifySystemPartition must have one top-level frozen canonical return';
+const STRICT_EQUALITY_OPERATOR = '===';
+const OPERATION_LEDGER_FIELD = 'operationLedger';
+const TABLE_ID_ACCESS_PATH = 'tableId';
+const REPLICA_OPERATIONS_TABLE_ACCESS_PATH =
+  'SYSTEM_TABLE_NAME.REPLICA_OPERATIONS';
+const OPERATION_LEDGER_IDENTITY_PROBLEM =
+  'canonical operationLedger must derive from the replica_operations table identity';
 
 const OWNER_CONTRACT_NAME = Object.freeze({
   CLASS: 'SYSTEM_PARTITION_CLASS',
@@ -56,6 +63,8 @@ const EXPECTED_PARTITION_CLASS_VALUE = Object.freeze({
 const EXPECTED_CLASSIFIER_OUTCOME_FIELDS = Object.freeze([
   'partitionClass',
   'bootstrapCritical',
+  'formationLivenessDependency',
+  'operationLedger',
   'priorityControlPlane',
   'systemTable',
 ]);
@@ -158,16 +167,34 @@ function destructuredContextBinding(node, propertyName) {
 
 function isDirectSetMembership(node, setName, argumentName) {
   const expression = unwrapChain(node);
-  if (expression?.type !== NODE_TYPE.CALL ||
-      expression.arguments?.length !== 1 ||
-      expression.arguments[0]?.type !== NODE_TYPE.IDENTIFIER ||
-      expression.arguments[0].name !== argumentName) {
+  if (expression?.type !== NODE_TYPE.CALL) {
     return false;
   }
   const callee = unwrapChain(expression.callee);
-  return callee?.type === NODE_TYPE.MEMBER &&
+  const directMembership = callee?.type === NODE_TYPE.MEMBER &&
+    expression.arguments?.length === 1 &&
+    expression.arguments[0]?.type === NODE_TYPE.IDENTIFIER &&
+    expression.arguments[0].name === argumentName &&
     resolveAccessPath(callee.object) === setName &&
     resolvePropertyName(callee) === LOCAL_STR_OWNED_009;
+  const hardenedMembership =
+    resolveIdentifierName(callee) === 'setHas' &&
+    expression.arguments?.length === 2 &&
+    resolveAccessPath(expression.arguments[0]) === setName &&
+    expression.arguments[1]?.type === NODE_TYPE.IDENTIFIER &&
+    expression.arguments[1].name === argumentName;
+  return directMembership || hardenedMembership;
+}
+
+function isOperationLedgerIdentity(node) {
+  const expression = unwrapChain(node);
+  if (expression?.type !== NODE_TYPE.BINARY ||
+      expression.operator !== STRICT_EQUALITY_OPERATOR) {
+    return false;
+  }
+  return resolveAccessPath(expression.left) === TABLE_ID_ACCESS_PATH &&
+    resolveAccessPath(expression.right) ===
+      REPLICA_OPERATIONS_TABLE_ACCESS_PATH;
 }
 
 function rowOwnsSetMembership(rowObject, setName, contextProperty) {
@@ -389,6 +416,11 @@ function canonicalOutcomeProblems(fields, rowNames) {
   }
   const membershipFields = [
     ['bootstrapCritical', 'CRITICAL_SYSTEM_PARTITION_IDS', 'partitionId'],
+    [
+      'formationLivenessDependency',
+      'FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS',
+      'partitionId',
+    ],
     ['priorityControlPlane', 'PRIORITY_CONTROL_PLANE_TABLE_IDS', 'tableId'],
     ['systemTable', 'SYSTEM_TABLE_IDS', 'tableId'],
   ];
@@ -402,6 +434,9 @@ function canonicalOutcomeProblems(fields, rowNames) {
         `canonical ${fieldName} must derive from ${setName}.has(${argumentName})`,
       );
     }
+  }
+  if (!isOperationLedgerIdentity(fields.get(OPERATION_LEDGER_FIELD)?.value)) {
+    problems.push(OPERATION_LEDGER_IDENTITY_PROBLEM);
   }
   return problems;
 }

@@ -1,7 +1,6 @@
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 
 const HEARTBEAT_REPORTER_VISIBILITY_READ = Object.freeze({
-  PROFILE: 'diagnostics',
   ROUTINGREADINESSDIMENSION: CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 });
 const HEARTBEAT_SERVICE_LITERAL = Object.freeze({
@@ -10,6 +9,8 @@ const HEARTBEAT_SERVICE_LITERAL = Object.freeze({
   HEARTBEAT: 'heartbeat',
   NODE_ROW_MISSING: 'NODE_ROW_MISSING',
   NODE_STATE_REPORTER: 'node_state_reporter',
+  REPORTER_DURABLE_VISIBILITY_REQUIRED:
+    'Authoritative node heartbeat visibility was not confirmed',
   NODE_ROW_MISSING_FROM_CACHE: 'node_row_missing_from_cache',
   NODE_SHUTDOWN_REPORTER_UNVERIFIED: 'node_shutdown_reporter_unverified',
   NODE_ROW_MISSING_FROM_STORAGE: 'node_row_missing_from_storage',

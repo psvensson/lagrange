@@ -654,7 +654,6 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          requireOwnerRpcRead: false,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );

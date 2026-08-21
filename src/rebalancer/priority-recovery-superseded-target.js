@@ -32,6 +32,9 @@ import {
   evaluatePriorityPublishedMembershipRemoveSafety,
   evaluateRemoveSafety,
 } from './operation-workflow-remove-safety-evaluator.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -630,11 +633,15 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     if (!move) {
       return null;
     }
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(move);
     const normalizedType =
       typeof move.type === 'string' ? move.type.toUpperCase() : move.type;
     const operation = {
       type: normalizedType,
-      partitionId: move.partitionId || move.entityId,
+      partitionId: move.partitionId || entityId,
+      entityType,
+      entityId,
       replicaId: move.replicaId,
       targetNodeId: move.nodeId,
       workflowStep: WORKFLOW_STEP.PENDING,

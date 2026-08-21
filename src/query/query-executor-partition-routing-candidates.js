@@ -2,6 +2,7 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
   COLUMN,
+  CONTROL_PLANE_READ_LEADER_MODE,
   LEADER_GAP_REASON_OWNER_MISSING,
   LEADER_GAP_REASON_SERVICE_MISSING,
   QUERY_EXECUTOR_LITERAL,
@@ -176,8 +177,8 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     const requireCanonicalLeader =
       forRead &&
       resolvedRoutingOptions?.[
-        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER
-      ] === true;
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
+      ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
     if (requireCanonicalLeader) {
       if (!canonicalLeaderNodeId) {
         this.logCanonicalLeaderRoutingGap(partitionId, {

@@ -16,7 +16,6 @@ const REBALANCER_SUBSYSTEM = Object.freeze({
 const REBALANCER_ENTITY_TYPE = Object.freeze({
   PARTITION: SERVICE_TYPE.PARTITION,
   MESSAGE_GROUP: SERVICE_TYPE.MESSAGE_GROUP,
-  WASM_SERVICE: SERVICE_TYPE.WASM_SERVICE,
   RUNTIME_SERVICE: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
 });
 
@@ -89,13 +88,10 @@ const REBALANCER_DEFAULT = Object.freeze({
     SYNCING_TIMEOUT_MS: 300000,
     REMOVING_TIMEOUT_MS: 60000,
     MAX_CONCURRENT_ADDS: NUM.FIVE,
-    // One plain-ADD slot is held in fair-share reserve for genuine
-    // runtime-service replica-creates so ordinary non-priority spread/REPLACE
-    // churn cannot starve a service's placement (quest
-    // formation-runtime-service-create-lane-budget-starvation). Demand-sensitive
-    // (lifted once a create is in flight) and clamped so ordinary adds never
-    // deadlock.
-    RESERVED_CREATE_ADD_SLOTS: NUM.ONE,
+    // One plain-ADD slot is held in fair-share reserve for runtime-service
+    // placement. ADD and REPLACE are one admission class, so partition churn
+    // cannot starve either initial placement or affinity relocation.
+    RESERVED_RUNTIME_SERVICE_PLACEMENT_SLOTS: NUM.ONE,
     MAX_CONCURRENT_REMOVES: NUM.FIVE,
     PERIODIC_CHECK_INTERVAL_MS: 60000,
     TIMEOUT_CHECK_INTERVAL_MS: 1000,
@@ -142,16 +138,6 @@ const REBALANCER_DEFAULT_POLICY = Object.freeze({
     },
   }),
   MESSAGE_GROUP: DEFAULT_MESSAGE_GROUP_POLICY,
-  WASM_SERVICE: Object.freeze({
-    targetReplicaCount: NUM.THREE,
-    minReplicaCount: NUM.THREE,
-    maxReplicaCount: NUM.SEVEN,
-    placementConstraints: {
-      spreadAcrossNodes: true,
-      considerCpuLoad: true,
-      considerMemoryLoad: true,
-    },
-  }),
   RUNTIME_SERVICE: Object.freeze({
     targetReplicaCount: NUM.THREE,
     minReplicaCount: 1,

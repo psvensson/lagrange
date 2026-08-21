@@ -1,6 +1,12 @@
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {UNIFIED_SERVICE_TYPE} from
+  '../constants/unified-service-lifecycle.js';
+import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
+import {
+  readAuthoritativeEntityServiceRows,
+} from './entity-service-row-read.js';
 
 const {
   DEFAULT_MIN_REPLICA_COUNT,
@@ -80,6 +86,83 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
       return this.mergeReplicaRowsForSafety(result.rows, cachedRows);
     } catch {
       return cachedRows;
+    }
+  }
+
+  /**
+   * Read the service rows owned by a non-partition rebalancer entity. The
+   * canonical owner read is shared with coordinator admission. Removal safety
+   * never merges or substitutes cache projection for owner evidence.
+   * @param {Object} identity
+   * @return {Promise<{available: boolean, rows: Object[]}>}
+   */
+  async getEntityReplicaRowsForSafety(identity) {
+    const gateway = this.repository?.controlPlaneSystemTableGateway;
+    if (!gateway) {
+      return Object.freeze({
+        available: false,
+        rows: [],
+      });
+    }
+    try {
+      const result = await readAuthoritativeEntityServiceRows(
+        gateway,
+        identity,
+        REMOVE_SAFETY_READ_QUERY_OPTIONS,
+      );
+      if (!result?.success || !Array.isArray(result.rows)) {
+        return Object.freeze({
+          available: false,
+          rows: [],
+        });
+      }
+      return Object.freeze({
+        available: true,
+        rows: result.rows,
+      });
+    } catch {
+      return Object.freeze({
+        available: false,
+        rows: [],
+      });
+    }
+  }
+
+  /**
+   * Resolve the minimum live-replica floor from the policy owner for the
+   * entity type. Runtime services own an availability floor; message groups
+   * own a replicated-group target floor. Unknown types fail closed.
+   * @param {string} entityType
+   * @param {string} entityId
+   * @return {Promise<number|null>}
+   */
+  async getEntityRemoveSafetyMinReplicaCount(entityType, entityId) {
+    if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      return REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.minReplicaCount;
+    }
+    if (entityType !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return null;
+    }
+    const defaultCount =
+      REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP.targetReplicaCount;
+    if (
+      !this.tablePolicyService ||
+      typeof this.tablePolicyService.getMessageGroupPolicy !== 'function'
+    ) {
+      return defaultCount;
+    }
+    try {
+      const policy = await this.tablePolicyService.getMessageGroupPolicy(
+        entityId,
+      );
+      const count = Number(
+        policy?.minReplicaCount ?? policy?.targetReplicaCount,
+      );
+      return Number.isFinite(count) && count > 0 ?
+        Math.floor(count) :
+        defaultCount;
+    } catch {
+      return defaultCount;
     }
   }
 

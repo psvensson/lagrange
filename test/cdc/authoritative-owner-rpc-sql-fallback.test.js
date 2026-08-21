@@ -15,6 +15,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_SEED_NODE_ID = 'node-seed';
@@ -22,8 +26,6 @@ const TEST_AUTHORITATIVE_NODE_ID = 'node-owner-rpc-timeout-fallback';
 const TEST_NODE_STATUS = 'active';
 const TEST_CONNECTION_STATE = 'ready';
 const TEST_LOCAL_READ_CONSISTENCY = 'local_leader';
-const TEST_OWNER_RPC_READ_PREFERENCE = true;
-const TEST_ALLOW_SQL_FALLBACK = true;
 const TEST_TRANSPORT_READY = true;
 const TEST_TIMEOUT_MS = 1234;
 const TEST_RETRY_AFTER_MS = 250;
@@ -126,9 +128,12 @@ async function assertOwnerRpcSqlFallbackRecovers(t, ownerRpcFailure) {
     TEST_NODES_SQL,
     [TEST_AUTHORITATIVE_NODE_ID],
     {
-      localReadConsistency: TEST_LOCAL_READ_CONSISTENCY,
-      preferOwnerRpcRead: TEST_OWNER_RPC_READ_PREFERENCE,
-      allowSqlFallback: TEST_ALLOW_SQL_FALLBACK,
+      readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+        localReadConsistency: TEST_LOCAL_READ_CONSISTENCY,
+      }),
       queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
     },
   );
@@ -245,8 +250,11 @@ test(TEST_OWNER_RPC_REPAIR_READ_LEADER_FIRST_NAME, async (t) => {
     TEST_NODES_SQL,
     [TEST_AUTHORITATIVE_NODE_ID],
     {
-      preferOwnerRpcRead: TEST_OWNER_RPC_READ_PREFERENCE,
-      allowSqlFallback: TEST_ALLOW_SQL_FALLBACK,
+      readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+      }),
       queryOptions: {timeoutMs: TEST_TIMEOUT_MS},
     },
   );

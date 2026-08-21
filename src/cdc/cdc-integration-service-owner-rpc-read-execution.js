@@ -1,6 +1,10 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
+import {resolveAuthoritativeReadModeContract} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const {
   ADDRESS,
@@ -35,7 +39,7 @@ const AUTHORITATIVE_LEADER_WITNESS_FAILURE =
 
 function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
   return queryResult?.success === true &&
-    readAuthority?.requireOwnerRpcReadLeader === true;
+    readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
 }
 
 function isValidLeaderReadAuthorityWitness(witness, partitionId) {
@@ -120,11 +124,16 @@ function shouldRetryOwnerRpcReadViaSqlFallback(
   options = {},
   localQueryTransportReadiness = null,
 ) {
-  if (ownerRpcResult?.success === true || options?.allowSqlFallback !== true) {
+  const authoritativeReadModeContract =
+    resolveAuthoritativeReadModeContract(options?.readAuthority);
+  if (
+    ownerRpcResult?.success === true ||
+    authoritativeReadModeContract.allowSqlFallback !== true
+  ) {
     return false;
   }
 
-  if (options?.requireOwnerRpcRead === true) {
+  if (authoritativeReadModeContract.requireOwnerRpcRead === true) {
     return false;
   }
 
@@ -367,13 +376,10 @@ async function executeAuthoritativeOwnerRpcRead(
     return null;
   }
 
-  // Structural authority: the gateway-built read-authority token wins over
-  // the field-level legacy booleans, which survive only for callers that
-  // bypass the gateway ingress.
-  const readAuthority =
-    options?.readAuthority && typeof options.readAuthority === 'object' ?
-      options.readAuthority :
-      null;
+  const readAuthority = options?.readAuthority;
+  if (!readAuthority || typeof readAuthority !== 'object') {
+    return null;
+  }
   const routingReadinessDimension =
     readAuthority?.routingReadinessDimension ||
     options?.queryOptions?.routingReadinessDimension ||
@@ -399,7 +405,7 @@ async function executeAuthoritativeOwnerRpcRead(
     deliverySource,
     allowReadinessAuthoritativeRefresh:
       options?.queryOptions?.allowReadinessAuthoritativeRefresh !== false,
-    ...(readAuthority ? {readAuthority} : {}),
+    readAuthority,
   };
 
   // Default owner-RPC reads route to "an owner" replica (preferLeader=false),
@@ -410,12 +416,8 @@ async function executeAuthoritativeOwnerRpcRead(
   // readiness dimension remains CONTROL_PLANE_RECOVERY_ELIGIBLE, so a
   // recovery-pending leader can still serve the readiness-owned interaction.
   const preferLeader =
-    (readAuthority ?
-      readAuthority.requireOwnerRpcReadLeader === true ||
-      readAuthority.preferOwnerRpcReadLeader === true :
-      options?.preferOwnerRpcReadLeader === true) ?
-      true :
-      AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
+    readAuthority.leaderMode !== CONTROL_PLANE_READ_LEADER_MODE.ANY ?
+      true : AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
 
   const queryResult = await queryExecutor.executeOnPartition(
     partitionId,

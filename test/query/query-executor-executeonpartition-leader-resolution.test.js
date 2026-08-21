@@ -337,7 +337,7 @@ async (t) => {
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -397,7 +397,7 @@ test('QueryExecutor - executeOnPartition fails closed on stale service ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -471,7 +471,7 @@ test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -574,7 +574,7 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -786,7 +786,7 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -875,7 +875,7 @@ test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(

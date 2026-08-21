@@ -15,6 +15,8 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/control-plane-publication-merge.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
@@ -120,7 +122,7 @@ const PUBLICATION_CONVERGENCE_HANDOFF_REPLAY_QUEUE_MESSAGE =
 
 test('shouldPreferAuthoritativeMembershipState refreshes published count-only rows without lifecycle projection evidence',
   async (t) => {
-    const preferAuthoritativeRead = shouldPreferAuthoritativeMembershipState({
+    const shouldUseAuthoritativeRead = shouldPreferAuthoritativeMembershipState({
       latestPublicationRow: {
         publication_epoch: PUBLICATION_CONVERGENCE_AUTH_REFRESH_EPOCH,
         status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -162,7 +164,7 @@ test('shouldPreferAuthoritativeMembershipState refreshes published count-only ro
       });
 
     t.equal(
-      preferAuthoritativeRead,
+      shouldUseAuthoritativeRead,
       true,
       'count-only published rows without lifecycle projection evidence should refresh owner planning inputs',
     );
@@ -224,7 +226,7 @@ test('readPublicationPlanningSnapshot uses authoritative membership evidence for
           return {
             success: true,
             rows:
-              options.authoritativeReadMode ===
+              options.readAuthority?.authoritativeReadMode ===
                 CONTROL_PLANE_AUTHORITATIVE_READ_MODE
                   .OWNER_RPC_PREFERRED_SQL_FALLBACK ?
                 authoritativeNodeRows :
@@ -334,9 +336,11 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         },
         async readRows(tableName, _sql, _params, options) {
           if (tableName === TABLES.NODES) {
-            nodeReadModes.push(options.authoritativeReadMode);
+            nodeReadModes.push(
+              options.readAuthority?.authoritativeReadMode,
+            );
             if (
-              options.authoritativeReadMode !==
+              options.readAuthority?.authoritativeReadMode !==
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
             ) {
               throw new Error(
@@ -374,7 +378,8 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
     });
 
     const outcome = await coordinator.reconcileClusterMembership({
-      preferAuthoritativeRead: true,
+      readSource:
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       publishedActiveNodeIds: [
         ...PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS,
       ],

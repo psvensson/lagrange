@@ -55,6 +55,8 @@ import {
 } from '../control-plane/eligibility-snapshot.js';
 import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
 import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
 import {
   CANONICAL_LEADER_IDENTITY_SOURCE,
@@ -156,8 +158,7 @@ const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
 const QUERY_EXECUTOR_ROUTING_OPTION_FIELD = Object.freeze({
   ALLOW_PRIORITY_RECOVERY_BOOTSTRAP: 'allowPriorityRecoveryBootstrap',
   FOR_READ: 'forRead',
-  READ_PURPOSE: 'readPurpose',
-  REQUIRE_CANONICAL_LEADER: 'requireCanonicalLeader',
+  READ_AUTHORITY: 'readAuthority',
 });
 function buildPartitionServiceWitnessFingerprint(service) {
   if (!service || typeof service !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT) {
@@ -270,6 +271,7 @@ export const QUERY_EXECUTOR_SHARED = {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READ_PURPOSE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ConfigurationManager,
   DistributedMergeEngine,

@@ -2,6 +2,9 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
+import {
+  readAuthoritativeEntityServiceRows,
+} from './entity-service-row-read.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -12,11 +15,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationRepository,
   SERVICE_TYPE,
-  SQL,
-  SYSTEM_TABLE_NAME,
-  UNIFIED_SERVICE_TYPE,
   getControlPlaneRetryAfterMs,
-  readAuthoritativeControlPlaneRows,
 } = REBALANCE_COORDINATOR_SHARED;
 
 class RebalanceCoordinatorOperationReadMethods {
@@ -458,25 +457,13 @@ class RebalanceCoordinatorOperationReadMethods {
     entityId,
     readOptions = {},
   }) {
-    let sql = SQL.SELECT_PARTITION_SERVICES_BY_ENTITY;
-    let params = [
-      entityType || SERVICE_TYPE.PARTITION,
-      partitionId || entityId,
-    ];
-
-    if (entityType === SERVICE_TYPE.MESSAGE_GROUP) {
-      sql = SQL.SELECT_MESSAGE_GROUP_SERVICES_BY_ENTITY;
-      params = [entityType, entityId];
-    } else if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
-      sql = SQL.SELECT_RUNTIME_SERVICES_BY_ENTITY;
-      params = [entityType, entityId];
-    }
-
-    const result = await readAuthoritativeControlPlaneRows(
+    const result = await readAuthoritativeEntityServiceRows(
       this.controlPlaneSystemTableGateway,
-      SYSTEM_TABLE_NAME.SERVICES,
-      sql,
-      params,
+      {
+        partitionId,
+        entityType: entityType || SERVICE_TYPE.PARTITION,
+        entityId,
+      },
       {
         ...CONTROL_PLANE_QUERY_OPTIONS,
         ...(readOptions && typeof readOptions === LOCAL_STR_OBJECT ?

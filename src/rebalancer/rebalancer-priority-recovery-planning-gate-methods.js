@@ -313,9 +313,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     // The coordinator owns the placement actuals; the planner only asks.
     if (
       this.rebalanceCoordinator
-        ?.isOperationLedgerQuorumConcentratedForPartition?.(
+        ?.getOperationLedgerQuorumConcentrationForPartition?.(
           normalizedPartitionId,
-        ) === true
+        ) !== null
     ) {
       return true;
     }

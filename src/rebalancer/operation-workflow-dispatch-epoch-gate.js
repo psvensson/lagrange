@@ -10,7 +10,6 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  OPERATION_METADATA_KEY,
   OperationType,
   REBALANCER_SKIP_REASON,
   ReplicaOperationField,
@@ -20,9 +19,6 @@ const DISPATCH_EPOCH_UNAVAILABLE_PREFIX =
   'current published membership epoch unreadable at dispatch';
 const STALE_DISPATCH_EPOCH_PREFIX =
   'Stale dispatch for published membership epoch ';
-
-const MEMBERSHIP_PUBLICATION_EPOCH_METADATA_KEY =
-  OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH;
 
 function isEpochFencedOperationType(operationType) {
   return (
@@ -44,33 +40,15 @@ function normalizePlanningEpoch(epochValue) {
 }
 
 /**
- * Resolve the operation's planning membership epoch. The live record
- * carries it top-level; operations persisted before the top-level write
- * landed only have the stepsHistory copy, so the step-history entry stays
- * the read fallback (its sole genuine reader).
+ * Resolve the operation's canonical durable planning membership epoch.
  * @param {Object} operation - Resolved dispatch candidate.
  * @return {number|null}
  * @private
  */
 function resolveOperationPlanningEpoch(operation) {
-  const topLevelEpoch = normalizePlanningEpoch(
+  return normalizePlanningEpoch(
     operation?.[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
   );
-  if (topLevelEpoch !== null) {
-    return topLevelEpoch;
-  }
-  const stepsHistory = Array.isArray(operation?.stepsHistory) ?
-    operation.stepsHistory :
-    [];
-  for (const step of stepsHistory) {
-    const historyEpoch = normalizePlanningEpoch(
-      step?.[MEMBERSHIP_PUBLICATION_EPOCH_METADATA_KEY],
-    );
-    if (historyEpoch !== null) {
-      return historyEpoch;
-    }
-  }
-  return null;
 }
 
 /**
@@ -107,9 +85,8 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
   }
   const planningEpoch = resolveOperationPlanningEpoch(operation);
   if (planningEpoch === null) {
-    // Rows with no planning epoch (direct unbound creates, or rows
-    // predating the epoch write) have nothing to fence on; creation only
-    // fences epoch-bound operations.
+    // Direct unbound creates have no planning epoch to fence; creation only
+    // admits this absence for non-planner operations.
     return null;
   }
   const currentEpoch = normalizePlanningEpoch(

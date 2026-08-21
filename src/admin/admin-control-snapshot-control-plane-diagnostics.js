@@ -495,8 +495,9 @@ class AdminControlSnapshotControlPlaneDiagnostics
     const boundedObservationProbe = options.boundedObservationProbe === true;
     const observedMembershipPublication =
       await this.ensureMembershipPublicationObservation({
-        preferAuthoritativeRead:
-          options.preferAuthoritativePublicationRead === true,
+        readSource: options.preferAuthoritativePublicationRead === true ?
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
         reconcileAuthoritativeMembershipPublication:
           options.reconcileAuthoritativeMembershipPublication === true,
         publicationActiveGateHandoff:
@@ -507,8 +508,9 @@ class AdminControlSnapshotControlPlaneDiagnostics
       await this.ensurePublishedMembershipObservation(
         observedMembershipPublication,
         {
-          preferAuthoritativeRead:
-            options.preferAuthoritativePublicationRead === true,
+          readSource: options.preferAuthoritativePublicationRead === true ?
+            MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+            MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
           boundedObservationProbe,
         },
       );
@@ -527,7 +529,10 @@ class AdminControlSnapshotControlPlaneDiagnostics
       observedPublishedMembership =
         await this.ensurePublishedMembershipObservation(
           observedMembershipPublication,
-          {preferAuthoritativeRead: true},
+          {
+            readSource:
+              MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
+          },
         );
     }
     const readinessEntries = await this.resolveControlPlaneReadinessEntries({
@@ -757,3 +762,5 @@ class AdminControlSnapshotControlPlaneDiagnostics
   }
 }
 export {AdminControlSnapshotControlPlaneDiagnostics};
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../control-plane/membership-publication-row-contract.js';

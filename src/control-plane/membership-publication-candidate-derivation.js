@@ -20,6 +20,8 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  './membership-publication-row-contract.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
 import {buildPrioritySpreadDecision} from
   './publication-recovery-priority-spread.js';
@@ -161,7 +163,10 @@ function resolveMembershipPublicationPrioritySpreadPending(options = {}) {
 }
 
 function shouldPreferAuthoritativeMembershipState(options = {}, helperFns = {}) {
-  if (options.preferAuthoritativeRead === true || options.requireAuthoritative === true) {
+  if (
+    options.readSource ===
+      MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED
+  ) {
     return true;
   }
   const publicationRows = [

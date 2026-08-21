@@ -8,7 +8,6 @@ import {
 } from '../cdc/cdc-integration-service.js';
 import {
   CONTROL_PLANE_READ_PURPOSE,
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
 import {
   buildPressureAdmissionFailure,
@@ -18,9 +17,8 @@ import {
 } from './pressure-governor.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  resolveAuthoritativeReadModeContract,
+  CONTROL_PLANE_READ_LEADER_MODE,
   resolveControlPlaneSystemTableDeliverySource,
-  resolveReadProfileOptions,
 } from './control-plane-system-table-gateway.js';
 import {
   buildControlPlaneReadAuthority,
@@ -29,14 +27,8 @@ import {
   buildControlPlaneWorkloadProfile,
   resolveControlPlaneWorkloadClass,
 } from './control-plane-workload-profile.js';
-import {
-  isDeferredTransportSemanticOutcome,
-  classifyTransportSemanticOutcome,
-} from '../transport/transport-semantic-outcome.js';
 
 const LOCAL_STR_SQL_QUERY_ENGINE = 'sql_query_engine';
-const LOCAL_STR_READY = 'ready';
-const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
 const LOCAL_STR_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE = 'authoritative_row_source_unavailable';
@@ -79,64 +71,20 @@ function normalizePositiveInteger(value, fallback) {
 }
 
 function applyAuthoritativeViewDefaultReadMode(options = {}) {
-  const hasExplicitReadModeContract =
-    typeof options?.readProfile === 'string' ||
-    typeof options?.profile === 'string' ||
-    typeof options?.authoritativeReadMode === 'string' ||
-    typeof options?.ownerReadMode === 'string' ||
-    typeof options?.preferOwnerRpcRead !== 'undefined' ||
-    typeof options?.requireOwnerRpcRead !== 'undefined' ||
-    typeof options?.allowSqlFallback !== 'undefined' ||
-    typeof options?.confirmEmptyLocalReadWithOwnerRpc !== 'undefined';
-  if (hasExplicitReadModeContract) {
-    return options;
-  }
+  const suppliedAuthority =
+    options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
+      options.readAuthority :
+      null;
   return {
     ...options,
-    authoritativeReadMode:
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    readAuthority: suppliedAuthority || buildControlPlaneReadAuthority({
+      localReadConsistency:
+        AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    }),
   };
-}
-
-function isReadyLocalQueryTransport(localQueryTransport = null) {
-  if (!localQueryTransport || typeof localQueryTransport !== 'object') {
-    return false;
-  }
-  if (localQueryTransport.ready === true) {
-    return true;
-  }
-  return String(localQueryTransport.state || '').toLowerCase() === LOCAL_STR_READY;
-}
-
-function shouldRetryAuthoritativeReadWithoutOwnerRpc(
-  result,
-  options = {},
-) {
-  const authoritativeReadModeContract =
-    resolveAuthoritativeReadModeContract(options);
-  if (result?.success === true) {
-    return false;
-  }
-  if (authoritativeReadModeContract.requireOwnerRpcRead === true ||
-      authoritativeReadModeContract.allowSqlFallback === false) {
-    return false;
-  }
-  if (normalizeReadSource(result?.source) !==
-      AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE) {
-    return false;
-  }
-  if (!isReadyLocalQueryTransport(result?.localQueryTransport)) {
-    return false;
-  }
-  const transportOutcome = classifyTransportSemanticOutcome(result);
-  const errorText = String(result?.error || '').toLowerCase();
-  const causeChain = Array.isArray(result?.causeChain) ?
-    result.causeChain.map((cause) => String(cause || '').toLowerCase()) :
-    [];
-  return isDeferredTransportSemanticOutcome(transportOutcome) ||
-    causeChain.includes(LOCAL_STR_CONTROL_PLANE_BACKPRESSURE) ||
-    errorText.includes(LOCAL_STR_CONTROL_PLANE_BACKPRESSURE);
 }
 
 function freezeRows(rows) {
@@ -168,9 +116,7 @@ function resolveAuthoritativeReadWorkloadProfile(
 }
 
 function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeoutMs) {
-  const resolvedOptions = resolveReadProfileOptions(options || {});
-  const authoritativeReadModeContract =
-    resolveAuthoritativeReadModeContract(resolvedOptions);
+  const resolvedOptions = options || {};
   const queryOptions =
     resolvedOptions?.queryOptions &&
       typeof resolvedOptions.queryOptions === 'object' ?
@@ -180,7 +126,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
     tableName,
     resolvedOptions,
   );
-  const readAuthority = buildControlPlaneReadAuthority(resolvedOptions);
+  const readAuthority = resolvedOptions.readAuthority;
   return JSON.stringify({
     tableName: tableName || null,
     sql: sql || null,
@@ -190,22 +136,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
       queryOptions.workClass ||
       workloadProfile.workClass ||
       PRESSURE_WORK_CLASS.INTERACTIVE,
-    authoritativeReadMode:
-      authoritativeReadModeContract.authoritativeReadMode,
-    preferOwnerRpcReadLeader:
-      resolvedOptions?.preferOwnerRpcReadLeader === true,
-    requireOwnerRpcReadLeader:
-      resolvedOptions?.requireOwnerRpcReadLeader === true,
-    localReadConsistency:
-      resolvedOptions?.localReadConsistency ||
-      AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-    replicaFallbackConsistency:
-      resolvedOptions?.replicaFallbackConsistency || null,
-    routingReadinessDimension:
-      queryOptions.routingReadinessDimension ||
-      resolvedOptions?.routingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    readPurpose: readAuthority.purpose,
+    readAuthority,
     timeoutMs: queryTimeoutMs,
   });
 }
@@ -381,9 +312,7 @@ class AuthoritativeControlPlaneView {
   * @return {Promise<Object>}
   */
   async readRows(tableName, sql, params = [], options = {}) {
-    const resolvedOptions = resolveReadProfileOptions(
-      applyAuthoritativeViewDefaultReadMode(options || {}),
-    );
+    const resolvedOptions = applyAuthoritativeViewDefaultReadMode(options || {});
     const queryTimeoutMs = normalizePositiveInteger(
       resolvedOptions.queryTimeoutMs,
       this.queryTimeoutMs,
@@ -411,7 +340,7 @@ class AuthoritativeControlPlaneView {
           `control-plane:table:${tableName || 'unknown'}`,
         ],
       );
-      const readAuthority = buildControlPlaneReadAuthority(resolvedOptions);
+      const readAuthority = resolvedOptions.readAuthority;
       const pressureDecision = await this.getPressureGovernor().admit({
         workClass:
           workloadProfile.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
@@ -430,10 +359,7 @@ class AuthoritativeControlPlaneView {
             `authoritative-control-plane-read:${this.nodeId || 'unknown'}:` +
               `${tableName}:${observedAtMs}`,
         routingReadinessDimension:
-          resolvedOptions?.queryOptions?.routingReadinessDimension ||
-          resolvedOptions?.routingReadinessDimension ||
-          CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          readAuthority.routingReadinessDimension,
         workloadClass: workloadProfile.workloadClass,
         workClass:
           resolvedOptions?.queryOptions?.workClass ||
@@ -447,7 +373,6 @@ class AuthoritativeControlPlaneView {
         // refresh through routed owner-RPC fallback.
         allowReadinessAuthoritativeRefresh: false,
         readAuthority,
-        readPurpose: readAuthority.purpose,
       };
       const deliverySource = resolveControlPlaneSystemTableDeliverySource({
         deliverySource: queryOptions.deliverySource || null,
@@ -489,72 +414,17 @@ class AuthoritativeControlPlaneView {
         });
       }
 
-      const authoritativeReadModeContract =
-        resolveAuthoritativeReadModeContract(resolvedOptions);
-      let result =
+      const result =
         await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
           tableName,
           sql,
           params,
           {
-            localReadConsistency:
-              AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-            replicaFallbackConsistency:
-              resolvedOptions?.replicaFallbackConsistency,
-            authoritativeReadMode:
-              authoritativeReadModeContract.authoritativeReadMode,
-            allowOwnerRpcFallback:
-              authoritativeReadModeContract.allowOwnerRpcFallback,
-            preferOwnerRpcRead:
-              authoritativeReadModeContract.preferOwnerRpcRead,
-            preferOwnerRpcReadLeader:
-              resolvedOptions?.preferOwnerRpcReadLeader === true,
-            requireOwnerRpcReadLeader:
-              resolvedOptions?.requireOwnerRpcReadLeader === true,
-            requireOwnerRpcRead:
-              authoritativeReadModeContract.requireOwnerRpcRead,
-            confirmEmptyLocalReadWithOwnerRpc:
-              authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc,
-            allowSqlFallback:
-              authoritativeReadModeContract.allowSqlFallback,
             cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
             readAuthority,
-            readPurpose: readAuthority.purpose,
             queryOptions,
           },
         );
-      if (shouldRetryAuthoritativeReadWithoutOwnerRpc(
-        result,
-        resolvedOptions,
-      )) {
-        result =
-          await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-            tableName,
-            sql,
-            params,
-            {
-              localReadConsistency:
-                AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-              replicaFallbackConsistency:
-                options?.replicaFallbackConsistency,
-              authoritativeReadMode:
-                CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-              allowOwnerRpcFallback: false,
-              preferOwnerRpcRead: false,
-              requireOwnerRpcRead: false,
-              confirmEmptyLocalReadWithOwnerRpc: false,
-              allowSqlFallback:
-                authoritativeReadModeContract.allowSqlFallback,
-              cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
-              readAuthority,
-              readPurpose: readAuthority.purpose,
-              queryOptions: {
-                ...queryOptions,
-                sessionId: `${queryOptions.sessionId}:owner-rpc-recovery`,
-              },
-            },
-          );
-      }
       const rows = freezeRows(result?.rows);
       const source = normalizeReadSource(result?.source);
 
@@ -611,18 +481,15 @@ class AuthoritativeControlPlaneView {
    * @return {Promise<Object>}
    */
   async readReadinessOwnerRows(tableName, sql, params = [], options = {}) {
-    return this.readRows(tableName, sql, params, {
-      ...options,
+    const readAuthority = buildControlPlaneReadAuthority({
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      allowSqlFallback: false,
-      preferOwnerRpcReadLeader: true,
-      requireOwnerRpcReadLeader: true,
-      readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
-      // A prebuilt token normally outranks scalar fields. This named operation
-      // owns the token itself, so a caller cannot smuggle a weaker nested
-      // authority contract past the protected fields above.
-      readAuthority: null,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+    });
+    return this.readRows(tableName, sql, params, {
+      ...options,
+      readAuthority,
     });
   }
 
@@ -638,11 +505,15 @@ class AuthoritativeControlPlaneView {
     const matchesNodeId = (row) =>
       row?.[COLUMN.NODE_ID] === normalizedNodeId ||
       row?.node_id === normalizedNodeId;
+    const resolvedBaseReadOptions = applyAuthoritativeViewDefaultReadMode(options);
     const baseReadOptions = {
-      ...options,
-      replicaFallbackConsistency:
-        options?.replicaFallbackConsistency ||
-        LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      ...resolvedBaseReadOptions,
+      readAuthority: buildControlPlaneReadAuthority({
+        ...resolvedBaseReadOptions.readAuthority,
+        replicaFallbackConsistency:
+          resolvedBaseReadOptions.readAuthority.replicaFallbackConsistency ||
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      }),
     };
     // Node-scoped reads are eventually-consistent readiness snapshots; opt them
     // into the central local-CDC-cache fallback (gated/default-off) so a joiner

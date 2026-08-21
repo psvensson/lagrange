@@ -116,7 +116,7 @@ t.test(
         operationId,
         options = {},
       ) => {
-        if (options.requireOwnerRpcRead === true) {
+        if (options.authoritativeReadMode === 'owner_rpc_required') {
           ownerRpcReads += 1;
         }
         return {

@@ -60,7 +60,7 @@ function retainNodeBootIncarnationWatermark(watermarks, nodeId, fence) {
 }
 
 const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
-  enqueueNodeStateUpdate(payload) {
+  enqueueNodeStateUpdate(payload, options = {}) {
     const nodeId = payload?.[ControlPlaneField.NODE_ID];
     const state = payload?.[ControlPlaneField.STATE];
     if (!nodeId || !state) {
@@ -73,9 +73,13 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     const nextWatermark = this.getNodeStateUpdateWatermark(payload);
     const previousWatermark =
       this.nodeStateUpdateWatermarks.get(nodeId) || null;
+    const awaitCompletion = options.awaitCompletion === true;
     if (
       !this.isNodeStateUpdateWatermarkNewer(previousWatermark, nextWatermark)
     ) {
+      if (awaitCompletion) {
+        return this.enqueueNodeStateUpdateWork(nodeId, payload, true);
+      }
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
         nodeId,
         reason: REPLICA_DISPATCH_SERVICE_LITERAL.STALE_OR_DUPLICATE_ENQUEUE,
@@ -95,17 +99,40 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       return false;
     }
 
-    const nodeStateUpdateQueue = this.resolveNodeStateUpdateQueue(nodeId);
-    const enqueued = nodeStateUpdateQueue.enqueue(
+    const enqueued = this.enqueueNodeStateUpdateWork(
       nodeId,
-      RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-      {payload},
+      payload,
+      awaitCompletion,
     );
     this.logger.debug(DISPATCH_LOG_MSG.ENQUEUE_NODE_STATE_UPDATE, {
       nodeId,
       enqueued,
     });
     return enqueued;
+  },
+
+  enqueueNodeStateUpdateWork(nodeId, payload, awaitCompletion) {
+    const nodeStateUpdateQueue = this.resolveNodeStateUpdateQueue(nodeId);
+    const context = {
+      payload,
+      requireDurableCompletion: awaitCompletion,
+    };
+    if (awaitCompletion) {
+      return nodeStateUpdateQueue.enqueueAndWait(
+        nodeId,
+        RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
+        context,
+      );
+    }
+    return nodeStateUpdateQueue.enqueue(
+      nodeId,
+      RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
+      context,
+    );
+  },
+
+  enqueueNodeStateUpdateAndWait(payload) {
+    return this.enqueueNodeStateUpdate(payload, {awaitCompletion: true});
   },
 
   async handleNodeStateUpdate(payload) {

@@ -4,6 +4,7 @@ const {
   OperationType,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 /**
@@ -148,7 +149,10 @@ async function adoptMostAdvancedObservedReplaceState(context, operation) {
   const authoritativeOperation =
     await context.repository.queryAuthoritativeOperationById(
       operation.operationId,
-      {requireOwnerRpcRead: true},
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      },
     );
   maybeSelectOperation(authoritativeOperation);
 

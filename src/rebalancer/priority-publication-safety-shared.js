@@ -37,6 +37,7 @@ const {
   isPriorityControlPlanePartition,
   isSystemTablePartition,
   readAuthoritativeControlPlaneRows,
+  resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES = Object.freeze(
@@ -176,6 +177,7 @@ const OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED = Object.freeze({
   isSystemTablePartition,
   normalizePriorityRecoveryOperationPartitionId,
   readAuthoritativeControlPlaneRows,
+  resolveOperationHandlerType,
 });
 
 export {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED};

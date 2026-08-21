@@ -5,9 +5,11 @@ import {
 import {
   trackStorageReservationReconcile,
 } from '../diagnostics/raft-churn-sync-sections.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
   ABSENT_OPERATION: 'absent_operation',
   DEFERRED_OPERATION_VISIBILITY: 'deferred_operation_visibility',
@@ -63,6 +65,8 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE = Object.freeze(
 );
 
 const {
+  CONTROL_PLANE_READ_LEADER_MODE,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DEFAULT_AMPLIFICATION_FACTOR,
   OperationType,
   REBALANCE_COORDINATOR_ERROR_MSG,
@@ -70,7 +74,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   RESERVATION_REASON,
   RESERVATION_STATUS,
-  SERVICE_TYPE,
   SQL,
   STORAGE_RESERVATION_READ_QUERY_OPTIONS,
   SYSTEM_TABLE_NAME,
@@ -209,8 +212,8 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
 
-    const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
-    const entityId = operation.entityId || operation.partitionId;
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
     // Sizing (cache read) is isolated in the entity-size helper; this
     // method makes only the durable reservation SQL write decision.
     const estimatedBytes = this.estimateEntityAdmissionBytes({
@@ -228,8 +231,8 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       [
         reservationId,
         operation.operationId,
-        operation.entityType || SERVICE_TYPE.PARTITION,
-        operation.entityId || operation.partitionId,
+        entityType,
+        entityId,
         operation.partitionId,
         operation.targetNodeId,
         estimatedBytes,
@@ -427,7 +430,6 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         await this.repository.getOperationByIdVisibilityObservation(
           operationId,
           {
-            requireOwnerRpcRead: false,
             allowPriorityRecoveryDeferredVisibility: true,
           },
         );
@@ -444,8 +446,9 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       return this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          requireOwnerRpcRead: true,
-          preferOwnerRpcReadLeader: true,
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           allowPriorityRecoveryDeferredVisibility: true,
           requireAbsenceConfirmation: true,
         },

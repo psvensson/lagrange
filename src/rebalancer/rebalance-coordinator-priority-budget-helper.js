@@ -7,8 +7,8 @@ import {
   shouldAllowPriorityRecoveryDeferredObservation,
 } from './rebalance-coordinator-pressure-helper.js';
 import {
-  resolveCreateReservedAddLimit,
-} from './rebalance-coordinator-create-slot-reservation.js';
+  resolveRuntimeServicePlacementReservedAddLimit,
+} from './rebalance-coordinator-runtime-placement-slot-reservation.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD,
   REBALANCE_COORDINATOR_OPERATION_FIELD,
@@ -442,7 +442,7 @@ async function resolveAuthoritativeAddAdmission(
   ) {
     return false;
   }
-  return authoritativeCount < resolveCreateReservedAddLimit(
+  return authoritativeCount < resolveRuntimeServicePlacementReservedAddLimit(
     coordinator,
     authoritativeOperations,
     concurrentAddLimit,
@@ -458,11 +458,13 @@ async function canStartAddOperation(coordinator, options = {}) {
   if (concurrentAddLimit <= 0) {
     return false;
   }
-  // Check create reservation only where cache would admit, preserving cache
-  // saturation and empty-query backoff while blocking stale undercounts.
-  const hasReservedCreateAddSlot =
-    typeof coordinator.getReservedCreateAddSlots === 'function' &&
-    coordinator.getReservedCreateAddSlots(options) > 0;
+  // Check the runtime-placement reservation only where cache would admit,
+  // preserving cache saturation and empty-query backoff while blocking stale
+  // undercounts.
+  const hasReservedRuntimeServicePlacementSlot =
+    typeof coordinator.getReservedRuntimeServicePlacementSlots ===
+      'function' &&
+    coordinator.getReservedRuntimeServicePlacementSlots(options) > 0;
   if (coordinator.getReservedPriorityRecoveryAddSlots(options) > 0) {
     return resolveAuthoritativeAddAdmission(
       coordinator,
@@ -475,15 +477,16 @@ async function canStartAddOperation(coordinator, options = {}) {
   const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
     cachedIncompleteOperations.length :
     0;
-  // Reserve a fair-share plain-ADD slot for genuine runtime-service creates so
-  // ordinary non-priority spread/REPLACE churn cannot starve a service's
-  // replica-create (quest formation-runtime-service-create-lane-budget-starvation).
-  const cachedCandidateEffectiveLimit = resolveCreateReservedAddLimit(
-    coordinator,
-    cachedIncompleteOperations,
-    concurrentAddLimit,
-    options,
-  );
+  // Reserve one fair-share plain-ADD slot for runtime-service placement so
+  // ordinary partition spread/REPLACE churn cannot starve runtime ADD or
+  // affinity REPLACE.
+  const cachedCandidateEffectiveLimit =
+    resolveRuntimeServicePlacementReservedAddLimit(
+      coordinator,
+      cachedIncompleteOperations,
+      concurrentAddLimit,
+      options,
+    );
   const cachedAddBudgetCandidateCount = (
     Array.isArray(cachedIncompleteOperations) ?
       cachedIncompleteOperations :
@@ -504,7 +507,7 @@ async function canStartAddOperation(coordinator, options = {}) {
     options,
   );
   const cachedCount = cachedFilteredOperations.length;
-  const cachedEffectiveLimit = resolveCreateReservedAddLimit(
+  const cachedEffectiveLimit = resolveRuntimeServicePlacementReservedAddLimit(
     coordinator,
     cachedFilteredOperations,
     concurrentAddLimit,
@@ -515,7 +518,7 @@ async function canStartAddOperation(coordinator, options = {}) {
   }
   if (cachedCount > 0) {
     if (cachedCount < cachedEffectiveLimit) {
-      if (hasReservedCreateAddSlot) {
+      if (hasReservedRuntimeServicePlacementSlot) {
         return resolveAuthoritativeAddAdmission(
           coordinator,
           options,
@@ -546,7 +549,7 @@ async function canStartAddOperation(coordinator, options = {}) {
   ) {
     return false;
   }
-  if (hasReservedCreateAddSlot) {
+  if (hasReservedRuntimeServicePlacementSlot) {
     return resolveAuthoritativeAddAdmission(
       coordinator,
       options,

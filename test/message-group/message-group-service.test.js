@@ -597,29 +597,9 @@ test(
         'forward-topology repair should use the critical control-plane work class',
       );
       t.equal(
-        readCalls[0]?.options?.preferOwnerRpcRead,
-        false,
-        'forward-topology repair should not prefer routed owner-rpc reads',
-      );
-      t.equal(
-        readCalls[0]?.options?.requireOwnerRpcRead,
-        false,
-        'forward-topology repair should not require routed owner-rpc reads',
-      );
-      t.equal(
-        readCalls[0]?.options?.allowOwnerRpcFallback,
-        false,
-        'forward-topology repair should fail closed instead of recursing through owner-rpc fallback',
-      );
-      t.equal(
-        readCalls[0]?.options?.allowSqlFallback,
-        false,
-        'forward-topology repair should not fall back to sql reads',
-      );
-      t.equal(
-        readCalls[0]?.options?.confirmEmptyLocalReadWithOwnerRpc,
-        false,
-        'forward-topology repair should keep empty local reads local-only',
+        readCalls[0]?.options?.authoritativeReadMode,
+        'owner_local_only',
+        'one named mode keeps forward-topology repair local-only',
       );
     } finally {
       await cleanup();

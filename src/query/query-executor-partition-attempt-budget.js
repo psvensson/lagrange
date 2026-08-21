@@ -17,6 +17,20 @@ const RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE = 'connected';
 const RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE = 'connecting';
 const RECOVERY_CANDIDATE_UNOBSERVED_CONNECTION_STATE = 'unobserved';
 
+function resolvePartitionExecutionTimeoutMs(executor, forRead, options) {
+  if (Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0) {
+    return Math.floor(options.timeoutMs);
+  }
+  if (
+    !forRead &&
+    Number.isFinite(executor.queryTimeoutMs) &&
+    executor.queryTimeoutMs > 0
+  ) {
+    return Math.floor(executor.queryTimeoutMs);
+  }
+  return null;
+}
+
 function createPartitionAttemptBudget({
   executor,
   partitionId,
@@ -25,11 +39,11 @@ function createPartitionAttemptBudget({
   routingReadinessDimension,
   cancellationToken = null,
 }) {
-  const executionTimeoutMs =
-    Number.isFinite(executionOptions?.timeoutMs) &&
-    executionOptions.timeoutMs > 0 ?
-      Math.floor(executionOptions.timeoutMs) :
-      null;
+  const executionTimeoutMs = resolvePartitionExecutionTimeoutMs(
+    executor,
+    forRead,
+    executionOptions,
+  );
   const parentDeadlineMs =
     Number.isFinite(executionOptions?.timeoutBudget?.deadlineMs) ?
       Math.floor(executionOptions.timeoutBudget.deadlineMs) :

@@ -1,6 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 
 function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   const primaryKey = tableName === SYSTEM_TABLE_NAME.LOGS ?
@@ -112,8 +114,8 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
       'should query the canonical system table',
     );
     t.equal(
-      serviceRead?.options?.allowSqlFallback,
-      false,
+      serviceRead?.options?.readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
       'should not recurse into routed SQL from the SQL engine fast path',
     );
     t.equal(deliveries.length, 0, 'should bypass routed query delivery');
@@ -160,7 +162,10 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     t.equal(result.success, true, 'shared authoritative view should satisfy the read');
     t.equal(authoritativeReads.length, 1, 'SQL fast path should delegate to the shared read owner');
     t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.SERVICES);
-    t.equal(authoritativeReads[0].options.allowSqlFallback, false);
+    t.equal(
+      authoritativeReads[0].options.readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    );
     t.equal(deliveries.length, 0,
       'shared authoritative reads should still bypass routed delivery');
     t.equal(result.rows.length, 1);
@@ -221,12 +226,14 @@ test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
     'bounded lookup should route through the authoritative read owner');
   t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.LOGS);
   t.equal(
-    authoritativeReads[0].options.confirmEmptyLocalReadWithOwnerRpc,
-    true,
+    authoritativeReads[0].options.readAuthority?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
     'bounded primary-key lookups should confirm empty local reads via owner RPC',
   );
   t.equal(
-    authoritativeReads[0].options.replicaFallbackConsistency,
+    authoritativeReads[0].options.readAuthority
+      ?.replicaFallbackConsistency,
     'any_replica',
     'bounded primary-key lookups should still allow local replica reads first',
   );

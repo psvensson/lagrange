@@ -11,6 +11,7 @@ import {
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
   getControlPlaneNodeStatePublicationProfile,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
@@ -74,9 +75,11 @@ class HeartbeatServicePublicationMethods {
    * Send a single heartbeat update.
    * @param {Object} [stats] - Node stats.
    * @param {Array<string>} [capabilities] - Node capabilities.
+   * @param {Object} [options]
+   * @param {boolean} [options.requireDurableVisibility]
    * @return {Promise<void>}
    * @private
-   */ async sendHeartbeat(stats, capabilities) {
+   */ async sendHeartbeat(stats, capabilities, options = {}) {
     const now = this.now();
     const memoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
       Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
@@ -135,8 +138,13 @@ class HeartbeatServicePublicationMethods {
     });
     const nodeWriteDecision = this.resolveNodeHeartbeatWriteDecision(updateRow, now);
     this.lastHeartbeatPublicationDecision = nodeWriteDecision;
-    let shouldWriteNodeHeartbeat = nodeWriteDecision.shouldWrite;
-    if (quietModeActive && shouldWriteNodeHeartbeat) {
+    const requireDurableVisibility = options.requireDurableVisibility === true;
+    // A caller waiting on the publication boundary owns a fresh write and its
+    // visibility proof.  Reusing an earlier coalesced heartbeat here would
+    // turn "durable" back into a timing-dependent cache observation.
+    let shouldWriteNodeHeartbeat =
+      requireDurableVisibility || nodeWriteDecision.shouldWrite;
+    if (quietModeActive && shouldWriteNodeHeartbeat && !requireDurableVisibility) {
       if (nodeWriteDecision.reason === HEARTBEAT_SERVICE_LITERAL.NO_PREVIOUS_WRITE) {
         incrementHistogramEntry(
           this.quietModeBypassReasonHistogram,
@@ -187,6 +195,7 @@ class HeartbeatServicePublicationMethods {
         now,
         heartbeatWriteQueryTimeoutMs,
         nodeWriteDecision.publicationMode,
+        options,
       );
     } // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
     // endpoint rows on every heartbeat.
@@ -255,6 +264,8 @@ class HeartbeatServicePublicationMethods {
    * @param {Array<string>|string|null} capabilities
    * @param {number} now
    * @param {number} [queryTimeoutMs]
+   * @param {string} [publicationMode]
+   * @param {Object} [options]
    * @return {Promise<void>}
    * @private
    */ async writeNodeHeartbeat(
@@ -263,6 +274,7 @@ class HeartbeatServicePublicationMethods {
     now,
     queryTimeoutMs = null,
     publicationMode = CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
+    options = {},
   ) {
     const heartbeatWriteQueryTimeoutMs =
       Number.isFinite(queryTimeoutMs) && queryTimeoutMs > ZERO ?
@@ -281,6 +293,8 @@ class HeartbeatServicePublicationMethods {
             readyLeaseExpiresAt: updateRow.ready_lease_expires_at,
             heartbeatOnly: true,
             nodeStatePublicationMode: publicationMode,
+            requireDurableCompletion:
+              options.requireDurableVisibility === true,
             nodeRow: {...updateRow},
           },
           reporterTimeoutMs,
@@ -289,6 +303,33 @@ class HeartbeatServicePublicationMethods {
           reporterResult,
           HEARTBEAT_PUBLICATION_PATH.NODE_STATE_REPORTER,
         );
+        if (options.requireDurableVisibility === true) {
+          const durableCompletion =
+            reporterResult?.completionKind ===
+              CONTROL_PLANE_MESSAGE_COMPLETION_KIND
+                .DURABLE_STATE_PUBLICATION &&
+            reporterResult?.completionCompleted === true;
+          if (!durableCompletion) {
+            const visibilityError = new Error(
+              HEARTBEAT_SERVICE_LITERAL.REPORTER_DURABLE_VISIBILITY_REQUIRED,
+            );
+            visibilityError.deferRetry = true;
+            visibilityError.publicationDiagnostics = reporterDiagnostics;
+            throw visibilityError;
+          }
+          this.lastReporterVisibilityVerifiedAt = this.now();
+          this.lastReporterVisibilityTargetAddress =
+            reporterDiagnostics.targetAddress || null;
+          recordHeartbeatPublicationSuccess({
+            diagnostics: reporterDiagnostics,
+            heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
+            heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
+            now,
+            serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
+          });
+          this.recordConfirmedNodeHeartbeatWrite(updateRow, now);
+          return;
+        }
         const visibilityDecision = this.resolveReporterHeartbeatVisibilityDecision(
           reporterDiagnostics,
           now,

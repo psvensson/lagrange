@@ -582,7 +582,7 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
       t.match(
         reconcileOptions,
         {
-          preferAuthoritativeRead: true,
+          readSource: 'authoritative_preferred',
           publishedActiveNodeIds: ['node-1', 'node-2'],
           requiredAckNodeIds: ['node-1', 'node-2'],
           acknowledgedNodeIds: ['node-1', 'node-2'],

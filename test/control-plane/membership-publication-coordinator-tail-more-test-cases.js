@@ -1,6 +1,8 @@
 import {registerMembershipPublicationCoordinatorDispatchRetryTests} from './membership-publication-coordinator-dispatch-retry-test-cases.js';
 import {registerMembershipPublicationCoordinatorPriorityRefreshTests} from './membership-publication-coordinator-priority-refresh-test-cases.js';
 import {registerMembershipPublicationCoordinatorTailFinalTests} from './membership-publication-coordinator-tail-final-test-cases.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 
 export function registerMembershipPublicationCoordinatorTailMoreTests({
   test,
@@ -112,7 +114,8 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
 
       const latestPublishedPublication =
       await coordinator.getLatestPublishedClusterPublication({
-        preferAuthoritativeRead: true,
+        readSource:
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       });
 
       t.match(latestPublishedPublication, {

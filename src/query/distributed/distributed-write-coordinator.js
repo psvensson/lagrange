@@ -13,13 +13,7 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_NUMBER = 'number';
 
-const WRITE_COORDINATOR_DEFAULT = Object.freeze({
-  MAX_RETRIES: 1,
-});
-
 const ERR_NO_PARTITION_FOR_KEY = 'No partition found for key: ';
-const WRITE_EXHAUSTED_RETRIES_MSG =
-  'Distributed write exhausted retries';
 const DEFAULT_PRIMARY_KEY_COLUMN = 'id';
 const HASH_ALGORITHM = 'sha1';
 const DIGEST_ENCODING = 'hex';
@@ -42,14 +36,12 @@ class DistributedWriteCoordinator {
    * @param {Object} options.queryExecutor - Query executor.
    * @param {Function} options.getTablePartitions - Table partitions resolver.
    * @param {Function} options.getTableInfo - Table metadata resolver.
-   * @param {number} [options.maxRetries] - Retry count per partition.
    */
   constructor(options = {}) {
     this.partitionResolver = options.partitionResolver || null;
     this.queryExecutor = options.queryExecutor || null;
     this.getTablePartitions = options.getTablePartitions || (() => []);
     this.getTableInfo = options.getTableInfo || (() => null);
-    this.maxRetries = options.maxRetries ?? WRITE_COORDINATOR_DEFAULT.MAX_RETRIES;
     this.logger = this.initLogger();
   }
 
@@ -332,7 +324,9 @@ class DistributedWriteCoordinator {
   }
 
   /**
-   * Execute one partition write with bounded retry.
+   * Delegate one partition write to the canonical query-delivery owner.
+   * QueryExecutor owns routing recovery and its absolute request deadline;
+   * this coordinator owns only participant planning and result aggregation.
    * @param {string} statementType - Statement type.
    * @param {Object} statementAst - Partition-scoped statement AST.
    * @param {string} partitionId - Target partition.
@@ -347,110 +341,64 @@ class DistributedWriteCoordinator {
     params,
     executionOptions = {},
   ) {
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        const result = await this.executePartitionStatementOnce(
-          statementType,
+    try {
+      let result;
+      if (statementType === QUERY_AST_TYPE.INSERT) {
+        result = await this.queryExecutor.executeInsert(
           statementAst,
           partitionId,
           params,
           executionOptions,
         );
-        if (result.success !== false) {
-          return {
-            ...result,
-            attempts: attempt + 1,
-          };
-        }
-        if (attempt >= this.maxRetries) {
-          return {
-            ...result,
-            attempts: attempt + 1,
-          };
-        }
-      } catch (error) {
-        if (attempt >= this.maxRetries) {
-          return {
-            success: false,
-            error: error.message,
-            errorCode:
-              typeof error?.code === LOCAL_STR_STRING &&
-              error.code.length > 0 ?
-                error.code :
-                (typeof error?.errorCode === LOCAL_STR_STRING &&
-                error.errorCode.length > 0 ?
-                  error.errorCode :
-                  null),
-            retryAfterMs:
-              Number.isFinite(error?.retryAfterMs) &&
-              error.retryAfterMs > 0 ?
-                Math.floor(error.retryAfterMs) :
-                null,
-            deferRetry: error?.deferRetry === true,
-            participantNodeId:
-              typeof error?.participantNodeId === LOCAL_STR_STRING ?
-                error.participantNodeId :
-                null,
-            participantAddress:
-              typeof error?.participantAddress === LOCAL_STR_STRING ?
-                error.participantAddress :
-                null,
-            failedTable:
-              typeof error?.failedTable === LOCAL_STR_STRING ?
-                error.failedTable :
-                (typeof error?.tableName === LOCAL_STR_STRING ?
-                  error.tableName :
-                  null),
-            attempts: attempt + 1,
-          };
-        }
+      } else if (statementType === QUERY_AST_TYPE.UPDATE) {
+        result = await this.queryExecutor.executeUpdate(
+          statementAst,
+          [partitionId],
+          params,
+          executionOptions,
+        );
+      } else {
+        result = await this.queryExecutor.executeDelete(
+          statementAst,
+          [partitionId],
+          params,
+          executionOptions,
+        );
       }
+      return {...result, attempts: 1};
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        errorCode:
+          typeof error?.code === LOCAL_STR_STRING && error.code.length > 0 ?
+            error.code :
+            (typeof error?.errorCode === LOCAL_STR_STRING &&
+            error.errorCode.length > 0 ?
+              error.errorCode :
+              null),
+        retryAfterMs:
+          Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ?
+            Math.floor(error.retryAfterMs) :
+            null,
+        deferRetry: error?.deferRetry === true,
+        participantNodeId:
+          typeof error?.participantNodeId === LOCAL_STR_STRING ?
+            error.participantNodeId :
+            null,
+        participantAddress:
+          typeof error?.participantAddress === LOCAL_STR_STRING ?
+            error.participantAddress :
+            null,
+        failedTable:
+          typeof error?.failedTable === LOCAL_STR_STRING ?
+            error.failedTable :
+            (typeof error?.tableName === LOCAL_STR_STRING ?
+              error.tableName :
+              null),
+        attempts: 1,
+      };
     }
-    return {
-      success: false,
-      error: WRITE_EXHAUSTED_RETRIES_MSG,
-      attempts: this.maxRetries + 1,
-    };
-  }
-
-  /**
-   * Execute one partition write without retry.
-   * @param {string} statementType - Statement type.
-   * @param {Object} statementAst - Partition-scoped statement AST.
-   * @param {string} partitionId - Target partition.
-   * @param {Array} params - Bound parameters.
-   * @return {Promise<Object>} Participant result.
-   * @private
-   */
-  async executePartitionStatementOnce(
-    statementType,
-    statementAst,
-    partitionId,
-    params,
-    executionOptions = {},
-  ) {
-    if (statementType === QUERY_AST_TYPE.INSERT) {
-      return this.queryExecutor.executeInsert(
-        statementAst,
-        partitionId,
-        params,
-        executionOptions,
-      );
-    }
-    if (statementType === QUERY_AST_TYPE.UPDATE) {
-      return this.queryExecutor.executeUpdate(
-        statementAst,
-        [partitionId],
-        params,
-        executionOptions,
-      );
-    }
-    return this.queryExecutor.executeDelete(
-      statementAst,
-      [partitionId],
-      params,
-      executionOptions,
-    );
   }
 
   /**

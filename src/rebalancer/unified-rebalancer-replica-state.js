@@ -439,22 +439,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     const normalizedOperation = normalizeReplicaOperationRecord(operation, {
       nowMs: this.nowFn(),
     });
-    const entityType =
-      normalizedOperation.entityType ||
-      operation?.entity_type ||
-      operation?.entityType ||
-      EntityType.PARTITION;
-    const entityId =
-      normalizedOperation.entityId ||
-      normalizedOperation.partitionGroupId ||
-      operation?.entity_id ||
-      operation?.entityId ||
-      operation?.partition_group_id ||
-      operation?.partitionGroupId ||
-      operation?.partition_id ||
-      operation?.partitionId ||
-      null;
-    return entityType === this.entityType && entityId === this.entityId;
+    return normalizedOperation.entityType === this.entityType &&
+      normalizedOperation.entityId === this.entityId;
   }
 
   /**

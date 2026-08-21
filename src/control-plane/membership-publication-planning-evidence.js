@@ -4,6 +4,8 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from './control-plane-system-table-gateway.js';
+import {buildControlPlaneReadAuthority} from
+  './control-plane-system-table-gateway-read-contracts.js';
 import {resolveActiveNodeViews} from './active-node-projection.js';
 import {
   buildMembershipLifecycleSummary,
@@ -30,11 +32,15 @@ import {
 } from './membership-publication-planning.js';
 import {buildMembershipEpochSnapshot} from './membership-epoch-contract.js';
 import {
+  assertCanonicalRebalancerEntityIdentity,
+} from '../rebalancer/rebalancer-entity-identity.js';
+import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE,
   MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS,
   MEMBERSHIP_PUBLICATION_READ_PROFILE,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
@@ -171,28 +177,45 @@ function normalizeReplicaOperationView(operation) {
   if (!operation || typeof operation !== 'object') {
     return null;
   }
-  const stepsHistory = Array.isArray(operation.stepsHistory) ?
-    operation.stepsHistory :
-    Array.isArray(operation.steps_history) ?
-      operation.steps_history :
-      [];
-  return {
-    operationId: operation.operationId || operation.operation_id || null,
-    type: operation.type || null,
-    partitionId: operation.partitionId || operation.partition_id || null,
-    replicaId: operation.replicaId || operation.replica_id || null,
-    sourceNodeId: operation.sourceNodeId || operation.source_node_id || null,
-    targetNodeId: operation.targetNodeId || operation.target_node_id || null,
-    status: operation.status || null,
-    workflowStep: operation.workflowStep || operation.workflow_step || null,
-    createdAt: operation.createdAt || operation.created_at,
-    updatedAt: operation.updatedAt || operation.updated_at,
-    completedAt: operation.completedAt || operation.completed_at,
-    errorMessage: operation.errorMessage || operation.error_message || null,
+  const isDatabaseRow = Object.hasOwn(operation, 'operation_id');
+  let stepsHistory = isDatabaseRow ? operation.steps_history :
+    operation.stepsHistory;
+  if (typeof stepsHistory === 'string') {
+    try {
+      stepsHistory = JSON.parse(stepsHistory);
+    } catch (_error) {
+      return null;
+    }
+  }
+  if (!Array.isArray(stepsHistory)) {
+    stepsHistory = [];
+  }
+  const normalized = isDatabaseRow ? {
+    operationId: operation.operation_id,
+    type: operation.type,
+    partitionId: operation.partition_id,
+    replicaId: operation.replica_id,
+    sourceNodeId: operation.source_node_id,
+    targetNodeId: operation.target_node_id,
+    status: operation.status,
+    workflowStep: operation.workflow_step,
+    createdAt: operation.created_at,
+    updatedAt: operation.updated_at,
+    completedAt: operation.completed_at,
+    errorMessage: operation.error_message,
     stepsHistory,
-    entityType: operation.entityType || operation.entity_type || null,
-    entityId: operation.entityId || operation.entity_id || null,
+    entityType: operation.entity_type,
+    entityId: operation.entity_id,
+  } : {
+    ...operation,
+    stepsHistory,
   };
+  try {
+    const identity = assertCanonicalRebalancerEntityIdentity(normalized);
+    return {...normalized, ...identity};
+  } catch (_error) {
+    return null;
+  }
 }
 
 const mergePublicationRows = mergeControlPlanePublicationRows;
@@ -201,7 +224,8 @@ function buildPublicationReadOptions(options = {}) {
   const readProfile = resolveMembershipPublicationReadProfile(options.readProfile);
   return {
     ...options,
-    preferAuthoritativeRead: true,
+    readSource:
+      MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
     authoritativeReadMode:
       readProfile === MEMBERSHIP_PUBLICATION_READ_PROFILE.DIAGNOSTICS ?
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED :
@@ -227,7 +251,8 @@ function buildPublicationListReadOptions(options = {}) {
 function buildPublicationAcknowledgementReadOptions(options = {}) {
   return {
     ...options,
-    preferAuthoritativeRead: true,
+    readSource:
+      MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
     readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE.ACKNOWLEDGEMENT,
   };
 }
@@ -239,8 +264,8 @@ function hasExplicitMembershipPublicationTarget(options = {}) {
 
 function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
   if (
-    options.preferAuthoritativeRead === true ||
-    options.requireAuthoritative === true
+    options.readSource ===
+      MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED
   ) {
     return options.tableName === TABLES.NODES ?
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
@@ -251,10 +276,20 @@ function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
 }
 
 function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
+  const operationalOptions = {...options};
+  delete operationalOptions.authoritativeReadMode;
+  delete operationalOptions.readAuthority;
+  delete operationalOptions.readSource;
   return {
-    ...options,
-    authoritativeReadMode:
-      resolveMembershipEvidenceAuthoritativeReadMode(options),
+    ...operationalOptions,
+    readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        resolveMembershipEvidenceAuthoritativeReadMode(options),
+      localReadConsistency: options?.localReadConsistency,
+      replicaFallbackConsistency: options?.replicaFallbackConsistency,
+      routingReadinessDimension: options?.routingReadinessDimension,
+      purpose: options?.purpose,
+    }),
   };
 }
 

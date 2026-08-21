@@ -5,6 +5,8 @@ import {
   TABLES,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 
 export function registerMembershipPublicationCoordinatorTailFinalTests({
   test,
@@ -691,11 +693,13 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       });
 
       await coordinator.reconcileClusterMembership({
-        preferAuthoritativeRead: true,
+        readSource:
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       });
 
       t.match(authoritativeReadOptions, {
-        preferAuthoritativeRead: true,
+        readSource:
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
         authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
       }, 'authoritative publication repair should stay on local authoritative publication reads');
@@ -1085,7 +1089,8 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       );
       t.equal(
         tableReadRequests.every((request) =>
-          request.options.preferAuthoritativeRead === true),
+          request.options.readSource ===
+            MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED),
         true,
         'in-flight membership publications should force authoritative table reads',
       );
@@ -1243,13 +1248,13 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       authoritativeReadOptionsByTableName.get(TABLES.SERVICES);
 
     t.equal(
-      nodeReadOptions.authoritativeReadMode,
+      nodeReadOptions.readAuthority?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE
         .OWNER_RPC_PREFERRED_SQL_FALLBACK,
       'published priority spread gaps should preserve fallback-capable authoritative node evidence',
     );
     t.equal(
-      serviceReadOptions.authoritativeReadMode,
+      serviceReadOptions.readAuthority?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
       'published priority spread gaps should use owner-rpc service evidence',
     );
@@ -1423,7 +1428,7 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       );
 
     t.equal(
-      operationReadOptions.authoritativeReadMode,
+      operationReadOptions.readAuthority?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
       'published priority spread gaps should use owner-rpc replica operation evidence',
     );

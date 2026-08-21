@@ -80,6 +80,7 @@ const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
 const CDC_INTEGRATION_SERVICE_ERROR = Object.freeze({
   MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS:
     'Missing canonical node_endpoints websocket address',
+  READ_AUTHORITY_REQUIRED: 'read_authority_required',
 });
 const QUERY_TRANSPORT_NOT_READY_ERROR_CODE = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
 const AUTHORITATIVE_READ_SOURCE = Object.freeze({

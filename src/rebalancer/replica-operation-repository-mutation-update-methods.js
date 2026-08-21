@@ -43,7 +43,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     SQL,
     SYSTEM_TABLE_NAME,
     buildControlPlaneFailurePayload,
-    isOperationLedgerPartition,
+    classifySystemPartition,
   } = options;
 
   class ReplicaOperationRepositoryMutationUpdateMethods {
@@ -265,9 +265,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             // transition write. Non-ledger lease touches keep their prior
             // write shape byte-identical.
             disableSystemWriteSession:
-              isOperationLedgerPartition({
+              classifySystemPartition({
                 partitionId: operation?.partitionId,
-              }) === true,
+              }).operationLedger === true,
           },
         );
         return result?.success === true;
@@ -444,7 +444,6 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         await this.queryAuthoritativeOperationById(operation.operationId, {
           authoritativeReadMode:
             CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          requireOwnerRpcRead: false,
         });
       if (
         !authoritativeOperation ||

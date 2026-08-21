@@ -142,9 +142,11 @@ function isRecoverableControlSnapshotPublicationReadError(error = null) {
   );
 }
 function buildMembershipPublicationReadOptions(options = {}) {
-  return options.preferAuthoritativeRead === true ?
+  return options.readSource ===
+    MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED ?
     {
-      preferAuthoritativeRead: true,
+      readSource:
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
       deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
@@ -358,3 +360,5 @@ assignAdminControlSnapshotLocalDiagnosticsMethods(AdminControlSnapshot, {
   uniqueSorted,
 });
 export {AdminControlSnapshot};
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../control-plane/membership-publication-row-contract.js';

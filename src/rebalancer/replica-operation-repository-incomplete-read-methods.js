@@ -204,7 +204,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     /**
    * Fenced orphan-adoption read (audit findings 5+14): the recovery sweep
    * surface. Returns incomplete ordinary-partition operations this node may
-   * adopt as the fenced successor — legacy unfenced rows OR rows whose
+   * adopt as the fenced successor — unfenced rows OR rows whose
    * durable lease expired by `nowMs`. A live remote lease is never returned.
    * @param {number} [nowMs]
    * @return {Object[]}
@@ -288,7 +288,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     /**
    * Query all incomplete (in-flight) operations owned by this node.
    * @param {object} [options={}]
-   * @param {boolean} [options.preferAuthoritativeRead]
+   * @param {string} [options.visibilityReadMode]
    * @return {Promise<Array>}
    */
     async queryIncompleteOperations(options = {}) {

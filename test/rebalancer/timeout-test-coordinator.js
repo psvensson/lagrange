@@ -15,6 +15,27 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
+function buildInsertedRow(sql, params) {
+  const columnList = String(sql).match(
+    /INSERT\s+INTO\s+replica_operations\s*\(([^)]+)\)/i,
+  )?.[1];
+  if (!columnList) {
+    throw new Error(
+      'Replica-operation fixture requires an explicit INSERT column list',
+    );
+  }
+  const columns = columnList.split(',').map((column) => column.trim());
+  if (columns.length !== params.length) {
+    throw new Error(
+      'Replica-operation fixture column/value mismatch: ' +
+      `${columns.length} columns, ${params.length} values`,
+    );
+  }
+  return Object.fromEntries(
+    columns.map((column, index) => [column, params[index]]),
+  );
+}
+
 function createTimeoutTestCoordinator(options = {}) {
   const {services = []} = options;
   const trackedOperations = new Map();
@@ -29,28 +50,8 @@ function createTimeoutTestCoordinator(options = {}) {
   const sqlEngine = {
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory,
-        ] = params;
-
-        trackedOperations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-        });
+        const row = buildInsertedRow(sql, params);
+        trackedOperations.set(row.operation_id, row);
         return {success: true};
       }
 
@@ -121,19 +122,12 @@ function createTimeoutTestCoordinator(options = {}) {
           };
         }
 
-        // Entity-scoped read (SELECT_OPERATIONS_BY_ENTITY): match production's
-        // entity filter so a per-partition observation does not leak ops from other
-        // partitions (the catch-all below returns ALL ops, which is not faithful for
-        // an entity-scoped query). Params: [entityType, entityId, partitionId]; these
-        // test rows carry only partition_id, so the partition fallback clause matches.
+        // Entity-scoped read (SELECT_OPERATIONS_BY_ENTITY): match the canonical
+        // typed identity so a per-entity observation cannot leak another owner.
         if (sql.includes('entity_type = ?') && sql.includes('entity_id = ?')) {
-          const [entityType, entityId, partitionId] = params;
+          const [entityType, entityId] = params;
           const matching = allOps.filter((op) =>
-            (op.entity_type === entityType && op.entity_id === entityId) ||
-            ((op.entity_type === null ||
-              op.entity_type === undefined ||
-              op.entity_type === '') &&
-              op.partition_id === partitionId));
+            op.entity_type === entityType && op.entity_id === entityId);
           return {success: true, rows: matching};
         }
 

@@ -15,7 +15,7 @@ import {
 
 // Fenced orphan adoption (audit findings 5+14): incomplete operations on
 // ORDINARY partitions whose recorded owner is remote join the sweep when
-// the durable lease is absent (legacy unfenced row) or expired at `now` — a
+// the durable lease is absent (unfenced row) or expired at `now` — a
 // live remote lease stays fenced out. The repository's adoption read is the
 // fence owner; adoption reuses the same gated lifecycle reconcile
 // (single-flight + staleness/prompt gate) as locally-owned orphans, so an
@@ -264,7 +264,6 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
             await this.repository.getOperationByIdVisibilityObservation(
               operation.operationId,
               {
-                requireOwnerRpcRead: false,
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
@@ -788,8 +787,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     // Fenced replacement for the unfenced routing-readiness heuristic (audit
     // findings 5+14): a LIVE durable owner lease held by the recorded owner
     // fences priority-control-plane drain remote settlement even when the
-    // routing-readiness heuristic reports the owner unready. An absent
-    // (legacy) or expired lease defers to the legacy heuristic.
+    // routing-readiness probe reports the owner unready. An unfenced or
+    // expired lease defers to that availability probe.
     return resolveOperationDrainOwnerAvailability({
       ownerNodeId,
       nodeId: this.nodeId,

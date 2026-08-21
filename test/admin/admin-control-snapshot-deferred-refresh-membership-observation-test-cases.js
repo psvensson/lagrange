@@ -195,8 +195,8 @@ test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner
       }
       const observedPublication =
         await snapshot.ensureMembershipPublicationObservation({
-          preferAuthoritativeRead:
-            options.preferAuthoritativePublicationRead === true,
+          readSource: options.preferAuthoritativePublicationRead === true ?
+            'authoritative_preferred' : 'cache_preferred',
         });
       return {
         nodes: [...observedPublication.publishedActiveNodeIds],
@@ -242,8 +242,7 @@ test('AdminControlSnapshot repair-deferred trigger refreshes after visible owner
     t.same(
       latestPublicationReadOptions,
       {
-        preferAuthoritativeRead:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+        readSource: 'authoritative_preferred',
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         deliveryPriority: 'readiness',
@@ -722,8 +721,8 @@ test('AdminControlSnapshot repair-deferred trigger queues owner reconcile withou
       }
       const observedPublication =
         await snapshot.ensureMembershipPublicationObservation({
-          preferAuthoritativeRead:
-            options.preferAuthoritativePublicationRead === true,
+          readSource: options.preferAuthoritativePublicationRead === true ?
+            'authoritative_preferred' : 'cache_preferred',
           reconcileAuthoritativeMembershipPublication:
             options.reconcileAuthoritativeMembershipPublication === true,
           publicationActiveGateHandoff:
@@ -1023,7 +1022,7 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
     t.match(
       reconcileOptions,
       {
-        preferAuthoritativeRead: true,
+        readSource: 'authoritative_preferred',
         publishedActiveNodeIds: ['node-1', 'node-2'],
         requiredAckNodeIds: ['node-1', 'node-2'],
         acknowledgedNodeIds: ['node-1', 'node-2'],

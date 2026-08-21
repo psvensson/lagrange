@@ -51,7 +51,6 @@ function createCoordinator(resultsByPartition) {
     getTableInfo() {
       return {primaryKey: 'id'};
     },
-    maxRetries: 0,
   });
 
   coordinator.executePartitionStatement =

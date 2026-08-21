@@ -9,7 +9,7 @@
  * denials and ordinary partitions keep the strict readiness filter.
  * Pinned from the natural five-node GCP run archived as
  * movielens-lagrange-service-affinity-live-2026-08-15T13-12-43-108Z
- * (joiners wedged at waiting_for_ledger_spread with voters 3 distinct 1).
+ * (joiners held by the formation barrier with voters 3 distinct 1).
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {

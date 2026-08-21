@@ -10,6 +10,7 @@ import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_WORKFLOW_STEP,
   PUBLICATION_WORKFLOW_REASON,
 } from './membership-publication-row-contract.js';
@@ -36,6 +37,13 @@ import {buildPublicationActiveGateHandoffContract} from './publication-active-ga
 import {
   resolveControlPlanePublicationsLeadership,
 } from './control-plane-publications-leadership.js';
+import {buildControlPlaneReadAuthority} from
+  './control-plane-system-table-gateway-read-contracts.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from
+  './control-plane-system-table-gateway-constants.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -281,14 +289,17 @@ class MembershipPublicationCoordinatorReconcile extends
         // otherwise re-read its own frozen epoch forever (the variant-D
         // recurrence). Local fallback is preserved (prefer, not require), so a
         // partitioned node still fails soft. See CL-001 "VARIANT D DEEPER LAYER".
-        preferOwnerRpcRead: true,
-        // preferOwnerRpcRead alone routes to "an owner" replica with
-        // preferLeader=false, so the frozen node still self-serves its own stale
-        // local publications replica and never advances. Pin the read to the
-        // publications LEADER, which holds the authoritative epoch (it serves on
+        // The owner-preferred mode alone can route to any owner replica, so the
+        // frozen node could still self-serve stale publications. The same token
+        // therefore pins the read to the publications leader, which holds the
+        // authoritative epoch (it serves on
         // the CONTROL_PLANE_RECOVERY_ELIGIBLE dimension even while recovery is
         // pending). This is the variant-D frozen-follower fix.
-        preferOwnerRpcReadLeader: true,
+        readAuthority: buildControlPlaneReadAuthority({
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        }),
       });
     } catch (error) {
       this.logger?.warn?.(MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG, {
@@ -570,7 +581,8 @@ class MembershipPublicationCoordinatorReconcile extends
     this.ownerMembershipReconcileInFlight = true;
     try {
       const planningSnapshot = await this.readPublicationPlanningSnapshot({
-        preferAuthoritativeRead: true,
+        readSource:
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       });
       // DIAG: on the owner — does the planning snapshot exist and what is its
       // own missingPublishedCount view (vs the harness convergence check)?
@@ -629,7 +641,8 @@ class MembershipPublicationCoordinatorReconcile extends
         // stale: it BELIEVES it is steady). It then serves that stale epoch to the
         // consistency probe as `publication_epochs_disagree`. Before trusting no-deficit,
         // re-validate the local view against authority. refreshDeferredPublicationsCache
-        // FromAuthority routes through the REAL partition leader (preferOwnerRpcRead,
+        // FromAuthority routes through the real partition leader (preferred
+        // leader mode,
         // belief-independent) and only HYDRATES the local cache — it never writes/
         // promotes/trims, so the B4 single-writer gate is intact; any genuine deficit it
         // reveals is reconciled on a LATER tick AFTER leadership is re-resolved from the

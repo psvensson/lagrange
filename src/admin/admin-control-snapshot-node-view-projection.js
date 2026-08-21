@@ -16,9 +16,6 @@ import {
   ADMIN_CACHE_DUMP,
 } from './admin-constants.js';
 import {
-  uniqueSorted,
-} from './admin-helpers.js';
-import {
   buildActiveMembershipSnapshot,
   resolveActiveNodeViews,
   buildReadinessByNodeId,
@@ -28,11 +25,12 @@ import {
   isCanonicallyActiveNode,
 } from '../control-plane/active-node-projection.js';
 import {
-  buildPublicationActiveGateHandoffContract,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   projectPublicationActiveGateHandoffToOwnerCohort,
-  selectPublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
+import {
+  buildControlSnapshotPublicationActiveGateHandoff,
+  normalizeControlSnapshotNodeIdList,
+} from './admin-control-snapshot-active-gate-handoff-projection.js';
 import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
 import {
   shouldAttemptAuthoritativeRepair,
@@ -103,15 +101,6 @@ function attachReadyLeaseAgeWitness(
     ...controlPlaneDiagnostics,
     readyLeaseAgeWitness,
   };
-}
-function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
-  return uniqueSorted(
-    (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
-      .map((value) =>
-        String(value || ADMIN_CONTROL_SNAPSHOT_LITERAL.VALUE).trim(),
-      )
-      .filter((value) => value.length > 0),
-  );
 }
 function normalizeControlSnapshotNodeId(value) {
   const normalizedValue = String(
@@ -219,59 +208,6 @@ function resolveControlSnapshotActiveGateBudgetSource(
     controlPlaneDiagnostics?.priorityRecoveryObservation?.activeGateBestProgress,
   ];
   return sources.find(isControlSnapshotRecord) || null;
-}
-function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
-  const readinessByNodeId = buildReadinessByNodeId({
-    readinessByNodeId: options.readinessByNodeId || null,
-  });
-  const computedHandoff = buildPublicationActiveGateHandoffContract({
-    nodeRows: options.nodeRows,
-    activeNodeViews: options.activeNodeViews,
-    publicationConvergence: options.publicationConvergence,
-    readinessByNodeId,
-  });
-  const progressHandoff = selectPublicationActiveGateHandoffContract(
-    options.publicationConvergence,
-  );
-  const progressPendingReconcileNodeIds = Array.isArray(
-    progressHandoff?.pendingReconcileNodeIds,
-  ) ?
-    progressHandoff.pendingReconcileNodeIds :
-    [];
-  const progressPendingReconcileCount = Number(
-    progressHandoff?.pendingReconcileCount,
-  );
-  const hasProgressOwnerReconcileDebt =
-    progressHandoff?.nextAction ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION &&
-    (
-      progressPendingReconcileNodeIds.length > 0 ||
-      Number.isFinite(progressPendingReconcileCount) &&
-        progressPendingReconcileCount > 0
-    );
-  const computedPendingReconcileNodeIds = Array.isArray(
-    computedHandoff?.pendingReconcileNodeIds,
-  ) ?
-    computedHandoff.pendingReconcileNodeIds :
-    [];
-  const computedPendingReconcileCount = Number(
-    computedHandoff?.pendingReconcileCount,
-  );
-  const hasComputedOwnerReconcileDebt =
-    computedHandoff?.nextAction ===
-      PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION
-        .RECONCILE_OWNER_MEMBERSHIP_PUBLICATION ||
-    computedPendingReconcileNodeIds.length > 0 ||
-    Number.isFinite(computedPendingReconcileCount) &&
-      computedPendingReconcileCount > 0;
-  if (
-    hasProgressOwnerReconcileDebt &&
-    hasComputedOwnerReconcileDebt !== true
-  ) {
-    return progressHandoff;
-  }
-  return computedHandoff;
 }
 function buildControlSnapshotActiveGateOwnerCohort(options = {}) {
   const publicationActiveGateHandoff =

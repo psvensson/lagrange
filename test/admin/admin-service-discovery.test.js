@@ -315,7 +315,7 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
         async executeRead(readIntent, options) {
           readCalls.push({
             tableName: readIntent?.tableName,
-            allowSqlFallback: options?.allowSqlFallback,
+            readProfile: options?.readProfile,
             allowPressureDegrade: options?.allowPressureDegrade,
             workloadClass: options?.workloadClass,
             workClass: options?.workClass,
@@ -340,9 +340,9 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     t.equal(readCalls.length > 0, true,
       'control snapshot repair should issue authoritative discovery reads');
     t.equal(
-      readCalls.every((call) => call.allowSqlFallback === true),
+      readCalls.every((call) => call.readProfile === 'repair_required'),
       true,
-      'control snapshot repair should preserve the routed authoritative fallback path',
+      'one repair profile owns the routed authoritative fallback path',
     );
     t.equal(
       readCalls.every((call) =>
@@ -389,7 +389,7 @@ test('AdminServiceDiscovery table-scoped snapshot repair keeps recovery-eligible
         async executeRead(readIntent, options) {
           readCalls.push({
             tableName: readIntent?.tableName,
-            allowSqlFallback: options?.allowSqlFallback,
+            readProfile: options?.readProfile,
             routingReadinessDimension: options?.routingReadinessDimension,
           });
           return buildCompleteAuthoritativeReadResult(
@@ -412,9 +412,9 @@ test('AdminServiceDiscovery table-scoped snapshot repair keeps recovery-eligible
     t.equal(readCalls.length > 0, true,
       'table-scoped service discovery repair should issue authoritative reads');
     t.equal(
-      readCalls.every((call) => call.allowSqlFallback === true),
+      readCalls.every((call) => call.readProfile === 'repair_required'),
       true,
-      'table-scoped service discovery repair should preserve SQL fallback',
+      'one repair profile owns SQL fallback',
     );
     t.equal(
       readCalls.every((call) =>

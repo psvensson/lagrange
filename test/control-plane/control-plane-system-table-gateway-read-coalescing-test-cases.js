@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -28,7 +29,10 @@ function registerControlPlaneSystemTableGatewayReadCoalescingTests() {
           options,
         ) {
           executions.push(options);
-          if (options?.preferOwnerRpcReadLeader === true) {
+          if (
+            options?.readAuthority?.leaderMode ===
+              CONTROL_PLANE_READ_LEADER_MODE.PREFERRED
+          ) {
             return {
               success: true,
               rows: [{operation_id: GATEWAY_REPLICA_OPERATION_ID}],
@@ -62,7 +66,7 @@ function registerControlPlaneSystemTableGatewayReadCoalescingTests() {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         coalescingKey: GATEWAY_REPLICA_OPERATION_READ_COALESCING_KEY,
-        preferOwnerRpcReadLeader: true,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       },
     );
 
@@ -76,13 +80,13 @@ function registerControlPlaneSystemTableGatewayReadCoalescingTests() {
     t.equal(executions.length, 2,
       'different leader-routing requirements should execute independently');
     t.equal(
-      executions[0]?.preferOwnerRpcReadLeader,
-      false,
+      executions[0]?.readAuthority?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.ANY,
       'the generic operation read should keep the unpinned default',
     );
     t.equal(
-      executions[1]?.preferOwnerRpcReadLeader,
-      true,
+      executions[1]?.readAuthority?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       'the collision confirmation should execute with the leader pin',
     );
     t.equal(genericResult.rows.length, 0,

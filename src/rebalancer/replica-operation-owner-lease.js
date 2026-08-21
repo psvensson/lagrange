@@ -8,14 +8,14 @@
  *  - WRITES: every canonical owner-driven insert/update of a coordinator-owned
  *    operation stamps ownerNodeId + a fresh ownerLeaseExpiresAt on the row
  *    (buildReplicaOperationRow / buildReplicaOperationUpdateData and the
- *    raw-SQL fallback statements). Legacy rows written before this change
- *    carry lease_expires_at = NULL.
+ *    raw-SQL fallback statements). A fail-soft lease touch may leave an
+ *    otherwise durable row without a lease stamp.
  *  - READS: resolveOperationOwnerLeaseState maps a row into one explicit
- *    state. An absent lease on a non-terminal row is LEGACY_UNFENCED (never a
+ *    state. An absent lease on a non-terminal row is UNFENCED (never a
  *    raw null/empty outcome); a future lease is ACTIVE; anything else is
  *    EXPIRED.
  *  - FENCING: a node may ADOPT an incomplete operation as its fenced
- *    successor owner only when the lease is absent/legacy or expired at the
+ *    successor owner only when the lease is absent or expired at the
  *    observation time. A live lease owned by ANOTHER node fences this node
  *    out — including the priority-control-plane drain owner-availability
  *    probe, which stops treating the unfenced routing-readiness heuristic as
@@ -25,7 +25,7 @@
 const REPLICA_OPERATION_OWNER_LEASE_STATE = Object.freeze({
   ACTIVE: 'active',
   EXPIRED: 'expired',
-  LEGACY_UNFENCED: 'legacy_unfenced',
+  UNFENCED: 'unfenced',
 });
 
 const REPLICA_OPERATION_OWNER_LEASE_ADOPTION = Object.freeze({
@@ -69,7 +69,7 @@ function resolveOperationOwnerLeaseState(operation, nowMs) {
   );
   if (leaseExpiresAtMs === null) {
     return Object.freeze({
-      state: REPLICA_OPERATION_OWNER_LEASE_STATE.LEGACY_UNFENCED,
+      state: REPLICA_OPERATION_OWNER_LEASE_STATE.UNFENCED,
       ownerNodeId,
       leaseExpiresAtMs,
     });
@@ -93,7 +93,7 @@ function resolveOperationOwnerLeaseState(operation, nowMs) {
  * owner at `nowMs`. The row has no owner column, so the live lease expiry is
  * the fence: a lease still in the future belongs to the recorded owner (the
  * caller only asks about operations it does NOT locally own) and fences the
- * successor out; an absent (legacy) or expired lease is adoptable.
+ * successor out; an absent or expired lease is adoptable.
  * @param {Object} operation
  * @param {string} nodeId
  * @param {number} [nowMs]

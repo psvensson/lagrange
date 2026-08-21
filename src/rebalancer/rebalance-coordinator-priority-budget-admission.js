@@ -1,16 +1,13 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {MOVE_REASON} from './rebalancer-constants.js';
 import {
-  isOperationLedgerPartition,
-} from '../bootstrap/system-partition-classification.js';
-import {
   getConcurrentAddBudgetLimit,
   getLatestMembershipPublicationRow,
   getPriorityConcurrentAddBudgetLimit,
   getPriorityRecoveryAdmissionPlan,
-  getReservedCreateAddSlots,
+  getReservedRuntimeServicePlacementSlots,
   getReservedPriorityRecoveryAddSlots,
-  isGenuineServiceCreateAdmission,
+  isRuntimeServicePlacementAdmission,
   isEmergencyPriorityControlPlanePartition,
   isEmergencyPriorityControlPlaneRecoveryActive,
   isGlobalPriorityControlPlaneRecoveryActive,
@@ -23,6 +20,9 @@ import {
 import {
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
 } from './replica-operation-step-policy.js';
+import {
+  isNonLedgerPriorityPlacementCurePartition,
+} from './replica-placement-cure-policy.js';
 
 const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
 const LOCAL_STR_FUNCTION = 'function';
@@ -281,8 +281,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       context?.normalizedMoveType === OperationType.ADD &&
       (context?.move?.moveReason ?? context?.move?.reason) ===
         MOVE_REASON.SPREAD_REPLICAS &&
-      !isOperationLedgerPartition({partitionId: context?.partitionId}) &&
-      this.isPriorityControlPlanePartition(context?.partitionId) &&
+      isNonLedgerPriorityPlacementCurePartition(context?.partitionId) &&
       occupiedAliveNodeIds.size < targetReplicaCount
     ) {
       const targetNodeId = String(context?.move?.nodeId || '').trim();
@@ -840,27 +839,26 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
   }
 
   /**
-   * The number of plain-ADD budget slots held in fair-share reserve for genuine
-   * runtime-service replica-creates (quest
-   * formation-runtime-service-create-lane-budget-starvation).
+   * The number of plain-ADD budget slots held in fair-share reserve for
+   * runtime-service placement.
    * @param {Object} [_options={}]
    * @return {number}
    * @private
    */
-  getReservedCreateAddSlots(_options = {}) {
-    return getReservedCreateAddSlots(this);
+  getReservedRuntimeServicePlacementSlots(_options = {}) {
+    return getReservedRuntimeServicePlacementSlots(this);
   }
 
   /**
-   * Whether an admission is a genuine runtime-service replica-create (an ADD of
-   * a runtime_service entity) that the reserved create slot protects.
+   * Whether an admission is runtime-service placement. ADD and REPLACE are
+   * intentionally one class at this boundary.
    * @param {string} normalizedMoveType
    * @param {string} entityType
    * @return {boolean}
    * @private
    */
-  isGenuineServiceCreateAdmission(normalizedMoveType, entityType) {
-    return isGenuineServiceCreateAdmission(normalizedMoveType, entityType);
+  isRuntimeServicePlacementAdmission(normalizedMoveType, entityType) {
+    return isRuntimeServicePlacementAdmission(normalizedMoveType, entityType);
   }
 
   /**

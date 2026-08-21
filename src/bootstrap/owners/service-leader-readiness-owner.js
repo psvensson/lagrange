@@ -16,6 +16,10 @@ import {
 import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../../cdc/cdc-integration-service.js';
+import {buildControlPlaneReadAuthority} from
+  '../../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../control-plane/control-plane-system-table-gateway-constants.js';
 import {getRemainingBudgetMs} from
   '../../control-plane/timeout-budget.js';
 import {
@@ -467,9 +471,12 @@ class ServiceLeaderReadinessOwner {
     }
 
     const readOptions = {
-      allowSqlFallback: false,
-      replicaFallbackConsistency:
-        LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      readAuthority: buildControlPlaneReadAuthority({
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        replicaFallbackConsistency:
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      }),
       queryTimeoutMs,
     };
     try {

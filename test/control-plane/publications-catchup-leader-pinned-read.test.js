@@ -5,6 +5,13 @@ import {hydrateCdcPropagatedTablesFromAuthority} from
   '../../src/cdc/cdc-integration-service-authoritative-catchup.js';
 import {executeAuthoritativeOwnerRpcRead} from
   '../../src/cdc/cdc-integration-service-owner-rpc-read-execution.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -52,13 +59,13 @@ test('deferred publications catch-up requests a LEADER-pinned owner-RPC read',
 
     t.equal(seenReadOptions.length, 1, 'the catch-up issues one authoritative read');
     t.equal(
-      seenReadOptions[0]?.preferOwnerRpcRead,
-      true,
+      seenReadOptions[0]?.readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
       'the read routes through the authoritative owner',
     );
     t.equal(
-      seenReadOptions[0]?.preferOwnerRpcReadLeader,
-      true,
+      seenReadOptions[0]?.readAuthority?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       'the read is pinned to the partition LEADER (not a stale local replica)',
     );
   });
@@ -94,13 +101,17 @@ test('owner-RPC read pins to the leader only when the flag is set', async (t) =>
     PUBLICATIONS,
     `SELECT * FROM ${PUBLICATIONS}`,
     [],
-    {preferOwnerRpcRead: true, preferOwnerRpcReadLeader: true},
+    {readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+    })},
     {},
   );
   t.equal(
     calls[calls.length - 1]?.preferLeader,
     true,
-    'preferOwnerRpcReadLeader pins the read to the leader',
+    'the preferred leader mode pins the read to the leader',
   );
 
   await executeAuthoritativeOwnerRpcRead(
@@ -108,7 +119,10 @@ test('owner-RPC read pins to the leader only when the flag is set', async (t) =>
     PUBLICATIONS,
     `SELECT * FROM ${PUBLICATIONS}`,
     [],
-    {preferOwnerRpcRead: true},
+    {readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+    })},
     {},
   );
   t.equal(

@@ -28,7 +28,7 @@ import {
   EXECUTOR_OUTCOME_TYPE} from
   '../rebalancer/executor-outcome-constants.js';
 import {
-  runtimeServiceDispatchedReplicaBelongsToEntity,
+  runtimeServiceReplicaBelongsToEntity,
 } from '../rebalancer/runtime-service-replica-identity.js';
 import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
@@ -246,7 +246,7 @@ class RuntimeServiceHandler extends EventEmitter {
         },
       );
     }
-    if (!runtimeServiceDispatchedReplicaBelongsToEntity(
+    if (!runtimeServiceReplicaBelongsToEntity(
       replicaId,
       entityId,
     )) {

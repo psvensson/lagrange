@@ -32,6 +32,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
+  STORAGE_ADMISSION_ERROR_MSG,
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from '../../src/rebalancer/storage-admission-constants.js';
@@ -41,7 +42,6 @@ import {
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {
   StorageAdmissionService,
-  ADMISSION_ERROR_MSG,
 } from '../../src/rebalancer/storage-admission-service.js';
 
 function initializeConfig(overrides = {}) {
@@ -179,7 +179,7 @@ test('constructor - throws when accountingService is missing', async (t) => {
   initializeConfig();
   t.throws(
     () => new StorageAdmissionService({}),
-    {message: ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED},
+    {message: STORAGE_ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED},
   );
   t.end();
 });
@@ -333,7 +333,7 @@ test('checkAdd - throws when targetNodeId is missing', async (t) => {
 
   await t.rejects(
     admission.checkAdd({estimatedBytes: NUM.TEN}),
-    {message: ADMISSION_ERROR_MSG.TARGET_NODE_REQUIRED},
+    {message: STORAGE_ADMISSION_ERROR_MSG.TARGET_NODE_REQUIRED},
   );
   t.end();
 });
@@ -344,7 +344,7 @@ test('checkAdd - throws when estimatedBytes is invalid', async (t) => {
 
   await t.rejects(
     admission.checkAdd({targetNodeId: 'node-1', estimatedBytes: 0}),
-    {message: ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED},
+    {message: STORAGE_ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED},
   );
   t.end();
 });
@@ -417,6 +417,41 @@ test('checkReplace - denies critical when emergency headroom exceeded',
   });
 
 // --- checkSplit ---
+
+test('checkSplit - returns typed source-quorum denial without candidates',
+  async (t) => {
+    initializeConfig();
+    const {admission} = setupWithNode('unused-node', NUM.THOUSAND);
+    const result = await admission.checkSplit({
+      targetNodeIds: [],
+      estimatedBytes: 1024,
+      requiredReplicaCount: 3,
+      minimumRoutableSourceCount: 2,
+      sourceRoutableNodeIds: [],
+    });
+    t.equal(result.allowed, false);
+    t.equal(result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.BLOCKED);
+    t.equal(result.reason,
+      STORAGE_ADMISSION_REASON.SOURCE_QUORUM_NOT_ROUTABLE);
+  });
+
+test('checkSplit - defers an empty canonical placement snapshot',
+  async (t) => {
+    initializeConfig();
+    const {admission} = setupWithNode('unused-node', NUM.THOUSAND);
+    const result = await admission.checkSplit({
+      targetNodeIds: [],
+      estimatedBytes: 1024,
+      requiredReplicaCount: 2,
+      sourceRoutableNodeIds: [],
+    });
+    t.equal(result.allowed, false);
+    t.equal(result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.DEFERRED);
+    t.equal(result.reason,
+      STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES);
+  });
 
 test('checkSplit - allows when capacity is available', async (t) => {
   initializeConfig();

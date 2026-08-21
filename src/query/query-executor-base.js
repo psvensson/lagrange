@@ -78,9 +78,6 @@ class QueryExecutorBase {
     this.queryTimeoutMs =
       config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
-    this.leaderRetryAttempts =
-      config.get(QUERY_CONFIG_KEY.LEADER_RETRY_ATTEMPTS) ||
-      QUERY_DEFAULTS.LEADER_RETRY_ATTEMPTS;
     this.leaderRetryDelayMs =
       config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
       QUERY_DEFAULTS.LEADER_RETRY_DELAY_MS;

@@ -187,9 +187,9 @@ async (t) => {
             'the canonical repository read should target the deferred operation id',
           );
           t.equal(
-            options.requireOwnerRpcRead,
-            false,
-            'dispatch retry rehydration should reuse the repository owner read contract',
+            options.authoritativeReadMode,
+            undefined,
+            'dispatch retry rehydration should use the repository default mode',
           );
           return {...authoritativeOperation};
         },
@@ -888,6 +888,8 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
     const priorityOperation = {
       operationId: 'op-priority-retry-1',
       partitionId: 'replica_operations-p1',
+      entityType: 'partition',
+      entityId: 'replica_operations-p1',
       type: OperationType.REPLACE,
       sourceNodeId: 'node-1',
       targetNodeId: 'node-2',
@@ -990,8 +992,8 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
             completed_at: undefined,
             error_message: undefined,
             steps_history: '[]',
-            entity_type: undefined,
-            entity_id: undefined,
+            entity_type: 'partition',
+            entity_id: READY_RETRY_PARTITION_ID,
           },
           readyNodeId: 'node-2',
           readyNodeRow: readyNode,
@@ -1019,6 +1021,8 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
     const priorityOperation = {
       operationId: READY_RETRY_OWNER_STARTING_OPERATION_ID,
       partitionId: READY_RETRY_PARTITION_ID,
+      entityType: 'partition',
+      entityId: READY_RETRY_PARTITION_ID,
       type: OperationType.REPLACE,
       sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
       targetNodeId: READY_RETRY_TARGET_NODE_ID,
@@ -1185,8 +1189,8 @@ test(READY_RETRY_OWNER_STARTING_TEST_NAME,
             completed_at: undefined,
             error_message: undefined,
             steps_history: READY_RETRY_EMPTY_STEPS_HISTORY,
-            entity_type: undefined,
-            entity_id: undefined,
+            entity_type: 'partition',
+            entity_id: READY_RETRY_PARTITION_ID,
           },
           deferredRetryProvenance: true,
         },
@@ -1228,8 +1232,8 @@ test(READY_RETRY_OWNER_DEFERRED_TEST_NAME, async (t) => {
     completed_at: undefined,
     error_message: undefined,
     steps_history: READY_RETRY_EMPTY_STEPS_HISTORY,
-    entity_type: undefined,
-    entity_id: undefined,
+    entity_type: 'partition',
+    entity_id: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
   };
   const deferredTimers = [];
   const dispatchCalls = [];

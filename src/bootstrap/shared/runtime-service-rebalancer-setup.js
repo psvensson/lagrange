@@ -41,9 +41,6 @@ import {
 import {
   isDeploymentBindingCellSourceKind,
 } from '../../control-plane/owners/deployment-binding-contract.js';
-import {
-  RuntimeServiceLegacyTargetReconciler,
-} from './runtime-service-legacy-target-reconciler.js';
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
@@ -56,7 +53,7 @@ const BINDING_RECONCILE_INTERVAL_MS = 5000;
 // by serializeServiceDefinition). The owner therefore selects active definitions
 // by `status`. Activated Binding lineage is admitted to the same owner;
 // inactive Binding sources and malformed lineage fail closed. Binding-derived
-// replica targets are system-policy outputs; the legacy `replica_count` column
+// replica targets are system-policy outputs; the `replica_count` column
 // remains authoritative only for non-Binding definitions.
 const SERVICE_DEFINITION_COLUMN = Object.freeze({
   SERVICE_ID: 'service_id',
@@ -126,12 +123,6 @@ class RuntimeServiceRebalancerOwner {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM_NAME) : console;
-    this._legacyTargetReconciler =
-      new RuntimeServiceLegacyTargetReconciler({
-        systemTableCache: this.systemTableCache,
-        rebalanceCoordinator: this.rebalanceCoordinator,
-        logger: this.logger,
-      });
     // Reconcile on every service_definitions cache change so services
     // deployed AFTER leadership attach get an owner (and deleted ones are
     // quiesced) without waiting for a leadership move. refresh() no-ops
@@ -181,7 +172,6 @@ class RuntimeServiceRebalancerOwner {
     }
     this._reconcileRebalancerSet();
     this._scheduleBindingRefresh();
-    this._legacyTargetReconciler.schedule();
   }
 
   _reconcileRebalancerSet() {
@@ -312,10 +302,6 @@ class RuntimeServiceRebalancerOwner {
 
   waitForBindingRefresh() {
     return this._bindingRefreshPromise;
-  }
-
-  waitForLegacyTargetReconciliation() {
-    return this._legacyTargetReconciler.waitForIdle();
   }
 
   /**

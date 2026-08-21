@@ -365,7 +365,11 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
       },
       async deliver(targetAddress, message) {
         deliveries.push({targetAddress, state: message.state});
-        return {acknowledged: true};
+        return {
+          acknowledged: true,
+          completionKind: 'durable_state_publication',
+          completionCompleted: true,
+        };
       },
     };
 
@@ -379,6 +383,7 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
 
     const outcome = await service.sendControlPlaneNodeStateUpdate({
       state: 'connected',
+      requireDurableCompletion: true,
     });
 
     t.same(deliveries, [
@@ -396,6 +401,11 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
       outcome.nextAction,
       OWNER_CONTRACT_NEXT_ACTION.PROCEED,
       'successful node-state publication should expose the shared proceed action',
+    );
+    t.equal(
+      outcome.completionCompleted,
+      true,
+      'the publication owner propagates the receiver completion proof',
     );
   });
 

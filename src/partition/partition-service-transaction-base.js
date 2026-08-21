@@ -18,6 +18,39 @@ const {
 
 class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   /**
+   * Irreversibly fence new transaction admission before replica removal is
+   * acknowledged. Existing session retries, commits, and rollbacks remain
+   * valid so the transaction owner can reach one terminal outcome.
+   * @return {{activeTransactionCount:number, preparedTransactionCount:number}}
+   */
+  fenceServingAdmissionForRemoval() {
+    this.removalServingAdmissionFenced = true;
+    return {
+      activeServingRequestCount: this.activeServingRequestCount,
+      activeTransactionCount: this.activeTransactions.size,
+      preparedTransactionCount: this.preparedTransactions.size,
+    };
+  }
+
+  /**
+   * Wait until every transaction admitted before the removal fence reaches a
+   * terminal outcome. The existing transaction timeout/heal owner remains
+   * responsible for stuck sessions; removal does not invent a second timeout.
+   * @param {Object} [options]
+   * @param {number} [options.pollIntervalMs]
+   * @return {Promise<void>}
+   */
+  async waitForRemovalServingDrain(options = {}) {
+    const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
+      options.pollIntervalMs > 0 ?
+      Math.floor(options.pollIntervalMs) :
+      10;
+    while (this.activeServingRequestCount > 0 || this.isInTransaction()) {
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  /**
    * Reconstruct prepared transaction state from the persisted Raft log.
    * @return {{preparedTransactionCount: number, prepareLostCount: number}}
    *   Reconstruction summary.
@@ -518,6 +551,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         };
       }
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
+    }
+    if (this.removalServingAdmissionFenced === true) {
+      const error = new Error(
+        PARTITION_SERVICE_ERROR_MSG.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
+      );
+      error.deferRetry = true;
+      throw error;
     }
     if (
       this.activeTransactions.size > 0 ||

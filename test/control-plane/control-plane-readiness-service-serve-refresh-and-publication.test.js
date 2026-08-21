@@ -619,12 +619,17 @@ async (t) => {
   t.equal(authoritativeReads.length, 2,
     'repair should perform bounded authoritative node and service reads');
   for (const read of authoritativeReads) {
-    t.match(read.options, {
-      localReadConsistency: 'local_leader',
-      allowSqlFallback: true,
-    });
     t.equal(
-      read.options.replicaFallbackConsistency,
+      read.options.readAuthority.localReadConsistency,
+      'local_leader',
+    );
+    t.equal(
+      read.options.readAuthority.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    );
+    t.equal(
+      read.options.readAuthority.replicaFallbackConsistency,
       'any_replica',
       'readiness repair should prefer a local replica repair read before routed SQL',
     );
@@ -760,7 +765,9 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
       async executeAuthoritativeSystemTableRead(tableName, sql, params, options) {
         authoritativeReads.push({tableName, sql, params, options});
         const queryOptions = options?.queryOptions || {};
-        if (options?.allowSqlFallback !== true ||
+        if (options?.readAuthority?.authoritativeReadMode !==
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+                .OWNER_RPC_PREFERRED_SQL_FALLBACK ||
             queryOptions?.routingReadinessDimension !==
               CONTROL_PLANE_READINESS_DIMENSION
                 .CONTROL_PLANE_RECOVERY_ELIGIBLE ||
@@ -817,8 +824,12 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
   t.equal(authoritativeReads.length, 2,
     'repair should read both node and service evidence');
   for (const read of authoritativeReads) {
-    t.equal(read.options?.allowSqlFallback, true,
-      'self readiness repair should be allowed to route through canonical SQL');
+    t.equal(
+      read.options?.readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+      'one repair mode allows canonical SQL fallback',
+    );
     t.equal(
       read.options?.queryOptions?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,

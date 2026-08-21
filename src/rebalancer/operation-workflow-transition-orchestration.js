@@ -9,6 +9,8 @@ import {
 import {
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
   isPriorityOutcomeDeferredLocalProgressCovered,
+  shouldClearPriorityDeferredClaim,
+  shouldRetainPriorityActiveReplaceRetry,
 } from './replica-operation-step-policy.js';
 
 const {
@@ -479,14 +481,14 @@ class OperationWorkflowTransitionOrchestration
     now,
   ) {
     this.clearTransitionRetry(operation.operationId);
-    if (step !== WORKFLOW_STEP.ACTIVE) {
+    if (!shouldRetainPriorityActiveReplaceRetry(step)) {
       this.clearPriorityActiveReplaceRetry(operation.operationId);
     }
     operation.workflowStep = step;
     operation.updatedAt = now;
     operation.status = persistedStatus;
     operation.stepsHistory = projectedOperation.stepsHistory;
-    if (step === WORKFLOW_STEP.CREATING) {
+    if (shouldClearPriorityDeferredClaim(step)) {
       delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
     }
 

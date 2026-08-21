@@ -631,8 +631,8 @@ function extractControlSnapshotPublishedNodeIds(snapshot) {
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES],
   ) ?
     snapshot[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES] :
-    Array.isArray(activeNodeViews?.publishedNodeIds) ?
-      activeNodeViews.publishedNodeIds :
+    Array.isArray(activeNodeViews?.publishedActiveNodeIds) ?
+      activeNodeViews.publishedActiveNodeIds :
       null;
   if (Array.isArray(explicitPublishedNodes)) {
     const nodeIds = new Set();
@@ -671,8 +671,8 @@ function extractControlSnapshotProjectedNodeIds(snapshot) {
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES],
   ) ?
     snapshot[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES] :
-    Array.isArray(activeNodeViews?.projectedNodeIds) ?
-      activeNodeViews.projectedNodeIds :
+    Array.isArray(activeNodeViews?.projectedActiveNodeIds) ?
+      activeNodeViews.projectedActiveNodeIds :
       null;
   if (!Array.isArray(projectedNodes)) {
     return extractControlSnapshotNodeIds(snapshot);

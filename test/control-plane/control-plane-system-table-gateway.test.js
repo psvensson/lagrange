@@ -3,6 +3,7 @@ import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
   CONTROL_PLANE_PHASE_SCOPE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OUTCOME,
@@ -100,12 +101,12 @@ test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   t.equal(result.success, true, 'authoritative read should succeed');
   t.equal(calls.length, 1, 'authoritative path should be used once');
   t.equal(
-    calls[0].options.localReadConsistency,
+    calls[0].options.readAuthority.localReadConsistency,
     'local_leader',
     'gateway should prefer local authoritative reads',
   );
   t.equal(
-    calls[0].options.replicaFallbackConsistency,
+    calls[0].options.readAuthority.replicaFallbackConsistency,
     'any_replica',
     'gateway should keep bounded replica fallback',
   );
@@ -152,28 +153,29 @@ async (t) => {
       replicaFallbackConsistency: 'local_leader',
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-      preferOwnerRpcReadLeader: true,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
     },
   );
 
   t.equal(result.success, true, 'authoritative read should succeed');
   t.equal(calls.length, 1, 'gateway should execute one authoritative read');
   t.equal(
-    calls[0]?.options?.authoritativeReadMode,
+    calls[0]?.options?.readAuthority?.authoritativeReadMode,
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     'gateway should pass the canonical authoritative read mode through to authoritative reads',
   );
   t.equal(
-    calls[0]?.options?.localReadConsistency,
+    calls[0]?.options?.readAuthority?.localReadConsistency,
     'local_leader',
     'gateway should preserve explicit local-read consistency',
   );
   t.equal(
-    calls[0]?.options?.replicaFallbackConsistency,
+    calls[0]?.options?.readAuthority?.replicaFallbackConsistency,
     'local_leader',
     'gateway should preserve explicit replica-fallback consistency',
   );
-  t.equal(calls[0]?.options?.preferOwnerRpcReadLeader, true,
+  t.equal(calls[0]?.options?.readAuthority?.leaderMode,
+    CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
     'gateway should preserve an explicit partition-leader pin');
   t.equal(
     calls[0]?.options?.queryOptions?.deliverySource,
@@ -292,14 +294,16 @@ test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
     params: [],
     strategy: 'authoritative_required',
   }, {
-    allowSqlFallback: true,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
   });
 
   t.equal(result.success, true, 'authoritative read should still succeed');
   t.equal(calls.length, 1, 'gateway should execute one authoritative read');
   t.equal(
-    calls[0].options.allowSqlFallback,
-    true,
+    calls[0].options.readAuthority.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
     'gateway should pass explicit routed-authoritative opt-in to the owner',
   );
 });
@@ -673,16 +677,17 @@ test('ControlPlaneSystemTableGateway readAuthoritativeRows bypasses legacy ' +
     'SELECT * FROM nodes WHERE node_id = ?',
     ['node-a'],
     {
-      requireAuthoritative: true,
-      allowSqlFallback: true,
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+          .OWNER_RPC_PREFERRED_SQL_FALLBACK,
     },
   );
 
   t.equal(result.success, true, 'authoritative helper should succeed');
   t.equal(calls.length, 1, 'authoritative helper should route one owner read');
   t.equal(
-    calls[0].options.allowSqlFallback,
-    true,
+    calls[0].options.readAuthority.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
     'authoritative helper should preserve authoritative read options',
   );
 });
@@ -812,17 +817,17 @@ test('ControlPlaneSystemTableGateway executeRead routes owner-local reads ' +
     'gateway should not reconstruct owner-local reads through the query engine',
   );
   t.equal(
-    authoritativeCalls[0].options.allowSqlFallback,
-    false,
+    authoritativeCalls[0].options.readAuthority.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
     'owner-local reads should not re-enable routed SQL fallback',
   );
   t.equal(
-    authoritativeCalls[0].options.localReadConsistency,
+    authoritativeCalls[0].options.readAuthority.localReadConsistency,
     'local_leader',
     'owner-local reads should prefer the local leader replica',
   );
   t.equal(
-    authoritativeCalls[0].options.replicaFallbackConsistency,
+    authoritativeCalls[0].options.readAuthority.replicaFallbackConsistency,
     'any_replica',
     'owner-local reads should keep bounded local replica fallback',
   );
@@ -897,7 +902,9 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
         options,
       ) {
         authoritativeCalls.push({tableName, sql, params, options});
-        if (options.allowSqlFallback !== true) {
+        if (options.readAuthority.authoritativeReadMode !==
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+            .OWNER_RPC_PREFERRED_SQL_FALLBACK) {
           return {
             success: false,
             error: 'authoritative_row_source_unavailable',
@@ -927,7 +934,9 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
     params: [],
     strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
   }, {
-    allowSqlFallback: true,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
     preferLeader: false,
   });
 
@@ -938,8 +947,8 @@ test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
     'gateway should surface the routed authoritative result',
   );
   t.equal(
-    authoritativeCalls[0]?.options?.allowSqlFallback,
-    true,
+    authoritativeCalls[0]?.options?.readAuthority?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
     'owner-local reads should pass the explicit routed-authoritative opt-in to the owner',
   );
   t.equal(

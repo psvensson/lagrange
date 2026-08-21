@@ -376,7 +376,6 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          requireOwnerRpcRead: false,
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );

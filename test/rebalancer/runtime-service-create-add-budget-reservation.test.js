@@ -1,19 +1,19 @@
 /**
- * Fair-share create-slot admission tests for canStartAddOperation.
+ * Fair-share runtime-placement admission tests for canStartAddOperation.
  *
  * Quest: formation-runtime-service-create-lane-budget-starvation.
  *
  * The plain-ADD budget lane (CONCURRENT_CREATE_BUDGET_SCOPE.ADD) is a global
  * cluster-wide cap shared by every non-priority ADD + non-dispatch-phase
- * REPLACE. A deployed runtime-service's genuine replica-CREATE ADD has no
- * reserved fair-share there, so under sustained non-priority spread/REPLACE
- * churn it loses every admission race and the service never places
+ * REPLACE. Runtime-service ADD and REPLACE are one placement class; if either
+ * is treated as ordinary churn, partition work can win every admission race
  * (live: run-30 of the service-data-affinity demo — svc replicas=0 for the
  * whole 300s watch while 32 control-plane moves complete).
  *
- * The fix reserves one plain-ADD slot for genuine service creates that a
- * REPLACE/self-move cannot consume, demand-sensitively (lifted once a create is
- * in flight) and clamped so ordinary REPLACEs never deadlock. These tests pin
+ * The fix reserves one plain-ADD slot for runtime-service placement that
+ * partition churn cannot consume, demand-sensitively (lifted once a runtime
+ * placement is in flight) and clamped so partition REPLACEs never deadlock.
+ * These tests pin
  * the admission arithmetic directly on canStartAddOperation and are
  * red-on-revert of the source change (A2 / A3 / A4 below).
  */
@@ -29,7 +29,7 @@ const PARTITION = 'partition';
 function buildFakeCoordinator(overrides = {}) {
   const coordinator = {
     reservedPrioritySlots: 1,
-    reservedCreateSlots: 1,
+    reservedRuntimePlacementSlots: 1,
     concurrentAddLimit: 4,
     authoritativeOperations: [],
     cachedOperations: [],
@@ -42,8 +42,8 @@ function buildFakeCoordinator(overrides = {}) {
     getReservedPriorityRecoveryAddSlots() {
       return coordinator.reservedPrioritySlots;
     },
-    getReservedCreateAddSlots() {
-      return coordinator.reservedCreateSlots;
+    getReservedRuntimeServicePlacementSlots() {
+      return coordinator.reservedRuntimePlacementSlots;
     },
     async queryCachedIncompleteOperations() {
       return coordinator.cachedOperations;
@@ -51,8 +51,8 @@ function buildFakeCoordinator(overrides = {}) {
     async queryIncompleteOperations() {
       return coordinator.authoritativeOperations;
     },
-    // In the fake, every op is a non-priority add-budget op; the create/replace
-    // distinction is carried by entityType so the create-count can be tallied.
+    // In the fake, every op is a non-priority add-budget operation. Entity type
+    // is the authoritative placement classification.
     isConcurrentAddBudgetOperation() {
       return true;
     },
@@ -95,113 +95,125 @@ function op(type, entityType, index) {
   };
 }
 
-// N non-priority ADD ops that are ordinary partition rebalance moves (NOT
-// genuine service creates) — the spread/REPLACE churn that fills the lane.
-function nonCreateAdds(count) {
+// N non-priority ADD operations representing partition churn.
+function partitionAdds(count) {
   return Array.from({length: count}, (_u, i) => op('ADD', PARTITION, i));
 }
 
-const SERVICE_CREATE = {
+const RUNTIME_SERVICE_ADD = {
   partitionId: 'svc-movielens-topn',
   entityType: RUNTIME_SERVICE,
-  isGenuineCreate: true,
+  isRuntimeServicePlacement: true,
 };
-const NON_CREATE = {
+const RUNTIME_SERVICE_REPLACE = {
+  partitionId: 'svc-movielens-topn',
+  entityType: RUNTIME_SERVICE,
+  isRuntimeServicePlacement: true,
+};
+const PARTITION_PLACEMENT = {
   partitionId: 'data-partition-p7',
   entityType: PARTITION,
-  isGenuineCreate: false,
+  isRuntimeServicePlacement: false,
 };
 
-test('A2 red-on-revert: a non-create ADD is DENIED at the reserved-create boundary ' +
-  '(pre-fix it consumes the slot the service create needs)', async (t) => {
-  // limit 4, 1 create slot reserved, 3 non-creates in flight, no create in
-  // flight. Pre-fix: authoritative count 3 < 4 -> ADMITTED (greedily fills slot
-  // 4). Fixed: non-create effective limit = max(1, 4-1) = 3, count 3 >= 3 ->
-  // DENIED, holding slot 4 open for a create.
+test('A2 red-on-revert: partition ADD is denied at the reserved runtime ' +
+  'placement boundary', async (t) => {
+  // Limit 4, one runtime-placement slot held, three partition operations in
+  // flight. Partition work cannot greedily fill the fourth slot.
   const coordinator = buildFakeCoordinator();
-  coordinator.authoritativeOperations = nonCreateAdds(3);
+  coordinator.authoritativeOperations = partitionAdds(3);
 
-  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
+  const allowed = await canStartAddOperation(coordinator, PARTITION_PLACEMENT);
   t.equal(allowed, false,
-    'non-create ADD denied at count 3 so the create slot stays reserved');
+    'partition ADD denied at count 3 so runtime placement keeps a turn');
   t.end();
 });
 
-test('A1: a genuine service create IS admitted while 3 non-creates hold the lane',
+test('A1: runtime-service ADD is admitted while three partition moves hold the lane',
   async (t) => {
-    // Same state, but the caller is the genuine create: it uses the full limit
-    // (4), count 3 < 4 -> ADMITTED. Guards that the reservation never blocks the
-    // very create it exists to protect.
+    // Same state, but runtime placement uses the full limit.
     const coordinator = buildFakeCoordinator();
-    coordinator.authoritativeOperations = nonCreateAdds(3);
+    coordinator.authoritativeOperations = partitionAdds(3);
 
-    const allowed = await canStartAddOperation(coordinator, SERVICE_CREATE);
+    const allowed = await canStartAddOperation(coordinator, RUNTIME_SERVICE_ADD);
     t.equal(allowed, true,
-      'genuine service create admitted into the slot reserved for it');
+      'runtime-service ADD admitted into its placement slot');
     t.end();
   });
 
-test('A3: no create over-admission — a 2nd create is denied at the cap',
+test('A1 interaction: runtime affinity REPLACE uses the same reserved placement ' +
+  'turn as runtime ADD', async (t) => {
+  const coordinator = buildFakeCoordinator();
+  coordinator.authoritativeOperations = partitionAdds(3);
+
+  const allowed = await canStartAddOperation(
+    coordinator,
+    RUNTIME_SERVICE_REPLACE,
+  );
+  t.equal(
+    allowed,
+    true,
+    'runtime REPLACE is not demoted to ordinary partition churn',
+  );
+  t.end();
+});
+
+test('A3: no placement over-admission — a second runtime placement is denied',
   async (t) => {
-    // 3 non-creates + 1 in-flight service create = count 4. A second create:
-    // limit 4, count 4 -> DENIED. Only one create slot exists.
+    // Three partition operations plus one runtime placement fill the limit.
     const coordinator = buildFakeCoordinator();
     coordinator.authoritativeOperations = [
-      ...nonCreateAdds(3),
+      ...partitionAdds(3),
       op('ADD', RUNTIME_SERVICE, 99),
     ];
 
-    const allowed = await canStartAddOperation(coordinator, SERVICE_CREATE);
-    t.equal(allowed, false, 'second concurrent create denied at the plain limit');
+    const allowed = await canStartAddOperation(coordinator, RUNTIME_SERVICE_ADD);
+    t.equal(allowed, false, 'second runtime placement denied at the lane limit');
     t.end();
   });
 
-test('A4 throughput: the create haircut is LIFTED once a create is in flight ' +
-  '(non-creates reclaim the slot, no permanent throughput cut)', async (t) => {
-  // 2 non-creates + 1 in-flight service create = count 3. A non-create arrives.
-  // With the demand-sensitive lift: a create already occupies its slot, so the
-  // haircut is 0 -> limit 4, count 3 < 4 -> ADMITTED (throughput preserved).
-  // Without the lift it would be wrongly denied at effective limit 3.
-  const coordinator = buildFakeCoordinator();
-  coordinator.authoritativeOperations = [
-    ...nonCreateAdds(2),
-    op('ADD', RUNTIME_SERVICE, 99),
-  ];
+test('A4 throughput: the hold is lifted while runtime placement is in flight',
+  async (t) => {
+    // Two partition operations plus one runtime placement leave one ordinary
+    // slot. The demand-sensitive hold no longer reduces throughput.
+    const coordinator = buildFakeCoordinator();
+    coordinator.authoritativeOperations = [
+      ...partitionAdds(2),
+      op('ADD', RUNTIME_SERVICE, 99),
+    ];
 
-  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
-  t.equal(allowed, true,
-    'non-create admitted once a create is in flight (haircut lifted)');
-  t.end();
-});
+    const allowed = await canStartAddOperation(coordinator, PARTITION_PLACEMENT);
+    t.equal(allowed, true,
+      'partition work reclaims the held slot while runtime placement is active');
+    t.end();
+  });
 
-test('A5 clamp: non-create limit never drops below 1 (ordinary REPLACEs cannot ' +
+test('A5 clamp: partition limit never drops below 1 (ordinary REPLACEs cannot ' +
   'deadlock at a small budget)', async (t) => {
-  // limit 1, 1 create slot reserved, no ops in flight. Naive haircut would give
-  // max(1, 1-1)=1 -> a lone non-create is still admissible. Assert it is not
-  // starved to 0.
+  // A one-slot lane still admits lone partition work when no operation exists.
   const coordinator = buildFakeCoordinator();
   coordinator.concurrentAddLimit = 1;
-  coordinator.reservedCreateSlots = 1;
+  coordinator.reservedRuntimePlacementSlots = 1;
   coordinator.authoritativeOperations = [];
 
-  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
+  const allowed = await canStartAddOperation(coordinator, PARTITION_PLACEMENT);
   t.equal(allowed, true,
-    'a lone non-create is admitted; the create haircut is clamped to >= 1 slot');
+    'a lone partition move is admitted; the hold is clamped to >= 1 slot');
   t.end();
 });
 
-test('A6 stale cache: a create reservation forces authoritative admission even ' +
+test('A6 stale cache: the runtime placement reservation forces owner admission ' +
   'when priority recovery is inactive', async (t) => {
-  // limit 4, create reserve 1, priority reserve 0. The cache under-reports two
+  // Limit 4, runtime reserve 1, priority reserve 0. The cache under-reports two
   // ordinary adds, but the owner sees the three that fill the ordinary cap.
-  // A cached fast-path would admit another ordinary add into the create slot.
+  // A cached fast-path would admit another partition add into the held slot.
   let cachedReadCount = 0;
   let authoritativeReadCount = 0;
   const coordinator = buildFakeCoordinator({
     reservedPrioritySlots: 0,
-    reservedCreateSlots: 1,
-    cachedOperations: nonCreateAdds(2),
-    authoritativeOperations: nonCreateAdds(3),
+    reservedRuntimePlacementSlots: 1,
+    cachedOperations: partitionAdds(2),
+    authoritativeOperations: partitionAdds(3),
     async queryCachedIncompleteOperations() {
       cachedReadCount += 1;
       return coordinator.cachedOperations;
@@ -212,24 +224,24 @@ test('A6 stale cache: a create reservation forces authoritative admission even '
     },
   });
 
-  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
+  const allowed = await canStartAddOperation(coordinator, PARTITION_PLACEMENT);
   t.equal(allowed, false,
-    'owner count denies the ordinary add at the create-reserved boundary');
+    'owner count denies the partition add at the reserved boundary');
   t.equal(authoritativeReadCount, 1,
-    'create reservation performs exactly one authoritative owner read');
+    'runtime-placement reservation performs one authoritative owner read');
   t.equal(cachedReadCount, 1,
     'cached observation triggers but cannot authorize reserved-slot admission');
   t.end();
 });
 
-test('regression: no create reservation configured preserves prior behaviour ' +
-  '(non-create admitted at count 3 under limit 4)', async (t) => {
-  const coordinator = buildFakeCoordinator();
-  coordinator.reservedCreateSlots = 0;
-  coordinator.authoritativeOperations = nonCreateAdds(3);
+test('regression: disabling the placement reservation restores the full limit',
+  async (t) => {
+    const coordinator = buildFakeCoordinator();
+    coordinator.reservedRuntimePlacementSlots = 0;
+    coordinator.authoritativeOperations = partitionAdds(3);
 
-  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
-  t.equal(allowed, true,
-    'with no create reservation the non-create keeps the full limit');
-  t.end();
-});
+    const allowed = await canStartAddOperation(coordinator, PARTITION_PLACEMENT);
+    t.equal(allowed, true,
+      'with no placement reservation partition work keeps the full limit');
+    t.end();
+  });

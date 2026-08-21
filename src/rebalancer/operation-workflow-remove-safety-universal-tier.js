@@ -1,5 +1,5 @@
-// The universal execution-time remove-safety floor (audit finding 1). These
-// helpers close the floor for an ordinary (non-system) replicated entity: the
+// The universal PARTITION execution-time remove-safety floor (audit finding
+// 1). These helpers close the floor for an ordinary (non-system) partition: the
 // REPLACE replacement-voter-ready guard, the projected peer-ping check, and
 // the post-removal voter-ready/min-replica projection. They are extracted from
 // operation-workflow-remove-safety-evaluator.js to hold that module under the
@@ -126,8 +126,8 @@ async function evaluateProjectedPeersContactable(
 }
 
 /**
- * The universal execution-time remove-safety floor for an ordinary
- * (non-system) replicated entity. The concurrent-operation lock and the
+ * The universal partition execution-time remove-safety floor for an ordinary
+ * (non-system) partition. The concurrent-operation lock and the
  * replica-row gathering have already run in evaluateRemoveSafety; here the
  * post-removal voter-ready/min-replica floor, the REPLACE replacement guard,
  * and the peer-ping check close the floor.

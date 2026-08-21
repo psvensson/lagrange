@@ -350,7 +350,6 @@ const REPLICA_OPERATION_SEMANTIC_PHASE_RULES_BY_TYPE = Object.freeze(
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
   READINESS_SNAPSHOT: 'readinessSnapshot',
-  MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
   REPLICA_IDS: 'replicaIds',
   PEER_ADDRESSES: 'peerAddresses',
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',

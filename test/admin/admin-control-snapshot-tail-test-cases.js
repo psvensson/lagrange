@@ -96,7 +96,7 @@ export function registerAdminControlSnapshotTailTests({
             },
             async getLatestPublishedClusterPublication(options = {}) {
               publishedReadOptions.push(options);
-              if (options.preferAuthoritativeRead === true) {
+              if (options.readSource === 'authoritative_preferred') {
                 return {
                   publication_id: 'publication-7',
                   publication_kind: 'cluster_membership',
@@ -140,7 +140,7 @@ export function registerAdminControlSnapshotTailTests({
         result.controlPlaneDiagnostics.activeNodeViews,
         {
           authoritativeSource: 'published_membership',
-          authoritativeNodeIds: ['node-1', 'node-2', 'node-3'],
+          authoritativeActiveNodeIds: ['node-1', 'node-2', 'node-3'],
           projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
           locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
           suspectedOrTransitioningNodeIds: [],
@@ -152,9 +152,9 @@ export function registerAdminControlSnapshotTailTests({
             unconfirmedProjectedNodeIds: [],
           },
           effectiveSource: 'published_membership',
-          effectiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          projectedNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedNodeIds: ['node-1', 'node-2', 'node-3'],
+          effectiveActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          projectedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
           publishedMembershipAvailable: true,
         },
         'default snapshots should advertise only local membership availability after recovery stays local',
@@ -185,7 +185,7 @@ export function registerAdminControlSnapshotTailTests({
               t.same(
                 options,
                 {
-                  preferAuthoritativeRead: true,
+                  readSource: 'authoritative_preferred',
                   readProfile: 'diagnostics',
                   deliveryPriority: 'readiness',
                 },
@@ -207,7 +207,7 @@ export function registerAdminControlSnapshotTailTests({
 
       const result = await snapshot.ensurePublishedMembershipObservation(
         null,
-        {preferAuthoritativeRead: true},
+        {readSource: 'authoritative_preferred'},
       );
 
       t.equal(
@@ -295,7 +295,7 @@ export function registerAdminControlSnapshotTailTests({
               t.same(
                 options,
                 {
-                  preferAuthoritativeRead: true,
+                  readSource: 'authoritative_preferred',
                   readProfile: 'diagnostics',
                   deliveryPriority: 'readiness',
                 },
@@ -316,7 +316,7 @@ export function registerAdminControlSnapshotTailTests({
               t.same(
                 options,
                 {
-                  preferAuthoritativeRead: true,
+                  readSource: 'authoritative_preferred',
                   readProfile: 'diagnostics',
                   deliveryPriority: 'readiness',
                 },
@@ -342,7 +342,7 @@ export function registerAdminControlSnapshotTailTests({
                     publication_epoch: 8,
                     status: 'OPEN',
                   },
-                  preferAuthoritativeRead: true,
+                  readSource: 'authoritative_preferred',
                 },
                 'forced repair should queue reconciliation using the authoritative latest publication row',
               );
@@ -498,7 +498,7 @@ export function registerAdminControlSnapshotTailTests({
               t.same(
                 options,
                 {
-                  preferAuthoritativeRead: true,
+                  readSource: 'authoritative_preferred',
                   readProfile: 'diagnostics',
                   deliveryPriority: 'readiness',
                 },

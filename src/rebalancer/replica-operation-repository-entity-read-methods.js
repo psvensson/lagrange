@@ -1,6 +1,8 @@
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -26,45 +28,23 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     /**
    * Get in-flight replica IDs for an entity.
    * @param {object} params
-   * @param {string} params.partitionId
    * @param {string} params.entityType
    * @param {string} params.entityId
    * @return {Promise<Set<string>>}
    */
-    async getEntityInFlightReplicaIds({partitionId, entityType, entityId}) {
+    async getEntityInFlightReplicaIds({entityType, entityId}) {
       const replicaIds = new Set();
-      const result = await this.executeReplicaOperationsRead(SQL.SELECT_OPERATIONS_BY_ENTITY, [
-        entityType,
-        entityId,
-        entityId,
-      ]);
-      if (result.success && Array.isArray(result.rows)) {
-        for (const row of result.rows) {
-          const operation = this.rowToOperation(row);
-          if (!operation || this.isOperationTerminal(operation)) {
-            continue;
-          }
-          const replicaId = operation.replicaId;
-          if (typeof replicaId === 'string' && replicaId.length > 0) {
-            replicaIds.add(replicaId);
-          }
-        }
-        return replicaIds;
-      } // Fallback path for degraded SQL-read conditions.
-      const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
-        if (!row) {
-          return false;
-        }
-        return (
-          (row.entity_type === entityType && row.entity_id === entityId) ||
-        ((row.entity_type === null || row.entity_type === undefined || row.entity_type === '') &&
-          row.partition_id === partitionId)
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATIONS_BY_ENTITY,
+        [entityType, entityId],
+      );
+      if (!result.success || !Array.isArray(result.rows)) {
+        throw new Error(
+          result?.error || REPLICA_OPERATION_REPOSITORY_LITERAL
+            .ENTITY_IN_FLIGHT_OPERATION_READ_UNAVAILABLE,
         );
-      });
-      if (cachedRows === null) {
-        return replicaIds;
       }
-      for (const row of cachedRows) {
+      for (const row of result.rows) {
         const operation = this.rowToOperation(row);
         if (!operation || this.isOperationTerminal(operation)) {
           continue;
@@ -115,20 +95,15 @@ function assignReplicaOperationRepositoryEntityReadMethods(
         if (!row) {
           return false;
         }
-        return (
-          (row.entity_type === entityType && row.entity_id === entityId) ||
-        ((row.entity_type === null || row.entity_type === undefined || row.entity_type === '') &&
-          row.partition_id === entityId)
-        );
+        return row.entity_type === entityType && row.entity_id === entityId;
       });
       if (cachedRows !== null) {
         return cachedRows.map((row) => this.rowToOperation(row));
       }
-      const result = await this.executeReplicaOperationsRead(SQL.SELECT_OPERATIONS_BY_ENTITY, [
-        entityType,
-        entityId,
-        entityId,
-      ]);
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATIONS_BY_ENTITY,
+        [entityType, entityId],
+      );
       if (!result.success || !result.rows) {
         return [];
       }
@@ -146,10 +121,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const queryStartedAtMs = Date.now();
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATIONS_BY_ENTITY,
-        [entityType, entityId, entityId],
+        [entityType, entityId],
         {
           ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
-          preferOwnerRpcReadLeader: true,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
         },
       );
       const queryDurationMs = Date.now() - queryStartedAtMs;
@@ -315,9 +290,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           if (!row || this.isOperationTerminal(row)) {
             return false;
           }
-          const rowEntityType = row.entity_type || SERVICE_TYPE.PARTITION;
-          const rowEntityId = row.entity_id || row.partition_id;
-          return rowEntityType === entityType && rowEntityId === entityId;
+          return row.entity_type === entityType && row.entity_id === entityId;
         }) || []
       );
     }

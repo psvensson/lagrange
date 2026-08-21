@@ -59,7 +59,7 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
 const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({
-  preferAuthoritativeRead: true,
+  readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
 });
 const MEMBERSHIP_PUBLICATION_RECONCILE_REASON =
   'admin_control_snapshot_publication_handoff';
@@ -105,9 +105,11 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_FIELD = Object.freeze({
  * @return {number}
  */
 function buildMembershipPublicationReadOptions(options = {}) {
-  return options.preferAuthoritativeRead === true ?
+  return options.readSource ===
+    MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED ?
     {
-      preferAuthoritativeRead: true,
+      readSource:
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       readProfile: MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
       deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.READINESS,
     } :
@@ -646,14 +648,16 @@ class AdminControlSnapshotMembershipPublicationReconcile
       this.resolveMembershipPublicationService();
     const hasMembershipPublicationService =
       isMembershipPublicationService(membershipPublicationService);
-    const preferAuthoritativeRead = options.preferAuthoritativeRead === true;
+    const authoritativeReadRequested =
+      options.readSource ===
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED;
     // A bounded observability probe must never block on awaited owner/peer
     // reads (they stall on a saturated transport during rolling restart). When
     // set, resolve only from synchronous caches and degrade to the local
     // system-table snapshot instead of awaiting authoritative rows.
     const boundedObservationProbe = options.boundedObservationProbe === true;
     if (
-      !preferAuthoritativeRead &&
+      !authoritativeReadRequested &&
       typeof readinessService?.getLatestMembershipPublicationRowSync ===
         'function'
     ) {
@@ -680,7 +684,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
     }
     if (
       hasMembershipPublicationService &&
-      !preferAuthoritativeRead &&
+      !authoritativeReadRequested &&
       typeof membershipPublicationService.getLatestClusterPublicationSync ===
         'function'
     ) {
@@ -699,7 +703,11 @@ class AdminControlSnapshotMembershipPublicationReconcile
       try {
         const publicationRow =
           await membershipPublicationService.getLatestClusterPublication(
-            buildMembershipPublicationReadOptions({preferAuthoritativeRead}),
+            buildMembershipPublicationReadOptions({
+              readSource: authoritativeReadRequested ?
+                MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+                MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
+            }),
           );
         if (publicationRow) {
           return publicationRow;
@@ -748,7 +756,8 @@ class AdminControlSnapshotMembershipPublicationReconcile
       isMembershipPublicationService(membershipPublicationService);
     const boundedObservationProbe = options.boundedObservationProbe === true;
     if (
-      options.preferAuthoritativeRead !== true &&
+      options.readSource !==
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED &&
       typeof readinessService?.getLatestPublishedMembershipPublicationRowSync ===
         'function'
     ) {
@@ -775,7 +784,8 @@ class AdminControlSnapshotMembershipPublicationReconcile
     }
     if (
       hasMembershipPublicationService &&
-      options.preferAuthoritativeRead !== true &&
+      options.readSource !==
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED &&
       typeof membershipPublicationService.getLatestPublishedClusterPublicationSync ===
         'function'
     ) {
@@ -795,7 +805,7 @@ class AdminControlSnapshotMembershipPublicationReconcile
         const publicationRow =
           await membershipPublicationService.getLatestPublishedClusterPublication(
             buildMembershipPublicationReadOptions({
-              preferAuthoritativeRead: options.preferAuthoritativeRead === true,
+              readSource: options.readSource,
             }),
           );
         if (publicationRow && typeof publicationRow === 'object') {
@@ -828,3 +838,5 @@ class AdminControlSnapshotMembershipPublicationReconcile
   }
 }
 export {AdminControlSnapshotMembershipPublicationReconcile};
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../control-plane/membership-publication-row-contract.js';

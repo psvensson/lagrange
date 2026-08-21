@@ -515,7 +515,6 @@ function withOwnerHandoffState(Base) {
               await this.repository.queryAuthoritativeOperationById(
                 operationId,
                 {
-                  requireOwnerRpcRead: false,
                 },
               );
             if (!operation) {

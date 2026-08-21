@@ -20,7 +20,6 @@ import {
   normalizeMutationOperation,
   normalizePhaseScope,
   normalizeSqlOperationKind,
-  buildControlPlaneReadAuthority,
   normalizeSystemTableName,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
@@ -50,7 +49,13 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
 // with stronger authority can absorb a weaker in-flight read's result (the
 // 2026-07-18 leader-pin coalescing incident).
 function buildReadExecutionContract(options = {}) {
-  return {...buildControlPlaneReadAuthority(options)};
+  const readAuthority = options?.readAuthority || null;
+  if (!readAuthority || Object.isFrozen(readAuthority) !== true) {
+    throw new TypeError(
+      GATEWAY_ERROR_MSG.EXECUTION_IDENTITY_AUTHORITY_TOKEN_REQUIRED,
+    );
+  }
+  return readAuthority;
 }
 
 function buildReadPressureContract(options = {}) {
@@ -427,7 +432,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
     return this.executeRead(
-      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
       options,
     );
   },

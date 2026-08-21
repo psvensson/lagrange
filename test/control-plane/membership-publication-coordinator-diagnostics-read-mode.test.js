@@ -5,6 +5,8 @@ import {
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 
 const PUBLICATIONS_TABLE = 'control_plane_publications';
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
@@ -39,7 +41,7 @@ const OWNER_PUBLISHED_NODE_IDS = Object.freeze([
   NODE_THREE_ID,
 ]);
 const DIAGNOSTICS_READ_OPTIONS = Object.freeze({
-  preferAuthoritativeRead: true,
+  readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
   readProfile: DIAGNOSTICS_READ_PROFILE,
 });
 const OWNER_RPC_REQUIRED_READ_MODE =

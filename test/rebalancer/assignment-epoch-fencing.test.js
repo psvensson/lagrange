@@ -17,11 +17,9 @@
  *   dispatch; an unreadable current epoch defers the dispatch as
  *   DEFERRED_RETRY_PENDING instead of dispatching unfenced. Reverting the
  *   gate flips these red.
- * - step-history-epoch-live-or-deleted: the step-history epoch write is
- *   deleted — the planning epoch now lives on the operation record
- *   top-level (its sole live write); the dead stepsHistory copy is gone,
- *   and the dispatch gate reads the operation-record epoch (a genuine
- *   reader), falling back to a legacy stepsHistory copy for pre-fix rows.
+ * - durable-planning-epoch: the planning epoch lives in the operation row's
+ *   dedicated membership_publication_epoch column and survives repository
+ *   serialization without a stepsHistory copy.
  *
  * Every test is red-on-revert against the fail-closed creation assert or
  * the executor staleness gate while the rest of the change remains.
@@ -261,6 +259,9 @@ async (t) => {
 
   const result = await rebalancer.executeMoveViaCoordinator({
     type: MoveType.ADD,
+    partitionId: TEST_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    entityId: TEST_PARTITION_ID,
     nodeId: TEST_TARGET_NODE_ID,
     replicaId: `${TEST_PARTITION_ID}-r4`,
   });
@@ -355,10 +356,10 @@ async (t) => {
   await coordinator.shutdown();
 });
 
-// --- step-history-epoch-live-or-deleted ---
+// --- durable-planning-epoch ---
 
-test('step-history-epoch-live-or-deleted: the planning epoch lives on the ' +
-  'operation record, not duplicated into stepsHistory',
+test('durable-planning-epoch: repository serialization preserves the sole ' +
+  'planning epoch field',
 async (t) => {
   initializeConfig();
   const {coordinator} = createEpochCoordinator({currentEpoch: PLANNING_EPOCH});
@@ -389,45 +390,19 @@ async (t) => {
     undefined,
     'no stepsHistory entry duplicates the planning epoch (dead write deleted)',
   );
-  await coordinator.shutdown();
-});
-
-test('step-history-epoch-live-or-deleted: the dispatch gate reads the ' +
-  'legacy stepsHistory epoch for a pre-fix row (genuine reader)',
-async (t) => {
-  initializeConfig();
-  const {coordinator} = createEpochCoordinator({
-    currentEpoch: PLANNING_EPOCH + 1, // advanced past the legacy row's epoch
-  });
-  const {deliveredRequests, failedOperations, dispatch} =
-    wireEpochDispatchProbe(coordinator);
-
-  // A row persisted before the top-level epoch write: the epoch exists only
-  // in stepsHistory. The gate must still fence it via that live reader.
-  const legacyOperation = buildEpochBoundAddOperation(PLANNING_EPOCH, {
-    [ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH]: undefined,
-    stepsHistory: [
-      {
-        step: WORKFLOW_STEP.PENDING,
-        timestamp: Date.now(),
-        membershipPublicationEpoch: PLANNING_EPOCH,
-      },
-    ],
-  });
-  delete legacyOperation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH];
-
-  const result = await dispatch(legacyOperation);
-
-  t.equal(result?.success, false, 'the legacy epoch-bound row is fenced');
-  t.equal(
-    deliveredRequests.length,
-    0,
-    'the legacy stale row never dispatches',
+  const persistedRow = coordinator.repository.buildReplicaOperationRow(
+    operation,
   );
   t.equal(
-    failedOperations.length,
-    1,
-    'the gate reads the stepsHistory epoch to fence the stale row',
+    persistedRow.membership_publication_epoch,
+    PLANNING_EPOCH,
+    'the canonical row owns the planning epoch',
+  );
+  const reloaded = coordinator.repository.rowToOperation(persistedRow);
+  t.equal(
+    reloaded[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
+    PLANNING_EPOCH,
+    'repository reload restores the same top-level field',
   );
   await coordinator.shutdown();
 });

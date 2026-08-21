@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {canonicalizeRebalancerMove} from './rebalancer-entity-identity.js';
 
 const {
   MoveType,
@@ -16,6 +17,10 @@ const {buildPriorityRecoveryBlockedPartitions} = SHARED.UNIFIED_REBALANCER_SHARE
 const FOLLOW_UP_AUGMENTATION_CONSTRUCTOR = 'constructor';
 
 class UnifiedRebalancerFollowUpAugmentationMethods {
+  canonicalizeRebalancerMove(move) {
+    return canonicalizeRebalancerMove(move, this);
+  }
+
   buildPriorityRecoveryFollowUpAugmentationEvidence({
     moves = [],
     followUpMove = null,

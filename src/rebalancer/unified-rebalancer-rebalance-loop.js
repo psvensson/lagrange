@@ -1,5 +1,8 @@
 import {UnifiedRebalancerMoveExecution} from './unified-rebalancer-move-execution.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {
+  canonicalizeRebalancerMove,
+} from './rebalancer-entity-identity.js';
 
 const {
   REBALANCER_EVENT,
@@ -205,9 +208,9 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
         currentReplicas,
         targetState,
       });
-    const moves = await this.movePlanner.applyPressureGating(
-      priorityRecoveryAwareMoves,
-    );
+    const moves = (
+      await this.movePlanner.applyPressureGating(priorityRecoveryAwareMoves)
+    ).map((move) => canonicalizeRebalancerMove(move, this));
 
     if (moves.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {

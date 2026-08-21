@@ -165,7 +165,7 @@ test('split routing fails closed when canonical leader owner metadata is missing
       },
       systemCache,
     });
-    executor.leaderRetryAttempts = 1;
+    executor.queryTimeoutMs = 5;
     executor.leaderRetryDelayMs = 1;
 
     const ast = parseSQL(

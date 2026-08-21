@@ -3,7 +3,6 @@ import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_LOG_MSG,
   BOOTSTRAP_PHASE,
-  BOOTSTRAP_READY_MESSAGE,
 } from './bootstrap-constants.js';
 import {
   INITIAL_MESSAGE_GROUP_ID,
@@ -20,10 +19,7 @@ import {
   createBootstrapServiceReplicaStateRuntimeMethods,
 } from './bootstrap-service-replica-registration-methods.js';
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
-  STATE,
   TABLES,
 } from '../constants/index.js';
 
@@ -146,77 +142,6 @@ function createBootstrapServiceRuntimeMethods() {
     buildMessageGroupOwnerNotReadyError(selection = {}, options = {}) {
       return this.messageGroupSelectionOwner
         .buildMessageGroupOwnerNotReadyError(selection, options);
-    },
-
-    /**
-     * Upsert/update a node's connection state into the nodes system table.
-     * Used by bootstrap-ready handlers and some tests.
-     * @param {Object} options
-     * @param {string} options.nodeId
-     * @param {string} options.nodeAddress
-     * @param {string} options.connectionState
-     * @param {Array<string>} [options.capabilities]
-     * @return {Promise<void>}
-     */
-    async upsertNodeConnectionState(options) {
-      const nodesPartition = this.getLeaderPartition(TABLES.NODES);
-      if (!nodesPartition) {
-        throw new Error(bootstrapError.NODES_LEADER_MISSING);
-      }
-
-      const cache = this.getSystemTableCache();
-      const existing = cache.get(TABLES.NODES, options.nodeId) || null;
-
-      const capabilities = Array.isArray(options.capabilities) ?
-        options.capabilities :
-        [];
-
-      if (existing) {
-        await nodesPartition.updateData(
-          TABLES.NODES,
-          {node_id: options.nodeId},
-          {
-            node_address: options.nodeAddress,
-            connection_state: options.connectionState,
-            capabilities: JSON.stringify(capabilities),
-            // Preserve last heartbeat if present to avoid clobbering liveness tracking.
-            last_heartbeat: existing.last_heartbeat,
-          },
-        );
-      } else {
-        await nodesPartition.upsertData(TABLES.NODES, {
-          node_id: options.nodeId,
-          node_address: options.nodeAddress,
-          connection_state: options.connectionState,
-          capabilities: JSON.stringify(capabilities),
-        });
-      }
-    },
-
-    /**
-     * Register the bootstrap "ready" handler on the message router.
-     * This is a compatibility hook for older joining flows.
-     */
-    registerBootstrapReadyHandler() {
-      if (!this.messageRouter?.register) {
-        return;
-      }
-
-      const address =
-        `${this.nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.BOOTSTRAP}` +
-        `${ADDRESS.SEPARATOR}${BOOTSTRAP_READY_MESSAGE.PATH}`;
-      this.messageRouter.register(address, async (msg) => {
-        const payload = msg?.payload || {};
-        if (payload.type === BOOTSTRAP_READY_MESSAGE.TYPE) {
-          await this.upsertNodeConnectionState({
-            nodeId: payload.nodeId,
-            nodeAddress: payload.nodeAddress,
-            connectionState: STATE.READY,
-            capabilities: payload.capabilities,
-          });
-        }
-        return {acknowledged: true};
-      });
     },
 
     /**

@@ -381,7 +381,7 @@ function buildOperationWorkflowOwnerPortOwnerLease(owner, operation) {
     ),
     // Derived from the durable row lease (lease_expires_at; audit finding
     // 18) — never a hard-coded CURRENT. An expired lease reads STALE; a
-    // legacy row with no lease stamp reads UNAVAILABLE.
+    // An unfenced row with no lease stamp reads UNAVAILABLE.
     freshnessState: resolveOperationWorkflowOwnerLeaseFreshnessState(
       operation,
       typeof owner.nowFn === OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
@@ -685,7 +685,7 @@ async function readOperationWorkflowOwnerPortDurableOperation(
   ) {
     const operation = await owner.repository.queryAuthoritativeOperationById(
       operationId,
-      {requireOwnerRpcRead: false},
+      {},
     );
     return mergeCoordinatorCreatedBootstrapMetadata(
       operation,

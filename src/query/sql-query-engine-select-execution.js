@@ -5,6 +5,10 @@ import {
   createSQLQueryEngineProvisioningMethods,
 } from './sql-query-engine-provisioning-methods.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {buildControlPlaneReadAuthority} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -342,11 +346,15 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       executableSql,
       params,
       {
-        allowSqlFallback: false,
+        readAuthority: buildControlPlaneReadAuthority({
+          authoritativeReadMode: confirmEmptyLocalReadWithOwnerRpc ?
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+              .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC :
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          replicaFallbackConsistency:
+            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+        }),
         queryTimeoutMs: queryOptions?.timeoutMs,
-        confirmEmptyLocalReadWithOwnerRpc,
-        replicaFallbackConsistency:
-          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
       },
     );
     if (!localResult?.success) {

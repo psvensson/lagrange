@@ -8,6 +8,7 @@ import {
   RECONCILE_QUEUE_EVENT,
   STALE_FENCE_SAMPLE_CAPACITY,
 } from '../../src/workflow/reconcile-queue-constants.js';
+import './owner-key-reconcile-queue-completion-test-cases.js';
 
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
@@ -164,24 +165,6 @@ test('OwnerKeyReconcileQueue - enqueue returns creation status',
     // key-2 was not in pending (it was cleared when drain started)
     // so it creates a new entry
     t.equal(created2, true, 'new key creates new entry');
-
-    queue.shutdown();
-  });
-
-test('OwnerKeyReconcileQueue - has() checks pending state',
-  async (t) => {
-    const queue = new OwnerKeyReconcileQueue({
-      reconcileFn: async () => {
-        await new Promise(() => {});
-      },
-    });
-
-    t.equal(queue.has('key-1'), false, 'empty queue has nothing');
-
-    queue.enqueue('key-1', RECONCILE_REASON.PERIODIC_CHECK);
-    // Pending is cleared when drain starts (microtask), so check
-    // before microtask runs
-    t.equal(queue.has('key-1'), true, 'enqueued key is pending');
 
     queue.shutdown();
   });
@@ -554,7 +537,11 @@ test('OwnerKeyReconcileQueue - shutdown clears in-flight set',
       },
     });
 
-    queue.enqueue('key-1', RECONCILE_REASON.PERIODIC_CHECK);
+    const completion = queue.enqueueAndWait(
+      'key-1',
+      RECONCILE_REASON.PERIODIC_CHECK,
+    );
+    const stoppedOutcome = completion.catch((error) => error);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -564,6 +551,12 @@ test('OwnerKeyReconcileQueue - shutdown clears in-flight set',
     );
 
     queue.shutdown();
+
+    t.match(
+      await stoppedOutcome,
+      /is stopped/,
+      'shutdown rejects callers waiting on an in-flight owner turn',
+    );
 
     t.equal(
       queue.isInFlight('key-1'), false,
@@ -1009,7 +1002,7 @@ test('OwnerKeyReconcileQueue - retryable drain failure preserves ' +
     },
   });
 
-  queue.enqueue(
+  const completion = queue.enqueueAndWait(
     'key-retry',
     RECONCILE_REASON.PERIODIC_CHECK,
     retryContext,
@@ -1050,6 +1043,7 @@ test('OwnerKeyReconcileQueue - retryable drain failure preserves ' +
   await new Promise((resolve) => {
     setTimeout(resolve, RECONCILE_QUEUE_RETRYABLE_WAIT_MS);
   });
+  await completion;
 
   t.equal(callCount, 2, 'retry timer drains the preserved item');
   t.same(
@@ -1184,8 +1178,18 @@ test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
     },
   });
   queue.on('retryable_drain_exhausted', (event) => exhausted.push(event));
-  queue.enqueue('owner-a', 'source_changed', {generation: 1});
+  const exhaustedCompletion = queue.enqueueAndWait(
+    'owner-a',
+    'source_changed',
+    {generation: 1},
+  );
+  const exhaustionAssertion = t.rejects(
+    exhaustedCompletion,
+    /repeatable failure/,
+    'commit-boundary callers observe retry exhaustion as failure',
+  );
   await new Promise((resolve) => setTimeout(resolve, 30));
+  await exhaustionAssertion;
   t.equal(callCount, 3, 'retryable work stops at the configured attempt bound');
   t.equal(exhausted.length, 1, 'exhaustion emits one typed loud event');
   t.match(queue.getDiagnostics(), {

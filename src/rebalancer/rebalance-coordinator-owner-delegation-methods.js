@@ -172,8 +172,8 @@ class RebalanceCoordinatorOwnerDelegationMethods {
    * the operation into its existing retry-next-cycle path instead of
    * persisting unfenced work. A readable-but-different epoch keeps the
    * pre-existing MEMBERSHIP_EPOCH_CHANGED stale-plan rejection. Direct
-   * callers that never carried an epoch (provisioning, legacy cleanup,
-   * REMOVE) are not epoch plans and bypass the fence exactly as before.
+   * callers that never carried an epoch (provisioning and direct REMOVE)
+   * are not epoch plans and bypass the fence.
    * @param {Object} move - Move specification.
    * @return {void}
    * @private

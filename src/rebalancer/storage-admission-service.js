@@ -23,6 +23,10 @@ import {assertCritical} from '../utils/assert.js';
 import {NUM} from '../constants/index.js';
 import {buildStorageAdmissionResult} from './storage-admission-result.js';
 import {
+  STORAGE_ADMISSION_PREFLIGHT_ACTION,
+  resolveStorageAdmissionPreflight,
+} from './storage-admission-preflight.js';
+import {
   ADMISSION_DECISION,
   ADMISSION_MODE,
   ADMISSION_REASON,
@@ -34,16 +38,11 @@ import {
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_DEFAULT,
+  STORAGE_ADMISSION_ERROR_MSG,
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from './storage-admission-constants.js';
 const STORAGE_ADMISSION_SERVICE_LITERAL = Object.freeze({VALUE_10000: 10000});
-const ADMISSION_ERROR_MSG = Object.freeze({
-  ACCOUNTING_SERVICE_REQUIRED: 'StorageAdmissionService requires accountingService',
-  TARGET_NODE_REQUIRED: 'Admission check requires targetNodeId',
-  ESTIMATED_BYTES_REQUIRED: 'Admission check requires positive estimatedBytes',
-  OPERATION_TYPE_REQUIRED: 'Admission check requires a valid operationType',
-});
 const PERCENT_DIVISOR = NUM.HUNDRED;
 const VALID_OPERATION_TYPES = new Set(Object.values(STORAGE_ADMISSION_OPERATION_TYPE));
 class StorageAdmissionService {
@@ -52,7 +51,10 @@ class StorageAdmissionService {
    * @param {Object} options.accountingService
    */
   constructor(options = {}) {
-    assertCritical(options.accountingService, ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED);
+    assertCritical(
+      options.accountingService,
+      STORAGE_ADMISSION_ERROR_MSG.ACCOUNTING_SERVICE_REQUIRED,
+    );
     this.accountingService = options.accountingService;
     this.nodeId = options.nodeId || null;
     this.now = typeof options.now === 'function' ? options.now : () => Date.now();
@@ -212,12 +214,11 @@ class StorageAdmissionService {
   async evaluateProvisioning(options = {}) {
     const operationType = this.validateOperationType(options.operationType);
     const candidateNodeIds = this.normalizeCandidateNodeIds(options);
-    assertCritical(candidateNodeIds.length > 0, ADMISSION_ERROR_MSG.TARGET_NODE_REQUIRED);
 
     const estimatedBytes = Number(options?.estimatedBytes);
     assertCritical(
       Number.isFinite(estimatedBytes) && estimatedBytes > 0,
-      ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED,
+      STORAGE_ADMISSION_ERROR_MSG.ESTIMATED_BYTES_REQUIRED,
     );
 
     const requiredReplicaCount = this.normalizeRequiredReplicaCount(options.requiredReplicaCount);
@@ -229,27 +230,19 @@ class StorageAdmissionService {
       options.sourceRoutableNodeIds.filter(Boolean) :
       [];
 
-    if (
-      minimumRoutableSourceCount > 0 &&
-      sourceRoutableNodeIds.length < minimumRoutableSourceCount
-    ) {
-      return this.applyModeOverride(
-        buildStorageAdmissionResult({
-          allowed: false,
-          decisionType: STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
-          operationType,
-          requiredReplicaCount,
-          eligibleNodeIds: [],
-          ineligibleNodes: [],
-          blockingReasons: [STORAGE_ADMISSION_REASON.SOURCE_QUORUM_NOT_ROUTABLE],
-
-          decisionTimestamp,
-          projectedUtilizationByNodeId: {},
-          projectedUtilization: null,
-          reason: STORAGE_ADMISSION_REASON.SOURCE_QUORUM_NOT_ROUTABLE,
-        }),
-        candidateNodeIds,
-      );
+    const preflight = resolveStorageAdmissionPreflight({
+      candidateNodeIds,
+      decisionTimestamp,
+      minimumRoutableSourceCount,
+      operationType,
+      requiredReplicaCount,
+      sourceRoutableNodeIds,
+    });
+    if (preflight.action !== STORAGE_ADMISSION_PREFLIGHT_ACTION.CONTINUE) {
+      return preflight.action ===
+        STORAGE_ADMISSION_PREFLIGHT_ACTION.APPLY_MODE_OVERRIDE ?
+        this.applyModeOverride(preflight.result, candidateNodeIds) :
+        preflight.result;
     }
 
     const eligibleNodeIds = [];
@@ -510,7 +503,7 @@ class StorageAdmissionService {
   validateOperationType(operationType) {
     assertCritical(
       VALID_OPERATION_TYPES.has(operationType),
-      ADMISSION_ERROR_MSG.OPERATION_TYPE_REQUIRED,
+      STORAGE_ADMISSION_ERROR_MSG.OPERATION_TYPE_REQUIRED,
     );
     return operationType;
   }
@@ -796,4 +789,4 @@ class StorageAdmissionService {
   }
 }
 
-export {StorageAdmissionService, ADMISSION_ERROR_MSG};
+export {StorageAdmissionService};

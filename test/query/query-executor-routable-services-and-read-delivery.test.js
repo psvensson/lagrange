@@ -599,7 +599,7 @@ test('QueryExecutor - executeOnPartition retries reads across ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -707,7 +707,7 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -819,7 +819,7 @@ test('QueryExecutor - read candidate delivery reserves timeout budget for ' +
     messageRouter,
     systemCache,
   });
-  executor.leaderRetryAttempts = 1;
+  executor.queryTimeoutMs = 5;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(

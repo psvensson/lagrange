@@ -2,7 +2,6 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
 import {
-  PUBLICATION_ACTIVE_GATE_HANDOFF_ACTIVE_NODE_VIEW_FIELDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
   PUBLICATION_ACTIVE_GATE_HANDOFF_LIFECYCLE_NODE_FIELDS,
@@ -310,9 +309,10 @@ function resolvePublicationActiveGateHandoffExpectedNodeIds(options = {}) {
     ...collectPublicationActiveGateHandoffReadinessNodeIds(
       options.readinessByNodeId,
     ),
-    ...collectPublicationActiveGateHandoffRecordNodeIds(
-      options.activeNodeViews,
-      PUBLICATION_ACTIVE_GATE_HANDOFF_ACTIVE_NODE_VIEW_FIELDS,
+    ...normalizePublicationActiveGateHandoffNodeIdList(
+      options.snapshotCoverage?.[
+        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NODE_IDS
+      ],
     ),
     ...collectPublicationActiveGateHandoffPublicationNodeIds(
       options.publicationConvergence,
@@ -329,15 +329,6 @@ function resolvePublicationActiveGateHandoffPublishedActiveNodeIds(
     );
   if (explicitPublishedNodeIds.length > 0) {
     return explicitPublishedNodeIds;
-  }
-  const activeNodeViewPublishedNodeIds =
-    normalizePublicationActiveGateHandoffNodeIdList(
-      options.activeNodeViews?.[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS
-      ],
-    );
-  if (activeNodeViewPublishedNodeIds.length > 0) {
-    return activeNodeViewPublishedNodeIds;
   }
   return normalizePublicationActiveGateHandoffNodeIdList(
     options.publicationConvergence?.[
@@ -570,7 +561,6 @@ function resolvePublicationActiveGateHandoffPendingReconcileNodeIds({
 export {
   normalizePublicationActiveGateHandoffPublicationSnapshot,
   resolvePublicationActiveGateHandoffReconcileRequirement,
-  collectPublicationActiveGateHandoffRecordNodeIds,
   collectPublicationActiveGateHandoffNodeRows,
   collectPublicationActiveGateHandoffReadinessNodeIds,
   collectPublicationActiveGateHandoffPriorityRecoveryEvidenceRecords,

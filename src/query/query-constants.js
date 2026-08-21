@@ -2,7 +2,6 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, TIME_MS, TABLES} from '../constants/index.js';
 
 const QUERY_SUBSYSTEM = Object.freeze({
-  QUERY_ROUTER: 'query-router',
   SQL_QUERY_ENGINE: 'sql-query-engine',
   QUERY_EXECUTOR: 'query-executor',
   PARALLEL_QUERY_COORDINATOR: 'parallel-query-coordinator',
@@ -205,17 +204,6 @@ const QUERY_ERROR_MSG = Object.freeze({
     'control-plane write path not ready',
 });
 
-const QUERY_ROUTER_ERROR_MSG = Object.freeze({
-  SYSTEM_CACHE_REQUIRED: 'QueryRouter requires systemCache',
-  MESSAGE_ROUTER_REQUIRED: 'QueryRouter requires messageRouter',
-  noServiceCandidates: (partitionId) =>
-    `No service candidates found for partition: ${partitionId}`,
-  routingTimeout: (partitionId, timeoutMs) =>
-    `Routing timed out for partition ${partitionId} after ${timeoutMs}ms`,
-  routingFailed: (partitionId, retryAttempts) =>
-    `Failed to route query to partition ${partitionId} after ${retryAttempts} attempts`,
-});
-
 const QUERY_LOG_MSG = Object.freeze({
   EXECUTING_DISTRIBUTED_SELECT: 'Executing distributed SELECT',
   EXECUTING_CROSS_PARTITION_JOIN: 'Executing cross-partition JOIN',
@@ -303,16 +291,6 @@ const QUERY_LOG_MSG = Object.freeze({
   SCHEMA_PROVISIONING_RECOVERY_DEFERRED:
     'Durable schema provisioning recovery deferred',
   INIT_LOGGER_FAILED: 'initLogger failed',
-});
-
-const QUERY_ROUTER_LOG_MSG = Object.freeze({
-  ROUTING_TO_PARTITION: 'Routing query to partition',
-  TIMEOUT_EXCEEDED: 'Routing timeout exceeded',
-  NO_CANDIDATES: 'No service candidates available for partition',
-  ROUTE_SUCCESS: 'Route to partition succeeded',
-  FOLLOWING_REDIRECT: 'Following leader redirect',
-  RETRY_ATTEMPT: 'Retrying partition route',
-  ROUTE_FAILED: 'Route to partition failed',
 });
 
 const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
@@ -439,7 +417,6 @@ const WRITE_TRACKING_EXCLUDED_TABLES = Object.freeze(new Set([
 const QUERY_CONFIG_KEY = Object.freeze({
   QUERY_TIMEOUT_MS: CONFIG_KEY.QUERY_TIMEOUT_MS,
   MAX_PARALLEL_PARTITIONS: CONFIG_KEY.QUERY_MAX_PARALLEL_PARTITIONS,
-  LEADER_RETRY_ATTEMPTS: CONFIG_KEY.QUERY_LEADER_RETRY_ATTEMPTS,
   LEADER_RETRY_DELAY_MS: CONFIG_KEY.QUERY_LEADER_RETRY_DELAY_MS,
   READ_RETRY_ATTEMPTS: CONFIG_KEY.QUERY_READ_RETRY_ATTEMPTS,
 
@@ -464,7 +441,6 @@ const QUERY_CONFIG_KEY = Object.freeze({
 const QUERY_DEFAULTS = Object.freeze({
   QUERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
-  LEADER_RETRY_ATTEMPTS: NUM.FIVE,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
   READ_RETRY_ATTEMPTS: NUM.THREE,
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
@@ -503,8 +479,6 @@ export {
   QUERY_OPERATION,
   QUERY_OPERATOR,
   QUERY_RESPONSE_TYPE,
-  QUERY_ROUTER_ERROR_MSG,
-  QUERY_ROUTER_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
   QUERY_JOIN_PUSHDOWN,

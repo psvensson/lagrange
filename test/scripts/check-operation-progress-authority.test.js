@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  RETIRED_SINGLE_OWNER_FORM_PATTERNS,
   collectOrdinalFileViolations,
   collectOwnerMapViolations,
+  collectPatternViolations,
+  containsTokenAtIdentifierBoundary,
   ownerMapHasSemanticSuccessor,
 } from '../../scripts/check-operation-progress-authority.js';
 
@@ -12,6 +15,74 @@ const OWNER_MAP_PATH = 'architecture/current-owner-maps.md';
 // compatibility wrappers remain. The guard still rejects re-introduced ordinal
 // files (see the rejection test below); this allowlist is now empty.
 const NAMED_LEGACY_FILES = Object.freeze([]);
+
+test('operation progress vocabulary guard respects identifier boundaries', (t) => {
+  t.equal(
+    containsTokenAtIdentifierBoundary(
+      'const OTHER_WITNESS_SOURCE = true;',
+      'WITNESS' + '_SOURCE',
+    ),
+    false,
+    'a larger unrelated identifier is not a retired source declaration',
+  );
+  t.equal(
+    containsTokenAtIdentifierBoundary(
+      'const WITNESS' + '_SOURCE = true;',
+      'WITNESS' + '_SOURCE',
+    ),
+    true,
+    'the exact retired identifier remains rejected',
+  );
+  t.end();
+});
+
+test('single-owner guard rejects reintroduced alternate runtime forms', (t) => {
+  const files = ['src/rebalancer/example.js'];
+  const contentByFile = new Map([[
+    files[0],
+    [
+      'const type = operation.entityType || SERVICE_TYPE.PARTITION;',
+      'const id = operation.entityId || operation.partitionId;',
+      'const epoch = OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH;',
+    ].join('\n'),
+  ]]);
+  const violations = collectPatternViolations({
+    files,
+    contentByFile,
+    rules: RETIRED_SINGLE_OWNER_FORM_PATTERNS,
+  });
+
+  t.equal(violations.length, 3,
+    'partition aliases and history epoch copies are rejected together');
+  t.end();
+});
+
+test('single-owner guard rejects create-only runtime placement budget forms',
+  (t) => {
+    const files = ['src/rebalancer/example.js'];
+    const contentByFile = new Map([[
+      files[0],
+      [
+        'const allowed = isGenuineServiceCreateAdmission(type, entityType);',
+        'const slots = coordinator.getReservedCreateAddSlots();',
+        'const options = {isGenuineCreate: true};',
+        'config.reservedCreateAddSlots = 1;',
+        'import \'./rebalance-coordinator-create-slot-reservation.js\';',
+      ].join('\n'),
+    ]]);
+    const violations = collectPatternViolations({
+      files,
+      contentByFile,
+      rules: RETIRED_SINGLE_OWNER_FORM_PATTERNS,
+    });
+
+    t.equal(
+      violations.length,
+      5,
+      'all retired create-only placement forms are rejected together',
+    );
+    t.end();
+  });
 
 test('operation progress authority guard requires semantic successor targets', (t) => {
   const ownerMap = fs.readFileSync(OWNER_MAP_PATH, ENCODING_UTF8);

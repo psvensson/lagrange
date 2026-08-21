@@ -166,7 +166,7 @@ test('post-rebalance closure classifies durable over-target trim debt after oper
           publishedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
         },
         activeNodeViews: {
-          projectedNodeIds: ACTIVE_NODE_IDS_THREE,
+          projectedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
         },
       },
     });
@@ -234,7 +234,7 @@ test('post-rebalance closure keeps run15 effective in-flight operation drain ope
           publishedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
         },
         activeNodeViews: {
-          projectedNodeIds: ACTIVE_NODE_IDS_FIVE,
+          projectedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
         },
       },
     });
@@ -337,7 +337,7 @@ test('post-rebalance closure does not classify retained published members as tri
           publishedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
         },
         activeNodeViews: {
-          projectedNodeIds: ACTIVE_NODE_IDS_THREE,
+          projectedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
           membershipFreeze: {
             active: true,
             reasonCode: MEMBERSHIP_FREEZE_REASON_BROAD_SUSPICION,
@@ -394,8 +394,8 @@ test('post-rebalance closure soft-closes a frozen speculative publication when p
         activeNodeViews: {
           effectiveSource: EFFECTIVE_SOURCE_PUBLISHED_MEMBERSHIP,
           publishedMembershipAvailable: true,
-          publishedNodeIds: ACTIVE_NODE_IDS_FOUR,
-          projectedNodeIds: ACTIVE_NODE_IDS_THREE,
+          publishedActiveNodeIds: ACTIVE_NODE_IDS_FOUR,
+          projectedActiveNodeIds: ACTIVE_NODE_IDS_THREE,
           membershipFreeze: {
             active: true,
             reasonCode: MEMBERSHIP_FREEZE_REASON_BROAD_SUSPICION,
@@ -476,7 +476,7 @@ test('post-rebalance closure keeps ack-pending publication open without an effec
           pendingAckNodeIds: [NODE_FIVE],
         },
         activeNodeViews: {
-          projectedNodeIds: ACTIVE_NODE_IDS_FIVE,
+          projectedActiveNodeIds: ACTIVE_NODE_IDS_FIVE,
         },
       },
     });

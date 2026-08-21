@@ -1,5 +1,5 @@
 /**
- * Deterministic binding scenario for the runtime-service create reservation.
+ * Deterministic binding scenario for the runtime-service placement reservation.
  *
  * Three non-priority REPLACEs fill the ordinary share of the plain ADD lane
  * while priority recovery holds one global slot. Repeated ordinary churn is
@@ -289,7 +289,7 @@ async function assertOrdinaryChurnRemainsRejected(t, coordinator) {
     t.equal(
       rejection?.rebalanceSkipReason,
       REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-      `${partitionId} churn cannot consume the create-reserved slot`,
+      `${partitionId} churn cannot consume the runtime-placement slot`,
     );
   }
 }
@@ -380,13 +380,25 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     t.equal(
       await coordinator.canStartAddOperation({
         partitionId: 'movie-spread-boundary',
-        isGenuineCreate: false,
+        isRuntimeServicePlacement: false,
       }),
       false,
       'the real admission helper closes the ordinary lane at that boundary',
     );
 
     await assertOrdinaryChurnRemainsRejected(t, coordinator);
+
+    await coordinator.ensureConcurrentOperationBudgetAllowed(
+      OperationType.REPLACE,
+      {
+        partitionId: SERVICE_ENTITY_ID,
+        entityType: EntityType.RUNTIME_SERVICE,
+        entityId: SERVICE_ENTITY_ID,
+      },
+    );
+    t.pass(
+      'runtime affinity REPLACE reaches the same reserved placement lane as ADD',
+    );
 
     const loadedArtifactTargets = [];
     const wasmDriver = new WasmComponentDriver({

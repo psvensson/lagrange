@@ -300,7 +300,7 @@ test('AdminControlSnapshot prefers authoritative published membership when cache
     t.same(
       publishedReadOptions,
       {
-        preferAuthoritativeRead: true,
+        readSource: 'authoritative_preferred',
         readProfile: 'diagnostics',
         deliveryPriority: 'readiness',
       },

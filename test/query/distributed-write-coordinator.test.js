@@ -122,7 +122,7 @@ test('DistributedWriteCoordinator - surfaces participant failures', async (t) =>
   t.same(result.rows, [{id: 1}]);
 });
 
-test('DistributedWriteCoordinator - retries failed participant once', async (t) => {
+test('DistributedWriteCoordinator delegates participant retry ownership', async (t) => {
   const attempts = new Map();
   const coordinator = new DistributedWriteCoordinator({
     partitionResolver: {},
@@ -137,10 +137,7 @@ test('DistributedWriteCoordinator - retries failed participant once', async (t) 
         const partitionId = partitionIds[0];
         const attempt = (attempts.get(partitionId) || 0) + 1;
         attempts.set(partitionId, attempt);
-        if (attempt === 1) {
-          throw new Error('transient failure');
-        }
-        return {success: true, affectedRows: 1, rows: []};
+        throw new Error('terminal participant failure');
       },
     },
     getTablePartitions() {
@@ -149,16 +146,19 @@ test('DistributedWriteCoordinator - retries failed participant once', async (t) 
     getTableInfo() {
       return {primaryKey: 'id'};
     },
-    maxRetries: 1,
   });
 
   const ast = new SQLParser('DELETE FROM users WHERE id = 1').parse();
   const plan = coordinator.createWritePlan(ast, [], {partitionIds: ['p1']});
 
   const result = await coordinator.executePlan(plan, []);
-  t.equal(result.success, true);
-  t.equal(result.affectedRows, 1);
-  t.equal(attempts.get('p1'), 2);
+  t.equal(result.success, false);
+  t.equal(result.affectedRows, 0);
+  t.equal(
+    attempts.get('p1'),
+    1,
+    'the aggregation owner must not replay a canonical delivery outcome',
+  );
 });
 
 test('DistributedWriteCoordinator - propagates global execution options to participants',
@@ -184,7 +184,6 @@ test('DistributedWriteCoordinator - propagates global execution options to parti
       getTableInfo() {
         return {primaryKey: 'id'};
       },
-      maxRetries: 0,
     });
 
     coordinator.executePartitionStatement =
@@ -294,7 +293,6 @@ function createTestCoordinator(resultsByPartition) {
     getTableInfo() {
       return {primaryKey: 'id'};
     },
-    maxRetries: 0,
   });
 
   coordinator.executePartitionStatement =

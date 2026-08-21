@@ -821,6 +821,9 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
 
         const result = await rebalancer.executeMoveViaCoordinator({
           type: MoveType.ADD,
+          partitionId: 'partition-1',
+          entityType: EntityType.PARTITION,
+          entityId: 'partition-1',
           nodeId: 'node-1',
           replicaId: 'partition-1-r4',
         });
@@ -873,6 +876,9 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
 
         const result = await rebalancer.executeMoveViaCoordinator({
           type: MoveType.ADD,
+          partitionId: 'partition-1',
+          entityType: EntityType.PARTITION,
+          entityId: 'partition-1',
           nodeId: 'node-1',
           replicaId: 'partition-1-r4',
         });
@@ -918,6 +924,9 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
 
         const result = await rebalancer.executeMoveViaCoordinator({
           type: MoveType.ADD,
+          partitionId: 'partition-1',
+          entityType: EntityType.PARTITION,
+          entityId: 'partition-1',
           nodeId: 'node-1',
           replicaId: 'partition-1-r4',
         });

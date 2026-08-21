@@ -8,6 +8,8 @@ import {
 import {createTimeoutBudget} from
   '../../src/control-plane/timeout-budget.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
 
 const TEST_PARTITION_ID = 'nodes-p1';
@@ -143,7 +145,9 @@ test('seed join gate refreshes stale leader metadata from bounded authoritative 
     for (const call of calls) {
       t.same(call.params, [TEST_PARTITION_ID, TEST_SECOND_PARTITION_ID],
         'each read should batch every missing partition into one query');
-      t.equal(call.options.allowSqlFallback, false,
+      t.equal(
+        call.options.readAuthority?.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
         'the refresh should remain on the authoritative owner read path');
       t.equal(call.options.queryTimeoutMs, 1500,
         'each authoritative read should carry a finite timeout');

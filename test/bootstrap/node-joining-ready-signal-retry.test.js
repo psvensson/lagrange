@@ -46,6 +46,7 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     initializeTestEnvironment();
 
     let sendAttempts = 0;
+    const sendOptions = [];
     let startCalls = 0;
     const sleepDelays = [];
 
@@ -70,8 +71,9 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     };
 
     service.heartbeatService = {
-      sendHeartbeat: async () => {
+      sendHeartbeat: async (_stats, _capabilities, options) => {
         sendAttempts += 1;
+        sendOptions.push(options);
         if (sendAttempts < 3) {
           throw new Error('Query timeout after 30000ms');
         }
@@ -98,6 +100,15 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     }
 
     t.equal(sendAttempts, 3, 'ready signal should retry transient failures');
+    t.same(
+      sendOptions,
+      [
+        {requireDurableVisibility: true},
+        {requireDurableVisibility: true},
+        {requireDurableVisibility: true},
+      ],
+      'join completion always requests the durable publication boundary',
+    );
     t.equal(
       startCalls,
       0,

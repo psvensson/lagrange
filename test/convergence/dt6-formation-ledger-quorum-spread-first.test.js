@@ -665,10 +665,11 @@ t.test(
         .isPriorityRecoveryOperationCreationRequiredForPlanningGate;
     const stub = (concentrated) => ({
       rebalanceCoordinator: {
-        isOperationLedgerQuorumConcentratedForPartition: () => concentrated,
+        getOperationLedgerQuorumConcentrationForPartition: () =>
+          concentrated ? {partitionId: LEDGER_PARTITION_ID} : null,
       },
-      // With no planning snapshot the legacy path always answers false, so a
-      // true here can only come from the concentration evidence.
+      // With no planning snapshot, a true result can only come from the
+      // coordinator-owned concentration evidence.
       getPriorityRecoveryPlanningSnapshotSync: () => null,
     });
     t.equal(

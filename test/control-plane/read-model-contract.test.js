@@ -20,7 +20,6 @@ const FIXTURE_OWNER_COMPONENT = 'TestOwner';
 const FIXTURE_ROW_KEY = 'row-key-1';
 const FIXTURE_ENTITY_TYPE = 'partition';
 const FIXTURE_ENTITY_ID = 'partition-1';
-const FIXTURE_PARTITION_ID = 'partition-1';
 
 // ═══════════════════════════════════════════════════════════════════
 // 1. Read-model contract registry tests
@@ -153,20 +152,17 @@ test('buildDivergenceEvent defaults optional fields to null',
 // 2. Owner-path regression tests — single read-model source
 // ═══════════════════════════════════════════════════════════════════
 
-test('RebalanceCoordinator.getEntityInFlightReplicaIds remains compatible ' +
-  'with the cache-aware owner path', async (t) => {
+test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
+  'authoritative owner is unavailable', async (t) => {
   let sqlQueryCalled = false;
-  let cacheAccessCount = 0;
 
   const coordinator = new RebalanceCoordinator({
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: {
       get() {
-        cacheAccessCount++;
         return null;
       },
       filter() {
-        cacheAccessCount++;
         return [];
       },
     },
@@ -195,23 +191,21 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds remains compatible ' +
 
   try {
     // Reset tracking flags after constructor/initialize
-    cacheAccessCount = 0;
     sqlQueryCalled = false;
 
-    await coordinator.getEntityInFlightReplicaIds({
-      partitionId: FIXTURE_PARTITION_ID,
-      entityType: FIXTURE_ENTITY_TYPE,
-      entityId: FIXTURE_ENTITY_ID,
-    });
+    await t.rejects(
+      coordinator.getEntityInFlightReplicaIds({
+        entityType: FIXTURE_ENTITY_TYPE,
+        entityId: FIXTURE_ENTITY_ID,
+      }),
+      /authoritative_read_owner_unavailable/,
+      'cache visibility cannot substitute for unavailable allocation authority',
+    );
 
     t.equal(
       sqlQueryCalled,
       false,
-      'getEntityInFlightReplicaIds should stay on the cache-aware owner path',
-    );
-    t.ok(
-      cacheAccessCount > 0,
-      'getEntityInFlightReplicaIds may consult the cache observation boundary under the current owner path',
+      'allocation does not bypass the owner through raw SQL',
     );
   } finally {
     await coordinator.shutdown();

@@ -766,7 +766,7 @@ test('AdminControlSnapshot uses observed membership publication when readiness e
     result.controlPlaneDiagnostics.activeNodeViews,
     {
       authoritativeSource: 'published_membership',
-      authoritativeNodeIds: ['node-1', 'node-2'],
+      authoritativeActiveNodeIds: ['node-1', 'node-2'],
       projectedServingNodeIds: ['node-1', 'node-2'],
       locallyEligibleNodeIds: ['node-1', 'node-2'],
       suspectedOrTransitioningNodeIds: [],
@@ -778,9 +778,9 @@ test('AdminControlSnapshot uses observed membership publication when readiness e
         unconfirmedProjectedNodeIds: [],
       },
       effectiveSource: 'published_membership',
-      effectiveNodeIds: ['node-1', 'node-2'],
-      projectedNodeIds: ['node-1', 'node-2'],
-      publishedNodeIds: ['node-1', 'node-2'],
+      effectiveActiveNodeIds: ['node-1', 'node-2'],
+      projectedActiveNodeIds: ['node-1', 'node-2'],
+      publishedActiveNodeIds: ['node-1', 'node-2'],
       publishedMembershipAvailable: true,
     },
     'control-plane diagnostics should report both effective and projected node views',
@@ -1116,13 +1116,13 @@ test('AdminControlSnapshot prefers the authoritative latest publication when con
     });
 
     await snapshot.ensureMembershipPublicationObservation({
-      preferAuthoritativeRead: true,
+      readSource: 'authoritative_preferred',
     });
 
     t.same(
       observedLatestPublicationReadOptions,
       {
-        preferAuthoritativeRead: true,
+        readSource: 'authoritative_preferred',
         readProfile: 'diagnostics',
         deliveryPriority: 'readiness',
       },
@@ -1236,7 +1236,7 @@ test('AdminControlSnapshot authoritative membership observation stays read-only 
             t.same(
               options,
               {
-                preferAuthoritativeRead: true,
+                readSource: 'authoritative_preferred',
                 readProfile: 'diagnostics',
                 deliveryPriority: 'readiness',
               },
@@ -1264,7 +1264,7 @@ test('AdminControlSnapshot authoritative membership observation stays read-only 
     });
 
     const publicationRow = await snapshot.ensureMembershipPublicationObservation({
-      preferAuthoritativeRead: true,
+      readSource: 'authoritative_preferred',
     });
 
     t.equal(
@@ -1329,7 +1329,7 @@ test('AdminControlSnapshot forced authoritative membership observation stays rea
     });
 
     const publicationRow = await snapshot.ensureMembershipPublicationObservation({
-      preferAuthoritativeRead: true,
+      readSource: 'authoritative_preferred',
       reconcileAuthoritativeMembershipPublication: true,
     });
 

@@ -338,7 +338,6 @@ class ReplicaDispatchServiceDispatchObservationMethods {
       const authoritativeOperation = await authoritativeOperationQuery(
         operationId,
         {
-          requireOwnerRpcRead: false,
         },
       );
       if (authoritativeOperation) {
@@ -414,7 +413,6 @@ class ReplicaDispatchServiceDispatchObservationMethods {
         null;
     if (visibilityObservationQuery) {
       const observation = await visibilityObservationQuery(operationId, {
-        requireOwnerRpcRead: false,
         allowPriorityRecoveryDeferredVisibility: true,
       });
       const operation =

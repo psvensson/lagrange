@@ -108,7 +108,6 @@ const CONFIG_KEY = Object.freeze({
 
   QUERY_TIMEOUT_MS: 'query.timeoutMs',
   QUERY_MAX_PARALLEL_PARTITIONS: 'query.maxParallelPartitions',
-  QUERY_LEADER_RETRY_ATTEMPTS: 'query.leaderRetryAttempts',
   QUERY_LEADER_RETRY_DELAY_MS: 'query.leaderRetryDelayMs',
   QUERY_READ_RETRY_ATTEMPTS: 'query.readRetryAttempts',
   QUERY_COORDINATOR_MAX_PARALLEL_PARTITIONS: 'queryCoordinator.maxParallelPartitions',

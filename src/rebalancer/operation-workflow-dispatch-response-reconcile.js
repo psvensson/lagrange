@@ -1,9 +1,11 @@
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
-  OPERATION_HANDLER,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
@@ -18,7 +20,6 @@ const {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
-  SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TRANSPORT_ERROR_MSG,
   WORKFLOW_STEP,
@@ -26,6 +27,7 @@ const {
   classifySystemPartition,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
+  resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 // Bounded memory for the first-attempt dispatch log discrimination; clearing
 // on overflow only means one extra info line per live operation step.
@@ -337,11 +339,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
-    const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
-    const entityId = operation.entityId || operation.partitionId;
-    const handlerType =
-      OPERATION_HANDLER[entityType] ||
-      OPERATION_HANDLER[SERVICE_TYPE.PARTITION];
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
+    const handlerType = resolveOperationHandlerType(entityType);
     let dispatchNodeId = operation.targetNodeId;
     let messageType = ReplicaOperationMessageType.CREATE_REPLICA;
     let requestReplicaId = operation.replicaId;
@@ -699,7 +699,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             await this.repository.getOperationByIdVisibilityObservation(
               operationId,
               {
-                requireOwnerRpcRead: false,
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );

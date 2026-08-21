@@ -19,6 +19,8 @@ import {
   recordHeartbeatPublicationTarget,
 } from './heartbeat-service-write-coalescing.js';
 import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-state.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  './membership-publication-row-contract.js';
 
 // Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
 // recovering nodes, never on the stable leader — so when those nodes defer to the
@@ -265,14 +267,6 @@ class HeartbeatServiceLifecycleMethods {
         if (attempt.timedOut) {
           return;
         }
-        try {
-          await this.runScheduledMembershipPublicationReconcileTick();
-        } catch (reconcileError) {
-          this.logger.error('Error during scheduled membership publication reconcile tick', reconcileError);
-        }
-        if (attempt.timedOut) {
-          return;
-        }
         this.heartbeatCount++;
         if (this.heartbeatConsecutiveFailures > 0) {
           this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
@@ -292,11 +286,10 @@ class HeartbeatServiceLifecycleMethods {
     };
     const heartbeatTick = () => {
       sendHeartbeat();
-      // The leader-driven reconcile (runScheduledMembershipPublicationReconcileTick)
-      // is otherwise reached only AFTER a successful heartbeat send; during a send
-      // stall it would never run. Drive it here, DECOUPLED from the heartbeat-send
-      // outcome — it self-guards (in-flight guard + publication-owner check), so an
-      // extra drive on a non-owner or busy node is a no-op.
+      // This interval callback is the sole scheduler for membership reconciliation.
+      // Reconciliation has its own in-flight guard and publication-owner check; it
+      // must never retain heartbeat attempt ownership or suppress the next lease
+      // renewal while a publication read/reconcile is slow.
       this.runScheduledMembershipPublicationReconcileTick();
     };
     this.heartbeatTimer = this.setIntervalFn(heartbeatTick, this.heartbeatIntervalMs);
@@ -356,7 +349,8 @@ class HeartbeatServiceLifecycleMethods {
 
       const planningSnapshot =
         await this.membershipPublicationService.readPublicationPlanningSnapshot({
-          preferAuthoritativeRead: true,
+          readSource:
+            MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
         });
 
       if (!planningSnapshot) {

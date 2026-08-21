@@ -5,6 +5,7 @@ import {MEMBERSHIP_PUBLICATION_PLANNING_SOURCE} from './control-plane-readiness-
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   MEMBERSHIP_PUBLICATION_READ_PROFILE,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
@@ -53,29 +54,39 @@ class MembershipPublicationCoordinatorPlanning extends
       });
     const nodeRows = await this.readTableRows(TABLES.NODES, {
       ...planningReadOptions,
-      preferAuthoritativeRead: preferAuthoritativeMembershipState,
+      readSource: preferAuthoritativeMembershipState ?
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
       preloadedRows: options.nodeRows,
     });
     const nodeEndpointRows = await this.readTableRows(TABLES.NODE_ENDPOINTS, {
       ...planningReadOptions,
-      preferAuthoritativeRead: preferAuthoritativeMembershipState,
+      readSource: preferAuthoritativeMembershipState ?
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
       preloadedRows: options.nodeEndpointRows,
     });
     const serviceRows = await this.readTableRows(TABLES.SERVICES, {
       ...planningReadOptions,
-      preferAuthoritativeRead: preferAuthoritativeMembershipState,
+      readSource: preferAuthoritativeMembershipState ?
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
       preloadedRows: options.serviceRows,
     });
     const partitionRows = await this.readTableRows(TABLES.PARTITIONS, {
       ...planningReadOptions,
-      preferAuthoritativeRead: preferAuthoritativeMembershipState,
+      readSource: preferAuthoritativeMembershipState ?
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
       preloadedRows: options.partitionRows,
     });
     const replicaOperationRows = await this.readTableRows(
       TABLES.REPLICA_OPERATIONS,
       {
         ...planningReadOptions,
-        preferAuthoritativeRead: preferAuthoritativeMembershipState,
+        readSource: preferAuthoritativeMembershipState ?
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED :
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
         preloadedRows: options.replicaOperationRows,
       },
     );

@@ -17,6 +17,8 @@ import {
 import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
@@ -80,8 +82,9 @@ function registerSqlQueryEngineExecutionTestCases({
       'system-table SELECT should allow bounded local replica fallback before owner RPC',
     );
     t.equal(
-      authoritativeReads[0]?.options?.allowSqlFallback,
-      false,
+      authoritativeReads[0]?.options?.readAuthority
+        ?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
       'system-table SELECT should keep routed SQL disabled during the authoritative preflight',
     );
   });

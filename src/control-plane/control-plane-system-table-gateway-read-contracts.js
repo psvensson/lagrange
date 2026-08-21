@@ -10,11 +10,11 @@ import {buildControlPlaneWorkloadProfile} from './control-plane-workload-profile
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
-  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_READ_PROFILE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
+  GATEWAY_ERROR_MSG,
 } from './control-plane-system-table-gateway-constants.js';
 import {
   normalizeDistinctStringArray,
@@ -71,6 +71,16 @@ function normalizeReadStrategy(value) {
   return null;
 }
 
+function normalizeReadLeaderMode(value) {
+  if (value === CONTROL_PLANE_READ_LEADER_MODE.PREFERRED) {
+    return CONTROL_PLANE_READ_LEADER_MODE.PREFERRED;
+  }
+  if (value === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED) {
+    return CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+  }
+  return CONTROL_PLANE_READ_LEADER_MODE.ANY;
+}
+
 function normalizeReadProfile(value) {
   if (value === CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS) {
     return CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS;
@@ -90,6 +100,14 @@ function normalizeReadProfile(value) {
 function normalizeAuthoritativeReadMode(value) {
   if (value === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY) {
     return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+  }
+  if (
+    value ===
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK
+  ) {
+    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK;
   }
   if (
     value ===
@@ -114,37 +132,30 @@ function normalizeAuthoritativeReadMode(value) {
 
 function resolveAuthoritativeReadMode(options = {}) {
   const explicitMode = normalizeAuthoritativeReadMode(
-    options?.authoritativeReadMode || options?.ownerReadMode,
+    options?.authoritativeReadMode,
   );
-  if (explicitMode) {
-    return explicitMode;
-  }
-  if (options?.requireOwnerRpcRead === true) {
-    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
-  }
-  if (options?.preferOwnerRpcRead === true) {
-    return options?.allowSqlFallback === true ?
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK :
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED;
-  }
-  if (options?.confirmEmptyLocalReadWithOwnerRpc === true) {
-    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC;
-  }
-  if (options?.allowSqlFallback === true) {
-    return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK;
-  }
-  return CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+  return explicitMode || CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
 }
 
 function resolveAuthoritativeReadModeContract(options = {}) {
   const authoritativeReadMode = resolveAuthoritativeReadMode(options);
   switch (authoritativeReadMode) {
+  case CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+    .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK:
+    return Object.freeze({
+      authoritativeReadMode,
+      preferOwnerRpcRead: false,
+      requireOwnerRpcRead: false,
+      allowOwnerRpcFallback: true,
+      allowSqlFallback: false,
+      confirmEmptyLocalReadWithOwnerRpc: false,
+    });
   case CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC:
     return Object.freeze({
       authoritativeReadMode,
       preferOwnerRpcRead: false,
       requireOwnerRpcRead: false,
-      allowOwnerRpcFallback: false,
+      allowOwnerRpcFallback: true,
       allowSqlFallback: false,
       confirmEmptyLocalReadWithOwnerRpc: true,
     });
@@ -207,16 +218,12 @@ function buildAuthoritativeControlPlaneReadIntent(
   tableName,
   sql,
   params = [],
-  options = {},
 ) {
   return {
     tableName,
     sql,
     params: Array.isArray(params) ? params : [],
-    strategy:
-      options?.requireAuthoritative === true ?
-        CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED :
-        CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE,
+    strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE,
   };
 }
 
@@ -236,13 +243,10 @@ function resolveControlPlaneReadIntent(
   options = {},
   supportsAuthoritativeReads = false,
 ) {
-  const readProfile = normalizeReadProfile(
-    options?.readProfile || options?.profile,
-  );
+  const readProfile = normalizeReadProfile(options?.readProfile);
   const profileStrategy = resolveReadStrategyForProfile(readProfile);
   const strategy = normalizeReadStrategy(
     options?.strategy ||
-      options?.readStrategy ||
       profileStrategy ||
       (options?.bootstrapSnapshotRows ||
       typeof options?.readBootstrapSnapshot === 'function' ?
@@ -250,11 +254,9 @@ function resolveControlPlaneReadIntent(
         options?.cachePredicate ||
             typeof options?.readFromCache === 'function' ?
           CONTROL_PLANE_READ_STRATEGY.CACHE :
-          options?.requireAuthoritative === true ?
-            CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED :
-            supportsAuthoritativeReads ?
-              CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE :
-              CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED),
+          supportsAuthoritativeReads ?
+            CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE :
+            CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED),
   );
   return {
     readProfile,
@@ -277,37 +279,27 @@ function resolveControlPlaneReadIntent(
  * ingress and threaded structurally (requestOptions.readAuthority,
  * executionOptions.readAuthority, coalescing identities) so no intermediate
  * layer can drop an authority field by re-enumerating options — the failure
- * mode behind the 2026-07-18 leader-pin incidents. Field-level booleans in
- * requestOptions remain for legacy consumers; token consumers win.
+ * mode behind the 2026-07-18 leader-pin incidents. The constructor accepts
+ * one flat authority draft; nested tokens and legacy routing booleans are not
+ * alternate input forms.
  */
 function buildControlPlaneReadAuthority(options = {}) {
-  if (
-    options?.readAuthority &&
-    typeof options.readAuthority === 'object'
-  ) {
-    return options.readAuthority;
-  }
   return Object.freeze({
     purpose:
-      options?.readPurpose === CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL ?
+      options?.purpose === CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL ?
         CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL :
         CONTROL_PLANE_READ_PURPOSE.ORDINARY,
-    strategy: normalizeReadStrategy(
-      options?.strategy || options?.readStrategy,
-    ),
-    readProfile: normalizeReadProfile(
-      options?.readProfile || options?.profile,
-    ),
+    strategy: normalizeReadStrategy(options?.strategy),
+    readProfile: normalizeReadProfile(options?.readProfile),
     authoritativeReadMode: resolveAuthoritativeReadMode(options),
-    preferOwnerRpcReadLeader: options?.preferOwnerRpcReadLeader === true,
-    requireOwnerRpcReadLeader:
-      options?.requireOwnerRpcReadLeader === true,
+    leaderMode: normalizeReadLeaderMode(options?.leaderMode),
     preferLeader:
       typeof options?.preferLeader === 'boolean' ?
         options.preferLeader :
         null,
     localReadConsistency: options?.localReadConsistency || null,
-    replicaFallbackConsistency: options?.replicaFallbackConsistency || null,
+    replicaFallbackConsistency:
+      options?.replicaFallbackConsistency || null,
     routingReadinessDimension:
       options?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -318,34 +310,43 @@ function buildControlPlaneReadAuthority(options = {}) {
 }
 
 function buildAuthoritativeControlPlaneReadRequestOptions(
-  options = {},
+  readAuthority,
+  deliveryOptions = {},
   queryOptions = null,
 ) {
+  // executeRead is the sole normalization boundary. Downstream request
+  // construction consumes that exact token; rebuilding here used to create a
+  // second authority owner and could erase fields that lived only in the
+  // structural token.
+  if (!readAuthority || Object.isFrozen(readAuthority) !== true) {
+    throw new TypeError(
+      GATEWAY_ERROR_MSG.AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED,
+    );
+  }
   const authoritativeReadModeContract =
-    resolveAuthoritativeReadModeContract(options);
+    resolveAuthoritativeReadModeContract(readAuthority);
   return Object.freeze({
     authoritativeReadModeContract,
     requestOptions: {
-      readAuthority: buildControlPlaneReadAuthority(options),
-      localReadConsistency:
-        options?.localReadConsistency || CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-      replicaFallbackConsistency:
-        options?.replicaFallbackConsistency ||
-        CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-      authoritativeReadMode:
-        authoritativeReadModeContract.authoritativeReadMode,
-      preferOwnerRpcRead: authoritativeReadModeContract.preferOwnerRpcRead,
-      preferOwnerRpcReadLeader:
-        options?.preferOwnerRpcReadLeader === true,
-      requireOwnerRpcReadLeader:
-        options?.requireOwnerRpcReadLeader === true,
-      requireOwnerRpcRead: authoritativeReadModeContract.requireOwnerRpcRead,
-      allowOwnerRpcFallback:
-        authoritativeReadModeContract.allowOwnerRpcFallback,
-      allowSqlFallback: authoritativeReadModeContract.allowSqlFallback,
+      ...buildAuthoritativeReadDeliveryOptions(
+        deliveryOptions,
+        readAuthority,
+      ),
       queryOptions,
     },
   });
+}
+
+// Keep the cache-fallback carrier separate from query construction. The
+// gateway owns whether cache repair is permitted; the query layer merely
+// transports that already-decided contract.
+function buildAuthoritativeReadDeliveryOptions(options, readAuthority) {
+  return {
+    readAuthority,
+    cacheFallbackPredicate: options?.cacheFallbackPredicate,
+    workClass: options?.workClass,
+    deliveryPriority: options?.deliveryPriority,
+  };
 }
 
 function applyProfileDefault(options, key, value) {
@@ -388,9 +389,7 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
 }
 
 function resolveReadProfileOptions(options = {}) {
-  const readProfile = normalizeReadProfile(
-    options?.readProfile || options?.profile,
-  );
+  const readProfile = normalizeReadProfile(options?.readProfile);
   if (!readProfile) {
     return applyReadWorkloadProfileDefaults(
       {

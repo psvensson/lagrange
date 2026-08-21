@@ -2,8 +2,6 @@ import {TIME_MS} from '../constants/index.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
-  evaluateOperationLedgerQuorumConcentration,
-  getConcentratedOperationLedgerPartition,
   getAuthoritativeOperationLedgerPlacementObservation,
 } from './operation-ledger-quorum-concentration.js';
 import {
@@ -14,12 +12,14 @@ import {
   classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   resolveEngagedLedgerQuorumSpreadHold,
+  resolveLedgerQuorumConcentratedPartition,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,
 } from './operation-ledger-hold-policy.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   REBALANCE_COORDINATOR_LOG_MSG,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
@@ -397,7 +397,10 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     try {
       observation = await this.queryAuthoritativeOperationVisibilityObservation(
         normalizedOperationId,
-        {requireOwnerRpcRead: true},
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        },
       );
     } catch {
       return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
@@ -479,8 +482,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
           readOptions: {
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-            allowSqlFallback: false,
-            preferOwnerRpcReadLeader: true,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           },
         });
       } catch {
@@ -502,23 +504,6 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
   }
 
   /**
-   * Quorum-concentration evidence for the PLANNER's priority-recovery gate: a
-   * concentrated operation-ledger partition requires its cure move to be
-   * planned even while local-serve readiness gates would defer planning —
-   * the hold itself sustains those readiness states, so without this evidence
-   * the cure is never planned and the hold never releases (verifier-traced
-   * permanent formation wedge). Feasibility is irrelevant here: planning the
-   * cure is how a target is found.
-   * @param {string|null} partitionId
-   * @return {boolean}
-   */
-  isOperationLedgerQuorumConcentratedForPartition(partitionId) {
-    return this.getOperationLedgerQuorumConcentrationForPartition(
-      partitionId,
-    ) !== null;
-  }
-
-  /**
    * Return the admission owner's immutable placement evidence for one
    * concentrated operation-ledger partition. Planning consumes this exact
    * observation when it must carry a count-decreasing cure across a
@@ -527,8 +512,8 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * @return {Object|null}
    */
   getOperationLedgerQuorumConcentrationForPartition(partitionId) {
-    return getConcentratedOperationLedgerPartition(
-      evaluateOperationLedgerQuorumConcentration(this.systemTableCache),
+    return resolveLedgerQuorumConcentratedPartition(
+      this.systemTableCache,
       partitionId,
     );
   }

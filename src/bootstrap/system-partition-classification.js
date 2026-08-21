@@ -219,6 +219,7 @@ function classifySystemPartition(options = {}) {
     bootstrapCritical: setHas(CRITICAL_SYSTEM_PARTITION_IDS, partitionId),
     formationLivenessDependency:
       setHas(FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS, partitionId),
+    operationLedger: tableId === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     priorityControlPlane: setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId),
     systemTable: setHas(SYSTEM_TABLE_IDS, tableId),
   });

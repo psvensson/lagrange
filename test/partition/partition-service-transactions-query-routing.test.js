@@ -19,6 +19,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  PARTITION_SERVICE_MESSAGE_TYPE,
+  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -1231,6 +1233,118 @@ test('PartitionService - beginTransaction is idempotent for the same prepared se
 
   await partition.rollbackTransaction('tx-prepared');
   partition.shutdown();
+});
+
+test('PartitionService - replica removal fence admits no new work and drains the existing transaction owner', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  await partition.beginTransaction('tx-before-removal', 404);
+
+  const fence = partition.fenceServingAdmissionForRemoval();
+  t.equal(fence.activeTransactionCount, 1,
+    'the removal fence observes the transaction it must drain');
+  const sameOwnerRetry = await partition.beginTransaction(
+    'tx-before-removal',
+    404,
+  );
+  t.equal(sameOwnerRetry.idempotent, true,
+    'the admitted transaction keeps its canonical session ownership');
+  await t.rejects(
+    () => partition.beginTransaction('tx-after-removal', 405),
+    /Serving admission fenced for replica removal/,
+    'a later transaction cannot overtake the removal fence',
+  );
+  const deniedQuery = await partition.handleApplicationMessage({
+    type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY,
+    sql: 'SELECT 1',
+  });
+  t.equal(deniedQuery.success, false,
+    'a later non-transactional query cannot enter the retiring runtime');
+  t.equal(deniedQuery.deferRetry, true,
+    'the serving fence exposes one typed retry outcome');
+  const deniedBegin = await partition.handleApplicationMessage({
+    type: PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION,
+    operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+    sessionId: 'tx-after-removal-transport',
+    transactionEpoch: 406,
+  });
+  t.equal(deniedBegin.success, false,
+    'the transport transaction ingress shares the partition-owned fence');
+  t.equal(deniedBegin.deferRetry, true,
+    'transaction ingress preserves the same retryable fence outcome');
+
+  let drained = false;
+  const drain = partition.waitForRemovalServingDrain({pollIntervalMs: 1})
+    .then(() => {
+      drained = true;
+    });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(drained, false,
+    'removal waits while the pre-fence transaction remains active');
+  await partition.rollbackTransaction('tx-before-removal');
+  await drain;
+  t.equal(drained, true,
+    'removal resumes only after the transaction owner reaches terminal');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - removal drain waits for a query admitted before its serving fence', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+  await partition.initialize();
+
+  let announceStarted;
+  const started = new Promise((resolve) => {
+    announceStarted = resolve;
+  });
+  let releaseQuery;
+  const queryGate = new Promise((resolve) => {
+    releaseQuery = resolve;
+  });
+  partition.handleRemoteQuery = async () => {
+    announceStarted();
+    await queryGate;
+    return {acknowledged: true, success: true};
+  };
+  const admittedQuery = partition.handleApplicationMessage({
+    type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY,
+    sql: 'SELECT 1',
+  });
+  await started;
+
+  const fence = partition.fenceServingAdmissionForRemoval();
+  t.equal(fence.activeServingRequestCount, 1,
+    'the removal fence observes a request admitted before it was raised');
+  let drained = false;
+  const drain = partition.waitForRemovalServingDrain({pollIntervalMs: 1})
+    .then(() => {
+      drained = true;
+    });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(drained, false,
+    'runtime teardown cannot overtake an admitted query');
+
+  releaseQuery();
+  await admittedQuery;
+  await drain;
+  t.equal(drained, true,
+    'runtime teardown resumes after the admitted request returns');
+  await partition.shutdown();
 });
 
 test('PartitionService - beginTransaction rejects other sessions while a prepared transaction is open', async (t) => {

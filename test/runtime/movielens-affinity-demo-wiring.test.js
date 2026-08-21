@@ -62,9 +62,10 @@ import {
   summarizePhase,
 } from '../../examples/service-data-affinity/run-affinity-demo.js';
 import {
-  GCP_DEMO_CONFIG,
+  GCP_DEMO_DEPLOYMENT_PROFILE,
   GCP_DEMO_SCENARIO_NAME,
-  resolveGcpDemoConfig,
+  buildGcpDemoClusterConfig,
+  resolveGcpDemoDeploymentProfile,
   stopGcpAffinityCluster,
 } from '../../examples/service-data-affinity/gcp-cluster-provider.js';
 import {
@@ -83,10 +84,31 @@ const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
 const gzip = promisify(gzipCallback);
 
-test('MovieLens GCP config accepts an explicit same-region capacity zone', (t) => {
-  assert.equal(resolveGcpDemoConfig({}).zone, GCP_DEMO_CONFIG.zone);
+test('MovieLens GCP deployment profile owns VM and container capacity', (t) => {
+  const defaultProfile = resolveGcpDemoDeploymentProfile({});
   assert.equal(
-    resolveGcpDemoConfig({LAGRANGE_AFFINITY_DEMO_GCP_ZONE: 'us-central1-f'}).zone,
+    defaultProfile.infrastructure.zone,
+    GCP_DEMO_DEPLOYMENT_PROFILE.infrastructure.zone,
+  );
+  assert.equal(
+    defaultProfile.infrastructure.zone,
+    'europe-central2-a',
+    'the affinity certification defaults to the requested EU region',
+  );
+  assert.deepEqual(
+    defaultProfile.container,
+    {memory: '2g', cpus: '2.0'},
+    'the live workload cannot inherit the legacy 512MiB/1-CPU fallback',
+  );
+  assert.deepEqual(
+    buildGcpDemoClusterConfig(defaultProfile).resourceLimits,
+    defaultProfile.container,
+    'the cluster consumes the deployment profile without a second default',
+  );
+  assert.equal(
+    resolveGcpDemoDeploymentProfile({
+      LAGRANGE_AFFINITY_DEMO_GCP_ZONE: 'us-central1-f',
+    }).infrastructure.zone,
     'us-central1-f',
   );
   t.end();

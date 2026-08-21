@@ -5,7 +5,6 @@ import {
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_EVIDENCE_STATE,
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_REASON,
   PUBLICATION_ACTIVE_GATE_CATCHUP_FENCE_STATE,
-  PUBLICATION_ACTIVE_GATE_HANDOFF_ACTIVE_NODE_VIEW_FIELDS,
   PUBLICATION_ACTIVE_GATE_HANDOFF_EMPTY_LIST,
   PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD,
   PUBLICATION_ACTIVE_GATE_HANDOFF_PUBLICATION_STATUS,
@@ -24,7 +23,6 @@ import {
 } from './publication-active-gate-handoff-contract-helpers.js';
 import {
   collectPublicationActiveGateHandoffNodeRows,
-  collectPublicationActiveGateHandoffRecordNodeIds,
   resolvePublicationActiveGateHandoffExpectedNodeIds,
 } from './publication-active-gate-handoff-contract-evidence.js';
 
@@ -153,11 +151,7 @@ function resolvePublicationActiveGateHandoffSnapshotCoverageSource(
 ) {
   return isPublicationActiveGateHandoffRecord(options.snapshotCoverage) ?
     options.snapshotCoverage :
-    (
-      isPublicationActiveGateHandoffRecord(options.activeNodeViews) ?
-        options.activeNodeViews :
-        null
-    );
+    null;
 }
 
 function resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(
@@ -172,19 +166,6 @@ function resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(
     ...normalizePublicationActiveGateHandoffNodeIdList(
       coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.NODE_IDS],
     ),
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.COVERED_NODE_IDS],
-    ),
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      coverageSource[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_COVERAGE_NODE_IDS
-      ],
-    ),
-    ...normalizePublicationActiveGateHandoffNodeIdList(
-      coverageSource[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.EFFECTIVE_ACTIVE_NODE_IDS
-      ],
-    ),
   ]);
 }
 
@@ -195,10 +176,6 @@ function resolvePublicationActiveGateHandoffSnapshotCoverageRevision(
     resolvePublicationActiveGateHandoffSnapshotCoverageSource(options);
   return resolvePublicationActiveGateHandoffFirstInteger(
     coverageSource?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REVISION],
-    coverageSource?.[
-      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_COVERAGE_REVISION
-    ],
-    coverageSource?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_REVISION],
   );
 }
 
@@ -212,15 +189,6 @@ function isPublicationActiveGateHandoffSnapshotCoverageStale(options = {}) {
     false ||
     hasPublicationActiveGateHandoffStaleMarker(
       coverageSource[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
-      coverageSource[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.REVISION_STATE
-      ],
-      coverageSource[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_REVISION_STATE
-      ],
-      coverageSource[
-        PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.SNAPSHOT_OBSERVATION
-      ]?.[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.STATE],
     );
 }
 
@@ -269,10 +237,6 @@ function buildPublicationActiveGateHandoffSnapshotCoverageEvidence({
 function resolvePublicationActiveGateHandoffPresenceNodeIds(options = {}) {
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...collectPublicationActiveGateHandoffNodeRows(options.nodeRows),
-    ...collectPublicationActiveGateHandoffRecordNodeIds(
-      options.activeNodeViews,
-      PUBLICATION_ACTIVE_GATE_HANDOFF_ACTIVE_NODE_VIEW_FIELDS,
-    ),
     ...resolvePublicationActiveGateHandoffSnapshotCoverageNodeIds(options),
   ]);
 }

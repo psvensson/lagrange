@@ -60,6 +60,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'membership_publication_epoch', type: COLUMN_TYPE.INTEGER},
     {name: 'replica_id', type: COLUMN_TYPE.TEXT},
     {name: 'target_claim_key', type: COLUMN_TYPE.TEXT},
     {name: 'source_node_id', type: COLUMN_TYPE.TEXT, notNull: true},

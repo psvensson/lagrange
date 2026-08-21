@@ -415,7 +415,6 @@ class RebalanceCoordinatorReplicaIdentityMethods {
         entityId,
       });
     const inFlightReplicaIds = await this.getEntityInFlightReplicaIds({
-      partitionId,
       entityType,
       entityId,
     });

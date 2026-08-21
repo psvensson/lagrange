@@ -192,7 +192,7 @@ async function readAuthoritativeControlPlaneRows(
   }
   if (gateway && typeof gateway.executeRead === 'function') {
     return gateway.executeRead(
-      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params),
       options,
     );
   }
@@ -236,10 +236,10 @@ export {
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READ_OUTCOME,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   resolveAuthoritativeReadModeContract,
   resolveControlPlaneSystemTableDeliverySource,
-  resolveReadProfileOptions,
 } from './control-plane-system-table-gateway-shared.js';

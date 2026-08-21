@@ -18,7 +18,7 @@
  * - orphan-op-adopted-by-fenced-successor: an incomplete operation on an
  *   ORDINARY partition whose recorded owner is remote was previously never
  *   resumed. The fenced recovery sweep adopts it once the durable lease is
- *   expired (or legacy-absent) and re-drives it through the gated lifecycle
+ *   expired (or unfenced) and re-drives it through the gated lifecycle
  *   reconcile; a LIVE remote lease keeps it fenced out of the sweep.
  *   Red-on-revert: removing the adoption arm (or the lease fence in the
  *   adoption read) flips these red.
@@ -34,6 +34,7 @@ import {setImmediate as waitForImmediate} from 'node:timers/promises';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   OPERATION_SHUTDOWN_JOIN_RESULT,
   joinInFlightOperationOwnerLanes,
@@ -98,6 +99,8 @@ function buildOrdinaryAddOperation(overrides = {}) {
     sourceNodeId: TEST_REMOTE_NODE_ID,
     targetNodeId: TEST_TARGET_NODE_ID,
   });
+  operation.entityType = SERVICE_TYPE.PARTITION;
+  operation.entityId = ORDINARY_PARTITION_ID;
   operation.workflowStep = WORKFLOW_STEP.SYNCING;
   operation.status = ReplicaStatus.SYNCING;
   operation.updatedAt = LEASE_ANCHOR_MS;
@@ -422,8 +425,8 @@ test(
       ownerLeaseExpiresAt: EXPIRED_LEASE_OBSERVED_AT_MS +
         REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
     });
-    const legacyOperation = buildOrdinaryAddOperation({
-      operationId: 'op-orphan-legacy',
+    const unfencedOperation = buildOrdinaryAddOperation({
+      operationId: 'op-orphan-unfenced',
     });
 
     t.equal(
@@ -454,12 +457,12 @@ test(
     );
     t.equal(
       resolveOperationOwnerLeaseAdoption(
-        legacyOperation,
+        unfencedOperation,
         TEST_NODE_ID,
         EXPIRED_LEASE_OBSERVED_AT_MS,
       ).adoption,
       REPLICA_OPERATION_OWNER_LEASE_ADOPTION.ADOPT_AS_FENCED_SUCCESSOR,
-      'a legacy unfenced row (no lease) is adoptable',
+      'an unfenced row (no lease) is adoptable',
     );
   },
 );

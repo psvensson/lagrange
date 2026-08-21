@@ -12,8 +12,6 @@ import {
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 import {
-} from './test-helpers.js';
-import {
   createHeartbeatUpdateRow,
   createMockCache,
   createMockCdc,
@@ -25,6 +23,7 @@ import {
   HEARTBEAT_REPORTER_VISIBILITY_ROUTING_DIMENSION,
   initEnv,
 } from './heartbeat-memory-trend-test-helpers.js';
+import './heartbeat-owner-completion-test-cases.js';
 
 test('Heartbeat memory trend slope helper handles minimal and rising samples', async (t) => {
   t.equal(calculateUsageSlopePerMinute([]), 0, 'empty sample list should return 0');
@@ -1257,19 +1256,17 @@ async (t) => {
     t.match(authoritativeReadOptions[0], {
       tableName: 'nodes',
       params: ['node-reporter-routed-visibility'],
-      options: {
-        localReadConsistency: 'local_leader',
-        allowSqlFallback: false,
-      },
     });
     t.equal(
-      authoritativeReadOptions[0].options.queryOptions?.routingReadinessDimension,
+      authoritativeReadOptions[0].options.readAuthority
+        ?.routingReadinessDimension,
       HEARTBEAT_REPORTER_VISIBILITY_ROUTING_DIMENSION,
       'reporter visibility verification should stay on the recovery-eligible routing lane',
     );
     t.equal(
-      authoritativeReadOptions[0].options.replicaFallbackConsistency,
-      undefined,
+      authoritativeReadOptions[0].options.readAuthority
+        ?.replicaFallbackConsistency,
+      null,
       'visibility verification must not fall back to a possibly stale local replica',
     );
   } finally {

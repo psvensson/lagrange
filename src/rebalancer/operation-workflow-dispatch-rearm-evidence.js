@@ -445,7 +445,6 @@ async function getDeferredDispatchRetryOperation(
 ) {
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
-      requireOwnerRpcRead: false,
       allowPriorityRecoveryDeferredVisibility: true,
       allowOwnerPersistedTransitionDeferredVisibility: false,
     });
@@ -534,7 +533,6 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
           await owner.repository.getOperationByIdVisibilityObservation(
             operationId,
             {
-              requireOwnerRpcRead: false,
               allowPriorityRecoveryDeferredVisibility: true,
             },
           );

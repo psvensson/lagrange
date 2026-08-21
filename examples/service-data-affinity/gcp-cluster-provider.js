@@ -45,12 +45,18 @@ const {createCluster} = CLUSTER_FACTORY_LAYER;
 // variance that swung otherwise-identical code between 2687ms and 9573ms
 // max gaps (archived runs 21-34-12/21-42-44/21-50-53); a fixed-performance
 // class removes steal-time from the certification variable set.
-const GCP_DEMO_CONFIG = Object.freeze({
-  project: 'something-2e584',
-  zone: 'us-central1-a',
-  machineType: 'n2-standard-4',
-  vmCount: 5,
-  preemptible: false,
+const GCP_DEMO_DEPLOYMENT_PROFILE = Object.freeze({
+  infrastructure: Object.freeze({
+    project: 'something-2e584',
+    zone: 'europe-central2-a',
+    machineType: 'n2-standard-4',
+    vmCount: 5,
+    preemptible: false,
+  }),
+  container: Object.freeze({
+    memory: '2g',
+    cpus: '2.0',
+  }),
 });
 const GCP_DEMO_ZONE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP_ZONE';
 const DEMO_NODE_COUNT = 5;
@@ -61,11 +67,23 @@ const TEARDOWN_FAILURE_PREFIX =
   'gcp-cluster-provider: best-effort teardown failed (infra may leak): ';
 const LINE_SEPARATOR = '\n';
 
-function resolveGcpDemoConfig(environment = process.env) {
+function resolveGcpDemoDeploymentProfile(environment = process.env) {
   const requestedZone = String(environment?.[GCP_DEMO_ZONE_ENV] || '').trim();
-  return requestedZone ?
-    {...GCP_DEMO_CONFIG, zone: requestedZone} :
-    {...GCP_DEMO_CONFIG};
+  return {
+    infrastructure: {
+      ...GCP_DEMO_DEPLOYMENT_PROFILE.infrastructure,
+      ...(requestedZone ? {zone: requestedZone} : {}),
+    },
+    container: {...GCP_DEMO_DEPLOYMENT_PROFILE.container},
+  };
+}
+
+function buildGcpDemoClusterConfig(deploymentProfile) {
+  return mergeWithDefaults({
+    size: DEMO_NODE_COUNT,
+    gcp: deploymentProfile.infrastructure,
+    resourceLimits: deploymentProfile.container,
+  });
 }
 
 async function materializeGcpFullNodeLogs(nodes, outputDir) {
@@ -135,7 +153,8 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
  *   seedExternalIp: string, stop: Function}>}
  */
 async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
-  const provisioner = new GCPProvisioner(resolveGcpDemoConfig());
+  const deploymentProfile = resolveGcpDemoDeploymentProfile();
+  const provisioner = new GCPProvisioner(deploymentProfile.infrastructure);
   let provisioned = false;
   let cluster = null;
   try {
@@ -152,7 +171,7 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
     // the 5-node scale factor 2.0 = 60s); every other sealed term
     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
     const config = await applySourceFingerprintConfig(
-      mergeWithDefaults({size: DEMO_NODE_COUNT}),
+      buildGcpDemoClusterConfig(deploymentProfile),
     );
     await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);
@@ -207,7 +226,8 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
 export {
   startGcpAffinityCluster,
   stopGcpAffinityCluster,
-  GCP_DEMO_CONFIG,
+  GCP_DEMO_DEPLOYMENT_PROFILE,
   GCP_DEMO_SCENARIO_NAME,
-  resolveGcpDemoConfig,
+  buildGcpDemoClusterConfig,
+  resolveGcpDemoDeploymentProfile,
 };

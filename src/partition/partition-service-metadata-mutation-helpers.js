@@ -5,6 +5,8 @@ import {
 import {
   isCriticalLeaderPublication,
 } from './partition-leader-publication-criticality.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -98,7 +100,8 @@ function buildMetadataMutationReadOptions(owner, deliveryOptions = {}) {
     // A replacement leader commonly runs on a node that does not host the
     // services/partitions system-table group. Owner-local-only confirmation
     // can therefore retry forever without ever reaching the CAS write.
-    preferOwnerRpcRead: true,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
     routingReadinessDimension:
       owner.getMetadataPublicationReadinessDimension(),
   };

@@ -175,9 +175,6 @@ const SUBSYSTEM = Object.freeze({
   /** Query executor for partition queries */
   QUERY_EXECUTOR: 'query-executor',
 
-  /** Query router for partition selection */
-  QUERY_ROUTER: 'query-router',
-
   /** Parallel query coordinator */
   PARALLEL_QUERY_COORDINATOR: 'parallel-query-coordinator',
 

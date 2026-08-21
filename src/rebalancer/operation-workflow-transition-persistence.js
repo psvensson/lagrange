@@ -185,7 +185,6 @@ class OperationWorkflowTransitionPersistence
             await this.repository.queryAuthoritativeOperationById(
               operation.operationId,
               {
-                requireOwnerRpcRead: false,
               },
             );
           if (

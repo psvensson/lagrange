@@ -15,6 +15,8 @@ import {
   transferBackgroundPrioritySpreadReleaseOwnership,
 } from './background-priority-spread-release-tracker.js';
 import {resolveEntitySizeBytes} from './entity-size-resolution.js';
+import {ALLOWED_UNIFIED_SERVICE_TYPES} from
+  '../constants/unified-service-lifecycle.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
@@ -51,6 +53,9 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       options.entityType,
       REBALANCER_ERROR_MSG.ENTITY_TYPE_REQUIRED,
     );
+    if (!ALLOWED_UNIFIED_SERVICE_TYPES.has(this.entityType)) {
+      throw new Error(`Unsupported rebalancer entity type: ${this.entityType}`);
+    }
     this.systemTableCache = assertCritical(
       options.systemTableCache,
       REBALANCER_ERROR_MSG.CACHE_REQUIRED,

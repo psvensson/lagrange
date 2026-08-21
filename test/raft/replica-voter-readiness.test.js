@@ -1,12 +1,14 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
+  EXPLICIT_NON_LEADER_RAFT_ROLES,
   LOAD_ROUTABLE_RAFT_ROLES,
   RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC,
   REPAIR_ONLY_RAFT_ROLES,
   VOTER_RAFT_ROLES,
   VOTER_READINESS_SEMANTIC,
   isCatchupLearnerRaftRole,
+  isExplicitNonLeaderRaftRole,
   isLoadRoutableRaftRole,
   isRepairOnlyRaftRole,
   isVoterRaftRole,
@@ -58,6 +60,22 @@ test('learner is never a voter and never routable; repair-only is disjoint from 
   }
   t.end();
 });
+
+test('explicit non-leader evidence includes every recognized non-leader role',
+  (t) => {
+    t.same(
+      [...EXPLICIT_NON_LEADER_RAFT_ROLES],
+      [RAFT_ROLE.FOLLOWER, RAFT_ROLE.CANDIDATE, RAFT_ROLE.LEARNER],
+      'the co-located leader-hint override has one declared membership row',
+    );
+    t.ok(isExplicitNonLeaderRaftRole('FOLLOWER'));
+    t.ok(isExplicitNonLeaderRaftRole(RAFT_ROLE.CANDIDATE));
+    t.ok(isExplicitNonLeaderRaftRole(RAFT_ROLE.LEARNER));
+    t.notOk(isExplicitNonLeaderRaftRole(RAFT_ROLE.LEADER));
+    t.notOk(isExplicitNonLeaderRaftRole('unknown'));
+    t.notOk(isExplicitNonLeaderRaftRole(null));
+    t.end();
+  });
 
 test('predicates are fail-closed and case-normalizing', (t) => {
   t.ok(isVoterRaftRole('follower'));

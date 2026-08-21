@@ -25,6 +25,7 @@ import {ControlPlaneReadinessService} from '../control-plane/control-plane-readi
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
@@ -128,24 +129,18 @@ const SQL = Object.freeze({
   SELECT_OPERATIONS_BY_PARTITION:
     'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
-    WHERE (
-      (entity_type = ? AND entity_id = ?)
-      OR ((entity_type IS NULL OR entity_type = '') AND partition_id = ?)
-    )`,
+    WHERE entity_type = ? AND entity_id = ?`,
   SELECT_IN_FLIGHT_FOR_ENTITY_NODE: `SELECT * FROM replica_operations
     WHERE partition_id = ? AND target_node_id = ?
-    AND (
-      (entity_type = ? AND entity_id = ?)
-      OR (entity_type IS NULL OR entity_type = '')
-    )`,
+    AND entity_type = ? AND entity_id = ?`,
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   INSERT_OPERATION: `INSERT INTO replica_operations (
     operation_id, type, partition_id, replica_id, target_claim_key,
     source_node_id, target_node_id,
     status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
-    entity_type, entity_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    entity_type, entity_id, membership_publication_epoch
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -163,12 +158,6 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
-  SELECT_PARTITION_SERVICES_BY_ENTITY: `SELECT * FROM services
-    WHERE service_type = ? AND partition_id = ?`,
-  SELECT_MESSAGE_GROUP_SERVICES_BY_ENTITY: `SELECT * FROM services
-    WHERE service_type = ? AND group_id = ?`,
-  SELECT_RUNTIME_SERVICES_BY_ENTITY: `SELECT * FROM services
-    WHERE service_type = ? AND service_id = ?`,
   INSERT_RESERVATION: `INSERT INTO storage_reservations (
     reservation_id, operation_id, entity_type, entity_id,
     partition_id, target_node_id, estimated_bytes,
@@ -202,7 +191,9 @@ const STORAGE_RESERVATION_READ_QUERY_OPTIONS = Object.freeze({
   // Reservation cleanup is an internal recovery path. When the routed
   // authoritative owner is temporarily unavailable, fall back to the local
   // SQL-backed view instead of leaving stale reservations behind.
-  allowSqlFallback: true,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+      .OWNER_RPC_PREFERRED_SQL_FALLBACK,
 });
 const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
   readOptions: {
@@ -241,6 +232,7 @@ const TOPOLOGY_GUARD_ERROR_MSG = Object.freeze({
 export const REBALANCE_COORDINATOR_SHARED = {
   CONCURRENT_CREATE_BUDGET_SCOPE,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_QUERY_OPTIONS,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_WORKLOAD_CLASS,

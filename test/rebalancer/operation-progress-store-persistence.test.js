@@ -377,7 +377,7 @@ test(
       t.equal(
         ports.readOwnerLease(buildSyncingOperation()).freshnessState,
         OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE.UNAVAILABLE,
-        'a legacy row with no lease stamp reads UNAVAILABLE (freshness ' +
+        'an unfenced row with no lease stamp reads UNAVAILABLE (freshness ' +
           'is not claimed without evidence)',
       );
     } finally {

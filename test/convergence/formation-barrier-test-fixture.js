@@ -156,6 +156,7 @@ function buildFormationBarrierOwner({
   now,
   startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
   startupAuthority: providedStartupAuthority = null,
+  isStartupAuthorityReady = null,
   joinerNodeIds = JOINER_NODE_IDS,
 }) {
   NodeService.getInstance().setSystemCacheProxy(cache);
@@ -184,7 +185,18 @@ function buildFormationBarrierOwner({
     providedStartupAuthority || defaultStartupAuthority;
   const readinessService =
     coordinator?.controlPlaneReadinessService || {};
-  readinessService.getStartupAuthoritySnapshotSync = () => startupAuthority;
+  readinessService.getStartupAuthoritySnapshotSync = () => {
+    if (typeof isStartupAuthorityReady !== 'function') {
+      return startupAuthority;
+    }
+    const ready = isStartupAuthorityReady() === true;
+    return Object.freeze({
+      ...startupAuthority,
+      state: ready ? 'ready' : 'recovery_pending',
+      ready,
+      authorityAvailable: true,
+    });
+  };
   owner.rebalanceCoordinator = coordinator || {
     controlPlaneReadinessService: readinessService,
   };

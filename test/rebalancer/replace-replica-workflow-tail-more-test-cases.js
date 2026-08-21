@@ -1,5 +1,7 @@
 import {registerReplaceReplicaWorkflowAddTopologyTests} from './replace-replica-workflow-add-topology-test-cases.js';
 
+const PARTITION_ENTITY_TYPE = 'partition';
+
 export async function registerReplaceReplicaWorkflowTailMoreTests({
   t,
   WORKFLOW_STEP,
@@ -1348,7 +1350,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         const operation = await coordinator.createOperation({
           type: OperationType.REPLACE,
           partitionId: 'control_plane_publications-p1',
-          entityType: 'partition',
+          entityType: PARTITION_ENTITY_TYPE,
           entityId: 'control_plane_publications-p1',
           nodeId: 'node-d',
           sourceNodeId: 'node-a',
@@ -1526,7 +1528,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         const operation = await coordinator.createOperation({
           type: OperationType.REPLACE,
           partitionId: 'control_plane_publications-p1',
-          entityType: 'partition',
+          entityType: PARTITION_ENTITY_TYPE,
           entityId: 'control_plane_publications-p1',
           nodeId: 'node-d',
           sourceNodeId: 'node-a',
@@ -1644,6 +1646,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operationId: 'op-observed-replace-active',
           type: OperationType.REPLACE,
           partitionId: 'control_plane_publications-p1',
+          entityType: PARTITION_ENTITY_TYPE,
+          entityId: 'control_plane_publications-p1',
           replicaId: 'control_plane_publications-p1-r4',
           sourceReplicaId: 'control_plane_publications-p1-r1',
           sourceNodeId: 'node-a',
@@ -1664,6 +1668,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operationId: 'op-observed-replace-active',
           type: OperationType.REPLACE,
           partitionId: 'control_plane_publications-p1',
+          entityType: PARTITION_ENTITY_TYPE,
+          entityId: 'control_plane_publications-p1',
           replicaId: 'control_plane_publications-p1-r1',
           sourceNodeId: 'node-a',
           targetNodeId: 'node-d',
@@ -1729,6 +1735,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operation_id: 'replace-active',
           type: OperationType.REPLACE,
           partition_id: 'users-p1',
+          entity_type: PARTITION_ENTITY_TYPE,
+          entity_id: 'users-p1',
           source_node_id: 'test-node-1',
           target_node_id: 'node-2',
           status: 'active',
@@ -1738,6 +1746,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operation_id: 'remove-pending',
           type: OperationType.REMOVE,
           partition_id: 'users-p1',
+          entity_type: PARTITION_ENTITY_TYPE,
+          entity_id: 'users-p1',
           source_node_id: 'test-node-1',
           target_node_id: 'node-3',
           status: 'pending',
@@ -1747,6 +1757,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operation_id: 'remove-removed',
           type: OperationType.REMOVE,
           partition_id: 'users-p1',
+          entity_type: PARTITION_ENTITY_TYPE,
+          entity_id: 'users-p1',
           source_node_id: 'test-node-1',
           target_node_id: 'node-4',
           status: 'removed',
@@ -1756,6 +1768,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operation_id: 'add-active',
           type: OperationType.ADD,
           partition_id: 'users-p1',
+          entity_type: PARTITION_ENTITY_TYPE,
+          entity_id: 'users-p1',
           source_node_id: 'test-node-1',
           target_node_id: 'node-5',
           status: 'active',
@@ -1765,6 +1779,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           operation_id: 'add-failed',
           type: OperationType.ADD,
           partition_id: 'users-p1',
+          entity_type: PARTITION_ENTITY_TYPE,
+          entity_id: 'users-p1',
           source_node_id: 'test-node-1',
           target_node_id: 'node-6',
           status: 'failed',

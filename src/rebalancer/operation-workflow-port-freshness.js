@@ -13,7 +13,7 @@
  *  - LEASE FRESHNESS: the Q9 durable owner lease
  *    (replica-operation-owner-lease.js, lease_expires_at on the row).
  *    An ACTIVE lease is CURRENT; an EXPIRED lease is STALE; a row with
- *    no lease stamp is UNAVAILABLE (legacy-unfenced is not freshness
+ *    no lease stamp is UNAVAILABLE (unfenced is not freshness
  *    evidence, and the port never claims freshness it cannot prove).
  *  - PUBLICATION FENCE: the coordinator's persisted transition-history
  *    witness (wired by operation-workflow-persistence.js) against the

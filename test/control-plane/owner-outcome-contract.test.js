@@ -124,9 +124,8 @@ test('publication active-gate outcome preserves owner detail through envelope ro
         {node_id: TEST_NODE_2},
         {node_id: TEST_NODE_3},
       ],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
-        publishedActiveNodeIds: [TEST_NODE_1],
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,

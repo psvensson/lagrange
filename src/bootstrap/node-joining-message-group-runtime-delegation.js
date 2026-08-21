@@ -149,18 +149,6 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     );
   }
   /**
-   * Compatibility shim for deferred self-hosted join elections.
-   * Replica create/start ownership remains in unified lifecycle adapters.
-   * @param {string} groupId - Message group ID.
-   * @return {void}
-   * @private
-   */
-  startDeferredJoinMessageGroupElections(groupId) {
-    return this.createMessageGroupPhase.startDeferredJoinMessageGroupElections(
-      groupId,
-    );
-  }
-  /**
    * Phase 3a: Create self-hosted message group (3 replicas on this node).
    * Requirements: 8.3 - Services created AFTER self-connection established.
    * @param {Object} assignment - Assignment instructions.

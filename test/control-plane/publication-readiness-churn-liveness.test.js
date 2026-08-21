@@ -1,4 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../../src/control-plane/membership-publication-row-contract.js';
 import {
   COLUMN,
   NODE_STATE,
@@ -43,6 +45,8 @@ import {
   CONTROL_PLANE_READ_PURPOSE,
 } from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 
 const NOW_MS = 1_780_000_000_000;
 const NODE_COUNT = 5;
@@ -434,7 +438,11 @@ test('bootstrap routing consumes deferred readiness only with owner-service ' +
     false,
     false,
     CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-    {readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
+    {
+      readAuthority: buildControlPlaneReadAuthority({
+        purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      }),
+    },
   ).candidates;
 
   t.equal(ordinaryCandidates().length, 0,
@@ -797,8 +805,9 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
     const table = semanticTables[revision - 1];
     activeCache.applySystemTableChange(table, 'UPDATE', churnRow(table, revision));
     const rows = await membershipOwner.readTableRows(TABLES.NODES, {
-      preferAuthoritativeRead: true,
-      readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      readSource:
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
+      purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
     });
     t.ok(rows.length >= NODE_COUNT,
       `${table} churn traverses the production internal owner-RPC chain`);

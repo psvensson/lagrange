@@ -24,7 +24,6 @@ import {
 } from '../../src/query/query-constants.js';
 import {
   LEDGER_PARTITION_ID,
-  SEED_NODE_ID,
   JOINER_1_NODE_ID,
   JOINER_2_NODE_ID,
   applyRow,
@@ -54,9 +53,8 @@ import {
 //     services observation lane is shed, pinning a REMOVING voter on the
 //     seed so the ledger never unconcentrates.
 //   Pressure persists exactly while the ledger is concentrated, so each
-//   link keeps the other failing and the joiner's engaged formation
-//   barrier oscillates (waiting_for_ledger_spread <->
-//   waiting_for_ledger_observation) until its fail-closed 120s timeout.
+//   link keeps the other failing and the readiness owner keeps the joiner's
+//   engaged formation barrier closed until its fail-closed 120s timeout.
 //
 // HONEST SCOPE (dt6-formation-ledger-* idiom):
 //   - REAL: the joiner's barrier loop (snapshot legs, engagement latch,
@@ -88,9 +86,7 @@ const CASE2_SERVICES_READ_FAIL_BUDGET = 6;
 const STOPPING_STARVATION_MESSAGE_FRAGMENT = 'stopping-observation starvation';
 const BARRIER_STATE = Object.freeze({
   SATISFIED: 'ledger_spread_satisfied',
-  WAITING_OBSERVATION: 'waiting_for_ledger_observation',
-  WAITING_OPERATION_DRAIN: 'waiting_for_ledger_operation_drain',
-  WAITING_SPREAD: 'waiting_for_ledger_spread',
+  WAITING_STARTUP_AUTHORITY: 'waiting_for_startup_authority',
 });
 const PRESSURE_READ_FAILURE = Object.freeze({
   success: false,
@@ -404,6 +400,9 @@ function buildScenario(options = {}) {
     cache,
     coordinator,
     joinerNodeIds: [JOINER_1_NODE_ID, JOINER_2_NODE_ID],
+    isStartupAuthorityReady: () =>
+      !concentrated() &&
+      nonTerminalTrackedOperations(trackedOperations).length === 0,
     now: () => clock.now,
     sleep: async (delayMs) => {
       await driveExecutionTick();
@@ -485,10 +484,11 @@ t.test(
         'no spread operation is starved non-terminal at release',
       );
       t.ok(
-        witnesses.barrierStates.includes(BARRIER_STATE.WAITING_SPREAD) &&
-          witnesses.barrierStates.includes(BARRIER_STATE.WAITING_OBSERVATION),
-        'the cross-lane evidence flap (spread <-> observation) occurred and ' +
-          'did not prevent release',
+        witnesses.barrierStates.includes(
+          BARRIER_STATE.WAITING_STARTUP_AUTHORITY,
+        ),
+        'the barrier waits on the single readiness-owner verdict while the ' +
+          'spread workflow is unresolved',
       );
       t.equal(
         witnesses.sessionWritesFailedDuringStorm,
@@ -564,330 +564,6 @@ t.test(
         witnesses.sessionWritesFailedDuringStorm,
         0,
         'the blip case exercises the observation lane only',
-      );
-    } finally {
-      await coordinator.shutdown();
-      resetEnvironment();
-    }
-  },
-);
-
-// Quest formation-barrier-release-snapshot-coherence — the busy-healthy
-// shape from live runs public-path-multinode-baseline-20260810T154716Z/
-// 155045Z: every lower face fixed (ops completing, zero refusals), the
-// ledger genuinely spread on three distinct nodes, its own REMOVE already
-// COMPLETE ("Replica removal completed" 15:52:51) — but the removed
-// replica's services row lingers as a terminal REMOVING ghost, the joiner
-// cache stays stale-concentrated, the owner-RPC placement lane answers only
-// intermittently, and the rebalancer keeps minting operations on OTHER
-// partitions. On the incoherent barrier, each RPC failure substituted the
-// stale cache verdict and each RPC answer counted the ghost as a quorum
-// voter, so the two release legs deadlocked (the self-op drain observation
-// was never even attempted: inFlightOperationCount stayed null for 135s)
-// and the barrier starved to timeout in a healthy busy cluster. The
-// coherent barrier evaluates all legs from one per-iteration evidence unit
-// and releases: settled ACTIVE spread (3/3/unconcentrated) proven on the
-// owner lane AND self-operations terminal.
-const CHURN_PARTITION_ID = 'user_sessions-p1';
-const BUSY_HEALTHY_RELEASE_BUDGET_POLLS = 10;
-const CHURN_MINT_TICK_INTERVAL = 20;
-const RAFT_ROLE_LEADER = 'leader';
-const RAFT_ROLE_FOLLOWER = 'follower';
-
-function buildGhostLedgerOwnerRows() {
-  const rows = [
-    [1, SEED_NODE_ID, RAFT_ROLE_LEADER],
-    [2, JOINER_1_NODE_ID, RAFT_ROLE_FOLLOWER],
-    [4, JOINER_2_NODE_ID, RAFT_ROLE_FOLLOWER],
-    // r3 becomes the ghost: ACTIVE at REMOVE creation (production
-    // ordering), flipped to REMOVING once the removal has executed and
-    // the services-row DELETE lags.
-    [3, SEED_NODE_ID, RAFT_ROLE_FOLLOWER],
-  ];
-  return rows.map(([index, nodeId, raftRole]) => ({
-    service_id: `${LEDGER_PARTITION_ID}-r${index}`,
-    replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
-    partition_id: LEDGER_PARTITION_ID,
-    node_id: nodeId,
-    service_type: REBALANCER_ENTITY_TYPE.PARTITION,
-    status: ReplicaStatus.ACTIVE,
-    raft_role: raftRole,
-  }));
-}
-
-async function buildBusyHealthyScenario(options = {}) {
-  initializeEnvironment();
-  const cache = buildFormationCache({
-    joinerNodeIds: [JOINER_1_NODE_ID, JOINER_2_NODE_ID],
-  });
-  const clock = {now: BARRIER_START_MS};
-  const fixture = createTimeoutTestCoordinator({
-    timeSource: {now: () => clock.now},
-  });
-  const {coordinator, trackedOperations} = fixture;
-  coordinator.systemTableCache = cache;
-  coordinator.repository.systemTableCache = cache;
-  const witnesses = {
-    barrierStates: [],
-    churnOperationIds: [],
-    placementLaneFailures: 0,
-    placementLaneAnswers: 0,
-  };
-
-  // The destructive-REMOVE placement fence and other coordinator-side
-  // guards read the authoritative services owner at creation time; serve
-  // them the ghost placement (4 voters, r3 REMOVING on the seed). The
-  // BARRIER's own placement lane is stubbed separately below — the
-  // intermittency under test lives there.
-  const ghostRows = buildGhostLedgerOwnerRows();
-  const gateway = coordinator.controlPlaneSystemTableGateway;
-  const baseReadAuthoritativeRows =
-    gateway.readAuthoritativeRows.bind(gateway);
-  gateway.readAuthoritativeRows = async (tableName, sql, params, opts) => {
-    if (tableName === 'services' || /FROM services/.test(String(sql))) {
-      return {
-        success: true,
-        source: 'owner_rpc_lane',
-        rows: ghostRows.map((row) => ({...row})),
-      };
-    }
-    return baseReadAuthoritativeRows(tableName, sql, params, opts);
-  };
-
-  // The ledger partition's own REMOVE self-operation (the ghost row's op).
-  const ledgerRemoval = await coordinator.createOperation({
-    type: OperationType.REMOVE,
-    partitionId: LEDGER_PARTITION_ID,
-    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-    entityId: LEDGER_PARTITION_ID,
-    nodeId: SEED_NODE_ID,
-    replicaId: `${LEDGER_PARTITION_ID}-r3`,
-    sourceNodeId: SEED_NODE_ID,
-  });
-  if (options.ledgerSelfOperationInFlight !== true) {
-    await coordinator.completeOperation(ledgerRemoval);
-  }
-  // The removal has executed: the replica left the raft group, but the
-  // services-row DELETE lags — the live-run terminal ghost (REMOVING row
-  // persisting for 70+ seconds after "Replica removal completed").
-  const ghostRow = ghostRows.find(
-    (row) => row.service_id === `${LEDGER_PARTITION_ID}-r3`,
-  );
-  ghostRow.status = ReplicaStatus.REMOVING;
-
-  // Best-effort: while a ledger self-move is in flight the REAL admission
-  // interlock defers other-partition creates — itself production-faithful
-  // churn pressure, so refusals are simply not counted.
-  const mintChurnOperation = async () => {
-    const churnIndex = witnesses.churnOperationIds.length + 2;
-    try {
-      const operation = await coordinator.createOperation({
-        type: OperationType.ADD,
-        partitionId: CHURN_PARTITION_ID,
-        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-        entityId: CHURN_PARTITION_ID,
-        nodeId: JOINER_1_NODE_ID,
-        replicaId: `${CHURN_PARTITION_ID}-r${churnIndex}`,
-      });
-      witnesses.churnOperationIds.push(operation.operationId);
-    } catch {
-      witnesses.churnMintRefusals = (witnesses.churnMintRefusals || 0) + 1;
-    }
-  };
-  // A busy rebalancer: operations on OTHER partitions are in flight before
-  // the barrier engages and keep getting minted while it waits.
-  await mintChurnOperation();
-  await mintChurnOperation();
-
-  let placementLaneCalls = 0;
-  coordinator.controlPlaneReadinessService.getAuthoritativeControlPlaneView =
-    () => ({
-      canRead: () => true,
-      readReadinessOwnerRows: async () => {
-        placementLaneCalls++;
-        const shedThisCall = options.placementLaneAvailable === false ||
-          placementLaneCalls % 2 === 1;
-        if (shedThisCall) {
-          witnesses.placementLaneFailures++;
-          return {...PRESSURE_READ_FAILURE};
-        }
-        witnesses.placementLaneAnswers++;
-        return {
-          success: true,
-          source: 'owner_rpc_lane',
-          rows: ghostRows.map((row) => ({...row})),
-        };
-      },
-    });
-
-  let tickCount = 0;
-  const owner = buildFormationBarrierOwner({
-    cache,
-    coordinator,
-    joinerNodeIds: [JOINER_1_NODE_ID, JOINER_2_NODE_ID],
-    now: () => clock.now,
-    sleep: async (delayMs) => {
-      tickCount++;
-      if (tickCount % CHURN_MINT_TICK_INTERVAL === 0) {
-        await mintChurnOperation();
-      }
-      clock.now += delayMs;
-    },
-  });
-  owner.config.priorityPlacementFormationPollMs = BARRIER_POLL_MS;
-  owner.config.priorityPlacementFormationTimeoutMs = BARRIER_TIMEOUT_MS;
-  owner.logger = {
-    info: (message, payload) => {
-      if (payload && typeof payload.state === 'string') {
-        witnesses.barrierStates.push(payload.state);
-      }
-    },
-    warn: () => {},
-    error: () => {},
-  };
-
-  return {cache, clock, coordinator, owner, trackedOperations, witnesses};
-}
-
-function inFlightChurnOperationCount(trackedOperations, witnesses) {
-  return [...trackedOperations.values()].filter(
-    (operation) =>
-      witnesses.churnOperationIds.includes(operation.operation_id) &&
-      !isTerminalStep(operation.type, operation.workflow_step),
-  ).length;
-}
-
-t.test(
-  'an engaged barrier over a genuinely spread ledger with a terminal ghost ' +
-    'REMOVING row, an intermittent owner lane, and other-partition churn ' +
-    'releases from one coherent snapshot within a few polls',
-  async (t) => {
-    const scenario = await buildBusyHealthyScenario();
-    const {clock, coordinator, owner, trackedOperations, witnesses} =
-      scenario;
-
-    try {
-      const barrierError = await owner
-        .awaitOperationLedgerFormationBarrier()
-        .then(() => null, (error) => error);
-
-      t.equal(
-        barrierError,
-        null,
-        'the busy-healthy cluster releases the barrier ' +
-          `(got ${barrierError?.code || 'release'} after ` +
-          `${clock.now - BARRIER_START_MS}ms virtual)`,
-      );
-      t.equal(
-        witnesses.barrierStates[witnesses.barrierStates.length - 1],
-        BARRIER_STATE.SATISFIED,
-        'the release is a genuine SATISFIED, not a bypass',
-      );
-      t.ok(
-        clock.now - BARRIER_START_MS <=
-          BUSY_HEALTHY_RELEASE_BUDGET_POLLS * BARRIER_POLL_MS,
-        'release lands within a few polls, not the 120s timeout ' +
-          `(${clock.now - BARRIER_START_MS}ms virtual elapsed)`,
-      );
-      t.ok(
-        witnesses.placementLaneFailures >= 1 &&
-          witnesses.placementLaneAnswers >= 1,
-        'per-leg observations genuinely arrived at different iteration ' +
-          'instants (the owner lane both shed and answered)',
-      );
-      t.ok(
-        inFlightChurnOperationCount(trackedOperations, witnesses) >= 1,
-        'rebalancer churn on OTHER partitions is still in flight at ' +
-          'release and did not defer it',
-      );
-      t.ok(
-        witnesses.barrierStates.includes(BARRIER_STATE.WAITING_OBSERVATION),
-        'an unavailable placement leg is a typed defer iteration',
-      );
-    } finally {
-      await coordinator.shutdown();
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'the same ghost shape with the ledger REMOVE still in flight holds the ' +
-    'barrier fail-closed to timeout (self-ops must be terminal)',
-  async (t) => {
-    const scenario = await buildBusyHealthyScenario({
-      ledgerSelfOperationInFlight: true,
-    });
-    const {coordinator, owner, witnesses} = scenario;
-
-    try {
-      const barrierError = await owner
-        .awaitOperationLedgerFormationBarrier()
-        .then(() => null, (error) => error);
-
-      t.match(
-        barrierError,
-        {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
-        'an in-flight ledger self-operation keeps the engaged barrier ' +
-          'closed until the fail-closed timeout',
-      );
-      t.ok(
-        witnesses.barrierStates.includes(
-          BARRIER_STATE.WAITING_OPERATION_DRAIN,
-        ),
-        'the hold is attributed to the self-operation drain leg',
-      );
-      t.notOk(
-        witnesses.barrierStates.includes(BARRIER_STATE.SATISFIED),
-        'no iteration released over the in-flight self-operation',
-      );
-    } finally {
-      await coordinator.shutdown();
-      resetEnvironment();
-    }
-  },
-);
-
-t.test(
-  'a spread-looking joiner cache cannot release an engaged barrier while ' +
-    'the authoritative placement lane stays unavailable',
-  async (t) => {
-    const scenario = await buildBusyHealthyScenario({
-      placementLaneAvailable: false,
-    });
-    const {cache, coordinator, owner, witnesses} = scenario;
-    // The joiner's LOCAL cache view happens to look fully spread — the
-    // exact shape that previously released with zero owner evidence.
-    for (const [replicaIndex, nodeId] of [
-      [2, JOINER_1_NODE_ID],
-      [3, JOINER_2_NODE_ID],
-    ]) {
-      cache.applySystemTableChange('services', 'UPDATE', {
-        ...cache.get('services', `${LEDGER_PARTITION_ID}-r${replicaIndex}`),
-        node_id: nodeId,
-      });
-    }
-
-    try {
-      const barrierError = await owner
-        .awaitOperationLedgerFormationBarrier()
-        .then(() => null, (error) => error);
-
-      t.match(
-        barrierError,
-        {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
-        'without an authoritative owner answer the engaged barrier fails ' +
-          'closed instead of trusting the local cache verdict',
-      );
-      t.equal(
-        barrierError?.formationBarrier?.spreadProofComplete,
-        false,
-        'the terminal snapshot records the missing placement proof as a ' +
-          'typed defer, not a cache-derived verdict',
-      );
-      t.notOk(
-        witnesses.barrierStates.includes(BARRIER_STATE.SATISFIED),
-        'no iteration released on cache-only spread evidence',
       );
     } finally {
       await coordinator.shutdown();

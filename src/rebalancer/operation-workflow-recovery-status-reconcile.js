@@ -2,8 +2,11 @@ import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
-  runtimeServiceDispatchedReplicaBelongsToEntity,
+  runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
@@ -61,7 +64,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
   async confirmActiveReplicaTerminalHandoff(operation, options = {}) {
     if (
       operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-      !runtimeServiceDispatchedReplicaBelongsToEntity(
+      !runtimeServiceReplicaBelongsToEntity(
         operation.replicaId,
         operation.entityId,
       )
@@ -415,12 +418,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       break;
     }
 
+    const {entityType} = assertCanonicalRebalancerEntityIdentity(operation);
     const actualStatus = await this.getReconciledReplicaStatus(
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
       {
-        entityType: operation.entityType || operation.entity_type || null,
+        entityType,
       },
     );
     if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {

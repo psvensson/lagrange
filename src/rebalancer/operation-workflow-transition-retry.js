@@ -98,7 +98,6 @@ function rearmTransitionRetryWhileUninitialized(
 async function resumeDeferredTransitionOperation(owner, operationId) {
   const visibilityObservation =
     await owner.repository.getOperationByIdVisibilityObservation(operationId, {
-      requireOwnerRpcRead: false,
       allowPriorityRecoveryDeferredVisibility: true,
     });
   const operation =

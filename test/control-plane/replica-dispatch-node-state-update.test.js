@@ -686,7 +686,7 @@ test('ReplicaDispatchService uses injected owners for shared metadata cache read
     const loadedNode = await service.getNodeRow('node-2');
     const loadedOperation = await service.getReplicaOperationRow('op-1');
     const hasHandler = await service.hasHandlerOnTarget('node-2', 'partition');
-    const pendingOperations = await service.getPendingReplicaOpsForNode('node-2');
+    const pendingOperations = await service.getDispatchRetryRowsForNode('node-2');
 
     t.equal(loadedNode.node_id, 'node-2');
     t.equal(loadedOperation.operation_id, 'op-1');

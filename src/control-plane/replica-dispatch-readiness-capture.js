@@ -7,6 +7,9 @@ import {
 import {
   buildOperationDispatchQueueFacade,
 } from './replica-dispatch-operation-queue-context.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from '../rebalancer/rebalancer-entity-identity.js';
 
 const {
   COLUMN,
@@ -21,7 +24,6 @@ const {
   OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
-  SERVICE_TYPE,
   STRING,
   classifySystemPartition,
   getControlPlaneNodeStatePublicationProfile,
@@ -224,8 +226,8 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       operationId: row.operation_id,
       type: row.type,
       partitionId: row.partition_id,
-      entityType: row[COLUMN.ENTITY_TYPE] || SERVICE_TYPE.PARTITION,
-      entityId: row[COLUMN.ENTITY_ID] || row.partition_id,
+      entityType: row[COLUMN.ENTITY_TYPE],
+      entityId: row[COLUMN.ENTITY_ID],
       replicaId: row.replica_id,
       sourceNodeId: row.source_node_id,
       targetNodeId: row.target_node_id,
@@ -237,6 +239,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       errorMessage: row.error_message,
       stepsHistory,
     };
+    assertCanonicalRebalancerEntityIdentity(operation);
     const sourceReplicaId = getOperationMetadataString(
       stepsHistory,
       OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
@@ -617,7 +620,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     if (!targetNodeId || targetNodeId !== this.nodeId) {
       return null;
     }
-    const entityType = operation?.entityType || SERVICE_TYPE.PARTITION;
+    const {entityType} = assertCanonicalRebalancerEntityIdentity(operation);
     const hasLocalHandler = await this.hasHandlerOnTarget(
       targetNodeId,
       entityType,

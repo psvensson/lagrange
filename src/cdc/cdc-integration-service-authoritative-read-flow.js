@@ -13,12 +13,14 @@ import {
   normalizeAuthoritativeReadLocalQueryTransport,
   shouldRetryOwnerRpcReadViaSqlFallback,
 } from './cdc-integration-service-owner-rpc-read-execution.js';
-
+import {
+  resolveAuthoritativeReadModeContract,
+} from '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 const {
   AUTHORITATIVE_READ_SOURCE,
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
+  CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   CONTROL_PLANE_READINESS_DIMENSION,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
@@ -269,6 +271,25 @@ function normalizeLocalSystemTableWriteResult(result) {
   };
 }
 
+function buildAuthoritativeReadDeliveryOptions(options, readAuthority) {
+  return {
+    readAuthority,
+    cacheFallbackPredicate: options?.cacheFallbackPredicate,
+    workClass: options?.workClass,
+    deliveryPriority: options?.deliveryPriority,
+  };
+}
+
+function attachAuthoritativeReadQueryOptions(deliveryOptions, options) {
+  return {
+    ...deliveryOptions,
+    queryOptions:
+      options?.queryOptions && typeof options.queryOptions === 'object' ?
+        options.queryOptions :
+        {},
+  };
+}
+
 async function executeAuthoritativeSystemTableRead(
   service,
   tableName,
@@ -276,18 +297,33 @@ async function executeAuthoritativeSystemTableRead(
   params = [],
   options = {},
 ) {
+  const readAuthority = options?.readAuthority || null;
+  if (!readAuthority || Object.isFrozen(readAuthority) !== true) {
+    return {
+      success: false,
+      error: CDC_INTEGRATION_SERVICE_ERROR.READ_AUTHORITY_REQUIRED,
+      rows: [],
+    };
+  }
+  const authoritativeReadModeContract =
+    resolveAuthoritativeReadModeContract(readAuthority);
+  const canonicalOptions = attachAuthoritativeReadQueryOptions(
+    buildAuthoritativeReadDeliveryOptions(options, readAuthority),
+    options,
+  );
   const statement = sql || `SELECT * FROM ${tableName}`;
-  const requireOwnerRpcRead = options.requireOwnerRpcRead === true;
+  const requireOwnerRpcRead =
+    authoritativeReadModeContract.requireOwnerRpcRead;
   const preferredConsistency =
-    options.localReadConsistency ||
-    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA;
+    readAuthority.localReadConsistency;
   const preferOwnerRpcRead =
-    options.preferOwnerRpcRead === true || requireOwnerRpcRead;
-  const allowOwnerRpcFallback = options.allowOwnerRpcFallback !== false;
+    authoritativeReadModeContract.preferOwnerRpcRead;
+  const allowOwnerRpcFallback =
+    authoritativeReadModeContract.allowOwnerRpcFallback;
   const baseDiagnostics = buildSystemTableOperationDiagnostics(
     service,
     tableName,
-    options,
+    canonicalOptions,
   );
 
   let localRead = {
@@ -309,8 +345,8 @@ async function executeAuthoritativeSystemTableRead(
 
     if (
       !localRead.available &&
-      options.replicaFallbackConsistency &&
-      options.replicaFallbackConsistency !== preferredConsistency
+      readAuthority.replicaFallbackConsistency &&
+      readAuthority.replicaFallbackConsistency !== preferredConsistency
     ) {
       localRead = await queryLocalAuthoritativeSystemTableRows(
         service,
@@ -318,7 +354,7 @@ async function executeAuthoritativeSystemTableRead(
         statement,
         params,
         {
-          consistency: options.replicaFallbackConsistency,
+          consistency: readAuthority.replicaFallbackConsistency,
         },
       );
       localReplicaFallbackHit = localRead.available;
@@ -346,7 +382,7 @@ async function executeAuthoritativeSystemTableRead(
   await readLocalAuthoritativeRows();
 
   const shouldConfirmEmptyLocalReadWithOwnerRpc =
-    options.confirmEmptyLocalReadWithOwnerRpc === true &&
+    authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc === true &&
     allowOwnerRpcFallback &&
     localRead.available &&
     localRead.rows.length === 0 &&
@@ -435,7 +471,7 @@ async function executeAuthoritativeSystemTableRead(
     tableName,
     statement,
     params,
-    options,
+    canonicalOptions,
     baseDiagnostics,
     localQueryTransportReadiness,
   );
@@ -453,7 +489,7 @@ async function executeAuthoritativeSystemTableRead(
     if (
       shouldRetryOwnerRpcReadViaSqlFallback(
         ownerRpcResult,
-        options,
+        canonicalOptions,
         localQueryTransportReadiness,
       )
     ) {

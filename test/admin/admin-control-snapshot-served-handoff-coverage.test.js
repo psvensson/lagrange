@@ -3,12 +3,10 @@ import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
 
 // CL-022 guard: the serve-time active-gate handoff rebuild
 // (resolveSharedControlSnapshot -> attachControlSnapshotObservationActiveGateHandoff)
-// receives controlPlaneDiagnostics.activeNodeViews in the serialized summary
-// dialect (effectiveNodeIds / publishedNodeIds / ...). The catchup fence reads
-// only the resolver-shaped *ActiveNodeIds keys; without translation the served
-// contract can never prove snapshot coverage and permanently denies runtime
-// promotion (state=degraded / published_active_coverage_incomplete), which
-// blocks the mode=load load-readiness admission gate.
+// receives the same canonical *ActiveNodeIds record written into
+// controlPlaneDiagnostics.activeNodeViews. A second serialized field dialect
+// previously required a translation here and allowed writer/reader drift to
+// permanently deny runtime promotion.
 
 const LOCAL_NODE_ID = 'node-seed';
 const CLUSTER_NODE_IDS = Object.freeze([
@@ -34,19 +32,18 @@ function buildServedLocalSnapshot() {
     projectedNodes: [...CLUSTER_NODE_IDS],
     suspectedOrTransitioningNodes: [],
     controlPlaneDiagnostics: {
-      // The serialized summary dialect exactly as buildLocalControlSnapshot
-      // writes it (keys drop the "Active" infix).
+      // The canonical summary shape written by buildLocalControlSnapshot.
       activeNodeViews: {
         authoritativeSource: 'published_membership',
-        authoritativeNodeIds: [...CLUSTER_NODE_IDS],
+        authoritativeActiveNodeIds: [...CLUSTER_NODE_IDS],
         projectedServingNodeIds: [...CLUSTER_NODE_IDS],
         locallyEligibleNodeIds: [...CLUSTER_NODE_IDS],
         suspectedOrTransitioningNodeIds: [],
         membershipFreeze: null,
         effectiveSource: 'published_membership',
-        effectiveNodeIds: [...CLUSTER_NODE_IDS],
-        projectedNodeIds: [...CLUSTER_NODE_IDS],
-        publishedNodeIds: [...CLUSTER_NODE_IDS],
+        effectiveActiveNodeIds: [...CLUSTER_NODE_IDS],
+        projectedActiveNodeIds: [...CLUSTER_NODE_IDS],
+        publishedActiveNodeIds: [...CLUSTER_NODE_IDS],
         publishedMembershipAvailable: true,
       },
       publicationConvergence: {
@@ -67,7 +64,7 @@ function buildServedLocalSnapshot() {
   };
 }
 
-test('served control snapshot handoff proves snapshot coverage from the summary dialect',
+test('served control snapshot handoff proves coverage from the canonical node view',
   async (t) => {
     const adminControlSnapshot = new AdminControlSnapshot({
       nodeId: LOCAL_NODE_ID,
@@ -87,7 +84,7 @@ test('served control snapshot handoff proves snapshot coverage from the summary 
     t.equal(
       fenceCoverage?.available,
       true,
-      'fence snapshot-coverage evidence is available from the summary dialect',
+      'fence snapshot-coverage evidence is available from the canonical view',
     );
     t.equal(
       fenceCoverage?.covered,
@@ -116,7 +113,7 @@ test('served control snapshot handoff proves snapshot coverage from the summary 
     );
   });
 
-test('served handoff rebuild keeps resolver-shaped activeNodeViews intact',
+test('served handoff ignores the retired short node-set field dialect',
   async (t) => {
     const adminControlSnapshot = new AdminControlSnapshot({
       nodeId: LOCAL_NODE_ID,
@@ -125,12 +122,11 @@ test('served handoff rebuild keeps resolver-shaped activeNodeViews intact',
       },
     });
     const localSnapshot = buildServedLocalSnapshot();
-    // A resolver-shaped record (canonical keys already present) must win over
-    // any summary keys: the translation must not clobber canonical fields.
+    // Retired short names must not silently become a second coverage input.
     localSnapshot.controlPlaneDiagnostics.activeNodeViews = {
       ...localSnapshot.controlPlaneDiagnostics.activeNodeViews,
-      effectiveActiveNodeIds: [...CLUSTER_NODE_IDS],
-      effectiveNodeIds: [],
+      effectiveActiveNodeIds: [],
+      effectiveNodeIds: [...CLUSTER_NODE_IDS],
     };
 
     const served = await adminControlSnapshot.resolveSharedControlSnapshot(
@@ -141,7 +137,7 @@ test('served handoff rebuild keeps resolver-shaped activeNodeViews intact',
       ?.publicationActiveGateHandoff?.activeGateCatchupFence?.snapshotCoverage;
     t.equal(
       fenceCoverage?.covered,
-      true,
-      'canonical effectiveActiveNodeIds keep coverage provable',
+      false,
+      'only canonical effectiveActiveNodeIds can prove coverage',
     );
   });

@@ -2,6 +2,9 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -13,7 +16,6 @@ const {
   RECENT_INTENT_TTL_MS,
   RECENT_OPERATION_INTENT_VISIBILITY_STATE,
   ReplicaStatus,
-  SERVICE_TYPE,
   STRING,
   WORKFLOW_STEP,
   classifySystemPartition,
@@ -123,11 +125,11 @@ class RebalanceCoordinatorOperationIntentMethods {
       return false;
     }
 
-    if ((operation.entityType || SERVICE_TYPE.PARTITION) !== entityType) {
+    if (operation.entityType !== entityType) {
       return false;
     }
 
-    if ((operation.entityId || operation.partitionId) !== entityId) {
+    if (operation.entityId !== entityId) {
       return false;
     }
 
@@ -270,9 +272,7 @@ class RebalanceCoordinatorOperationIntentMethods {
         operation: null,
       });
     }
-    const partitionId = String(
-      operation.partitionId || operation.entityId || '',
-    ).trim();
+    const partitionId = String(operation.partitionId ?? '').trim();
     if (
       partitionId.length === 0 ||
       !classifySystemPartition({partitionId}).priorityControlPlane
@@ -282,18 +282,8 @@ class RebalanceCoordinatorOperationIntentMethods {
         operation: null,
       });
     }
-    const entityType = String(
-      operation.entityType || SERVICE_TYPE.PARTITION,
-    ).trim();
-    const entityId = String(
-      operation.entityId || operation.partitionId || '',
-    ).trim();
-    if (entityId.length === 0) {
-      return Object.freeze({
-        state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.DEFERRED,
-        operation: null,
-      });
-    }
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
     const observation = await this.getEntityAuthoritativeOperationObservation(
       entityType,
       entityId,

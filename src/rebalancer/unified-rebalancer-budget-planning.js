@@ -291,9 +291,9 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     if (
       !this.rebalanceCoordinator ||
       typeof this.rebalanceCoordinator
-        .isOperationLedgerQuorumConcentratedForPartition !== 'function' ||
+        .getOperationLedgerQuorumConcentrationForPartition !== 'function' ||
       this.rebalanceCoordinator
-        .isOperationLedgerQuorumConcentratedForPartition(this.entityId) !== true
+        .getOperationLedgerQuorumConcentrationForPartition(this.entityId) === null
     ) {
       return normalizedMoves;
     }

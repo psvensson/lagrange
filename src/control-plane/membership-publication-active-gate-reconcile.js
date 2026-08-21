@@ -12,7 +12,11 @@ import {
   hasPublicationActiveGateOwnerReconcileSignal,
   resolvePublicationActiveGateMembershipPublicationTarget,
 } from './publication-active-gate-handoff-contract.js';
-import {MEMBERSHIP_PUBLICATION_KIND, MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-row-contract.js';
+import {
+  MEMBERSHIP_PUBLICATION_KIND,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
+  MEMBERSHIP_PUBLICATION_STATUS,
+} from './membership-publication-row-contract.js';
 import {normalizeNodeIdList, normalizePositiveInteger} from './membership-publication-row-helpers.js';
 import {
   buildMembershipPublicationRow,
@@ -314,7 +318,8 @@ function buildActiveGateMembershipPublicationReconcileContext({
     );
   return {
     ...options,
-    preferAuthoritativeRead: true,
+    readSource:
+      MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
       .PUBLISHED_ACTIVE_NODE_IDS]: [...target.publishedActiveNodeIds],
     [ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
@@ -617,7 +622,8 @@ async function readActiveGateMembershipPublicationVisibleRow(
       normalizedPublicationRow.publicationId,
       buildPublicationReadOptions({
         ...context,
-        preferAuthoritativeRead: true,
+        readSource:
+          MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
       }),
     );
   } catch (error) {

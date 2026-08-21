@@ -7,7 +7,7 @@ import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
 /**
  * Project the effective runtime-service target used by the placement owner.
  *
- * Binding-derived definitions carry no replica intent, so their legacy
+ * Binding-derived definitions carry no replica intent, so their
  * `replica_count` storage value is ignored. Non-Binding definitions retain the
  * existing built-in scale/start contract. Consumers use this projection
  * directly instead of materializing a generated policy value back into desired

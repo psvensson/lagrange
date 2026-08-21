@@ -676,10 +676,10 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
         row?.suspectedOrTransitioningNodes ??
           row?.suspected_or_transitioning_nodes,
       ),
-      ...parseJsonArrayField(activeNodeViews?.authoritativeNodeIds),
-      ...parseJsonArrayField(activeNodeViews?.effectiveNodeIds),
-      ...parseJsonArrayField(activeNodeViews?.projectedNodeIds),
-      ...parseJsonArrayField(activeNodeViews?.publishedNodeIds),
+      ...parseJsonArrayField(activeNodeViews?.authoritativeActiveNodeIds),
+      ...parseJsonArrayField(activeNodeViews?.effectiveActiveNodeIds),
+      ...parseJsonArrayField(activeNodeViews?.projectedActiveNodeIds),
+      ...parseJsonArrayField(activeNodeViews?.publishedActiveNodeIds),
       ...publicationProjectionNodeIds,
     ]);
     const capturedAtMs =

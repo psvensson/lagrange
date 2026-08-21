@@ -11,8 +11,7 @@ const REPORT_DIR = 'test-output/reports';
 const TEST_FILES = Object.freeze([
   'test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js',
   'test/rebalancer/runtime-service-target-claim.test.js',
-  'test/partition/replica-operations-target-claim-schema-migration.test.js',
-  'test/rebalancer/runtime-service-legacy-target-reconciliation.test.js',
+  'test/partition/replica-operations-schema-migration.test.js',
   'test/rebalancer/operation-workflow-active-cache-handoff.test.js',
   'test/node/runtime-service-handler.test.js',
   'test/rebalancer/replace-replica-workflow.test.js',

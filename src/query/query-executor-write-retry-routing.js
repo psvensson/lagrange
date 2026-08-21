@@ -9,9 +9,9 @@ import {
 const {
   COLUMN,
   CONTROL_PLANE_READ_PURPOSE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ERRORS,
-  NUM,
   PARTITION_SERVICE_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
@@ -41,8 +41,8 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   ) {
     if (
       routingOptions?.[
-        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER
-      ] === true
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
+      ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED
     ) {
       return [];
     }
@@ -347,27 +347,9 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    * @private
    */
   shouldAllowRoutingAuthoritativeRefresh(options = {}) {
-    const readPurpose =
-      options?.readAuthority?.purpose || options?.readPurpose || null;
+    const readPurpose = options?.readAuthority?.purpose || null;
     return readPurpose !== CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL &&
       options?.allowReadinessAuthoritativeRefresh !== false;
-  }
-
-  /**
-   * Get write retry attempt limit for transient leader-election gaps.
-   * @return {number} Maximum attempts.
-   * @private
-   */
-  getWriteRetryAttemptLimit(options = {}) {
-    const maxRecoveryAttempts = NUM.TEN * NUM.FOUR;
-    const retryDelayMs = Math.max(this.leaderRetryDelayMs || 0, 1);
-    const executionTimeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
-        Math.floor(options.timeoutMs) :
-        this.queryTimeoutMs;
-    const timeoutBoundAttempts = Math.ceil(executionTimeoutMs / retryDelayMs);
-    const boundedAttempts = Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
-    return Math.max(this.leaderRetryAttempts, boundedAttempts);
   }
 
   /**

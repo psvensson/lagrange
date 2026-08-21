@@ -544,7 +544,6 @@ test('Owner-path convergence: all progression entry points ' +
           [{
             operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
             options: {
-              requireOwnerRpcRead: false,
               allowPriorityRecoveryDeferredVisibility: true,
             },
           }],
@@ -666,7 +665,6 @@ test('Owner-path convergence: all progression entry points ' +
           [{
             operationId: TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
             options: {
-              requireOwnerRpcRead: false,
               allowPriorityRecoveryDeferredVisibility: true,
               allowOwnerPersistedTransitionDeferredVisibility: false,
             },

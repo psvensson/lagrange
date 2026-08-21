@@ -3,6 +3,7 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 const {
   OperationType,
   ReplicaStatus,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   WORKFLOW_STEP,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   classifySystemPartition,
@@ -27,7 +28,10 @@ async function replayReplaceActiveSourceRemovalFromAuthoritative(context, operat
   const authoritativeOperation =
     await context.repository.queryAuthoritativeOperationById(
       operation.operationId,
-      {requireOwnerRpcRead: true},
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      },
     );
   if (
     !authoritativeOperation ||

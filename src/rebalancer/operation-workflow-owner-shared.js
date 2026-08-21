@@ -316,6 +316,14 @@ const OPERATION_HANDLER = Object.freeze({
   [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: 'runtime-service-handler',
 });
 
+function resolveOperationHandlerType(entityType) {
+  const handlerType = OPERATION_HANDLER[entityType];
+  if (!handlerType) {
+    throw new Error(`Unsupported replica-operation entity type: ${entityType}`);
+  }
+  return handlerType;
+}
+
 const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
   new Set([
     ReplicaStatus.PENDING,
@@ -633,6 +641,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
   readAuthoritativeControlPlaneRows,
+  resolveOperationHandlerType,
   resolvePriorityRecoveryActiveNodeCohort,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 };

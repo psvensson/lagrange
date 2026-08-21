@@ -102,9 +102,8 @@ test('publication active-gate handoff contract schedules owner reconcile from on
         {node_id: TEST_NODE_2},
         {node_id: TEST_NODE_3},
       ],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
-        publishedActiveNodeIds: [TEST_NODE_1],
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -213,9 +212,8 @@ test('publication active-gate handoff emits classified workflow backpressure def
         {node_id: TEST_NODE_2},
         {node_id: TEST_NODE_3},
       ],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
-        publishedActiveNodeIds: [TEST_NODE_1],
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2, TEST_NODE_3],
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -262,9 +260,9 @@ test('publication active-gate handoff waits on selected-timeout snapshot owner e
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
       expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -597,10 +595,9 @@ test('publication active-gate handoff emits reconcile contract for unpublished p
 test('publication active-gate handoff preserves nested selected missing publication evidence',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -1147,9 +1144,8 @@ test('publication active-gate selector prefers drained explicit handoff over sta
 test('publication active-gate handoff keeps recovery-pending nodes out of reconcile',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        publishedActiveNodeIds: [TEST_NODE_1],
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -1178,12 +1174,11 @@ test('publication active-gate handoff keeps recovery-pending nodes out of reconc
     });
   });
 
-test('publication active-gate handoff projection preserves the legacy owner cohort surface',
+test('publication active-gate handoff projection preserves the owner cohort surface',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        publishedActiveNodeIds: [TEST_NODE_1],
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -1220,9 +1215,9 @@ test('publication active-gate handoff completes only when durable publication co
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
       expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -1269,9 +1264,9 @@ test('publication active-gate handoff denies promotion when the publication epoc
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
       expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
       },
       publicationConvergence: {
         status: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -1312,9 +1307,9 @@ test('publication active-gate handoff denies promotion when the publication epoc
 test('publication active-gate catch-up fence keeps seed-only publication pending while active targets are present',
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -1404,10 +1399,10 @@ test('publication active-gate catch-up fence never promotes stale snapshot cover
   async (t) => {
     const contract = buildPublicationActiveGateHandoffContract({
       expectedNodeIds: [TEST_NODE_1, TEST_NODE_2],
-      activeNodeViews: {
-        effectiveActiveNodeIds: [TEST_NODE_1, TEST_NODE_2],
-        snapshotCoverageRevision: TEST_SNAPSHOT_COVERAGE_REVISION,
-        snapshotRevisionState: TEST_STALE_SNAPSHOT_REVISION_STATE,
+      snapshotCoverage: {
+        nodeIds: [TEST_NODE_1, TEST_NODE_2],
+        revision: TEST_SNAPSHOT_COVERAGE_REVISION,
+        state: TEST_STALE_SNAPSHOT_REVISION_STATE,
       },
       publicationConvergence: {
         publicationEpoch: TEST_PUBLICATION_EPOCH,

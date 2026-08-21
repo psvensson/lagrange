@@ -137,8 +137,7 @@ function createLagAwareGateway(store, options = {}) {
     }
     const isOwnerRpcRequiredRead =
       queryOptions?.authoritativeReadMode ===
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED ||
-      queryOptions?.requireOwnerRpcRead === true;
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED;
     if (!isOwnerRpcRequiredRead) {
       readLog.laggedReads++;
       return {success: true, rows: []};
@@ -218,6 +217,8 @@ function seedInFlightAddOperation(store) {
     operation_id: TEST_OPERATION_ID,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: TEST_PARTITION_ID,
     target_node_id: TEST_TARGET_NODE_ID,
     status: 'syncing',
     workflow_step: WORKFLOW_STEP.SYNCING,

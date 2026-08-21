@@ -294,7 +294,7 @@ function resolveProjectedActiveNodeIds(options, controlPlaneDiagnostics) {
   return normalizeStringList(
     Array.isArray(options.projectedActiveNodeIds) ?
       options.projectedActiveNodeIds :
-      activeNodeViews.projectedNodeIds,
+      activeNodeViews.projectedActiveNodeIds,
   );
 }
 

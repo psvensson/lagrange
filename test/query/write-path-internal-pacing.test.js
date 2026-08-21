@@ -311,13 +311,82 @@ test(
     t.equal(result.success, false, 'stuck leadership must still fail loudly');
     t.ok(deliveries > 0, 'the owner should make a bounded recovery attempt');
     t.ok(
-      deliveries <= 40,
-      'the existing write-attempt ceiling must remain bounded',
-    );
-    t.ok(
       elapsedMs < 250,
       'the participant loop must not restart the 1000ms child timeout',
     );
+  },
+);
+
+test(
+  'write routing has one deadline instead of a competing attempt ceiling',
+  async (t) => {
+    const partitionId = 'ratings-p1';
+    const address = 'node-leader/partition/ratings-r1';
+    let routingObservationCount = 0;
+    let deliveries = 0;
+    const systemCache = buildMockSystemCache({
+      partitions: [{
+        partition_id: partitionId,
+        table_name: 'ratings',
+        leader_node_id: 'node-leader',
+      }],
+      services: [],
+    });
+    const executor = new QueryExecutor({
+      systemCache,
+      messageRouter: {
+        async deliver() {
+          deliveries += 1;
+          return {acknowledged: true, success: true, rows: []};
+        },
+      },
+    });
+    executor.leaderRetryDelayMs = 1;
+    executor.delay = async () => {};
+    executor.resolvePartitionServiceCandidates = () => {
+      routingObservationCount += 1;
+      const ready = routingObservationCount > 40;
+      return {
+        candidates: ready ? [{
+          address,
+          nodeId: 'node-leader',
+          node_id: 'node-leader',
+        }] : [],
+        routingSnapshot: {
+          routableServiceCount: ready ? 1 : 0,
+          routableServices: ready ? [{address}] : [],
+        },
+      };
+    };
+
+    const timeoutMs = 1000;
+    const startedAtMs = Date.now();
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'INSERT INTO ratings (rating_id, rating) VALUES (?, ?)',
+      [50001, 3.0],
+      false,
+      false,
+      false,
+      {
+        timeoutBudget: {
+          configuredBudgetMs: timeoutMs,
+          startedAtMs,
+          deadlineMs: startedAtMs + timeoutMs,
+        },
+      },
+    );
+
+    t.equal(
+      result.success,
+      true,
+      'the canonical request deadline must outlive the deleted 40-attempt form',
+    );
+    t.ok(
+      routingObservationCount > 40,
+      'routing may recover after more than 40 owner observations',
+    );
+    t.equal(deliveries, 1, 'the logical write is delivered exactly once');
   },
 );
 
@@ -379,7 +448,6 @@ test(
       queryExecutor: executor,
       getTablePartitions: () => [],
       getTableInfo: () => ({primaryKey: 'id'}),
-      maxRetries: 0,
     });
     const ast = new SQLParser(
       'UPDATE counters SET value = 1 WHERE id = 1',

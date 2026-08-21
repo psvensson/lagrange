@@ -194,6 +194,7 @@ function wakeRetryWorkItem(queue, ownerKey) {
     if (item.fenceToken !== undefined && item.fenceToken !== null) {
       existing.fenceToken = item.fenceToken;
     }
+    queue._mergeWorkItemCompletionWaiters(existing, item);
   } else {
     mapSet(queue.pending, ownerKey, item);
   }
@@ -249,9 +250,10 @@ function scheduleRetryDrain(queue, ownerKey, retryAfterMs) {
 }
 
 function recordExhausted(queue, ownerKey, item, retryState, overrides = {}) {
+  const {error, ...stateOverrides} = overrides;
   const exhaustedState = {
     ...retryState,
-    ...overrides,
+    ...stateOverrides,
     type: RETRY_EXHAUSTED,
     nextAttemptAt: null,
     maxAttempts: queue.retryPolicy.maxAttempts,
@@ -263,6 +265,10 @@ function recordExhausted(queue, ownerKey, item, retryState, overrides = {}) {
   mapSet(queue.exhaustedWorkItems, ownerKey, item);
   queue._retryableDrainFailureCount++;
   queue._retryableDrainExhaustedCount++;
+  queue._rejectWorkItemCompletionWaiters(
+    item,
+    error || new Error(exhaustedState.errorMessage),
+  );
   pushFailureSample(queue, exhaustedState);
   queue.emit(RETRY_EXHAUSTED, exhaustedState);
   queue.logger.error(EXHAUSTED_LOG_MSG, {...exhaustedState});
@@ -294,6 +300,7 @@ function mergeConcurrentEnqueue(queue, ownerKey, item, reasons) {
     setForEach(concurrentlyEnqueued.reasons,
       (reason) => setAdd(item.reasons, reason));
     mergeConcurrentItemContext(item, concurrentlyEnqueued);
+    queue._mergeWorkItemCompletionWaiters(item, concurrentlyEnqueued);
     mergedReasons = queue.snapshotReasons(item.reasons);
     state = CONCURRENT_MERGE_STATE.MERGED;
   }
@@ -350,7 +357,7 @@ function deferRetryableDrainFailure(queue, ownerKey, item, reasons, error) {
   };
   item.retryState = retryState;
   if (failureCount >= queue.retryPolicy.maxAttempts) {
-    recordExhausted(queue, ownerKey, item, retryState);
+    recordExhausted(queue, ownerKey, item, retryState, {error: stableError});
     return true;
   }
   mapSet(queue.retryStates, ownerKey, retryState);
@@ -360,6 +367,7 @@ function deferRetryableDrainFailure(queue, ownerKey, item, reasons, error) {
     recordExhausted(queue, ownerKey, item, retryState, {
       failureReason: TIMER_REGISTRATION_FAILED,
       errorMessage: readFailureMessage(timerSchedule.error),
+      error: timerSchedule.error,
     });
     return true;
   }

@@ -184,7 +184,7 @@ function resolveMembershipPublicationReadOptions({
       null;
   return Object.freeze({
     ...baseOptions,
-    readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+    purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
     queryTimeoutMs: normalizedQueryTimeoutMs,
   });
 }

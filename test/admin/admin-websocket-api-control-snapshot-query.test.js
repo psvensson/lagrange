@@ -295,7 +295,7 @@ test(
           },
           async getLatestPublishedClusterPublication(options = {}) {
             publishedReadOptions.push(options);
-            if (options.preferAuthoritativeRead === true) {
+            if (options.readSource === 'authoritative_preferred') {
               throw new Error(
                 ERROR_UNEXPECTED_AUTHORITATIVE_PUBLISHED_MEMBERSHIP_READ,
               );

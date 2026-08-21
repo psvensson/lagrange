@@ -489,14 +489,13 @@ test('coupling sanity: the refused drain is exactly the formation ' +
   t.equal(
     wedgeObservation.concentrated,
     true,
-    'the wedge is quorum-concentrated, so the joiner barrier stays in ' +
-      'waiting_for_ledger_spread',
+    'the wedge is quorum-concentrated, so the startup-authority owner keeps ' +
+      'the joiner barrier closed',
   );
   t.equal(
     wedgeObservation.spreadComplete,
     false,
-    'settledSpreadComplete stays false while the surplus persists (live ' +
-      'barrier records)',
+    'the canonical spread evidence stays false while the surplus persists',
   );
 
   const drainedRows = createSettledWedgeServiceRows().filter(
@@ -514,8 +513,8 @@ test('coupling sanity: the refused drain is exactly the formation ' +
     drainedObservation.spreadComplete,
     true,
     'draining ONE seed voter completes the spread (3 voters on 3 distinct ' +
-      'nodes) and releases the barrier — the REMOVE refused by the ' +
-      'voter-ready floor is the exact missing step',
+      'nodes), allowing the readiness owner to release the barrier — the ' +
+      'REMOVE refused by the voter-ready floor is the exact missing step',
   );
   t.end();
 });

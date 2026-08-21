@@ -38,8 +38,8 @@ import {
   classifyPriorityRecoveryAdmissionPartitionClass,
 } from '../control-plane/priority-recovery-admission-constants.js';
 import {
+  classifySystemPartition,
   isOperationLedgerPartition,
-  isPriorityControlPlanePartition,
 } from '../bootstrap/system-partition-classification.js';
 
 const LOCAL_STR_STRING = 'string';
@@ -190,6 +190,12 @@ function resolvePlacementCure(condition) {
   return PLACEMENT_CURE_BY_CONDITION.get(condition) ?? null;
 }
 
+function isNonLedgerPriorityPlacementCurePartition(partitionId) {
+  const classification = classifySystemPartition({partitionId});
+  return classification.priorityControlPlane === true &&
+    classification.operationLedger !== true;
+}
+
 /**
  * Classify the exact operation-ledger state where the final spread step should
  * expand then drain instead of paying a second exclusive REPLACE.
@@ -259,8 +265,7 @@ function classifyPriorityExpandForSpreadCureCondition(evidence = {}) {
   const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
   const partitionId = evidence.partitionId;
   if (
-    !isPriorityControlPlanePartition({partitionId}) ||
-    isOperationLedgerPartition({partitionId})
+    !isNonLedgerPriorityPlacementCurePartition(partitionId)
   ) {
     return null;
   }
@@ -303,8 +308,7 @@ function classifyPrioritySpreadSurplusDrainCureCondition(evidence = {}) {
   const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
   const partitionId = evidence.partitionId;
   if (
-    !isPriorityControlPlanePartition({partitionId}) ||
-    isOperationLedgerPartition({partitionId})
+    !isNonLedgerPriorityPlacementCurePartition(partitionId)
   ) {
     return null;
   }
@@ -348,8 +352,7 @@ function classifyPriorityOverTargetSpreadCureCondition(evidence = {}) {
   const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
   const partitionId = evidence.partitionId;
   if (
-    !isPriorityControlPlanePartition({partitionId}) ||
-    isOperationLedgerPartition({partitionId})
+    !isNonLedgerPriorityPlacementCurePartition(partitionId)
   ) {
     return null;
   }
@@ -382,9 +385,8 @@ function isPrioritySpreadSatisfiedAtTarget(evidence = {}) {
   const targetReplicaCount = Number(evidence.targetReplicaCount);
   const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
   if (
-    !isPriorityControlPlanePartition({
-      partitionId: evidence.partitionId,
-    })
+    !classifySystemPartition({partitionId: evidence.partitionId})
+      .priorityControlPlane
   ) {
     return false;
   }
@@ -563,6 +565,7 @@ export {
   classifyPriorityRecoveryFollowUpCureCondition,
   classifyPrioritySpreadSurplusDrainCureCondition,
   isOrdinarySerialLaneCureMove,
+  isNonLedgerPriorityPlacementCurePartition,
   isPrioritySpreadSatisfiedAtTarget,
   resolvePlacementCure,
   resolvePlacementCureBudgetScope,

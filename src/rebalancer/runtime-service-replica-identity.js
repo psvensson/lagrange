@@ -1,8 +1,9 @@
 /**
  * Canonical identity matching for runtime-service rows.
  *
- * Direct lifecycle use may project the bare entity id. Dispatched replicas
- * use `${entityId}-rN`, where N is a positive canonical decimal ordinal.
+ * Every runtime replica uses `${entityId}-rN`, where N is a positive canonical
+ * decimal ordinal. The bare entity id is the logical service identity, never a
+ * replica identity.
  */
 
 const RUNTIME_SERVICE_REPLICA_ID_SEPARATOR = '-r';
@@ -24,10 +25,6 @@ function runtimeServiceReplicaBelongsToEntity(serviceId, entityId) {
   ) {
     return false;
   }
-  if (serviceId === entityId) {
-    return true;
-  }
-
   const canonicalPrefix =
     `${entityId}${RUNTIME_SERVICE_REPLICA_ID_SEPARATOR}`;
   if (!serviceId.startsWith(canonicalPrefix)) {
@@ -35,24 +32,6 @@ function runtimeServiceReplicaBelongsToEntity(serviceId, entityId) {
   }
   return POSITIVE_DECIMAL_REPLICA_ORDINAL_PATTERN.test(
     serviceId.slice(canonicalPrefix.length),
-  );
-}
-
-/**
- * Decide whether an operation-dispatched runtime replica has canonical
- * entity-qualified ordinal identity. Direct lifecycle use may still use the
- * bare entity id, but distributed CREATE_REPLICA may not.
- * @param {unknown} serviceId
- * @param {unknown} entityId
- * @return {boolean}
- */
-function runtimeServiceDispatchedReplicaBelongsToEntity(
-  serviceId,
-  entityId,
-) {
-  return (
-    serviceId !== entityId &&
-    runtimeServiceReplicaBelongsToEntity(serviceId, entityId)
   );
 }
 
@@ -65,7 +44,7 @@ function runtimeServiceDispatchedReplicaBelongsToEntity(
  * @return {string|null}
  */
 function buildRuntimeServiceTargetClaimKey(serviceId, entityId) {
-  if (!runtimeServiceDispatchedReplicaBelongsToEntity(serviceId, entityId)) {
+  if (!runtimeServiceReplicaBelongsToEntity(serviceId, entityId)) {
     return null;
   }
   return JSON.stringify([
@@ -77,6 +56,5 @@ function buildRuntimeServiceTargetClaimKey(serviceId, entityId) {
 
 export {
   buildRuntimeServiceTargetClaimKey,
-  runtimeServiceDispatchedReplicaBelongsToEntity,
   runtimeServiceReplicaBelongsToEntity,
 };

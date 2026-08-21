@@ -32,6 +32,7 @@ const {
   assertCritical,
   createControlPlaneRuntimeBundle,
   getControlPlaneMessageRequiredTables,
+  getControlPlaneMessageCompletionKind,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -432,13 +433,16 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       return;
     }
 
-    const onMessageReceived = (event) => {
-      this.handleMessageReceived(messageGroupService, event).catch((error) => {
+    const onMessageReceived = async (event) => {
+      try {
+        return await this.handleMessageReceived(messageGroupService, event);
+      } catch (error) {
         this.logger.error(DISPATCH_LOG_MSG.MESSAGE_HANDLING_FAILED, {
           error: error.message,
           groupId: messageGroupService.groupId,
         });
-      });
+        throw error;
+      }
     };
 
     const onCdcApplied = (event) => {
@@ -450,16 +454,29 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       });
     };
 
-    messageGroupService.on(
-      CONTROL_PLANE_EVENT.MESSAGE_RECEIVED,
-      onMessageReceived,
-    );
+    const ownsApplicationCompletion =
+      typeof messageGroupService.registerApplicationMessageCompletionHandler ===
+        'function';
+    const ownedMessageTypes = Object.values(ControlPlaneMessageType);
+    if (ownsApplicationCompletion) {
+      messageGroupService.registerApplicationMessageCompletionHandler(
+        ownedMessageTypes,
+        onMessageReceived,
+      );
+    } else {
+      messageGroupService.on(
+        CONTROL_PLANE_EVENT.MESSAGE_RECEIVED,
+        onMessageReceived,
+      );
+    }
     messageGroupService.on(CONTROL_PLANE_EVENT.CDC_APPLIED, onCdcApplied);
 
     this.messageGroupServices.add(messageGroupService);
     this.messageGroupHandlers.set(messageGroupService, {
       onMessageReceived,
       onCdcApplied,
+      ownsApplicationCompletion,
+      ownedMessageTypes,
     });
   }
 
@@ -476,6 +493,9 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     if (!payload || !this.isControlMessage(payload)) {
       return;
     }
+
+    const completionKind = getControlPlaneMessageCompletionKind(payload.type);
+    const completion = () => ({completionKind, completionCompleted: true});
 
     const requiredTables =
       this.resolveControlPlaneMessageRequiredTables(payload);
@@ -501,21 +521,21 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         ) {
           await mgService.acknowledgeMessage(messageId);
         }
-        return;
+        return completion();
       }
-      this.enqueueNodeStateUpdate(payload);
+      await this.enqueueNodeStateUpdateAndWait(payload);
       if (
         messageId &&
         typeof mgService.acknowledgeMessage === 'function'
       ) {
         await mgService.acknowledgeMessage(messageId);
       }
-      return;
+      return completion();
     }
 
     if (!mgService.isLeaderReplica()) {
       await this.forwardToLeader(mgService, payload);
-      return;
+      return completion();
     }
 
     if (payload.type === ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH) {
@@ -525,6 +545,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     if (messageId && typeof mgService.acknowledgeMessage === 'function') {
       await mgService.acknowledgeMessage(messageId);
     }
+    return completion();
   }
 
   resolveControlPlaneMessageRequiredTables(payload) {

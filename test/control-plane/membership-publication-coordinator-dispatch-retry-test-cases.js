@@ -71,6 +71,8 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
             return [{
               operationId: 'op-priority-retry-1',
               partitionId: 'replica_operations-p1',
+              entityType: 'partition',
+              entityId: 'replica_operations-p1',
               type: 'REPLACE',
               sourceNodeId: 'node-1',
               targetNodeId: 'node-2',
@@ -120,6 +122,8 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
               operation_id: staleCacheOperationId,
               type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
               partition_id: DISPATCH_RETRY_PARTITION_ID,
+              entity_type: 'partition',
+              entity_id: DISPATCH_RETRY_PARTITION_ID,
               replica_id: DISPATCH_RETRY_REPLICA_ID,
               source_node_id: DISPATCH_RETRY_SOURCE_NODE_ID,
               target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
@@ -164,6 +168,8 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
           return [{
             operationId: authoritativeOperationId,
             partitionId: DISPATCH_RETRY_CREATING_PARTITION_ID,
+            entityType: 'partition',
+            entityId: DISPATCH_RETRY_CREATING_PARTITION_ID,
             type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
             sourceNodeId: DISPATCH_RETRY_SOURCE_NODE_ID,
             targetNodeId: DISPATCH_RETRY_TARGET_NODE_ID,
@@ -246,6 +252,8 @@ export function registerMembershipPublicationCoordinatorDispatchRetryTests({
             return [{
               operationId: 'op-priority-retry-target-owner',
               partitionId: 'replica_operations-p1',
+              entityType: 'partition',
+              entityId: 'replica_operations-p1',
               type: 'REPLACE',
               sourceNodeId: 'node-1',
               targetNodeId: 'node-2',

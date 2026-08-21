@@ -232,19 +232,14 @@ t.test(
       now,
       partitionId: LEDGER_PARTITION_ID,
       targetReplicaCount: 3,
-      observedVoterCount: 3,
-      observationComplete: true,
-      spreadProofComplete: true,
-      concentrated: now < 90000,
-      spreadConcentrated: now < 90000,
-      authoritativePlacementComplete: true,
-      authoritativePlacementConcentrated: now < 90000,
-      authoritativePlacementDistinctNodeCount: now < 90000 ? 2 : 3,
-      authoritativePlacementObservedVoterCount: 3,
-      authoritativePlacementSource: 'owner_rpc_lane',
-      operationObservationComplete: now >= 90000,
-      operationObservationState: now >= 90000 ? 'present' : null,
-      inFlightOperationCount: now >= 90000 ? 0 : null,
+      startupAuthorityAvailable: true,
+      startupAuthorityState:
+        now >= 90000 ? 'ready' : 'recovery_pending',
+      startupAuthorityReady: now >= 90000,
+      startupAuthorityRecoveryReasonCodes:
+        now >= 90000 ? [] : ['priority_partitions_not_spread'],
+      startupAuthorityPublicationRecoveryGateState:
+        now >= 90000 ? 'ready' : 'priority_spread_pending',
       candidateNodeIds: Object.freeze([
         SEED_NODE_ID,
         ...JOINER_NODE_IDS,
@@ -392,18 +387,6 @@ t.test(
       }
       return baseReadAuthoritativeRows(tableName, sql, params, options);
     };
-    // The coherent barrier releases only on owner-lane placement evidence
-    // (a cache-side verdict can no longer stand in), so the joiner's
-    // authoritative view answers from the same live formation rows.
-    fixture.coordinator.controlPlaneReadinessService
-      .getAuthoritativeControlPlaneView = () => ({
-        canRead: () => true,
-        readReadinessOwnerRows: async () => ({
-          success: true,
-          source: 'owner_rpc_lane',
-          rows: currentLedgerReplicas(cache).map((row) => ({...row})),
-        }),
-      });
     const planner = buildRealLedgerPlanner(
       cache,
       fixture.trackedOperations,
@@ -414,6 +397,11 @@ t.test(
     const owner = buildFormationBarrierOwner({
       cache,
       coordinator: fixture.coordinator,
+      isStartupAuthorityReady: () =>
+        !isLedgerQuorumConcentratedPartition(cache, LEDGER_PARTITION_ID) &&
+        [...fixture.trackedOperations.values()].every((operation) =>
+          isTerminalStep(operation.type, operation.workflow_step),
+        ),
       now: () => now,
       sleep: async (delayMs) => {
         await executeLedgerFormationTick({
@@ -581,19 +569,14 @@ t.test(
           now,
           partitionId: LEDGER_PARTITION_ID,
           targetReplicaCount: 3,
-          observedVoterCount: 2,
-          observationComplete: false,
-          spreadProofComplete: false,
-          concentrated: null,
-          spreadConcentrated: null,
-          authoritativePlacementComplete: false,
-          authoritativePlacementConcentrated: null,
-          authoritativePlacementDistinctNodeCount: 0,
-          authoritativePlacementObservedVoterCount: 0,
-          authoritativePlacementSource: null,
-          operationObservationComplete: false,
-          operationObservationState: null,
-          inFlightOperationCount: null,
+          startupAuthorityAvailable: true,
+          startupAuthorityState: 'recovery_pending',
+          startupAuthorityReady: false,
+          startupAuthorityRecoveryReasonCodes: Object.freeze([
+            'priority_partitions_not_spread',
+          ]),
+          startupAuthorityPublicationRecoveryGateState:
+            'priority_spread_pending',
           candidateNodeIds: Object.freeze([
             JOINER_1_NODE_ID,
             JOINER_2_NODE_ID,
@@ -682,7 +665,7 @@ t.test(
           retryable: true,
           deferRetry: true,
         },
-        'a partial cache cannot be interpreted as spread completion',
+        'an unavailable canonical release cannot be inferred from local rows',
       );
       t.equal(
         isRetryableControlPlaneError(error),
@@ -694,211 +677,6 @@ t.test(
     }
   },
 );
-
-for (const authoritativePlacementCase of [
-  {
-    name: 'full distinct owner placement',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-      [3, JOINER_3_NODE_ID],
-    ],
-    source: 'owner_rpc_lane',
-    releases: true,
-  },
-  {
-    name: 'full distinct owner placement over a stale concentrated cache',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-      [3, JOINER_3_NODE_ID],
-    ],
-    source: 'owner_rpc_lane',
-    localCacheComplete: true,
-    releases: true,
-  },
-  {
-    name: 'partial owner placement',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-    ],
-    source: 'owner_rpc_lane',
-    releases: false,
-  },
-  {
-    name: 'partial owner placement with a stale cached target of two',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-    ],
-    source: 'owner_rpc_lane',
-    localTargetReplicaCount: 2,
-    releases: false,
-  },
-  {
-    name: 'concentrated owner placement',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-      [3, JOINER_2_NODE_ID],
-    ],
-    source: 'owner_rpc_lane',
-    releases: false,
-  },
-  {
-    name: 'SQL fallback placement source',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-      [3, JOINER_3_NODE_ID],
-    ],
-    source: 'sql_query_engine',
-    releases: false,
-  },
-  {
-    name: 'cache-only placement source',
-    rows: [
-      [1, SEED_NODE_ID],
-      [2, JOINER_2_NODE_ID],
-      [3, JOINER_3_NODE_ID],
-    ],
-    source: 'local_cdc_cache',
-    releases: false,
-  },
-]) {
-  t.test(
-    `a lagging local ledger cache handles ${authoritativePlacementCase.name} ` +
-      'without splitting the join cohort',
-    async (t) => {
-      initializeEnvironment();
-      const cache = buildFormationCache();
-      cache.applySystemTableChange('services', 'UPDATE', {
-        ...cache.get('services', `${LEDGER_PARTITION_ID}-r2`),
-        node_id: JOINER_2_NODE_ID,
-      });
-      if (authoritativePlacementCase.localCacheComplete !== true) {
-        cache.applySystemTableChange('services', 'DELETE', {
-          service_id: `${LEDGER_PARTITION_ID}-r3`,
-        });
-      }
-      if (authoritativePlacementCase.localTargetReplicaCount) {
-        cache.applySystemTableChange('partitions', 'UPDATE', {
-          ...cache.get('partitions', LEDGER_PARTITION_ID),
-          replica_count:
-            authoritativePlacementCase.localTargetReplicaCount,
-        });
-      }
-      let operationReadCount = 0;
-      let placementReadCount = 0;
-      const authoritativeRows = authoritativePlacementCase.rows.map(
-        ([index, nodeId]) => ({
-          service_id: `${LEDGER_PARTITION_ID}-r${index}`,
-          replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
-          partition_id: LEDGER_PARTITION_ID,
-          node_id: nodeId,
-          service_type: REBALANCER_ENTITY_TYPE.PARTITION,
-          status: ReplicaStatus.ACTIVE,
-          raft_role: index === 1 ? 'leader' : 'follower',
-        }),
-      );
-      const coordinator = {
-        controlPlaneReadinessService: {
-          getAuthoritativeControlPlaneView: () => ({
-            canRead: () => true,
-            readRows: async () => {
-              throw new Error(
-                'formation must use the named readiness-owner interaction',
-              );
-            },
-            readReadinessOwnerRows: async () => {
-              placementReadCount++;
-              return {
-                success: true,
-                source: authoritativePlacementCase.source,
-                rows: authoritativeRows,
-              };
-            },
-          }),
-        },
-        getEntityAuthoritativeOperationObservation: async () => {
-          operationReadCount++;
-          return {
-            state: 'present',
-            operations: [{
-              operation_id: 'terminal-ledger-replace',
-              type: REBALANCER_MOVE_TYPE.REPLACE,
-              workflow_step: 'REMOVED',
-              status: 'removed',
-            }],
-            deferredOutcome: null,
-          };
-        },
-      };
-      let sleepCalls = 0;
-      let now = 4000;
-      const owner = buildFormationBarrierOwner({
-        cache,
-        coordinator,
-        now: () => now,
-        sleep: async (delayMs) => {
-          sleepCalls++;
-          now += delayMs;
-        },
-      });
-      owner.config.priorityPlacementFormationTimeoutMs = 3;
-
-      try {
-        const error = await owner
-          .awaitOperationLedgerFormationBarrier()
-          .then(() => null, (failure) => failure);
-        t.equal(
-          cache.filter(
-            'services',
-            (row) => row.partition_id === LEDGER_PARTITION_ID,
-          ).length,
-          authoritativePlacementCase.localCacheComplete === true ? 3 : 2,
-          'the local cache remains stale in the selected failure direction',
-        );
-        t.ok(
-          placementReadCount >= 1,
-          'the lagging cache consumes the authoritative services owner',
-        );
-        t.equal(
-          placementReadCount > 0,
-          true,
-          'placement recovery uses the non-downgradable readiness-owner API',
-        );
-        if (authoritativePlacementCase.releases) {
-          t.equal(error, null, 'full distinct owner placement releases');
-          t.equal(
-            operationReadCount,
-            1,
-            'release still consumes the authoritative operation owner',
-          );
-          t.equal(
-            sleepCalls,
-            1,
-            'owner evidence releases on the first drain poll',
-          );
-        } else {
-          t.match(
-            error,
-            {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
-            'non-authoritative or unsafe placement evidence fails closed',
-          );
-          t.equal(
-            operationReadCount,
-            0,
-            'operation drain is not queried before placement is proven',
-          );
-        }
-      } finally {
-        resetEnvironment();
-      }
-    },
-  );
-}
 
 t.test(
   'pre-lease startup-authority targetability remains closed for ordinary ' +

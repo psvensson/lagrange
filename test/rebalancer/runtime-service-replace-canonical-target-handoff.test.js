@@ -78,23 +78,6 @@ function buildService(replicaId, nodeId) {
   };
 }
 
-// Partition-typed mirror row used only by the remove-safety voter-ready
-// read (which filters service_type === 'partition'). Keyed by a distinct
-// service_id so the entity read model and the lifecycle upserts — both of
-// which address rows by the replica id — never observe it.
-function buildSafetyReplicaRow(replicaId, nodeId) {
-  return {
-    service_id: `${replicaId}-safety`,
-    replica_id: replicaId,
-    service_type: EntityType.PARTITION,
-    partition_id: ENTITY_ID,
-    node_id: nodeId,
-    status: ReplicaStatus.ACTIVE,
-    raft_role: 'leader',
-    address: `${nodeId}/partition/${replicaId}`,
-  };
-}
-
 function attachServiceDefinition(cache) {
   const definition = Object.freeze({
     service_id: ENTITY_ID,
@@ -238,18 +221,6 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
     services: [
       buildService(SOURCE_REPLICA_ID, SOURCE_NODE_ID),
       buildService(STABLE_REPLICA_ID, STABLE_NODE_ID),
-      // The universal remove-safety floor (audit finding 1, lenient REPLACE)
-      // reads partition-typed replica rows
-      // (getCachedCriticalReplicaRows filters service_type === 'partition'
-      // on partition_id) and requires the replacement replica to be
-      // voter-ready before the source removal may dispatch. The runtime
-      // handler's lifecycle only upserts runtime_service-typed rows, which
-      // the safety read never sees — seed partition-typed mirrors of the
-      // two live replicas, plus the minted target after createOperation
-      // below, so the lenient REPLACE branch sees the replacement holding
-      // quorum instead of failing closed on an empty row read.
-      buildSafetyReplicaRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID),
-      buildSafetyReplicaRow(STABLE_REPLICA_ID, STABLE_NODE_ID),
     ],
   }));
   const activeEffects = new Set([
@@ -317,13 +288,6 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
       sourceNodeId: SOURCE_NODE_ID,
       replicaId: SOURCE_REPLICA_ID,
     });
-    // Seed the minted target replica as a voter-ready partition-typed row
-    // so the lenient REPLACE floor sees the replacement holding quorum
-    // (see buildSafetyReplicaRow above).
-    cache.upsert(
-      SYSTEM_TABLE_NAME.SERVICES,
-      buildSafetyReplicaRow(created.replicaId, TARGET_NODE_ID),
-    );
     await coordinator.executeOperation(created);
     const completed = await completion;
 

@@ -270,66 +270,6 @@ function evaluateOperationLedgerQuorumConcentration(
 }
 
 /**
- * Read completeness evidence for one operation-ledger partition from the same
- * voter predicate used by concentration evaluation. Formation barriers must
- * not interpret an empty or partially hydrated cache as "spread": they may
- * release only after at least the partition's target voter count is observed.
- *
- * @param {Object|null} systemTableCache
- * @param {string|null} partitionId
- * @param {Object} [options]
- * @param {number|null} [options.minimumTargetReplicaCount]
- * @return {{
- *   partitionId: string|null,
- *   targetReplicaCount: number|null,
- *   observedVoterCount: number,
- *   complete: boolean,
- * }}
- */
-function getOperationLedgerQuorumObservation(
-  systemTableCache,
-  partitionId,
-  options = {},
-) {
-  const normalizedPartitionId = String(partitionId || '').trim();
-  const cachedTargetReplicaCount =
-    normalizedPartitionId.length > 0 ?
-      readTargetReplicaCount(systemTableCache, normalizedPartitionId) :
-      null;
-  const minimumTargetReplicaCount =
-    Number.isInteger(options?.minimumTargetReplicaCount) &&
-    options.minimumTargetReplicaCount > 0 ?
-      options.minimumTargetReplicaCount :
-      null;
-  const targetReplicaCount =
-    cachedTargetReplicaCount === null ?
-      minimumTargetReplicaCount :
-      minimumTargetReplicaCount === null ?
-        cachedTargetReplicaCount :
-        Math.max(cachedTargetReplicaCount, minimumTargetReplicaCount);
-  const observedVoterCount =
-    normalizedPartitionId.length > 0 ?
-      readCacheRows(
-        systemTableCache,
-        TABLES.SERVICES,
-        (row) =>
-          normalizedField(row, 'partition_id') === normalizedPartitionId &&
-          row?.service_type === SERVICE_TYPE.PARTITION &&
-          isQuorumVoterRow(row),
-      ).length :
-      0;
-  return Object.freeze({
-    partitionId:
-      normalizedPartitionId.length > 0 ? normalizedPartitionId : null,
-    targetReplicaCount,
-    observedVoterCount,
-    complete:
-      targetReplicaCount !== null &&
-      observedVoterCount >= targetReplicaCount,
-  });
-}
-
-/**
  * Evaluate one identity-scoped placement row set returned by the authoritative
  * services-table owner. Unlike the cache observation above, this accepts its
  * target explicitly because the row set is deliberately scoped to services.
@@ -478,6 +418,5 @@ export {
   evaluateOperationLedgerQuorumConcentration,
   getConcentratedOperationLedgerPartition,
   getAuthoritativeOperationLedgerPlacementObservation,
-  getOperationLedgerQuorumObservation,
   isConcentratedOperationLedgerPartition,
 };

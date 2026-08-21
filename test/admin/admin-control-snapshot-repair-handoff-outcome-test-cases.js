@@ -451,7 +451,7 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
     t.match(
       enqueuedContext,
       {
-        preferAuthoritativeRead: true,
+        readSource: 'authoritative_preferred',
         publishedActiveNodeIds: [
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
@@ -1097,7 +1097,7 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
     t.match(
       enqueuedContext,
       {
-        preferAuthoritativeRead: true,
+        readSource: 'authoritative_preferred',
         publishedActiveNodeIds: [
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
@@ -1212,8 +1212,7 @@ test('AdminControlSnapshot keeps handoff reconcile outcomes out of publication o
 
     const observedPublication =
       await snapshot.ensureMembershipPublicationObservation({
-        preferAuthoritativeRead:
-          ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_AUTHORITATIVE_READ,
+        readSource: 'authoritative_preferred',
       });
 
     t.equal(

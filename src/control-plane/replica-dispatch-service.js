@@ -3,15 +3,35 @@ import {ReplicaDispatchReadinessCapture} from './replica-dispatch-readiness-capt
 
 const {
   CONTROL_PLANE_EVENT,
-  ControlPlaneMessageType,
   DISPATCH_LOG_MSG,
   DISPATCH_STATE,
+  getControlPlaneMessageCompletionKind,
   REBALANCE_COORDINATOR_EVENT,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
+function unregisterMessageGroupHandlers(mgService, handlers) {
+  if (handlers.ownsApplicationCompletion &&
+      typeof mgService.unregisterApplicationMessageCompletionHandler ===
+        'function') {
+    mgService.unregisterApplicationMessageCompletionHandler(
+      handlers.ownedMessageTypes,
+      handlers.onMessageReceived,
+    );
+  } else {
+    mgService.off(
+      CONTROL_PLANE_EVENT.MESSAGE_RECEIVED,
+      handlers.onMessageReceived,
+    );
+  }
+  mgService.off(
+    CONTROL_PLANE_EVENT.CDC_APPLIED,
+    handlers.onCdcApplied,
+  );
+}
+
 class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
   isControlMessage(payload) {
-    return Object.values(ControlPlaneMessageType).includes(payload?.type);
+    return getControlPlaneMessageCompletionKind(payload?.type) !== null;
   }
 
   /**
@@ -49,14 +69,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     this.readinessPlanningSnapshotUnsubscribe = null;
 
     for (const [mgService, handlers] of this.messageGroupHandlers) {
-      mgService.off(
-        CONTROL_PLANE_EVENT.MESSAGE_RECEIVED,
-        handlers.onMessageReceived,
-      );
-      mgService.off(
-        CONTROL_PLANE_EVENT.CDC_APPLIED,
-        handlers.onCdcApplied,
-      );
+      unregisterMessageGroupHandlers(mgService, handlers);
     }
     this.messageGroupHandlers.clear();
     this.messageGroupServices.clear();

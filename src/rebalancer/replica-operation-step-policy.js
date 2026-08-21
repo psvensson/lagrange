@@ -487,6 +487,18 @@ function isPriorityOutcomeDeferredLocalProgressCovered(operationType, step) {
   return coveredTypes ? coveredTypes.has(operationType) : false;
 }
 
+// Local projections consume these named predicates rather than rebuilding a
+// multi-step branch pile beside the durable transition owner. Although each
+// action covers one step today, naming the rows keeps later extensions in the
+// policy table instead of silently widening only one projection path.
+function shouldRetainPriorityActiveReplaceRetry(step) {
+  return step === WORKFLOW_STEP.ACTIVE;
+}
+
+function shouldClearPriorityDeferredClaim(step) {
+  return step === WORKFLOW_STEP.CREATING;
+}
+
 export {
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
@@ -525,4 +537,6 @@ export {
   isActiveReplaceSourceRemovalPhase,
   isIncompleteOperationRowStep,
   isPriorityOutcomeDeferredLocalProgressCovered,
+  shouldClearPriorityDeferredClaim,
+  shouldRetainPriorityActiveReplaceRetry,
 };

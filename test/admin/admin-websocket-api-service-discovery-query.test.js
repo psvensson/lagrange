@@ -1122,7 +1122,7 @@ test(
     );
     t.equal(
       authoritativeGateway.executeReadCalls.every((call) => {
-        return call?.options?.allowSqlFallback === true;
+        return call?.options?.readProfile === 'repair_required';
       }),
       true,
       'authoritative gateway repair should opt into routed authoritative reads',

@@ -431,6 +431,9 @@ test('owner contract requires the ordered vocabulary, rows, and outcome', (t) =>
       return Object.freeze({
         partitionClass: row.partitionClass,
         bootstrapCritical: CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+        formationLivenessDependency:
+          FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS.has(partitionId),
+        operationLedger: tableId === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         priorityControlPlane: PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
         systemTable: SYSTEM_TABLE_IDS.has(tableId),
       });

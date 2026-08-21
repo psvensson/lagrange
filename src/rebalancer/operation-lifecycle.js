@@ -105,7 +105,7 @@ const OPERATION_PROGRESS_ACTIVE_STATES = Object.freeze([
   OPERATION_LIFECYCLE_STATE.RETRY_PENDING,
 ]);
 
-const OPERATION_PROGRESS_LEGACY_STATE_BY_EVENT = Object.freeze({
+const OPERATION_PROGRESS_DECISION_STATE_BY_EVENT = Object.freeze({
   [OPERATION_PROGRESS_EVENT_TYPE.ACTIVE_GATE_VISIBLE]:
     OPERATION_WORKFLOW_PROGRESS_STATE_VALUES
       .AUTHORITATIVE_VISIBILITY_DEFERRED,
@@ -369,15 +369,15 @@ function buildActiveFailureTransitions() {
 }
 
 function freezeTransition(entry) {
-  const legacyState =
-    OPERATION_PROGRESS_LEGACY_STATE_BY_EVENT[entry.eventType];
+  const decisionState =
+    OPERATION_PROGRESS_DECISION_STATE_BY_EVENT[entry.eventType];
   const outcome = OPERATION_PROGRESS_OUTCOME_BY_EVENT[entry.eventType];
   const effectCommand = OPERATION_PROGRESS_EFFECT_BY_EVENT[entry.eventType];
   return Object.freeze({
     fromState: entry.fromState,
     eventType: entry.eventType,
     toState: entry.toState,
-    state: legacyState,
+    state: decisionState,
     outcome,
     nextRequiredAction: outcome,
     effectCommand,

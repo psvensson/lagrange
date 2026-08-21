@@ -628,14 +628,6 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     ].filter(Boolean);
   },
 
-  async resolveCheckRebalanceGateDecision(evaluationContext = null) {
-    const planningGateDecisions =
-      await this.collectRebalancePlanningGateDecisions(evaluationContext);
-    return planningGateDecisions.length > 0 ?
-      planningGateDecisions[0] :
-      null;
-  },
-
   /**
    * Preserve the blocker facade while exposing one explicit
    * planning-gate decision for the touched rebalancer seam.
@@ -643,9 +635,9 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @private
    */
   async getCheckRebalanceBlocker(evaluationContext = null) {
-    const decision = await this.resolveCheckRebalanceGateDecision(
-      evaluationContext,
-    );
+    const decisions =
+      await this.collectRebalancePlanningGateDecisions(evaluationContext);
+    const decision = decisions[0] || null;
     if (!decision) {
       return null;
     }

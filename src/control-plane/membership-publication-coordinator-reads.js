@@ -24,6 +24,7 @@ import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_KIND,
   MEMBERSHIP_PUBLICATION_OWNER_KEY,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from './membership-publication-row-contract.js';
 import {
@@ -145,11 +146,12 @@ class MembershipPublicationCoordinatorReads {
     ) {
       return preloadedRows;
     }
-    const preferAuthoritativeRead =
-      options.preferAuthoritativeRead === true || options.requireAuthoritative === true;
+    const authoritativeReadRequested =
+      options.readSource ===
+        MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED;
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      preferAuthoritativeRead !== true &&
+      authoritativeReadRequested !== true &&
       this.controlPlanePublicationsOwner &&
       typeof this.controlPlanePublicationsOwner.listPublicationsFromCache === 'function'
     ) {
@@ -361,7 +363,7 @@ class MembershipPublicationCoordinatorReads {
     const cachedPublicationRow =
       this.getLatestPublicationRowSync({
         ...options,
-        preferAuthoritativeRead: false,
+        readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.CACHE_PREFERRED,
       });
     const initialPublicationRow =
       cachedPublicationRow ||

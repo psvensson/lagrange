@@ -2,6 +2,10 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
+import {buildControlPlaneReadAuthority} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -21,6 +25,14 @@ const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
   AUTHORITATIVE_MISSING: 'authoritative_missing',
   MISSING: 'missing',
 });
+
+const AUTHORITATIVE_ROUTING_OVERLAY_READ_AUTHORITY =
+  buildControlPlaneReadAuthority({
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    replicaFallbackConsistency:
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+  });
 
 const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE = Object.freeze({
   AVAILABLE: 'available',
@@ -562,9 +574,7 @@ class SQLQueryEngineRoutingMetadataMethods {
         `SELECT * FROM ${TABLES.PARTITIONS} WHERE ${COLUMN.PARTITION_ID} = ?`,
         [partitionId],
         {
-          allowSqlFallback: false,
-          replicaFallbackConsistency:
-            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+          readAuthority: AUTHORITATIVE_ROUTING_OVERLAY_READ_AUTHORITY,
           queryTimeoutMs,
         },
       ),
@@ -574,9 +584,7 @@ class SQLQueryEngineRoutingMetadataMethods {
           `AND ${COLUMN.SERVICE_TYPE} = ?`,
         [partitionId, SERVICE_TYPE.PARTITION],
         {
-          allowSqlFallback: false,
-          replicaFallbackConsistency:
-            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+          readAuthority: AUTHORITATIVE_ROUTING_OVERLAY_READ_AUTHORITY,
           queryTimeoutMs,
         },
       ),

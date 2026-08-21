@@ -3,6 +3,7 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   OperationType,
@@ -291,7 +292,8 @@ test(
 
     t.ok(escalatedReads.length > 0, 'the escalated read must run');
     t.ok(
-      escalatedReads.every((options) => options.preferOwnerRpcReadLeader === true),
+      escalatedReads.every((options) =>
+        options.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.PREFERRED),
       'every escalated read must pin to the partition leader so a self-stale replica cannot serve it',
     );
   },

@@ -3,6 +3,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
 } from '../../src/rebalancer/storage-admission-constants.js';
@@ -90,13 +92,10 @@ function createSqlEngine(options = {}) {
       }
       if (sql.includes('SELECT * FROM replica_operations') &&
           sql.includes('entity_type = ?')) {
-        const [entityType, entityId, fallbackPartitionId] = params;
-        const existing = [...operations.values()].filter((operation) => {
-          return operation.entity_type === entityType &&
-            operation.entity_id === entityId ||
-            (!operation.entity_type &&
-              operation.partition_id === fallbackPartitionId);
-        });
+        const [entityType, entityId] = params;
+        const existing = [...operations.values()].filter((operation) =>
+          operation.entity_type === entityType &&
+          operation.entity_id === entityId);
         return {
           success: true,
           rows: existing,
@@ -336,8 +335,11 @@ test(
       createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
     ];
     const slowSuccessfulGateway = {
-      readAuthoritativeRows: async () => {
+      readAuthoritativeRows: async (tableName) => {
         nowMs += 1_500;
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          return {success: true, rows: []};
+        }
         return {success: true, rows: authoritativeServices};
       },
       readRows: async () => ({success: true, rows: authoritativeServices}),

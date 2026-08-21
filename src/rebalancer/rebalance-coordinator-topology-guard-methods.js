@@ -10,10 +10,10 @@ import {
 import {
   isEngagedLedgerQuorumSpreadCureMove,
 } from './operation-ledger-hold-policy.js';
-import {MOVE_REASON} from './rebalancer-constants.js';
 import {
-  isOperationLedgerPartition,
-} from '../bootstrap/system-partition-classification.js';
+  isNonLedgerPriorityPlacementCurePartition,
+} from './replica-placement-cure-policy.js';
+import {MOVE_REASON} from './rebalancer-constants.js';
 import {
   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
 } from '../control-plane/startup-authority-placement-eligibility.js';
@@ -23,6 +23,7 @@ import {
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   OperationType,
   REBALANCER_SKIP_REASON,
   ReplicaStatus,
@@ -33,6 +34,7 @@ const {
   TOPOLOGY_GUARD_REASON,
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
+  classifySystemPartition,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_FUNCTION = 'function';
@@ -259,8 +261,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       // The operation ledger keeps its own, stricter cure relation
       // (isConcentratedLedgerRecoveryMove); this escape covers the OTHER
       // priority control-plane partitions only.
-      isOperationLedgerPartition({partitionId}) ||
-      !this.isPriorityControlPlanePartition(partitionId)
+      !isNonLedgerPriorityPlacementCurePartition(partitionId)
     ) {
       return false;
     }
@@ -370,7 +371,8 @@ class RebalanceCoordinatorTopologyGuardMethods {
     return (
       context?.normalizedMoveType === OperationType.REMOVE &&
       moveReason !== MOVE_REASON.REPLICA_FAILED &&
-      this.isPriorityControlPlanePartition(context?.partitionId)
+      classifySystemPartition({partitionId: context?.partitionId})
+        .priorityControlPlane
     );
   }
 
@@ -426,8 +428,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
           readOptions: {
             authoritativeReadMode:
               CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-            allowSqlFallback: false,
-            preferOwnerRpcReadLeader: true,
+            leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
           },
         });
       } catch (error) {
@@ -761,15 +762,13 @@ class RebalanceCoordinatorTopologyGuardMethods {
    * @readModel COORDINATOR_OPERATION_DEDUP —
    *   READ_MODEL_SOURCE.AUTHORITATIVE_SQL
    * @param {Object} params - Lookup parameters.
-   * @param {string} params.partitionId - Partition ID compatibility key.
    * @param {string} params.entityType - Entity type.
    * @param {string} params.entityId - Entity ID.
    * @return {Promise<Set<string>>} In-flight replica IDs.
    * @private
    */
-  async getEntityInFlightReplicaIds({partitionId, entityType, entityId}) {
+  async getEntityInFlightReplicaIds({entityType, entityId}) {
     return this.repository.getEntityInFlightReplicaIds({
-      partitionId,
       entityType,
       entityId,
     });

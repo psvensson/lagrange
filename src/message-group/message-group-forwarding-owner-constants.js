@@ -5,6 +5,8 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const MESSAGE_GROUP_FORWARDING_OWNER_LITERAL = Object.freeze({
   AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED:
@@ -175,11 +177,8 @@ function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     workloadClass: workloadProfile.workloadClass,
     workClass: workloadProfile.workClass,
-    preferOwnerRpcRead: false,
-    requireOwnerRpcRead: false,
-    allowOwnerRpcFallback: false,
-    allowSqlFallback: false,
-    confirmEmptyLocalReadWithOwnerRpc: false,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
   };
 }
 

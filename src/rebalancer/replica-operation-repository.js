@@ -21,7 +21,6 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   classifySystemPartition,
-  isOperationLedgerPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -136,6 +135,8 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
     'Control-plane participation deferred by canonical readiness',
   VALUE: '',
   IN_FLIGHT_OPERATION_OWNER_QUERY_INDICATES: 'In-flight operation owner query indicates',
+  ENTITY_IN_FLIGHT_OPERATION_READ_UNAVAILABLE:
+    'Entity in-flight operation owner read unavailable',
   CONTROL_PLANE_PRESSURE: ' control-plane pressure',
   AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED: 'Authoritative replica operation not confirmed: ',
   REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS:
@@ -164,16 +165,10 @@ const SQL = Object.freeze({
     )`,
   SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
-    WHERE (
-      (entity_type = ? AND entity_id = ?)
-      OR ((entity_type IS NULL OR entity_type = '') AND partition_id = ?)
-    )`,
+    WHERE entity_type = ? AND entity_id = ?`,
   SELECT_IN_FLIGHT_FOR_ENTITY_NODE: `SELECT * FROM replica_operations
     WHERE partition_id = ? AND target_node_id = ?
-    AND (
-      (entity_type = ? AND entity_id = ?)
-      OR (entity_type IS NULL OR entity_type = '')
-    )`,
+    AND entity_type = ? AND entity_id = ?`,
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   SELECT_ALL_OPERATIONS: 'SELECT * FROM replica_operations ORDER BY created_at DESC',
@@ -181,8 +176,8 @@ const SQL = Object.freeze({
     operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
     target_node_id, status, workflow_step, created_at, updated_at,
     completed_at, error_message, steps_history,
-    entity_type, entity_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    entity_type, entity_id, membership_publication_epoch
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -352,7 +347,7 @@ const REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE = buildControlPlaneWorkloadPro
 const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
   ...CONTROL_PLANE_QUERY_OPTIONS,
   routingReadinessDimension: REPLICA_OPERATION_READINESS_DIMENSION,
-  readStrategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+  strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
   controlPlaneOperationKind: 'read',
@@ -361,11 +356,8 @@ const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
     REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.workClass || PRESSURE_WORK_CLASS.CRITICAL,
   deliveryPriority: 'critical',
   preferLeader: REPLICA_OPERATION_READ_PREFER_LEADER,
-  preferOwnerRpcRead: false,
-  requireOwnerRpcRead: false,
-  allowOwnerRpcFallback: false,
-  allowSqlFallback: false,
-  confirmEmptyLocalReadWithOwnerRpc: false,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
 });
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions({
@@ -382,8 +374,8 @@ const _REPLICA_OPERATION_PERSIST_CONFIRMATION_READ_QUERY_OPTIONS =
   REPLICA_OPERATION_CRITICAL_RECOVERY_READ_QUERY_OPTIONS;
 const REPLICA_STATUS_READ_QUERY_OPTIONS = Object.freeze({
   ...CONTROL_PLANE_QUERY_OPTIONS,
-  preferOwnerRpcRead: true,
-  allowOwnerRpcFallback: true,
+  authoritativeReadMode:
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
 });
 const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
   QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
@@ -449,10 +441,6 @@ const REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
 const REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
   ...REPLICA_STATUS_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-  preferOwnerRpcRead: false,
-  allowOwnerRpcFallback: false,
-  allowSqlFallback: false,
-  confirmEmptyLocalReadWithOwnerRpc: false,
 });
 
 function normalizeReplicaOperationVisibilityReadMode(value) {
@@ -473,16 +461,10 @@ function normalizeReplicaOperationVisibilityReadMode(value) {
 
 function resolveReplicaOperationVisibilityReadMode(options = {}) {
   const explicitMode = normalizeReplicaOperationVisibilityReadMode(
-    options?.visibilityReadMode || options?.incompleteOperationReadMode,
+    options?.visibilityReadMode,
   );
   if (explicitMode) {
     return explicitMode;
-  }
-  if (options?.preferAuthoritativeRead === true) {
-    return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED;
-  }
-  if (options?.skipSqlFallbackWhenCacheEmpty === true) {
-    return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY;
   }
   return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK;
 }
@@ -747,7 +729,6 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
-  isOperationLedgerPartition,
   isRetryableControlPlaneError,
   isRetryableWorkflowParticipantLookupErrorMessage,
   ROUTER_ERROR_MSG,
@@ -765,7 +746,7 @@ assignReplicaOperationRepositoryMutationUpdateMethods(ReplicaOperationRepository
   SQL,
   SYSTEM_TABLE_NAME,
   buildControlPlaneFailurePayload,
-  isOperationLedgerPartition,
+  classifySystemPartition,
 });
 
 assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {

@@ -19,6 +19,7 @@ import {
 
 const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   ERRORS,
   LOG_MSG,
   QUERY_ERROR_MSG,
@@ -50,7 +51,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
     const requireCanonicalLeader =
-      executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true;
+      executionOptions?.readAuthority?.leaderMode ===
+        CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
     const attemptBudget = createPartitionAttemptBudget({
       executor: this,
       partitionId,
@@ -90,9 +92,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ...buildFailureResult(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE),
       };
     }
+    // Writes have one retry authority: the absolute execution deadline built
+    // above. An independent attempt ceiling can expire first and turn a
+    // recoverable routing gap into a permanent client-visible failure. Reads
+    // retain their bounded candidate-probing policy.
     const maxAttempts = forRead ?
       this.getReadRetryAttemptLimit() :
-      this.getWriteRetryAttemptLimit(executionOptions);
+      Number.MAX_SAFE_INTEGER;
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
@@ -138,9 +144,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           routingReadinessDimension,
           {
             allowReadinessAuthoritativeRefresh,
-            readPurpose: executionOptions?.readAuthority?.purpose,
-            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
-              requireCanonicalLeader,
+            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+              executionOptions?.readAuthority || null,
             recoveryCandidateSelectionKey:
                 executionOptions.recoveryCandidateSelectionKey,
           },
@@ -163,9 +168,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             routingReadinessDimension,
             {
               allowReadinessAuthoritativeRefresh,
-              readPurpose: executionOptions?.readAuthority?.purpose,
-              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
-                requireCanonicalLeader,
+              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+                executionOptions?.readAuthority || null,
               recoveryCandidateSelectionKey:
                   executionOptions.recoveryCandidateSelectionKey,
             },

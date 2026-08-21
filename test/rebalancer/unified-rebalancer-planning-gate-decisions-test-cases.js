@@ -177,7 +177,9 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       rebalancer.maxInterval = 1000;
 
       try {
-        const decision = await rebalancer.resolveCheckRebalanceGateDecision();
+        const decisions =
+          await rebalancer.collectRebalancePlanningGateDecisions();
+        const decision = decisions[0] || null;
 
         t.equal(
           decision?.decision,

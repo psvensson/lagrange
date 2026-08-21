@@ -1,5 +1,7 @@
 import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {isExplicitNonLeaderRaftRole} from
+  '../raft/replica-voter-readiness.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
   REPLICA_INVENTORY_EFFECTIVE_VIEW,
@@ -268,11 +270,7 @@ class MovePlannerMoveCalculationMethods {
       // classify every co-located replica as the leader and restore first-wins
       // source selection. Preserve per-replica role evidence; use the node-level
       // owner only when the service row has no recognized role yet.
-      if (
-        role === RAFT_ROLE.FOLLOWER ||
-        role === RAFT_ROLE.CANDIDATE ||
-        role === RAFT_ROLE.LEARNER
-      ) {
+      if (isExplicitNonLeaderRaftRole(role)) {
         return false;
       }
       const candidateNodeId = replica.node_id || replica.nodeId || null;

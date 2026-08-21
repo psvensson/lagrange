@@ -20,29 +20,31 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 /**
- * The number of plain-ADD budget slots held in fair-share reserve for genuine
- * runtime-service replica-creates (quest
- * formation-runtime-service-create-lane-budget-starvation). The global plain-ADD
- * lane is shared by every non-priority ADD + non-dispatch-phase REPLACE, so a
- * service's replica-create is otherwise starved by ordinary spread/REPLACE churn.
+ * The number of plain-ADD budget slots held in fair-share reserve for
+ * runtime-service placement. ADD and REPLACE share this lane and therefore
+ * share one admission classification.
  * @param {Object} coordinator
  * @return {number}
  */
-function getReservedCreateAddSlots(coordinator) {
-  const reserved = Number(coordinator?.config?.reservedCreateAddSlots);
+function getReservedRuntimeServicePlacementSlots(coordinator) {
+  const reserved = Number(
+    coordinator?.config?.reservedRuntimeServicePlacementSlots,
+  );
   return Number.isFinite(reserved) && reserved > 0 ? Math.floor(reserved) : 0;
 }
 
 /**
- * A genuine runtime-service replica-create admission: an ADD move for a
- * runtime_service entity. REPLACE/self-move of a service is count-neutral and is
- * NOT a create, so it cannot consume the reserved create slot.
+ * Runtime-service ADD and REPLACE are two workflow shapes of the same placement
+ * responsibility and must use the same reserved lane.
  * @param {string} normalizedMoveType
  * @param {string} entityType
  * @return {boolean}
  */
-function isGenuineServiceCreateAdmission(normalizedMoveType, entityType) {
-  if (normalizedMoveType !== OperationType.ADD) {
+function isRuntimeServicePlacementAdmission(normalizedMoveType, entityType) {
+  if (
+    normalizedMoveType !== OperationType.ADD &&
+    normalizedMoveType !== OperationType.REPLACE
+  ) {
     return false;
   }
   return (
@@ -138,7 +140,7 @@ function shouldBypassConcurrentBudgetEmptyBackoff(
   ) {
     return false;
   }
-  if (isGenuineServiceCreateAdmission(
+  if (isRuntimeServicePlacementAdmission(
     normalizedMoveType,
     options.entityType,
   )) {
@@ -281,9 +283,9 @@ export {
   getLatestMembershipPublicationRow,
   getPriorityConcurrentAddBudgetLimit,
   getPriorityRecoveryAdmissionPlan,
-  getReservedCreateAddSlots,
+  getReservedRuntimeServicePlacementSlots,
   getReservedPriorityRecoveryAddSlots,
-  isGenuineServiceCreateAdmission,
+  isRuntimeServicePlacementAdmission,
   isEmergencyPriorityControlPlanePartition,
   isEmergencyPriorityControlPlaneRecoveryActive,
   isGlobalPriorityControlPlaneRecoveryActive,

@@ -125,13 +125,6 @@ function installNodeJoiningStatePublicationOwner(service) {
       getNodeCapabilities: () => service.getNodeCapabilities(),
       getMessageRouter: () => service.messageRouter,
       getControlPlaneKernelIngress: () => service.controlPlaneKernelIngress,
-      resolveLegacyTargetCandidates: (publicationOptions = {}) =>
-        typeof service.resolveControlPlaneTargetAddressCandidates ===
-        'function' ?
-          service.resolveControlPlaneTargetAddressCandidates(
-            publicationOptions,
-          ) :
-          [],
       resolveNodeStateUpdateTimeoutMs: (publicationOptions = {}) =>
         service.resolveControlPlaneNodeStateUpdateTimeoutMs(
           publicationOptions,

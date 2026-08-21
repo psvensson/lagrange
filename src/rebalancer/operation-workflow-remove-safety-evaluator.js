@@ -5,6 +5,12 @@ import {
   evaluateUniversalPartitionRemoveSafety,
   isRemoveSafetyGuardPassed,
 } from './operation-workflow-remove-safety-universal-tier.js';
+import {
+  evaluateEntityRemoveSafety,
+} from './operation-workflow-remove-safety-entity-tier.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -13,6 +19,7 @@ const {
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
+  SERVICE_TYPE,
   buildPriorityRecoveryBlockedPartitionIds,
   classifySystemPartition,
   normalizeReplicaRowNodeIds,
@@ -429,20 +436,25 @@ async function evaluateRemoveSafety(context, operation) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  // Audit finding 1: the execution-time safety floor is UNIVERSAL. The
-  // concurrent-operation serialization lock, the post-removal voter-ready /
-  // min-replica floor, the distinct-node spread, and the peer-ping checks run
-  // for EVERY replicated entity — an ordinary user-partition REMOVE gets no
-  // exemption. Only the deeper published-membership / leader-tenure /
-  // priority-control-plane checks below stay scoped to system entities.
+  // The execution-time safety floor is universal across PARTITIONS: ordinary
+  // user partitions get the same voter/minimum protection as system
+  // partitions. It is not universal across entity types. Message groups and
+  // runtime services have explicit row-identity and lifecycle safety owners.
+  // Only the deeper published-membership / leader-tenure /
+  // priority-control-plane checks below stay scoped to system partitions.
   const partitionClassification = classifySystemPartition({
     partitionId: operation.partitionId,
   });
 
-  // Concurrent partition operation check
+  const {entityType, entityId} =
+    assertCanonicalRebalancerEntityIdentity(operation);
+
+  // The operation ledger serializes the actual entity. Hard-coding partition
+  // here lets runtime/message-group replacements overtake their own source
+  // retirement while unrelated partition rows appear idle.
   const allOps = await context.repository.getOperationsByEntity(
-    'partition',
-    operation.partitionId,
+    entityType,
+    entityId,
   );
   // CL-043: a persist-failed concurrent op (coordination row never committed)
   // stays non-terminal with no terminal-timeout anchor and would otherwise block
@@ -478,7 +490,16 @@ async function evaluateRemoveSafety(context, operation) {
   if (concurrentActiveOp) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
-      `Quorum check failed: concurrent partition operation ${concurrentActiveOp.operationId} is active`,
+      `Safety check failed: concurrent ${entityType} operation ` +
+        `${concurrentActiveOp.operationId} is active`,
+    );
+  }
+
+  if (entityType !== SERVICE_TYPE.PARTITION) {
+    return evaluateEntityRemoveSafety(
+      context,
+      operation,
+      {partitionId: operation.partitionId, entityType, entityId},
     );
   }
 

@@ -1,9 +1,11 @@
 import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const {
-  OPERATION_HANDLER,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
@@ -15,7 +17,7 @@ const {
   ReplicaOperationMessageType,
   ReplicaOperationReason,
   ReplicaOperationResponseStatus,
-  SERVICE_TYPE,
+  resolveOperationHandlerType,
 } = SHARED;
 
 const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
@@ -201,11 +203,9 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       return null;
     }
 
-    const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
-    const entityId = operation.entityId || operation.partitionId;
-    const handlerType =
-      OPERATION_HANDLER[entityType] ||
-      OPERATION_HANDLER[SERVICE_TYPE.PARTITION];
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
+    const handlerType = resolveOperationHandlerType(entityType);
     const target = `${handoffRequest.dispatchNodeId}/service/${handlerType}`;
     const request = {
       [ReplicaOperationField.TYPE]: handoffRequest.messageType,

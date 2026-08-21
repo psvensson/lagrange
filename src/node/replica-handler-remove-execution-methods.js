@@ -23,6 +23,32 @@ const FAILED_REMOVAL_TOLERATED_STATUS_WRITES = new Set([
 function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveExecutionMethods {
     /**
+     * Raise the partition-owned transaction admission fence synchronously,
+     * before REMOVE_REPLICA returns an accepted status. This gives acceptance
+     * one meaning: no new transaction can enter the retiring runtime.
+     * @param {string} replicaId
+     * @param {Object|null} [replica]
+     * @return {Object|null}
+     * @private
+     */
+    fenceReplicaServingAdmissionForRemoval(replicaId, replica = null) {
+      const service = replica?.service || this.getTrackedService(replicaId);
+      service?.fenceServingAdmissionForRemoval?.();
+      return service || null;
+    }
+
+    /**
+     * Let transactions admitted before the removal fence finish under their
+     * existing owner before deleting the routable service row or runtime.
+     * @param {Object|null} service
+     * @return {Promise<void>}
+     * @private
+     */
+    async waitForReplicaServingDrain(service) {
+      await service?.waitForRemovalServingDrain?.();
+    }
+
+    /**
      * Build one canonical snapshot for REMOVE execution.
      * Failed replicas skip the transitional REMOVING write because the state
      * machine only permits failed -> removed durable cleanup.
@@ -169,6 +195,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         removalLifecycleSnapshot.skipRemovingStatusWrite === true;
       try {
         this.throwIfShuttingDown();
+        await this.waitForReplicaServingDrain(service);
         if (!skipRemovingStatusWrite) {
           try {
             await this.persistReplicaStatusWithRetry(

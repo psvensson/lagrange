@@ -25,6 +25,7 @@ import {CONTROL_PLANE_WORKLOAD_CLASS} from '../../src/control-plane/control-plan
 import {CONTROL_PLANE_TIMEOUT_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -306,13 +307,15 @@ test('rowToOperation rehydrates replica topology metadata', async (t) => {
   t.same(op.peerAddresses, history[0].peerAddresses);
 });
 
-test('rowToOperation defaults entity_type to partition', async (t) => {
+test('rowToOperation rejects rows without canonical entity identity', async (t) => {
   const repo = createTestRepository();
   const row = makeRow({entity_type: null, entity_id: null});
-  const op = repo.rowToOperation(row);
 
-  t.equal(op.entityType, SERVICE_TYPE.PARTITION);
-  t.equal(op.entityId, TEST_PARTITION_ID);
+  t.throws(
+    () => repo.rowToOperation(row),
+    /Unsupported rebalancer entity type/,
+    'repository replay cannot invent partition semantics for an untyped row',
+  );
 });
 
 test('rowToOperation recovers from malformed steps_history', async (t) => {
@@ -774,7 +777,8 @@ test('zero-change operation insert collision confirms through the ledger leader'
           authoritativeReadCalls.push(options);
           return {
             success: true,
-            rows: options.preferOwnerRpcReadLeader === true ? [row] : [],
+            rows: options.leaderMode ===
+              CONTROL_PLANE_READ_LEADER_MODE.PREFERRED ? [row] : [],
           };
         },
       },
@@ -799,8 +803,8 @@ test('zero-change operation insert collision confirms through the ledger leader'
       'collision recovery should require the owner-RPC authority lane',
     );
     t.equal(
-      authoritativeReadCalls[0]?.preferOwnerRpcReadLeader,
-      true,
+      authoritativeReadCalls[0]?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       'collision recovery should pin verification to the ledger leader',
     );
   });
@@ -829,8 +833,8 @@ test('zero-change operation insert collision fails when the ledger leader has no
       'an unconfirmed collision must remain fail-closed',
     );
     t.equal(
-      authoritativeReadCalls[0]?.preferOwnerRpcReadLeader,
-      true,
+      authoritativeReadCalls[0]?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       'the negative proof should still query the canonical ledger leader',
     );
   });

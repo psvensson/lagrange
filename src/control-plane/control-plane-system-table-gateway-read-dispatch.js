@@ -1,6 +1,8 @@
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_READ_OUTCOME,
+  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   PRESSURE_GOVERNOR_ACTION,
@@ -53,9 +55,17 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       ...profiledOptions,
       strategy,
     };
-    mergedOptions.readAuthority = buildControlPlaneReadAuthority(mergedOptions);
+    mergedOptions.readAuthority = buildControlPlaneReadAuthority({
+      ...mergedOptions,
+      localReadConsistency:
+        mergedOptions.localReadConsistency ||
+        CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+      replicaFallbackConsistency:
+        mergedOptions.replicaFallbackConsistency ||
+        CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
+    });
     const authoritativeReadModeContract =
-      resolveAuthoritativeReadModeContract(mergedOptions);
+      resolveAuthoritativeReadModeContract(mergedOptions.readAuthority);
     const requestKey = this.buildReadRequestKey(
       tableName,
       sql,

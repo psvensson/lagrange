@@ -42,6 +42,8 @@ const MESSAGE_GROUP_APPLICATION_STATUS = Object.freeze({
 });
 
 const MESSAGE_GROUP_APPLICATION_ERROR_MSG = Object.freeze({
+  COMPLETION_HANDLER_ALREADY_REGISTERED:
+    'Message-group application completion handler already registered',
   INVALID_LATENCY_CDC_PAYLOAD: 'Invalid latency CDC propagation payload',
   INVALID_LATENCY_CDC_BATCH_PAYLOAD:
     'Invalid latency CDC batch propagation payload',

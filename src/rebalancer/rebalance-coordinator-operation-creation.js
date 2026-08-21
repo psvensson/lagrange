@@ -12,10 +12,16 @@ import {
 } from './replica-operation-insert-disposition.js';
 import {
   buildRuntimeServiceTargetClaimKey,
-  runtimeServiceDispatchedReplicaBelongsToEntity,
+  runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
-import {UNIFIED_SERVICE_TYPE} from
+import {
+  UNIFIED_SERVICE_TYPE,
+} from
   '../constants/unified-service-lifecycle.js';
+import {
+  assertCanonicalRebalancerEntityIdentity,
+  normalizeRebalancerEntityIdentity,
+} from './rebalancer-entity-identity.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
@@ -50,13 +56,13 @@ const {
  * @return {Object}
  */
 function buildLedgerInterlockProbeContext(move, normalizedMoveType) {
-  const entityId = move?.entityId || move?.partitionId;
+  const {entityType, entityId} = normalizeRebalancerEntityIdentity(move);
   return {
     move,
     normalizedMoveType,
-    entityType: move?.entityType || SERVICE_TYPE.PARTITION,
+    entityType,
     entityId,
-    partitionId: move?.partitionId || entityId,
+    partitionId: move?.partitionId ?? entityId,
   };
 }
 
@@ -73,7 +79,7 @@ class RebalanceCoordinatorOperationCreation {
         operationType !== OperationType.ADD &&
         operationType !== OperationType.REPLACE
       ) ||
-      runtimeServiceDispatchedReplicaBelongsToEntity(replicaId, entityId)
+      runtimeServiceReplicaBelongsToEntity(replicaId, entityId)
     ) {
       return;
     }
@@ -136,9 +142,8 @@ class RebalanceCoordinatorOperationCreation {
 
     this.assertLocalControlPlaneMutationReady(move);
 
-    const entityType = move.entityType || SERVICE_TYPE.PARTITION;
-    const entityId = move.entityId || move.partitionId;
-    const partitionId = move.partitionId || entityId;
+    const {entityType, entityId} = normalizeRebalancerEntityIdentity(move);
+    const partitionId = move.partitionId ?? entityId;
     const normalizedMoveType = this.normalizeMoveType(move?.type);
     this.assertExplicitRuntimeServiceTargetIdentity(
       move,
@@ -163,8 +168,14 @@ class RebalanceCoordinatorOperationCreation {
       partitionId,
       criticalAddLikeIntentKey,
     });
+    const canonicalMove = {
+      ...move,
+      entityType,
+      entityId,
+      partitionId,
+    };
     const moveForCreate = applyReplaceIntentIdentity(
-      move,
+      canonicalMove,
       replaceIntentIdentity,
     );
     const createOperationIntentKey = criticalAddLikeIntentKey || dedupeKey;
@@ -289,9 +300,9 @@ class RebalanceCoordinatorOperationCreation {
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
     const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
-    const entityType = move.entityType || SERVICE_TYPE.PARTITION;
-    const entityId = move.entityId || move.partitionId;
-    const partitionId = move.partitionId || entityId;
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(move);
+    const partitionId = move.partitionId;
     const normalizedMove = normalizedMoveType ?
       {
         ...move,

@@ -17,6 +17,7 @@ import {
   getPartitionRowFromCache,
 } from '../bootstrap/system-partition-classification.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {assertCanonicalRebalancerEntityIdentity} from './rebalancer-entity-identity.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_DECISION,
 } from '../partition/partition-constants.js';
@@ -227,13 +228,14 @@ class MovePlanner {
     if (!options.entityType) {
       throw new Error(MOVE_PLANNER_LITERAL.MOVEPLANNER_REQUIRES_ENTITYTYPE);
     }
+    const identity = assertCanonicalRebalancerEntityIdentity(options);
     if (!options.moveStateProvider) {
       throw new Error(
         MOVE_PLANNER_LITERAL.MOVEPLANNER_REQUIRES_MOVESTATEPROVIDER,
       );
     }
-    this.entityId = options.entityId;
-    this.entityType = options.entityType;
+    this.entityId = identity.entityId;
+    this.entityType = identity.entityType;
     this.moveStateProvider = options.moveStateProvider;
     this.storageAdmissionService = options.storageAdmissionService || null;
     this.accountingService = options.accountingService || null;

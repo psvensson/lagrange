@@ -34,6 +34,7 @@ const VOTER_READINESS_SEMANTIC = Object.freeze({
   LOAD_ROUTABLE: 'load_routable',
   REPAIR_ONLY: 'repair_only',
   CATCHUP_LEARNER: 'catchup_learner',
+  EXPLICIT_NON_LEADER: 'explicit_non_leader',
 });
 
 const RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC = Object.freeze(new Map([
@@ -65,6 +66,14 @@ const RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC = Object.freeze(new Map([
       RAFT_ROLE.LEARNER,
     ])),
   ],
+  [
+    VOTER_READINESS_SEMANTIC.EXPLICIT_NON_LEADER,
+    Object.freeze(new Set([
+      RAFT_ROLE.FOLLOWER,
+      RAFT_ROLE.CANDIDATE,
+      RAFT_ROLE.LEARNER,
+    ])),
+  ],
 ]));
 
 // Named row aliases — the table rows under their historical consumer names.
@@ -82,6 +91,10 @@ const LOAD_ROUTABLE_RAFT_ROLES =
 const REPAIR_ONLY_RAFT_ROLES =
   RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC.get(
     VOTER_READINESS_SEMANTIC.REPAIR_ONLY,
+  );
+const EXPLICIT_NON_LEADER_RAFT_ROLES =
+  RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC.get(
+    VOTER_READINESS_SEMANTIC.EXPLICIT_NON_LEADER,
   );
 
 function normalizeRaftRoleInput(role) {
@@ -113,13 +126,25 @@ function isCatchupLearnerRaftRole(role) {
   return normalizeRaftRoleInput(role) === RAFT_ROLE.LEARNER;
 }
 
+// Explicit per-replica membership evidence outranks a node-level leader hint.
+// This row is intentionally wider than voter readiness because a LEARNER is
+// still authoritative evidence that this particular co-located replica is
+// not the leader.
+function isExplicitNonLeaderRaftRole(role) {
+  const normalized = normalizeRaftRoleInput(role);
+  return normalized !== null &&
+    setHas(EXPLICIT_NON_LEADER_RAFT_ROLES, normalized);
+}
+
 export {
   LOAD_ROUTABLE_RAFT_ROLES,
   RAFT_ROLES_BY_VOTER_READINESS_SEMANTIC,
   REPAIR_ONLY_RAFT_ROLES,
+  EXPLICIT_NON_LEADER_RAFT_ROLES,
   VOTER_RAFT_ROLES,
   VOTER_READINESS_SEMANTIC,
   isCatchupLearnerRaftRole,
+  isExplicitNonLeaderRaftRole,
   isLoadRoutableRaftRole,
   isRepairOnlyRaftRole,
   isVoterRaftRole,

@@ -29,10 +29,6 @@ const LOCAL_STR_ENTITY_TYPE = 'entity_type';
 const LOCAL_STR_ENTITYTYPE = 'entityType';
 const LOCAL_STR_ENTITY_ID = 'entity_id';
 const LOCAL_STR_ENTITYID = 'entityId';
-const LOCAL_STR_PARTITION_GROUP_ID = 'partition_group_id';
-const LOCAL_STR_PARTITIONGROUPID = 'partitionGroupId';
-const LOCAL_STR_PARTITION_ID = 'partition_id';
-const LOCAL_STR_PARTITIONID = 'partitionId';
 const LOCAL_STR_SOURCE_NODE_ID = 'source_node_id';
 const LOCAL_STR_SOURCENODEID = 'sourceNodeId';
 const LOCAL_STR_SOURCE_REPLICA_ID = 'source_replica_id';
@@ -44,6 +40,7 @@ const LOCAL_STR_TIMESTAMP = 'timestamp';
 const LOCAL_STR_TIMESTAMPMS = 'timestampMs';
 
 const UNKNOWN_STATUS = 'unknown';
+const UNKNOWN_ENTITY_TYPE = 'unknown';
 const UNKNOWN_PARTITION_GROUP_ID = 'unknown';
 const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
 const REPLICA_OPERATION_STATUS_FAILED = 'failed';
@@ -55,7 +52,6 @@ const OPERATION_TIMELINE_EVENT_STATE = 'state';
 const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const MINUTES_PER_HOUR = NUM.THIRTY * 2;
-const SERVICE_TYPE_PARTITION = 'partition';
 const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
 const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   TIME_MS.MINUTE *
@@ -362,16 +358,12 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       row,
       LOCAL_STR_ENTITY_TYPE,
       LOCAL_STR_ENTITYTYPE,
-    ) || SERVICE_TYPE_PARTITION).toLowerCase(),
+    ) || UNKNOWN_ENTITY_TYPE).toLowerCase(),
     entityId: String(firstStringField(
       row,
       LOCAL_STR_ENTITY_ID,
       LOCAL_STR_ENTITYID,
-      LOCAL_STR_PARTITION_GROUP_ID,
-      LOCAL_STR_PARTITIONGROUPID,
-      LOCAL_STR_PARTITION_ID,
-      LOCAL_STR_PARTITIONID,
-    ) || inferredPartitionGroupId || UNKNOWN_PARTITION_GROUP_ID),
+    ) || UNKNOWN_PARTITION_GROUP_ID),
     sourceNodeId: String(firstStringField(
       row,
       LOCAL_STR_SOURCE_NODE_ID,

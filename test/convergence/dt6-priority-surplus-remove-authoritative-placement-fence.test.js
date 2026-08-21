@@ -2,6 +2,7 @@ import t from 'tap';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   MOVE_REASON,
@@ -223,8 +224,10 @@ t.test(
       result.servicesReads[0]?.options.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     );
-    t.equal(result.servicesReads[0]?.options.allowSqlFallback, false);
-    t.equal(result.servicesReads[0]?.options.preferOwnerRpcReadLeader, true);
+    t.equal(
+      result.servicesReads[0]?.options.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+    );
   },
 );
 

@@ -326,6 +326,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       authoritativeReadModeContract,
       requestOptions,
     } = buildAuthoritativeControlPlaneReadRequestOptions(
+      options.readAuthority,
       options,
       queryOptions,
     );
@@ -415,6 +416,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       sql,
     });
     const {requestOptions} = buildAuthoritativeControlPlaneReadRequestOptions(
+      options.readAuthority,
       options,
       queryOptions,
     );

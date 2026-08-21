@@ -13,6 +13,13 @@ import {applyCDCIntegrationServiceCacheVisibilityWait} from
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {buildControlPlaneReadAuthority} from
+  '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 
 // CL-001 variant D — a non-write-leader's control_plane_publications cache is fed
 // only by the leader's point-in-time CDC fan-out (leader-gated, no replay). A node
@@ -134,12 +141,14 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
   t.equal(seen.length, 1, 'the first defer triggers a catch-up');
   t.same(seen[0], {
     tables: [PUBLICATIONS],
-    preferOwnerRpcRead: true,
-    preferOwnerRpcReadLeader: true,
+    readAuthority: buildControlPlaneReadAuthority({
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+    }),
   },
   'the catch-up is scoped to control_plane_publications only and routes through ' +
-    'the authoritative owner pinned to the LEADER (preferOwnerRpcRead + ' +
-    'preferOwnerRpcReadLeader) rather than a stale local replica');
+    'the authoritative owner pinned to the leader by one authority token');
 
   clock += 4000; // still within the 5000ms cooldown
   await coordinator.reconcileClusterMembership();
@@ -200,7 +209,8 @@ test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through th
   const reads = [];
   service.executeAuthoritativeSystemTableRead =
     async (_tableName, _sql, _params, options = {}) => {
-      const owner = options.preferOwnerRpcRead === true;
+      const owner = options.readAuthority?.authoritativeReadMode ===
+        'owner_rpc_preferred';
       reads.push(owner ? 'owner' : 'local');
       return owner ?
         {
