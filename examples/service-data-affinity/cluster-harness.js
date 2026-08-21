@@ -210,9 +210,14 @@ async function startDockerCluster(nodeCount) {
     await import('../../test/distributed/harness/cluster-factory-layer.js');
   const {createCluster} = CLUSTER_FACTORY_LAYER;
   const {buildImage} = await import('../../test/distributed/run.js');
+  const {applySourceFingerprintConfig} = await import(
+    '../../test/distributed/source-fingerprint-config.js'
+  );
 
   console.log(`Starting ${nodeCount}-node Lagrange cluster in Docker...`);
-  const config = mergeWithDefaults({size: nodeCount});
+  const config = await applySourceFingerprintConfig(
+    mergeWithDefaults({size: nodeCount}),
+  );
   console.log(`Ensuring image ${config.image} is current...`);
   await buildImage(config, false);
 

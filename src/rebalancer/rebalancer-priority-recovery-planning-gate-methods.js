@@ -35,6 +35,45 @@ const {
 
 const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
 const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
+const PRIORITY_RECOVERY_OPERATION_CREATION_KIND = Object.freeze({
+  LEDGER_SURPLUS_DRAIN: 'ledger_surplus_drain',
+});
+
+function normalizeLedgerSurplusDrainPlanningEvidence(concentration) {
+  const targetReplicaCount = Number(concentration?.targetReplicaCount);
+  const totalVoters = Number(concentration?.totalVoters);
+  const targetNodeIds = Array.isArray(concentration?.distinctVoterNodeIds) ?
+    concentration.distinctVoterNodeIds.filter(Boolean) :
+    [];
+  return {concentration, targetReplicaCount, targetNodeIds, totalVoters};
+}
+
+function isExecutableLedgerSurplusDrainPlanningEvidence(evidence) {
+  return (
+    evidence.concentration?.overTarget === true &&
+    Number.isInteger(evidence.targetReplicaCount) &&
+    evidence.targetReplicaCount > 0 &&
+    Number.isInteger(evidence.totalVoters) &&
+    evidence.totalVoters > evidence.targetReplicaCount &&
+    evidence.targetNodeIds.length === evidence.targetReplicaCount
+  );
+}
+
+function buildLedgerSurplusDrainPlanningCapability(concentration) {
+  const evidence = normalizeLedgerSurplusDrainPlanningEvidence(concentration);
+  if (!isExecutableLedgerSurplusDrainPlanningEvidence(evidence)) {
+    return null;
+  }
+  const {
+    targetReplicaCount,
+    targetNodeIds,
+  } = evidence;
+  return Object.freeze({
+    kind: PRIORITY_RECOVERY_OPERATION_CREATION_KIND.LEDGER_SURPLUS_DRAIN,
+    targetReplicaCount,
+    targetNodeIds: Object.freeze([...targetNodeIds]),
+  });
+}
 
 function buildBlockedPartitionLogContext(partition) {
   const expectedReplicaCount = readExpectedReplicaCount(partition);
@@ -394,6 +433,33 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     });
   },
 
+  buildLedgerConcentrationOperationCreationPlanningGate(partitionId) {
+    const readConcentration = this.rebalanceCoordinator
+      ?.getOperationLedgerQuorumConcentrationForPartition;
+    if (typeof readConcentration !== 'function') {
+      return null;
+    }
+    const ledgerConcentration = readConcentration.call(
+      this.rebalanceCoordinator,
+      partitionId,
+    );
+    if (!ledgerConcentration) {
+      return null;
+    }
+    const noReadyNodePlanningCapability =
+      buildLedgerSurplusDrainPlanningCapability(ledgerConcentration);
+    if (!noReadyNodePlanningCapability) {
+      return null;
+    }
+    return Object.freeze({
+      operationCreationRequired: true,
+      operationCreationPartitionId: partitionId,
+      operationCreationScope:
+        PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
+      noReadyNodePlanningCapability,
+    });
+  },
+
   buildPriorityRecoveryOperationCreationPlanningGateSnapshot(partitionId) {
     const normalizedPartitionId = String(
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
@@ -403,6 +469,13 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       !this.isControlPlanePriorityPartition()
     ) {
       return null;
+    }
+    const ledgerConcentrationGate =
+      this.buildLedgerConcentrationOperationCreationPlanningGate(
+        normalizedPartitionId,
+      );
+    if (ledgerConcentrationGate) {
+      return ledgerConcentrationGate;
     }
     const publishedPlanningSnapshot =
       this.getPriorityRecoveryPlanningSnapshotSync(
@@ -427,6 +500,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         operationCreationPartitionId: normalizedPartitionId,
         operationCreationScope:
           PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
+        noReadyNodePlanningCapability: null,
       });
     }
 
@@ -441,6 +515,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         operationCreationRequired: false,
         operationCreationPartitionId: null,
         operationCreationScope: null,
+        noReadyNodePlanningCapability: null,
       });
     }
 
@@ -450,6 +525,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         this.resolvePriorityRecoveryFollowUpPartitionId(surrogateDecision),
       operationCreationScope:
         PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.SURROGATE_PARTITION,
+      noReadyNodePlanningCapability: null,
     });
   },
 
@@ -538,14 +614,19 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
    * @param {Object|null} decision - The winning planning-gate decision, if any.
    * @return {Object|null} The recorded diagnostic, or null when not applicable.
    */
-  recordPriorityRecoveryPlanningGateDecisionDiagnostic(decision) {
+  recordPriorityRecoveryPlanningGateDecisionDiagnostic(
+    decision,
+    evaluationContext = null,
+  ) {
     if (!this.isControlPlanePriorityPartition()) {
       return null;
     }
     let bypass = null;
     let syncPlanningSnapshotAvailable = false;
     try {
-      bypass = this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      bypass = this.buildPriorityRecoveryPlanningGateBypassSnapshot(
+        evaluationContext,
+      );
     } catch (_bypassError) {
       bypass = null;
     }

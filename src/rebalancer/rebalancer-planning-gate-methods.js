@@ -610,27 +610,27 @@ const REBALANCER_PLANNING_GATE_METHODS = {
 
   ...REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS,
 
-  async collectRebalancePlanningGateDecisions() {
-    const evaluationContext =
+  async collectRebalancePlanningGateDecisions(evaluationContext = null) {
+    const cycleContext = evaluationContext ||
       this.createRebalancePlanningGateEvaluationContext();
     return [
-      this.evaluateClusterReadinessGateDecision(evaluationContext),
-      this.resolveStartDelayPlanningGateDecision(evaluationContext),
-      this.resolveStabilizationPlanningGateDecision(evaluationContext),
+      this.evaluateClusterReadinessGateDecision(cycleContext),
+      this.resolveStartDelayPlanningGateDecision(cycleContext),
+      this.resolveStabilizationPlanningGateDecision(cycleContext),
       await this.resolveTopologySettlingPlanningGateDecision(
-        evaluationContext,
+        cycleContext,
       ),
-      this.resolveTrafficReadinessPlanningGateDecision(evaluationContext),
-      this.resolveLocalServePlanningGateDecision(evaluationContext),
-      this.resolveLocalMutationPlanningGateDecision(evaluationContext),
-      this.resolvePrioritySpreadPlanningGateDecision(evaluationContext),
-      this.resolveTransportBackpressurePlanningGateDecision(evaluationContext),
+      this.resolveTrafficReadinessPlanningGateDecision(cycleContext),
+      this.resolveLocalServePlanningGateDecision(cycleContext),
+      this.resolveLocalMutationPlanningGateDecision(cycleContext),
+      this.resolvePrioritySpreadPlanningGateDecision(cycleContext),
+      this.resolveTransportBackpressurePlanningGateDecision(cycleContext),
     ].filter(Boolean);
   },
 
-  async resolveCheckRebalanceGateDecision() {
+  async resolveCheckRebalanceGateDecision(evaluationContext = null) {
     const planningGateDecisions =
-      await this.collectRebalancePlanningGateDecisions();
+      await this.collectRebalancePlanningGateDecisions(evaluationContext);
     return planningGateDecisions.length > 0 ?
       planningGateDecisions[0] :
       null;
@@ -642,8 +642,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Promise<{apply: Function, decision: Object}|null>}
    * @private
    */
-  async getCheckRebalanceBlocker() {
-    const decision = await this.resolveCheckRebalanceGateDecision();
+  async getCheckRebalanceBlocker(evaluationContext = null) {
+    const decision = await this.resolveCheckRebalanceGateDecision(
+      evaluationContext,
+    );
     if (!decision) {
       return null;
     }
@@ -660,16 +662,23 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @param {boolean} needsRebalance
    * @param {Object|null} [evaluatedPolicy=null] - The policy the evaluation
    *   judged; the cure must plan from the same evidence, not a re-fetch.
+   * @param {Object|null} [evaluationContext=null] - Cycle-owned planning
+   *   evidence shared through execution.
    * @return {Promise<boolean>} Whether to force a priority retry cadence.
    * @private
    */
-  async advanceCheckCadence(needsRebalance, evaluatedPolicy = null) {
+  async advanceCheckCadence(
+    needsRebalance,
+    evaluatedPolicy = null,
+    evaluationContext = null,
+  ) {
     let forcePriorityRetry = false;
 
     if (needsRebalance) {
       const rebalanceResult = await this.rebalance(
         TriggerType.PERIODIC,
         evaluatedPolicy,
+        evaluationContext,
       );
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
@@ -734,9 +743,18 @@ const REBALANCER_PLANNING_GATE_METHODS = {
 
     let forcePriorityRetry = false;
     try {
-      const blocker = await this.getCheckRebalanceBlocker();
+      // One cycle owns one operation-creation answer. Planning gates and state
+      // evaluation must not independently reinterpret the same recovery need:
+      // a gate may correctly admit a concentrated-ledger cure while a later
+      // no-READY-node guard otherwise suppresses the very move that releases
+      // formation. Keep the decision capability alive through the complete
+      // check, including diagnostics, so every stage consumes one answer.
+      const evaluationContext =
+        this.createRebalancePlanningGateEvaluationContext();
+      const blocker = await this.getCheckRebalanceBlocker(evaluationContext);
       this.recordPriorityRecoveryPlanningGateDecisionDiagnostic(
         blocker?.decision || null,
+        evaluationContext,
       );
       if (blocker) {
         blocker.apply();
@@ -751,10 +769,14 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       // fetch serves the whole cycle so the cure judges the evidence the
       // evaluation observed.
       const evaluatedPolicy = await this.getPolicy();
-      const needsRebalance = await this.evaluateState(evaluatedPolicy);
+      const needsRebalance = await this.evaluateState(
+        evaluatedPolicy,
+        evaluationContext,
+      );
       forcePriorityRetry = await this.advanceCheckCadence(
         needsRebalance,
         evaluatedPolicy,
+        evaluationContext,
       );
     } catch (error) {
       this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {

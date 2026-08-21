@@ -29,6 +29,9 @@ import {
   CLUSTER_FACTORY_LAYER,
 } from '../../test/distributed/harness/cluster-factory-layer.js';
 import {buildImage} from '../../test/distributed/build-image.js';
+import {
+  applySourceFingerprintConfig,
+} from '../../test/distributed/source-fingerprint-config.js';
 import {createReadStream, createWriteStream} from 'node:fs';
 import {resolve} from 'node:path';
 import {pipeline} from 'node:stream/promises';
@@ -148,9 +151,9 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
     // the window returns to the harness default convergence base (30s x
     // the 5-node scale factor 2.0 = 60s); every other sealed term
     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
-    const config = mergeWithDefaults({
-      size: DEMO_NODE_COUNT,
-    });
+    const config = await applySourceFingerprintConfig(
+      mergeWithDefaults({size: DEMO_NODE_COUNT}),
+    );
     await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);
 

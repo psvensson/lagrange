@@ -2,6 +2,8 @@ import {TIME_MS} from '../constants/index.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
+  evaluateOperationLedgerQuorumConcentration,
+  getConcentratedOperationLedgerPartition,
   getAuthoritativeOperationLedgerPlacementObservation,
 } from './operation-ledger-quorum-concentration.js';
 import {
@@ -11,7 +13,6 @@ import {
   classifyOperationLedgerHoldMove,
   classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
-  isLedgerQuorumConcentratedPartition,
   resolveEngagedLedgerQuorumSpreadHold,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,
@@ -512,8 +513,22 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * @return {boolean}
    */
   isOperationLedgerQuorumConcentratedForPartition(partitionId) {
-    return isLedgerQuorumConcentratedPartition(
-      this.systemTableCache,
+    return this.getOperationLedgerQuorumConcentrationForPartition(
+      partitionId,
+    ) !== null;
+  }
+
+  /**
+   * Return the admission owner's immutable placement evidence for one
+   * concentrated operation-ledger partition. Planning consumes this exact
+   * observation when it must carry a count-decreasing cure across a
+   * formation-held, zero-READY-node cycle.
+   * @param {string|null} partitionId
+   * @return {Object|null}
+   */
+  getOperationLedgerQuorumConcentrationForPartition(partitionId) {
+    return getConcentratedOperationLedgerPartition(
+      evaluateOperationLedgerQuorumConcentration(this.systemTableCache),
       partitionId,
     );
   }

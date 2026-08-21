@@ -38,9 +38,36 @@ import {
 } from '../../run.js';
 import {CLI} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
+import {
+  computeSourceFingerprint,
+  SOURCE_FINGERPRINT_ALGORITHM,
+} from '../../../../src/diagnostics/source-fingerprint.js';
+import {
+  applySourceFingerprintConfig,
+} from '../../source-fingerprint-config.js';
 
 const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY =
   'stateMachinePressurePreflight';
+
+describe('cluster source identity', () => {
+  it('authenticates the exact boot source without mutating launch config',
+    async () => {
+      const input = Object.freeze({
+        image: 'lagrange:test',
+        docker: Object.freeze({socketPath: '/var/run/docker.sock'}),
+      });
+      const configured = await applySourceFingerprintConfig(input);
+      const expected = await computeSourceFingerprint('src');
+
+      assert.equal(configured.docker.srcFingerprint, expected);
+      assert.equal(
+        configured.docker.srcFingerprintAlgo,
+        SOURCE_FINGERPRINT_ALGORITHM,
+      );
+      assert.equal(configured.docker.socketPath, input.docker.socketPath);
+      assert.equal(input.docker.srcFingerprint, undefined);
+    });
+});
 
 describe('parseArgs', () => {
   it('returns defaults when no args provided', () => {

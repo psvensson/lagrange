@@ -122,7 +122,11 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     return results;
   }
 
-  async rebalance(trigger = TriggerType.PERIODIC, policy = null) {
+  async rebalance(
+    trigger = TriggerType.PERIODIC,
+    policy = null,
+    evaluationContext = null,
+  ) {
     if (this.isShuttingDown) {
       return this.buildRebalanceResult(false, {
         skipped: true,
@@ -144,7 +148,16 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       this.movePlanner.captureReplicaInventorySourceState();
     const currentReplicas = this.getCurrentReplicas();
     const availableNodes = this.getAvailableNodes();
-    if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+    const operationCreationGate =
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
+      );
+    const noReadyNodePlanningCapability =
+      operationCreationGate?.noReadyNodePlanningCapability || null;
+    if (
+      availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
+      !noReadyNodePlanningCapability
+    ) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
         entityId: this.entityId,
         entityType: this.entityType,
@@ -154,11 +167,33 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       });
     }
 
-    const targetState = await this.movePlanner.calculateTargetState(
+    let targetState = await this.movePlanner.calculateTargetState(
       currentReplicas,
       effectivePolicy,
       inventorySourceStateBefore,
     );
+    if (
+      availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
+      noReadyNodePlanningCapability
+    ) {
+      // The interaction owner authorizes exactly one zero-READY operation:
+      // a count-decreasing ledger surplus drain whose retained target nodes
+      // came from the admission owner's authoritative voter placement. Keep
+      // the generic placement diagnostics and inventory snapshot, but do not
+      // let its unrelated READY projection relabel this concrete remove-only
+      // plan as degraded and suppress it.
+      targetState = Object.freeze({
+        ...targetState,
+        targetReplicaCount:
+          noReadyNodePlanningCapability.targetReplicaCount,
+        targetNodes: Object.freeze([
+          ...noReadyNodePlanningCapability.targetNodeIds,
+        ]),
+        degraded: false,
+        degradedReason: null,
+        noReadyNodePlanningKind: noReadyNodePlanningCapability.kind,
+      });
+    }
     const planningMembershipPublicationEpoch =
       this.resolvePublishedMembershipPlanningEpoch();
     const calculatedMoves = this.movePlanner.calculateMoves(

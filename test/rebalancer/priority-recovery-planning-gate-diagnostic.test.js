@@ -18,7 +18,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   REBALANCER_LOG_MSG,
+  REBALANCER_MOVE_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -71,6 +73,13 @@ function createRebalancer(options = {}) {
       canStartAddOperation: async () => true,
       canStartRemoveOperation: async () => true,
       getStats: () => ({}),
+      storageAccountingService: {
+        estimateReplicaBytes: () => 1,
+      },
+      storageAdmissionService: {
+        checkAdd: async () => ({decision: 'allow'}),
+        checkReplace: async () => ({decision: 'allow'}),
+      },
     },
   });
 }
@@ -258,6 +267,185 @@ test('one planning pass shares its priority operation-creation gate',
       operationCreationGateBuilds,
       1,
       'all gates in one pass reuse one current operation-creation decision',
+    );
+    rebalancer.shutdown();
+  },
+);
+
+test(
+  'ledger concentration owner issues only a spread-preserving zero-READY ' +
+    'surplus-drain capability',
+  (t) => {
+    initializeTestEnvironment();
+    const rebalancer = createRebalancer({
+      entityId: 'replica_operations-p1',
+    });
+    rebalancer.isControlPlanePriorityPartition = () => true;
+    rebalancer.rebalanceCoordinator
+      .getOperationLedgerQuorumConcentrationForPartition = () =>
+        Object.freeze({
+          overTarget: true,
+          targetReplicaCount: 3,
+          totalVoters: 4,
+          distinctVoterNodeIds: Object.freeze([
+            'seed-node',
+            'joiner-1',
+            'joiner-2',
+          ]),
+        });
+
+    const gate =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        'replica_operations-p1',
+      );
+    t.equal(gate.operationCreationRequired, true, 'cure creation is required');
+    t.strictSame(
+      gate.noReadyNodePlanningCapability,
+      {
+        kind: 'ledger_surplus_drain',
+        targetReplicaCount: 3,
+        targetNodeIds: ['seed-node', 'joiner-1', 'joiner-2'],
+      },
+      'the gate carries the concrete retained placement across subsystems',
+    );
+    t.ok(
+      Object.isFrozen(gate.noReadyNodePlanningCapability.targetNodeIds),
+      'callers cannot mutate the owner-issued placement capability',
+    );
+
+    rebalancer.rebalanceCoordinator
+      .getOperationLedgerQuorumConcentrationForPartition = () =>
+        Object.freeze({
+          overTarget: true,
+          targetReplicaCount: 3,
+          totalVoters: 4,
+          distinctVoterNodeIds: Object.freeze(['seed-node', 'joiner-1']),
+        });
+    const unsafeGate =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        'replica_operations-p1',
+      );
+    t.equal(
+      unsafeGate,
+      null,
+      'zero-READY bypass fails closed without target-wide distinct placement',
+    );
+    rebalancer.shutdown();
+    t.end();
+  },
+);
+
+test(
+  'one check cycle carries a concentrated-ledger cure through the empty ' +
+    'READY-node evaluation guard',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createRebalancer({
+      entityId: 'replica_operations-p1',
+      nodeId: 'remote-ledger-leader',
+    });
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+    rebalancer.isControlPlanePriorityPartition = () => true;
+
+    const currentReplicas = [
+      {
+        replica_id: 'ledger-r1',
+        node_id: 'seed-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'leader',
+      },
+      {
+        replica_id: 'ledger-r2',
+        node_id: 'seed-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+      },
+      {
+        replica_id: 'ledger-r4',
+        node_id: 'joiner-1',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+      },
+      {
+        replica_id: 'ledger-r5',
+        node_id: 'joiner-2',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'follower',
+      },
+    ];
+    rebalancer.getCurrentReplicas = () => currentReplicas;
+    rebalancer.getAvailableNodes = () => [];
+
+    // Production Frankfurt shape after the first successful surplus drain:
+    // the operation-creation owner still sees a required ledger cure, while
+    // every joiner remains formation-held and the generic READY projection is
+    // empty. No asynchronous follow-up decision is visible on the new Raft
+    // leader, so only the cycle-owned creation decision can carry the cure
+    // across the planning-gate -> state-evaluation interaction.
+    let operationCreationGateBuilds = 0;
+    rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot =
+      () => {
+        operationCreationGateBuilds++;
+        return Object.freeze({
+          operationCreationRequired: true,
+          operationCreationPartitionId: 'replica_operations-p1',
+          operationCreationScope: 'current_partition',
+          noReadyNodePlanningCapability: Object.freeze({
+            kind: 'ledger_surplus_drain',
+            targetReplicaCount: 3,
+            targetNodeIds: Object.freeze([
+              'seed-node',
+              'joiner-1',
+              'joiner-2',
+            ]),
+          }),
+        });
+      };
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () => null;
+    rebalancer.hasPriorityRecoveryFollowUpOperationRequired =
+      async () => false;
+    rebalancer.hasPriorityRecoverySurrogateFollowUpOperationRequired =
+      async () => false;
+
+    rebalancer.augmentMovesWithPriorityRecoveryFollowUp = async (moves) =>
+      moves;
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+    rebalancer.getOrdinaryPriorityRecoverySerialGateSnapshot = async () =>
+      null;
+    rebalancer.getConfiguredRebalanceBudget = async () => 5;
+    rebalancer.getGlobalInFlightOperationCount = async () => 0;
+    rebalancer.getReservedPriorityRecoveryMoveSlots = () => 0;
+    let plannedMoves = [];
+    rebalancer.executeRebalancingMoves = async (moves) => {
+      plannedMoves = moves;
+      return moves.map((move) => ({...move, success: true}));
+    };
+    rebalancer.scheduleNextCheck = () => {};
+
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      plannedMoves.length,
+      1,
+      'the admitted ledger cure reaches execution despite zero READY nodes',
+    );
+    t.equal(
+      plannedMoves[0]?.type,
+      REBALANCER_MOVE_TYPE.REMOVE,
+      'the real planner emits the count-decreasing cure',
+    );
+    t.equal(
+      plannedMoves[0]?.nodeId,
+      'seed-node',
+      'the real planner drains the remaining surplus host',
+    );
+    t.equal(
+      operationCreationGateBuilds,
+      1,
+      'gates, diagnostics, and evaluation consume one owner decision',
     );
     rebalancer.shutdown();
   },

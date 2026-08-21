@@ -16,9 +16,11 @@ const REBALANCER_EVALUATION_METHODS = {
    * round.
    *
    * @param {Object|null} [policy=null] - Pre-fetched policy for this cycle.
+   * @param {Object|null} [evaluationContext=null] - Cycle-owned planning
+   *   evidence shared with the planning gates.
    * @return {Promise<boolean>} True if rebalancing is needed.
    */
-  async evaluateState(policy = null) {
+  async evaluateState(policy = null, evaluationContext = null) {
     const currentReplicas = this.getCurrentReplicas();
     const effectivePolicy = policy || (await this.getPolicy());
     const availableNodes = this.getAvailableNodes();
@@ -45,6 +47,22 @@ const REBALANCER_EVALUATION_METHODS = {
       targetReplicaCount: desiredTarget,
       actionableTargetReplicaCount: actionableTarget,
     });
+
+    const operationCreationGate =
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
+      );
+    const noReadyNodePlanningCapability =
+      operationCreationGate?.noReadyNodePlanningCapability || null;
+    // The cycle owner has already established that a priority-recovery move
+    // must be created. This includes count-decreasing ledger cures, which need
+    // no READY target node and are what allow formation-held nodes to become
+    // READY. Reapplying the generic empty-ready-set guard here would invert
+    // that dependency and recreate the cold-formation deadlock.
+    if (noReadyNodePlanningCapability) {
+      this.lastSuboptimalSignal = null;
+      return true;
+    }
 
     let hasPriorityEligibleNodes = false;
     if (this.isControlPlanePriorityPartition()) {

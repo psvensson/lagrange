@@ -15,10 +15,6 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {basename, dirname, extname, join, resolve} from 'node:path';
 
 import {mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
-import {
-  computeSourceFingerprint,
-  SOURCE_FINGERPRINT_ALGORITHM,
-} from '../../src/diagnostics/source-fingerprint.js';
 import {parseConfig} from './harness/config-parser.js';
 import {
   discoverScenarios,
@@ -34,6 +30,9 @@ import {
   teardownGcpProvisioner,
 } from './gcp-run-orchestration.js';
 import {buildImage} from './build-image.js';
+import {
+  applySourceFingerprintConfig,
+} from './source-fingerprint-config.js';
 import {
   ReportWriter,
   computeSummary,
@@ -493,19 +492,16 @@ async function applyFastLocalConfig(config, cwd = process.cwd()) {
   // container recreate (fresh process → fresh import), defeating the stale-code
   // trap; unchanged keeps the fast warm-reuse path. Only meaningful in fast-local
   // (image mode bakes src in and is covered by the git-hash image label).
-  const hostSourcePath = resolve(cwd, FAST_LOCAL_SOURCE_RELATIVE_PATH);
-  const srcFingerprint = await computeSourceFingerprint(hostSourcePath);
+  const fingerprintedConfig = await applySourceFingerprintConfig(config, cwd);
 
   return {
-    ...config,
+    ...fingerprintedConfig,
     docker: {
-      ...dockerConfig,
+      ...fingerprintedConfig.docker,
       skipBuildOnDirty: true,
       reuseContainers: true,
       keepRunningContainers: true,
       binds: mergedBinds,
-      srcFingerprint,
-      srcFingerprintAlgo: SOURCE_FINGERPRINT_ALGORITHM,
     },
   };
 }
@@ -1153,6 +1149,8 @@ async function main() {
       if (args.verbose) {
         process.stdout.write(FAST_LOCAL_LOG_PREFIX);
       }
+    } else {
+      runConfig = await applySourceFingerprintConfig(runConfig);
     }
     const gcpResult = await provisionGcpDockerHosts(runConfig, args.verbose);
     runConfig = gcpResult.runConfig;

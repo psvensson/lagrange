@@ -189,12 +189,20 @@ function evaluateLedgerPartitionConcentration({
   );
   const overTarget =
     targetReplicaCount !== null && totalVoters > targetReplicaCount;
+  const distinctVoterNodeIds = Object.freeze(
+    [...new Set(
+      voterRows
+        .map((row) => normalizedField(row, 'node_id'))
+        .filter((nodeId) => nodeId.length > 0),
+    )],
+  );
   return Object.freeze({
     partitionId,
     targetReplicaCount,
     totalVoters,
     maxVotersOnOneNode,
     hottestNodeId,
+    distinctVoterNodeIds,
     feasibleTargetNodeId,
     feasibleTargetNodeIds: Object.freeze(feasibleTargetNodeIds),
     overTarget,
@@ -445,9 +453,30 @@ function isConcentratedOperationLedgerPartition(evaluation, partitionId) {
   );
 }
 
+/**
+ * Return the immutable concentration observation for one ledger partition.
+ * This is the evidence-bearing form of isConcentratedOperationLedgerPartition:
+ * interaction owners that must choose a concrete cure consume the same
+ * placement observation as the admission hold instead of reconstructing it
+ * from unrelated readiness projections.
+ * @param {Object|null} evaluation
+ * @param {string|null} partitionId
+ * @return {Object|null}
+ */
+function getConcentratedOperationLedgerPartition(evaluation, partitionId) {
+  const normalizedPartitionId = String(partitionId || '').trim();
+  if (normalizedPartitionId.length === 0) {
+    return null;
+  }
+  return evaluation?.concentratedPartitions?.find(
+    (partition) => partition.partitionId === normalizedPartitionId,
+  ) || null;
+}
+
 export {
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
   evaluateOperationLedgerQuorumConcentration,
+  getConcentratedOperationLedgerPartition,
   getAuthoritativeOperationLedgerPlacementObservation,
   getOperationLedgerQuorumObservation,
   isConcentratedOperationLedgerPartition,

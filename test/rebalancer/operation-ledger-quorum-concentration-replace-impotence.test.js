@@ -111,6 +111,11 @@ test(
     const entry = evaluation.concentratedPartitions[0];
     t.equal(entry.maxVotersOnOneNode, 2, 'skew measured');
     t.equal(entry.hottestNodeId, 'node-0', 'hottest node named');
+    t.strictSame(
+      [...entry.distinctVoterNodeIds],
+      ['node-0', 'node-1'],
+      'the owner publishes the distinct voter placement with its decision',
+    );
     t.equal(entry.spreadActionable, true, 'REPLACE cure is actionable');
     t.end();
   },
