@@ -40,8 +40,7 @@ function buildNodeSamples(nodeId, options = {}) {
     samples.push({
       timestamp: i * stepMs,
       nodeId,
-      memoryUsageBytes: startBytes + (i * stepBytes),
-      memoryLimitBytes: 2_000_000_000,
+      processRssBytes: startBytes + (i * stepBytes),
     });
   }
   return samples;
@@ -54,8 +53,8 @@ function leakingConfig(overrides = {}) {
     warmupFraction: 0.2,
     minWarmupMs: 0,
     minAnalysisWindowMs: 1,
-    maxPositiveSlopeBytesPerMin: 524288,
-    minGrowthBytes: 33554432,
+    maxRssSlopeBytesPerMin: 524288,
+    minRssGrowthBytes: 33554432,
     minPositiveDeltaRatio: 0.7,
     ...overrides,
   };
@@ -93,6 +92,7 @@ describe('memory-soak enforcement oracle', () => {
         ...buildNodeSamples('node-3'),
       ];
       const analysis = analyzeMemoryLeakSamples(samples, leakingConfig());
+      assert.equal(analysis.nodeCount, 3);
       assert.equal(analysis.leakDetected, false);
       for (const node of analysis.nodes) {
         assert.equal(node.analyzed, true, `${node.nodeId} must be analyzed`);
@@ -136,8 +136,8 @@ describe('memory-soak enforcement oracle', () => {
       sampleCount: MIN_SAMPLES_PER_NODE + 10,
     });
     const analysis = analyzeMemoryLeakSamples(samples, leakingConfig({
-      maxPositiveSlopeBytesPerMin: 1,
-      minGrowthBytes: 1,
+      maxRssSlopeBytesPerMin: 1,
+      minRssGrowthBytes: 1,
       minPositiveDeltaRatio: 0.5,
     }));
     assert.equal(analysis.leakDetected, true);

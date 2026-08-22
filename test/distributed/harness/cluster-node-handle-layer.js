@@ -1,4 +1,5 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
+import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -19,6 +20,8 @@ const {
   CDC_EVENT_MESSAGE_TYPE,
   FETCH_TIMEOUT_MS,
   HTTP_METHOD_GET,
+  HTTP_OK_LOWER,
+  HTTP_OK_UPPER,
   INACTIVE_STATE,
   LIVE_QUERY_EVENT_MESSAGE_TYPE,
   LIVE_QUERY_INITIAL_MESSAGE_TYPE,
@@ -77,6 +80,84 @@ const ADMIN_QUERY_CONNECTION_RESET_PREFIX =
   'Admin API query connection reset for node ';
 const ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT = ' on lane ';
 const SUPPRESSED_BEST_EFFORT_ERROR_INCREMENT = 1;
+const PROCESS_RESOURCE_DIAGNOSTICS_UNAVAILABLE_PREFIX =
+  'Process resource diagnostics unavailable for node ';
+const PROCESS_RESOURCE_DIAGNOSTICS_INVALID_PREFIX =
+  'Process resource diagnostics invalid for node ';
+const numberConstructor = Number;
+const numberIsFinite = Number.isFinite;
+const stringConstructor = String;
+
+function requiredProcessResourceCounter(value, nodeId, field) {
+  const numeric = numberConstructor(value);
+  if (!numberIsFinite(numeric) || numeric < ZERO) {
+    throw new Error(
+      PROCESS_RESOURCE_DIAGNOSTICS_INVALID_PREFIX + nodeId + ': ' + field,
+    );
+  }
+  return numeric;
+}
+
+function normalizeProcessResourceDiagnostics(body, expectedNodeId) {
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    body.nodeId !== expectedNodeId
+  ) {
+    throw new Error(
+      PROCESS_RESOURCE_DIAGNOSTICS_INVALID_PREFIX +
+        expectedNodeId + ': node identity',
+    );
+  }
+  const latest = body?.diagnostics?.resources?.latest;
+  const processSnapshot = latest?.process;
+  if (
+    !latest ||
+    typeof latest !== 'object' ||
+    !processSnapshot ||
+    typeof processSnapshot !== 'object'
+  ) {
+    throw new Error(
+      PROCESS_RESOURCE_DIAGNOSTICS_INVALID_PREFIX +
+        expectedNodeId + ': resource sample',
+    );
+  }
+  return {
+    nodeId: expectedNodeId,
+    capturedAt: requiredProcessResourceCounter(
+      latest.timestamp,
+      expectedNodeId,
+      'timestamp',
+    ),
+    process: {
+      rssBytes: requiredProcessResourceCounter(
+        processSnapshot.rssBytes,
+        expectedNodeId,
+        'rssBytes',
+      ),
+      heapUsedBytes: requiredProcessResourceCounter(
+        processSnapshot.heapUsedBytes,
+        expectedNodeId,
+        'heapUsedBytes',
+      ),
+      heapTotalBytes: requiredProcessResourceCounter(
+        processSnapshot.heapTotalBytes,
+        expectedNodeId,
+        'heapTotalBytes',
+      ),
+      externalBytes: requiredProcessResourceCounter(
+        processSnapshot.externalBytes,
+        expectedNodeId,
+        'externalBytes',
+      ),
+      arrayBuffersBytes: requiredProcessResourceCounter(
+        processSnapshot.arrayBuffersBytes,
+        expectedNodeId,
+        'arrayBuffersBytes',
+      ),
+    },
+  };
+}
 
 function resolveReachabilityProbeTimeoutMs(remainingBudgetMs, maxTimeoutMs) {
   const remainingMs = resolvePositiveTimeoutMs(
@@ -931,6 +1012,32 @@ class NodeHandle {
         },
       ],
     };
+  }
+
+  /** Read the node-owned process resource sample from its diagnostics route. */
+  async getProcessResourceDiagnostics(options = {}) {
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options.timeoutMs,
+      FETCH_TIMEOUT_MS,
+    );
+    const url = 'http://' + this.ip + ':' + this._adminApiPort +
+      ADMIN_ROUTE.SERVICE_DIAGNOSTICS;
+    const response = await httpRequest({
+      url,
+      timeoutMs,
+      method: HTTP_METHOD_GET,
+      includeBody: true,
+    });
+    if (
+      response?.status < HTTP_OK_LOWER ||
+      response?.status > HTTP_OK_UPPER
+    ) {
+      throw new Error(
+        PROCESS_RESOURCE_DIAGNOSTICS_UNAVAILABLE_PREFIX + this.id +
+          ' (status=' + stringConstructor(response?.status) + ')',
+      );
+    }
+    return normalizeProcessResourceDiagnostics(response.body, this.id);
   }
 
   /** Get local control snapshot from Admin API cache projection. */

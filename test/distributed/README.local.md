@@ -666,9 +666,12 @@ npm run test:fast
 
 ## Memory Leak Detection
 
-The harness includes a memory leak analyzer that samples RSS across nodes
-during scenario execution. Configuration lives in the `memoryLeak` block of
-each config file.
+The harness includes a memory leak analyzer that samples process RSS from each
+node's runtime resource-diagnostics owner during scenario execution. Raw Docker
+cgroup usage cannot satisfy this gate. Container capacity displays use the
+separate reclaimable-cache-adjusted working set produced by the canonical
+container-memory accounting module. Configuration lives in the `memoryLeak`
+block of each config file.
 
 Key settings:
 
@@ -677,6 +680,8 @@ Key settings:
    `true`).
 3. `requireSamples` — fail when insufficient samples are collected (default
    `false`).
+4. `maxRssSlopeBytesPerMin` and `minRssGrowthBytes` — explicit process-RSS
+   trend thresholds. The former ambiguous threshold names are rejected.
 
 ### Local Profile Enforcement
 

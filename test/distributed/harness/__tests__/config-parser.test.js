@@ -110,8 +110,8 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         LEAK_DEFAULTS.minSamplesPerNode,
       );
       assert.strictEqual(
-        config.memoryLeak.maxPositiveSlopeBytesPerMin,
-        LEAK_DEFAULTS.maxPositiveSlopeBytesPerMin,
+        config.memoryLeak.maxRssSlopeBytesPerMin,
+        LEAK_DEFAULTS.maxRssSlopeBytesPerMin,
       );
       assert.strictEqual(
         config.memoryLeak.captureHeapArtifacts,
@@ -225,7 +225,7 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         failOnDetection: true,
         requireSamples: true,
         minSamplesPerNode: 25,
-        maxPositiveSlopeBytesPerMin: 500000,
+        maxRssSlopeBytesPerMin: 500000,
         captureHeapArtifacts: true,
         heapSnapshotNearLimitCount: 3,
       },
@@ -287,14 +287,14 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.memoryLeak.requireSamples, true);
     assert.strictEqual(config.memoryLeak.minSamplesPerNode, 25);
     assert.strictEqual(
-      config.memoryLeak.maxPositiveSlopeBytesPerMin,
+      config.memoryLeak.maxRssSlopeBytesPerMin,
       500000,
     );
     assert.strictEqual(config.memoryLeak.captureHeapArtifacts, true);
     assert.strictEqual(config.memoryLeak.heapSnapshotNearLimitCount, 3);
     assert.strictEqual(
-      config.memoryLeak.minGrowthBytes,
-      LEAK_DEFAULTS.minGrowthBytes,
+      config.memoryLeak.minRssGrowthBytes,
+      LEAK_DEFAULTS.minRssGrowthBytes,
     );
     assert.strictEqual(config.benchmark.baselineImage, 'postgres:15');
     assert.strictEqual(config.benchmark.durationSeconds, 45);

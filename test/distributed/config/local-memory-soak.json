@@ -46,8 +46,8 @@
     "warmupFraction": 0.2,
     "minWarmupMs": 300000,
     "minAnalysisWindowMs": 900000,
-    "maxPositiveSlopeBytesPerMin": 524288,
-    "minGrowthBytes": 33554432,
+    "maxRssSlopeBytesPerMin": 524288,
+    "minRssGrowthBytes": 33554432,
     "minPositiveDeltaRatio": 0.7,
     "captureHeapArtifacts": true,
     "heapSnapshotNearLimitCount": 2

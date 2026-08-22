@@ -16,6 +16,8 @@ import {
   RESOURCE_DEFAULTS,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
+import {resolveDockerMemoryWorkingSetBytes} from
+  './container-memory-working-set.js';
 const localText = Object.freeze({
   HTTP: 'http',
   HTTPS: 'https',
@@ -221,6 +223,16 @@ function normalizeContainerLogOptions(options) {
   if (options.since) logOptions.since = options.since;
   return {logOptions, normalizedTail};
 }
+
+// Loud-by-construction: best-effort callback/cleanup failures are counted per
+// context (never silently swallowed) so a log-driven debug session can see
+// that suppression happened and where.
+const SUPPRESSED_BEST_EFFORT_CONTEXT = Object.freeze({
+  BUILD_PROGRESS_CALLBACK: 'build_progress_callback',
+  FAILED_CONTAINER_LOG_COLLECTION: 'failed_container_log_collection',
+  FAILED_CONTAINER_REMOVE: 'failed_container_remove',
+  OPERATION_SINK_CALLBACK: 'operation_sink_callback',
+});
 
 class DockerProvider {
   /**
@@ -495,8 +507,10 @@ class DockerProvider {
           if (typeof onProgress === TYPEOF_FUNCTION) {
             try {
               onProgress(event);
-            } catch (_err) {
+            } catch (err) {
               // Best-effort progress callback isolation.
+              this._recordSuppressedBestEffortError(
+                SUPPRESSED_BEST_EFFORT_CONTEXT.BUILD_PROGRESS_CALLBACK, err);
             }
           }
         },
@@ -709,13 +723,18 @@ class DockerProvider {
           `Logs from failed container ${containerId}:\n${logs}\n`,
         );
       }
-    } catch (_logErr) {
+    } catch (logErr) {
       // Best-effort log collection
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.FAILED_CONTAINER_LOG_COLLECTION,
+        logErr);
     }
     try {
       await this.removeContainer(containerId);
-    } catch (_removeErr) {
+    } catch (removeErr) {
       // Best-effort cleanup
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.FAILED_CONTAINER_REMOVE, removeErr);
     }
   }
 
@@ -1267,9 +1286,26 @@ class DockerProvider {
         operation,
         ...(details || {}),
       });
-    } catch (_err) {
+    } catch (err) {
       // Best-effort operation callback isolation.
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.OPERATION_SINK_CALLBACK, err);
     }
+  }
+
+  // Mirrors the loud-by-construction suppression ledger in
+  // cluster-class-lifecycle-base: swallowed best-effort failures stay
+  // observable per context instead of vanishing.
+  _recordSuppressedBestEffortError(context, error) {
+    if (!this._suppressedBestEffortErrorsByContext) {
+      this._suppressedBestEffortErrorsByContext = new Map();
+    }
+    const entry =
+      this._suppressedBestEffortErrorsByContext.get(context) ||
+      {count: 0, lastMessage: null};
+    entry.count += 1;
+    entry.lastMessage = error?.message || String(error);
+    this._suppressedBestEffortErrorsByContext.set(context, entry);
   }
 
   /**
@@ -1399,7 +1435,9 @@ function parseContainerStats(stats) {
     cpuPercent: parseCpuPercent(stats),
     cpuUsageNanoseconds:
       safeNumber(stats?.cpu_stats?.cpu_usage?.total_usage),
-    memoryUsageBytes: safeNumber(stats?.memory_stats?.usage),
+    memoryUsageBytes: resolveDockerMemoryWorkingSetBytes(
+      stats?.memory_stats,
+    ),
     memoryLimitBytes: safeNumber(stats?.memory_stats?.limit),
     pids: safeNumber(stats?.pids_stats?.current),
     rxBytes,

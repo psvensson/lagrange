@@ -12,6 +12,7 @@ const EVENT_TYPE_REPLICA_MOVED = 'replica.moved';
 const EVENT_TYPE_PARTITION_SPLIT = 'partition.split';
 const EVENT_TYPE_PARTITION_MERGE = 'partition.merge';
 const EVENT_TYPE_REPLICA_CREATED = 'replica.created';
+const stringIncludes = Function.call.bind(String.prototype.includes);
 
 function createManualIntervalScheduler() {
   const callbacks = new Map();
@@ -208,6 +209,19 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
         };
       },
     },
+    async getProcessResourceDiagnostics() {
+      return {
+        nodeId: 'node-1',
+        capturedAt: 1234,
+        process: {
+          rssBytes: 768,
+          heapUsedBytes: 384,
+          heapTotalBytes: 512,
+          externalBytes: 64,
+          arrayBuffersBytes: 32,
+        },
+      };
+    },
     async query(sql) {
       if (sql.includes('FROM nodes')) {
         return {
@@ -292,10 +306,12 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
       manifest.files.viewer,
       'utf8',
     );
-    assert.ok(eventContent.includes('cluster.start'));
-    assert.ok(sampleContent.includes('memoryUsageBytes'));
-    assert.ok(snapshotContent.includes('partitions'));
-    assert.ok(viewerContent.includes('Playback Viewer'));
+    assert.ok(stringIncludes(eventContent, 'cluster.start'));
+    assert.ok(stringIncludes(sampleContent, 'processRssBytes'));
+    assert.ok(stringIncludes(sampleContent, 'containerMemoryWorkingSetBytes'));
+    assert.equal(stringIncludes(sampleContent, 'memoryUsageBytes'), false);
+    assert.ok(stringIncludes(snapshotContent, 'partitions'));
+    assert.ok(stringIncludes(viewerContent, 'Playback Viewer'));
   } finally {
     await rm(outputDir, {recursive: true, force: true});
   }

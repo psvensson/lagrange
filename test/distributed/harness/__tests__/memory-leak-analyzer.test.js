@@ -7,7 +7,8 @@ import {
   parseSamplesNdjson,
   analyzeMemoryLeakSamples,
   analyzeMemoryLeakFromPlayback,
-  calculateTailSlopeBytesPerMinute,
+  calculateTailRssSlopeBytesPerMinute,
+  normalizeLeakConfig,
 } from '../memory-leak-analyzer.js';
 
 const MS_PER_MINUTE = 60000;
@@ -29,35 +30,53 @@ function buildLinearSamples(options = {}) {
   const stepMs = Number.isFinite(options.stepMs) ?
     options.stepMs :
     MS_PER_MINUTE;
-  const memoryLimitBytes = Number.isFinite(options.memoryLimitBytes) ?
-    options.memoryLimitBytes :
-    500000;
-
   const samples = [];
   for (let i = 0; i < sampleCount; i++) {
     samples.push({
       timestamp: startTimestamp + (i * stepMs),
       nodeId,
-      memoryUsageBytes: startBytes + (i * stepBytes),
-      memoryLimitBytes,
+      processRssBytes: startBytes + (i * stepBytes),
     });
   }
   return samples;
 }
 
 describe('memory-leak-analyzer', () => {
-  it('parseSamplesNdjson ignores malformed and empty lines', () => {
-    const parsed = parseSamplesNdjson([
-      JSON.stringify({timestamp: 1, nodeId: 'node-1', memoryUsageBytes: 10}),
+  it('parseSamplesNdjson skips malformed and empty lines and counts the malformed skips', () => {
+    const {samples, malformedLineCount} = parseSamplesNdjson([
+      JSON.stringify({timestamp: 1, nodeId: 'node-1', processRssBytes: 10}),
       'not-json',
       '',
       '  ',
-      JSON.stringify({timestamp: 2, nodeId: 'node-1', memoryUsageBytes: 12}),
+      JSON.stringify({timestamp: 2, nodeId: 'node-1', processRssBytes: 12}),
     ].join('\n'));
 
-    assert.equal(parsed.length, 2);
-    assert.equal(parsed[0].timestamp, 1);
-    assert.equal(parsed[1].memoryUsageBytes, 12);
+    assert.equal(samples.length, 2);
+    assert.equal(samples[0].timestamp, 1);
+    assert.equal(samples[1].processRssBytes, 12);
+    assert.equal(malformedLineCount, 1);
+  });
+
+  it('does not reinterpret legacy container memory as process RSS', () => {
+    const analysis = analyzeMemoryLeakSamples([
+      {timestamp: 1, nodeId: 'node-1', memoryUsageBytes: 10},
+      {timestamp: 2, nodeId: 'node-1', memoryUsageBytes: 12},
+    ], {
+      enabled: true,
+      minSamplesPerNode: 2,
+      minWarmupMs: 0,
+      minAnalysisWindowMs: 1,
+    });
+
+    assert.equal(analysis.sampleCount, 0);
+    assert.equal(analysis.analyzed, false);
+  });
+
+  it('rejects legacy ambiguous memory threshold names', () => {
+    assert.throws(
+      () => normalizeLeakConfig({maxPositiveSlopeBytesPerMin: 1}),
+      /Legacy memory leak config field is not supported/u,
+    );
   });
 
   it('analyzeMemoryLeakSamples returns disabled result when not enabled', () => {
@@ -89,8 +108,8 @@ describe('memory-leak-analyzer', () => {
         warmupFraction: 0,
         minWarmupMs: 0,
         minAnalysisWindowMs: 1,
-        maxPositiveSlopeBytesPerMin: 500,
-        minGrowthBytes: 4000,
+        maxRssSlopeBytesPerMin: 500,
+        minRssGrowthBytes: 4000,
         minPositiveDeltaRatio: 0.6,
       },
     );
@@ -119,8 +138,8 @@ describe('memory-leak-analyzer', () => {
         warmupFraction: 0.9,
         minWarmupMs: 0,
         minAnalysisWindowMs: 1,
-        maxPositiveSlopeBytesPerMin: 100,
-        minGrowthBytes: 100,
+        maxRssSlopeBytesPerMin: 100,
+        minRssGrowthBytes: 100,
         minPositiveDeltaRatio: 0.6,
       });
 
@@ -175,8 +194,8 @@ describe('memory-leak-analyzer', () => {
           warmupFraction: 0,
           minWarmupMs: 0,
           minAnalysisWindowMs: 1,
-          maxPositiveSlopeBytesPerMin: 1000,
-          minGrowthBytes: 1000,
+          maxRssSlopeBytesPerMin: 1000,
+          minRssGrowthBytes: 1000,
           minPositiveDeltaRatio: 0.9,
         },
       );
@@ -207,8 +226,7 @@ describe('memory-leak-analyzer', () => {
       samples.push({
         timestamp: i * MS_PER_MINUTE,
         nodeId: 'node-spike',
-        memoryUsageBytes: startBytes + (i * spikeStepBytes),
-        memoryLimitBytes: 500000000,
+        processRssBytes: startBytes + (i * spikeStepBytes),
       });
     }
     const peakBytes =
@@ -217,8 +235,7 @@ describe('memory-leak-analyzer', () => {
       samples.push({
         timestamp: (spikeCount + i) * MS_PER_MINUTE,
         nodeId: 'node-spike',
-        memoryUsageBytes: peakBytes,
-        memoryLimitBytes: 500000000,
+        processRssBytes: peakBytes,
       });
     }
 
@@ -228,8 +245,8 @@ describe('memory-leak-analyzer', () => {
       warmupFraction: 0,
       minWarmupMs: 0,
       minAnalysisWindowMs: 1,
-      maxPositiveSlopeBytesPerMin: 500000,
-      minGrowthBytes: 4000000,
+      maxRssSlopeBytesPerMin: 500000,
+      minRssGrowthBytes: 4000000,
       minPositiveDeltaRatio: 0.5,
     });
 
@@ -264,8 +281,8 @@ describe('memory-leak-analyzer', () => {
         warmupFraction: 0,
         minWarmupMs: 0,
         minAnalysisWindowMs: 1,
-        maxPositiveSlopeBytesPerMin: 500000,
-        minGrowthBytes: 4000000,
+        maxRssSlopeBytesPerMin: 500000,
+        minRssGrowthBytes: 4000000,
         minPositiveDeltaRatio: 0.5,
       });
 
@@ -282,17 +299,17 @@ describe('memory-leak-analyzer', () => {
       assert.equal(analysis.leakingNodeCount, 1);
     });
 
-  it('calculateTailSlopeBytesPerMinute returns near-zero for flat tail',
+  it('calculateTailRssSlopeBytesPerMinute returns near-zero for flat tail',
     () => {
       const samples = [];
       const flatBytes = 200000000;
       for (let i = 0; i < 10; i++) {
         samples.push({
           timestamp: i * MS_PER_MINUTE,
-          memoryUsageBytes: flatBytes,
+          processRssBytes: flatBytes,
         });
       }
-      const tailSlope = calculateTailSlopeBytesPerMinute(samples);
+      const tailSlope = calculateTailRssSlopeBytesPerMinute(samples);
       assert.ok(
         Math.abs(tailSlope) < 1000,
         'Expected near-zero tail slope for flat data, ' +
@@ -300,14 +317,14 @@ describe('memory-leak-analyzer', () => {
       );
     });
 
-  it('calculateTailSlopeBytesPerMinute returns positive for growing tail',
+  it('calculateTailRssSlopeBytesPerMinute returns positive for growing tail',
     () => {
       const samples = buildLinearSamples({
         nodeId: 'node-grow',
         sampleCount: 10,
         stepBytes: 2000000,
       });
-      const tailSlope = calculateTailSlopeBytesPerMinute(samples);
+      const tailSlope = calculateTailRssSlopeBytesPerMinute(samples);
       assert.ok(
         tailSlope > 0,
         'Expected positive tail slope for growing data, ' +

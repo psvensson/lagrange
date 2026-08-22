@@ -29,6 +29,7 @@ async function fixture() {
     'cpu.stat': 'usage_usec 1234\nuser_usec 1000\nsystem_usec 234\n',
     'cpu.max': '200000 100000\n',
     'memory.current': '1048576\n',
+    'memory.stat': 'anon 524288\nfile 524288\ninactive_file 262144\n',
     'memory.max': '67108864\n',
     'pids.current': '2\n',
     'io.stat':
@@ -90,7 +91,7 @@ test('mixed provider meters cgroup process resources through C4 provider seam', 
       );
     assert.equal(snapshot.cpuUsageNanoseconds, 1_234_000);
     assert.equal(snapshot.cpuLimitNanoCpus, 2_000_000_000);
-    assert.equal(snapshot.memoryUsageBytes, 1_048_576);
+    assert.equal(snapshot.memoryUsageBytes, 786_432);
     assert.equal(snapshot.memoryLimitBytes, 67_108_864);
     assert.equal(snapshot.rxBytes + snapshot.txBytes, 120);
     assert.equal(snapshot.blockReadBytes, 100);
@@ -125,6 +126,7 @@ test('mixed provider rejects malformed or missing required counters', async () =
   const cases = [
     ['cpu.stat', 'user_usec 1000\n'],
     ['memory.current', '1234junk\n'],
+    ['memory.stat', 'anon 100\n'],
     ['memory.max', 'max\n'],
     ['pids.current', '1e3\n'],
     ['io.stat', '8:0 rbytes=1 wbytes=2 rios=3\n'],

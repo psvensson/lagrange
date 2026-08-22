@@ -14,7 +14,6 @@ import {
   RESOURCE_DEFAULTS,
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
-  LEAK_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
   RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
@@ -27,6 +26,7 @@ import {
   applyMachineCalibration,
   resolveMachineFactorFromEnv,
 } from './convergence-budget-calibration.js';
+import {normalizeLeakConfig} from './memory-leak-analyzer.js';
 
 const ZERO = 0;
 
@@ -181,21 +181,7 @@ function mergeWithDefaults(partial = {}) {
       requestTimeoutMs: DEBUG_TRACE_DEFAULTS.requestTimeoutMs,
       ...(partial.debugTrace || {}),
     },
-    memoryLeak: {
-      enabled: LEAK_DEFAULTS.enabled,
-      failOnDetection: LEAK_DEFAULTS.failOnDetection,
-      requireSamples: LEAK_DEFAULTS.requireSamples,
-      minSamplesPerNode: LEAK_DEFAULTS.minSamplesPerNode,
-      warmupFraction: LEAK_DEFAULTS.warmupFraction,
-      minWarmupMs: LEAK_DEFAULTS.minWarmupMs,
-      minAnalysisWindowMs: LEAK_DEFAULTS.minAnalysisWindowMs,
-      maxPositiveSlopeBytesPerMin: LEAK_DEFAULTS.maxPositiveSlopeBytesPerMin,
-      minGrowthBytes: LEAK_DEFAULTS.minGrowthBytes,
-      minPositiveDeltaRatio: LEAK_DEFAULTS.minPositiveDeltaRatio,
-      captureHeapArtifacts: LEAK_DEFAULTS.captureHeapArtifacts,
-      heapSnapshotNearLimitCount: LEAK_DEFAULTS.heapSnapshotNearLimitCount,
-      ...(partial.memoryLeak || {}),
-    },
+    memoryLeak: normalizeLeakConfig(partial.memoryLeak || {}),
     benchmark: resolvePostgresBaselineBenchmarkConfig(
       partial.benchmark || {},
       {

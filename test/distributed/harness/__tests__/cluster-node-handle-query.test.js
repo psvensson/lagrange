@@ -9,6 +9,7 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {createServer} from 'node:http';
 import {WebSocketServer} from 'ws';
 import {
   ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
@@ -39,6 +40,62 @@ const TEST_RESET_LANE_QUERY_TWO = 'SELECT 2';
 const TEST_RESET_LANE_ROW = Object.freeze({ok: 1});
 const TEST_FIRST_CONNECTION_COUNT = 1;
 const TEST_QUERY_RESULT_COUNT = 1;
+
+test('Unit: NodeHandle reads process memory from the node diagnostics owner',
+  async () => {
+    const capturedAt = 123456;
+    const processSnapshot = {
+      rssBytes: 900,
+      heapUsedBytes: 400,
+      heapTotalBytes: 600,
+      externalBytes: 70,
+      arrayBuffersBytes: 30,
+    };
+    let responseNodeId = TEST_NODE_ID;
+    const server = createServer((_request, response) => {
+      response.end(JSON.stringify({
+        nodeId: responseNodeId,
+        diagnostics: {
+          resources: {
+            latest: {
+              timestamp: capturedAt,
+              process: processSnapshot,
+            },
+          },
+        },
+      }));
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+      server.listen(TEST_ADMIN_PORT_ANY, TEST_ADMIN_HOST);
+    });
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const node = new NodeHandle(
+      TEST_NODE_ID,
+      TEST_CONTAINER_ID,
+      TEST_ADMIN_HOST,
+      NODE_ROLES.SEED,
+      {},
+      address.port,
+    );
+    try {
+      const diagnostics = await node.getProcessResourceDiagnostics();
+      assert.equal(diagnostics.nodeId, TEST_NODE_ID);
+      assert.equal(diagnostics.capturedAt, capturedAt);
+      assert.deepEqual(diagnostics.process, processSnapshot);
+      responseNodeId = 'different-node';
+      await assert.rejects(
+        node.getProcessResourceDiagnostics(),
+        /node identity/u,
+      );
+    } finally {
+      await new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
 
 /**
  * Feature: distributed-testing-framework

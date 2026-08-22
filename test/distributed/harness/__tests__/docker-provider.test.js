@@ -887,6 +887,9 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
     memory_stats: {
       usage: 123456,
       limit: 654321,
+      stats: {
+        inactive_file: 23456,
+      },
     },
     pids_stats: {current: 7},
     blkio_stats: {
@@ -913,7 +916,7 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
 
   const parsed = parseContainerStats(stats);
   assert.equal(parsed.timestamp, Date.parse(stats.read));
-  assert.equal(parsed.memoryUsageBytes, 123456);
+  assert.equal(parsed.memoryUsageBytes, 100000);
   assert.equal(parsed.memoryLimitBytes, 654321);
   assert.equal(parsed.cpuUsageNanoseconds, 2000000000);
   assert.equal(parsed.pids, 7);
@@ -925,6 +928,46 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
   assert.equal(parsed.blockWriteOperations, 13);
   assert.ok(parsed.cpuPercent > 0);
 });
+
+test('Unit: parseContainerStats uses one cache-adjusted working-set rule',
+  async () => {
+    const base = {
+      memory_stats: {
+        usage: 1000,
+        limit: 2000,
+      },
+    };
+    assert.equal(
+      parseContainerStats({
+        ...base,
+        memory_stats: {
+          ...base.memory_stats,
+          stats: {total_inactive_file: 250, inactive_file: 900},
+        },
+      }).memoryUsageBytes,
+      750,
+    );
+    assert.equal(
+      parseContainerStats({
+        ...base,
+        memory_stats: {
+          ...base.memory_stats,
+          stats: {inactive_file: 200},
+        },
+      }).memoryUsageBytes,
+      800,
+    );
+    assert.equal(
+      parseContainerStats({
+        ...base,
+        memory_stats: {
+          ...base.memory_stats,
+          stats: {inactive_file: 5000},
+        },
+      }).memoryUsageBytes,
+      0,
+    );
+  });
 
 test('Unit: getContainerStats reads non-stream docker stats', async () => {
   const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});

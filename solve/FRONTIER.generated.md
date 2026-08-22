@@ -58,8 +58,8 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | gcp-affinity-full-log-materialization | product | 1 | 0 | 2026-08-20 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
-| harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 | — |
-| harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 | — |
+| harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
+| harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | lone-seed-formation-admission-livelock-closure | product | 5 | 0 | 2026-08-16 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
@@ -74,7 +74,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 ⚠ stale | — |
 | publication-readiness-hotpath-starvation-relief | product | 0 | 0 | 2026-08-14 | — |
-| raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-20 | — |
+| raft-follower-append-sqlite-starvation-relief | product | 9 | 0 | 2026-08-20 | — |
 | readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 | — |
 | readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 | — |
@@ -85,5 +85,5 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | schema-provisioning-collision-retry-closure | product | 5 | 0 | 2026-08-15 | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
-> 12 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 14 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

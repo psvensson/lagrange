@@ -55,6 +55,10 @@ const WARNING_CODE_TOPOLOGY_CAPTURE_FAILED = 'topology-capture-failed';
 const WARNING_CODE_SERVICE_QUERY_FAILED = 'service-query-failed';
 const WARNING_CODE_STATS_CAPTURE_FAILED = 'stats-capture-failed';
 const WARNING_CODE_STATS_API_MISSING = 'stats-api-missing';
+const WARNING_CODE_PROCESS_DIAGNOSTICS_CAPTURE_FAILED =
+  'process-diagnostics-capture-failed';
+const WARNING_CODE_PROCESS_DIAGNOSTICS_API_MISSING =
+  'process-diagnostics-api-missing';
 const SNAPSHOT_QUERY_LANE = 'snapshot';
 const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
 
@@ -64,6 +68,12 @@ const REACHABILITY_SOURCE_PROBE = 'reachability_probe';
 const REACHABILITY_ERROR_LEGACY_UNAVAILABLE =
   'reachability probe unavailable';
 const REACHABILITY_DETAILS_KEY = 'reachability';
+
+function normalizeCaptureErrorMessage(error) {
+  return typeof error?.message === 'string' && error.message.length > 0 ?
+    error.message :
+    String(error || CAPTURE_ERROR_MESSAGE);
+}
 
 function extractRows(result) {
   if (!result || typeof result !== 'object') {
@@ -1162,35 +1172,72 @@ class PlaybackRecorder {
         containerId: node?.containerId || null,
       };
 
-      try {
-        const provider = node?._dockerProvider;
-        if (!provider || typeof provider.getContainerStats !== 'function') {
-          const warningCode = WARNING_CODE_STATS_API_MISSING +
-            '-' + String(node?.id || 'unknown');
-          this._captureWarning(
-            warningCode,
-            'Docker provider does not expose getContainerStats',
-          );
-          sample.error = 'container stats API unavailable';
-        } else {
-          const stats = await provider.getContainerStats(node.containerId);
-          sample.cpuPercent = stats.cpuPercent;
-          sample.memoryUsageBytes = stats.memoryUsageBytes;
-          sample.memoryLimitBytes = stats.memoryLimitBytes;
-          sample.rxBytes = stats.rxBytes;
-          sample.txBytes = stats.txBytes;
-        }
-      } catch (err) {
-        sample.error = err.message;
-        this._captureWarning(
-          WARNING_CODE_STATS_CAPTURE_FAILED + '-' + String(node?.id || 'unknown'),
-          'Failed to capture container stats for node ' +
-            String(node?.id || 'unknown') + ': ' + err.message,
-        );
-      }
+      await this._appendContainerResourceSample(node, sample);
+      await this._appendProcessResourceSample(node, sample);
 
       this._appendNdjson(this._samplesStream, sample);
       this._samplesCount++;
+    }
+  }
+
+  async _appendContainerResourceSample(node, sample) {
+    const nodeId = String(node?.id || 'unknown');
+    const provider = node?._dockerProvider;
+    if (!provider || typeof provider.getContainerStats !== 'function') {
+      this._captureWarning(
+        WARNING_CODE_STATS_API_MISSING + '-' + nodeId,
+        'Docker provider does not expose getContainerStats',
+      );
+      sample.containerStatsError = 'container stats API unavailable';
+      return;
+    }
+    try {
+      const stats = await provider.getContainerStats(node.containerId);
+      sample.cpuPercent = stats.cpuPercent;
+      sample.containerMemoryWorkingSetBytes = stats.memoryUsageBytes;
+      sample.containerMemoryLimitBytes = stats.memoryLimitBytes;
+      sample.rxBytes = stats.rxBytes;
+      sample.txBytes = stats.txBytes;
+    } catch (error) {
+      const errorMessage = normalizeCaptureErrorMessage(error);
+      sample.containerStatsError = errorMessage;
+      this._captureWarning(
+        WARNING_CODE_STATS_CAPTURE_FAILED + '-' + nodeId,
+        'Failed to capture container stats for node ' + nodeId +
+          ': ' + errorMessage,
+      );
+    }
+  }
+
+  async _appendProcessResourceSample(node, sample) {
+    const nodeId = String(node?.id || 'unknown');
+    if (typeof node?.getProcessResourceDiagnostics !== 'function') {
+      this._captureWarning(
+        WARNING_CODE_PROCESS_DIAGNOSTICS_API_MISSING + '-' + nodeId,
+        'Node handle does not expose process resource diagnostics',
+      );
+      sample.processDiagnosticsError =
+        'process resource diagnostics API unavailable';
+      return;
+    }
+    try {
+      const diagnostics = await node.getProcessResourceDiagnostics({
+        timeoutMs: PLAYBACK.resourceDiagnosticsTimeoutMs,
+      });
+      sample.processCapturedAt = diagnostics.capturedAt;
+      sample.processRssBytes = diagnostics.process.rssBytes;
+      sample.processHeapUsedBytes = diagnostics.process.heapUsedBytes;
+      sample.processHeapTotalBytes = diagnostics.process.heapTotalBytes;
+      sample.processExternalBytes = diagnostics.process.externalBytes;
+      sample.processArrayBuffersBytes = diagnostics.process.arrayBuffersBytes;
+    } catch (error) {
+      const errorMessage = normalizeCaptureErrorMessage(error);
+      sample.processDiagnosticsError = errorMessage;
+      this._captureWarning(
+        WARNING_CODE_PROCESS_DIAGNOSTICS_CAPTURE_FAILED + '-' + nodeId,
+        'Failed to capture process diagnostics for node ' + nodeId +
+          ': ' + errorMessage,
+      );
     }
   }
 
@@ -1251,12 +1298,8 @@ class PlaybackRecorder {
       if (report.adminReady) {
         adminReady = true;
       }
-      try {
-        if (report.reachable === true && report.adminReady === true) {
-          reachable.push(node);
-        }
-      } catch (_err) {
-        // Ignore individual node reachability failures.
+      if (report.reachable === true && report.adminReady === true) {
+        reachable.push(node);
       }
     }
     return {

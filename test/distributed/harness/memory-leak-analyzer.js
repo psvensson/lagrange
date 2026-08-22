@@ -14,8 +14,17 @@ const ZERO = 0;
 const ONE = 1;
 const MS_PER_MINUTE = 60000;
 const UNKNOWN_NODE_ID = 'unknown-node';
+const MEMORY_LEAK_METRIC = 'process_rss_bytes';
+const MALFORMED_SAMPLE_LINE_WARNING_PREFIX = 'malformed-sample-lines:';
 const TAIL_FRACTION = 0.3;
 const RECOVERY_SLOPE_RATIO = 0.25;
+const objectHasOwn = Object.hasOwn;
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+const LEGACY_MEMORY_LEAK_CONFIG_FIELDS = Object.freeze([
+  'maxPositiveSlopeBytesPerMin',
+  'minGrowthBytes',
+]);
 
 /**
  * Normalize memory leak config.
@@ -23,6 +32,13 @@ const RECOVERY_SLOPE_RATIO = 0.25;
  * @return {Object}
  */
 function normalizeLeakConfig(options = {}) {
+  for (const field of LEGACY_MEMORY_LEAK_CONFIG_FIELDS) {
+    if (objectHasOwn(options, field)) {
+      throw new TypeError(
+        'Legacy memory leak config field is not supported: ' + field,
+      );
+    }
+  }
   const minSamplesPerNode = normalizePositiveInteger(
     options.minSamplesPerNode,
     LEAK_DEFAULTS.minSamplesPerNode,
@@ -39,13 +55,13 @@ function normalizeLeakConfig(options = {}) {
     options.minAnalysisWindowMs,
     LEAK_DEFAULTS.minAnalysisWindowMs,
   );
-  const maxPositiveSlopeBytesPerMin = normalizeNonNegativeNumber(
-    options.maxPositiveSlopeBytesPerMin,
-    LEAK_DEFAULTS.maxPositiveSlopeBytesPerMin,
+  const maxRssSlopeBytesPerMin = normalizeNonNegativeNumber(
+    options.maxRssSlopeBytesPerMin,
+    LEAK_DEFAULTS.maxRssSlopeBytesPerMin,
   );
-  const minGrowthBytes = normalizeNonNegativeNumber(
-    options.minGrowthBytes,
-    LEAK_DEFAULTS.minGrowthBytes,
+  const minRssGrowthBytes = normalizeNonNegativeNumber(
+    options.minRssGrowthBytes,
+    LEAK_DEFAULTS.minRssGrowthBytes,
   );
   const minPositiveDeltaRatio = normalizeBoundedFraction(
     options.minPositiveDeltaRatio,
@@ -60,8 +76,8 @@ function normalizeLeakConfig(options = {}) {
     warmupFraction,
     minWarmupMs,
     minAnalysisWindowMs,
-    maxPositiveSlopeBytesPerMin,
-    minGrowthBytes,
+    maxRssSlopeBytesPerMin,
+    minRssGrowthBytes,
     minPositiveDeltaRatio,
     captureHeapArtifacts: options.captureHeapArtifacts === true,
     heapSnapshotNearLimitCount: normalizePositiveInteger(
@@ -82,6 +98,7 @@ function analyzeMemoryLeakSamples(samples, options = {}) {
   if (!config.enabled) {
     return {
       enabled: false,
+      metric: MEMORY_LEAK_METRIC,
       analyzed: false,
       leakDetected: false,
       sampleCount: ZERO,
@@ -118,6 +135,7 @@ function analyzeMemoryLeakSamples(samples, options = {}) {
 
   return {
     enabled: true,
+    metric: MEMORY_LEAK_METRIC,
     analyzed: analyzedNodeCount > ZERO,
     leakDetected: leakingNodes.length > ZERO,
     sampleCount: normalizedSamples.length,
@@ -141,6 +159,7 @@ async function analyzeMemoryLeakFromPlayback(playbackManifest, options = {}) {
   if (!config.enabled) {
     return {
       enabled: false,
+      metric: MEMORY_LEAK_METRIC,
       analyzed: false,
       leakDetected: false,
       sampleCount: ZERO,
@@ -159,6 +178,7 @@ async function analyzeMemoryLeakFromPlayback(playbackManifest, options = {}) {
   if (!samplesPathCandidate) {
     return {
       enabled: true,
+      metric: MEMORY_LEAK_METRIC,
       analyzed: false,
       leakDetected: false,
       sampleCount: ZERO,
@@ -180,6 +200,7 @@ async function analyzeMemoryLeakFromPlayback(playbackManifest, options = {}) {
   } catch (error) {
     return {
       enabled: true,
+      metric: MEMORY_LEAK_METRIC,
       analyzed: false,
       leakDetected: false,
       sampleCount: ZERO,
@@ -194,34 +215,43 @@ async function analyzeMemoryLeakFromPlayback(playbackManifest, options = {}) {
     };
   }
 
-  const samples = parseSamplesNdjson(raw);
+  const {samples, malformedLineCount} = parseSamplesNdjson(raw);
   const analysis = analyzeMemoryLeakSamples(samples, config);
+  const warnings = malformedLineCount > ZERO ?
+    [...analysis.warnings,
+      MALFORMED_SAMPLE_LINE_WARNING_PREFIX + malformedLineCount] :
+    analysis.warnings;
   return {
     ...analysis,
+    warnings,
     samplesPath,
   };
 }
 
 /**
- * Parse NDJSON into sample objects.
+ * Parse NDJSON into sample objects, counting skipped malformed lines so the
+ * suppression stays observable in the analysis warnings.
  * @param {string} content
- * @return {Array<Object>}
+ * @return {{samples: Array<Object>, malformedLineCount: number}}
  */
 function parseSamplesNdjson(content) {
   const samples = [];
-  const lines = String(content || '').split(NEWLINE);
+  let malformedLineCount = ZERO;
+  const lines = stringSplit(String(content || ''), NEWLINE);
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = stringTrim(line);
     if (!trimmed) {
       continue;
     }
     try {
       samples.push(JSON.parse(trimmed));
     } catch (_error) {
-      // Skip malformed lines; analysis should be best-effort.
+      // Skip malformed lines; analysis should be best-effort, but the skip
+      // is counted into a typed warning instead of vanishing.
+      malformedLineCount += ONE;
     }
   }
-  return samples;
+  return {samples, malformedLineCount};
 }
 
 /**
@@ -234,22 +264,18 @@ function normalizeSample(sample) {
     return null;
   }
   const timestamp = Number(sample.timestamp);
-  const memoryUsageBytes = Number(sample.memoryUsageBytes);
-  if (!Number.isFinite(timestamp) || !Number.isFinite(memoryUsageBytes)) {
+  const processRssBytes = Number(sample.processRssBytes);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(processRssBytes)) {
     return null;
   }
-  if (memoryUsageBytes < ZERO) {
+  if (processRssBytes < ZERO) {
     return null;
   }
   const nodeId = String(sample.nodeId || sample.node_id || UNKNOWN_NODE_ID);
-  const memoryLimitBytes = Number(sample.memoryLimitBytes);
   return {
     timestamp,
     nodeId,
-    memoryUsageBytes,
-    memoryLimitBytes: Number.isFinite(memoryLimitBytes) ?
-      memoryLimitBytes :
-      null,
+    processRssBytes,
   };
 }
 
@@ -280,10 +306,14 @@ function groupSamplesByNode(samples) {
  * @return {Object}
  */
 function analyzeNodeMemoryTrend(nodeId, samples, config) {
+  const identity = {
+    nodeId,
+    metric: MEMORY_LEAK_METRIC,
+  };
   const sampleCount = samples.length;
   if (sampleCount < config.minSamplesPerNode) {
     return {
-      nodeId,
+      ...identity,
       analyzed: false,
       leakDetected: false,
       reason: 'insufficient-samples',
@@ -296,7 +326,7 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
   const durationMs = last.timestamp - first.timestamp;
   if (durationMs <= ZERO) {
     return {
-      nodeId,
+      ...identity,
       analyzed: false,
       leakDetected: false,
       reason: 'invalid-sample-window',
@@ -312,7 +342,7 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
   );
   if (analysisSamples.length < config.minSamplesPerNode) {
     return {
-      nodeId,
+      ...identity,
       analyzed: false,
       leakDetected: false,
       reason: 'insufficient-post-warmup-samples',
@@ -326,7 +356,7 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
   const analysisWindowMs = analysisLast.timestamp - analysisFirst.timestamp;
   if (analysisWindowMs < config.minAnalysisWindowMs) {
     return {
-      nodeId,
+      ...identity,
       analyzed: false,
       leakDetected: false,
       reason: 'analysis-window-too-short',
@@ -336,33 +366,28 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
     };
   }
 
-  const slopeBytesPerMin = calculateSlopeBytesPerMinute(analysisSamples);
-  const growthBytes =
-    analysisLast.memoryUsageBytes - analysisFirst.memoryUsageBytes;
-  const growthPercent = analysisFirst.memoryUsageBytes > ZERO ?
-    (growthBytes / analysisFirst.memoryUsageBytes) * 100 :
+  const rssSlopeBytesPerMin = calculateRssSlopeBytesPerMinute(analysisSamples);
+  const rssGrowthBytes =
+    analysisLast.processRssBytes - analysisFirst.processRssBytes;
+  const rssGrowthPercent = analysisFirst.processRssBytes > ZERO ?
+    (rssGrowthBytes / analysisFirst.processRssBytes) * 100 :
     null;
   const positiveDeltaRatio = calculatePositiveDeltaRatio(analysisSamples);
-  const maxMemoryUsageBytes = Math.max(
-    ...analysisSamples.map((sample) => sample.memoryUsageBytes),
+  const maxProcessRssBytes = Math.max(
+    ...analysisSamples.map((sample) => sample.processRssBytes),
   );
-  const memoryLimitBytes = firstFiniteValue(
-    analysisSamples.map((sample) => sample.memoryLimitBytes),
-  );
-  const maxMemoryUsagePercent = Number.isFinite(memoryLimitBytes) &&
-    memoryLimitBytes > ZERO ?
-    (maxMemoryUsageBytes / memoryLimitBytes) * 100 :
-    null;
 
-  const leakDetected = slopeBytesPerMin > config.maxPositiveSlopeBytesPerMin &&
-    growthBytes > config.minGrowthBytes &&
+  const leakDetected =
+    rssSlopeBytesPerMin > config.maxRssSlopeBytesPerMin &&
+    rssGrowthBytes > config.minRssGrowthBytes &&
     positiveDeltaRatio >= config.minPositiveDeltaRatio;
 
-  const tailSlopeBytesPerMin = calculateTailSlopeBytesPerMinute(
+  const tailRssSlopeBytesPerMin = calculateTailRssSlopeBytesPerMinute(
     analysisSamples,
   );
   const recoveryDetected = leakDetected &&
-    tailSlopeBytesPerMin <= slopeBytesPerMin * RECOVERY_SLOPE_RATIO;
+    tailRssSlopeBytesPerMin <=
+      rssSlopeBytesPerMin * RECOVERY_SLOPE_RATIO;
   const effectiveLeakDetected = leakDetected && !recoveryDetected;
   const reason = effectiveLeakDetected ?
     'sustained-positive-trend' :
@@ -371,20 +396,19 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
       'within-thresholds';
 
   return {
-    nodeId,
+    ...identity,
     analyzed: true,
     leakDetected: effectiveLeakDetected,
     reason,
     sampleCount,
     postWarmupSampleCount: analysisSamples.length,
     analysisWindowMs,
-    slopeBytesPerMin,
-    tailSlopeBytesPerMin,
-    growthBytes,
-    growthPercent,
+    rssSlopeBytesPerMin,
+    tailRssSlopeBytesPerMin,
+    rssGrowthBytes,
+    rssGrowthPercent,
     positiveDeltaRatio,
-    maxMemoryUsageBytes,
-    maxMemoryUsagePercent,
+    maxProcessRssBytes,
     recoveryDetected,
   };
 }
@@ -394,7 +418,7 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
  * @param {Array<Object>} samples
  * @return {number}
  */
-function calculateSlopeBytesPerMinute(samples) {
+function calculateRssSlopeBytesPerMinute(samples) {
   if (!Array.isArray(samples) || samples.length < 2) {
     return ZERO;
   }
@@ -407,7 +431,7 @@ function calculateSlopeBytesPerMinute(samples) {
 
   for (const sample of samples) {
     const x = sample.timestamp - origin;
-    const y = sample.memoryUsageBytes;
+    const y = sample.processRssBytes;
     sumX += x;
     sumY += y;
     sumXY += x * y;
@@ -437,7 +461,7 @@ function calculatePositiveDeltaRatio(samples) {
   let positiveCount = ZERO;
   const intervalCount = samples.length - ONE;
   for (let i = ONE; i < samples.length; i++) {
-    const delta = samples[i].memoryUsageBytes - samples[i - ONE].memoryUsageBytes;
+    const delta = samples[i].processRssBytes - samples[i - ONE].processRssBytes;
     if (delta > ZERO) {
       positiveCount++;
     }
@@ -453,7 +477,7 @@ function calculatePositiveDeltaRatio(samples) {
  * @param {Array<Object>} samples
  * @return {number}
  */
-function calculateTailSlopeBytesPerMinute(samples) {
+function calculateTailRssSlopeBytesPerMinute(samples) {
   if (!Array.isArray(samples) || samples.length < 2) {
     return ZERO;
   }
@@ -465,21 +489,7 @@ function calculateTailSlopeBytesPerMinute(samples) {
   if (tailSamples.length < 2) {
     return ZERO;
   }
-  return calculateSlopeBytesPerMinute(tailSamples);
-}
-
-/**
- * Return first finite number from the input list.
- * @param {Array<*>} values
- * @return {number|null}
- */
-function firstFiniteValue(values) {
-  for (const value of values) {
-    if (Number.isFinite(value)) {
-      return Number(value);
-    }
-  }
-  return null;
+  return calculateRssSlopeBytesPerMinute(tailSamples);
 }
 
 function normalizePositiveInteger(value, fallback) {
@@ -519,7 +529,7 @@ export {
   parseSamplesNdjson,
   analyzeMemoryLeakSamples,
   analyzeMemoryLeakFromPlayback,
-  calculateSlopeBytesPerMinute,
+  calculateRssSlopeBytesPerMinute,
   calculatePositiveDeltaRatio,
-  calculateTailSlopeBytesPerMinute,
+  calculateTailRssSlopeBytesPerMinute,
 };

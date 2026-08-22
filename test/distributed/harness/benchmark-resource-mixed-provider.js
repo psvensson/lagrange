@@ -5,6 +5,8 @@ import {
   stat,
 } from 'node:fs/promises';
 import path from 'node:path';
+import {calculateContainerMemoryWorkingSetBytes} from
+  './container-memory-working-set.js';
 
 const TEXT = 'utf8';
 const NANOCPUS_PER_CPU = 1_000_000_000;
@@ -37,8 +39,10 @@ const localText = Object.freeze({
   HOST_PROCESS_CGROUP_IMAGE: 'host-process-cgroup-v2',
   IO_STAT: 'io.stat',
   MAXIMUM: 'max',
-  MEMORY_MAX: 'memory.max',
   MEMORY_CURRENT: 'memory.current',
+  MEMORY_INACTIVE_FILE: 'inactive_file',
+  MEMORY_MAX: 'memory.max',
+  MEMORY_STAT: 'memory.stat',
   PIDS_CURRENT: 'pids.current',
   PROCESS_READ_BYTES: 'read_bytes',
   PROCESS_READ_OPERATIONS: 'syscr',
@@ -325,6 +329,14 @@ async function cgroupSnapshot(registration, storagePath) {
   const cpu = await textFile(registration.cgroupPath, 'cpu.stat');
   const memoryMax =
     await textFile(registration.cgroupPath, 'memory.max');
+  const memoryCurrent = integer(
+    await textFile(registration.cgroupPath, localText.MEMORY_CURRENT),
+    localText.MEMORY_CURRENT,
+  );
+  const memoryStat = await textFile(
+    registration.cgroupPath,
+    localText.MEMORY_STAT,
+  );
   const processes =
     await textFile(registration.cgroupPath, 'cgroup.procs');
   const ioPath = path.join(registration.cgroupPath, 'io.stat');
@@ -350,9 +362,9 @@ async function cgroupSnapshot(registration, storagePath) {
       NANOSECONDS_PER_MICROSECOND,
       localText.CPU_USAGE_NANOSECONDS,
     ),
-    memoryUsageBytes: integer(
-      await textFile(registration.cgroupPath, localText.MEMORY_CURRENT),
-      localText.MEMORY_CURRENT,
+    memoryUsageBytes: calculateContainerMemoryWorkingSetBytes(
+      memoryCurrent,
+      cgroupStatValue(memoryStat, localText.MEMORY_INACTIVE_FILE),
     ),
     memoryLimitBytes:
       requiredMemoryLimit(memoryMax),
