@@ -1652,18 +1652,31 @@
         card.className = 'metric-card';
 
         const cpu = Number(sample.cpuPercent || 0).toFixed(1) + '%';
-        const memoryUsedMb = Number(sample.memoryUsageBytes || 0) / (1024 * 1024);
-        const memoryLimitMb = Number(sample.memoryLimitBytes || 0) / (1024 * 1024);
+        const processRssMb = Number(sample.processRssBytes || 0) / (1024 * 1024);
+        const containerWorkingSetMb =
+          Number(sample.containerMemoryWorkingSetBytes || 0) / (1024 * 1024);
+        const containerLimitMb =
+          Number(sample.containerMemoryLimitBytes || 0) / (1024 * 1024);
         const rxMb = Number(sample.rxBytes || 0) / (1024 * 1024);
         const txMb = Number(sample.txBytes || 0) / (1024 * 1024);
 
         card.innerHTML =
           '<div class="metric-title">' + String(sample.nodeId || 'unknown') + '</div>' +
           metricRow('CPU', cpu) +
-          metricRow('Memory', memoryUsedMb.toFixed(1) + ' / ' + memoryLimitMb.toFixed(1) + ' MB') +
+          metricRow('Process RSS', processRssMb.toFixed(1) + ' MB') +
+          metricRow(
+            'Container working set',
+            containerWorkingSetMb.toFixed(1) + ' / ' +
+              containerLimitMb.toFixed(1) + ' MB',
+          ) +
           metricRow('RX', rxMb.toFixed(2) + ' MB') +
           metricRow('TX', txMb.toFixed(2) + ' MB') +
-          (sample.error ? metricRow('Error', String(sample.error)) : '');
+          (sample.containerStatsError ?
+            metricRow('Container error', String(sample.containerStatsError)) :
+            '') +
+          (sample.processDiagnosticsError ?
+            metricRow('Process error', String(sample.processDiagnosticsError)) :
+            '');
 
         dom.metrics.appendChild(card);
       }

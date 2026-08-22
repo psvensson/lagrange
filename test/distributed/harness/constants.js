@@ -220,6 +220,10 @@ const PLAYBACK_SAMPLES_FILENAME = 'samples.ndjson';
 const PLAYBACK_SNAPSHOTS_FILENAME = 'snapshots.ndjson';
 const PLAYBACK_MANIFEST_FILENAME = 'playback-manifest.json';
 const PLAYBACK_VIEWER_FILENAME = 'playback-viewer.html';
+// Single owner of the playback UI: the admin static file. Relative to the
+// harness module directory so the recorder can copy it into scenario output.
+const PLAYBACK_VIEWER_SOURCE_RELATIVE =
+  '../../../src/admin/static/playback-viewer.html';
 const DEBUG_TRACE_EVENTS_FILENAME = 'debug-trace.ndjson';
 const DEBUG_TRACE_MANIFEST_FILENAME = 'debug-trace-manifest.json';
 
@@ -233,6 +237,7 @@ const OUTPUT = Object.freeze({
   PLAYBACK_SNAPSHOTS_FILENAME,
   PLAYBACK_MANIFEST_FILENAME,
   PLAYBACK_VIEWER_FILENAME,
+  PLAYBACK_VIEWER_SOURCE_RELATIVE,
   DEBUG_TRACE_EVENTS_FILENAME,
   DEBUG_TRACE_MANIFEST_FILENAME,
 });

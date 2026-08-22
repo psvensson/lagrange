@@ -74,18 +74,24 @@ describe('lagrange-server npm distribution', () => {
     assert.equal(candidate.integrity, packed.integrity);
   });
 
-  it('keeps the repository playback copy equal to the packaged runtime asset',
-    async () => {
-      const [packagedViewer, harnessViewer] = await Promise.all([
-        readFile(join(
-          import.meta.dirname,
-          '../../src/admin/static/playback-viewer.html',
-        )),
-        readFile(join(
-          import.meta.dirname,
-          '../distributed/harness/playback-viewer.html',
-        )),
-      ]);
-      assert.deepEqual(harnessViewer, packagedViewer);
-    });
+  it('resolves the harness playback-viewer copy source to the packaged ' +
+    'runtime asset (single owner, no checked-in twin)',
+  async () => {
+    const {OUTPUT} = await import(
+      '../distributed/harness/constants.js');
+    const copySource = join(
+      import.meta.dirname,
+      '../distributed/harness',
+      OUTPUT.PLAYBACK_VIEWER_SOURCE_RELATIVE,
+    );
+    const canonical = join(
+      import.meta.dirname,
+      '../../src/admin/static/playback-viewer.html',
+    );
+    const [sourceBytes, canonicalBytes] = await Promise.all([
+      readFile(copySource),
+      readFile(canonical),
+    ]);
+    assert.deepEqual(sourceBytes, canonicalBytes);
+  });
 });

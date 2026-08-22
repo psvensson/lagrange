@@ -904,8 +904,11 @@ class PlaybackRecorder {
     this._started = false;
 
     try {
+      // The admin static viewer is the single owner of the playback UI; the
+      // harness ships a copy into each scenario output so bundles stay
+      // self-contained without a second checked-in twin of the file.
       await copyFile(
-        join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_FILENAME),
+        join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_SOURCE_RELATIVE),
         this._viewerPath,
       );
     } catch (_err) {
