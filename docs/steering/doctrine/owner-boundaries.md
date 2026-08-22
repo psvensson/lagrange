@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md (complete architecture domain pack)
 parent_index: ../doctrine/INDEX.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-08-22
 ---
 
 > **Canonical source.** Doctrine sub-file: owner boundaries. Index: [`INDEX.md`](INDEX.md).
@@ -115,3 +115,49 @@ The normal sequence is:
 5. execute one bounded attempt
 6. rerun the focused proof
 7. commit the attempt with `node scripts/solve.js step --commit`
+
+## 18. Interactions Between Owners Are Owned Contracts
+
+A seam where two owners meet is itself a concern, and it must have one owner
+and one checked artifact. The signature of an unowned interaction is every
+per-owner seal green while the composition deadlocks or diverges: false
+terminals on store divergence, a detector wired to no cure, two writers
+sharing a tolerance only one honors, a hold deferring the cure its own policy
+documents. Fixing such a bug purely inside one participant leaves the
+interaction implicit, and the failure ping-pongs to the adjacent owner (§16
+records that migration; this rule prevents the next one).
+
+The contract layer for interactions already exists. Search it before writing
+code, argue the change against it, and extend it in the same body of work:
+
+- **Decision tables** — `docs/specs/decision-tables/*.json`
+  (`npm run model:decision-tables`): each names an `owner`, a `boundary`, and
+  `invariants` for one cross-input decision. Any change to a hold, fence,
+  admission lane, cure classification, or observation authority starts here;
+  the table is where the argument is settled (e.g.
+  `operation-ledger-hold-engagement.json` invariant `cure-stays-admissible`).
+- **Model checks** — `models/` indexed by `models/CL-INDEX.md`: design-class
+  liveness bugs (circular dependencies, lost wakeups, holds without release)
+  are proven by a TLC bug/fixed config pair, never by scenario reruns alone.
+- **System contracts** — `architecture/contracts/`
+  (`npm run model:contracts`), including the liveness contracts.
+- **Coupled-pair registry** — audit-enforced pairs of files that must move
+  together.
+- **Closure-record and theory history** — CL records (e.g. CL-013 cure and
+  exemption classes, CL-001 variant D detection-to-cure wiring) and the quest
+  theory ledger carry the precedents for each interaction class.
+
+When fixing a bug at a seam between owners:
+
+1. Name the interaction and locate its artifact; if none exists, authoring one
+   — owned by the component that decides — is in the fix's scope.
+2. Argue the fix against the artifact's invariants and extend the artifact in
+   the same change, never afterwards.
+3. Hold every gate to the default liveness invariant: **an engaged hold, gate,
+   or fence must have a reachable release path** — an admissible move class, a
+   disengagement condition, or a bounded escalation releases it. A gate that
+   defers its own cure violates this rule even when every row of its matrix is
+   individually justified.
+
+A Quest whose scope crosses owners must seal the interaction artifact as a
+closure requirement, not only the code change.

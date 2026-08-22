@@ -193,6 +193,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## release
 
+- `release:digest` — `node scripts/release-content-digest.js`
 - `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
 
 ## solve
@@ -306,4 +307,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-204 scripts indexed; 32 have a curated description, 172 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+205 scripts indexed; 32 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.

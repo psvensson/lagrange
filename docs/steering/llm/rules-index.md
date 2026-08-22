@@ -5,7 +5,7 @@ citations: `npm run rule -- --id <ID>` (or `--tag`, `--domain`,
 `--strength`, or free-text terms). Regenerate with
 `node scripts/lookup-rule.js --write-index`.
 
-Total rules: 683 (679 masters + 4 cross-domain aliases; alias rows say "alias of <ID>" and are suppressed from the per-domain packs, so pack banners count masters only). machine_check names the command that enforces the rule, or —.
+Total rules: 689 (685 masters + 4 cross-domain aliases; alias rows say "alias of <ID>" and are suppressed from the per-domain packs, so pack banners count masters only). machine_check names the command that enforces the rule, or —.
 
 ## Source roles
 
@@ -17,7 +17,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | --- | --- | --- | ---: | ---: | --- |
 | system-guidelines.md | packed | architecture | 98 | 2 | — |
 | runtime-contracts.md | packed | architecture | 131 | 0 | — |
-| doctrine/owner-boundaries.md | packed | architecture | 11 | 0 | — |
+| doctrine/owner-boundaries.md | packed | architecture | 17 | 0 | — |
 | doctrine/single-path.md | packed | architecture | 7 | 0 | — |
 | doctrine/state-encoding.md | packed | architecture | 34 | 1 | — |
 | doctrine/decision-experiments.md | packed | architecture | 28 | 0 | — |
@@ -222,10 +222,12 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0141 | must | architecture | system-guidelines.md:319 [packed] | — | All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps. |
 | ARCH-0142 | must_not | architecture | doctrine/decision-experiments.md:87 [packed] | — | Broad ideas must not go straight into code. |
 | ARCH-0143 | must_not | architecture | doctrine/decision-experiments.md:98 [packed] | — | Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only … |
-| ARCH-0144 | must_not | architecture | doctrine/state-encoding.md:20 [packed] | — | A phase must not tear down the only live runtime path. |
-| ARCH-0145 | must_not | architecture | doctrine/state-encoding.md:31 [packed] | — | Pressure must not become hidden drops, memory growth without bounds, or correctness failu… |
-| ARCH-0146 | must_not | architecture | doctrine/state-encoding.md:102 [packed] | — | Degraded — weaker, indirect, or cross-plane; may explain, defer, or improve diagnostics, … |
-| ARCH-0147 | must_not | architecture | doctrine/state-encoding.md:104 [packed] | — | Contradictory — authoritative or equivalent signals disagree; produces reconciliation wit… |
+| ARCH-0144 | must_not | architecture | doctrine/owner-boundaries.md:139 [packed] | — | Model checks — models/ indexed by models/CL-INDEX.md: design-class liveness bugs (circula… |
+| ARCH-0145 | must_not | architecture | doctrine/owner-boundaries.md:154 [packed] | — | Argue the fix against the artifact's invariants and extend the artifact in the same chang… |
+| ARCH-0146 | must_not | architecture | doctrine/state-encoding.md:20 [packed] | — | A phase must not tear down the only live runtime path. |
+| ARCH-0147 | must_not | architecture | doctrine/state-encoding.md:31 [packed] | — | Pressure must not become hidden drops, memory growth without bounds, or correctness failu… |
+| ARCH-0148 | must_not | architecture | doctrine/state-encoding.md:102 [packed] | — | Degraded — weaker, indirect, or cross-plane; may explain, defer, or improve diagnostics, … |
+| ARCH-0149 | must_not | architecture | doctrine/state-encoding.md:104 [packed] | — | Contradictory — authoritative or equivalent signals disagree; produces reconciliation wit… |
 | GOV-0001 | must_not | governance | findings/2026-07-10-reuse-comparison-before-new-machinery.md:7 [packed] | — | Parallel or duplicated machinery discovered on contact MUST be recorded as a consolidatio… |
 | GOV-0002 | must_not | governance | roadmap.md:144 [packed] | — | Roadmap State Policy — Required workflow: Roadmap corrections discovered during implement… |
 | GOV-0003 | must_not | governance | roadmap.md:147 [packed] | — | Roadmap State Policy — Required workflow: Do not use roadmap state to claim Quest closure… |
@@ -242,72 +244,72 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0030 | must_not | testing | testing-guidelines/regression-policy.md:382 [packed] | — | A test that fails because behavior regressed MUST be fixed (in the code or the test), and… |
 | TEST-0031 | must_not | testing | testing-guidelines/regression-policy.md:388 [packed] | — | Work must not close while the touched area remains red. |
 | GOV-0004 | must_not | governance | memory-boundary.md:29 [packed] | — | Session/narrative state (current blocker, handoff notes, working hypotheses) stays in ext… |
-| ARCH-0148 | must | architecture | runtime-contracts.md:34 [packed] | — | Owner And Path Detail — Required runtime patterns: Callers submit intent to the owner and… |
-| ARCH-0149 | must | architecture | runtime-contracts.md:35 [packed] | — | Owner And Path Detail — Required runtime patterns: Components constructed with owner depe… |
-| ARCH-0150 | must | architecture | runtime-contracts.md:41 [packed] | — | Owner And Path Detail — Required runtime patterns: A transitional delegator must have a r… |
-| ARCH-0151 | must | architecture | runtime-contracts.md:58 [packed] | — | System-Table Row Lifecycle — Required patterns: Initial creation writes the full canonica… |
-| ARCH-0152 | must | architecture | runtime-contracts.md:59 [packed] | — | System-Table Row Lifecycle — Required patterns: Later lifecycle changes use partial updat… |
-| ARCH-0153 | must | architecture | runtime-contracts.md:60 [packed] | — | System-Table Row Lifecycle — Required patterns: Lifecycle updates write only fields owned… |
-| ARCH-0154 | must | architecture | runtime-contracts.md:61 [packed] | — | System-Table Row Lifecycle — Required patterns: Missing rows route through the canonical … |
-| ARCH-0155 | must | architecture | runtime-contracts.md:62 [packed] | — | System-Table Row Lifecycle — Required patterns: CDC-replicated row mutations are addresse… |
-| ARCH-0156 | must | architecture | runtime-contracts.md:63 [packed] | — | System-Table Row Lifecycle — Required patterns: Multi-row transitions either transition r… |
-| ARCH-0157 | must | architecture | runtime-contracts.md:82 [packed] | — | Cache And Read Models — Required patterns: CDC-propagated metadata decisions read from th… |
-| ARCH-0158 | must | architecture | runtime-contracts.md:84 [packed] | — | Cache And Read Models — Required patterns: SQL reads for equivalent semantics are limited… |
-| ARCH-0159 | must | architecture | runtime-contracts.md:86 [packed] | — | Cache And Read Models — Required patterns: Cache divergence recovery re-enters the owner … |
-| ARCH-0160 | must | architecture | runtime-contracts.md:87 [packed] | — | Cache And Read Models — Required patterns: Cache/authoritative divergence is surfaced as … |
-| ARCH-0161 | must | architecture | runtime-contracts.md:88 [packed] | — | Cache And Read Models — Required patterns: New system tables are classified in exactly on… |
-| ARCH-0162 | must | architecture | runtime-contracts.md:115 [packed] | — | Snapshot Readers And Repair — Required patterns: Non-forced readers consume owner outcome… |
-| ARCH-0163 | must | architecture | runtime-contracts.md:117 [packed] | — | Snapshot Readers And Repair — Required patterns: Non-forced readers schedule repair throu… |
-| ARCH-0164 | must | architecture | runtime-contracts.md:119 [packed] | — | Snapshot Readers And Repair — Required patterns: Forced repair, when allowed, still route… |
-| ARCH-0165 | must | architecture | runtime-contracts.md:149 [packed] | — | Canonical Owner Rows — Required precedence: partitions.leader_node_id owns partition lead… |
-| ARCH-0166 | must | architecture | runtime-contracts.md:150 [packed] | — | Canonical Owner Rows — Required precedence: message_groups.leader_node_id owns message-gr… |
-| ARCH-0167 | must | architecture | runtime-contracts.md:151 [packed] | — | Canonical Owner Rows — Required precedence: services owns replica-only fields such as rep… |
-| ARCH-0168 | must | architecture | runtime-contracts.md:206 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Semantic owners submit shared-metad… |
-| ARCH-0169 | must | architecture | runtime-contracts.md:208 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Semantic decisions use one canonica… |
-| ARCH-0170 | must | architecture | runtime-contracts.md:210 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Bootstrap-only shortcuts remain pha… |
-| ARCH-0171 | must | architecture | runtime-contracts.md:228 [packed] | — | Bootstrap And Phase Handoff — Required patterns: A phase-created subscriber, bridge, queu… |
-| ARCH-0172 | must | architecture | runtime-contracts.md:230 [packed] | — | Bootstrap And Phase Handoff — Required patterns: Phase completion removes temporary scaff… |
-| ARCH-0173 | must | architecture | runtime-contracts.md:231 [packed] | — | Bootstrap And Phase Handoff — Required patterns: Handoff completion is represented by one… |
-| ARCH-0174 | must | architecture | runtime-contracts.md:248 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The producer declares its durab… |
-| ARCH-0175 | must | architecture | runtime-contracts.md:250 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The consumer declares the preco… |
-| ARCH-0176 | must | architecture | runtime-contracts.md:252 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The handoff exposes one freshne… |
-| ARCH-0177 | must | architecture | runtime-contracts.md:254 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: Diagnostics serialize both side… |
-| ARCH-0178 | must | architecture | runtime-contracts.md:278 [packed] | — | Deterministic Control-Plane Progression — Required patterns: For one owner key, at most o… |
-| ARCH-0179 | must | architecture | runtime-contracts.md:279 [packed] | — | Deterministic Control-Plane Progression — Required patterns: Event, cache update, and tim… |
-| ARCH-0180 | must | architecture | runtime-contracts.md:281 [packed] | — | Deterministic Control-Plane Progression — Required patterns: Broad polling is recovery-on… |
-| ARCH-0181 | must | architecture | runtime-contracts.md:295 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Step transitions persist… |
-| ARCH-0182 | must | architecture | runtime-contracts.md:296 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Atomic multi-row authori… |
-| ARCH-0183 | must | architecture | runtime-contracts.md:298 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Executor-owned phase pro… |
-| ARCH-0184 | must | architecture | runtime-contracts.md:300 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Existing shared workflow… |
-| ARCH-0185 | must | architecture | runtime-contracts.md:317 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: Collectors fetch ev… |
-| ARCH-0186 | must | architecture | runtime-contracts.md:318 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: One normalized per-… |
-| ARCH-0187 | must | architecture | runtime-contracts.md:320 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: One canonical adjud… |
-| ARCH-0188 | must | architecture | runtime-contracts.md:322 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: Equivalent evidence… |
-| ARCH-0189 | must | architecture | runtime-contracts.md:354 [packed] | — | Modes And Status Taxonomy — Required patterns: Gate by configured mode first. |
-| ARCH-0190 | must | architecture | runtime-contracts.md:355 [packed] | — | Modes And Status Taxonomy — Required patterns: Execute only prerequisites for the active … |
-| ARCH-0191 | must | architecture | runtime-contracts.md:356 [packed] | — | Modes And Status Taxonomy — Required patterns: Publish reason codes valid for the active … |
-| ARCH-0192 | must | architecture | runtime-contracts.md:357 [packed] | — | Modes And Status Taxonomy — Required patterns: Active/terminal predicates consume canonic… |
-| ARCH-0193 | must | architecture | runtime-contracts.md:358 [packed] | — | Modes And Status Taxonomy — Required patterns: Terminal success is monotonic and not rewr… |
-| ARCH-0194 | must | architecture | runtime-contracts.md:372 [packed] | — | Timeout And Invariant Rules — Required patterns: Top-level operations start with one cano… |
-| ARCH-0195 | must | architecture | runtime-contracts.md:373 [packed] | — | Timeout And Invariant Rules — Required patterns: Nested operations derive from remaining … |
-| ARCH-0196 | must | architecture | runtime-contracts.md:374 [packed] | — | Timeout And Invariant Rules — Required patterns: Timeout classifications are typed outcom… |
-| ARCH-0197 | must | architecture | runtime-contracts.md:375 [packed] | — | Timeout And Invariant Rules — Required patterns: Exact-boundary timeout clusters require … |
-| ARCH-0198 | must | architecture | runtime-contracts.md:376 [packed] | — | Timeout And Invariant Rules — Required patterns: Owners emit structured invariant results… |
-| ARCH-0199 | must | architecture | runtime-contracts.md:391 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Queues have capacity l… |
-| ARCH-0200 | must | architecture | runtime-contracts.md:392 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Downstream pressure pr… |
-| ARCH-0201 | must | architecture | runtime-contracts.md:394 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Load is shed at ingres… |
-| ARCH-0202 | must | architecture | runtime-contracts.md:396 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Control-plane and quer… |
-| ARCH-0203 | must | architecture | runtime-contracts.md:398 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Runtime collections ha… |
-| ARCH-0204 | must | architecture | runtime-contracts.md:400 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Diagnostics can prove … |
-| ARCH-0205 | must | architecture | runtime-contracts.md:417 [packed] | — | Query Routing And Transport — Required patterns: Retry or redirect to available replicas … |
-| ARCH-0206 | must | architecture | runtime-contracts.md:418 [packed] | — | Query Routing And Transport — Required patterns: Return structured retryable outcomes whe… |
-| ARCH-0207 | must | architecture | runtime-contracts.md:420 [packed] | — | Query Routing And Transport — Required patterns: Bound retries by the caller timeout budg… |
-| ARCH-0208 | must | architecture | runtime-contracts.md:421 [packed] | — | Query Routing And Transport — Required patterns: Tolerate briefly stale partition maps. |
-| ARCH-0209 | must | architecture | runtime-contracts.md:422 [packed] | — | Query Routing And Transport — Required patterns: Route query/data-plane traffic through M… |
-| ARCH-0210 | must | architecture | runtime-contracts.md:438 [packed] | — | Idempotency — Required patterns: Use operation IDs, idempotency keys, or equivalent uniqu… |
-| ARCH-0211 | must | architecture | runtime-contracts.md:439 [packed] | — | Idempotency — Required patterns: Make lifecycle transitions monotonic. |
-| ARCH-0212 | must | architecture | runtime-contracts.md:440 [packed] | — | Idempotency — Required patterns: Use write-if-not-exists semantics for creation. |
-| ARCH-0213 | must | architecture | runtime-contracts.md:441 [packed] | — | Idempotency — Required patterns: Make replayed transitions no-ops or deterministic equiva… |
+| ARCH-0150 | must | architecture | runtime-contracts.md:34 [packed] | — | Owner And Path Detail — Required runtime patterns: Callers submit intent to the owner and… |
+| ARCH-0151 | must | architecture | runtime-contracts.md:35 [packed] | — | Owner And Path Detail — Required runtime patterns: Components constructed with owner depe… |
+| ARCH-0152 | must | architecture | runtime-contracts.md:41 [packed] | — | Owner And Path Detail — Required runtime patterns: A transitional delegator must have a r… |
+| ARCH-0153 | must | architecture | runtime-contracts.md:58 [packed] | — | System-Table Row Lifecycle — Required patterns: Initial creation writes the full canonica… |
+| ARCH-0154 | must | architecture | runtime-contracts.md:59 [packed] | — | System-Table Row Lifecycle — Required patterns: Later lifecycle changes use partial updat… |
+| ARCH-0155 | must | architecture | runtime-contracts.md:60 [packed] | — | System-Table Row Lifecycle — Required patterns: Lifecycle updates write only fields owned… |
+| ARCH-0156 | must | architecture | runtime-contracts.md:61 [packed] | — | System-Table Row Lifecycle — Required patterns: Missing rows route through the canonical … |
+| ARCH-0157 | must | architecture | runtime-contracts.md:62 [packed] | — | System-Table Row Lifecycle — Required patterns: CDC-replicated row mutations are addresse… |
+| ARCH-0158 | must | architecture | runtime-contracts.md:63 [packed] | — | System-Table Row Lifecycle — Required patterns: Multi-row transitions either transition r… |
+| ARCH-0159 | must | architecture | runtime-contracts.md:82 [packed] | — | Cache And Read Models — Required patterns: CDC-propagated metadata decisions read from th… |
+| ARCH-0160 | must | architecture | runtime-contracts.md:84 [packed] | — | Cache And Read Models — Required patterns: SQL reads for equivalent semantics are limited… |
+| ARCH-0161 | must | architecture | runtime-contracts.md:86 [packed] | — | Cache And Read Models — Required patterns: Cache divergence recovery re-enters the owner … |
+| ARCH-0162 | must | architecture | runtime-contracts.md:87 [packed] | — | Cache And Read Models — Required patterns: Cache/authoritative divergence is surfaced as … |
+| ARCH-0163 | must | architecture | runtime-contracts.md:88 [packed] | — | Cache And Read Models — Required patterns: New system tables are classified in exactly on… |
+| ARCH-0164 | must | architecture | runtime-contracts.md:115 [packed] | — | Snapshot Readers And Repair — Required patterns: Non-forced readers consume owner outcome… |
+| ARCH-0165 | must | architecture | runtime-contracts.md:117 [packed] | — | Snapshot Readers And Repair — Required patterns: Non-forced readers schedule repair throu… |
+| ARCH-0166 | must | architecture | runtime-contracts.md:119 [packed] | — | Snapshot Readers And Repair — Required patterns: Forced repair, when allowed, still route… |
+| ARCH-0167 | must | architecture | runtime-contracts.md:149 [packed] | — | Canonical Owner Rows — Required precedence: partitions.leader_node_id owns partition lead… |
+| ARCH-0168 | must | architecture | runtime-contracts.md:150 [packed] | — | Canonical Owner Rows — Required precedence: message_groups.leader_node_id owns message-gr… |
+| ARCH-0169 | must | architecture | runtime-contracts.md:151 [packed] | — | Canonical Owner Rows — Required precedence: services owns replica-only fields such as rep… |
+| ARCH-0170 | must | architecture | runtime-contracts.md:206 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Semantic owners submit shared-metad… |
+| ARCH-0171 | must | architecture | runtime-contracts.md:208 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Semantic decisions use one canonica… |
+| ARCH-0172 | must | architecture | runtime-contracts.md:210 [packed] | — | Runtime Shared-Metadata Gateways — Required patterns: Bootstrap-only shortcuts remain pha… |
+| ARCH-0173 | must | architecture | runtime-contracts.md:228 [packed] | — | Bootstrap And Phase Handoff — Required patterns: A phase-created subscriber, bridge, queu… |
+| ARCH-0174 | must | architecture | runtime-contracts.md:230 [packed] | — | Bootstrap And Phase Handoff — Required patterns: Phase completion removes temporary scaff… |
+| ARCH-0175 | must | architecture | runtime-contracts.md:231 [packed] | — | Bootstrap And Phase Handoff — Required patterns: Handoff completion is represented by one… |
+| ARCH-0176 | must | architecture | runtime-contracts.md:248 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The producer declares its durab… |
+| ARCH-0177 | must | architecture | runtime-contracts.md:250 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The consumer declares the preco… |
+| ARCH-0178 | must | architecture | runtime-contracts.md:252 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: The handoff exposes one freshne… |
+| ARCH-0179 | must | architecture | runtime-contracts.md:254 [packed] | — | Producer Consumer Handoff Invariants — Required patterns: Diagnostics serialize both side… |
+| ARCH-0180 | must | architecture | runtime-contracts.md:278 [packed] | — | Deterministic Control-Plane Progression — Required patterns: For one owner key, at most o… |
+| ARCH-0181 | must | architecture | runtime-contracts.md:279 [packed] | — | Deterministic Control-Plane Progression — Required patterns: Event, cache update, and tim… |
+| ARCH-0182 | must | architecture | runtime-contracts.md:281 [packed] | — | Deterministic Control-Plane Progression — Required patterns: Broad polling is recovery-on… |
+| ARCH-0183 | must | architecture | runtime-contracts.md:295 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Step transitions persist… |
+| ARCH-0184 | must | architecture | runtime-contracts.md:296 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Atomic multi-row authori… |
+| ARCH-0185 | must | architecture | runtime-contracts.md:298 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Executor-owned phase pro… |
+| ARCH-0186 | must | architecture | runtime-contracts.md:300 [packed] | — | Durable Workflow And Transaction Boundaries — Required patterns: Existing shared workflow… |
+| ARCH-0187 | must | architecture | runtime-contracts.md:317 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: Collectors fetch ev… |
+| ARCH-0188 | must | architecture | runtime-contracts.md:318 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: One normalized per-… |
+| ARCH-0189 | must | architecture | runtime-contracts.md:320 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: One canonical adjud… |
+| ARCH-0190 | must | architecture | runtime-contracts.md:322 [packed] | — | Admission, Readiness, And Multi-Signal Decisions — Required patterns: Equivalent evidence… |
+| ARCH-0191 | must | architecture | runtime-contracts.md:354 [packed] | — | Modes And Status Taxonomy — Required patterns: Gate by configured mode first. |
+| ARCH-0192 | must | architecture | runtime-contracts.md:355 [packed] | — | Modes And Status Taxonomy — Required patterns: Execute only prerequisites for the active … |
+| ARCH-0193 | must | architecture | runtime-contracts.md:356 [packed] | — | Modes And Status Taxonomy — Required patterns: Publish reason codes valid for the active … |
+| ARCH-0194 | must | architecture | runtime-contracts.md:357 [packed] | — | Modes And Status Taxonomy — Required patterns: Active/terminal predicates consume canonic… |
+| ARCH-0195 | must | architecture | runtime-contracts.md:358 [packed] | — | Modes And Status Taxonomy — Required patterns: Terminal success is monotonic and not rewr… |
+| ARCH-0196 | must | architecture | runtime-contracts.md:372 [packed] | — | Timeout And Invariant Rules — Required patterns: Top-level operations start with one cano… |
+| ARCH-0197 | must | architecture | runtime-contracts.md:373 [packed] | — | Timeout And Invariant Rules — Required patterns: Nested operations derive from remaining … |
+| ARCH-0198 | must | architecture | runtime-contracts.md:374 [packed] | — | Timeout And Invariant Rules — Required patterns: Timeout classifications are typed outcom… |
+| ARCH-0199 | must | architecture | runtime-contracts.md:375 [packed] | — | Timeout And Invariant Rules — Required patterns: Exact-boundary timeout clusters require … |
+| ARCH-0200 | must | architecture | runtime-contracts.md:376 [packed] | — | Timeout And Invariant Rules — Required patterns: Owners emit structured invariant results… |
+| ARCH-0201 | must | architecture | runtime-contracts.md:391 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Queues have capacity l… |
+| ARCH-0202 | must | architecture | runtime-contracts.md:392 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Downstream pressure pr… |
+| ARCH-0203 | must | architecture | runtime-contracts.md:394 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Load is shed at ingres… |
+| ARCH-0204 | must | architecture | runtime-contracts.md:396 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Control-plane and quer… |
+| ARCH-0205 | must | architecture | runtime-contracts.md:398 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Runtime collections ha… |
+| ARCH-0206 | must | architecture | runtime-contracts.md:400 [packed] | — | Pressure, Backpressure, And Resource Lifetime — Required patterns: Diagnostics can prove … |
+| ARCH-0207 | must | architecture | runtime-contracts.md:417 [packed] | — | Query Routing And Transport — Required patterns: Retry or redirect to available replicas … |
+| ARCH-0208 | must | architecture | runtime-contracts.md:418 [packed] | — | Query Routing And Transport — Required patterns: Return structured retryable outcomes whe… |
+| ARCH-0209 | must | architecture | runtime-contracts.md:420 [packed] | — | Query Routing And Transport — Required patterns: Bound retries by the caller timeout budg… |
+| ARCH-0210 | must | architecture | runtime-contracts.md:421 [packed] | — | Query Routing And Transport — Required patterns: Tolerate briefly stale partition maps. |
+| ARCH-0211 | must | architecture | runtime-contracts.md:422 [packed] | — | Query Routing And Transport — Required patterns: Route query/data-plane traffic through M… |
+| ARCH-0212 | must | architecture | runtime-contracts.md:438 [packed] | — | Idempotency — Required patterns: Use operation IDs, idempotency keys, or equivalent uniqu… |
+| ARCH-0213 | must | architecture | runtime-contracts.md:439 [packed] | — | Idempotency — Required patterns: Make lifecycle transitions monotonic. |
+| ARCH-0214 | must | architecture | runtime-contracts.md:440 [packed] | — | Idempotency — Required patterns: Use write-if-not-exists semantics for creation. |
+| ARCH-0215 | must | architecture | runtime-contracts.md:441 [packed] | — | Idempotency — Required patterns: Make replayed transitions no-ops or deterministic equiva… |
 | STYLE-0008 | must | style | code-style.md:58 [packed] | `npm run audit:file-size` | New or newly edited source-code files must finish within the per-scope thresholds owned b… |
 | STYLE-0009 | must | style | code-style.md:62 [packed] | — | New source-code files must be named for the semantic responsibility they own, not for the… |
 | STYLE-0010 | must | style | code-style.md:84 [packed] | — | Shared domain literals belong in their canonical owner module and must be imported from t… |
@@ -368,43 +370,43 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0086 | must | testing | testing-guidelines/regression-policy.md:306 [packed] | — | Read-Side Repair Separation Regression Policy — Required coverage: Add a regression showi… |
 | TEST-0087 | must | testing | testing-guidelines/regression-policy.md:308 [packed] | — | Read-Side Repair Separation Regression Policy — Required coverage: If the caller caches t… |
 | TEST-0088 | must | testing | testing-guidelines/regression-policy.md:352 [packed] | — | Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use … |
-| ARCH-0214 | must_not | architecture | doctrine/decision-experiments.md:30 [packed] | — | Do not respond to repeated distributed failures by adding more scattered local special ca… |
-| ARCH-0215 | must_not | architecture | doctrine/decision-experiments.md:134 [packed] | — | Do not treat hot-path green tests as analysis closure while the original scenario now fai… |
-| ARCH-0216 | must_not | architecture | doctrine/decision-experiments.md:137 [packed] | — | Quests must never close from symptom movement alone (such as changed timeout durations, t… |
-| ARCH-0217 | must_not | architecture | doctrine/owner-boundaries.md:24 [packed] | — | Callers do not reproduce the owner's logic locally, and callers do not keep shadow state … |
-| ARCH-0218 | must_not | architecture | doctrine/owner-boundaries.md:28 [packed] | — | A new owner left running alongside the old path it was meant to replace is an unfinished … |
-| ARCH-0219 | must_not | architecture | doctrine/owner-boundaries.md:53 [packed] | — | Do not keep patching symptoms while leaving the boundary porous. |
-| ARCH-0220 | must_not | architecture | doctrine/owner-boundaries.md:68 [packed] | — | Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, o… |
-| ARCH-0221 | must_not | architecture | doctrine/owner-boundaries.md:91 [packed] | — | Do not let old migration history or several optional delegated findings create competing … |
-| ARCH-0222 | must_not | architecture | doctrine/single-path.md:17 [packed] | — | There may be multiple semantic owners, but there must not be many equivalent runtime ingr… |
-| ARCH-0223 | must_not | architecture | doctrine/single-path.md:37 [packed] | — | Bootstrap may hydrate initial state, but bootstrap code must not remain the runtime disse… |
-| ARCH-0224 | must_not | architecture | doctrine/single-path.md:55 [packed] | — | Do not let observed, published, retained, cached, repaired, or fast-path variants drift i… |
-| ARCH-0225 | must_not | architecture | doctrine/single-path.md:75 [packed] | — | Do not let row nullability, protocol-specific fields, or bootstrap-only shapes become sem… |
-| ARCH-0226 | must_not | architecture | doctrine/single-path.md:89 [packed] | — | Do not encode semantic policy as independent booleans that callers can combine into overl… |
-| ARCH-0227 | must_not | architecture | doctrine/state-encoding.md:28 [packed] | — | The system must not become less correct. |
-| ARCH-0228 | must_not | architecture | doctrine/state-encoding.md:38 [packed] | — | The owner outcome must not degrade into empty collections, null-shaped absence, or timeou… |
-| ARCH-0229 | must_not | architecture | doctrine/state-encoding.md:50 [packed] | — | Callers may consume or propagate that deferred outcome, but they must not silently reinte… |
-| ARCH-0230 | must_not | architecture | doctrine/state-encoding.md:55 [packed] | — | Readers must not run synchronous multi-table authoritative repair inline on the hot read … |
-| ARCH-0231 | must_not | architecture | doctrine/state-encoding.md:92 [packed] | — | Collectors may fetch, retry, and annotate evidence, but they do not emit the final verdic… |
-| ARCH-0232 | must_not | architecture | doctrine/state-encoding.md:107 [packed] | — | Never let degraded evidence promote a blocked entity to ready or admitted. _(alias of ARCH-0067)_ |
-| ARCH-0233 | must_not | architecture | doctrine/state-encoding.md:109 [packed] | — | Policy targets must not be rewritten from the survivors observed during one attempt. |
-| ARCH-0234 | must_not | architecture | doctrine/state-encoding.md:161 [packed] | — | Do not force readers to reconstruct progress from object existence, local booleans, times… |
-| ARCH-0235 | must_not | architecture | runtime-contracts.md:265 [packed] | — | Forbidden patterns: allowing a publication recovery producer to stall or wait on unknown … |
-| ARCH-0236 | must_not | architecture | runtime-contracts.md:329 [packed] | — | Use ControlPlaneReadinessService as the readiness owner (node readiness and planning surf… |
+| ARCH-0216 | must_not | architecture | doctrine/decision-experiments.md:30 [packed] | — | Do not respond to repeated distributed failures by adding more scattered local special ca… |
+| ARCH-0217 | must_not | architecture | doctrine/decision-experiments.md:134 [packed] | — | Do not treat hot-path green tests as analysis closure while the original scenario now fai… |
+| ARCH-0218 | must_not | architecture | doctrine/decision-experiments.md:137 [packed] | — | Quests must never close from symptom movement alone (such as changed timeout durations, t… |
+| ARCH-0219 | must_not | architecture | doctrine/owner-boundaries.md:24 [packed] | — | Callers do not reproduce the owner's logic locally, and callers do not keep shadow state … |
+| ARCH-0220 | must_not | architecture | doctrine/owner-boundaries.md:28 [packed] | — | A new owner left running alongside the old path it was meant to replace is an unfinished … |
+| ARCH-0221 | must_not | architecture | doctrine/owner-boundaries.md:53 [packed] | — | Do not keep patching symptoms while leaving the boundary porous. |
+| ARCH-0222 | must_not | architecture | doctrine/owner-boundaries.md:68 [packed] | — | Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, o… |
+| ARCH-0223 | must_not | architecture | doctrine/owner-boundaries.md:91 [packed] | — | Do not let old migration history or several optional delegated findings create competing … |
+| ARCH-0224 | must_not | architecture | doctrine/single-path.md:17 [packed] | — | There may be multiple semantic owners, but there must not be many equivalent runtime ingr… |
+| ARCH-0225 | must_not | architecture | doctrine/single-path.md:37 [packed] | — | Bootstrap may hydrate initial state, but bootstrap code must not remain the runtime disse… |
+| ARCH-0226 | must_not | architecture | doctrine/single-path.md:55 [packed] | — | Do not let observed, published, retained, cached, repaired, or fast-path variants drift i… |
+| ARCH-0227 | must_not | architecture | doctrine/single-path.md:75 [packed] | — | Do not let row nullability, protocol-specific fields, or bootstrap-only shapes become sem… |
+| ARCH-0228 | must_not | architecture | doctrine/single-path.md:89 [packed] | — | Do not encode semantic policy as independent booleans that callers can combine into overl… |
+| ARCH-0229 | must_not | architecture | doctrine/state-encoding.md:28 [packed] | — | The system must not become less correct. |
+| ARCH-0230 | must_not | architecture | doctrine/state-encoding.md:38 [packed] | — | The owner outcome must not degrade into empty collections, null-shaped absence, or timeou… |
+| ARCH-0231 | must_not | architecture | doctrine/state-encoding.md:50 [packed] | — | Callers may consume or propagate that deferred outcome, but they must not silently reinte… |
+| ARCH-0232 | must_not | architecture | doctrine/state-encoding.md:55 [packed] | — | Readers must not run synchronous multi-table authoritative repair inline on the hot read … |
+| ARCH-0233 | must_not | architecture | doctrine/state-encoding.md:92 [packed] | — | Collectors may fetch, retry, and annotate evidence, but they do not emit the final verdic… |
+| ARCH-0234 | must_not | architecture | doctrine/state-encoding.md:107 [packed] | — | Never let degraded evidence promote a blocked entity to ready or admitted. _(alias of ARCH-0067)_ |
+| ARCH-0235 | must_not | architecture | doctrine/state-encoding.md:109 [packed] | — | Policy targets must not be rewritten from the survivors observed during one attempt. |
+| ARCH-0236 | must_not | architecture | doctrine/state-encoding.md:161 [packed] | — | Do not force readers to reconstruct progress from object existence, local booleans, times… |
+| ARCH-0237 | must_not | architecture | runtime-contracts.md:265 [packed] | — | Forbidden patterns: allowing a publication recovery producer to stall or wait on unknown … |
+| ARCH-0238 | must_not | architecture | runtime-contracts.md:329 [packed] | — | Use ControlPlaneReadinessService as the readiness owner (node readiness and planning surf… |
 | GOV-0005 | must_not | governance | roadmap.md:96 [packed] | — | docs/ holds documentation, never active work definition: user/operator-facing docs, the a… |
 | GOV-0006 | must_not | governance | roadmap.md:158 [packed] | — | Tests never pin a flag (see testing-guidelines/fixtures.md "No Flag-Coupled Tests"). |
 | GOV-0007 | must_not | governance | workflow-guidelines/solver-quests.md:48 [packed] | — | Operating Contract — A Quest must: after audit passes, commit every Quest-scoped change (… |
 | GOV-0008 | must_not | governance | memory-boundary.md:3 [packed] | — | The in-repo and external memory systems have different jobs and MUST NOT duplicate each o… |
-| ARCH-0237 | must | architecture | system-guidelines.md:243 [packed] | — | 7. Phase Code Must Hand Off To Runtime Owners — Required contract: Subscribers, bridges, … |
-| ARCH-0238 | must | architecture | runtime-contracts.md:101 [packed] | — | Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and … |
-| ARCH-0239 | must | architecture | runtime-contracts.md:202 [packed] | — | Runtime shared-metadata access must cross canonical ingress owners. |
-| ARCH-0240 | must | architecture | system-guidelines.md:296 [packed] | — | 9. Load May Slow The System, Not Break It — Required contract: Query routing during topol… |
-| ARCH-0241 | must | architecture | system-guidelines.md:299 [packed] | — | 9. Load May Slow The System, Not Break It — Required contract: Every queue, buffer, subsc… |
-| ARCH-0242 | must | architecture | system-guidelines.md:342 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Runtime kinds such as native JS, W… |
-| ARCH-0243 | must | architecture | system-guidelines.md:352 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Quest validatio… |
-| ARCH-0244 | must | architecture | system-guidelines.md:362 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Before closure,… |
-| ARCH-0245 | must | architecture | system-guidelines.md:367 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Scenario-driven… |
-| ARCH-0246 | must | architecture | system-guidelines.md:375 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: If a representa… |
+| ARCH-0239 | must | architecture | system-guidelines.md:243 [packed] | — | 7. Phase Code Must Hand Off To Runtime Owners — Required contract: Subscribers, bridges, … |
+| ARCH-0240 | must | architecture | runtime-contracts.md:101 [packed] | — | Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and … |
+| ARCH-0241 | must | architecture | runtime-contracts.md:202 [packed] | — | Runtime shared-metadata access must cross canonical ingress owners. |
+| ARCH-0242 | must | architecture | system-guidelines.md:296 [packed] | — | 9. Load May Slow The System, Not Break It — Required contract: Query routing during topol… |
+| ARCH-0243 | must | architecture | system-guidelines.md:299 [packed] | — | 9. Load May Slow The System, Not Break It — Required contract: Every queue, buffer, subsc… |
+| ARCH-0244 | must | architecture | system-guidelines.md:342 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Runtime kinds such as native JS, W… |
+| ARCH-0245 | must | architecture | system-guidelines.md:352 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Quest validatio… |
+| ARCH-0246 | must | architecture | system-guidelines.md:362 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Before closure,… |
+| ARCH-0247 | must | architecture | system-guidelines.md:367 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: Scenario-driven… |
+| ARCH-0248 | must | architecture | system-guidelines.md:375 [packed] | — | 13. Closure Requires Proof, Review, And Truth Repair — Required contract: If a representa… |
 | GOV-0009 | must_not | governance | workflow-guidelines/solver-quests.md:1244 [packed] | — | THEORY_REQUIRED / recoverable BLOCKED: return the typed judgment action to the external d… |
 | STYLE-0011 | must_not | style | code-style.md:91 [packed] | — | JavaScript-language primitives are NOT domain scalars and do not need named constants: ty… |
 | STYLE-0012 | must_not | style | code-style.md:102 [packed] | — | terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages,… |
@@ -414,7 +416,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0092 | must_not | testing | testing-guidelines/harness.md:125 [packed] | — | Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <te… |
 | TEST-0093 | must_not | testing | testing-guidelines/regression-policy.md:99 [packed] | — | Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a "kn… |
 | TEST-0094 | must_not | testing | testing-guidelines/release-gate.md:103 [packed] | — | An upward re-anchor MUST satisfy all of: the gate was silently red (never ran clean befor… |
-| ARCH-0247 | must | architecture | runtime-contracts.md:387 [packed] | — | The system may slow under pressure, but it must remain correct. |
+| ARCH-0249 | must | architecture | runtime-contracts.md:387 [packed] | — | The system may slow under pressure, but it must remain correct. |
 | GOV-0010 | must_not | governance | workflow-guidelines/closure.md:27 [packed] | — | The optional report may be generated and cited for convenience, but its presence is never… |
 | GOV-0011 | must_not | governance | workflow-guidelines/closure.md:66 [packed] | — | Do not treat symptom movement as SOLVED. |
 | GOV-0012 | must_not | governance | workflow-guidelines/subagents.md:18 [packed] | — | Delegated agents do not decide whether the Quest is solved. |
@@ -425,23 +427,24 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0017 | must_not | governance | workflow-guidelines/validators.md:51 [packed] | — | The report projection must not invent terminal status, synthetic attempts, or unmeasured … |
 | TEST-0095 | must_not | testing | testing-guidelines/regression-policy.md:376 [packed] | — | Fix Failing Tests Immediately — When you discover failing or timing-out tests you must ad… |
 | TEST-0096 | must_not | testing | testing-guidelines/regression-policy.md:377 [packed] | — | Fix Failing Tests Immediately — When you discover failing or timing-out tests you must ad… |
-| ARCH-0248 | must | architecture | doctrine/decision-experiments.md:41 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0249 | must | architecture | doctrine/decision-experiments.md:42 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0250 | must | architecture | doctrine/decision-experiments.md:43 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0251 | must | architecture | doctrine/decision-experiments.md:44 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0252 | must | architecture | doctrine/decision-experiments.md:45 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0253 | must | architecture | doctrine/single-path.md:24 [packed] | — | Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but b… |
-| ARCH-0254 | must | architecture | doctrine/state-encoding.md:21 [packed] | — | A phase-scoped bridge must either become a runtime-owned bridge or be replaced before tea… |
-| ARCH-0255 | must | architecture | doctrine/state-encoding.md:23 [packed] | — | Completion of a phase must reduce temporary machinery, not strand it. |
-| ARCH-0256 | must | architecture | doctrine/state-encoding.md:30 [packed] | — | Pressure must become admission, defer, reject, or coalescing signals. |
-| ARCH-0257 | must | architecture | doctrine/state-encoding.md:44 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0258 | must | architecture | doctrine/state-encoding.md:45 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0259 | must | architecture | doctrine/state-encoding.md:46 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0260 | must | architecture | doctrine/state-encoding.md:47 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0261 | must | architecture | doctrine/state-encoding.md:72 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0262 | must | architecture | doctrine/state-encoding.md:73 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0263 | must | architecture | doctrine/state-encoding.md:74 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0264 | must | architecture | doctrine/state-encoding.md:75 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0250 | must | architecture | doctrine/decision-experiments.md:41 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0251 | must | architecture | doctrine/decision-experiments.md:42 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0252 | must | architecture | doctrine/decision-experiments.md:43 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0253 | must | architecture | doctrine/decision-experiments.md:44 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0254 | must | architecture | doctrine/decision-experiments.md:45 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0255 | must | architecture | doctrine/owner-boundaries.md:144 [packed] | — | Coupled-pair registry — audit-enforced pairs of files that must move together. |
+| ARCH-0256 | must | architecture | doctrine/single-path.md:24 [packed] | — | Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but b… |
+| ARCH-0257 | must | architecture | doctrine/state-encoding.md:21 [packed] | — | A phase-scoped bridge must either become a runtime-owned bridge or be replaced before tea… |
+| ARCH-0258 | must | architecture | doctrine/state-encoding.md:23 [packed] | — | Completion of a phase must reduce temporary machinery, not strand it. |
+| ARCH-0259 | must | architecture | doctrine/state-encoding.md:30 [packed] | — | Pressure must become admission, defer, reject, or coalescing signals. |
+| ARCH-0260 | must | architecture | doctrine/state-encoding.md:44 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0261 | must | architecture | doctrine/state-encoding.md:45 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0262 | must | architecture | doctrine/state-encoding.md:46 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0263 | must | architecture | doctrine/state-encoding.md:47 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0264 | must | architecture | doctrine/state-encoding.md:72 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0265 | must | architecture | doctrine/state-encoding.md:73 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0266 | must | architecture | doctrine/state-encoding.md:74 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0267 | must | architecture | doctrine/state-encoding.md:75 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
 | GOV-0018 | must | governance | findings/2026-07-10-reuse-comparison-before-new-machinery.md:5 [packed] | — | Every fix design and quest report MUST carry a visible REUSED vs EXTENDED vs NEW comparis… |
 | GOV-0019 | must | governance | roadmap.md:89 [packed] | — | A Quest must cite or encode enough scope context to prevent local invention. |
 | GOV-0020 | must | governance | roadmap.md:122 [packed] | — | The row must be in scope for this repository under the repo-root edition-matrix.md. |
@@ -498,7 +501,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0049 | must_not | governance | workflow-guidelines/solver-quests.md:373 [packed] | — | The authored inputs for those generated projections remain counted and their freshness ga… |
 | GOV-0050 | must_not | governance | workflow-guidelines/solver-quests.md:405 [packed] | — | The Solver NEVER pushes: no subcommand, loop, or handoff runs git push (autoCommitQuest a… |
 | GOV-0051 | must_not | governance | workflow-guidelines/solver-quests.md:424 [packed] | — | Detectors fire only on real recorded events and never touch the sealed doneWhen. |
-| ARCH-0265 | should | architecture | system-guidelines.md:340 [packed] | — | 12. User-Facing Model Stays Small — Required contract: New features should strengthen tab… |
+| ARCH-0268 | should | architecture | system-guidelines.md:340 [packed] | — | 12. User-Facing Model Stays Small — Required contract: New features should strengthen tab… |
 | GOV-0052 | must_not | governance | roadmap.md:113 [packed] | — | Such examples must not define implementation tasks in this repository unless the active Q… |
 | GOV-0053 | must_not | governance | workflow-guidelines/solver-quests.md:588 [packed] | — | Do not revive sprint/package theory state as active authority. |
 | GOV-0054 | must_not | governance | workflow-guidelines/solver-quests.md:654 [packed] | — | Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, … |
@@ -517,10 +520,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0067 | must | governance | workflow-guidelines/validators.md:25 [packed] | — | Probe-Owned Truth — Required validation: The post-attempt metric is finite when progress … |
 | GOV-0068 | must | governance | workflow-guidelines/validators.md:26 [packed] | — | Probe-Owned Truth — Required validation: The configured metric direction is lower-is-bett… |
 | GOV-0069 | must | governance | workflow-guidelines/validators.md:27 [packed] | — | Probe-Owned Truth — Required validation: The attempt changeRef resolves to an existing di… |
-| ARCH-0266 | must_not | architecture | doctrine/decision-experiments.md:101 [packed] | — | Do not begin a new local patch on the same architectural boundary while the current Quest… |
-| ARCH-0267 | must_not | architecture | doctrine/decision-experiments.md:111 [packed] | — | Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and… |
-| ARCH-0268 | must_not | architecture | doctrine/state-encoding.md:127 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
-| ARCH-0269 | must_not | architecture | doctrine/state-encoding.md:131 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
+| ARCH-0269 | must_not | architecture | doctrine/decision-experiments.md:101 [packed] | — | Do not begin a new local patch on the same architectural boundary while the current Quest… |
+| ARCH-0270 | must_not | architecture | doctrine/decision-experiments.md:111 [packed] | — | Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and… |
+| ARCH-0271 | must_not | architecture | doctrine/state-encoding.md:127 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
+| ARCH-0272 | must_not | architecture | doctrine/state-encoding.md:131 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
 | GOV-0070 | must_not | governance | workflow-guidelines/solver-quests.md:1131 [packed] | — | The override changes the response to a recorded signal; it never mutates a detector verdi… |
 | GOV-0071 | must_not | governance | workflow-guidelines/solver-quests.md:1188 [packed] | — | Reflection is additive and reversible: it produces a recorded note and resets a cadence c… |
 | GOV-0072 | must_not | governance | workflow-guidelines/solver-quests.md:1226 [packed] | — | Advisories are read-only and never block; they fire on the same conditions the autonomous… |
@@ -532,17 +535,19 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0076 | must_not | governance | workflow-guidelines/solver-quests.md:1322 [packed] | — | The consistency gate separately checks structural contract fields and the presence of the… |
 | GOV-0077 | must_not | governance | memory-boundary.md:34 [packed] | — | When external memory and in-repo steering disagree, in-repo steering wins for rules and g… |
 | GOV-0078 | must_not | governance | memory-boundary.md:43 [packed] | — | Metadata is part of the diff. When you substantively change a memory file, refresh its fr… |
-| ARCH-0270 | must | architecture | doctrine/owner-boundaries.md:17 [packed] | — | Every durable concern must have one semantic owner. |
-| ARCH-0271 | must | architecture | doctrine/owner-boundaries.md:27 [packed] | — | Introducing a new owner is a cutover, not an addition: the prior authority for that conce… |
-| ARCH-0272 | must | architecture | doctrine/owner-boundaries.md:52 [packed] | — | After repeated bugs at one boundary, the next fix must reduce the number of paths, states… |
-| ARCH-0273 | must | architecture | doctrine/owner-boundaries.md:80 [packed] | — | An active Quest may have several frontiers, but each attempt must start from one selected… |
-| ARCH-0274 | must | architecture | doctrine/owner-boundaries.md:94 [packed] | — | If the semantic owner, owner boundary, or next required action changes, record a finding … |
-| ARCH-0275 | must | architecture | doctrine/single-path.md:58 [packed] | — | The "consumer set" and "forbidden reinterpretations" bullets above overlap by design with… |
-| ARCH-0276 | must | architecture | doctrine/state-encoding.md:17 [packed] | — | Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must han… |
-| ARCH-0277 | must | architecture | doctrine/state-encoding.md:36 [packed] | — | When an owner-path read or write is unresolved because pressure, authority establishment,… |
-| ARCH-0278 | must | architecture | doctrine/state-encoding.md:61 [packed] | — | Critical convergence traffic must keep stricter admission than diagnostics, observability… |
-| ARCH-0279 | must | architecture | doctrine/state-encoding.md:62 [packed] | — | In practice, node-state publication, membership publication, and authoritative operation … |
-| ARCH-0280 | must | architecture | doctrine/state-encoding.md:115 [packed] | — | State names are boundary-specific but must distinguish static exclusion, missing discover… |
+| ARCH-0273 | must | architecture | doctrine/owner-boundaries.md:17 [packed] | — | Every durable concern must have one semantic owner. |
+| ARCH-0274 | must | architecture | doctrine/owner-boundaries.md:27 [packed] | — | Introducing a new owner is a cutover, not an addition: the prior authority for that conce… |
+| ARCH-0275 | must | architecture | doctrine/owner-boundaries.md:52 [packed] | — | After repeated bugs at one boundary, the next fix must reduce the number of paths, states… |
+| ARCH-0276 | must | architecture | doctrine/owner-boundaries.md:80 [packed] | — | An active Quest may have several frontiers, but each attempt must start from one selected… |
+| ARCH-0277 | must | architecture | doctrine/owner-boundaries.md:94 [packed] | — | If the semantic owner, owner boundary, or next required action changes, record a finding … |
+| ARCH-0278 | must | architecture | doctrine/owner-boundaries.md:121 [packed] | — | A seam where two owners meet is itself a concern, and it must have one owner and one chec… |
+| ARCH-0279 | must | architecture | doctrine/owner-boundaries.md:162 [packed] | — | A Quest whose scope crosses owners must seal the interaction artifact as a closure requir… |
+| ARCH-0280 | must | architecture | doctrine/single-path.md:58 [packed] | — | The "consumer set" and "forbidden reinterpretations" bullets above overlap by design with… |
+| ARCH-0281 | must | architecture | doctrine/state-encoding.md:17 [packed] | — | Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must han… |
+| ARCH-0282 | must | architecture | doctrine/state-encoding.md:36 [packed] | — | When an owner-path read or write is unresolved because pressure, authority establishment,… |
+| ARCH-0283 | must | architecture | doctrine/state-encoding.md:61 [packed] | — | Critical convergence traffic must keep stricter admission than diagnostics, observability… |
+| ARCH-0284 | must | architecture | doctrine/state-encoding.md:62 [packed] | — | In practice, node-state publication, membership publication, and authoritative operation … |
+| ARCH-0285 | must | architecture | doctrine/state-encoding.md:115 [packed] | — | State names are boundary-specific but must distinguish static exclusion, missing discover… |
 | GOV-0079 | must | governance | workflow-guidelines/solver-quests.md:40 [packed] | — | Operating Contract — A Quest must: declare a single sealed doneWhen predicate up front; |
 | GOV-0080 | must | governance | workflow-guidelines/solver-quests.md:41 [packed] | — | Operating Contract — A Quest must: define one or more independent frontiers[]; |
 | GOV-0081 | must | governance | workflow-guidelines/solver-quests.md:42 [packed] | — | Operating Contract — A Quest must: measure progress with lower-is-better probe metrics; |
@@ -553,10 +558,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0086 | must | governance | workflow-guidelines/solver-quests.md:598 [packed] | — | widen-scope: selected frontier theory required. |
 | GOV-0087 | must | governance | workflow-guidelines/solver-quests.md:599 [packed] | — | model: selected frontier theory, active system theory, and --modelRef or --modelNotApplic… |
 | GOV-0088 | must | governance | workflow-guidelines/solver-quests.md:601 [packed] | — | change-approach: selected frontier theory remains required; model evidence is not require… |
-| ARCH-0281 | must_not | architecture | runtime-contracts.md:190 [packed] | — | The services row is the canonical example of non-overlapping field owners on one row: ide… |
-| ARCH-0282 | must_not | architecture | runtime-contracts.md:195 [packed] | — | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
+| ARCH-0286 | must_not | architecture | runtime-contracts.md:190 [packed] | — | The services row is the canonical example of non-overlapping field owners on one row: ide… |
+| ARCH-0287 | must_not | architecture | runtime-contracts.md:195 [packed] | — | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
 | GOV-0089 | must | governance | workflow-guidelines/solver-quests.md:997 [packed] | — | THEORY_REQUIRED (non-terminal): the selected rung needs system or frontier theory before … |
-| ARCH-0283 | should | architecture | system-guidelines.md:305 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
+| ARCH-0288 | should | architecture | system-guidelines.md:305 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
 | TEST-0120 | must | testing | testing-guidelines/fixtures.md:117 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
 | TEST-0121 | must | testing | testing-guidelines/fixtures.md:129 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
 | TEST-0122 | must | testing | testing-guidelines/proof-ladders.md:28 [packed] | — | Quest-Driven Validation Policy — Required workflow: After the Quest validation surface is… |
@@ -599,10 +604,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0103 | must_not | governance | workflow-guidelines/solver-quests.md:490 [packed] | — | Gradient refinement of the sealed metric: a frontier metric may be sharpened from the sca… |
 | GOV-0104 | must_not | governance | workflow-guidelines/solver-quests.md:497 [packed] | — | Harness-not-measuring gate (rr-G): a run that did not measure the system under test — a d… |
 | GOV-0105 | must_not | governance | workflow-guidelines/solver-quests.md:632 [packed] | — | Record attempt: node scripts/solve.js step --id <id> --commit --changeRef diff:<path> --s… |
-| ARCH-0284 | may | architecture | system-guidelines.md:128 [packed] | — | 2. One Semantic Owner Per Concern — Required contract: A shared row may have several fiel… |
-| ARCH-0285 | may | architecture | system-guidelines.md:155 [packed] | — | 3. One Path Per Semantic Decision — Required contract: Collectors may gather evidence; on… |
+| ARCH-0289 | may | architecture | system-guidelines.md:128 [packed] | — | 2. One Semantic Owner Per Concern — Required contract: A shared row may have several fiel… |
+| ARCH-0290 | may | architecture | system-guidelines.md:155 [packed] | — | 3. One Path Per Semantic Decision — Required contract: Collectors may gather evidence; on… |
 | GOV-0106 | must_not | governance | workflow-guidelines/solver-quests.md:985 [packed] | — | EXHAUSTED (terminal): every frontier is parked **as exhausted**, either by the finite str… |
-| ARCH-0286 | may | architecture | system-guidelines.md:338 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Internal machinery may appear in d… |
+| ARCH-0291 | may | architecture | system-guidelines.md:338 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Internal machinery may appear in d… |
 | GOV-0107 | must_not | governance | workflow-guidelines/solver-quests.md:1000 [packed] | — | BLOCKED (non-terminal): a recoverable precondition gate (scope pressure, regression-resto… |
 | GOV-0108 | must_not | governance | workflow-guidelines/solver-quests.md:1044 [packed] | — | A guard never silently halts a run. Every blocking continuation is mapped, through a reve… |
 | GOV-0109 | must_not | governance | workflow-guidelines/solver-quests.md:1045 [packed] | — | A guard never silently halts a run. Every blocking continuation is mapped, through a reve… |
@@ -624,17 +629,18 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0149 | should | testing | testing-guidelines/regression-policy.md:31 [packed] | — | The fix should make the failing test pass |
 | TEST-0150 | should | testing | testing-guidelines/regression-policy.md:82 [packed] | — | Is the current problem a repeated pattern? If so, is there a shared abstraction that shou… |
 | GOV-0121 | must | governance | workflow-guidelines/solver-quests.md:975 [packed] | — | For any other open choice the agent MUST pick a sensible default, record a finding, and c… |
-| ARCH-0287 | must | architecture | doctrine/decision-experiments.md:46 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0288 | must | architecture | doctrine/decision-experiments.md:56 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0289 | must | architecture | doctrine/decision-experiments.md:58 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0290 | must | architecture | doctrine/decision-experiments.md:59 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0291 | must | architecture | doctrine/decision-experiments.md:60 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0292 | must | architecture | doctrine/decision-experiments.md:61 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0293 | must | architecture | doctrine/decision-experiments.md:64 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0294 | must | architecture | doctrine/decision-experiments.md:66 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0295 | must | architecture | doctrine/decision-experiments.md:68 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0296 | must | architecture | doctrine/decision-experiments.md:91 [packed] | — | Every active Quest must name its residual-closure inventory before code is treated as com… |
-| ARCH-0297 | must | architecture | doctrine/state-encoding.md:124 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
+| ARCH-0292 | must | architecture | doctrine/decision-experiments.md:46 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0293 | must | architecture | doctrine/decision-experiments.md:56 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0294 | must | architecture | doctrine/decision-experiments.md:58 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0295 | must | architecture | doctrine/decision-experiments.md:59 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0296 | must | architecture | doctrine/decision-experiments.md:60 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0297 | must | architecture | doctrine/decision-experiments.md:61 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0298 | must | architecture | doctrine/decision-experiments.md:64 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0299 | must | architecture | doctrine/decision-experiments.md:66 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0300 | must | architecture | doctrine/decision-experiments.md:68 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0301 | must | architecture | doctrine/decision-experiments.md:91 [packed] | — | Every active Quest must name its residual-closure inventory before code is treated as com… |
+| ARCH-0302 | must | architecture | doctrine/owner-boundaries.md:156 [packed] | — | Hold every gate to the default liveness invariant: an engaged hold, gate, or fence must h… |
+| ARCH-0303 | must | architecture | doctrine/state-encoding.md:124 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
 | GOV-0122 | must | governance | workflow-guidelines/solver-quests.md:1172 [packed] | — | EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of … |
 | TEST-0151 | must | testing | testing-guidelines/fixtures.md:105 [packed] | — | When adding a new test file, or making a behavior-meaningful change to an existing test —… |
 | TEST-0152 | must | testing | testing-guidelines/harness.md:155 [packed] | — | Only run the complete suite (npm run check:release) at: - Checkpoint tasks explicitly mar… |
@@ -647,7 +653,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0127 | must_not | governance | workflow-guidelines/solver-quests.md:292 [packed] | — | A later regression-resolution finding with resolution explained may discharge the restore… |
 | GOV-0128 | must_not | governance | workflow-guidelines/solver-quests.md:406 [packed] | — | Pushing is a separate, outward-facing action — for Quest and ad-hoc work alike, a never-b… |
 | GOV-0129 | must_not | governance | workflow-guidelines/solver-quests.md:421 [packed] | — | The CONVERGENCE_GUARDS map is a source-owned compile-time policy surface, not a runtime f… |
-| ARCH-0298 | may | architecture | system-guidelines.md:237 [packed] | — | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
+| ARCH-0304 | may | architecture | system-guidelines.md:237 [packed] | — | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
 | GOV-0130 | must_not | governance | workflow-guidelines/solver-quests.md:784 [packed] | — | When the quest declaration seals a verificationTemplates array, those categories are the … |
 | GOV-0131 | must_not | governance | workflow-guidelines/solver-quests.md:845 [packed] | — | The reproducibility of recorded artifact bytes from reachable commits may be measured wit… |
 | GOV-0132 | must_not | governance | workflow-guidelines/solver-quests.md:949 [packed] | — | When a finding materially falsifies or constrains ANOTHER declared quest's premise, route… |
@@ -655,13 +661,13 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0134 | must_not | governance | workflow-guidelines/solver-quests.md:1179 [packed] | — | The production reflection path runs only when the executor exposes a reflect() method (th… |
 | GOV-0135 | must_not | governance | workflow-guidelines/solver-quests.md:1196 [packed] | — | A supervised driver — a human, or any agent that drives the Solver through individual sub… |
 | TEST-0155 | should | testing | testing-guidelines/regression-policy.md:32 [packed] | — | No other tests should break |
-| ARCH-0299 | should | architecture | doctrine/decision-experiments.md:88 [packed] | — | Active implementation should target one executable concern per Quest. |
-| ARCH-0300 | should | architecture | doctrine/decision-experiments.md:89 [packed] | — | Quest status should live in the Solver event log and report rather than in parallel track… |
+| ARCH-0305 | should | architecture | doctrine/decision-experiments.md:88 [packed] | — | Active implementation should target one executable concern per Quest. |
+| ARCH-0306 | should | architecture | doctrine/decision-experiments.md:89 [packed] | — | Quest status should live in the Solver event log and report rather than in parallel track… |
 | TEST-0156 | should | testing | testing-guidelines/proof-ladders.md:17 [packed] | — | All non-trivial implementation work should have validation owned by its active Quest. |
 | TEST-0157 | should | testing | testing-guidelines/proof-ladders.md:123 [packed] | — | Runtime Quests that touch already oversized files should record whether they are adding l… |
 | TEST-0158 | should | testing | testing-guidelines/regression-policy.md:168 [packed] | — | These tests should be small and targeted. |
 | TEST-0159 | should | testing | testing-guidelines/release-gate.md:114 [packed] | — | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
-| ARCH-0301 | may | architecture | runtime-contracts.md:37 [packed] | — | Owner And Path Detail — Required runtime patterns: A shared row may have multiple owners … |
+| ARCH-0307 | may | architecture | runtime-contracts.md:37 [packed] | — | Owner And Path Detail — Required runtime patterns: A shared row may have multiple owners … |
 | GOV-0136 | must | governance | roadmap.md:154 [packed] | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
 | GOV-0137 | must | governance | roadmap.md:161 [packed] | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
 | GOV-0138 | must | governance | workflow-guidelines/solver-quests.md:44 [packed] | — | Operating Contract — A Quest must: accumulate version 2 source attempts into one exact la… |
@@ -682,9 +688,9 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0163 | may | testing | testing-guidelines/harness.md:46 [packed] | — | Runner Parallelism Budget Policy — Required workflow: Only restore higher parallelism aft… |
 | TEST-0164 | may | testing | testing-guidelines/regression-policy.md:86 [packed] | — | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
 | GOV-0150 | must | governance | workflow-guidelines/subagents.md:60 [packed] | — | Adversarial verification prompts (design vets, implementation verifiers) MUST include eve… |
-| ARCH-0302 | should | architecture | doctrine/decision-experiments.md:49 [packed] | — | Runtime Quests that follow such a model should cite it as their scope basis and proof sur… |
-| ARCH-0303 | should | architecture | doctrine/decision-experiments.md:80 [packed] | — | Implementation work should be as explicit and bounded as the runtime design. |
-| ARCH-0304 | should | architecture | doctrine/owner-boundaries.md:99 [packed] | — | Sub-agents are optional for research, implementation, and additional attempt review; they… |
+| ARCH-0308 | should | architecture | doctrine/decision-experiments.md:49 [packed] | — | Runtime Quests that follow such a model should cite it as their scope basis and proof sur… |
+| ARCH-0309 | should | architecture | doctrine/decision-experiments.md:80 [packed] | — | Implementation work should be as explicit and bounded as the runtime design. |
+| ARCH-0310 | should | architecture | doctrine/owner-boundaries.md:99 [packed] | — | Sub-agents are optional for research, implementation, and additional attempt review; they… |
 | GOV-0151 | must | governance | workflow-guidelines/solver-quests.md:211 [packed] | — | Therefore, when authoring a quest whose defect class is visible in a live surface (demo, … |
 | GOV-0152 | should | governance | workflow-guidelines/solver-quests.md:542 [packed] | — | Frontier theory: why the next local intervention should move the selected frontier metric. |
 | GOV-0153 | must | governance | workflow-guidelines/solver-quests.md:327 [packed] | — | A resume-critical result (a newly pinned binding head, a decided next move) must therefor… |
@@ -696,8 +702,8 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0159 | must | governance | workflow-guidelines/solver-quests.md:970 [packed] | — | The agent MUST stop and request user input only on one of the four canonical core.md stop… |
 | GOV-0160 | should | governance | workflow-guidelines/subagents.md:51 [packed] | — | The review should return findings, candidate risks, or suggested frontiers. |
 | GOV-0161 | must | governance | workflow-guidelines/solver-quests.md:1017 [packed] | — | Guards: the command refuses without a prior reflect --altitude on the quest (the frame-qu… |
-| ARCH-0305 | may | architecture | doctrine/state-encoding.md:98 [packed] | — | Authoritative — owned by the same semantic owner and plane; may directly admit or reject. |
-| ARCH-0306 | may | architecture | doctrine/state-encoding.md:100 [packed] | — | Equivalent — another access path to the same owner and plane; may confirm or refute only … |
+| ARCH-0311 | may | architecture | doctrine/state-encoding.md:98 [packed] | — | Authoritative — owned by the same semantic owner and plane; may directly admit or reject. |
+| ARCH-0312 | may | architecture | doctrine/state-encoding.md:100 [packed] | — | Equivalent — another access path to the same owner and plane; may confirm or refute only … |
 | GOV-0162 | may | governance | roadmap.md:125 [packed] | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
 | TEST-0165 | may | testing | testing-guidelines/fixtures.md:82 [packed] | — | The test-only-paths rule and this flag-coupling rule together close the loop — neither te… |
 | TEST-0166 | may | testing | testing-guidelines/regression-policy.md:316 [packed] | — | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
@@ -713,11 +719,11 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0172 | should | governance | workflow-guidelines/solver-quests.md:647 [packed] | — | Independent work within a Quest SHOULD run concurrently: batch independent reads, fan out… |
 | GOV-0173 | should | governance | workflow-guidelines/solver-quests.md:649 [packed] | — | Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list. |
 | GOV-0174 | should | governance | workflow-guidelines/solver-quests.md:967 [packed] | — | Longer work SHOULD use run --keep-alive to replay progress-bearing MAX_CYCLES; the extern… |
-| ARCH-0307 | should | architecture | doctrine/decision-experiments.md:82 [packed] | — | A human idea should first become the smallest sufficient form: - direct bounded work with… |
+| ARCH-0313 | should | architecture | doctrine/decision-experiments.md:82 [packed] | — | A human idea should first become the smallest sufficient form: - direct bounded work with… |
 | GOV-0175 | should | governance | memory-boundary.md:9 [packed] | — | In-repo steering (docs/steering/**, the generated packs under docs/steering/llm/, rules.j… |
-| ARCH-0308 | may | architecture | doctrine/state-encoding.md:27 [packed] | — | Under load, the system may slow down, defer work, or reject new edge work with structured… |
+| ARCH-0314 | may | architecture | doctrine/state-encoding.md:27 [packed] | — | Under load, the system may slow down, defer work, or reject new edge work with structured… |
 | GOV-0176 | may | governance | workflow-guidelines/quest-artifacts.md:40 [packed] | — | The derived cache is git-ignored and may be rebuilt from the Quest plus event log. |
-| ARCH-0309 | should | architecture | doctrine/decision-experiments.md:71 [packed] | — | Classification-only is a valid result only when the causal chain is still explicit, the f… |
+| ARCH-0315 | should | architecture | doctrine/decision-experiments.md:71 [packed] | — | Classification-only is a valid result only when the causal chain is still explicit, the f… |
 | GOV-0177 | may | governance | workflow-guidelines/solver-quests.md:291 [packed] | — | Only a genuinely broken or disconnected harness is globally invalid/non-measuring. |
 | GOV-0178 | may | governance | workflow-guidelines/solver-quests.md:355 [packed] | — | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
 | GOV-0179 | should | governance | workflow-guidelines/solver-quests.md:1164 [packed] | — | Mandatory Step-Back Reflection Turn — Altitude (framing) reflection (altitudeReflectionDu… |

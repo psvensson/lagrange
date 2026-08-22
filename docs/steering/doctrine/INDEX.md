@@ -37,7 +37,7 @@ for older links only.
 ## Doctrine Summary (highlights — not the full rule set)
 
 These nine lines are a memory aid, **not** the complete or authoritatively-numbered
-doctrine. The canonical rules are the numbered sections §1–§17 (with §11a/§11b)
+doctrine. The canonical rules are the numbered sections §1–§18 (with §11a/§11b)
 in the four sub-files below; these summary numbers are independent of the section
 numbers and do not map to them one-to-one. Read the sub-files for the binding text.
 
@@ -55,7 +55,7 @@ numbers and do not map to them one-to-one. Read the sub-files for the binding te
 
 | File | Topics covered |
 | --- | --- |
-| [`owner-boundaries.md`](owner-boundaries.md) | §1 One Semantic Owner · §6 Shrink Boundary When Bugs Cluster · §14 Shared Surfaces Name Consumers · §17 Quest Execution Has One Current Boundary |
+| [`owner-boundaries.md`](owner-boundaries.md) | §1 One Semantic Owner · §6 Shrink Boundary When Bugs Cluster · §14 Shared Surfaces Name Consumers · §17 Quest Execution Has One Current Boundary · §18 Interactions Between Owners Are Owned Contracts |
 | [`single-path.md`](single-path.md) | §2 One Ingress · §3 One Dissemination Path · §11b One Contract Shape Per Concern · §12 Normalize Boundary Impedance · §13 Named Modes Over Combinable Flags |
 | [`state-encoding.md`](state-encoding.md) | §4 Phase Code Must Hand Off · §5 Slower Under Pressure · §7 Resource Lifetime Bounded · §10 Normalize Evidence · §15 One Progress Grammar |
 | [`decision-experiments.md`](decision-experiments.md) | §8 Architectural Direction for Repeated Control-Plane Problems · §9 Escalate Repeated Scenario Failures · §11a Sharpen Work Before Changing Code · §16 Failure Migration As Boundary Evidence |

@@ -24,10 +24,10 @@
       "file": "doctrine/owner-boundaries.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 11,
-      "masterRuleCount": 11,
+      "ruleCount": 17,
+      "masterRuleCount": 17,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 11
+      "emittedMasterRuleCount": 17
     },
     {
       "file": "doctrine/single-path.md",
@@ -305,13 +305,13 @@
     }
   ],
   "stats": {
-    "candidateCount": 689,
-    "dedupedRuleCount": 683,
-    "exportedRuleCount": 683,
+    "candidateCount": 695,
+    "dedupedRuleCount": 689,
+    "exportedRuleCount": 689,
     "aliasRuleCount": 4,
-    "masterRuleCount": 679,
-    "emittedMasterRuleCount": 679,
-    "estimatedAllRulesTokens": 32201
+    "masterRuleCount": 685,
+    "emittedMasterRuleCount": 685,
+    "estimatedAllRulesTokens": 32455
   },
   "rules": [
     {
@@ -1491,7 +1491,7 @@
         }
       ],
       "aliases": [
-        "ARCH-0232"
+        "ARCH-0234"
       ]
     },
     {
@@ -3250,6 +3250,38 @@
       "id": "ARCH-0144",
       "domain": "architecture",
       "strength": "must_not",
+      "tags": [],
+      "rule": "Model checks — models/ indexed by models/CL-INDEX.md: design-class liveness bugs (circular dependencies, lost wakeups, holds without release) are proven by a TLC bug/fixed config pair, never by scenario reruns alone.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 139,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0145",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Argue the fix against the artifact's invariants and extend the artifact in the same change, never afterwards.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 154,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0146",
+      "domain": "architecture",
+      "strength": "must_not",
       "tags": [
         "lifecycle"
       ],
@@ -3265,7 +3297,7 @@
       ]
     },
     {
-      "id": "ARCH-0145",
+      "id": "ARCH-0147",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3281,7 +3313,7 @@
       ]
     },
     {
-      "id": "ARCH-0146",
+      "id": "ARCH-0148",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3299,7 +3331,7 @@
       ]
     },
     {
-      "id": "ARCH-0147",
+      "id": "ARCH-0149",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3601,7 +3633,7 @@
       ]
     },
     {
-      "id": "ARCH-0148",
+      "id": "ARCH-0150",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3619,7 +3651,7 @@
       ]
     },
     {
-      "id": "ARCH-0149",
+      "id": "ARCH-0151",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3637,7 +3669,7 @@
       ]
     },
     {
-      "id": "ARCH-0150",
+      "id": "ARCH-0152",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3655,7 +3687,7 @@
       ]
     },
     {
-      "id": "ARCH-0151",
+      "id": "ARCH-0153",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3673,7 +3705,7 @@
       ]
     },
     {
-      "id": "ARCH-0152",
+      "id": "ARCH-0154",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3691,7 +3723,7 @@
       ]
     },
     {
-      "id": "ARCH-0153",
+      "id": "ARCH-0155",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3710,7 +3742,7 @@
       ]
     },
     {
-      "id": "ARCH-0154",
+      "id": "ARCH-0156",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3729,7 +3761,7 @@
       ]
     },
     {
-      "id": "ARCH-0155",
+      "id": "ARCH-0157",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3748,7 +3780,7 @@
       ]
     },
     {
-      "id": "ARCH-0156",
+      "id": "ARCH-0158",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3766,7 +3798,7 @@
       ]
     },
     {
-      "id": "ARCH-0157",
+      "id": "ARCH-0159",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3786,7 +3818,7 @@
       ]
     },
     {
-      "id": "ARCH-0158",
+      "id": "ARCH-0160",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3804,7 +3836,7 @@
       ]
     },
     {
-      "id": "ARCH-0159",
+      "id": "ARCH-0161",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3823,7 +3855,7 @@
       ]
     },
     {
-      "id": "ARCH-0160",
+      "id": "ARCH-0162",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3841,7 +3873,7 @@
       ]
     },
     {
-      "id": "ARCH-0161",
+      "id": "ARCH-0163",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3860,7 +3892,7 @@
       ]
     },
     {
-      "id": "ARCH-0162",
+      "id": "ARCH-0164",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3878,7 +3910,7 @@
       ]
     },
     {
-      "id": "ARCH-0163",
+      "id": "ARCH-0165",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3896,7 +3928,7 @@
       ]
     },
     {
-      "id": "ARCH-0164",
+      "id": "ARCH-0166",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3915,7 +3947,7 @@
       ]
     },
     {
-      "id": "ARCH-0165",
+      "id": "ARCH-0167",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3933,7 +3965,7 @@
       ]
     },
     {
-      "id": "ARCH-0166",
+      "id": "ARCH-0168",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3951,7 +3983,7 @@
       ]
     },
     {
-      "id": "ARCH-0167",
+      "id": "ARCH-0169",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3969,7 +4001,7 @@
       ]
     },
     {
-      "id": "ARCH-0168",
+      "id": "ARCH-0170",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3985,7 +4017,7 @@
       ]
     },
     {
-      "id": "ARCH-0169",
+      "id": "ARCH-0171",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4003,7 +4035,7 @@
       ]
     },
     {
-      "id": "ARCH-0170",
+      "id": "ARCH-0172",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4021,7 +4053,7 @@
       ]
     },
     {
-      "id": "ARCH-0171",
+      "id": "ARCH-0173",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4041,7 +4073,7 @@
       ]
     },
     {
-      "id": "ARCH-0172",
+      "id": "ARCH-0174",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4059,7 +4091,7 @@
       ]
     },
     {
-      "id": "ARCH-0173",
+      "id": "ARCH-0175",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4078,7 +4110,7 @@
       ]
     },
     {
-      "id": "ARCH-0174",
+      "id": "ARCH-0176",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4094,7 +4126,7 @@
       ]
     },
     {
-      "id": "ARCH-0175",
+      "id": "ARCH-0177",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4112,7 +4144,7 @@
       ]
     },
     {
-      "id": "ARCH-0176",
+      "id": "ARCH-0178",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4128,7 +4160,7 @@
       ]
     },
     {
-      "id": "ARCH-0177",
+      "id": "ARCH-0179",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4144,7 +4176,7 @@
       ]
     },
     {
-      "id": "ARCH-0178",
+      "id": "ARCH-0180",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4162,7 +4194,7 @@
       ]
     },
     {
-      "id": "ARCH-0179",
+      "id": "ARCH-0181",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4181,7 +4213,7 @@
       ]
     },
     {
-      "id": "ARCH-0180",
+      "id": "ARCH-0182",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4197,7 +4229,7 @@
       ]
     },
     {
-      "id": "ARCH-0181",
+      "id": "ARCH-0183",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4213,7 +4245,7 @@
       ]
     },
     {
-      "id": "ARCH-0182",
+      "id": "ARCH-0184",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4229,7 +4261,7 @@
       ]
     },
     {
-      "id": "ARCH-0183",
+      "id": "ARCH-0185",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4247,7 +4279,7 @@
       ]
     },
     {
-      "id": "ARCH-0184",
+      "id": "ARCH-0186",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4263,7 +4295,7 @@
       ]
     },
     {
-      "id": "ARCH-0185",
+      "id": "ARCH-0187",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4281,7 +4313,7 @@
       ]
     },
     {
-      "id": "ARCH-0186",
+      "id": "ARCH-0188",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4299,7 +4331,7 @@
       ]
     },
     {
-      "id": "ARCH-0187",
+      "id": "ARCH-0189",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4317,7 +4349,7 @@
       ]
     },
     {
-      "id": "ARCH-0188",
+      "id": "ARCH-0190",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4335,7 +4367,7 @@
       ]
     },
     {
-      "id": "ARCH-0189",
+      "id": "ARCH-0191",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4351,7 +4383,7 @@
       ]
     },
     {
-      "id": "ARCH-0190",
+      "id": "ARCH-0192",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4367,7 +4399,7 @@
       ]
     },
     {
-      "id": "ARCH-0191",
+      "id": "ARCH-0193",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4383,7 +4415,7 @@
       ]
     },
     {
-      "id": "ARCH-0192",
+      "id": "ARCH-0194",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4399,7 +4431,7 @@
       ]
     },
     {
-      "id": "ARCH-0193",
+      "id": "ARCH-0195",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4415,7 +4447,7 @@
       ]
     },
     {
-      "id": "ARCH-0194",
+      "id": "ARCH-0196",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4433,7 +4465,7 @@
       ]
     },
     {
-      "id": "ARCH-0195",
+      "id": "ARCH-0197",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4451,7 +4483,7 @@
       ]
     },
     {
-      "id": "ARCH-0196",
+      "id": "ARCH-0198",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4469,7 +4501,7 @@
       ]
     },
     {
-      "id": "ARCH-0197",
+      "id": "ARCH-0199",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4487,7 +4519,7 @@
       ]
     },
     {
-      "id": "ARCH-0198",
+      "id": "ARCH-0200",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4505,7 +4537,7 @@
       ]
     },
     {
-      "id": "ARCH-0199",
+      "id": "ARCH-0201",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4521,7 +4553,7 @@
       ]
     },
     {
-      "id": "ARCH-0200",
+      "id": "ARCH-0202",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4537,7 +4569,7 @@
       ]
     },
     {
-      "id": "ARCH-0201",
+      "id": "ARCH-0203",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4553,7 +4585,7 @@
       ]
     },
     {
-      "id": "ARCH-0202",
+      "id": "ARCH-0204",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4569,7 +4601,7 @@
       ]
     },
     {
-      "id": "ARCH-0203",
+      "id": "ARCH-0205",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4587,7 +4619,7 @@
       ]
     },
     {
-      "id": "ARCH-0204",
+      "id": "ARCH-0206",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4603,7 +4635,7 @@
       ]
     },
     {
-      "id": "ARCH-0205",
+      "id": "ARCH-0207",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4621,7 +4653,7 @@
       ]
     },
     {
-      "id": "ARCH-0206",
+      "id": "ARCH-0208",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4640,7 +4672,7 @@
       ]
     },
     {
-      "id": "ARCH-0207",
+      "id": "ARCH-0209",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4659,7 +4691,7 @@
       ]
     },
     {
-      "id": "ARCH-0208",
+      "id": "ARCH-0210",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4677,7 +4709,7 @@
       ]
     },
     {
-      "id": "ARCH-0209",
+      "id": "ARCH-0211",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4695,7 +4727,7 @@
       ]
     },
     {
-      "id": "ARCH-0210",
+      "id": "ARCH-0212",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4711,7 +4743,7 @@
       ]
     },
     {
-      "id": "ARCH-0211",
+      "id": "ARCH-0213",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4729,7 +4761,7 @@
       ]
     },
     {
-      "id": "ARCH-0212",
+      "id": "ARCH-0214",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -4745,7 +4777,7 @@
       ]
     },
     {
-      "id": "ARCH-0213",
+      "id": "ARCH-0215",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -5795,7 +5827,7 @@
       ]
     },
     {
-      "id": "ARCH-0214",
+      "id": "ARCH-0216",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5811,7 +5843,7 @@
       ]
     },
     {
-      "id": "ARCH-0215",
+      "id": "ARCH-0217",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5827,7 +5859,7 @@
       ]
     },
     {
-      "id": "ARCH-0216",
+      "id": "ARCH-0218",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -5845,7 +5877,7 @@
       ]
     },
     {
-      "id": "ARCH-0217",
+      "id": "ARCH-0219",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -5863,7 +5895,7 @@
       ]
     },
     {
-      "id": "ARCH-0218",
+      "id": "ARCH-0220",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -5881,7 +5913,7 @@
       ]
     },
     {
-      "id": "ARCH-0219",
+      "id": "ARCH-0221",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5897,7 +5929,7 @@
       ]
     },
     {
-      "id": "ARCH-0220",
+      "id": "ARCH-0222",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -5916,7 +5948,7 @@
       ]
     },
     {
-      "id": "ARCH-0221",
+      "id": "ARCH-0223",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5932,7 +5964,7 @@
       ]
     },
     {
-      "id": "ARCH-0222",
+      "id": "ARCH-0224",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5948,7 +5980,7 @@
       ]
     },
     {
-      "id": "ARCH-0223",
+      "id": "ARCH-0225",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -5966,7 +5998,7 @@
       ]
     },
     {
-      "id": "ARCH-0224",
+      "id": "ARCH-0226",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5982,7 +6014,7 @@
       ]
     },
     {
-      "id": "ARCH-0225",
+      "id": "ARCH-0227",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -5998,7 +6030,7 @@
       ]
     },
     {
-      "id": "ARCH-0226",
+      "id": "ARCH-0228",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6014,7 +6046,7 @@
       ]
     },
     {
-      "id": "ARCH-0227",
+      "id": "ARCH-0229",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6030,7 +6062,7 @@
       ]
     },
     {
-      "id": "ARCH-0228",
+      "id": "ARCH-0230",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -6049,7 +6081,7 @@
       ]
     },
     {
-      "id": "ARCH-0229",
+      "id": "ARCH-0231",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6065,7 +6097,7 @@
       ]
     },
     {
-      "id": "ARCH-0230",
+      "id": "ARCH-0232",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6081,7 +6113,7 @@
       ]
     },
     {
-      "id": "ARCH-0231",
+      "id": "ARCH-0233",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6097,7 +6129,7 @@
       ]
     },
     {
-      "id": "ARCH-0232",
+      "id": "ARCH-0234",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -6116,7 +6148,7 @@
       "canonical_of": "ARCH-0067"
     },
     {
-      "id": "ARCH-0233",
+      "id": "ARCH-0235",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6132,7 +6164,7 @@
       ]
     },
     {
-      "id": "ARCH-0234",
+      "id": "ARCH-0236",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6148,7 +6180,7 @@
       ]
     },
     {
-      "id": "ARCH-0235",
+      "id": "ARCH-0237",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -6164,7 +6196,7 @@
       ]
     },
     {
-      "id": "ARCH-0236",
+      "id": "ARCH-0238",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -6253,7 +6285,7 @@
       ]
     },
     {
-      "id": "ARCH-0237",
+      "id": "ARCH-0239",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6273,7 +6305,7 @@
       ]
     },
     {
-      "id": "ARCH-0238",
+      "id": "ARCH-0240",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6298,7 +6330,7 @@
       ]
     },
     {
-      "id": "ARCH-0239",
+      "id": "ARCH-0241",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6314,7 +6346,7 @@
       ]
     },
     {
-      "id": "ARCH-0240",
+      "id": "ARCH-0242",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6333,7 +6365,7 @@
       ]
     },
     {
-      "id": "ARCH-0241",
+      "id": "ARCH-0243",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6351,7 +6383,7 @@
       ]
     },
     {
-      "id": "ARCH-0242",
+      "id": "ARCH-0244",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6367,7 +6399,7 @@
       ]
     },
     {
-      "id": "ARCH-0243",
+      "id": "ARCH-0245",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6385,7 +6417,7 @@
       ]
     },
     {
-      "id": "ARCH-0244",
+      "id": "ARCH-0246",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6401,7 +6433,7 @@
       ]
     },
     {
-      "id": "ARCH-0245",
+      "id": "ARCH-0247",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6417,7 +6449,7 @@
       ]
     },
     {
-      "id": "ARCH-0246",
+      "id": "ARCH-0248",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6595,7 +6627,7 @@
       ]
     },
     {
-      "id": "ARCH-0247",
+      "id": "ARCH-0249",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6773,7 +6805,7 @@
       ]
     },
     {
-      "id": "ARCH-0248",
+      "id": "ARCH-0250",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6789,7 +6821,7 @@
       ]
     },
     {
-      "id": "ARCH-0249",
+      "id": "ARCH-0251",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6805,7 +6837,7 @@
       ]
     },
     {
-      "id": "ARCH-0250",
+      "id": "ARCH-0252",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6821,7 +6853,7 @@
       ]
     },
     {
-      "id": "ARCH-0251",
+      "id": "ARCH-0253",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6839,7 +6871,7 @@
       ]
     },
     {
-      "id": "ARCH-0252",
+      "id": "ARCH-0254",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6855,7 +6887,23 @@
       ]
     },
     {
-      "id": "ARCH-0253",
+      "id": "ARCH-0255",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [],
+      "rule": "Coupled-pair registry — audit-enforced pairs of files that must move together.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 144,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0256",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6871,7 +6919,7 @@
       ]
     },
     {
-      "id": "ARCH-0254",
+      "id": "ARCH-0257",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6889,7 +6937,7 @@
       ]
     },
     {
-      "id": "ARCH-0255",
+      "id": "ARCH-0258",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6907,7 +6955,7 @@
       ]
     },
     {
-      "id": "ARCH-0256",
+      "id": "ARCH-0259",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6923,7 +6971,7 @@
       ]
     },
     {
-      "id": "ARCH-0257",
+      "id": "ARCH-0260",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6939,7 +6987,7 @@
       ]
     },
     {
-      "id": "ARCH-0258",
+      "id": "ARCH-0261",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6955,7 +7003,7 @@
       ]
     },
     {
-      "id": "ARCH-0259",
+      "id": "ARCH-0262",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6971,7 +7019,7 @@
       ]
     },
     {
-      "id": "ARCH-0260",
+      "id": "ARCH-0263",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6990,7 +7038,7 @@
       ]
     },
     {
-      "id": "ARCH-0261",
+      "id": "ARCH-0264",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -7008,7 +7056,7 @@
       ]
     },
     {
-      "id": "ARCH-0262",
+      "id": "ARCH-0265",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7024,7 +7072,7 @@
       ]
     },
     {
-      "id": "ARCH-0263",
+      "id": "ARCH-0266",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7040,7 +7088,7 @@
       ]
     },
     {
-      "id": "ARCH-0264",
+      "id": "ARCH-0267",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8009,7 +8057,7 @@
       ]
     },
     {
-      "id": "ARCH-0265",
+      "id": "ARCH-0268",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -8324,7 +8372,7 @@
       ]
     },
     {
-      "id": "ARCH-0266",
+      "id": "ARCH-0269",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -8342,7 +8390,7 @@
       ]
     },
     {
-      "id": "ARCH-0267",
+      "id": "ARCH-0270",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8358,7 +8406,7 @@
       ]
     },
     {
-      "id": "ARCH-0268",
+      "id": "ARCH-0271",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8374,7 +8422,7 @@
       ]
     },
     {
-      "id": "ARCH-0269",
+      "id": "ARCH-0272",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8568,7 +8616,7 @@
       ]
     },
     {
-      "id": "ARCH-0270",
+      "id": "ARCH-0273",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8586,7 +8634,7 @@
       ]
     },
     {
-      "id": "ARCH-0271",
+      "id": "ARCH-0274",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8604,7 +8652,7 @@
       ]
     },
     {
-      "id": "ARCH-0272",
+      "id": "ARCH-0275",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8620,7 +8668,7 @@
       ]
     },
     {
-      "id": "ARCH-0273",
+      "id": "ARCH-0276",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8638,7 +8686,7 @@
       ]
     },
     {
-      "id": "ARCH-0274",
+      "id": "ARCH-0277",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8656,7 +8704,43 @@
       ]
     },
     {
-      "id": "ARCH-0275",
+      "id": "ARCH-0278",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "A seam where two owners meet is itself a concern, and it must have one owner and one checked artifact.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 121,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0279",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [
+        "governance"
+      ],
+      "rule": "A Quest whose scope crosses owners must seal the interaction artifact as a closure requirement, not only the code change.",
+      "score": 198,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 162,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0280",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8674,7 +8758,7 @@
       ]
     },
     {
-      "id": "ARCH-0276",
+      "id": "ARCH-0281",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8698,7 +8782,7 @@
       ]
     },
     {
-      "id": "ARCH-0277",
+      "id": "ARCH-0282",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8716,7 +8800,7 @@
       ]
     },
     {
-      "id": "ARCH-0278",
+      "id": "ARCH-0283",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8732,7 +8816,7 @@
       ]
     },
     {
-      "id": "ARCH-0279",
+      "id": "ARCH-0284",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8748,7 +8832,7 @@
       ]
     },
     {
-      "id": "ARCH-0280",
+      "id": "ARCH-0285",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8930,7 +9014,7 @@
       ]
     },
     {
-      "id": "ARCH-0281",
+      "id": "ARCH-0286",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -8948,7 +9032,7 @@
       ]
     },
     {
-      "id": "ARCH-0282",
+      "id": "ARCH-0287",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -8984,7 +9068,7 @@
       ]
     },
     {
-      "id": "ARCH-0283",
+      "id": "ARCH-0288",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -9735,7 +9819,7 @@
       ]
     },
     {
-      "id": "ARCH-0284",
+      "id": "ARCH-0289",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -9753,7 +9837,7 @@
       ]
     },
     {
-      "id": "ARCH-0285",
+      "id": "ARCH-0290",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -9787,7 +9871,7 @@
       ]
     },
     {
-      "id": "ARCH-0286",
+      "id": "ARCH-0291",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -10154,7 +10238,7 @@
       ]
     },
     {
-      "id": "ARCH-0287",
+      "id": "ARCH-0292",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10172,7 +10256,7 @@
       ]
     },
     {
-      "id": "ARCH-0288",
+      "id": "ARCH-0293",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10190,7 +10274,7 @@
       ]
     },
     {
-      "id": "ARCH-0289",
+      "id": "ARCH-0294",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10206,7 +10290,7 @@
       ]
     },
     {
-      "id": "ARCH-0290",
+      "id": "ARCH-0295",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10222,7 +10306,7 @@
       ]
     },
     {
-      "id": "ARCH-0291",
+      "id": "ARCH-0296",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10238,7 +10322,7 @@
       ]
     },
     {
-      "id": "ARCH-0292",
+      "id": "ARCH-0297",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10256,7 +10340,7 @@
       ]
     },
     {
-      "id": "ARCH-0293",
+      "id": "ARCH-0298",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10272,7 +10356,7 @@
       ]
     },
     {
-      "id": "ARCH-0294",
+      "id": "ARCH-0299",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10288,7 +10372,7 @@
       ]
     },
     {
-      "id": "ARCH-0295",
+      "id": "ARCH-0300",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10304,7 +10388,7 @@
       ]
     },
     {
-      "id": "ARCH-0296",
+      "id": "ARCH-0301",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10322,7 +10406,23 @@
       ]
     },
     {
-      "id": "ARCH-0297",
+      "id": "ARCH-0302",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [],
+      "rule": "Hold every gate to the default liveness invariant: an engaged hold, gate, or fence must have a reachable release path — an admissible move class, a disengagement condition, or a bounded escalation releases it. A gate that defers its own cure violates this rule even when every row of its matrix is individually justified.",
+      "score": 184,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 156,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0303",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10540,7 +10640,7 @@
       ]
     },
     {
-      "id": "ARCH-0298",
+      "id": "ARCH-0304",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -10673,7 +10773,7 @@
       ]
     },
     {
-      "id": "ARCH-0299",
+      "id": "ARCH-0305",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -10689,7 +10789,7 @@
       ]
     },
     {
-      "id": "ARCH-0300",
+      "id": "ARCH-0306",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -10771,7 +10871,7 @@
       ]
     },
     {
-      "id": "ARCH-0301",
+      "id": "ARCH-0307",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -11118,7 +11218,7 @@
       ]
     },
     {
-      "id": "ARCH-0302",
+      "id": "ARCH-0308",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -11136,7 +11236,7 @@
       ]
     },
     {
-      "id": "ARCH-0303",
+      "id": "ARCH-0309",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -11152,7 +11252,7 @@
       ]
     },
     {
-      "id": "ARCH-0304",
+      "id": "ARCH-0310",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -11352,7 +11452,7 @@
       ]
     },
     {
-      "id": "ARCH-0305",
+      "id": "ARCH-0311",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -11370,7 +11470,7 @@
       ]
     },
     {
-      "id": "ARCH-0306",
+      "id": "ARCH-0312",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -11632,7 +11732,7 @@
       ]
     },
     {
-      "id": "ARCH-0307",
+      "id": "ARCH-0313",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -11666,7 +11766,7 @@
       ]
     },
     {
-      "id": "ARCH-0308",
+      "id": "ARCH-0314",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -11700,7 +11800,7 @@
       ]
     },
     {
-      "id": "ARCH-0309",
+      "id": "ARCH-0315",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -12025,5 +12125,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-08-19T05:08:20.072Z"
+  "generatedAt": "2026-08-22T15:56:38.002Z"
 }
