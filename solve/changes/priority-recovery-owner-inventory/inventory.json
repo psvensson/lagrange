@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "1600258f502b7a64bfb16b84d0ff0e216382062a5bdfd22a66f97ee3e0c9f106"
+    "sourceSha256": "5b37a58e2fef3da696908388bf5bd864abdb5e537fc540a4b9385517e334ddc1"
   },
   "layerDirection": [
     "raw_observation",

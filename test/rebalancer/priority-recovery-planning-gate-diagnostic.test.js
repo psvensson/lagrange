@@ -300,7 +300,7 @@ test(
       );
     t.equal(gate.operationCreationRequired, true, 'cure creation is required');
     t.strictSame(
-      gate.noReadyNodePlanningCapability,
+      gate.ledgerSurplusDrainPlanningCapability,
       {
         kind: 'ledger_surplus_drain',
         targetReplicaCount: 3,
@@ -309,7 +309,7 @@ test(
       'the gate carries the concrete retained placement across subsystems',
     );
     t.ok(
-      Object.isFrozen(gate.noReadyNodePlanningCapability.targetNodeIds),
+      Object.isFrozen(gate.ledgerSurplusDrainPlanningCapability.targetNodeIds),
       'callers cannot mutate the owner-issued placement capability',
     );
 
@@ -392,7 +392,7 @@ test(
           operationCreationRequired: true,
           operationCreationPartitionId: 'replica_operations-p1',
           operationCreationScope: 'current_partition',
-          noReadyNodePlanningCapability: Object.freeze({
+          ledgerSurplusDrainPlanningCapability: Object.freeze({
             kind: 'ledger_surplus_drain',
             targetReplicaCount: 3,
             targetNodeIds: Object.freeze([

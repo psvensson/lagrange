@@ -450,9 +450,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     if (!ledgerConcentration) {
       return null;
     }
-    const noReadyNodePlanningCapability =
+    const ledgerSurplusDrainPlanningCapability =
       buildLedgerSurplusDrainPlanningCapability(ledgerConcentration);
-    if (!noReadyNodePlanningCapability) {
+    if (!ledgerSurplusDrainPlanningCapability) {
       return null;
     }
     return Object.freeze({
@@ -460,7 +460,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       operationCreationPartitionId: partitionId,
       operationCreationScope:
         PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
-      noReadyNodePlanningCapability,
+      ledgerSurplusDrainPlanningCapability,
     });
   },
 
@@ -504,7 +504,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         operationCreationPartitionId: normalizedPartitionId,
         operationCreationScope:
           PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
-        noReadyNodePlanningCapability: null,
+        ledgerSurplusDrainPlanningCapability: null,
       });
     }
 
@@ -519,7 +519,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         operationCreationRequired: false,
         operationCreationPartitionId: null,
         operationCreationScope: null,
-        noReadyNodePlanningCapability: null,
+        ledgerSurplusDrainPlanningCapability: null,
       });
     }
 
@@ -529,7 +529,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         this.resolvePriorityRecoveryFollowUpPartitionId(surrogateDecision),
       operationCreationScope:
         PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.SURROGATE_PARTITION,
-      noReadyNodePlanningCapability: null,
+      ledgerSurplusDrainPlanningCapability: null,
     });
   },
 

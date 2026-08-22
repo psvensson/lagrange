@@ -75,7 +75,7 @@ function expectedPlanningGateSnapshot({required, partitionId = null}) {
     operationCreationScope: required ?
       TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION :
       null,
-    noReadyNodePlanningCapability: null,
+    ledgerSurplusDrainPlanningCapability: null,
   });
 }
 

@@ -155,11 +155,11 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
         evaluationContext,
       );
-    const noReadyNodePlanningCapability =
-      operationCreationGate?.noReadyNodePlanningCapability || null;
+    const ledgerSurplusDrainPlanningCapability =
+      operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
     if (
       availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
-      !noReadyNodePlanningCapability
+      !ledgerSurplusDrainPlanningCapability
     ) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
         entityId: this.entityId,
@@ -175,26 +175,29 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       effectivePolicy,
       inventorySourceStateBefore,
     );
-    if (
-      availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
-      noReadyNodePlanningCapability
-    ) {
-      // The interaction owner authorizes exactly one zero-READY operation:
-      // a count-decreasing ledger surplus drain whose retained target nodes
-      // came from the admission owner's authoritative voter placement. Keep
-      // the generic placement diagnostics and inventory snapshot, but do not
-      // let its unrelated READY projection relabel this concrete remove-only
-      // plan as degraded and suppress it.
+    if (ledgerSurplusDrainPlanningCapability) {
+      // The concentration owner authorizes exactly one operation for this
+      // state: a count-decreasing ledger surplus drain whose retained target
+      // nodes came from the admission owner's authoritative voter placement.
+      // The capability's own minting evidence is the authorization, so it is
+      // honored REGARDLESS of how many nodes the READY projection reports:
+      // an engaged quorum-spread hold withholds joiner READY leases, and a
+      // partial READY view (for example only the seed) would otherwise
+      // relabel this remove-only plan as degraded, invert its target set,
+      // and silently drop the drain the hold is waiting for (quest
+      // ledger-quorum-spread-hold-cure-drain-admission; DT invariant
+      // cure-stays-admissible). Keep the generic placement diagnostics and
+      // inventory snapshot; only the target state is retargeted.
       targetState = Object.freeze({
         ...targetState,
         targetReplicaCount:
-          noReadyNodePlanningCapability.targetReplicaCount,
+          ledgerSurplusDrainPlanningCapability.targetReplicaCount,
         targetNodes: Object.freeze([
-          ...noReadyNodePlanningCapability.targetNodeIds,
+          ...ledgerSurplusDrainPlanningCapability.targetNodeIds,
         ]),
         degraded: false,
         degradedReason: null,
-        noReadyNodePlanningKind: noReadyNodePlanningCapability.kind,
+        noReadyNodePlanningKind: ledgerSurplusDrainPlanningCapability.kind,
       });
     }
     const planningMembershipPublicationEpoch =

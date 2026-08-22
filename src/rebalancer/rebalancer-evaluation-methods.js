@@ -52,14 +52,14 @@ const REBALANCER_EVALUATION_METHODS = {
       this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
         evaluationContext,
       );
-    const noReadyNodePlanningCapability =
-      operationCreationGate?.noReadyNodePlanningCapability || null;
+    const ledgerSurplusDrainPlanningCapability =
+      operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
     // The cycle owner has already established that a priority-recovery move
     // must be created. This includes count-decreasing ledger cures, which need
     // no READY target node and are what allow formation-held nodes to become
     // READY. Reapplying the generic empty-ready-set guard here would invert
     // that dependency and recreate the cold-formation deadlock.
-    if (noReadyNodePlanningCapability) {
+    if (ledgerSurplusDrainPlanningCapability) {
       this.lastSuboptimalSignal = null;
       return true;
     }
