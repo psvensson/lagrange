@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2438191,
-        "sha256": "2ac6521c6ae378ee5053782dedcf1a946aeaae5c7546b86b0749f0ed0f9a9d4d"
+        "bytes": 2437624,
+        "sha256": "873ab394df188d568fd599574cf766e8936d6aaaf84d639d8b0d95fc034071f7"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "45f4c7803e0058d997fd8e1334dc5ac30d61a68609551c53f721d1e201109c95"
+        "sha256": "8046641b04635a688f725f267b6d3bd4281bf346f4d552f297dfcdf2f65098b9"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3263a3be40b07b4b8d8f1ae5f22e2a32f247bb3f80e6aff75fe4a03a20216252"
+    "inputDigest": "99c506424982247ade4ff8df737d9814478d582c960425dd00932483f8fe55a5"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "45f4c7803e0058d997fd8e1334dc5ac30d61a68609551c53f721d1e201109c95"
+          "sha256": "8046641b04635a688f725f267b6d3bd4281bf346f4d552f297dfcdf2f65098b9"
         },
         "cloneGroups": 810,
         "duplicatedLines": 31055,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2438191,
-        "sha256": "2ac6521c6ae378ee5053782dedcf1a946aeaae5c7546b86b0749f0ed0f9a9d4d"
+        "bytes": 2437624,
+        "sha256": "873ab394df188d568fd599574cf766e8936d6aaaf84d639d8b0d95fc034071f7"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "4c0c6bc1fa9ddbbba409f1084058b2ccd832ecefbd6e971590175745532d4d29",
+      "sourceDigest": "d45a5a720182f01a8552eb9765f7294f3705d551ef4a7da4aa5fcb8554aa0f0b",
       "moduleCount": 4933,
-      "edgeCount": 21932,
+      "edgeCount": 21923,
       "unresolvedCount": 34
     }
   },
@@ -274,7 +274,7 @@
       "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 628,
+      "importIn": 626,
       "importOut": 388,
       "score": 1228.7,
       "topPaths": [
@@ -443,7 +443,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 37,
-      "importOut": 382,
+      "importOut": 373,
       "score": 412,
       "topPaths": [
         "test/integration/move-replica-handoff.integration.test.js",
@@ -610,7 +610,7 @@
       "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 102,
+      "importIn": 101,
       "importOut": 54,
       "score": 254.2,
       "topPaths": [
@@ -694,7 +694,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 84,
+      "importIn": 83,
       "importOut": 67,
       "score": 200,
       "topPaths": [
@@ -722,7 +722,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 102,
+      "importIn": 101,
       "importOut": 80,
       "score": 197,
       "topPaths": [
@@ -946,7 +946,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 146,
+      "importIn": 145,
       "importOut": 45,
       "score": 129.8,
       "topPaths": [
@@ -1725,7 +1725,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 22,
+      "importIn": 21,
       "importOut": 10,
       "score": 36,
       "topPaths": [

@@ -349,9 +349,21 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
 
     let capturedRow = null;
     const cdcIntegrationService = {
+      // Mirrors the real cdc-integration-service-mutations upsert envelope:
+      // success plus partitionResult/visibility fields, never a legacy
+      // outcome string (the frozen outcome enum rejects unknown forms).
       async upsertSystemTableRow(tableName, row) {
         capturedRow = {tableName, row};
-        return {success: true, outcome: 'applied-via-runtime-owner'};
+        return {
+          success: true,
+          operation: 'upsert',
+          tableName,
+          data: row,
+          partitionResult: {success: true, affectedRows: 1},
+          visibilityState: 'visible',
+          contractState: 'ready',
+          nextAction: 'proceed',
+        };
       },
     };
     const api = new BootstrapAPI({
@@ -377,7 +389,7 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
 
     t.match(result, {
       success: true,
-      outcome: 'applied-via-runtime-owner',
+      outcome: 'applied',
       completionState: 'applied',
       contractState: 'ready',
       nextAction: 'proceed',

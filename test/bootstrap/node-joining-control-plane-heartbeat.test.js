@@ -27,8 +27,10 @@ function initializeTestEnvironment() {
 
 function setHeartbeatNodeStateUpdateTargets(service, targetAddress) {
   const resolver = () => [targetAddress];
-  service.resolveNodeStateUpdateTargetCandidates = resolver;
-  service.resolveControlPlaneTargetAddressCandidates = resolver;
+  // Target resolution is owned by NodeStatePublicationOwner; patching the
+  // service-level aliases is dead since the single-owner cutover.
+  service.nodeStatePublicationOwner.resolveNodeStateUpdateTargetCandidates =
+    resolver;
 }
 
 test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages',

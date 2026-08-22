@@ -465,6 +465,8 @@ test(
           return [{
             operation_id: 'svc-op-1',
             type: 'MOVE_REPLICA',
+            entity_type: 'partition',
+            entity_id: 'services-p1',
             partition_id: 'services-p1',
             replica_id: 'services-p1-r2',
             source_node_id: 'joining-node-readiness-evaluator',
@@ -475,6 +477,8 @@ test(
           }, {
             operation_id: 'tx-op-1',
             type: 'MOVE_REPLICA',
+            entity_type: 'partition',
+            entity_id: 'sql_transactions-p1',
             partition_id: 'sql_transactions-p1',
             replica_id: 'sql_transactions-p1-r2',
             source_node_id: 'joining-node-readiness-evaluator',
@@ -546,6 +550,8 @@ test(
           return [{
             operation_id: 'tx-op-1',
             type: 'MOVE_REPLICA',
+            entity_type: 'partition',
+            entity_id: 'sql_transactions-p1',
             partition_id: 'sql_transactions-p1',
             replica_id: 'sql_transactions-p1-r2',
             source_node_id: 'seed-node',
@@ -620,6 +626,8 @@ test(
           return [{
             operation_id: 'priority-op-1',
             type: 'REPLACE',
+            entity_type: 'partition',
+            entity_id: 'replica_operations-p1',
             partition_id: 'replica_operations-p1',
             replica_id: 'replica_operations-p1-r4',
             source_node_id: 'seed-node',
@@ -725,6 +733,8 @@ test(
           return [{
             operation_id: JOIN_READINESS_TEST_PRIORITY_OPERATION_ID,
             type: JOIN_READINESS_TEST_OPERATION_TYPE.REPLACE,
+            entity_type: 'partition',
+            entity_id: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,
             partition_id: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,
             replica_id: JOIN_READINESS_TEST_PRIORITY_REPLICA_ID,
             source_node_id: JOIN_READINESS_TEST_NODE_ID,
