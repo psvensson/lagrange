@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 222,
+    "placement-rebalance": 223,
     "query-sql": 156,
     "release-packaging": 10,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2070,
-  "digest": "fnv1a32-81a585ce",
+  "censusSize": 2071,
+  "digest": "fnv1a32-0b82bf2f",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
     "test/address/address-manager.test.js": "transport-messaging",
@@ -1432,6 +1432,7 @@
     "test/rebalancer/in-flight-aware-replica-count.test.js": "placement-rebalance",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
+    "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",

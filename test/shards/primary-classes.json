@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1819,
+    "unit": 1820,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2070,
-  "digest": "fnv1a32-4d2a6941",
+  "censusSize": 2071,
+  "digest": "fnv1a32-7233ebbb",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1415,6 +1415,7 @@
     "test/rebalancer/in-flight-aware-replica-count.test.js": "unit",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "unit",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "unit",
+    "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "unit",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "integration",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "unit",
     "test/rebalancer/move-planner-capacity-gating.test.js": "unit",

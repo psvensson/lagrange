@@ -496,6 +496,45 @@ const CONFIGS = [
     expectedFailurePattern: 'Temporal property EventuallyClosed was violated',
   },
   {
+    id: 'ledger-spread-drain-release-starved',
+    mode: 'ledger-spread-drain-release-starved',
+    module: path.resolve(
+      'models',
+      'ledger-spread-drain-release',
+      'LedgerSpreadDrainRelease.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'ledger-spread-drain-release',
+      'LedgerSpreadDrainRelease_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'ledger-spread-drain-release-tlc-starved.model.report.json',
+    scenario: 'user-table-metadata-fanout-ledger-drain-wedge',
+    owner: 'operation_ledger_hold_policy',
+    boundary: 'rebalancer_admission',
+    expectedFailurePattern: 'Temporal property HoldEventuallyReleases was violated',
+  },
+  {
+    id: 'ledger-spread-drain-release-cured',
+    mode: 'ledger-spread-drain-release-cured',
+    module: path.resolve(
+      'models',
+      'ledger-spread-drain-release',
+      'LedgerSpreadDrainRelease.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'ledger-spread-drain-release',
+      'LedgerSpreadDrainRelease_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'ledger-spread-drain-release-tlc-cured.model.report.json',
+    scenario: 'user-table-metadata-fanout-ledger-drain-wedge',
+    owner: 'operation_ledger_hold_policy',
+    boundary: 'rebalancer_admission',
+  },
+  {
     id: 'ledger-selfmove-remint-idempotent',
     mode: 'ledger-selfmove-remint-idempotent',
     module: path.resolve(

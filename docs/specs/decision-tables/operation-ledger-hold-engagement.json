@@ -38,6 +38,10 @@
     {
       "id": "fail-closed-defer",
       "statement": "Any undeclared (hold, moveClass) combination resolves to defer; an unknown move never silently bypasses a hold."
+    },
+    {
+      "id": "cure-planning-not-starved",
+      "statement": "The hold's own side-effects must not starve cure planning: the ledger_surplus_drain planning capability, once minted from concentration evidence by the admission owner, is consumed by the move planner regardless of the READY projection. An engaged quorum-spread hold withholds joiner READY leases, so a READY-conditioned consumer would suppress the drain the hold is waiting for and leave the hold without a reachable release path (quest ledger-quorum-spread-hold-cure-drain-admission)."
     }
   ],
   "rules": [
@@ -94,7 +98,8 @@
       },
       "reason": "The count-neutral spread REPLACE is the cure for a concentrated ledger quorum and must pass the hold it releases.",
       "invariantRefs": [
-        "cure-stays-admissible"
+        "cure-stays-admissible",
+        "cure-planning-not-starved"
       ]
     },
     {

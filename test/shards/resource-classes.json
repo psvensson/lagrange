@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2053,
+    "ordinary": 2054,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2070,
-  "digest": "fnv1a32-c2ae6a07",
+  "censusSize": 2071,
+  "digest": "fnv1a32-06d62481",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -1414,6 +1414,7 @@
     "test/rebalancer/in-flight-aware-replica-count.test.js": "ordinary",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "ordinary",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "ordinary",
+    "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "ordinary",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "ordinary",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "ordinary",
     "test/rebalancer/move-planner-capacity-gating.test.js": "ordinary",
