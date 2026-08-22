@@ -5,8 +5,8 @@ description: >-
   Deploys a seed node plus joiner nodes as StatefulSets with stable per-pod DNS
   identity (name-first addressing survives pod restarts with new IPs).
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.1
+appVersion: "0.1.1"
 home: https://github.com/psvensson/lagrange
 sources:
   - https://github.com/psvensson/lagrange

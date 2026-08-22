@@ -10,6 +10,13 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-22
+
+Maintenance release. First release published by the GitHub Actions release
+workflow (the sole release owner going forward): the `v*` tag drives the full
+release gate, checksummed SEA and Helm artifacts, the GitHub Release page,
+Docker Hub images, and the first `lagrange-server` npm publication.
+
 ### Added
 - Per-release notes on every release surface, generated from this changelog
   (`scripts/release-notes.js`): the GitHub release page carries the
@@ -19,12 +26,22 @@ releases without a compatibility guarantee.
   (`org.opencontainers.image.version/revision/created`). Tagging a version
   without a non-empty changelog section now fails the release in seconds.
 
+### Fixed
+- The admin dashboard's playback viewer read memory fields the recorder no
+  longer emits, rendering a dead `0.0 MB` memory row and hiding capture
+  errors for new recordings. The admin static viewer is now the single
+  checked-in copy, shows process RSS and the reclaimable-cache-adjusted
+  container working set, and the test harness ships that same file into every
+  scenario bundle.
+
 ### Removed
 - The broken `test:coverage` npm script (`tap test/` exceeds the OS argument
   limit; use the sharded `test:*` scripts instead).
 - Helm chart publication of the unauthenticated admin listener. Chart-managed
   pods now bind admin to loopback and reject the original insecure values;
   REST `/health` and `/readyz` remain available through the Services.
+- Seventeen dead symlinks under `scripts/` that pointed at an external
+  tooling pack via an absolute path that never resolved.
 
 ## [0.1.0] — 2026-07-02
 
@@ -97,5 +114,6 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0
