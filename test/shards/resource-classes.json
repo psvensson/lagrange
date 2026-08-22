@@ -1521,6 +1521,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "ordinary",
     "test/rebalancer/replica-placement-cure-policy.test.js": "ordinary",
     "test/rebalancer/replica-placement-policy.property.test.js": "ordinary",
+    "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "ordinary",
     "test/rebalancer/replica-status-completeness.property.test.js": "ordinary",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "ordinary",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "ordinary",

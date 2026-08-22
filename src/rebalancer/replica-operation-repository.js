@@ -151,6 +151,7 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
   AUTHORITATIVE: 'authoritative',
   ABSENT: 'absent',
   UNAVAILABLE: 'unavailable',
+  AUTHORITATIVE_ABSENT_CACHE_BLOCKING: 'authoritative_absent_cache_blocking',
 });
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',

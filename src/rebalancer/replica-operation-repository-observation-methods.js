@@ -391,19 +391,45 @@ function assignReplicaOperationRepositoryObservationMethods(
           lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
         });
       }
+      if (
+        authoritativeReadAttempted === true &&
+        authoritativeReadFailed !== true
+      ) {
+        // ABSENT is positive retirement evidence and terminalizes retiring
+        // operations, so a successful-but-empty authoritative read must be
+        // corroborated: while the local cache still holds a live (not
+        // removed/failed) row for this replica, the stores have diverged and
+        // absence is NOT proven. Fail closed to UNAVAILABLE so the stopping
+        // reconcile takes its defer/retry lane and re-dispatches the real
+        // deletion owner instead of resting terminal on stale actuals.
+        const contradictingCacheRow = this.getObservedReplicaRowFromCache(
+          replicaId,
+          partitionId,
+          targetNodeId,
+          readOptions,
+        );
+        const contradictingLifecycle = contradictingCacheRow ?
+          this.normalizeObservedReplicaLifecycle(contradictingCacheRow) :
+          null;
+        if (
+          contradictingLifecycle !== null &&
+          contradictingLifecycle !== ReplicaStatus.REMOVED &&
+          contradictingLifecycle !== ReplicaStatus.FAILED
+        ) {
+          return Object.freeze({
+            state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+            source: REPLICA_OPERATION_REPOSITORY_LITERAL
+              .AUTHORITATIVE_ABSENT_CACHE_BLOCKING,
+          });
+        }
+        return Object.freeze({
+          state: REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT,
+          source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
+        });
+      }
       return Object.freeze({
-        state:
-        authoritativeReadFailed === true ?
-          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
-          authoritativeReadAttempted === true ?
-            REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT :
-            REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
-        source:
-        authoritativeReadFailed === true ?
-          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
-          authoritativeReadAttempted === true ?
-            REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE :
-            REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+        state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+        source: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
       });
     }
     /**

@@ -1539,6 +1539,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-cure-policy.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-policy.property.test.js": "placement-rebalance",
+    "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "placement-rebalance",
     "test/rebalancer/replica-status-completeness.property.test.js": "placement-rebalance",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "placement-rebalance",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "placement-rebalance",

@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 32
+## Open quests — 33
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -78,6 +78,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
 | readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 ⚠ stale | — |
+| replica-retirement-terminal-actuals-coherence | product | 1 | 0 | 2026-08-22 | — |
 | restore-deterministic-cloud-gate | process | 2 | 0 | 2026-08-18 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |

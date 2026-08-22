@@ -1522,6 +1522,7 @@
     "test/rebalancer/replica-operations-single-writer.test.js": "unit",
     "test/rebalancer/replica-placement-cure-policy.test.js": "unit",
     "test/rebalancer/replica-placement-policy.property.test.js": "unit",
+    "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "unit",
     "test/rebalancer/replica-status-completeness.property.test.js": "unit",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "unit",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "unit",
