@@ -52,6 +52,15 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
   const now = typeof options.now === 'function' ?
     options.now :
     () => Date.now();
+  // Injectable scheduler pairs with the injectable clock: the coalescing
+  // window is timing-exact, so deterministic tests drive both instead of
+  // racing real timers on a loaded host.
+  const scheduleTimeout = typeof options.scheduleTimeout === 'function' ?
+    options.scheduleTimeout :
+    setTimeout;
+  const cancelTimeout = typeof options.cancelTimeout === 'function' ?
+    options.cancelTimeout :
+    clearTimeout;
   const leaderElectionCooldownMs =
     Number.isFinite(options.leaderElectionCooldownMs) &&
     options.leaderElectionCooldownMs >= 0 ?
@@ -86,7 +95,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
 
   const clearScheduledRecovery = () => {
     if (recoveryTimer) {
-      clearTimeout(recoveryTimer);
+      cancelTimeout(recoveryTimer);
       recoveryTimer = null;
     }
     scheduledDueAtMs = null;
@@ -146,7 +155,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     }
 
     clearScheduledRecovery();
-    recoveryTimer = setTimeout(() => {
+    recoveryTimer = scheduleTimeout(() => {
       recoveryTimer = null;
       scheduledDueAtMs = null;
       if (!pendingLeaderElectionRecovery) {

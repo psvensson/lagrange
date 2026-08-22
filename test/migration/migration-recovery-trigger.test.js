@@ -35,18 +35,45 @@ test('wireMigrationRecoveryOnLeaderElection coalesces bursty leader ' +
   'elections into one follow-up recovery', async (t) => {
   const recoverCalls = [];
   const partitionServices = createPartitionServices();
+  // Deterministic clock and scheduler: the coalescing window is
+  // timing-exact, so the test drives time explicitly instead of racing
+  // real 5/25/35ms timers against host scheduling (this exact burst
+  // assertion failed on a loaded CI runner when a >25ms event-loop stall
+  // fired the cooldown before the not-yet check).
+  let clockMs = 0;
+  const scheduled = [];
   const detach = wireMigrationRecoveryOnLeaderElection({
     sqlQueryEngine: createSqlQueryEngine(recoverCalls),
     partitionServices,
     leaderElectionCooldownMs: 25,
+    now: () => clockMs,
+    scheduleTimeout: (callback, delayMs) => {
+      const entry = {callback, dueAtMs: clockMs + delayMs, cleared: false};
+      scheduled.push(entry);
+      return entry;
+    },
+    cancelTimeout: (entry) => {
+      if (entry) {
+        entry.cleared = true;
+      }
+    },
     logger: {
       info() {},
       debug() {},
       error() {},
     },
   });
+  const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  const fireDueTimers = async () => {
+    for (const entry of scheduled.splice(0)) {
+      if (!entry.cleared && entry.dueAtMs <= clockMs) {
+        entry.callback();
+      }
+    }
+    await flushMicrotasks();
+  };
 
-  await wait(5);
+  await flushMicrotasks();
   t.equal(
     recoverCalls.length,
     1,
@@ -58,14 +85,20 @@ test('wireMigrationRecoveryOnLeaderElection coalesces bursty leader ' +
     partitionService.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED);
   }
 
-  await wait(5);
+  await flushMicrotasks();
   t.equal(
     recoverCalls.length,
     1,
     'bursty leader-election events should not start immediate duplicate recoveries',
   );
+  t.equal(
+    scheduled.filter((entry) => !entry.cleared).length,
+    1,
+    'the burst should coalesce into exactly one scheduled follow-up recovery',
+  );
 
-  await wait(35);
+  clockMs += 25;
+  await fireDueTimers();
   t.equal(
     recoverCalls.length,
     2,
