@@ -31,28 +31,63 @@ function createRepository(overrides = {}) {
   });
 }
 
-test('ReplicaOperationRepository treats authoritative absence as distinct from cache visibility',
-  async (t) => {
-    const repository = createRepository();
-    repository.getObservedReplicaRowFromCache = () => ({
-      lifecycle_status: 'ACTIVE',
-    });
-
-    const observation = await repository.getActualReplicaObservation(
-      'replica-1',
-      'partition-1',
-      'node-2',
-    );
-
-    t.same(
-      observation,
-      {
-        state: 'absent',
-        source: 'authoritative',
-      },
-      'successful authoritative no-row reads should not fall back to stale cache',
-    );
+test('ReplicaOperationRepository fails closed when a live cache row contradicts ' +
+  'authoritative absence',
+async (t) => {
+  const repository = createRepository();
+  // A production-shaped row (the normalizer reads `status`, not
+  // `lifecycle_status`): a surviving live row means the stores diverged, so
+  // ABSENT is not proven and the observation must fail closed (quest
+  // replica-retirement-terminal-actuals-coherence).
+  repository.getObservedReplicaRowFromCache = () => ({
+    service_id: 'replica-1',
+    partition_id: 'partition-1',
+    node_id: 'node-2',
+    status: 'active',
   });
+
+  const observation = await repository.getActualReplicaObservation(
+    'replica-1',
+    'partition-1',
+    'node-2',
+  );
+
+  t.same(
+    observation,
+    {
+      state: 'unavailable',
+      source: 'authoritative_absent_cache_blocking',
+    },
+    'a live contradicting cache row must veto authoritative absence',
+  );
+});
+
+test('ReplicaOperationRepository confirms authoritative absence when the cache ' +
+  'corroborates it',
+async (t) => {
+  const repository = createRepository();
+  repository.getObservedReplicaRowFromCache = () => ({
+    service_id: 'replica-1',
+    partition_id: 'partition-1',
+    node_id: 'node-2',
+    status: 'removed',
+  });
+
+  const observation = await repository.getActualReplicaObservation(
+    'replica-1',
+    'partition-1',
+    'node-2',
+  );
+
+  t.same(
+    observation,
+    {
+      state: 'absent',
+      source: 'authoritative',
+    },
+    'a removed cache row corroborates the successful no-row read as true absence',
+  );
+});
 
 test('ReplicaOperationRepository exposes cache fallback after authoritative failure explicitly',
   async (t) => {

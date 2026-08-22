@@ -392,8 +392,9 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
   );
 
   test(
-    'getActualReplicaStatus returns null when authoritative reads succeed ' +
-      'empty despite stale services cache state',
+    'getActualReplicaStatus returns null on authoritative no-row reads, and ' +
+      'a live stale cache row makes the observation fail closed instead of ' +
+      'proving absence',
     async (t) => {
       const cacheReadCounts = {
         get: 0,
@@ -472,12 +473,31 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityReadStateTests
         t.equal(
           actualStatus,
           null,
-          'successful authoritative no-row reads should win over stale cache visibility',
+          'a successful authoritative no-row read never yields a stale cache status',
         );
-        t.same(
-          cacheReadCounts,
-          {get: 0, getAll: 0, filter: 0},
-          'coordinator should not consult services cache after successful authoritative no-row reads',
+        // ABSENT is positive retirement evidence, so a successful-but-empty
+        // authoritative read is corroborated against the cache; a surviving
+        // live row means the stores diverged and the observation fails closed
+        // (quest replica-retirement-terminal-actuals-coherence).
+        t.ok(
+          cacheReadCounts.get >= 1,
+          'the corroboration gate must consult the services cache after a successful no-row read',
+        );
+        const observation = await coordinator.repository
+          .getActualReplicaObservation(
+            'partition-1-r2',
+            'partition-1',
+            'node-2',
+          );
+        t.equal(
+          observation.state,
+          'unavailable',
+          'a live cache row contradicting authoritative absence fails closed to unavailable',
+        );
+        t.equal(
+          observation.source,
+          'authoritative_absent_cache_blocking',
+          'the fail-closed observation names the contradiction source',
         );
       } finally {
         await coordinator.shutdown();
