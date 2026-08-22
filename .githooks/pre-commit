@@ -125,8 +125,13 @@ if [ "$REGEN_INVENTORIES" = "1" ] \
       > /dev/null
   fi
   node scripts/generate-priority-recovery-owner-inventory.js > /dev/null
+  # The --refresh fallback also rewrites the tracked import-graph seal; ship
+  # it with the same commit or the publisher's exact-HEAD worktree check fails
+  # when the gate's own --refresh regenerates a diverging seal (2026-08-22:
+  # three publish attempts died on exactly this).
   git add solve/changes/global-owner-debt-inventory/inventory.json \
-    solve/changes/priority-recovery-owner-inventory/inventory.json
+    solve/changes/priority-recovery-owner-inventory/inventory.json \
+    test/shards/impact-graph-seal.json
 fi
 
 if [ "$FAILURES" -gt 0 ]; then
