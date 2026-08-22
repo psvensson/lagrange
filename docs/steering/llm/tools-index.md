@@ -12,7 +12,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## top-level
 
-- `check` — `node scripts/check-fast-static.js && npm test`
+- `check` — `node scripts/run-verification.js --profile affected`
 - `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the curated Quest-first command quickstart.
 - `frontier` — Print the Solver frontier board.
@@ -102,7 +102,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## check
 
 - `check:memory-index` — `node scripts/check-memory-index.js`
-- `check:release` — `npm run test:ci && npm run test:gate`
+- `check:release` — `node scripts/run-verification.js --profile release`
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
 - `check:subsystem` — `node scripts/check-subsystem.js`
 
@@ -244,7 +244,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:all` — `node scripts/run-classified-test-files.js --primary unit,packaging,integration,bootstrap`
 - `test:analysis` — `npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
-- `test:ci` — `bash scripts/run-test-ci.sh`
 - `test:cli` — `find test/cli -type f -name '*.test.js' -print | sort | node scripts/run-classified-test-files.js --stdin`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
@@ -267,7 +266,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:fast` — `node scripts/run-classified-test-files.js --primary unit,packaging,integration --exclude-prefix test/integration/,test/bootstrap/`
 - `test:file` — `node scripts/run-classified-test-files.js`
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
-- `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
 - `test:llm-steering-usability` — `node scripts/run-llm-steering-usability-scenarios.js`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
@@ -278,9 +276,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:pgwire` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
 - `test:pgwire:integration` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-integration.txt)`
 - `test:pgwire:unit` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt)`
-- `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
 - `test:quality` — `npm run test:static && npm run test:mutation`
-- `test:quest-proof` — `node scripts/run-quest-proof.js`
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
@@ -306,4 +302,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-204 scripts indexed; 32 have a curated description, 172 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+200 scripts indexed; 32 have a curated description, 168 fall back to their raw command. Improve coverage in the two sources named in the header comment.

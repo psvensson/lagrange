@@ -116,6 +116,8 @@ test('an unreachable base is reported, never silently narrowed', () => {
   // collected. That fallback belongs to the workflow; the library must refuse
   // rather than quietly proving the working tree only.
   const missing = '0'.repeat(40);
-  assert.equal(changedRecords({root: repo, base: missing, head: shas.d}), null,
-    'an undiffable range returns null so the caller fails closed');
+  assert.throws(
+    () => changedRecords({root: repo, base: missing, head: shas.d}),
+    /change discovery failed: git diff/u,
+    'an undiffable range is a typed hard failure');
 });

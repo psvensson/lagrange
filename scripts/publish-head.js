@@ -249,7 +249,10 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
 function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
   checked(run, GIT_COMMAND, [PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
     cwd: worktree,
-    env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},
+    // The push hook validates the same content-addressed PASS receipt minted by
+    // gateExactHead. There is no environment bypass and no second meaning of
+    // "already tested".
+    env: gateEnv,
   });
   const remoteAfter = remoteMainSha(run, root);
   if (remoteAfter !== head) {

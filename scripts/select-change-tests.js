@@ -41,6 +41,7 @@ import {
 import {
   PACKAGE_MANIFEST_PATH,
   REASON_SAFETY_SPINE,
+  REFUSAL_CHANGE_DISCOVERY_FAILED,
   REFUSAL_RELEASE_PROOF_REQUIRED,
   REFUSAL_BANNER,
   RELEASE_PROOF_HINT,
@@ -83,7 +84,7 @@ export function loadSafetySpine(spineRoot = root) {
 // crosses a subsystem boundary must prove BOTH owners.
 export function changedPathsBetween(base, head, gitRoot = root) {
   const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? null : semanticPaths(records);
+  return semanticPaths(records);
 }
 
 // Which of those paths this change REMOVED. Kept separate from the path list
@@ -91,7 +92,7 @@ export function changedPathsBetween(base, head, gitRoot = root) {
 // a vanished source file must still prove its former owner.
 export function vanishedPathsBetween(base, head, gitRoot = root) {
   const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? new Set() : vanishedPaths(records);
+  return vanishedPaths(records);
 }
 
 // Which top-level package.json keys differ between the two states. Computed
@@ -239,18 +240,25 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  const changedPaths = changedPathsBetween(
-    invocation.base, invocation.headRevision);
-  if (changedPaths === null) {
-    process.stderr.write(
-      `cannot diff ${invocation.base}..${invocation.headRevision}${NEWLINE}`);
+  let records;
+  try {
+    records = changedRecords({
+      root,
+      base: invocation.base,
+      head: invocation.headRevision,
+    });
+  } catch (error) {
+    process.stderr.write(renderRefusal({
+      refusalCode: REFUSAL_CHANGE_DISCOVERY_FAILED,
+      refusals: [error.message],
+    }));
     process.exitCode = 1;
     return;
   }
   const plan = buildExecutionPlan({
-    changedPaths,
+    changedPaths: semanticPaths(records),
     packageFields: changedPackageFields(invocation.base, invocation.head),
-    vanished: vanishedPathsBetween(invocation.base, invocation.headRevision),
+    vanished: vanishedPaths(records),
   });
 
   if (invocation.explain) {

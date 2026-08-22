@@ -74,6 +74,15 @@ function buildFixtureRepo() {
     {recursive: true});
   fs.cpSync(path.join(root, 'test/shards'), path.join(repo, 'test/shards'),
     {recursive: true});
+  fs.cpSync(path.join(root, 'src'), path.join(repo, 'src'), {recursive: true});
+  fs.cpSync(path.join(root, 'wit'), path.join(repo, 'wit'), {recursive: true});
+  const primaryClasses = JSON.parse(fs.readFileSync(
+    path.join(root, 'test/shards/primary-classes.json'), UTF8)).classes;
+  for (const testPath of Object.keys(primaryClasses)) {
+    const absolute = path.join(repo, testPath);
+    fs.mkdirSync(path.dirname(absolute), {recursive: true});
+    fs.writeFileSync(absolute, '', UTF8);
+  }
   fs.copyFileSync(path.join(root, 'package.json'),
     path.join(repo, 'package.json'));
   fs.writeFileSync(path.join(repo, RUNNER),
@@ -136,10 +145,8 @@ test('the npm vocabulary is wired to the change proof', () => {
     'npm test must be the change-proof orchestrator');
   assert.ok(!/test:sharded|test:fast|test:gate|test:ci/.test(scripts.test),
     'npm test must not be a broad suite alias');
-  assert.match(scripts.check, /check-fast-static\.js/,
-    'npm run check must run the fast static layer');
-  assert.match(scripts.check, /npm test/,
-    'npm run check must then run the change proof');
+  assert.match(scripts.check, /run-verification\.js --profile affected/,
+    'npm run check must use the canonical affected profile');
 });
 
 test('an unclassifiable path refuses at the command boundary', () => {

@@ -33,7 +33,14 @@ import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {testsForSubsystem} from '../check-subsystem.js';
+import {
+  expandContractTests,
+  impactSelectionForChangedPath,
+  loadImpactContractRegistry,
+} from './impact-contract-registry.js';
+import {
+  testsForSubsystem,
+} from './test-subsystem-classification.js';
 import {withoutWorkspaceInjections} from './changed-paths.js';
 import {
   IMPACT_CONTRACTS_PATH,
@@ -75,7 +82,6 @@ import {
 // owner from the plan while every count still looked healthy.
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -84,7 +90,6 @@ const arraySome = Function.call.bind(Array.prototype.some);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8 = 'utf8';
 const TEST_SUFFIX = '.test.js';
@@ -123,50 +128,6 @@ export function subsystemForSourcePath(changedPath) {
     rule: null,
     ambiguous: arrayMap(hits, (hit) => `${hit.id}->${hit.subsystem}`),
   };
-}
-
-function contractWitnesses(contracts, changedPath) {
-  const witnesses = [];
-  for (const [id, contract] of Object.entries(contracts?.contracts || {})) {
-    if (!arraySome(contract.owners || [],
-      (owner) => stringStartsWith(changedPath, owner))) {
-      continue;
-    }
-    witnesses.push({id, tests: contract.tests || []});
-  }
-  return witnesses;
-}
-
-function coupledWitnesses(contracts, changedPath) {
-  const witnesses = [];
-  for (const [id, pair] of Object.entries(contracts?.coupledPairs || {})) {
-    const endpoints = pair.endpoints || [];
-    const touched = arrayFind(endpoints, (endpoint) =>
-      arraySome(endpoint.owners || [],
-        (owner) => stringStartsWith(changedPath, owner)));
-    if (!touched) continue;
-    for (const endpoint of endpoints) {
-      if (endpoint.id === touched.id) continue;
-      witnesses.push({id: `${id}:${endpoint.id}`, owners: endpoint.owners || []});
-    }
-  }
-  return witnesses;
-}
-
-// A contract names witness tests directly, as files or directories. No import
-// graph is consulted: the registry is curated, so its witnesses are authority.
-function expandWitness(classes, entries) {
-  const tests = new Set();
-  for (const entry of entries) {
-    if (stringEndsWith(entry, TEST_SUFFIX)) {
-      if (classes[entry]) tests.add(entry);
-      continue;
-    }
-    for (const testPath of Object.keys(classes)) {
-      if (stringStartsWith(testPath, entry)) tests.add(testPath);
-    }
-  }
-  return tests;
 }
 
 function addReason(plan, testPath, reason) {
@@ -318,7 +279,7 @@ function admitChangedTest(evidence, changedPath, classes, vanished) {
   addReason(evidence.plan, changedPath, REASON_CHANGED_TEST);
 }
 
-function admitChangedSource(evidence, changedPath, classes, contracts) {
+function admitChangedSource(evidence, changedPath, classes, registry) {
   const owner = subsystemForSourcePath(changedPath);
   if (!owner.subsystem) {
     evidence.refusals.push(`${REFUSED_UNKNOWN_OWNER_PROBLEM} ${changedPath}` +
@@ -329,18 +290,27 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
   evidence.sourceChanged = true;
   evidence.subsystems.add(owner.subsystem);
 
-  for (const witness of contractWitnesses(contracts, changedPath)) {
-    for (const testPath of expandWitness(classes, witness.tests)) {
+  const impact = impactSelectionForChangedPath(
+    registry, changedPath, Object.keys(classes));
+  for (const contractName of impact.contractNames) {
+    for (const testPath of expandContractTests(
+      registry, [contractName], Object.keys(classes))) {
       addReason(evidence.plan, testPath,
-        `${REASON_IMPACT_WITNESS}${REASON_SEPARATOR}${witness.id}`);
+        `${REASON_IMPACT_WITNESS}${REASON_SEPARATOR}${contractName}`);
     }
   }
   // A coupled pair means the OPPOSITE endpoint must be proved too, so its
   // owning subsystem joins the selection rather than a guess at its tests. The
   // pair id is remembered so --explain can say a test is here because of a
   // declared coupling rather than because its own area changed.
-  for (const witness of coupledWitnesses(contracts, changedPath)) {
-    for (const ownerPath of witness.owners) {
+  for (const witness of impact.coupledPairs) {
+    for (const testPath of witness.witnessTests) {
+      if (classes[testPath]) {
+        addReason(evidence.plan, testPath,
+          `${REASON_COUPLED_WITNESS}${REASON_SEPARATOR}${witness.id}`);
+      }
+    }
+    for (const ownerPath of witness.oppositeOwnerSpecs) {
       const opposite = subsystemForSourcePath(ownerPath);
       if (!opposite.subsystem) continue;
       evidence.subsystems.add(opposite.subsystem);
@@ -376,7 +346,7 @@ export function packageDevToolingSubsystem(changedPackageFields) {
 function collectChangeEvidence({
   changedPaths,
   classes,
-  contracts,
+  registry,
   vanished,
   packageSubsystem,
 }) {
@@ -398,7 +368,7 @@ function collectChangeEvidence({
       evidence.subsystems.add(packageSubsystem);
       continue;
     }
-    admitChangedSource(evidence, changedPath, classes, contracts);
+    admitChangedSource(evidence, changedPath, classes, registry);
   }
   return evidence;
 }
@@ -424,10 +394,21 @@ export function selectChangedTests({
 
   const manifest = readJson(root, SUBSYSTEM_MANIFEST_PATH);
   const classes = manifest?.classes || {};
+  const impactRegistry = loadImpactContractRegistry(root, IMPACT_CONTRACTS_PATH);
+  const authorityProblems = [];
+  if (!manifest || !manifest.classes || typeof manifest.classes !== 'object' ||
+      Array.isArray(manifest.classes)) {
+    authorityProblems.push('subsystem classification is unavailable or invalid');
+  }
+  authorityProblems.push(...impactRegistry.problems);
+  if (authorityProblems.length > 0) {
+    return refusedSelection(
+      REFUSAL_UNKNOWN_SCOPE, authorityProblems, []);
+  }
   const evidence = collectChangeEvidence({
     changedPaths,
     classes,
-    contracts: readJson(root, IMPACT_CONTRACTS_PATH),
+    registry: impactRegistry.registry,
     vanished: vanishedPaths,
     packageSubsystem: packageDevToolingSubsystem(changedPackageFields),
   });
@@ -437,7 +418,7 @@ export function selectChangedTests({
   }
 
   for (const subsystem of evidence.subsystems) {
-    for (const testPath of testsForSubsystem(subsystem, root)) {
+    for (const testPath of testsForSubsystem(manifest, subsystem)) {
       addReason(evidence.plan, testPath,
         `${REASON_SUBSYSTEM}${REASON_SEPARATOR}${subsystem}`);
       for (const pairId of evidence.coupledBy.get(subsystem) || []) {

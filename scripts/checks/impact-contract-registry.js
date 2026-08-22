@@ -646,6 +646,51 @@ export function contractsForChangedPath(registry, changedPath) {
   return sorted;
 }
 
+// The selection-facing projection. Path matching belongs to this registry;
+// callers receive semantic edges and never reimplement exact/directory/stem
+// matching with a local startsWith chain.
+export function impactSelectionForChangedPath(
+  registry,
+  changedPath,
+  classifiedTests,
+) {
+  const contractNames = contractsForChangedPath(registry, changedPath);
+  const contractTests = expandContractTests(
+    registry, contractNames, classifiedTests);
+  const coupledPairs = [];
+  if (!registry) return {contractNames, contractTests, coupledPairs};
+  for (let pairIndex = 0;
+    pairIndex < registry.coupledPairs.length;
+    pairIndex += 1) {
+    const pair = registry.coupledPairs[pairIndex];
+    const touched = arrayFilter(pair.endpoints, (endpoint) =>
+      arraySome(endpoint.owners, (owner) =>
+        impactPathSpecMatches(owner, changedPath)));
+    if (touched.length === 0) continue;
+    const touchedIds = new SetConstructor(
+      arrayMap(touched, (endpoint) => endpoint.id));
+    const oppositeOwnerSpecs = [];
+    for (let endpointIndex = 0;
+      endpointIndex < pair.endpoints.length;
+      endpointIndex += 1) {
+      const endpoint = pair.endpoints[endpointIndex];
+      if (setHas(touchedIds, endpoint.id)) continue;
+      for (let ownerIndex = 0;
+        ownerIndex < endpoint.owners.length;
+        ownerIndex += 1) {
+        appendOwnArrayValue(
+          oppositeOwnerSpecs, endpoint.owners[ownerIndex].spec);
+      }
+    }
+    appendOwnArrayValue(coupledPairs, {
+      id: pair.id,
+      oppositeOwnerSpecs,
+      witnessTests: copyArrayByIndex(pair.witnessTests),
+    });
+  }
+  return {contractNames, contractTests, coupledPairs};
+}
+
 export function expandContractTests(registry, contractNames, classifiedTests) {
   const selected = new SetConstructor();
   for (let nameIndex = 0; nameIndex < contractNames.length; nameIndex += 1) {

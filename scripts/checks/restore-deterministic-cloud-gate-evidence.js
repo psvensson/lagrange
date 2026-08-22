@@ -47,9 +47,11 @@ const TEST_RECEIPTS = Object.freeze([
   ['check-operation-dispatch-completion-owner-determinism',
     'test/scripts/check-operation-dispatch-completion-owner.test.js',
     'the shifting subtest identity was the tap cap expiring mid-file, not a race'],
+  // Stable historical receipt id; the exercised implementation is now the
+  // canonical change-selection boundary below.
   ['impact-proof-cone-consumers-determinism',
-    'test/scripts/impact-proof-cone-consumers.test.js',
-    'the live-census selector agrees with the classifier under repeated runs'],
+    'test/scripts/change-proof-boundary.test.js',
+    'the canonical selector and executable boundary agree under repeated runs'],
   ['cdc-current-epoch-propagation',
     'test/cdc/current-epoch-propagation.integration.test.js',
     'the integration-classified cdc test passes in its serial lane'],

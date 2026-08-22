@@ -6,10 +6,10 @@ import {execFileSync} from 'node:child_process';
 
 import {buildManifest} from '../../scripts/checks/test-primary-classification.js';
 import {
-  IMPORT_GRAPH_PATH,
-  IMPORT_GRAPH_SEAL_PATH,
-} from '../../scripts/checks/impact-proof-cone-constants.js';
-import {OWNER_DEBT} from '../../scripts/global-owner-debt-inventory/constants.js';
+  OWNER_DEBT,
+  OWNER_DEBT_IMPORT_GRAPH_SEAL_PATH as IMPORT_GRAPH_SEAL_PATH,
+  OWNER_DEBT_REPORTS,
+} from '../../scripts/global-owner-debt-inventory/constants.js';
 import {
   fileIdentity,
   importGraphResolverStateDigest,
@@ -19,6 +19,8 @@ import {
 } from '../../scripts/global-owner-debt-inventory/helpers.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {saveQuest} from '../../scripts/solve/store.js';
+
+const IMPORT_GRAPH_PATH = OWNER_DEBT_REPORTS.importGraph;
 
 const SOURCE_PATHS = Object.freeze([
   'scripts/left-a.js',
@@ -30,6 +32,8 @@ const OTHER_WITNESS_PATH = 'test/other-witness.test.js';
 const REGISTRY_PATH = 'test/shards/impact-contracts.json';
 const PRODUCER_PATH = 'scripts/generate-global-owner-debt-inventory.js';
 const PRIMARY_CLASSES_PATH = 'test/shards/primary-classes.json';
+const SUBSYSTEM_CLASSES_PATH = 'test/shards/subsystem-classes.json';
+const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 const GIT_COMMAND = 'git';
 const UTF8_ENCODING = 'utf8';
 const STDIO_IGNORE = 'ignore';
@@ -177,6 +181,17 @@ export function createCoupledPairFixture({
   writeRegistry(root, registry);
   writeFile(root, PRIMARY_CLASSES_PATH,
     `${JSON.stringify(buildManifest(root), null, 2)}\n`);
+  writeFile(root, SUBSYSTEM_CLASSES_PATH, `${JSON.stringify({
+    schemaVersion: 1,
+    id: 'test-subsystem-classes',
+    classes: {
+      [OTHER_WITNESS_PATH]: 'test-infrastructure',
+      [WITNESS_PATH]: 'test-infrastructure',
+    },
+  }, null, 2)}\n`);
+  writeFile(root, SAFETY_SPINE_PATH, `${JSON.stringify({
+    tests: [WITNESS_PATH],
+  }, null, 2)}\n`);
   refreshCanonicalGraph(root);
 
   const id = 'coupled-pair-fixture';

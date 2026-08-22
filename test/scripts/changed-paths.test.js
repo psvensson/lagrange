@@ -28,6 +28,7 @@ import {
   CHANGE_RENAMED,
 } from '../../scripts/checks/change-selection-constants.js';
 import {
+  ChangeDiscoveryError,
   changedRecords,
   existingPaths,
   semanticPaths,
@@ -127,4 +128,29 @@ test('the derivation does not modify the repository it inspects', () => {
   const before = fingerprint();
   changedRecords({root: repo});
   assert.equal(fingerprint(), before);
+});
+
+test('every Git input query fails closed instead of becoming an empty change', () => {
+  const invocations = [];
+  const failAt = (targetIndex) => (_command, args) => {
+    const index = invocations.length;
+    invocations.push(args);
+    if (index === targetIndex) throw new Error(`injected Git failure ${index}`);
+    return '';
+  };
+  const expectedCommands = 4;
+  for (let targetIndex = 0; targetIndex < expectedCommands; targetIndex += 1) {
+    invocations.length = 0;
+    assert.throws(
+      () => changedRecords({
+        root: repo,
+        base: 'base-ref',
+        head: 'head-ref',
+        executeGit: failAt(targetIndex),
+      }),
+      (error) => error instanceof ChangeDiscoveryError &&
+        error.message.includes(`injected Git failure ${targetIndex}`),
+      `Git input query ${targetIndex} must refuse the selection`,
+    );
+  }
 });

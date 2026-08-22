@@ -6,22 +6,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {
-  OUTCOME_FAIL,
-  OUTCOME_PASS,
-  TAP_NOT_OK,
-  TAP_OK,
-  VERDICT_FAIL,
-  VERDICT_PASS,
-  VERDICT_REASON_ALL_PASS,
-  VERDICT_REASON_CHECK_FAILED,
-} from './impact-proof-cone-constants.js';
-
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const stringReplace = Function.call.bind(String.prototype.replace);
 
 const REPORT_TIMESTAMP_PATTERN = /[:.]/g;
 const REPORT_TIMESTAMP_REPLACEMENT = '-';
+const OUTCOME_FAIL = 'FAIL';
+const OUTCOME_PASS = 'PASS';
+const TAP_NOT_OK = 'not ok';
+const TAP_OK = 'ok';
+const VERDICT_FAIL = 'FAIL';
+const VERDICT_PASS = 'PASS';
+const VERDICT_REASON_ALL_PASS = 'all_checks_passed';
+const VERDICT_REASON_CHECK_FAILED = 'check_failed';
 
 export function scenarioCheck(label, fn) {
   try {

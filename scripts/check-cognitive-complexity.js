@@ -25,7 +25,9 @@ const TARGET_THRESHOLD = 20;
 // DOWN only from here.
 // 2026-07-19: tightened 183 -> 179 (measured; owner-complexity rebalancer
 // planning refactors landed without taking the ratchet down).
-const BASELINE_COUNT = 179;
+// 2026-08-22: tightened 179 -> 178 after retiring the duplicate proof-cone
+// selector and its remaining consumers.
+const BASELINE_COUNT = 178;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

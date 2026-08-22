@@ -66,13 +66,14 @@ The default runner is GitHub-hosted. Self-hosted routing requires
 `[ci:self-hosted]` in the already-reviewed HEAD commit message and
 `--runner self-hosted`; publish validates the marker and never amends. Direct
 `git push` remains an advanced escape hatch. If the exact tree already passed
-`test:gate:postpush`,
-`LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
-checks still run. `--no-verify` skips every gate and is emergencies-only.
+the pre-push profile, the hook validates its content-addressed PASS receipt and
+does not rerun it. There is no skip variable or alternate assertion that a tree
+was tested. `--no-verify` skips every gate and is emergencies-only.
 
-The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
-duplication/file-size ratchets, cycles, unused exports, then the long post-push
-test corpus. Fix one-way ratchets rather than raising their baselines.
+The pre-push profile is fast-fail ordered and runs against every exact pushed
+ref: thermal admission, static and architecture obligations, then one
+deduplicated union of affected tests and `test:fast`. Fix one-way ratchets
+rather than raising their baselines.
 
 ## Orient Without Mutation
 

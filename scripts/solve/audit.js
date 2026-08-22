@@ -38,7 +38,7 @@ import {
   evaluateCoupledPairGuards,
   loadImpactContractRegistry,
 } from '../checks/impact-contract-registry.js';
-import {PROOF_CONE_CONTRACTS_PATH} from '../checks/impact-proof-cone-constants.js';
+import {IMPACT_CONTRACTS_PATH} from '../checks/change-selection-constants.js';
 import {loadQuest, projectState, readLog} from './store.js';
 import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
 import {analyzeQuestHealth} from './health.js';
@@ -238,7 +238,7 @@ function auditCoupledPairGuards(root, quest, log, startIndex, terminal) {
   if (!pairProjectionIsReviewable(projection)) return [];
 
   const changedPaths = changedPathsFromDiffContent(projection.content);
-  const registryChanged = changedPaths.includes(PROOF_CONE_CONTRACTS_PATH);
+  const registryChanged = changedPaths.includes(IMPACT_CONTRACTS_PATH);
   if (changedPaths.length < 2 && !registryChanged) return [];
 
   const loaded = loadImpactContractRegistry(root);

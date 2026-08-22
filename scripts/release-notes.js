@@ -3,7 +3,7 @@
 // Per-release notes renderer: makes CHANGELOG.md the single source of the
 // "what changed in this release" prose on every release surface.
 //
-// release.yml runs this FIRST (fail-fast, before the 40-60min test:ci gate):
+// release.yml runs this FIRST (fail-fast, before the complete release proof):
 //   --mode check     validates the tagged version has a non-empty CHANGELOG
 //                    section AND matches package.json's version. A tag whose
 //                    changes were never written down fails the release in

@@ -276,30 +276,22 @@ describe('acceptance proof manifest runner', () => {
       'utf8',
     ));
     assert.deepEqual(actual.commands.map((entry) => entry.id), [
-      'focused-contracts',
+      'owner-debt-report-inputs',
       'static-analysis',
       'model-contracts',
-      'owner-debt-report-inputs',
+      'complete-tests',
+      'chart-endpoint-sync',
       'golden-capability-guard-scenarios',
-      'fast-tests',
     ]);
-    const focused = actual.commands[0].argv;
-    for (const required of [
-      'test/scripts/run-test-files.test.js',
-      'test/scripts/acceptance-proof-manifest-runner.test.js',
-      'test/release/public-api-side-effect-boundary.test.js',
-      'test/release/project-hardening-contracts.test.js',
-      'test/admin/admin-websocket-external-bind-policy.test.js',
-      'test/runtime/pgwire-protocol-ordering.test.js',
-      'test/compatibility/pgwire-client-compat.test.js',
-    ]) {
-      assert.equal(focused.includes(required), true, `${required} is engaged`);
-    }
+    assert.equal(actual.commands.filter(
+      (entry) => entry.argv.includes('test:all')).length, 1,
+    'the complete behavioral leaf executes exactly once');
+    assert.equal(actual.commands.some(
+      (entry) => entry.argv.includes('test:fast')), false,
+    'a complete suite is not followed by its fast subset');
     const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    assert.equal(
-      packageJson.scripts['test:gate'],
-      packageJson.scripts['test:project-hardening'],
-    );
+    assert.equal(packageJson.scripts['test:project-hardening'], undefined);
+    assert.equal(packageJson.scripts['test:ci'], undefined);
     assert.match(
       packageJson.scripts['test:gate'],
       /run-project-hardening-acceptance\.js/u,

@@ -30,7 +30,11 @@ import {
   RESOURCE_CLASS_JOBS,
   RESOURCE_CLASS_ORDINARY,
 } from './checks/test-resource-classification-constants.js';
-import {parseLaneArgs, planLane} from './plan-test-lane.js';
+import {
+  parseLaneArgs,
+  planLane,
+  planNamedTestProfile,
+} from './plan-test-lane.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RUNNER = 'scripts/run-test-files.js';
@@ -39,6 +43,7 @@ const PRIMARY_FLAG = '--primary';
 const RESOURCE_FLAG = '--resource';
 const EXCLUDE_FLAG = '--exclude';
 const EXCLUDE_PREFIX_FLAG = '--exclude-prefix';
+const PROFILE_FLAG = '--profile';
 const MAX_FILES_PER_RUN = 100;
 const EXCLUSIVE_TAP_TIMEOUT_SECONDS = '120';
 const NEWLINE = '\n';
@@ -48,6 +53,8 @@ const NO_FILES_PROBLEM =
   'run-classified-test-files: no test files provided\n';
 const MIXED_INPUT_PROBLEM =
   'classified test plan cannot combine filters and stdin';
+const MIXED_PROFILE_PROBLEM =
+  'classified test plan cannot combine a named profile with other inputs';
 const UNEXPECTED_FILTER_ARGUMENT_PREFIX =
   'classified test plan has an unexpected filter argument: ';
 const LANE_FILTER_FLAGS = new Set([
@@ -67,6 +74,7 @@ const SERIAL_PRIMARY_CLASSES = new Set([
   PRIMARY_CLASS_CONVERGENCE_PROBE,
   PRIMARY_CLASS_INTEGRATION,
 ]);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
 function effectiveResourceClass(primaryClass, resourceClass) {
   return SERIAL_PRIMARY_CLASSES.has(primaryClass) ?
@@ -132,8 +140,14 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
 }
 
 function readInputFiles(argv) {
-  if (argv.includes(PRIMARY_FLAG) || argv.includes(RESOURCE_FLAG)) {
-    if (argv.includes(STDIN_FLAG)) {
+  if (arrayIncludes(argv, PROFILE_FLAG)) {
+    if (argv.length !== 2 || argv[0] !== PROFILE_FLAG) {
+      throw new Error(MIXED_PROFILE_PROBLEM);
+    }
+    return planNamedTestProfile(ROOT, argv[1]);
+  }
+  if (arrayIncludes(argv, PRIMARY_FLAG) || arrayIncludes(argv, RESOURCE_FLAG)) {
+    if (arrayIncludes(argv, STDIN_FLAG)) {
       throw new Error(MIXED_INPUT_PROBLEM);
     }
     for (let index = 0; index < argv.length; index += 2) {
@@ -143,7 +157,7 @@ function readInputFiles(argv) {
     }
     return planLane(ROOT, parseLaneArgs(argv));
   }
-  const useStdin = argv.includes(STDIN_FLAG);
+  const useStdin = arrayIncludes(argv, STDIN_FLAG);
   const argumentsWithoutFlags = argv.filter((argument) => argument !== STDIN_FLAG);
   const stdinFiles = useStdin ? fs.readFileSync(0, 'utf8')
     .split(NEWLINE).map((line) => line.trim()).filter(Boolean) : [];

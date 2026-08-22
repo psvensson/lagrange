@@ -60,6 +60,8 @@ export const OWNER_DEBT_REPORTS = Object.freeze({
   duplicationSource: 'test-output/analysis/jscpd-src-scripts/jscpd-report.json',
   duplicationTest: 'test-output/analysis/jscpd-test/jscpd-report.json',
 });
+export const OWNER_DEBT_IMPORT_GRAPH_SEAL_PATH =
+  'test/shards/impact-graph-seal.json';
 
 export const OWNER_DEBT_REFRESH_COMMANDS = Object.freeze([
   ['scripts/check-complexity.js'],

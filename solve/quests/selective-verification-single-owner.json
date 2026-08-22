@@ -1,0 +1,67 @@
+{
+  "id": "selective-verification-single-owner",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "One canonical verification policy derives fail-closed affected, pre-push, and release proof plans; all hooks, Solver consumers, CI, and publishers execute those plans or validate PASS-only content-addressed receipts, no legacy selector remains authoritative, and repeated verification of unchanged inputs is skipped without weakening any proof obligation.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+    "draftedAtCommit": "3fec3877bbd09f138ffbb972981b3433617e855e"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "selective-verification-single-owner",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "selective-verification-single-owner-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "selective-verification-single-owner",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-selector-authority",
+      "statement": "scripts/checks/change-selection.js is the sole semantic test-selection authority. Reverse-import evidence is additive only, legacy proof-cone consumers are migrated atomically, and no third selector or second impact matcher may remain."
+    },
+    {
+      "id": "authority-fail-closed",
+      "statement": "Unreadable Git state, invalid taxonomy or impact contracts, corrupt policy inputs, and parse failures produce a typed refusal and no receipt. A boundary reason or broad-suite request may never launder an authority failure into a passing result."
+    },
+    {
+      "id": "content-bound-pass-reuse",
+      "statement": "Only complete PASS receipts may suppress a rerun. Their canonical semantic-input digest binds change semantics, file modes, symlinks, deletions, untracked bytes, policy and runner closure, registries and manifests, lockfile, toolchain, platform, and test-affecting environment while inert Solver bookkeeping is excluded."
+    },
+    {
+      "id": "exact-boundary-plans",
+      "statement": "Affected verification binds the final staged index or explicit range; pre-push covers every non-delete pushed ref with the deduplicated union of its affected plan and test:fast plus retained push obligations; release uses one proof DAG whose leaf identities execute at most once per valid receipt."
+    },
+    {
+      "id": "no-duration-guessing",
+      "statement": "Version 1 gates known broad command identities and records measured timings. It does not refuse tests from an uncalibrated predicted-duration model and does not claim temporal exactly-once execution."
+    },
+    {
+      "id": "no-proof-weakening",
+      "statement": "The cutover preserves existing static, model, focused-contract, owner-debt, golden-capability, bootstrap, integration, and release obligations; consolidation may deduplicate identical leaves but may not remove a proof requirement."
+    }
+  ]
+}

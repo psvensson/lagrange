@@ -23,7 +23,6 @@ const GOLDEN_CAPABILITY_GATE_RUNNER =
   'scripts/checks/run-golden-capability-guard-scenarios.js';
 const ACCEPTANCE_MANIFEST_PATHS = [
   'test/manifests/project-hardening-proof-manifest.json',
-  'test/manifests/project-hardening-proof-postpush-manifest.json',
 ];
 const RETIRED_RELEASE_PATHS = [
   '.forgejo/workflows/ci.yml',
@@ -88,18 +87,17 @@ describe('project hardening contracts', () => {
     assert.match(
       packageJson.scripts['test:fast'], /run-classified-test-files\.js/u);
     assert.match(
-      packageJson.scripts['test:fast'], /--primary unit,packaging,integration/u);
+      packageJson.scripts['test:fast'], /--profile fast/u);
     assert.equal(packageJson.scripts['test:fast:ordinary'], undefined);
     assert.equal(packageJson.scripts['test:fast:toolchain'], undefined);
     assert.match(
       packageJson.scripts['test:all'],
-      /run-classified-test-files\.js/u,
+      /run-classified-test-files\.js --profile all/u,
     );
     assert.doesNotMatch(packageJson.scripts['test:deps'], /ignore-known/u);
-    assert.equal(
-      packageJson.scripts['test:gate'],
-      packageJson.scripts['test:project-hardening'],
-    );
+    assert.equal(packageJson.scripts['test:project-hardening'], undefined);
+    assert.equal(packageJson.scripts['test:gate:postpush'], undefined);
+    assert.equal(packageJson.scripts['test:ci'], undefined);
     assert.match(
       packageJson.scripts['test:gate'],
       /run-project-hardening-acceptance\.js/u,
@@ -187,15 +185,23 @@ describe('project hardening contracts', () => {
       'a pull request proves base..head, not just its tip');
     assert.match(rangeStep.run, /PUSH_BEFORE_SHA/u,
       'a push proves the range the remote did not have');
-    // ONE definition of complete. The repository used to carry two - the
-    // nightly ran test:gate while releases ran test:ci - so "prove everything"
-    // meant different things depending on who asked. check:release is now the
-    // only answer, and both callers invoke it and nothing else.
+    assert.doesNotMatch(rangeStep.run, /falling back to HEAD\^/u,
+      'an unavailable range authority must refuse, not narrow to one commit');
+    // ONE definition of complete. The former test:ci shell and test:gate
+    // manifest duplicated static, model, and behavioral leaves. The release
+    // profile now invokes one acceptance DAG.
     const packageJson = JSON.parse(await readFile('package.json', UTF8));
     const releaseProof = packageJson.scripts['check:release'];
-    assert.match(releaseProof, /npm run test:ci/u);
-    assert.match(releaseProof, /npm run test:gate/u,
-      'check:release must contain BOTH prior notions of complete');
+    assert.match(releaseProof,
+      /run-verification\.js --profile release/u);
+    assert.equal(packageJson.scripts['test:ci'], undefined);
+    const releaseManifest = JSON.parse(await readFile(
+      'test/manifests/project-hardening-proof-manifest.json', UTF8));
+    assert.equal(releaseManifest.commands.filter(
+      (command) => command.argv.includes('test:all')).length, 1);
+    assert.equal(releaseManifest.commands.some(
+      (command) => command.argv.includes('test:fast')), false,
+    'release must not rerun a subset after test:all');
 
     const fullGateSteps = fullGate.jobs.gate.steps;
     const fullGateProof = fullGateSteps.filter(

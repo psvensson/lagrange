@@ -78,14 +78,12 @@ jobs:
             base="$PUSH_BEFORE_SHA"
           fi
 
-          # A new branch reports the zero SHA, and a force-push or an expired
-          # object can leave `before` unreachable. Fall back to the single
-          # preceding commit and SAY SO, rather than resolving to an empty base
-          # that would quietly prove the working tree alone.
+          # An unavailable base is an authority failure. Falling back to HEAD^
+          # would silently prove only the tip and can miss earlier commits.
           if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
             ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "proof range: base '$base' unavailable, falling back to HEAD^"
-            base="$(git rev-parse HEAD^)"
+            echo "::error::proof range base '$base' is unavailable"
+            exit 1
           fi
 
           echo "proof range: $base..$(git rev-parse HEAD)"

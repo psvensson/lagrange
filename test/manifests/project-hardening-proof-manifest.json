@@ -9,24 +9,19 @@
   },
   "commands": [
     {
-      "id": "focused-contracts",
+      "id": "owner-debt-report-inputs",
       "executable": "node",
       "argv": [
-        "scripts/run-test-files.js",
-        "--jobs=1",
-        "test/scripts/run-test-files.test.js",
-        "test/scripts/acceptance-proof-manifest-runner.test.js",
-        "test/release/public-api-side-effect-boundary.test.js",
-        "test/release/project-hardening-contracts.test.js",
-        "test/admin/admin-websocket-external-bind-policy.test.js",
-        "test/runtime/pgwire-protocol-ordering.test.js",
-        "test/compatibility/pgwire-client-compat.test.js"
+        "scripts/generate-global-owner-debt-inventory.js",
+        "--refresh",
+        "--output",
+        "test-output/analysis/owner-debt-live-inventory.json"
       ],
-      "timeoutMs": 600000,
+      "timeoutMs": 1800000,
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/focused-contracts.json"
+        "path": "test-output/acceptance/project-hardening/owner-debt-report-inputs.json"
       }
     },
     {
@@ -52,19 +47,25 @@
       }
     },
     {
-      "id": "owner-debt-report-inputs",
-      "executable": "node",
-      "argv": [
-        "scripts/generate-global-owner-debt-inventory.js",
-        "--refresh-import-graph",
-        "--output",
-        "test-output/analysis/owner-debt-live-inventory.json"
-      ],
-      "timeoutMs": 1800000,
+      "id": "complete-tests",
+      "executable": "npm",
+      "argv": ["run", "test:all"],
+      "timeoutMs": 3600000,
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/owner-debt-report-inputs.json"
+        "path": "test-output/acceptance/project-hardening/complete-tests.json"
+      }
+    },
+    {
+      "id": "chart-endpoint-sync",
+      "executable": "npm",
+      "argv": ["run", "test:chart:endpoint-sync"],
+      "timeoutMs": 600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening/chart-endpoint-sync.json"
       }
     },
     {
@@ -76,17 +77,6 @@
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening/golden-capability-guard-scenarios.json"
-      }
-    },
-    {
-      "id": "fast-tests",
-      "executable": "npm",
-      "argv": ["run", "test:fast"],
-      "timeoutMs": 3600000,
-      "acceptableExitCodes": [0],
-      "requiredArtifact": {
-        "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/fast-tests.json"
       }
     }
   ]

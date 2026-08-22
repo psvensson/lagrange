@@ -10,7 +10,7 @@ bug as a counterexample without it (DT7 in
 Each model carries a `_bug.cfg` (the property must FAIL — the counterexample is the
 bug) and a `_fixed.cfg` (the property must HOLD under the modelled fix). `npm run
 model:tlc` runs them all and asserts the inverted expectations; it is wired into CI
-via `npm run model:check` in `test:ci`.
+via `npm run model:check` in the canonical release proof.
 
 | CL / concern | Spec | Property | Fix modelled |
 | --- | --- | --- | --- |

@@ -16,6 +16,7 @@ import {
 } from './check-file-size-thresholds.js';
 import {
   OWNER_DEBT,
+  OWNER_DEBT_IMPORT_GRAPH_SEAL_PATH as IMPORT_GRAPH_SEAL_PATH,
   OWNER_DEBT_CHILD_LIMITS as CHILD_LIMITS,
   OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
   OWNER_DEBT_REPORTS as REPORTS,
@@ -52,7 +53,6 @@ import {
   DEPENDENCY_CLASS,
   packageNameOf,
 } from './global-owner-debt-inventory/dependency-policy.js';
-import {IMPORT_GRAPH_SEAL_PATH} from './checks/impact-proof-cone-constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;

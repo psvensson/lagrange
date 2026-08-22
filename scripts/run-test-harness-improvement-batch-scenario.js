@@ -54,8 +54,8 @@ const CHECKS = [
   },
   {
     id: 'middle-tier-gate-and-runnable-test-ci',
-    ok: () => hasScript('test:gate') && hasScript('test:ci') &&
-      !scripts['test:ci'].includes('stryker'),
+    ok: () => hasScript('test:gate') && hasScript('check:release') &&
+      scriptIncludes('check:release', 'run-verification.js'),
   },
   {
     id: 'gate-report-diagnostics-dedup',
@@ -90,7 +90,8 @@ const CHECKS = [
   {
     id: 'model-contracts-validators-in-a-gate',
     ok: () => hasScript('model:contracts') &&
-      fileContains('scripts/run-test-ci.sh', 'npm run model:contracts'),
+      fileContains('test/manifests/project-hardening-proof-manifest.json',
+        'model-contracts'),
   },
   {
     id: 'bounded-auto-retention-history-floor',

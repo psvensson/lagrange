@@ -91,7 +91,6 @@ tap.test('publish gates and pushes only the exact committed HEAD', (t) => {
 tap.test('publish exposes installed dependencies only while gating', (t) => {
   const {parent, root, remote} = fixture(
     'cat >/dev/null\ntest ! -f .git || ' +
-      'test "${LAGRANGE_PUSH_SKIP_TESTS:-}" = 1 || ' +
       'test -f node_modules/.publish-marker',
   );
   fs.mkdirSync(path.join(root, 'node_modules'));
@@ -109,7 +108,6 @@ tap.test('publish exposes installed dependencies only while gating', (t) => {
 tap.test('publish exposes the gitignored dataset tree only while gating', (t) => {
   const {parent, root, remote} = fixture(
     'cat >/dev/null\ntest ! -f .git || ' +
-      'test "${LAGRANGE_PUSH_SKIP_TESTS:-}" = 1 || ' +
       'test -f data/examples/movielens-100k/u.data',
   );
   const dataset = path.join(root, 'data', 'examples', 'movielens-100k');

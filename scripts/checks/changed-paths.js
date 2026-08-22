@@ -65,15 +65,27 @@ const STATUS_DELETED_PREFIX = 'D';
 const STATUS_ADDED_PREFIX = 'A';
 const INJECTION_SEPARATOR = ',';
 const PATH_SEPARATOR = '/';
+const CHANGE_DISCOVERY_ERROR_NAME = 'ChangeDiscoveryError';
+const CHANGE_DISCOVERY_ERROR_PREFIX = 'change discovery failed';
 
-function git(root, args) {
+export class ChangeDiscoveryError extends Error {
+  constructor(args, cause) {
+    super(`${CHANGE_DISCOVERY_ERROR_PREFIX}: git ${args.join(' ')}: ` +
+      `${cause?.message || String(cause)}`, {cause});
+    this.name = CHANGE_DISCOVERY_ERROR_NAME;
+    this.args = [...args];
+  }
+}
+
+function git(root, args, executeGit) {
   try {
     return arrayFilter(
-      stringSplit(execFileSync(GIT, args,
-        {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER}), NEWLINE),
+      stringSplit(executeGit(GIT, args,
+        {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER, stdio: 'pipe'}),
+      NEWLINE),
       Boolean);
-  } catch {
-    return null;
+  } catch (error) {
+    throw new ChangeDiscoveryError(args, error);
   }
 }
 
@@ -156,20 +168,24 @@ export function withoutWorkspaceInjections(paths, env = process.env) {
 
 // `base` optional: without it only the working tree is considered, which is the
 // ordinary inner-loop case.
-export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
+export function changedRecords({
+  root,
+  base = null,
+  head = DEFAULT_HEAD,
+  executeGit = execFileSync,
+}) {
   const records = [];
   if (base) {
     const committed = git(root,
-      [DIFF, NAME_STATUS, RENAME_DETECTION, `${base}..${head}`]);
-    if (committed === null) return null;
+      [DIFF, NAME_STATUS, RENAME_DETECTION, `${base}..${head}`], executeGit);
     records.push(...parseNameStatus(committed));
   }
   records.push(...parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, DEFAULT_HEAD])));
+    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, DEFAULT_HEAD], executeGit)));
   records.push(...parseNameStatus(
-    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, CACHED])));
+    git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, CACHED], executeGit)));
   for (const untracked of git(root,
-    [LS_FILES, OTHERS, EXCLUDE_STANDARD]) || []) {
+    [LS_FILES, OTHERS, EXCLUDE_STANDARD], executeGit)) {
     records.push({status: CHANGE_ADDED, oldPath: null, path: untracked});
   }
   const injections = declaredWorkspaceInjections();
@@ -224,6 +240,5 @@ export function javaScriptPaths(paths) {
 
 // Backwards-compatible convenience for callers that only need existing paths.
 export function changedCandidatePaths(options) {
-  const records = changedRecords(options);
-  return records === null ? null : existingPaths(records);
+  return existingPaths(changedRecords(options));
 }

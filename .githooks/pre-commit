@@ -34,13 +34,15 @@ if [ -n "${LAGRANGE_SKIP_PRECOMMIT:-}" ]; then
 fi
 
 # Staged (added/copied/modified/renamed) paths only; deletions need no scan.
-mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
-if [ "${#STAGED[@]}" -eq 0 ]; then
+# Capture the command result before parsing it. A process-substitution failure
+# is not governed by `set -e` and previously became an empty staged set.
+STAGED_OUTPUT="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "${STAGED_OUTPUT}" ]; then
   exit 0
 fi
+mapfile -t STAGED <<< "${STAGED_OUTPUT}"
 
 JS_FILES=()
-CODE_JS_FILES=()
 DOC_FILES=()
 REGEN_INVENTORIES=0
 for f in "${STAGED[@]}"; do
@@ -48,9 +50,6 @@ for f in "${STAGED[@]}"; do
   case "$f" in
     *.js|*.mjs|*.cjs)
       JS_FILES+=("$f")
-      case "$f" in
-        src/*|scripts/*) CODE_JS_FILES+=("$f") ;;
-      esac
       ;;
   esac
   case "$f" in
@@ -78,14 +77,6 @@ run_check "staged constant names" \
   node scripts/check-staged-constant-names.js
 
 if [ "${#JS_FILES[@]}" -gt 0 ]; then
-  # --cache keeps repeat runs inside the hook budget; the cache lives in
-  # this worktree's private git dir, NOT node_modules/.cache (node_modules
-  # is commonly symlinked into agent worktrees, so a cache there is shared
-  # and thrashed by concurrent sessions).
-  ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
-  run_check "eslint (staged files)" \
-    npx eslint --cache --cache-location "${ESLINT_CACHE_DIR}" \
-      --no-warn-ignored "${JS_FILES[@]}"
   run_check "literal guideline (staged files)" \
     node scripts/check-guideline-literals.js "${JS_FILES[@]}"
   run_check "decision boundaries (staged files)" \
@@ -94,12 +85,6 @@ if [ "${#JS_FILES[@]}" -gt 0 ]; then
     node scripts/check-guideline-ambient-intrinsics.js "${JS_FILES[@]}"
   run_check "silent catch (staged files)" \
     node scripts/check-guideline-silent-catch.js "${JS_FILES[@]}"
-fi
-if [ "${#CODE_JS_FILES[@]}" -gt 0 ]; then
-  # Report-only: scoped mode lists violations in the staged files (exit 0
-  # even for pre-existing ones, so an edit to an already-over-threshold
-  # file is not blocked); the aggregate ratchet still gates at push time.
-  node scripts/check-complexity.js --scoped "${CODE_JS_FILES[@]}" || true
 fi
 if [ "${#DOC_FILES[@]}" -gt 0 ]; then
   run_check "doc ascii hyphens (staged docs/examples)" \
@@ -134,3 +119,9 @@ if [ "$FAILURES" -gt 0 ]; then
   echo "pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)"
   exit 1
 fi
+
+# The canonical affected proof runs LAST, after inventory regeneration and
+# staging, against an exact materialization of the final index. Its PASS receipt
+# is content-addressed; no worktree-only or pre-regeneration result can satisfy
+# this boundary.
+node scripts/run-verification.js --profile affected --boundary index

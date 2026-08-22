@@ -37,6 +37,19 @@ const NO_FILTER_ERROR =
 const EMPTY_LANE_ERROR =
   'plan-test-lane: selection is empty — a lane that runs no files would ' +
   'silently pass; fix the filters or the classification';
+export const TEST_PROFILE_FAST = 'fast';
+export const TEST_PROFILE_ALL = 'all';
+const TEST_PROFILE_ARGUMENTS = Object.freeze({
+  [TEST_PROFILE_FAST]: Object.freeze([
+    '--primary', 'unit,packaging,integration',
+    '--exclude-prefix', 'test/integration/',
+    '--exclude-prefix', 'test/bootstrap/',
+  ]),
+  [TEST_PROFILE_ALL]: Object.freeze([
+    '--primary', 'unit,packaging,integration,bootstrap',
+  ]),
+});
+const UNKNOWN_PROFILE_ERROR = 'plan-test-lane: unknown test profile: ';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -90,6 +103,14 @@ export function planLane(repoRoot, filters) {
       return true;
     })
     .sort();
+}
+
+export function planNamedTestProfile(repoRoot, profile) {
+  if (!Object.hasOwn(TEST_PROFILE_ARGUMENTS, profile)) {
+    throw new Error(UNKNOWN_PROFILE_ERROR + profile);
+  }
+  const args = TEST_PROFILE_ARGUMENTS[profile];
+  return planLane(repoRoot, parseLaneArgs(args));
 }
 
 function main() {
