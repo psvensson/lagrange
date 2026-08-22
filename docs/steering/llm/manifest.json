@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-22T15:56:38.050Z",
+  "generatedAt": "2026-08-22T16:10:05.323Z",
   "stats": {
     "candidateCount": 695,
     "dedupedRuleCount": 689,
@@ -7,7 +7,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 685,
     "emittedMasterRuleCount": 685,
-    "estimatedAllRulesTokens": 32455
+    "estimatedAllRulesTokens": 32514
   },
   "sources": [
     {
@@ -333,7 +333,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 312,
-      "estimatedTokens": 12732,
+      "estimatedTokens": 12791,
       "domains": [
         "architecture"
       ],

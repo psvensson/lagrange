@@ -141,8 +141,11 @@ code, argue the change against it, and extend it in the same body of work:
   are proven by a TLC bug/fixed config pair, never by scenario reruns alone.
 - **System contracts** — `architecture/contracts/`
   (`npm run model:contracts`), including the liveness contracts.
-- **Coupled-pair registry** — audit-enforced pairs of files that must move
-  together.
+- **Coupled-pair registry** — `coupledPairs` in
+  `test/shards/impact-contracts.json`: a change crossing both endpoints of a
+  registered pair must carry the pair's complete contract edge (named
+  contract plus witness tests) before landing, and a one-endpoint change
+  pulls the opposite endpoint's witness tests into its proof cone.
 - **Closure-record and theory history** — CL records (e.g. CL-013 cure and
   exemption classes, CL-001 variant D detection-to-cure wiring) and the quest
   theory ledger carry the precedents for each interaction class.

@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md (complete architecture domain pack)
-last_reviewed: 2026-07-10
+last_reviewed: 2026-08-22
 ---
 
 > **Canonical source — index.** This is the navigation index for the Lagrange Engineering Doctrine. Rule content lives in the sub-files; the LLM pack generator reads them via `llm-pack.config.json`.

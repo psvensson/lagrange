@@ -311,7 +311,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 685,
     "emittedMasterRuleCount": 685,
-    "estimatedAllRulesTokens": 32455
+    "estimatedAllRulesTokens": 32514
   },
   "rules": [
     {
@@ -3272,7 +3272,7 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 154,
+          "line": 157,
           "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
           "role": "packed"
         }
@@ -6891,22 +6891,6 @@
       "domain": "architecture",
       "strength": "must",
       "tags": [],
-      "rule": "Coupled-pair registry — audit-enforced pairs of files that must move together.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "doctrine/owner-boundaries.md",
-          "line": 144,
-          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0256",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [],
       "rule": "Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but both planes must share the same pressure/admission contract.",
       "score": 208,
       "sources": [
@@ -6919,7 +6903,7 @@
       ]
     },
     {
-      "id": "ARCH-0257",
+      "id": "ARCH-0256",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6937,7 +6921,7 @@
       ]
     },
     {
-      "id": "ARCH-0258",
+      "id": "ARCH-0257",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -6955,7 +6939,7 @@
       ]
     },
     {
-      "id": "ARCH-0259",
+      "id": "ARCH-0258",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6971,7 +6955,7 @@
       ]
     },
     {
-      "id": "ARCH-0260",
+      "id": "ARCH-0259",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -6987,7 +6971,7 @@
       ]
     },
     {
-      "id": "ARCH-0261",
+      "id": "ARCH-0260",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7003,7 +6987,7 @@
       ]
     },
     {
-      "id": "ARCH-0262",
+      "id": "ARCH-0261",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7019,7 +7003,7 @@
       ]
     },
     {
-      "id": "ARCH-0263",
+      "id": "ARCH-0262",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -7038,7 +7022,7 @@
       ]
     },
     {
-      "id": "ARCH-0264",
+      "id": "ARCH-0263",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -7056,7 +7040,7 @@
       ]
     },
     {
-      "id": "ARCH-0265",
+      "id": "ARCH-0264",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7072,7 +7056,7 @@
       ]
     },
     {
-      "id": "ARCH-0266",
+      "id": "ARCH-0265",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -7088,7 +7072,7 @@
       ]
     },
     {
-      "id": "ARCH-0267",
+      "id": "ARCH-0266",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8057,7 +8041,7 @@
       ]
     },
     {
-      "id": "ARCH-0268",
+      "id": "ARCH-0267",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -8372,7 +8356,7 @@
       ]
     },
     {
-      "id": "ARCH-0269",
+      "id": "ARCH-0268",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -8390,7 +8374,7 @@
       ]
     },
     {
-      "id": "ARCH-0270",
+      "id": "ARCH-0269",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8406,7 +8390,7 @@
       ]
     },
     {
-      "id": "ARCH-0271",
+      "id": "ARCH-0270",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8422,7 +8406,7 @@
       ]
     },
     {
-      "id": "ARCH-0272",
+      "id": "ARCH-0271",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -8616,7 +8600,7 @@
       ]
     },
     {
-      "id": "ARCH-0273",
+      "id": "ARCH-0272",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8634,7 +8618,7 @@
       ]
     },
     {
-      "id": "ARCH-0274",
+      "id": "ARCH-0273",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8652,7 +8636,7 @@
       ]
     },
     {
-      "id": "ARCH-0275",
+      "id": "ARCH-0274",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8668,7 +8652,7 @@
       ]
     },
     {
-      "id": "ARCH-0276",
+      "id": "ARCH-0275",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8686,7 +8670,7 @@
       ]
     },
     {
-      "id": "ARCH-0277",
+      "id": "ARCH-0276",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8704,7 +8688,7 @@
       ]
     },
     {
-      "id": "ARCH-0278",
+      "id": "ARCH-0277",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8722,7 +8706,7 @@
       ]
     },
     {
-      "id": "ARCH-0279",
+      "id": "ARCH-0278",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8733,14 +8717,14 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 162,
+          "line": 165,
           "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
           "role": "packed"
         }
       ]
     },
     {
-      "id": "ARCH-0280",
+      "id": "ARCH-0279",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8758,7 +8742,7 @@
       ]
     },
     {
-      "id": "ARCH-0281",
+      "id": "ARCH-0280",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8782,7 +8766,7 @@
       ]
     },
     {
-      "id": "ARCH-0282",
+      "id": "ARCH-0281",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -8800,7 +8784,7 @@
       ]
     },
     {
-      "id": "ARCH-0283",
+      "id": "ARCH-0282",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8816,7 +8800,7 @@
       ]
     },
     {
-      "id": "ARCH-0284",
+      "id": "ARCH-0283",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -8832,7 +8816,7 @@
       ]
     },
     {
-      "id": "ARCH-0285",
+      "id": "ARCH-0284",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -9014,7 +8998,7 @@
       ]
     },
     {
-      "id": "ARCH-0286",
+      "id": "ARCH-0285",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -9032,7 +9016,7 @@
       ]
     },
     {
-      "id": "ARCH-0287",
+      "id": "ARCH-0286",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -9068,7 +9052,7 @@
       ]
     },
     {
-      "id": "ARCH-0288",
+      "id": "ARCH-0287",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -9819,7 +9803,7 @@
       ]
     },
     {
-      "id": "ARCH-0289",
+      "id": "ARCH-0288",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -9837,7 +9821,7 @@
       ]
     },
     {
-      "id": "ARCH-0290",
+      "id": "ARCH-0289",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -9871,7 +9855,7 @@
       ]
     },
     {
-      "id": "ARCH-0291",
+      "id": "ARCH-0290",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -10238,7 +10222,7 @@
       ]
     },
     {
-      "id": "ARCH-0292",
+      "id": "ARCH-0291",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10256,7 +10240,7 @@
       ]
     },
     {
-      "id": "ARCH-0293",
+      "id": "ARCH-0292",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10274,7 +10258,7 @@
       ]
     },
     {
-      "id": "ARCH-0294",
+      "id": "ARCH-0293",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10290,7 +10274,7 @@
       ]
     },
     {
-      "id": "ARCH-0295",
+      "id": "ARCH-0294",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10306,7 +10290,7 @@
       ]
     },
     {
-      "id": "ARCH-0296",
+      "id": "ARCH-0295",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10322,7 +10306,7 @@
       ]
     },
     {
-      "id": "ARCH-0297",
+      "id": "ARCH-0296",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10340,7 +10324,7 @@
       ]
     },
     {
-      "id": "ARCH-0298",
+      "id": "ARCH-0297",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10356,7 +10340,7 @@
       ]
     },
     {
-      "id": "ARCH-0299",
+      "id": "ARCH-0298",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10372,7 +10356,7 @@
       ]
     },
     {
-      "id": "ARCH-0300",
+      "id": "ARCH-0299",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -10388,7 +10372,7 @@
       ]
     },
     {
-      "id": "ARCH-0301",
+      "id": "ARCH-0300",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -10406,6 +10390,24 @@
       ]
     },
     {
+      "id": "ARCH-0301",
+      "domain": "architecture",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Coupled-pair registry — coupledPairs in test/shards/impact-contracts.json: a change crossing both endpoints of a registered pair must carry the pair's complete contract edge (named contract plus witness tests) before landing, and a one-endpoint change pulls the opposite endpoint's witness tests into its proof cone.",
+      "score": 184,
+      "sources": [
+        {
+          "file": "doctrine/owner-boundaries.md",
+          "line": 144,
+          "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "ARCH-0302",
       "domain": "architecture",
       "strength": "must",
@@ -10415,7 +10417,7 @@
       "sources": [
         {
           "file": "doctrine/owner-boundaries.md",
-          "line": 156,
+          "line": 159,
           "section": "Doctrine — Owner Boundaries > 18. Interactions Between Owners Are Owned Contracts",
           "role": "packed"
         }
@@ -12125,5 +12127,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-08-22T15:56:38.002Z"
+  "generatedAt": "2026-08-22T16:10:05.320Z"
 }

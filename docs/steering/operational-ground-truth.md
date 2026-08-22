@@ -106,6 +106,14 @@ any distributed-harness or convergence work:
   (the deterministic backbone of the latent-blocker census;
   [`solve/epics/latent-convergence-blocker-census.md`](../../solve/epics/latent-convergence-blocker-census.md)).
   Open raw ndjson only after an analyzer has named the owner/edge.
+- **Cross-owner seams have owned contracts — argue against them first.**
+  Convergence bugs cluster at interactions between individually-correct owners
+  (doctrine §18 in
+  [`doctrine/owner-boundaries.md`](doctrine/owner-boundaries.md)). Before
+  changing any hold, fence, admission lane, or cure classification, read its
+  decision table under `docs/specs/decision-tables/` and the matching TLC
+  model family in [`models/CL-INDEX.md`](../../models/CL-INDEX.md); an engaged
+  hold, gate, or fence must always have a reachable release path.
 - **Distributed blockers are tracked one invariant at a time.** Follow
   [`solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md):
   record the first violated invariant BEFORE changing code. Records live per-file

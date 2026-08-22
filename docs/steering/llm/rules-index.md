@@ -223,7 +223,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0142 | must_not | architecture | doctrine/decision-experiments.md:87 [packed] | — | Broad ideas must not go straight into code. |
 | ARCH-0143 | must_not | architecture | doctrine/decision-experiments.md:98 [packed] | — | Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only … |
 | ARCH-0144 | must_not | architecture | doctrine/owner-boundaries.md:139 [packed] | — | Model checks — models/ indexed by models/CL-INDEX.md: design-class liveness bugs (circula… |
-| ARCH-0145 | must_not | architecture | doctrine/owner-boundaries.md:154 [packed] | — | Argue the fix against the artifact's invariants and extend the artifact in the same chang… |
+| ARCH-0145 | must_not | architecture | doctrine/owner-boundaries.md:157 [packed] | — | Argue the fix against the artifact's invariants and extend the artifact in the same chang… |
 | ARCH-0146 | must_not | architecture | doctrine/state-encoding.md:20 [packed] | — | A phase must not tear down the only live runtime path. |
 | ARCH-0147 | must_not | architecture | doctrine/state-encoding.md:31 [packed] | — | Pressure must not become hidden drops, memory growth without bounds, or correctness failu… |
 | ARCH-0148 | must_not | architecture | doctrine/state-encoding.md:102 [packed] | — | Degraded — weaker, indirect, or cross-plane; may explain, defer, or improve diagnostics, … |
@@ -432,19 +432,18 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0252 | must | architecture | doctrine/decision-experiments.md:43 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
 | ARCH-0253 | must | architecture | doctrine/decision-experiments.md:44 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
 | ARCH-0254 | must | architecture | doctrine/decision-experiments.md:45 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0255 | must | architecture | doctrine/owner-boundaries.md:144 [packed] | — | Coupled-pair registry — audit-enforced pairs of files that must move together. |
-| ARCH-0256 | must | architecture | doctrine/single-path.md:24 [packed] | — | Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but b… |
-| ARCH-0257 | must | architecture | doctrine/state-encoding.md:21 [packed] | — | A phase-scoped bridge must either become a runtime-owned bridge or be replaced before tea… |
-| ARCH-0258 | must | architecture | doctrine/state-encoding.md:23 [packed] | — | Completion of a phase must reduce temporary machinery, not strand it. |
-| ARCH-0259 | must | architecture | doctrine/state-encoding.md:30 [packed] | — | Pressure must become admission, defer, reject, or coalescing signals. |
-| ARCH-0260 | must | architecture | doctrine/state-encoding.md:44 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0261 | must | architecture | doctrine/state-encoding.md:45 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0262 | must | architecture | doctrine/state-encoding.md:46 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0263 | must | architecture | doctrine/state-encoding.md:47 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
-| ARCH-0264 | must | architecture | doctrine/state-encoding.md:72 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0265 | must | architecture | doctrine/state-encoding.md:73 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0266 | must | architecture | doctrine/state-encoding.md:74 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
-| ARCH-0267 | must | architecture | doctrine/state-encoding.md:75 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0255 | must | architecture | doctrine/single-path.md:24 [packed] | — | Query-plane traffic may use a separate ingress from metadata/control-plane traffic, but b… |
+| ARCH-0256 | must | architecture | doctrine/state-encoding.md:21 [packed] | — | A phase-scoped bridge must either become a runtime-owned bridge or be replaced before tea… |
+| ARCH-0257 | must | architecture | doctrine/state-encoding.md:23 [packed] | — | Completion of a phase must reduce temporary machinery, not strand it. |
+| ARCH-0258 | must | architecture | doctrine/state-encoding.md:30 [packed] | — | Pressure must become admission, defer, reject, or coalescing signals. |
+| ARCH-0259 | must | architecture | doctrine/state-encoding.md:44 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0260 | must | architecture | doctrine/state-encoding.md:45 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0261 | must | architecture | doctrine/state-encoding.md:46 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0262 | must | architecture | doctrine/state-encoding.md:47 [packed] | — | 5. Slower Under Pressure, Never Less Correct — That deferred outcome must carry the canon… |
+| ARCH-0263 | must | architecture | doctrine/state-encoding.md:72 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0264 | must | architecture | doctrine/state-encoding.md:73 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0265 | must | architecture | doctrine/state-encoding.md:74 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
+| ARCH-0266 | must | architecture | doctrine/state-encoding.md:75 [packed] | — | 7. Resource Lifetime Must Be Owned And Bounded — Every queue, buffer, subscriber set, ret… |
 | GOV-0018 | must | governance | findings/2026-07-10-reuse-comparison-before-new-machinery.md:5 [packed] | — | Every fix design and quest report MUST carry a visible REUSED vs EXTENDED vs NEW comparis… |
 | GOV-0019 | must | governance | roadmap.md:89 [packed] | — | A Quest must cite or encode enough scope context to prevent local invention. |
 | GOV-0020 | must | governance | roadmap.md:122 [packed] | — | The row must be in scope for this repository under the repo-root edition-matrix.md. |
@@ -501,7 +500,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0049 | must_not | governance | workflow-guidelines/solver-quests.md:373 [packed] | — | The authored inputs for those generated projections remain counted and their freshness ga… |
 | GOV-0050 | must_not | governance | workflow-guidelines/solver-quests.md:405 [packed] | — | The Solver NEVER pushes: no subcommand, loop, or handoff runs git push (autoCommitQuest a… |
 | GOV-0051 | must_not | governance | workflow-guidelines/solver-quests.md:424 [packed] | — | Detectors fire only on real recorded events and never touch the sealed doneWhen. |
-| ARCH-0268 | should | architecture | system-guidelines.md:340 [packed] | — | 12. User-Facing Model Stays Small — Required contract: New features should strengthen tab… |
+| ARCH-0267 | should | architecture | system-guidelines.md:340 [packed] | — | 12. User-Facing Model Stays Small — Required contract: New features should strengthen tab… |
 | GOV-0052 | must_not | governance | roadmap.md:113 [packed] | — | Such examples must not define implementation tasks in this repository unless the active Q… |
 | GOV-0053 | must_not | governance | workflow-guidelines/solver-quests.md:588 [packed] | — | Do not revive sprint/package theory state as active authority. |
 | GOV-0054 | must_not | governance | workflow-guidelines/solver-quests.md:654 [packed] | — | Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, … |
@@ -520,10 +519,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0067 | must | governance | workflow-guidelines/validators.md:25 [packed] | — | Probe-Owned Truth — Required validation: The post-attempt metric is finite when progress … |
 | GOV-0068 | must | governance | workflow-guidelines/validators.md:26 [packed] | — | Probe-Owned Truth — Required validation: The configured metric direction is lower-is-bett… |
 | GOV-0069 | must | governance | workflow-guidelines/validators.md:27 [packed] | — | Probe-Owned Truth — Required validation: The attempt changeRef resolves to an existing di… |
-| ARCH-0269 | must_not | architecture | doctrine/decision-experiments.md:101 [packed] | — | Do not begin a new local patch on the same architectural boundary while the current Quest… |
-| ARCH-0270 | must_not | architecture | doctrine/decision-experiments.md:111 [packed] | — | Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and… |
-| ARCH-0271 | must_not | architecture | doctrine/state-encoding.md:127 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
-| ARCH-0272 | must_not | architecture | doctrine/state-encoding.md:131 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
+| ARCH-0268 | must_not | architecture | doctrine/decision-experiments.md:101 [packed] | — | Do not begin a new local patch on the same architectural boundary while the current Quest… |
+| ARCH-0269 | must_not | architecture | doctrine/decision-experiments.md:111 [packed] | — | Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and… |
+| ARCH-0270 | must_not | architecture | doctrine/state-encoding.md:127 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
+| ARCH-0271 | must_not | architecture | doctrine/state-encoding.md:131 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
 | GOV-0070 | must_not | governance | workflow-guidelines/solver-quests.md:1131 [packed] | — | The override changes the response to a recorded signal; it never mutates a detector verdi… |
 | GOV-0071 | must_not | governance | workflow-guidelines/solver-quests.md:1188 [packed] | — | Reflection is additive and reversible: it produces a recorded note and resets a cadence c… |
 | GOV-0072 | must_not | governance | workflow-guidelines/solver-quests.md:1226 [packed] | — | Advisories are read-only and never block; they fire on the same conditions the autonomous… |
@@ -535,19 +534,19 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0076 | must_not | governance | workflow-guidelines/solver-quests.md:1322 [packed] | — | The consistency gate separately checks structural contract fields and the presence of the… |
 | GOV-0077 | must_not | governance | memory-boundary.md:34 [packed] | — | When external memory and in-repo steering disagree, in-repo steering wins for rules and g… |
 | GOV-0078 | must_not | governance | memory-boundary.md:43 [packed] | — | Metadata is part of the diff. When you substantively change a memory file, refresh its fr… |
-| ARCH-0273 | must | architecture | doctrine/owner-boundaries.md:17 [packed] | — | Every durable concern must have one semantic owner. |
-| ARCH-0274 | must | architecture | doctrine/owner-boundaries.md:27 [packed] | — | Introducing a new owner is a cutover, not an addition: the prior authority for that conce… |
-| ARCH-0275 | must | architecture | doctrine/owner-boundaries.md:52 [packed] | — | After repeated bugs at one boundary, the next fix must reduce the number of paths, states… |
-| ARCH-0276 | must | architecture | doctrine/owner-boundaries.md:80 [packed] | — | An active Quest may have several frontiers, but each attempt must start from one selected… |
-| ARCH-0277 | must | architecture | doctrine/owner-boundaries.md:94 [packed] | — | If the semantic owner, owner boundary, or next required action changes, record a finding … |
-| ARCH-0278 | must | architecture | doctrine/owner-boundaries.md:121 [packed] | — | A seam where two owners meet is itself a concern, and it must have one owner and one chec… |
-| ARCH-0279 | must | architecture | doctrine/owner-boundaries.md:162 [packed] | — | A Quest whose scope crosses owners must seal the interaction artifact as a closure requir… |
-| ARCH-0280 | must | architecture | doctrine/single-path.md:58 [packed] | — | The "consumer set" and "forbidden reinterpretations" bullets above overlap by design with… |
-| ARCH-0281 | must | architecture | doctrine/state-encoding.md:17 [packed] | — | Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must han… |
-| ARCH-0282 | must | architecture | doctrine/state-encoding.md:36 [packed] | — | When an owner-path read or write is unresolved because pressure, authority establishment,… |
-| ARCH-0283 | must | architecture | doctrine/state-encoding.md:61 [packed] | — | Critical convergence traffic must keep stricter admission than diagnostics, observability… |
-| ARCH-0284 | must | architecture | doctrine/state-encoding.md:62 [packed] | — | In practice, node-state publication, membership publication, and authoritative operation … |
-| ARCH-0285 | must | architecture | doctrine/state-encoding.md:115 [packed] | — | State names are boundary-specific but must distinguish static exclusion, missing discover… |
+| ARCH-0272 | must | architecture | doctrine/owner-boundaries.md:17 [packed] | — | Every durable concern must have one semantic owner. |
+| ARCH-0273 | must | architecture | doctrine/owner-boundaries.md:27 [packed] | — | Introducing a new owner is a cutover, not an addition: the prior authority for that conce… |
+| ARCH-0274 | must | architecture | doctrine/owner-boundaries.md:52 [packed] | — | After repeated bugs at one boundary, the next fix must reduce the number of paths, states… |
+| ARCH-0275 | must | architecture | doctrine/owner-boundaries.md:80 [packed] | — | An active Quest may have several frontiers, but each attempt must start from one selected… |
+| ARCH-0276 | must | architecture | doctrine/owner-boundaries.md:94 [packed] | — | If the semantic owner, owner boundary, or next required action changes, record a finding … |
+| ARCH-0277 | must | architecture | doctrine/owner-boundaries.md:121 [packed] | — | A seam where two owners meet is itself a concern, and it must have one owner and one chec… |
+| ARCH-0278 | must | architecture | doctrine/owner-boundaries.md:165 [packed] | — | A Quest whose scope crosses owners must seal the interaction artifact as a closure requir… |
+| ARCH-0279 | must | architecture | doctrine/single-path.md:58 [packed] | — | The "consumer set" and "forbidden reinterpretations" bullets above overlap by design with… |
+| ARCH-0280 | must | architecture | doctrine/state-encoding.md:17 [packed] | — | Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must han… |
+| ARCH-0281 | must | architecture | doctrine/state-encoding.md:36 [packed] | — | When an owner-path read or write is unresolved because pressure, authority establishment,… |
+| ARCH-0282 | must | architecture | doctrine/state-encoding.md:61 [packed] | — | Critical convergence traffic must keep stricter admission than diagnostics, observability… |
+| ARCH-0283 | must | architecture | doctrine/state-encoding.md:62 [packed] | — | In practice, node-state publication, membership publication, and authoritative operation … |
+| ARCH-0284 | must | architecture | doctrine/state-encoding.md:115 [packed] | — | State names are boundary-specific but must distinguish static exclusion, missing discover… |
 | GOV-0079 | must | governance | workflow-guidelines/solver-quests.md:40 [packed] | — | Operating Contract — A Quest must: declare a single sealed doneWhen predicate up front; |
 | GOV-0080 | must | governance | workflow-guidelines/solver-quests.md:41 [packed] | — | Operating Contract — A Quest must: define one or more independent frontiers[]; |
 | GOV-0081 | must | governance | workflow-guidelines/solver-quests.md:42 [packed] | — | Operating Contract — A Quest must: measure progress with lower-is-better probe metrics; |
@@ -558,10 +557,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0086 | must | governance | workflow-guidelines/solver-quests.md:598 [packed] | — | widen-scope: selected frontier theory required. |
 | GOV-0087 | must | governance | workflow-guidelines/solver-quests.md:599 [packed] | — | model: selected frontier theory, active system theory, and --modelRef or --modelNotApplic… |
 | GOV-0088 | must | governance | workflow-guidelines/solver-quests.md:601 [packed] | — | change-approach: selected frontier theory remains required; model evidence is not require… |
-| ARCH-0286 | must_not | architecture | runtime-contracts.md:190 [packed] | — | The services row is the canonical example of non-overlapping field owners on one row: ide… |
-| ARCH-0287 | must_not | architecture | runtime-contracts.md:195 [packed] | — | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
+| ARCH-0285 | must_not | architecture | runtime-contracts.md:190 [packed] | — | The services row is the canonical example of non-overlapping field owners on one row: ide… |
+| ARCH-0286 | must_not | architecture | runtime-contracts.md:195 [packed] | — | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
 | GOV-0089 | must | governance | workflow-guidelines/solver-quests.md:997 [packed] | — | THEORY_REQUIRED (non-terminal): the selected rung needs system or frontier theory before … |
-| ARCH-0288 | should | architecture | system-guidelines.md:305 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
+| ARCH-0287 | should | architecture | system-guidelines.md:305 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
 | TEST-0120 | must | testing | testing-guidelines/fixtures.md:117 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
 | TEST-0121 | must | testing | testing-guidelines/fixtures.md:129 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
 | TEST-0122 | must | testing | testing-guidelines/proof-ladders.md:28 [packed] | — | Quest-Driven Validation Policy — Required workflow: After the Quest validation surface is… |
@@ -604,10 +603,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0103 | must_not | governance | workflow-guidelines/solver-quests.md:490 [packed] | — | Gradient refinement of the sealed metric: a frontier metric may be sharpened from the sca… |
 | GOV-0104 | must_not | governance | workflow-guidelines/solver-quests.md:497 [packed] | — | Harness-not-measuring gate (rr-G): a run that did not measure the system under test — a d… |
 | GOV-0105 | must_not | governance | workflow-guidelines/solver-quests.md:632 [packed] | — | Record attempt: node scripts/solve.js step --id <id> --commit --changeRef diff:<path> --s… |
-| ARCH-0289 | may | architecture | system-guidelines.md:128 [packed] | — | 2. One Semantic Owner Per Concern — Required contract: A shared row may have several fiel… |
-| ARCH-0290 | may | architecture | system-guidelines.md:155 [packed] | — | 3. One Path Per Semantic Decision — Required contract: Collectors may gather evidence; on… |
+| ARCH-0288 | may | architecture | system-guidelines.md:128 [packed] | — | 2. One Semantic Owner Per Concern — Required contract: A shared row may have several fiel… |
+| ARCH-0289 | may | architecture | system-guidelines.md:155 [packed] | — | 3. One Path Per Semantic Decision — Required contract: Collectors may gather evidence; on… |
 | GOV-0106 | must_not | governance | workflow-guidelines/solver-quests.md:985 [packed] | — | EXHAUSTED (terminal): every frontier is parked **as exhausted**, either by the finite str… |
-| ARCH-0291 | may | architecture | system-guidelines.md:338 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Internal machinery may appear in d… |
+| ARCH-0290 | may | architecture | system-guidelines.md:338 [packed] | — | 12. User-Facing Model Stays Small — Required contract: Internal machinery may appear in d… |
 | GOV-0107 | must_not | governance | workflow-guidelines/solver-quests.md:1000 [packed] | — | BLOCKED (non-terminal): a recoverable precondition gate (scope pressure, regression-resto… |
 | GOV-0108 | must_not | governance | workflow-guidelines/solver-quests.md:1044 [packed] | — | A guard never silently halts a run. Every blocking continuation is mapped, through a reve… |
 | GOV-0109 | must_not | governance | workflow-guidelines/solver-quests.md:1045 [packed] | — | A guard never silently halts a run. Every blocking continuation is mapped, through a reve… |
@@ -629,17 +628,18 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0149 | should | testing | testing-guidelines/regression-policy.md:31 [packed] | — | The fix should make the failing test pass |
 | TEST-0150 | should | testing | testing-guidelines/regression-policy.md:82 [packed] | — | Is the current problem a repeated pattern? If so, is there a shared abstraction that shou… |
 | GOV-0121 | must | governance | workflow-guidelines/solver-quests.md:975 [packed] | — | For any other open choice the agent MUST pick a sensible default, record a finding, and c… |
-| ARCH-0292 | must | architecture | doctrine/decision-experiments.md:46 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
-| ARCH-0293 | must | architecture | doctrine/decision-experiments.md:56 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0294 | must | architecture | doctrine/decision-experiments.md:58 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0295 | must | architecture | doctrine/decision-experiments.md:59 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0296 | must | architecture | doctrine/decision-experiments.md:60 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0297 | must | architecture | doctrine/decision-experiments.md:61 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0298 | must | architecture | doctrine/decision-experiments.md:64 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0299 | must | architecture | doctrine/decision-experiments.md:66 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0300 | must | architecture | doctrine/decision-experiments.md:68 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
-| ARCH-0301 | must | architecture | doctrine/decision-experiments.md:91 [packed] | — | Every active Quest must name its residual-closure inventory before code is treated as com… |
-| ARCH-0302 | must | architecture | doctrine/owner-boundaries.md:156 [packed] | — | Hold every gate to the default liveness invariant: an engaged hold, gate, or fence must h… |
+| ARCH-0291 | must | architecture | doctrine/decision-experiments.md:46 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — A causal model must name: t… |
+| ARCH-0292 | must | architecture | doctrine/decision-experiments.md:56 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0293 | must | architecture | doctrine/decision-experiments.md:58 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0294 | must | architecture | doctrine/decision-experiments.md:59 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0295 | must | architecture | doctrine/decision-experiments.md:60 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0296 | must | architecture | doctrine/decision-experiments.md:61 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0297 | must | architecture | doctrine/decision-experiments.md:64 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0298 | must | architecture | doctrine/decision-experiments.md:66 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0299 | must | architecture | doctrine/decision-experiments.md:68 [packed] | — | 9. Escalate Repeated Scenario Failures Into Causal Analysis — Scenario-driven Quests must… |
+| ARCH-0300 | must | architecture | doctrine/decision-experiments.md:91 [packed] | — | Every active Quest must name its residual-closure inventory before code is treated as com… |
+| ARCH-0301 | must | architecture | doctrine/owner-boundaries.md:144 [packed] | — | Coupled-pair registry — coupledPairs in test/shards/impact-contracts.json: a change cross… |
+| ARCH-0302 | must | architecture | doctrine/owner-boundaries.md:159 [packed] | — | Hold every gate to the default liveness invariant: an engaged hold, gate, or fence must h… |
 | ARCH-0303 | must | architecture | doctrine/state-encoding.md:124 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
 | GOV-0122 | must | governance | workflow-guidelines/solver-quests.md:1172 [packed] | — | EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of … |
 | TEST-0151 | must | testing | testing-guidelines/fixtures.md:105 [packed] | — | When adding a new test file, or making a behavior-meaningful change to an existing test —… |
