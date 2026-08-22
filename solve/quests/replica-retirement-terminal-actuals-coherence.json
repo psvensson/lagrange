@@ -46,6 +46,10 @@
     {
       "id": "evidence-anchor",
       "statement": "Two independent in-process repros archived under solve/report/ledger-surplus-drain-stale-actuals-2026-08-22/ and recorded as findings on formation-ledger-spread-voter-ready-readiness-closure: (a) surplus REMOVE of the seed's replica_operations-p1 replica terminal (workflow_step REMOVED/status removed) with the seed retaining two ACTIVE services rows -> concentration evaluator reports overTarget/concentrated forever and provisioning admission wedges (~50% of user-table-metadata-fanout runs; that test now goes red with owner evidence when it manifests); (b) join-time REPLACE terminal with the source ACTIVE row surviving -> cluster rests at 4 active voters, no REMOVE planned across 90s. Suspect seam: replica-operation-observed-completion.js hasObservedRetiredReplaceSourceReplica and the workflow executor-outcome reconcile."
+    },
+    {
+      "id": "detection-cure-wiring-owned",
+      "statement": "The Face B cure scope must not just make the anti-entropy sweep reachable; the detection-to-cure interaction needs one owner: the component that detects cache/authoritative divergence (today: bootstrap-topology-snapshot-owner, which only logs) and the component that cures it (cdc-integration-service applyAuthoritativeCacheSweep) are separate owners with unowned wiring. Follow the CL-001 variant D precedent (consumer-triggered, cooldown-limited, owner-read hydration) and record which owner holds the trigger decision as part of the attempt."
     }
   ]
 }

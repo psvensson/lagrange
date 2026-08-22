@@ -50,6 +50,10 @@
     {
       "id": "evidence-anchor",
       "statement": "Deterministic-ish repro: user-table-metadata-fanout residual (~1-in-3 post Face A+C): cluster reaches 4 voters at 2-1-1 (seed 2, joiners 1+1), concentration reports overTarget true / spreadActionable true / feasibleTargetNodeIds [], and across 22+ pump-driven planning cycles NO surplus REMOVE is ever minted - zero removal activity in the entire run (fanout-loop-1 captured log: only provisioning-deferral and raft-truncation-refusal messages). The hold policy's own comment (operation-ledger-hold-policy.js:107-113) documents REMOVE as the drain step while classifying it DEPENDENT, which the engaged quorum-spread hold defers: the hold defers its own cure."
+    },
+    {
+      "id": "interaction-contract-owned",
+      "statement": "Closure requires the hold-x-cure interaction itself to become an owned, mechanically-checked contract, not just a code change: a decision table under docs/specs/decision-tables/ (boundary: ledger_quorum_spread_hold_release, owner: operation-ledger-hold-policy.js, invariant: every engaged hold has a reachable release path - for each engagement row, some admissible move class or evaluator disengagement releases it) and/or an extension of the operation-ledger TLA model family (models/operation-ledger-self-move-waiter-fairness/) whose liveness property fails on today's matrix and passes on the chosen route. The existing DTs (operation-ledger-placement-observation.json, priority-surplus-remove-placement-fence.json) are the precedent artifacts; check-decision-tables.js validates them."
     }
   ]
 }
