@@ -113,6 +113,7 @@
     "package:npm": "node scripts/release-npm-package.js verify",
     "publish:npm": "node scripts/release-npm-package.js publish",
     "publish": "node scripts/publish-head.js",
+    "release:digest": "node scripts/release-content-digest.js",
     "release:notes": "node scripts/release-notes.js",
     "spike:raft-logic": "node scripts/run-raft-logic-investigation-spike.js",
     "migration:raft:benchmarks": "node scripts/run-raft-migration-benchmarks.js",

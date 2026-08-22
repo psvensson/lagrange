@@ -1748,6 +1748,7 @@
     "test/scripts/prune-test-output.test.js": "ordinary",
     "test/scripts/publish-head.test.js": "ordinary",
     "test/scripts/quest-context.test.js": "ordinary",
+    "test/scripts/release-content-digest.test.js": "ordinary",
     "test/scripts/release-notes.test.js": "ordinary",
     "test/scripts/release-npm-package.test.js": "ordinary",
     "test/scripts/rolling-restart-leadership-churn-attribution.test.js": "ordinary",

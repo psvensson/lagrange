@@ -1766,6 +1766,7 @@
     "test/scripts/prune-test-output.test.js": "test-infrastructure",
     "test/scripts/publish-head.test.js": "test-infrastructure",
     "test/scripts/quest-context.test.js": "test-infrastructure",
+    "test/scripts/release-content-digest.test.js": "test-infrastructure",
     "test/scripts/release-notes.test.js": "test-infrastructure",
     "test/scripts/release-npm-package.test.js": "test-infrastructure",
     "test/scripts/rolling-restart-leadership-churn-attribution.test.js": "test-infrastructure",

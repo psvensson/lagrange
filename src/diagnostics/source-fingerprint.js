@@ -13,7 +13,7 @@
 // is the only basis that is sound in both directions.
 
 import crypto from 'node:crypto';
-import {readdir, readFile} from 'node:fs/promises';
+import {lstat, readdir, readFile, readlink} from 'node:fs/promises';
 import path from 'node:path';
 
 // Versioned so a future change to the hashing scheme is visibly distinguishable
@@ -62,6 +62,30 @@ function updateHashWithRecord(hash, relativePath, content) {
   hash.update(content);
 }
 
+// Shared digest core for both entry points: identical record framing over a
+// sorted (relativePath, absolutePath) list, so a directory walk and an explicit
+// file set can never disagree about how the same files hash.
+async function digestRecords(records, hexLength) {
+  const sorted = [...records]
+    .sort((a, b) => (a.relativePath < b.relativePath ? -1 : 1));
+  const hash = crypto.createHash(HASH_NAME);
+  // Bind the file count into the digest so adding/removing files always changes
+  // the fingerprint even in degenerate empty/single-file edge cases.
+  hash.update(String(sorted.length), 'utf8');
+  hash.update(':', 'utf8');
+  for (const {relativePath, absolutePath} of sorted) {
+    // Git semantics: a symlink's content is its target string, never the bytes
+    // behind it — so a broken or out-of-tree link still hashes deterministically
+    // and identically to what a checkout of the same tree would contain.
+    const stats = await lstat(absolutePath);
+    const content = stats.isSymbolicLink() ?
+      Buffer.from(await readlink(absolutePath), 'utf8') :
+      await readFile(absolutePath);
+    updateHashWithRecord(hash, relativePath, content);
+  }
+  return hash.digest('hex').slice(0, hexLength);
+}
+
 /**
  * Compute a deterministic content fingerprint of every regular file under
  * rootDir. Order-independent (paths are sorted) and location-independent (only
@@ -73,27 +97,34 @@ function updateHashWithRecord(hash, relativePath, content) {
 async function computeSourceFingerprint(rootDir) {
   const absoluteRoot = path.resolve(rootDir);
   const filePaths = await collectFilePathsRecursively(absoluteRoot, []);
-  const records = filePaths
-    .map((absolutePath) => ({
-      relativePath: toPosixRelativePath(absoluteRoot, absolutePath),
-      absolutePath,
-    }))
-    .sort((a, b) => (a.relativePath < b.relativePath ? -1 : 1));
+  const records = filePaths.map((absolutePath) => ({
+    relativePath: toPosixRelativePath(absoluteRoot, absolutePath),
+    absolutePath,
+  }));
+  return digestRecords(records, FINGERPRINT_HEX_LENGTH);
+}
 
-  const hash = crypto.createHash(HASH_NAME);
-  // Bind the file count into the digest so adding/removing files always changes
-  // the fingerprint even in degenerate empty/single-file edge cases.
-  hash.update(String(records.length), 'utf8');
-  hash.update(':', 'utf8');
-  for (const {relativePath, absolutePath} of records) {
-    const content = await readFile(absolutePath);
-    updateHashWithRecord(hash, relativePath, content);
-  }
-  return hash.digest('hex').slice(0, FINGERPRINT_HEX_LENGTH);
+/**
+ * Compute the same deterministic content fingerprint over an explicit set of
+ * root-relative POSIX paths (e.g. the tracked release-content file list)
+ * instead of a directory walk. Full-length digest: this variant exists for
+ * release identity, where truncation buys nothing.
+ * @param {string} rootDir Repository root the paths are relative to.
+ * @param {Array<string>} relativePaths Root-relative POSIX file paths.
+ * @return {Promise<string>} Full lowercase hex digest.
+ */
+async function computeFileSetFingerprint(rootDir, relativePaths) {
+  const absoluteRoot = path.resolve(rootDir);
+  const records = relativePaths.map((relativePath) => ({
+    relativePath,
+    absolutePath: path.join(absoluteRoot, relativePath),
+  }));
+  return digestRecords(records, Infinity);
 }
 
 export {
   computeSourceFingerprint,
+  computeFileSetFingerprint,
   SOURCE_FINGERPRINT_ALGORITHM,
   SOURCE_FINGERPRINT_ENV_VAR,
   FINGERPRINT_HEX_LENGTH,

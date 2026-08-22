@@ -1749,6 +1749,7 @@
     "test/scripts/prune-test-output.test.js": "unit",
     "test/scripts/publish-head.test.js": "unit",
     "test/scripts/quest-context.test.js": "unit",
+    "test/scripts/release-content-digest.test.js": "unit",
     "test/scripts/release-notes.test.js": "unit",
     "test/scripts/release-npm-package.test.js": "unit",
     "test/scripts/rolling-restart-leadership-churn-attribution.test.js": "unit",
