@@ -1,0 +1,47 @@
+{
+  "id": "default-replica-count-one-join-wedge",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Bootstrapping a multi-node cluster with partition.defaultReplicaCount=1 either converges or is refused with a typed validation error; join-time formation must not hang forever persisting a replica_operations-p1 self-move against a target of 1.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "ab267aebda921fa02f2ac3d69a69d7e6a5e43dcb"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "default-replica-count-one-join-wedge",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "default-replica-count-one-join-wedge-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "default-replica-count-one-join-wedge",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "evidence-anchor",
+      "statement": "Repro (3x): set partition.defaultReplicaCount=1 BEFORE bootstrap, then join nodes \u2014 join-time formation mints a replica_operations-p1 self-move (workflowStep STOPPING targeting the seed) whose progress persistence loops forever with Query timeout / DISTRIBUTED_PARTICIPANT_FAILURE, stalling the join and the cluster; single-node rc=1 is fine (create-table-partition-provisioning passes). Logs: solve/report/ledger-surplus-drain-stale-actuals-2026-08-22/fanout2.log, fanout-repro6.log, fanout-repro7.log. Fails as a hang, never as a validation error; may resolve as 'unsupported config' with a typed refusal."
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+not ok test/integration/user-table-metadata-fanout.integration.test.js (3 assertions, 193083ms)
+# TAP assertions failed; test process received SIGALRM; test process exited without a status
+TAP version 14
+# Subtest: Later-created user-table metadata fans out to all node-local system caches
+    ok 1 - seed bootstrap should succeed
+{"level":50,"time":"2026-08-22T12:36:39.529Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-1-1787402196932","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:42.239Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-2-1787402199817","error":"Query timeout after 2422ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:47.470Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-4-1787402205239","error":"Query timeout after 2230ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:50.118Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-5-1787402208270","error":"Query timeout after 1830ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:51.930Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-6-1787402211718","error":"Query timeout after 212ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:51.931Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 212ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 212ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:36:55.855Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-7-1787402213355","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:36:58.437Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-8-1787402215957","error":"Query timeout after 2479ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:01.068Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-9-1787402218639","error":"Query timeout after 2429ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:03.765Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-10-1787402221470","error":"Query timeout after 2295ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:06.502Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-11-1787402224649","error":"Query timeout after 1853ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:07.349Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-3-1787402224849","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449921","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:07.350Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","partitionId":"replica_operations-p1","targetNodeId":"550e8400-e29b-41d4-a716-446655449921","workflowStep":"STOPPING","error":"Distributed operation failed due to participant failures","boundary":"coordinator_created_remote_handoff","nodeId":"test-node","msg":"Deferred replica operation dispatch retry failed"}
+{"level":50,"time":"2026-08-22T12:37:08.357Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-12-1787402228103","error":"Query timeout after 253ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:08.357Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 253ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 253ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:37:12.243Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-13-1787402229742","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:14.886Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-14-1787402232344","error":"Query timeout after 2479ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:17.525Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-15-1787402235119","error":"Query timeout after 2406ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:20.220Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-16-1787402237925","error":"Query timeout after 2272ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:22.881Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-17-1787402241021","error":"Query timeout after 1860ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:24.883Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-18-1787402244481","error":"Query timeout after 261ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:24.885Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 261ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 261ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:37:29.379Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-19-1787402246879","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:31.959Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-20-1787402249480","error":"Query timeout after 2479ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:34.589Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-21-1787402252160","error":"Query timeout after 2429ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:35.821Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-4-1787402225589","error":"Query timeout after 30000ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:37.404Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-22-1787402255167","error":"Query timeout after 2237ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:40.161Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-5-1787402257491","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:40.162Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449921","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:37:40.165Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-23-1787402258205","error":"Query timeout after 1836ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:41.878Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-24-1787402261766","error":"Query timeout after 112ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:41.878Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 112ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 112ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:37:47.164Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-25-1787402264664","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:49.908Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-26-1787402267265","error":"Query timeout after 2480ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:52.544Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-27-1787402270171","error":"Query timeout after 2373ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:55.208Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-28-1787402272945","error":"Query timeout after 2239ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:57.844Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-29-1787402276025","error":"Query timeout after 1819ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:59.664Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-30-1787402279450","error":"Query timeout after 215ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:37:59.664Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 215ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 215ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:38:04.107Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-31-1787402281307","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:06.746Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-32-1787402284356","error":"Query timeout after 2390ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:09.296Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-33-1787402286947","error":"Query timeout after 2340ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:11.901Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-34-1787402289700","error":"Query timeout after 2202ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:12.677Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-7-1787402290175","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:12.678Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449921","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:38:14.504Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-35-1787402292702","error":"Query timeout after 1802ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:16.306Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-36-1787402296185","error":"Query timeout after 121ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:16.307Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 121ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 121ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:38:23.728Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-38-1787402301341","error":"Query timeout after 2384ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:26.547Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-39-1787402304308","error":"Query timeout after 2239ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:31.709Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-41-1787402310151","error":"Query timeout after 1557ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:36.387Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-6-1787402286098","error":"Query timeout after 30000ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:37.172Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-43-1787402314725","error":"Query timeout after 2447ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:39.875Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-44-1787402317388","error":"Query timeout after 2393ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:42.509Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-45-1787402320282","error":"Query timeout after 2226ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:45.166Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-46-1787402323310","error":"Query timeout after 1825ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:46.453Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-8-1787402322944","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:46.454Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449921","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:38:46.963Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-47-1787402326768","error":"Query timeout after 193ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:46.964Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 193ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 193ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:38:54.116Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-49-1787402331580","error":"Query timeout after 2381ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:38:56.636Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-50-1787402334351","error":"Query timeout after 2284ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:01.806Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-52-1787402340123","error":"Query timeout after 1682ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:03.487Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-53-1787402343406","error":"Query timeout after 81ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:03.488Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 81ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 81ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:39:07.177Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-54-1787402344677","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:09.893Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-55-1787402347278","error":"Query timeout after 2480ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:12.528Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-56-1787402350146","error":"Query timeout after 2382ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:15.183Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-57-1787402352930","error":"Query timeout after 2249ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:18.226Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-58-1787402356773","error":"Query timeout after 1452ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:19.274Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-10-1787402356773","error":"Query timeout after 2500ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+{"level":50,"time":"2026-08-22T12:39:19.274Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":null,"error":"Query timeout after 2500ms","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449921","msg":"Failed to persist operation"}
+    not ok 2 - timeout!
+      ---
+      signal: null
+      handles:
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 4:127.0.0.1:49752
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 4:127.0.0.1:49753
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+      expired: TAP
+      ...
+    
+    1..2
+not ok 1 - Later-created user-table metadata fans out to all node-local system caches # time=181190.787ms
+  ---
+  at:
+    fileName: test/integration/user-table-metadata-fanout.integration.test.js
+    lineNumber: 101
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('Later-created user-table metadata fans out to all node-local system
+    caches',
+  
+    ^
+      {timeout: TEST_TIMEOUT_MS},
+      async (t) => {
+  ...
+
+1..1
+# { total: 2, pass: 1, fail: 1 }
+# time=181195.78ms
+{"level":50,"time":"2026-08-22T12:39:32.016Z","nodeId":"test-node","pid":3058389,"subsystem":"rebalance-coordinator","operationId":"49bc9e5e-67f9-4349-aa81-a0b25df1a1bb","error":"Distributed operation failed due to participant failures","nodeId":"test-node","code":"DISTRIBUTED_PARTICIPANT_FAILURE","retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":"replica_operations","participantFailures":[{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":"DISTRIBUTED_PARTICIPANT_FAILURE","error":"Distributed operation failed due to participant failures","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null}],"firstFailedParticipant":{"partitionId":"replica_operations-p1","participantNodeId":null,"participantAddress":null,"errorCode":"DISTRIBUTED_PARTICIPANT_FAILURE","error":"Distributed operation failed due to participant failures","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":null},"contextNodeId":"550e8400-e29b-41d4-a716-446655449922","msg":"Failed to persist operation"}
+{"level":50,"time":"2026-08-22T12:39:36.920Z","nodeId":"test-node","pid":3058389,"subsystem":"parallel-query-coordinator","queryId":"q-9-1787402346740","error":"Query timeout after 30000ms","nodeId":"test-node","msg":"Parallel query execution failed"}
+# test-files total=1 pass=0 fail=1 assertions=3

@@ -1,0 +1,354 @@
+not ok test/integration/user-table-metadata-fanout.integration.test.js (13 assertions, 371893ms)
+# TAP assertions failed; test process received SIGALRM; test process exited without a status
+TAP version 14
+# Subtest: Later-created user-table metadata fans out to all node-local system caches
+    ok 1 - seed bootstrap should succeed
+    ok 2 - 550e8400-e29b-41d4-a716-446655449922 should join successfully
+{"level":50,"time":"2026-08-22T12:54:43.581Z","nodeId":"test-node","pid":3064518,"subsystem":"partition","requestedIndex":660,"committedIndex":661,"address":"unknown","nodeId":"test-node","msg":"Refused raft log truncation into the committed prefix (committed-entry-loss prevented)"}
+{"level":50,"time":"2026-08-22T12:54:43.581Z","nodeId":"test-node","pid":3064518,"subsystem":"partition","requestedIndex":660,"committedIndex":661,"address":"unknown","nodeId":"test-node","msg":"Refused raft log truncation into the committed prefix (committed-entry-loss prevented)"}
+    ok 3 - 550e8400-e29b-41d4-a716-446655449923 should join successfully
+{"level":50,"time":"2026-08-22T12:54:53.710Z","nodeId":"test-node","pid":3064518,"subsystem":"partition","requestedIndex":674,"committedIndex":675,"address":"unknown","nodeId":"test-node","msg":"Refused raft log truncation into the committed prefix (committed-entry-loss prevented)"}
+{"level":50,"time":"2026-08-22T12:54:53.710Z","nodeId":"test-node","pid":3064518,"subsystem":"partition","requestedIndex":674,"committedIndex":675,"address":"unknown","nodeId":"test-node","msg":"Refused raft log truncation into the committed prefix (committed-entry-loss prevented)"}
+    not ok 4 - operation-ledger voter quorum should de-concentrate off the seed: {"partitionId":"replica_operations-p1","targetReplicaCount":3,"totalVoters":4,"maxVotersOnOneNode":2,"hottestNodeId":"550e8400-e29b-41d4-a716-446655449921","distinctVoterNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"feasibleTargetNodeId":null,"feasibleTargetNodeIds":[],"overTarget":true,"spreadActionable":true}
+      ---
+      compare: ===
+      at:
+        fileName: test/integration/user-table-metadata-fanout.integration.test.js
+        lineNumber: 217
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/integration/user-table-metadata-fanout.integration.test.js:217:9)
+      source: |2
+                return !lastConcentration;
+              }, LEDGER_SPREAD_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+              t.equal(
+        --------^
+                ledgerSpreadObserved,
+                true,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+{"level":50,"time":"2026-08-22T12:57:24.035Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:57:24.035Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:57:35.065Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:57:35.065Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:57:46.090Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:57:46.090Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:57:57.110Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:57:57.110Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:58:08.509Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":[],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[],"rejectionSummary":"none","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:58:08.509Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=none","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:58:19.539Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:58:19.539Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:58:30.595Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:58:30.595Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:58:41.612Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:58:41.612Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:58:52.630Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:58:52.630Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:59:03.647Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:03.647Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:59:14.671Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:14.671Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+    ok 5 - create table should succeed on seed
+    not ok 6 - durable create job should reach ready: {"contractState":"pending","nextAction":"retry","reasonCodes":["schema_replica_convergence_pending"]}
+      ---
+      compare: ===
+      at:
+        fileName: test/integration/user-table-metadata-fanout.integration.test.js
+        lineNumber: 243
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/integration/user-table-metadata-fanout.integration.test.js:243:9)
+      source: >2
+              const createResult = await createTableUntilTerminal(createEngine);
+              t.equal(createResult?.success, true, 'create table should succeed on seed');
+              t.equal(
+        --------^
+                createResult?.contractState,
+                'ready',
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ready
+        +pending
+      ...
+    
+    ok 7 - 550e8400-e29b-41d4-a716-446655449921 should expose a system table cache
+{"level":50,"time":"2026-08-22T12:59:25.707Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:25.708Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:59:36.726Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:36.726Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+    not ok 8 - 550e8400-e29b-41d4-a716-446655449921 should observe table metadata fanout: {"tableRowCount":1,"partitionRowCount":1,"partitionIds":["tbl-77b941a57d421496f7d1e835498851a6-p1"],"activePartitionServiceCount":0,"activePartitionIds":[],"leaderPartitionIds":[],"ready":false}
+      ---
+      compare: ===
+      at:
+        fileName: test/integration/user-table-metadata-fanout.integration.test.js
+        lineNumber: 279
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/integration/user-table-metadata-fanout.integration.test.js:279:11)
+      source: |2
+                  return metadataState.ready;
+                }, CACHE_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+                t.equal(
+        ----------^
+                  ready,
+                  true,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 9 - 550e8400-e29b-41d4-a716-446655449922 should expose a system table cache
+{"level":50,"time":"2026-08-22T12:59:47.760Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:47.760Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T12:59:58.833Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T12:59:58.833Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+{"level":50,"time":"2026-08-22T13:00:09.846Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T13:00:09.846Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+    not ok 10 - 550e8400-e29b-41d4-a716-446655449922 should observe table metadata fanout: {"tableRowCount":1,"partitionRowCount":1,"partitionIds":["tbl-77b941a57d421496f7d1e835498851a6-p1"],"activePartitionServiceCount":0,"activePartitionIds":[],"leaderPartitionIds":[],"ready":false}
+      ---
+      compare: ===
+      at:
+        fileName: test/integration/user-table-metadata-fanout.integration.test.js
+        lineNumber: 279
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/integration/user-table-metadata-fanout.integration.test.js:279:11)
+      source: |2
+                  return metadataState.ready;
+                }, CACHE_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+                t.equal(
+        ----------^
+                  ready,
+                  true,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 11 - 550e8400-e29b-41d4-a716-446655449923 should expose a system table cache
+{"level":50,"time":"2026-08-22T13:00:20.860Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T13:00:20.860Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+    not ok 12 - timeout!
+      ---
+      signal: null
+      handles:
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 4:127.0.0.1:57952
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 4:127.0.0.1:57953
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 4:127.0.0.1:57954
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+      expired: TAP
+      ...
+    
+    1..12
+not ok 1 - Later-created user-table metadata fans out to all node-local system caches # time=360009.893ms
+  ---
+  at:
+    fileName: test/integration/user-table-metadata-fanout.integration.test.js
+    lineNumber: 105
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('Later-created user-table metadata fans out to all node-local system
+    caches',
+  
+    ^
+      {timeout: TEST_TIMEOUT_MS},
+      async (t) => {
+  ...
+
+1..1
+# { total: 12, pass: 7, fail: 5 }
+# time=360017.91ms
+{"level":50,"time":"2026-08-22T13:00:31.873Z","nodeId":"test-node","pid":3064518,"subsystem":"sql-query-engine","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","targetReplicaCount":1,"minimumRoutableReplicaCount":1,"candidateTargetNodeIds":["550e8400-e29b-41d4-a716-446655449921","550e8400-e29b-41d4-a716-446655449922","550e8400-e29b-41d4-a716-446655449923"],"existingRoutableNodeIds":[],"plannedTargetNodeIds":[],"rejectedTargets":[{"targetNodeId":"550e8400-e29b-41d4-a716-446655449921","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449922","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"},{"targetNodeId":"550e8400-e29b-41d4-a716-446655449923","decisionType":"deferred","blockingReasons":["operation_ledger_quorum_concentrated"],"reasonCodes":[],"nodeSummary":null,"readinessSnapshot":null,"message":"Operation-ledger partition replica_operations-p1 quorum is concentrated on one node; operation admission deferred until the ledger spreads"}],"rejectionSummary":"550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Insufficient admissible provisioning targets for initial table partition"}
+{"level":50,"time":"2026-08-22T13:00:31.873Z","nodeId":"test-node","pid":3064518,"subsystem":"table-creation-service","tableId":"tbl-77b941a57d421496f7d1e835498851a6","tableName":"user_table_metadata_fanout","partitionId":"tbl-77b941a57d421496f7d1e835498851a6-p1","replicaCount":1,"error":"Unable to satisfy minimum routable provisioning cohort for partition tbl-77b941a57d421496f7d1e835498851a6-p1: required=1, provisionable=0, target=1, rejected=550e8400-e29b-41d4-a716-446655449921:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449922:operation_ledger_quorum_concentrated; 550e8400-e29b-41d4-a716-446655449923:operation_ledger_quorum_concentrated","nodeId":"test-node","msg":"Initial table partition provisioning failed"}
+# test-files total=1 pass=0 fail=1 assertions=13
