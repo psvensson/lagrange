@@ -1,0 +1,18 @@
+{
+  "test": "test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js",
+  "src": [
+    "src/rebalancer/unified-rebalancer-available-nodes.js"
+  ],
+  "base": "6dfe3e50b^",
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "revertRunOutputTail": "        Test.<anonymous> (test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js:144:5)\n      source: >2\n          t.equal(result.success, true, 'the real rebalance path schedules the\n        deficit');\n          t.equal(createdOperations.length, 1, 'exactly one ADD is created');\n          t.equal(\n        ----^\n            createdOperations[0]?.nodeId,\n            HEALTHY_NODE_ID,\n      diff: |\n        --- expected\n        +++ actual\n        @@ -1,1 +1,1 @@\n        -healthy-alternative-node\n        +undefined\n      ...\n    \n    ok 5 - the expired preferred target is not retried\n    1..5\nnot ok 1 - ordinary runtime-service placement excludes an expired-lease repairEligible candidate before planning # time=48.861ms\n  ---\n  at:\n    fileName: test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js\n    lineNumber: 63\n    columnNumber: 1\n    isToplevel: true\n  source: |\n    }\n  \n    test('ordinary runtime-service placement excludes an expired-lease ' +\n    ^\n      'repairEligible candidate before planning', async (t) => {\n      initializeTestEnvironment();\n  ...\n\n1..1\n# { total: 5, pass: 2, fail: 3 }\n# time=55.535ms\n# test-files total=1 pass=0 fail=1 assertions=6\n",
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-22T10:06:26.354Z"
+}

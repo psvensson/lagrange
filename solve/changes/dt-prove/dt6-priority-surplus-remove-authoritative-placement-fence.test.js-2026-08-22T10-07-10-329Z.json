@@ -1,0 +1,19 @@
+{
+  "test": "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js",
+  "src": [
+    "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+    "src/rebalancer/rebalance-coordinator-operation-creation.js"
+  ],
+  "base": "d708b3db8^",
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "revertRunOutputTail": "    reservationTtlMs: 300000\n  }\n}\nShutting down RebalanceCoordinator { nodeId: 'node-1', inFlightOperations: 0 }\n# Subtest: failed priority cleanup preserves the no-new-authority-read path\n    ok 1 - should be equal\n    ok 2 - should be equal\n    ok 3 - should be equal\n    ok 4 - should be equal\n    1..4\nok 14 - failed priority cleanup preserves the no-new-authority-read path # time=0.775ms\n\nRebalanceCoordinator initialized {\n  nodeId: 'node-1',\n  config: {\n    pendingTimeoutMs: 30000,\n    creatingTimeoutMs: 60000,\n    syncingTimeoutMs: 300000,\n    removingTimeoutMs: 60000,\n    maxConcurrentAdds: 5,\n    reservedRuntimeServicePlacementSlots: 1,\n    maxConcurrentRemoves: 5,\n    periodicCheckIntervalMs: 60000,\n    reservationTtlMs: 300000\n  }\n}\nShutting down RebalanceCoordinator { nodeId: 'node-1', inFlightOperations: 0 }\n# Subtest: non-priority standalone remove preserves the no-new-authority-read path\n    ok 1 - should be equal\n    ok 2 - should be equal\n    ok 3 - should be equal\n    ok 4 - should be equal\n    1..4\nok 15 - non-priority standalone remove preserves the no-new-authority-read path # time=0.633ms\n\n1..15\n# { total: 61, pass: 13, fail: 48 }\n# time=590.229ms\n# test-files total=1 pass=0 fail=1 assertions=76\n",
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-22T10:07:10.246Z"
+}

@@ -1,0 +1,20 @@
+{
+  "test": "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js",
+  "src": [
+    "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
+    "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+    "src/rebalancer/rebalance-coordinator-operation-read-methods.js"
+  ],
+  "base": "11db5c559^",
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "revertRunOutputTail": "      hottestNodeId: 'node-0',\n      distinctVoterNodeIds: [Array],\n      feasibleTargetNodeId: 'node-1',\n      feasibleTargetNodeIds: [Array],\n      overTarget: false,\n      spreadActionable: true\n    }\n  ]\n}\nOperation-ledger quorum concentrated on one node; deferring dependent operation admission until the ledger spreads {\n  deferredMoveType: 'ADD',\n  deferredPartitionId: 'sql_write_operations-p1',\n  concentratedPartitions: [\n    {\n      partitionId: 'replica_operations-p1',\n      targetReplicaCount: 3,\n      totalVoters: 3,\n      maxVotersOnOneNode: 3,\n      hottestNodeId: 'node-0',\n      distinctVoterNodeIds: [Array],\n      feasibleTargetNodeId: 'node-1',\n      feasibleTargetNodeIds: [Array],\n      overTarget: false,\n      spreadActionable: true\n    },\n    {\n      partitionId: 'replica_operations-p2',\n      targetReplicaCount: 3,\n      totalVoters: 3,\n      maxVotersOnOneNode: 3,\n      hottestNodeId: 'node-0',\n      distinctVoterNodeIds: [Array],\n      feasibleTargetNodeId: 'node-1',\n      feasibleTargetNodeIds: [Array],\n      overTarget: false,\n      spreadActionable: true\n    }\n  ]\n}\n",
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-22T10:09:05.438Z"
+}

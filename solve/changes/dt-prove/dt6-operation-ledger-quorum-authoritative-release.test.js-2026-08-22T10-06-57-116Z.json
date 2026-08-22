@@ -1,0 +1,21 @@
+{
+  "test": "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js",
+  "src": [
+    "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
+    "src/rebalancer/operation-ledger-quorum-concentration.js",
+    "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+    "src/rebalancer/rebalance-coordinator-operation-read-methods.js"
+  ],
+  "base": "11db5c559^",
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "revertRunOutputTail": "not ok test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js (0 assertions, 710ms)\n# no assertions executed; test process exited 1\n# time=710ms\n# test-files total=1 pass=0 fail=1 assertions=0\nfile:///tmp/session-worktree-wXkDq3/tree/src/rebalancer/operation-ledger-hold-policy.js:38\n  getConcentratedOperationLedgerPartition,\n  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nSyntaxError: The requested module './operation-ledger-quorum-concentration.js' does not provide an export named 'getConcentratedOperationLedgerPartition'\n    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)\n    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)\n\nNode.js v22.21.1\n",
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-22T10:06:57.030Z"
+}
