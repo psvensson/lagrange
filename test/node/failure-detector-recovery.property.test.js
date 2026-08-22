@@ -119,6 +119,11 @@ test('Property 8: Failure detector recovery detection',
               const mockEngine = createMockSqlQueryEngine({nodes});
 
               const detector = new FailureDetector({
+                // Frozen clock: the generators exercise exact threshold
+                // boundaries (e.g. heartbeatAge = threshold - 1), so real
+                // elapsed time between fixture construction and
+                // checkNodeHealth must not shift the effective age.
+                now: () => now,
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
@@ -190,6 +195,11 @@ test('Property 8: Failure detector recovery detection',
               const mockEngine = createMockSqlQueryEngine({nodes});
 
               const detector = new FailureDetector({
+                // Frozen clock: the generators exercise exact threshold
+                // boundaries (e.g. heartbeatAge = threshold - 1), so real
+                // elapsed time between fixture construction and
+                // checkNodeHealth must not shift the effective age.
+                now: () => now,
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
@@ -255,6 +265,11 @@ test('Property 8: Failure detector recovery detection',
               const mockEngine = createMockSqlQueryEngine({nodes});
 
               const detector = new FailureDetector({
+                // Frozen clock: the generators exercise exact threshold
+                // boundaries (e.g. heartbeatAge = threshold - 1), so real
+                // elapsed time between fixture construction and
+                // checkNodeHealth must not shift the effective age.
+                now: () => now,
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
@@ -331,6 +346,11 @@ test('Property 8: Failure detector recovery detection',
               const mockEngine = createMockSqlQueryEngine({nodes});
 
               const detector = new FailureDetector({
+                // Frozen clock: the generators exercise exact threshold
+                // boundaries (e.g. heartbeatAge = threshold - 1), so real
+                // elapsed time between fixture construction and
+                // checkNodeHealth must not shift the effective age.
+                now: () => now,
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,

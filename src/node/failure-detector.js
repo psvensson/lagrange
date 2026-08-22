@@ -74,6 +74,10 @@ class FailureDetector extends EventEmitter {
     this.failureRepairIntentRecorder =
       options.failureRepairIntentRecorder ||
       createInMemoryFailureRepairIntentRecorder();
+    // Injectable clock: health classification compares heartbeat ages against
+    // hard thresholds, so boundary-exact tests need a frozen now instead of
+    // racing real elapsed time between fixture construction and evaluation.
+    this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -228,7 +232,7 @@ class FailureDetector extends EventEmitter {
    * @return {Promise<void>}
    */
   async checkNodeHealth() {
-    const now = Date.now();
+    const now = this.now();
     const nodes = await this.getNodes();
 
     for (const node of nodes) {
@@ -540,7 +544,7 @@ class FailureDetector extends EventEmitter {
     }
 
     this.adaptiveResetTimer = setInterval(() => {
-      const now = Date.now();
+      const now = this.now();
 
       for (const [nodeId, failures] of this.recentFailures) {
         if (failures.length === 0) {
