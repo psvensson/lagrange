@@ -30,6 +30,11 @@ const REPLICA_STATE_MACHINE_VALID_TRANSITIONS = Object.freeze({
   ],
   [REPLICA_STATE_MACHINE_STATE.SYNCING]: [
     REPLICA_STATE_MACHINE_STATE.ACTIVE,
+    // A failed ADD can strand a replica in SYNCING (voter-ready timeout with
+    // no FAILED flip); its cleanup REMOVE writes REMOVING, and refusing the
+    // edge made the replica permanently un-removable while it blocked ledger
+    // spread. CREATING already admits REMOVING for the same reason.
+    REPLICA_STATE_MACHINE_STATE.REMOVING,
     REPLICA_STATE_MACHINE_STATE.FAILED,
   ],
   [REPLICA_STATE_MACHINE_STATE.ACTIVE]: [

@@ -1004,6 +1004,7 @@
     "test/node/concurrent-operation-limits.property.test.js": "bootstrap-membership",
     "test/node/entry-time-tracking.property.test.js": "bootstrap-membership",
     "test/node/event-emission-completeness.property.test.js": "bootstrap-membership",
+    "test/node/failed-replica-removal-transition-tolerance.test.js": "bootstrap-membership",
     "test/node/failure-detection-delegation.property.test.js": "bootstrap-membership",
     "test/node/failure-detector-adaptive-threshold.property.test.js": "bootstrap-membership",
     "test/node/failure-detector-cdc-writes.property.test.js": "bootstrap-membership",

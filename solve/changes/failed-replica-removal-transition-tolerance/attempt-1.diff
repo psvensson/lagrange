@@ -1,0 +1,202 @@
+diff --git a/scripts/checks/run-failed-replica-removal-transition-tolerance-scenarios.js b/scripts/checks/run-failed-replica-removal-transition-tolerance-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c91ed318e5240eadcf619ee87855fc503d9ffd3
+--- /dev/null
++++ b/scripts/checks/run-failed-replica-removal-transition-tolerance-scenarios.js
+@@ -0,0 +1,25 @@
++/**
++ * Scenario runner for the failed-replica-removal-transition-tolerance quest.
++ *
++ * Binds the contract that a replica stranded in SYNCING (failed ADD,
++ * voter-ready timeout) accepts its cleanup removal transition while FAILED
++ * stays terminal for lifecycle writes, plus the state-machine suites that pin
++ * the whole transition matrix and the handler paths that consume it.
++ */
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const TOLERANCE_GUARDS = Object.freeze([
++  'test/node/failed-replica-removal-transition-tolerance.test.js',
++  'test/node/replica-state-machine.test.js',
++  'test/node/replica-state-machine-transitions.property.test.js',
++  'test/node/replica-state-delegation.test.js',
++  'test/node/replica-lifecycle-manager.test.js',
++]);
++
++const SCENARIOS = Object.freeze({
++  'failed-replica-removal-transition-tolerance-main': TOLERANCE_GUARDS,
++  'failed-replica-removal-transition-tolerance': TOLERANCE_GUARDS,
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/node/replica-state-machine-constants.js b/src/node/replica-state-machine-constants.js
+index 1904237d5496da995e07627b21b30aa3d566093d..ff30371c808e56f39f5ed7251c94d76f19b5aece 100644
+--- a/src/node/replica-state-machine-constants.js
++++ b/src/node/replica-state-machine-constants.js
+@@ -30,6 +30,11 @@ const REPLICA_STATE_MACHINE_VALID_TRANSITIONS = Object.freeze({
+   ],
+   [REPLICA_STATE_MACHINE_STATE.SYNCING]: [
+     REPLICA_STATE_MACHINE_STATE.ACTIVE,
++    // A failed ADD can strand a replica in SYNCING (voter-ready timeout with
++    // no FAILED flip); its cleanup REMOVE writes REMOVING, and refusing the
++    // edge made the replica permanently un-removable while it blocked ledger
++    // spread. CREATING already admits REMOVING for the same reason.
++    REPLICA_STATE_MACHINE_STATE.REMOVING,
+     REPLICA_STATE_MACHINE_STATE.FAILED,
+   ],
+   [REPLICA_STATE_MACHINE_STATE.ACTIVE]: [
+diff --git a/test/node/failed-replica-removal-transition-tolerance.test.js b/test/node/failed-replica-removal-transition-tolerance.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..620ceebc97fd0cedc5fa848d19ff327637ee3261
+--- /dev/null
++++ b/test/node/failed-replica-removal-transition-tolerance.test.js
+@@ -0,0 +1,113 @@
++/**
++ * Quest failed-replica-removal-transition-tolerance: a replica stranded in
++ * SYNCING (a failed ADD whose voter-ready wait timed out without a FAILED
++ * flip) must accept the removal transition, or its cleanup REMOVE is rejected
++ * forever, the replica becomes un-removable, and the operation-ledger spread
++ * it blocks never completes (archived repro: fanout-postfix-seamC.log.txt in
++ * solve/report/ledger-surplus-drain-stale-actuals-2026-08-22/).
++ *
++ * The matrix already admits CREATING -> REMOVING; refusing SYNCING ->
++ * REMOVING was an omission, not a design decision. FAILED stays terminal for
++ * lifecycle transitions by design: the removal executor's FAILED tolerance
++ * skips the REMOVING write and proceeds to durable cleanup, so FAILED ->
++ * REMOVING must remain invalid.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  ReplicaStateMachine,
++  ReplicaState,
++  VALID_TRANSITIONS,
++} from '../../src/node/replica-state-machine.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++function createMockCDCService() {
++  return {
++    updateSystemTableRow: async () => ({success: true}),
++    insertSystemTableRow: async () => ({success: true}),
++    deleteSystemTableRow: async () => ({success: true}),
++    upsertSystemTableRow: async () => ({success: true}),
++  };
++}
++
++function initializeTestEnvironment() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({});
++  LoggingService.getInstance().initialize({level: 'error'});
++}
++
++async function driveReplicaTo(stateMachine, replicaId, states) {
++  for (const state of states) {
++    await stateMachine.transition(replicaId, state, {
++      partitionId: 'replica_operations-p1',
++      reason: 'setup',
++    });
++  }
++}
++
++test('a SYNCING replica accepts the removal transition so a failed ADD ' +
++  'cleanup REMOVE cannot strand it', async (t) => {
++  initializeTestEnvironment();
++  const stateMachine = new ReplicaStateMachine({
++    nodeId: 'test-node',
++    cdcIntegrationService: createMockCDCService(),
++  });
++  const replicaId = 'replica_operations-p1-r4';
++  await driveReplicaTo(stateMachine, replicaId, [
++    ReplicaState.PENDING,
++    ReplicaState.CREATING,
++    ReplicaState.SYNCING,
++  ]);
++
++  const admitted = await stateMachine.transition(
++    replicaId,
++    ReplicaState.REMOVING,
++    {
++      partitionId: 'replica_operations-p1',
++      reason: 'failed-add-cleanup-remove',
++    },
++  );
++  t.equal(admitted !== false, true,
++    'SYNCING -> REMOVING must be admitted; rejecting it leaves a failed ' +
++    'ADD replica un-removable and blocks ledger spread forever');
++  t.equal(stateMachine.getState(replicaId)?.state, ReplicaState.REMOVING,
++    'the replica should be tracked as REMOVING after admission');
++
++  const removed = await stateMachine.transition(
++    replicaId,
++    ReplicaState.REMOVED,
++    {
++      partitionId: 'replica_operations-p1',
++      reason: 'failed-add-cleanup-complete',
++    },
++  );
++  t.equal(removed !== false, true,
++    'the admitted removal must be able to reach REMOVED');
++});
++
++test('FAILED stays terminal for lifecycle transitions: the executor skip ' +
++  'tolerance, not a matrix edge, owns failed-replica removal', async (t) => {
++  initializeTestEnvironment();
++  const stateMachine = new ReplicaStateMachine({
++    nodeId: 'test-node',
++    cdcIntegrationService: createMockCDCService(),
++  });
++  const replicaId = 'replica_operations-p1-r5';
++  await driveReplicaTo(stateMachine, replicaId, [
++    ReplicaState.PENDING,
++    ReplicaState.FAILED,
++  ]);
++
++  const admitted = await stateMachine.transition(
++    replicaId,
++    ReplicaState.REMOVING,
++    {partitionId: 'replica_operations-p1', reason: 'must-stay-invalid'},
++  );
++  t.equal(admitted, false,
++    'FAILED -> REMOVING must remain invalid; failed replicas take the ' +
++    'durable-cleanup skip path that deletes the row directly');
++  t.same(VALID_TRANSITIONS[ReplicaState.FAILED], [ReplicaState.REMOVED],
++    'the FAILED row of the matrix must keep exactly its terminal edge');
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 54ace6296fd1ad11324c378a06263652bc7a7fff..d48890c226f4426cda43f48a0659ec62a8c14880 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -987,6 +987,7 @@
+     "test/node/concurrent-operation-limits.property.test.js": "unit",
+     "test/node/entry-time-tracking.property.test.js": "unit",
+     "test/node/event-emission-completeness.property.test.js": "unit",
++    "test/node/failed-replica-removal-transition-tolerance.test.js": "unit",
+     "test/node/failure-detection-delegation.property.test.js": "unit",
+     "test/node/failure-detector-adaptive-threshold.property.test.js": "unit",
+     "test/node/failure-detector-cdc-writes.property.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 04f14867bc5086cae3699b0ac72405641c0a51c8..65afba7c840ea8f072663f79c6aa7bc3b4856ec3 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -986,6 +986,7 @@
+     "test/node/concurrent-operation-limits.property.test.js": "ordinary",
+     "test/node/entry-time-tracking.property.test.js": "ordinary",
+     "test/node/event-emission-completeness.property.test.js": "ordinary",
++    "test/node/failed-replica-removal-transition-tolerance.test.js": "ordinary",
+     "test/node/failure-detection-delegation.property.test.js": "ordinary",
+     "test/node/failure-detector-adaptive-threshold.property.test.js": "ordinary",
+     "test/node/failure-detector-cdc-writes.property.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 23d58941d24135e4b58782f7ccad0858ac257c2d..5b8a58032d6c8b69ee76e431cb3f0b01fed9f8de 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -1004,6 +1004,7 @@
+     "test/node/concurrent-operation-limits.property.test.js": "bootstrap-membership",
+     "test/node/entry-time-tracking.property.test.js": "bootstrap-membership",
+     "test/node/event-emission-completeness.property.test.js": "bootstrap-membership",
++    "test/node/failed-replica-removal-transition-tolerance.test.js": "bootstrap-membership",
+     "test/node/failure-detection-delegation.property.test.js": "bootstrap-membership",
+     "test/node/failure-detector-adaptive-threshold.property.test.js": "bootstrap-membership",
+     "test/node/failure-detector-cdc-writes.property.test.js": "bootstrap-membership",

@@ -986,6 +986,7 @@
     "test/node/concurrent-operation-limits.property.test.js": "ordinary",
     "test/node/entry-time-tracking.property.test.js": "ordinary",
     "test/node/event-emission-completeness.property.test.js": "ordinary",
+    "test/node/failed-replica-removal-transition-tolerance.test.js": "ordinary",
     "test/node/failure-detection-delegation.property.test.js": "ordinary",
     "test/node/failure-detector-adaptive-threshold.property.test.js": "ordinary",
     "test/node/failure-detector-cdc-writes.property.test.js": "ordinary",

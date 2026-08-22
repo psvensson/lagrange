@@ -987,6 +987,7 @@
     "test/node/concurrent-operation-limits.property.test.js": "unit",
     "test/node/entry-time-tracking.property.test.js": "unit",
     "test/node/event-emission-completeness.property.test.js": "unit",
+    "test/node/failed-replica-removal-transition-tolerance.test.js": "unit",
     "test/node/failure-detection-delegation.property.test.js": "unit",
     "test/node/failure-detector-adaptive-threshold.property.test.js": "unit",
     "test/node/failure-detector-cdc-writes.property.test.js": "unit",
