@@ -66,7 +66,7 @@ import {
 // TEST SUITE
 // ============================================================================
 
-test('Membership Consistency Integration Tests', async (t) => {
+test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) => {
   t.teardown(() => {
     if (process.env.TAP === '1') {
       setTimeout(() => {

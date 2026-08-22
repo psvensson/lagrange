@@ -22,7 +22,12 @@ import {NodeService} from '../../src/node/node-service.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../../src/bootstrap/bootstrap-constants.js';
 import {CDCPipelineReadinessGate} from '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cache-constants.js';
-import {COLUMN, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {
+  COLUMN,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  TABLES,
+} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
 import {
@@ -60,6 +65,10 @@ function createInProcHttpPost(seedApi) {
  * This cache wraps the real cache but masks canonical owner metadata for
  * specified partitions and message groups. It also removes explicit leader
  * service rows for the same entities so diagnostics reflect the degraded view.
+ *
+ * The join gate consults the cache first and then confirms any cache-observed
+ * gap against the authoritative owner view, so tests that want the join to
+ * fail must degrade BOTH surfaces (see createIncompleteAuthoritativeView).
  * @param {Object} realCache - The real system table cache.
  * @param {Object} options - Configuration for what to remove.
  * @param {Array<string>} options.removePartitionLeaders - Partition IDs to remove leaders for.
@@ -141,6 +150,26 @@ function createIncompleteLeaderCache(realCache, options = {}) {
     getAll: (tableName) => getMaskedRows(tableName),
     filter: (tableName, predicate) => getMaskedRows(tableName).filter(predicate),
     getReadyNodes: () => realCache.getReadyNodes?.() || [],
+  };
+}
+
+/**
+ * Create a mock authoritative control-plane view exposing the same degraded
+ * leader metadata as createIncompleteLeaderCache. The join gate re-verifies a
+ * cache-observed leader gap against this owner view before failing the join,
+ * so simulating incomplete leader metadata requires masking it here too.
+ * @param {Object} realCache - The real system table cache.
+ * @param {Object} options - Same masking options as createIncompleteLeaderCache.
+ * @return {Object} Mock authoritative view with canRead/readRows.
+ */
+function createIncompleteAuthoritativeView(realCache, options = {}) {
+  const maskedCache = createIncompleteLeaderCache(realCache, options);
+  return {
+    canRead: () => true,
+    readRows: async (tableName) => ({
+      success: true,
+      rows: maskedCache.getAll(tableName),
+    }),
   };
 }
 
@@ -246,11 +275,18 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         // =========================================================================
         const realCache = NodeService.getInstance().getSystemTableCache();
 
-        // Create mock cache that removes leaders for specific partitions
-        const incompleteCache = createIncompleteLeaderCache(realCache, {
+        // Create mock cache that removes leaders for specific partitions.
+        // The authoritative owner view must be degraded the same way: the
+        // join gate confirms cache-observed leader gaps against the owner
+        // before failing the join.
+        const maskOptions = {
           removePartitionLeaders: ['nodes-p1', 'tables-p1'],
           removeMessageGroupLeaders: [],
-        });
+        };
+        const incompleteCache = createIncompleteLeaderCache(
+          realCache,
+          maskOptions,
+        );
 
         seedApi = new BootstrapAPI({
           seedNodeId,
@@ -262,6 +298,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
           bootstrapService: bootstrapService,
+          authoritativeControlPlaneView: createIncompleteAuthoritativeView(
+            realCache,
+            maskOptions,
+          ),
         });
 
         await seedApi.initialize(0, {listen: false});
@@ -470,10 +510,14 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       // PHASE 3: Create BootstrapAPI with both partition and message group
       //          leaders missing
       // =========================================================================
-      const incompleteCache = createIncompleteLeaderCache(realCache, {
+      const maskOptions = {
         removePartitionLeaders: ['partitions-p1', 'services-p1'],
         removeMessageGroupLeaders: messageGroupIds,
-      });
+      };
+      const incompleteCache = createIncompleteLeaderCache(
+        realCache,
+        maskOptions,
+      );
 
       seedApi = new BootstrapAPI({
         seedNodeId,
@@ -485,6 +529,10 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
         bootstrapService: bootstrapService,
+        authoritativeControlPlaneView: createIncompleteAuthoritativeView(
+          realCache,
+          maskOptions,
+        ),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -646,20 +694,35 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       t.ok(Array.isArray(body.systemTableSnapshots[TABLES.TABLES]),
         'systemTableSnapshots should include tables table');
 
-      // Verify services snapshot contains partition leaders with addresses
+      // Verify canonical leader metadata: leadership lives on the owner
+      // record (partitions.leader_node_id); services.raft_role is advisory
+      // follower metadata. Each led partition must expose an ACTIVE,
+      // addressed partition service on its leader node.
       const servicesSnapshot = body.systemTableSnapshots[TABLES.SERVICES];
-      const partitionLeaders = servicesSnapshot.filter((service) =>
-        service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-        service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER,
+      const partitionsSnapshot = body.systemTableSnapshots[TABLES.PARTITIONS];
+      const ledPartitions = partitionsSnapshot.filter((partition) =>
+        typeof partition[COLUMN.LEADER_NODE_ID] === 'string' &&
+        partition[COLUMN.LEADER_NODE_ID].length > 0,
       );
-      t.ok(partitionLeaders.length > 0, 'services snapshot should contain partition leaders');
+      t.ok(ledPartitions.length > 0,
+        'partitions snapshot should carry canonical leader_node_id owners');
 
-      // Verify at least one partition leader has an address
-      const leadersWithAddresses = partitionLeaders.filter((leader) =>
-        leader[COLUMN.ADDRESS] && leader[COLUMN.ADDRESS].length > 0,
+      const partitionsWithCanonicalLeaderService = ledPartitions.filter(
+        (partition) => servicesSnapshot.some((service) =>
+          service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+          service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
+          service[COLUMN.NODE_ID] === partition[COLUMN.LEADER_NODE_ID] &&
+          service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+          typeof service[COLUMN.ADDRESS] === 'string' &&
+          service[COLUMN.ADDRESS].length > 0,
+        ),
       );
-      t.ok(leadersWithAddresses.length > 0,
-        'at least one partition leader should have an address');
+      t.equal(
+        partitionsWithCanonicalLeaderService.length,
+        ledPartitions.length,
+        'every led partition should expose an active addressed service on ' +
+          'its canonical leader node',
+      );
 
       // Verify message group assignment is present
       t.ok(body.messageGroupAssignment, 'response should include messageGroupAssignment');
@@ -683,7 +746,9 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       const timeDiff = Date.now() - body.timestamp;
       t.ok(timeDiff < 5000, 'timestamp should be recent (within 5 seconds)');
 
-      t.comment(`Join succeeded with ${partitionLeaders.length} partition leaders`);
+      t.comment(
+        `Join succeeded with ${ledPartitions.length} led partitions`,
+      );
       t.comment(`Message group assignment strategy: ${body.messageGroupAssignment.strategy}`);
       t.comment(`Ready nodes: ${JSON.stringify(body.readyNodes)}`);
     } finally {

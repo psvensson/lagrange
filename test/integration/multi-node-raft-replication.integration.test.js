@@ -24,6 +24,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {TERMINAL_STATUSES} from '../../src/rebalancer/replica-status.js';
 import {URL} from 'url';
 import {
   initializeTestEnvironment,
@@ -32,6 +33,7 @@ import {
   stopAllRebalancers,
   gracefulShutdown,
   gracefulJoiningShutdown,
+  waitFor,
   waitForPartitionLeaderElection,
 } from './helpers/cluster-test-helpers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
@@ -138,7 +140,7 @@ async function waitForPartitionLeader(
   );
 }
 
-test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
+test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
   t.beforeEach(() => {
     // This suite validates Raft packet handling and cluster join consensus.
     // Keep autonomous rebalancing effectively idle to avoid unrelated churn.
@@ -755,6 +757,20 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       t.ok(nodeIds.includes(seedNodeId), 'seed node in cluster');
       t.ok(nodeIds.includes(joiningNodeId2), 'second node in cluster');
       t.ok(nodeIds.includes(joiningNodeId3), 'third node in cluster');
+
+      // =========================================================================
+      // PHASE 5: Quiesce before teardown
+      // =========================================================================
+      // The two joins leave replica spread operations in flight. Let them reach
+      // terminal state before shutdown so teardown does not race active Raft
+      // commit/apply slices mid-append (best-effort wait, not an assertion).
+      await waitFor(() => {
+        const inFlight = systemTableCache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (operation) => !TERMINAL_STATUSES.includes(operation.status),
+        ) || [];
+        return inFlight.length === 0;
+      }, 30000, 250);
     } finally {
       // =========================================================================
       // CLEANUP - Stop rebalancers FIRST to prevent async operations

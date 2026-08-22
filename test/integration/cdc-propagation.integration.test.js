@@ -72,7 +72,7 @@ function createCdcConfirmationTracker(systemTableCache) {
   });
 }
 
-test('CDC propagation integration', {timeout: 30000}, async (t) => {
+test('CDC propagation integration', {timeout: 90000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

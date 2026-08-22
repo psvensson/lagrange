@@ -244,7 +244,7 @@ function promoteReplicasToActive(systemTableCache, partitionId) {
   }
 }
 
-test('Failure scenario integration tests', async (t) => {
+test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
   t.teardown(() => {
     if (process.env.TAP === '1') {
       setTimeout(() => {

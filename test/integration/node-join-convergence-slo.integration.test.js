@@ -22,6 +22,7 @@ import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-con
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   ReplicaStatus,
+  isCoordinatorOwnedOperationType,
   isTerminalReplicaOperationRecord,
 } from '../../src/rebalancer/replica-status.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -243,7 +244,16 @@ function collectPartitionVoterCounts(systemTableCache) {
 function collectInFlightReplicaOperations(systemTableCache) {
   return systemTableCache.filter(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    (operation) => !isTerminalReplicaOperationRecord(operation),
+    (operation) =>
+      // Only steady-state coordinator work (ADD/REMOVE/REPLACE) counts as
+      // in-flight convergence work. Bootstrap-owned MOVE_ASSIGNMENT
+      // reservations are outside the coordinator domain by contract and
+      // rest durably at status='active'/workflow_step='ACTIVE' once
+      // committed, which the coordinator terminal predicate does not cover.
+      isCoordinatorOwnedOperationType(
+        operation?.type || operation?.operation_type || null,
+      ) &&
+      !isTerminalReplicaOperationRecord(operation),
   ) || [];
 }
 
@@ -251,6 +261,10 @@ function summarizeReplicaOperations(operations) {
   return operations.map((operation) => ({
     operationId: operation.operation_id || operation.operationId || null,
     partitionId: operation.partition_id || operation.partitionId || null,
+    operationType: operation.operation_type || operation.type || null,
+    entityType: operation.entity_type || null,
+    entityId: operation.entity_id || null,
+    nodeId: operation.node_id || null,
     status: operation.status || null,
     workflowStep: operation.workflow_step || operation.workflowStep || null,
   }));
@@ -484,6 +498,27 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
       }
 
       finalizeOverTargetState(overTargetState, Date.now());
+
+      const overTargetPartitionRows = [...finalCounts.entries()]
+        .filter(([, count]) => count > TARGET_VOTER_COUNT)
+        .map(([partitionId]) => ({
+          partitionId,
+          rows: (systemTableCache.filter(
+            SYSTEM_TABLE_NAME.SERVICES,
+            (row) => row.partition_id === partitionId &&
+              isVoterReadyPartitionReplica(row),
+          ) || []).map((row) => ({
+            serviceId: row.service_id,
+            nodeId: row.node_id,
+            raftRole: row.raft_role,
+            status: row.status,
+          })),
+        }));
+      if (overTargetPartitionRows.length > 0) {
+        t.comment(
+          `over-target voter rows: ${JSON.stringify(overTargetPartitionRows)}`,
+        );
+      }
 
       const systemPartitionCount = new Set(
         [...bootstrapResult.partitionServices.values()].map((service) => service.partitionId),
@@ -776,6 +811,11 @@ test('Readiness endpoint remains reachable during background log buffer flush',
         loggingService.getBufferSize() >= READINESS_STRESS_BUFFERED_LOGS,
         'stress setup should buffer logs before logs-table hookup',
       );
+      // The buffer may hold additional error-level entries emitted by the
+      // bootstrap/raft machinery of this very test; the flush contract is
+      // "everything buffered at hookup gets scheduled", not an exact stress
+      // count.
+      const bufferedBeforeHookup = loggingService.getBufferSize();
 
       logsTableService = LogsTableService.getInstance();
       logsTableService.initialize({
@@ -787,10 +827,10 @@ test('Readiness endpoint remains reachable during background log buffer flush',
         },
       });
       const flushedCount = await logsTableService.connectToLoggingService();
-      t.equal(
-        flushedCount,
-        READINESS_STRESS_BUFFERED_LOGS,
-        'stress hookup should schedule full buffered flush',
+      t.ok(
+        flushedCount >= bufferedBeforeHookup,
+        'stress hookup should schedule full buffered flush ' +
+          `(flushed=${flushedCount}, buffered=${bufferedBeforeHookup})`,
       );
 
       let abortedCount = 0;

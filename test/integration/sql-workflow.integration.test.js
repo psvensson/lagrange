@@ -25,13 +25,21 @@ function initializeTestEnvironment() {
     logging: {level: 'error'},
     transport: {wsHost: '127.0.0.1'},
   });
+  // Single-replica table creation: this suite runs the SQL engine without a
+  // rebalance coordinator, so the durable schema-provisioning job can only
+  // converge when one routable replica satisfies the provisioning contract.
+  config.setByPath('partition.defaultReplicaCount', 1);
 
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
 }
 
 /**
- * Create a mock CDC integration service.
+ * Create a mock CDC integration service returning the canonical system-table
+ * mutation envelope ({success, operation, tableName, data, partitionResult,
+ * visibilityState, contractState, nextAction}). The control-plane gateway
+ * fail-closes on unknown mutation outcomes, and the durable schema job owner
+ * requires partitionResult.affectedRows to accept workflow transitions.
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService() {
@@ -39,21 +47,35 @@ function createMockCDCService() {
   const updatedRows = [];
   const deletedRows = [];
 
+  const buildMutationEnvelope = (operation, tableName, extra) => ({
+    success: true,
+    operation,
+    tableName,
+    partitionResult: {success: true, affectedRows: 1},
+    visibilityState: 'visible',
+    contractState: 'ready',
+    nextAction: 'proceed',
+    ...extra,
+  });
+
   return {
     insertedRows,
     updatedRows,
     deletedRows,
     async insertSystemTableRow(tableName, data) {
       insertedRows.push({tableName, data});
-      return {success: true};
+      return buildMutationEnvelope('INSERT', tableName, {data});
     },
     async updateSystemTableRow(tableName, where, data) {
       updatedRows.push({tableName, where, data});
-      return {success: true};
+      return buildMutationEnvelope('UPDATE', tableName, {
+        whereClause: where,
+        data,
+      });
     },
     async deleteSystemTableRow(tableName, where) {
       deletedRows.push({tableName, where});
-      return {success: true};
+      return buildMutationEnvelope('DELETE', tableName, {whereClause: where});
     },
   };
 }
@@ -112,15 +134,22 @@ test('End-to-end SQL workflow integration tests', async (t) => {
       )
     `);
 
+    // CREATE TABLE runs as a durable schema-provisioning job; a SUCCEEDED
+    // job spreads the created-table result plus the owner contract outcome.
     t.equal(result.success, true, 'should succeed');
+    t.equal(result.contractState, 'ready', 'durable job should reach ready');
+    t.equal(result.nextAction, 'proceed', 'ready job should say proceed');
     t.equal(result.operation, 'CREATE_TABLE', 'should be CREATE_TABLE');
     t.equal(result.tableName, 'products', 'should have table name');
     t.ok(result.tableId, 'should have table ID');
     t.ok(result.partitionId, 'should have partition ID');
     t.equal(result.partitionKey, 'id', 'should derive partition key from PRIMARY KEY');
+    t.ok(result.jobId, 'should expose the durable schema job ID');
 
-    // Verify CDC was called
-    t.ok(cdcService.insertedRows.length >= 2, 'should insert table and partition');
+    // Verify CDC persisted the table and partition metadata
+    const insertedTables = cdcService.insertedRows.map((row) => row.tableName);
+    t.ok(insertedTables.includes('tables'), 'should insert the tables row');
+    t.ok(insertedTables.includes('partitions'), 'should insert the partitions row');
   });
 
   t.test('CREATE TABLE - rejects table without PRIMARY KEY', async (t) => {

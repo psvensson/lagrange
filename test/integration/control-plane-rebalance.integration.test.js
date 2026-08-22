@@ -2,35 +2,24 @@
  * Integration test: control plane dispatch of replica operations.
  * Requirements: 5.2, 5.3, 5.4
  *
- * Refactored to use real components from BootstrapService instead of mocks.
+ * Uses the real control-plane services created and owned by
+ * BootstrapService (single-owner contract: bootstrap attaches the
+ * message-group services to its ReplicaDispatchService exactly once;
+ * the test must consume those instances, never construct duplicates).
  * Requirements: 1.1, 2.1, 2.2, 3.1, 3.2
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
-import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
-import {LeaseService} from '../../src/control-plane/lease-service.js';
-import {EndpointService} from '../../src/control-plane/endpoint-service.js';
-import {
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-  createSystemMetadataOwners,
-} from '../../src/control-plane/owners/index.js';
-import {ReplicaDispatchService} from
-  '../../src/control-plane/replica-dispatch-service.js';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {ClusterReadinessSignal} from '../../src/rebalancer/cluster-readiness-signal.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {DistributedTransactionCoordinator} from
-  '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {CDCPipelineReadinessGate} from '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cache-constants.js';
-import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {STATE} from '../../src/constants/index.js';
 import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {
   initializeTestEnvironment,
@@ -38,19 +27,6 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
-
-function createMockStorageAdmissionService() {
-  return {
-    checkAdd: async () => ({allowed: true}),
-    checkReplace: async () => ({allowed: true}),
-  };
-}
-
-function createMockStorageAccountingService() {
-  return {
-    estimateReplicaBytes: () => 1,
-  };
-}
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -186,84 +162,19 @@ test('Control plane dispatch integration', async (t) => {
           originalIsOutboundQueueAvailable(nodeId) : true;
       };
 
-      // Create real SQL query engine
-      const sqlQueryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: realMessageRouter,
-        nodeId: seedNodeId,
-      });
+      // Use the control-plane services created and owned by bootstrap.
+      // Bootstrap already attached every message-group service to its
+      // ReplicaDispatchService; re-attaching a second dispatch service
+      // is forbidden by the single-completion-handler contract.
+      const rebalanceCoordinator = bootstrapService.rebalanceCoordinator;
+      t.ok(rebalanceCoordinator, 'bootstrap should own a rebalance coordinator');
 
-      // Create real RebalanceCoordinator
-      const transactionCoordinator = new DistributedTransactionCoordinator({
-        beginParticipant: async () => {},
-        prepareParticipant: async () => {},
-        commitParticipant: async () => {},
-        rollbackParticipant: async () => {},
-        now: () => Date.now(),
-      });
-      const rebalanceCoordinator = new RebalanceCoordinator({
-        nodeId: seedNodeId,
-        systemTableCache,
-        cdcIntegrationService,
-        messageRouter: realMessageRouter,
-        tablePolicyService,
-        sqlQueryEngine,
-        transactionCoordinator,
-        storageAdmissionService: createMockStorageAdmissionService(),
-        storageAccountingService: createMockStorageAccountingService(),
-        enableTimeouts: false,
-      });
-      rebalanceCoordinator.initialize();
-
-      const controlPlaneSystemTableGateway =
-        rebalanceCoordinator.controlPlaneSystemTableGateway;
-
-      // Create decomposed control-plane services
-      const heartbeatSvc = new HeartbeatService({
-        nodeId: seedNodeId,
-        nodeAddress: `ws://localhost:${seedWsPort}`,
-        cdcIntegrationService,
-        systemTableCache,
-        controlPlaneSystemTableGateway,
-      });
-      heartbeatSvc.initialize();
-
-      const leaseSvc = new LeaseService({
-        nodeId: seedNodeId,
-        nodeLeaseOwner: heartbeatSvc,
-        systemTableCache,
-        sqlQueryEngine,
-        controlPlaneSystemTableGateway,
-      });
-      leaseSvc.initialize();
-
-      const endpointSvc = new EndpointService({
-        nodeId: seedNodeId,
-        serviceEndpointsOwner: createSystemMetadataOwners({
-          controlPlaneSystemTableGateway,
-          systemTableCache,
-        }).serviceEndpointsOwner,
-        controlPlaneSystemTableGateway,
-      });
-      endpointSvc.initialize();
-
-      const dispatchSvc = new ReplicaDispatchService({
-        nodeId: seedNodeId,
-        messageRouter: realMessageRouter,
-        cdcIntegrationService,
-        systemTableCache,
-        rebalanceCoordinator,
-        sqlQueryEngine,
-        controlPlaneSystemTableGateway,
-      });
-      dispatchSvc.initialize();
-
-      // Attach message group services for CDC event handling
-      for (const mgService of
-        bootstrapResult.messageGroupServices.values()) {
-        dispatchSvc.attachMessageGroupService(mgService);
-        leaseSvc.messageGroupServices.add(mgService);
-      }
+      const dispatchSvc = bootstrapService.dispatchService;
+      t.ok(dispatchSvc, 'bootstrap should own a replica dispatch service');
+      t.ok(
+        dispatchSvc.messageGroupServices.size > 0,
+        'bootstrap dispatch service should already have message groups attached',
+      );
 
       // Add a target node to the cache (simulating a node that has joined and is ready)
       const now = Date.now();
@@ -277,6 +188,7 @@ test('Control plane dispatch integration', async (t) => {
         cpu_cores: 4,
         memory_mb: 1024,
         disk_gb: 10,
+        storage_budget_bytes: 10 * 1024 * 1024 * 1024,
         cpu_usage_percent: 10,
         memory_usage_percent: 10,
         disk_usage_percent: 10,
@@ -289,35 +201,30 @@ test('Control plane dispatch integration', async (t) => {
         updated_at: now,
       });
 
-      // Get a partition ID from the bootstrapped partitions
+      // Target the operation-ledger partition (replica_operations-p1).
+      // An ADD onto an emergency control-plane spine partition is exempt
+      // from the operation-ledger quorum-spread hold, which otherwise
+      // defers dependent admissions once a second ACTIVE node makes
+      // spreading the concentrated single-node ledger quorum actionable.
+      const ledgerPartitionId = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
       const systemPartitionReady = await waitFor(() => {
         const partitions = systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
-        return partitions.some(
-          (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
-        );
+        return partitions.some((p) => p?.partition_id === ledgerPartitionId);
       }, 3000, 25);
-      t.ok(systemPartitionReady, 'should have at least one system-table partition (*-p1)');
+      t.ok(systemPartitionReady, 'should have the operation-ledger partition');
 
       const partitions = systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
       const selectedPartition = partitions.find(
-        (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
+        (p) => p?.partition_id === ledgerPartitionId,
       );
-      t.ok(selectedPartition, 'should select a system-table partition');
+      t.ok(selectedPartition, 'should select the operation-ledger partition');
       const partitionId = selectedPartition.partition_id;
 
-      // Add a service entry for the target node so the handler
-      // registration check in dispatchOperationRow passes.
-      await cdcIntegrationService.upsertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
-        service_id: `replica-${targetNodeId}-${partitionId}`,
-        node_id: targetNodeId,
-        partition_id: partitionId,
-        service_type: 'partition',
-        status: SERVICE_STATUS.ACTIVE,
-        address: `${targetNodeId}/partition/replica-${targetNodeId}-${partitionId}`,
-        raft_role: 'follower',
-        created_at: now,
-        updated_at: now,
-      });
+      // Deliberately do NOT pre-insert a SERVICES row for the target
+      // replica: under the current contract an ACTIVE replica service row
+      // for the exact target replica means "replica already exists", which
+      // short-circuits the dispatch (workflow completes as ACTIVE with
+      // reason dispatch_already_exists and no replica-handler delivery).
 
       // The coordinator insert triggers a cache update async; ensure a deterministic
       // confirmation primitive is in place for subsequent waits.
@@ -391,17 +298,18 @@ test('Control plane dispatch integration', async (t) => {
         `operation should advance beyond SENDING after dispatch (got ${updatedOperation?.workflow_step})`,
       );
 
-      // Restore original remote-delivery method before cleanup
+      // Restore original router methods before cleanup; the control-plane
+      // services themselves are owned (and shut down) by bootstrap.
       realMessageRouter.deliverRemote = originalDeliverRemote;
+      if (originalGetConnectionState) {
+        realMessageRouter.getConnectionState = originalGetConnectionState;
+      }
+      if (originalIsOutboundQueueAvailable) {
+        realMessageRouter.isOutboundQueueAvailable =
+          originalIsOutboundQueueAvailable;
+      }
 
       cdcConfirmationTracker.shutdown();
-
-      // Cleanup
-      heartbeatSvc.stop();
-      leaseSvc.stop();
-      endpointSvc.stop();
-      dispatchSvc.stop();
-      await rebalanceCoordinator.shutdown();
     } finally {
       if (bootstrapService) {
         await shutdownOrFail(

@@ -11,6 +11,11 @@ import {NodeJoiningService, JoiningPhase} from '../../src/bootstrap/node-joining
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
+import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -25,10 +30,25 @@ import {
 } from './helpers/cluster-test-helpers.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
+  const dimensions = {
+    [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+  };
   return {
-    getNodeReadinessSync: () => ({
+    getNodeReadinessSync: (_nodeId, options = {}) => ({
       dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        ...dimensions,
+        ...(options.decisionDimension ?
+          {[options.decisionDimension]: true} :
+          {}),
       },
     }),
   };
@@ -53,7 +73,9 @@ function createMockStoragePressureBehavior() {
   };
 }
 
-test('Multi-node cluster integration tests', async (t) => {
+const TEST_TIMEOUT_MS = 120000;
+
+test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -84,7 +106,11 @@ test('Multi-node cluster integration tests', async (t) => {
       connection_state: 'ready',
       capabilities: '[]',
       last_heartbeat: now,
-      ready_lease_expires_at: now + 60000,
+      // No ready_lease_expires_at: a live row whose only liveness comes from
+      // an unexpired ready lease is a retryable NODE_REJOIN_LEASE_WINDOW
+      // conflict under the current admission contract; a live row without a
+      // lease is the terminal "already registered" rejection this test
+      // asserts.
       created_at: now,
     });
 
@@ -182,6 +208,37 @@ test('Multi-node cluster integration tests', async (t) => {
         created_at: Date.now(),
       });
 
+      // Create a test-owned RebalanceCoordinator carrying the always-ready
+      // readiness mock. The rebalancer adopts the coordinator's readiness
+      // owner during initialize(), so the mock must live on the coordinator
+      // (patching only the rebalancer option would be bypassed by the
+      // production coordinator's real readiness service).
+      const sqlQueryEngine = new SQLQueryEngine({
+        systemCache: systemTableCache,
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      const rebalanceCoordinator = new RebalanceCoordinator({
+        nodeId: seedNodeId,
+        systemTableCache,
+        cdcIntegrationService: cdcService,
+        messageRouter: bootstrapResult.messageRouter,
+        tablePolicyService: bootstrapService.tablePolicyService,
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway: new ControlPlaneSystemTableGateway({
+          nodeId: seedNodeId,
+          sqlQueryEngine,
+          cdcIntegrationService: cdcService,
+          messageRouter: bootstrapResult.messageRouter,
+        }),
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        enableTimeouts: false,
+      });
+      rebalanceCoordinator.initialize();
+
       // Create rebalancer using real components
       const rebalancer = new UnifiedRebalancer({
         entityId: partitionId,
@@ -190,7 +247,7 @@ test('Multi-node cluster integration tests', async (t) => {
         cdcIntegrationService: cdcService,
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapResult.messageRouter,
-        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        rebalanceCoordinator,
         nodeId: seedNodeId,
         controlPlaneReadinessService:
           createAlwaysReadyControlPlaneReadinessService(),
@@ -216,6 +273,7 @@ test('Multi-node cluster integration tests', async (t) => {
 
       // Cleanup
       rebalancer.shutdown();
+      await rebalanceCoordinator.shutdown();
     } finally {
       await bootstrapService.shutdown().catch(() => {});
       await cleanupTestEnvironment();

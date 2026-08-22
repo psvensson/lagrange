@@ -17,6 +17,7 @@ import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
+  waitFor,
 } from './helpers/cluster-test-helpers.js';
 
 const REPLICA_OPERATIONS_PROBE_SQL =
@@ -102,13 +103,22 @@ test('replica_operations owner-read defers until local query transport is ready'
         }
       };
 
-      const deferredParticipation =
-        readinessService.getControlPlaneParticipationSync(seedNodeId, {
-          participationKind:
-            CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
-          decisionDimension:
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-        });
+      // The sync participation answer comes from the readiness planning
+      // snapshot owner, which refreshes asynchronously (a not-yet-refreshed
+      // snapshot answers blocked/planning_snapshot_refresh_pending). Poll
+      // until the snapshot has absorbed the patched transport evidence.
+      let deferredParticipation = null;
+      await waitFor(() => {
+        deferredParticipation =
+          readinessService.getControlPlaneParticipationSync(seedNodeId, {
+            participationKind:
+              CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
+            decisionDimension:
+              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          });
+        return deferredParticipation.reasonCode ===
+          CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY;
+      }, 10000, 50);
       t.equal(
         deferredParticipation.decision,
         CONTROL_PLANE_PARTICIPATION_DECISION.DEFER,
@@ -139,13 +149,20 @@ test('replica_operations owner-read defers until local query transport is ready'
         'local-safe owner-read should still return a row array');
 
       localQueryTransportReady = true;
-      const readyParticipation =
-        readinessService.getControlPlaneParticipationSync(seedNodeId, {
-          participationKind:
-            CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
-          decisionDimension:
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-        });
+      // Same planning-snapshot refresh cycle applies to recovery: poll until
+      // the snapshot owner republishes with the now-ready transport evidence.
+      let readyParticipation = null;
+      await waitFor(() => {
+        readyParticipation =
+          readinessService.getControlPlaneParticipationSync(seedNodeId, {
+            participationKind:
+              CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
+            decisionDimension:
+              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          });
+        return readyParticipation.decision ===
+          CONTROL_PLANE_PARTICIPATION_DECISION.READY;
+      }, 10000, 50);
       t.equal(
         readyParticipation.decision,
         CONTROL_PLANE_PARTICIPATION_DECISION.READY,

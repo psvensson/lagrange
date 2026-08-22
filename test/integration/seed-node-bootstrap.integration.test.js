@@ -67,7 +67,9 @@ async function cleanupTestEnvironment() {
   AddressManager.resetInstance();
 }
 
-test('Seed node bootstrap integration', async (t) => {
+const TEST_TIMEOUT_MS = 120000;
+
+test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

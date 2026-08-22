@@ -27,13 +27,20 @@ import {
   gracefulShutdown,
 } from './helpers/cluster-test-helpers.js';
 
-const TEST_TIMEOUT_MS = 180000;
+const TEST_TIMEOUT_MS = 480000;
+// A joining node's router self-connection can time out transiently when the
+// single-process multi-node cluster saturates the event loop; the production
+// entrypoint join loop retries retryable join failures, so the test does too.
+const JOIN_ATTEMPTS_PER_NODE = 3;
 const READY_WAIT_TIMEOUT_MS = 15000;
 const MESSAGE_GROUP_WAIT_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 100;
 const MIN_LOCAL_MESSAGE_GROUPS = 1;
-const ADMIN_HEALTH_WAIT_TIMEOUT_MS = 10000;
-const ADMIN_QUERY_TIMEOUT_MS = NUM.FIVE_THOUSAND;
+// A distributed fan-out query over the 7-node single-process cluster can
+// transiently exceed several seconds while readiness refresh churn saturates
+// the shared event loop; give the admin probes room and retry them.
+const ADMIN_HEALTH_WAIT_TIMEOUT_MS = 30000;
+const ADMIN_QUERY_TIMEOUT_MS = 15000;
 
 const HTTP_STATUS_OK = 200;
 const LOCALHOST = '127.0.0.1';
@@ -192,11 +199,9 @@ async function queryAdminWebSocket(port, sql) {
       }
       settled = true;
       clearTimeout(timeoutId);
-      try {
-        socket.close();
-      } catch {
-        // Best-effort close.
-      }
+      // ws close() is a no-op on an already-closed socket and does not
+      // throw for a plain no-argument close, so no catch guard is needed.
+      socket.close();
       if (error) {
         reject(error);
         return;
@@ -325,23 +330,40 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
     const expectedReadyNodeCount = JOINING_NODE_IDS.length + 1;
 
     for (const joiningNodeId of JOINING_NODE_IDS) {
-      const joiningWsPort = getUniquePort();
-      const joiningService = new NodeJoiningService({
-        nodeId: joiningNodeId,
-        nodeAddress: `ws://localhost:${joiningWsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: joiningWsPort,
-        config: {
-          ...TEST_CONFIG.bootstrap,
-          ...JOINING_CONFIG,
-        },
-        httpPost,
-      });
-      joiningServices.push(joiningService);
+      let joiningService = null;
+      let joinResult = null;
+      for (let attempt = 1; attempt <= JOIN_ATTEMPTS_PER_NODE; attempt += 1) {
+        const joiningWsPort = getUniquePort();
+        joiningService = new NodeJoiningService({
+          nodeId: joiningNodeId,
+          nodeAddress: `ws://localhost:${joiningWsPort}`,
+          seedNodeAddress: 'http://localhost:0',
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          wsPort: joiningWsPort,
+          config: {
+            ...TEST_CONFIG.bootstrap,
+            ...JOINING_CONFIG,
+          },
+          httpPost,
+        });
+        joiningServices.push(joiningService);
+
+        joinResult = await joiningService.join();
+        if (joinResult.success) {
+          break;
+        }
+        t.comment(
+          `join attempt ${attempt} failed for ${joiningNodeId}: ` +
+            `${joinResult.error || 'unknown error'}`,
+        );
+        if (attempt < JOIN_ATTEMPTS_PER_NODE) {
+          joiningServices.pop();
+          await gracefulJoiningShutdown(joiningService);
+          joiningService = null;
+        }
+      }
       joiningServicesByNode.set(joiningNodeId, joiningService);
 
-      const joinResult = await joiningService.join();
       joinResultsByNode.set(joiningNodeId, joinResult);
       t.equal(joinResult.success, true, `${joiningNodeId} should join successfully`);
       if (!joinResult.success) {
@@ -524,14 +546,21 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
 
       let queryRows = [];
       let queryError = null;
-      try {
-        queryRows = await queryAdminWebSocket(
-          adminPort,
-          ADMIN_SMOKE_QUERY_SQL,
-        );
-      } catch (error) {
-        queryError = error;
-      }
+      // Retry the smoke query: a single distributed read can time out
+      // transiently while the in-process cluster is saturated.
+      await waitFor(async () => {
+        try {
+          queryRows = await queryAdminWebSocket(
+            adminPort,
+            ADMIN_SMOKE_QUERY_SQL,
+          );
+          queryError = null;
+          return true;
+        } catch (error) {
+          queryError = error;
+          return false;
+        }
+      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
       t.equal(
         queryError,
         null,

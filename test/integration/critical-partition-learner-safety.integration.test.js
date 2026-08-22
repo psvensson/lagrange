@@ -276,45 +276,84 @@ test('Critical partition learner safety', {
       const coordinator = bootstrapService.rebalanceCoordinator;
       t.ok(coordinator, 'seed should expose RebalanceCoordinator');
 
-      const removeOperation = await coordinator.createOperation({
-        type: OperationType.REMOVE,
-        partitionId: criticalPartitionId,
-        entityType: 'partition',
-        entityId: criticalPartitionId,
-        nodeId: seedNodeId,
-        replicaId: sourceReplica.service_id,
-      });
-      t.ok(removeOperation?.operationId, 'should create remove operation record');
+      // Current owner contract: operation admission itself can refuse the
+      // REMOVE at creation time (for example while the operation-ledger
+      // partition's own self-move is in flight the coordinator defers all
+      // operation admission). Both a creation-time admission refusal and an
+      // execution-time safety deferral satisfy requirement 1.2: the source
+      // REMOVE must not proceed before a safe replacement state exists.
+      let removeOperation = null;
+      let admissionRefusal = null;
+      try {
+        removeOperation = await coordinator.createOperation({
+          type: OperationType.REMOVE,
+          partitionId: criticalPartitionId,
+          entityType: 'partition',
+          entityId: criticalPartitionId,
+          nodeId: seedNodeId,
+          replicaId: sourceReplica.service_id,
+        });
+      } catch (error) {
+        const refusedByAdmission =
+          error?.admissionResult?.allowed === false ||
+          typeof error?.rebalanceSkipReason === 'string';
+        if (!refusedByAdmission) {
+          throw error;
+        }
+        admissionRefusal = error;
+      }
 
-      const execution = await coordinator.executeOperation(removeOperation);
+      if (admissionRefusal) {
+        t.ok(
+          admissionRefusal,
+          'REMOVE admission should be refused while replacement is unsafe: ' +
+            admissionRefusal.message,
+        );
+        const removeRowsForPartition = systemTableCache.filter(
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          (row) =>
+            row.partition_id === criticalPartitionId &&
+            String(row.type || '').toUpperCase() === OperationType.REMOVE &&
+            row.workflow_step === WORKFLOW_STEP.STOPPING,
+        ) || [];
+        t.equal(
+          removeRowsForPartition.length,
+          0,
+          'refused REMOVE must not surface any STOPPING ledger row',
+        );
+      } else {
+        t.ok(removeOperation?.operationId, 'should create remove operation record');
 
-      t.equal(
-        execution.success,
-        false,
-        'REMOVE should be blocked while replacement remains learner',
-      );
+        const execution = await coordinator.executeOperation(removeOperation);
 
-      const updatedOperation = systemTableCache.get(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        removeOperation.operationId,
-      );
-      t.not(
-        updatedOperation?.workflow_step,
-        WORKFLOW_STEP.STOPPING,
-        'blocked REMOVE must not advance to STOPPING',
-      );
+        t.equal(
+          execution.success,
+          false,
+          'REMOVE should be blocked while replacement remains learner',
+        );
 
-      // If current behavior incorrectly started REMOVE, wait briefly so teardown
-      // does not race in-flight async cleanup and flood logs.
-      if (execution.success) {
-        await waitFor(async () => {
-          const row = systemTableCache.get(
-            SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-            removeOperation.operationId,
-          );
-          return row?.workflow_step === WORKFLOW_STEP.REMOVED ||
-            row?.workflow_step === WORKFLOW_STEP.FAILED;
-        }, 3000, 100);
+        const updatedOperation = systemTableCache.get(
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          removeOperation.operationId,
+        );
+        t.not(
+          updatedOperation?.workflow_step,
+          WORKFLOW_STEP.STOPPING,
+          'blocked REMOVE must not advance to STOPPING',
+        );
+
+        // If current behavior incorrectly started REMOVE, wait briefly so
+        // teardown does not race in-flight async cleanup and flood logs.
+        if (execution.success) {
+          await waitFor(async () => {
+            const row = systemTableCache.get(
+              SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+              removeOperation.operationId,
+            );
+            return row?.workflow_step === WORKFLOW_STEP.REMOVED ||
+              row?.workflow_step === WORKFLOW_STEP.FAILED;
+          }, 3000, 100);
+        }
       }
     } finally {
       await gracefulJoiningShutdown(joiningService);

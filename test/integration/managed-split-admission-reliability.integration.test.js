@@ -16,20 +16,16 @@ import {
 } from '../../src/partition/partition-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-  StorageCapacityAccountingService,
-} from '../../src/rebalancer/storage-capacity-accounting-service.js';
-import {StorageAdmissionService} from '../../src/rebalancer/storage-admission-service.js';
-import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {
-  ControlPlaneReadinessService,
-} from '../../src/control-plane/control-plane-readiness-service.js';
-import {
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PUBLICATION_MODE,
 } from '../../src/topology/cdc-group-propagation-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   cleanupTestEnvironment,
   getUniquePort,
@@ -39,7 +35,7 @@ import {
 
 const POLL_INTERVAL_MS = 50;
 const ROUTING_TIMEOUT_MS = 8000;
-const TEST_TIMEOUT_MS = 45000;
+const TEST_TIMEOUT_MS = 120000;
 const FIXTURE_NODE_ID = '550e8400-e29b-41d4-a716-446655449902';
 const SYNTHETIC_NODE_ID = '550e8400-e29b-41d4-a716-4466554499aa';
 const STORAGE_BUDGET_BYTES = 128 * 1024 * 1024 * 1024;
@@ -90,70 +86,22 @@ function parseTransitionMetadata(tableRow) {
   return JSON.parse(rawMetadata);
 }
 
-function buildSafeModePublicationOwner() {
+/**
+ * The single-owner contract forbids installing replacement admission or
+ * readiness services next to the ones bootstrap already wired: dedicated
+ * owner objects (readiness planning snapshot owner, membership publication
+ * owner) consult the bootstrap-wired instances, so a fresh side-instance is
+ * bypassed and evaluates readiness without the bootstrap evidence. Resolve
+ * the canonical owners from the bootstrap rebalance coordinator instead.
+ * @param {Object} fixture
+ * @return {Object} The canonical admission owner set.
+ */
+function resolveCanonicalAdmissionOwner(fixture) {
+  const coordinator = fixture.bootstrapService.rebalanceCoordinator;
   return {
-    getPublicationModeDiagnostics: () => Object.freeze({
-      currentMode: CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
-      reasonCode: CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
-      enteredAt: new Date().toISOString(),
-      recentTransitions: Object.freeze([]),
-    }),
-  };
-}
-
-function installCanonicalAdmissionOwner(fixture) {
-  const storageAccountingService = new StorageCapacityAccountingService({
-    systemTableCache: fixture.systemTableCache,
-  });
-  storageAccountingService.initialize({
-    systemTableCache: fixture.systemTableCache,
-  });
-
-  // In a single-node bootstrap the real propagation service reports
-  // degraded mode (missing_local_group).  Use a safe-mode stub so the
-  // readiness evaluation treats publication as healthy during fixture
-  // table creation.  Tests that need degraded publication override
-  // getPublicationModeDiagnostics on this object after table creation.
-  const propagationService = buildSafeModePublicationOwner();
-
-  const controlPlaneReadinessService = new ControlPlaneReadinessService({
-    nodeId: FIXTURE_NODE_ID,
-    systemTableCache: fixture.systemTableCache,
-    cacheMutationTarget: fixture.systemTableCache,
-    messageRouter: fixture.bootstrapResult.messageRouter,
-    storageAccountingService,
-    cdcIntegrationService: fixture.bootstrapService.cdcIntegrationService,
-    cdcGroupPropagationService: propagationService,
-  });
-  const storageAdmissionService = new StorageAdmissionService({
-    nodeId: FIXTURE_NODE_ID,
-    accountingService: storageAccountingService,
-    cdcIntegrationService: fixture.bootstrapService.cdcIntegrationService,
-    cacheMutationTarget: fixture.systemTableCache,
-    messageRouter: fixture.bootstrapResult.messageRouter,
-    controlPlaneReadinessService,
-  });
-
-  fixture.sqlQueryEngine.rebalanceCoordinator.storageAccountingService =
-    storageAccountingService;
-  fixture.sqlQueryEngine.rebalanceCoordinator.storageAdmissionService =
-    storageAdmissionService;
-  fixture.sqlQueryEngine.rebalanceCoordinator
-    .controlPlaneReadinessService = controlPlaneReadinessService;
-  // The engine snapshots controlPlaneReadinessService at construction
-  // (sql-query-engine-instance-initializer.js), and the admin API prefers
-  // that direct reference over the coordinator's.  Swap it too so every
-  // consumer (admission, routing, admin diagnostics) sees the same
-  // canonical readiness owner installed here.
-  fixture.sqlQueryEngine.controlPlaneReadinessService =
-    controlPlaneReadinessService;
-  fixture.sqlQueryEngine.managedSplitWorkflow.storageAdmissionService =
-    storageAdmissionService;
-
-  return {
-    storageAccountingService,
-    controlPlaneReadinessService,
-    storageAdmissionService,
+    storageAccountingService: coordinator.storageAccountingService,
+    controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+    storageAdmissionService: coordinator.storageAdmissionService,
   };
 }
 
@@ -194,15 +142,13 @@ async function bootstrapManagedSplitFixture(tableName) {
       rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
     });
 
-    // Wire the canonical admission owner BEFORE table creation so the
-    // node passes placement-eligibility checks during provisioning.
     const fixture = {
       bootstrapService,
       bootstrapResult,
       systemTableCache,
       sqlQueryEngine,
     };
-    const admissionOwner = installCanonicalAdmissionOwner(fixture);
+    const admissionOwner = resolveCanonicalAdmissionOwner(fixture);
 
     // Seed node readiness (heartbeat + lease + storage budget) so the
     // node passes placement-eligibility checks.
@@ -256,6 +202,19 @@ async function bootstrapManagedSplitFixture(tableName) {
       );
     }
 
+    // The managed split workflow requires the local node to be the source
+    // partition leader (partitions.leader_node_id is written by the replica
+    // state machine on raft leadership, after the service row turns ACTIVE).
+    const leaderReady = await waitFor(() => {
+      const partition = getPartitionRow(systemTableCache, tableName);
+      return partition?.leader_node_id === FIXTURE_NODE_ID;
+    }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
+    if (!leaderReady) {
+      throw new Error(
+        `Timed out waiting for local partition leadership for ${tableName}`,
+      );
+    }
+
     return {
       bootstrapService,
       bootstrapResult,
@@ -302,6 +261,11 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
     },
   );
 
+  // The synthetic node must count as a routable SOURCE replica host (the
+  // split's source-quorum gate filters service rows through per-node
+  // readiness, which consults both the cached row connection state and the
+  // live router connection state) while staying placement-INELIGIBLE for
+  // child provisioning (zero storage budget).
   await cdcIntegrationService.upsertSystemTableRow(TABLES.NODES, {
     node_id: SYNTHETIC_NODE_ID,
     node_address: `ws://127.0.0.1:${getUniquePort()}`,
@@ -312,7 +276,7 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
     memory_usage_percent: 0,
     disk_usage_percent: 0,
     status: SERVICE_STATUS.ACTIVE,
-    connection_state: STATE.DISCONNECTED,
+    connection_state: STATE.READY,
     capabilities: '[]',
     last_heartbeat: now,
     ready_lease_expires_at: now + LEASE_EXTENSION_MS,
@@ -321,6 +285,28 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
     storage_budget_updated_at: now,
     created_at: now,
   });
+
+  const messageRouter = fixture.bootstrapResult.messageRouter;
+  const originalGetConnectionState =
+    messageRouter.getConnectionState.bind(messageRouter);
+  const originalIsOutboundQueueAvailable =
+    typeof messageRouter.isOutboundQueueAvailable === 'function' ?
+      messageRouter.isOutboundQueueAvailable.bind(messageRouter) :
+      null;
+  messageRouter.getConnectionState = (nodeId) => {
+    if (nodeId === SYNTHETIC_NODE_ID) {
+      return STATE.CONNECTED;
+    }
+    return originalGetConnectionState(nodeId);
+  };
+  messageRouter.isOutboundQueueAvailable = (nodeId) => {
+    if (nodeId === SYNTHETIC_NODE_ID) {
+      return true;
+    }
+    return originalIsOutboundQueueAvailable ?
+      originalIsOutboundQueueAvailable(nodeId) :
+      true;
+  };
 
   const syntheticServiceId =
     `${partitionRow.partition_id}-synthetic-follower`;
@@ -372,6 +358,26 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
     return updated?.replica_count === NUM.THREE;
   }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
 
+  // The split's source-quorum gate filters service rows through the sync
+  // per-node readiness planning snapshot, which refreshes asynchronously
+  // after the cache mutations above. Poll the exact production predicate
+  // until both source hosts count as routable for the split's readiness
+  // dimension.
+  const sourceQuorumRoutable = await waitFor(() => {
+    const routableNodeIds =
+      fixture.sqlQueryEngine.getRoutablePartitionServiceNodeIds(
+        partitionRow.partition_id,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      );
+    return routableNodeIds.includes(FIXTURE_NODE_ID) &&
+      routableNodeIds.includes(SYNTHETIC_NODE_ID);
+  }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
+  if (!sourceQuorumRoutable) {
+    throw new Error(
+      'Split-admission source quorum did not become readiness-routable',
+    );
+  }
+
   return getPartitionRow(systemTableCache, tableName);
 }
 
@@ -385,7 +391,6 @@ test('managed split persists blocked split admission instead of generic failure'
         fixture,
         tableName,
       );
-      installCanonicalAdmissionOwner(fixture);
 
       const result = await fixture.sqlQueryEngine.executeManagedSplit(
         partitionRow.partition_id,
@@ -471,7 +476,7 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
       tableName,
     );
     const {controlPlaneReadinessService: readinessService} =
-        installCanonicalAdmissionOwner(fixture);
+        resolveCanonicalAdmissionOwner(fixture);
     const publicationService =
         readinessService?.cdcGroupPropagationService || null;
     const degradedPublicationMode = Object.freeze({
@@ -496,6 +501,56 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
     }
 
     try {
+      // A publication-mode change is not an observable source change for
+      // stored readiness snapshots (setPublicationMode only rewrites the
+      // diagnostics; snapshots rebuild on real cache changes such as
+      // heartbeats). Touch both node rows so the next readiness build reads
+      // the degraded diagnostics, then wait until both source hosts' sync
+      // snapshots carry the degraded publication evidence while staying
+      // readiness-routable (transport-backed recovery grace keeps the
+      // source quorum routable during priority recovery).
+      const degradedHeartbeatAt = Date.now();
+      const cdcIntegrationService =
+        fixture.bootstrapService.cdcIntegrationService;
+      for (const nodeId of [FIXTURE_NODE_ID, SYNTHETIC_NODE_ID]) {
+        await cdcIntegrationService.updateSystemTableRow(
+          TABLES.NODES,
+          {node_id: nodeId},
+          {
+            last_heartbeat: degradedHeartbeatAt,
+            ready_lease_expires_at: degradedHeartbeatAt + LEASE_EXTENSION_MS,
+          },
+        );
+        readinessService.recordReadinessPlanningSnapshotChange(nodeId);
+      }
+      const degradedSettled = await waitFor(() => {
+        const localSnapshot =
+          readinessService.getNodeReadinessSync(FIXTURE_NODE_ID);
+        const syntheticSnapshot =
+          readinessService.getNodeReadinessSync(SYNTHETIC_NODE_ID);
+        const degradedVisible =
+          localSnapshot?.runtimeAuthority?.publication?.mode ===
+            CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT &&
+          syntheticSnapshot?.runtimeAuthority?.publication?.mode ===
+            CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT;
+        if (!degradedVisible) {
+          return false;
+        }
+        const routableNodeIds =
+          fixture.sqlQueryEngine.getRoutablePartitionServiceNodeIds(
+            partitionRow.partition_id,
+            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          );
+        return routableNodeIds.includes(FIXTURE_NODE_ID) &&
+          routableNodeIds.includes(SYNTHETIC_NODE_ID);
+      }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
+      t.equal(
+        degradedSettled,
+        true,
+        'degraded publication evidence should settle while the source quorum ' +
+          'stays readiness-routable',
+      );
+
       const result = await fixture.sqlQueryEngine.executeManagedSplit(
         partitionRow.partition_id,
       );
@@ -652,7 +707,7 @@ test('managed split admission repairs stale connected node readiness from ' +
     }
 
     const {storageAdmissionService, controlPlaneReadinessService} =
-      installCanonicalAdmissionOwner(fixture);
+      resolveCanonicalAdmissionOwner(fixture);
 
     const originalGetConnectionState =
       fixture.bootstrapResult.messageRouter.getConnectionState.bind(
@@ -737,6 +792,14 @@ test('managed split admission repairs stale connected node readiness from ' +
         'admission should issue an authoritative nodes-table ' +
         'repair read',
       );
+      // The reconciler applies the repaired row to the cache through
+      // applySystemTableChange, which can land asynchronously relative to
+      // the admission result; poll for the cached lease to converge.
+      await waitFor(() => {
+        return controlPlaneReadinessService.getNodeRow(SYNTHETIC_NODE_ID)
+          ?.ready_lease_expires_at ===
+            freshSyntheticNodeRow.ready_lease_expires_at;
+      }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
       t.equal(
         controlPlaneReadinessService.getNodeRow(SYNTHETIC_NODE_ID)
           ?.ready_lease_expires_at,

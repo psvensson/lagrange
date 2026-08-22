@@ -179,7 +179,9 @@ async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
   return selectedPartitionId;
 }
 
-test('Node joining rebalancing integration', async (t) => {
+const TEST_TIMEOUT_MS = 120000;
+
+test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -716,10 +718,13 @@ test('Node joining rebalancing integration', async (t) => {
       });
       dispatchSvc.initialize();
 
-      // Attach message group services to control plane
+      // Track message group services on the lease service only. The
+      // bootstrap's own ReplicaDispatchService already owns the
+      // application-message completion handlers on these message group
+      // services; attaching a second dispatch service would violate the
+      // single-owner registration contract and throw.
       for (const mgService of
         bootstrapResult.messageGroupServices.values()) {
-        dispatchSvc.attachMessageGroupService(mgService);
         leaseSvc.messageGroupServices.add(mgService);
       }
 

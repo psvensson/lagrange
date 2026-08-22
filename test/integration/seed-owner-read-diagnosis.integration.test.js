@@ -189,7 +189,12 @@ test('Seed owner-read diagnosis integration', async (t) => {
         return;
       }
 
-      const participation =
+      // The sync participation view is served from the readiness planning
+      // snapshot, which refreshes in the background; poll until the snapshot
+      // reflects the injected transport defer.
+      let participation = null;
+      const observedTransportDefer = await waitFor(() => {
+        participation =
           fixture.coordinator.controlPlaneReadinessService
             .getControlPlaneParticipationSync(
               fixture.seedNodeId,
@@ -200,8 +205,15 @@ test('Seed owner-read diagnosis integration', async (t) => {
                   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
               },
             );
-      t.equal(participation.decision, 'defer',
-        'canonical participation should still report the transport defer');
+        return participation.decision === 'defer';
+      }, 5000, 50);
+      t.equal(observedTransportDefer, true,
+        'canonical participation should report the transport defer');
+      t.equal(
+        participation.reasonCode,
+        CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+        'transport defer should carry the canonical transport reason code',
+      );
       t.equal(participation.localExecutionAllowed, true,
         'canonical participation should expose the local-safe execution bypass');
 
@@ -263,18 +275,24 @@ test('Seed owner-read diagnosis integration', async (t) => {
         t.equal(probeRecovered, true,
           'readyz should recover promptly after the transport-ready flip');
 
-        const participation =
-          fixture.coordinator.controlPlaneReadinessService
-            .getControlPlaneParticipationSync(
-              fixture.seedNodeId,
-              {
-                participationKind:
-                  CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
-                decisionDimension:
-                  CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-              },
-            );
-        t.equal(participation.eligible, true,
+        // The sync participation view refreshes from the background
+        // planning snapshot; poll until it converges on eligibility.
+        const participationRecovered = await waitFor(() => {
+          const participation =
+            fixture.coordinator.controlPlaneReadinessService
+              .getControlPlaneParticipationSync(
+                fixture.seedNodeId,
+                {
+                  participationKind:
+                    CONTROL_PLANE_PARTICIPATION_KIND
+                      .REPLICA_OPERATION_OWNER_READ,
+                  decisionDimension:
+                    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+                },
+              );
+          return participation.eligible === true;
+        }, 5000, 50);
+        t.equal(participationRecovered, true,
           'canonical participation should recover after the transport-ready flip');
 
         const recoveredRead = await fixture.coordinator.executeReplicaOperationsRead(
