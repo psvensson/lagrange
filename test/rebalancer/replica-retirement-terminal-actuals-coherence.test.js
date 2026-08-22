@@ -24,7 +24,7 @@
  * authoritative services-p1 read (the 'Bootstrap snapshot diverged
  * from local authoritative partition state' shape, where the
  * authoritative store holds fewer rows than the cache) is enough to
- * terminalize a retirement whose actuals still exist — and the
+ * drive a retirement terminal while its actuals still exist — and the
  * terminal record is absorbing: once the read heals, nothing re-opens
  * the operation or retires the surviving row.
  *

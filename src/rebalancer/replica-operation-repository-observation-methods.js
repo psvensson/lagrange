@@ -299,23 +299,26 @@ function assignReplicaOperationRepositoryObservationMethods(
       return REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS;
     }
     /**
-   * Get authoritative replica status via SQL, with cache
-   * fallback for degraded conditions.
-   * @param {string} replicaId
-   * @param {string} partitionId
-   * @param {string} targetNodeId
-   * @param {Object} [readOptions={}]
-   * @return {Promise<Object>}
-   */
-    async getActualReplicaObservation(
+     * Run the authoritative replica-status reads (exact-id probe, then the
+     * optional partition+node secondary lookup) and fold their outcomes into
+     * one attempted/failed/row summary for observation classification.
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {Object} readOptions
+     * @return {Promise<{observedRow: Object|null,
+     *   authoritativeReadAttempted: boolean,
+     *   authoritativeReadFailed: boolean}>}
+     * @private
+     */
+    async readAuthoritativeReplicaRowForObservation(
       replicaId,
       partitionId,
       targetNodeId,
-      readOptions = {},
+      readOptions,
     ) {
       const statusReadQueryOptions =
         this.resolveActualReplicaStatusReadQueryOptions(readOptions);
-      const allowCacheFallback = readOptions?.allowCacheFallback !== false;
       const allowPartitionNodeFallback =
         readOptions?.allowPartitionNodeFallback !== false;
       let observedRow = null;
@@ -341,47 +344,150 @@ function assignReplicaOperationRepositoryObservationMethods(
         }
       };
       if (replicaId) {
-        const result = await readAuthoritativeControlPlaneRows(
+        recordAuthoritativeResult(await readAuthoritativeControlPlaneRows(
           this.controlPlaneSystemTableGateway,
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_STATUS,
           [replicaId],
           statusReadQueryOptions,
-        );
-        recordAuthoritativeResult(result);
+        ));
       }
       if (!observedRow && allowPartitionNodeFallback) {
-      // Secondary lookup by partition + node when replicaId
-      // yields no row
-        const result = await readAuthoritativeControlPlaneRows(
+        // Secondary lookup by partition + node when replicaId yields no row
+        recordAuthoritativeResult(await readAuthoritativeControlPlaneRows(
           this.controlPlaneSystemTableGateway,
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_BY_PARTITION_NODE,
           [partitionId, targetNodeId],
           statusReadQueryOptions,
-        );
-        recordAuthoritativeResult(result);
+        ));
       }
+      return {observedRow, authoritativeReadAttempted, authoritativeReadFailed};
+    }
+    /**
+     * Resolve the cache-fallback observation for a replica whose
+     * authoritative read was unavailable or failed. Null when the cache holds
+     * no matching row (the caller then classifies the read outcome).
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {Object} readOptions
+     * @param {boolean} authoritativeReadFailed
+     * @return {Object|null} Frozen observation or null.
+     * @private
+     */
+    buildCacheFallbackReplicaObservation(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      readOptions,
+      authoritativeReadFailed,
+    ) {
+      const observedRow = this.getObservedReplicaRowFromCache(
+        replicaId,
+        partitionId,
+        targetNodeId,
+        readOptions,
+      );
+      if (!observedRow) {
+        return null;
+      }
+      return Object.freeze({
+        state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
+        source:
+          authoritativeReadFailed === true ?
+            REPLICA_OPERATION_REPOSITORY_LITERAL
+              .CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE :
+            REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE,
+        lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+      });
+    }
+    /**
+     * Classify a successful-but-empty authoritative read. ABSENT is positive
+     * retirement evidence and terminates retiring operations, so absence must
+     * be corroborated: while the local cache still holds a live (not
+     * removed/failed) row for this replica, the stores have diverged and
+     * absence is NOT proven. Fail closed to UNAVAILABLE so the stopping
+     * reconcile takes its defer/retry lane and re-dispatches the real
+     * deletion owner instead of resting terminal on stale actuals.
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {string} targetNodeId
+     * @param {Object} readOptions
+     * @return {Object} Frozen observation.
+     * @private
+     */
+    classifyCorroboratedReplicaAbsence(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      readOptions,
+    ) {
+      const contradictingCacheRow = this.getObservedReplicaRowFromCache(
+        replicaId,
+        partitionId,
+        targetNodeId,
+        readOptions,
+      );
+      const contradictingLifecycle = contradictingCacheRow ?
+        this.normalizeObservedReplicaLifecycle(contradictingCacheRow) :
+        null;
+      if (
+        contradictingLifecycle !== null &&
+        contradictingLifecycle !== ReplicaStatus.REMOVED &&
+        contradictingLifecycle !== ReplicaStatus.FAILED
+      ) {
+        return Object.freeze({
+          state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+          source: REPLICA_OPERATION_REPOSITORY_LITERAL
+            .AUTHORITATIVE_ABSENT_CACHE_BLOCKING,
+        });
+      }
+      return Object.freeze({
+        state: REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT,
+        source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
+      });
+    }
+    /**
+   * Get authoritative replica status via SQL, with cache
+   * fallback for degraded conditions.
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {string} targetNodeId
+   * @param {Object} [readOptions={}]
+   * @return {Promise<Object>}
+   */
+    async getActualReplicaObservation(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      readOptions = {},
+    ) {
+      const allowCacheFallback = readOptions?.allowCacheFallback !== false;
+      const {
+        observedRow,
+        authoritativeReadAttempted,
+        authoritativeReadFailed,
+      } = await this.readAuthoritativeReplicaRowForObservation(
+        replicaId,
+        partitionId,
+        targetNodeId,
+        readOptions,
+      );
       if (
         !observedRow &&
         allowCacheFallback &&
         (!authoritativeReadAttempted || authoritativeReadFailed)
       ) {
-        observedRow = this.getObservedReplicaRowFromCache(
+        const cacheObservation = this.buildCacheFallbackReplicaObservation(
           replicaId,
           partitionId,
           targetNodeId,
           readOptions,
+          authoritativeReadFailed,
         );
-        if (observedRow) {
-          return Object.freeze({
-            state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
-            source:
-            authoritativeReadFailed === true ?
-              REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE :
-              REPLICA_OPERATION_REPOSITORY_LITERAL.CACHE,
-            lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
-          });
+        if (cacheObservation) {
+          return cacheObservation;
         }
       }
       if (observedRow) {
@@ -395,37 +501,12 @@ function assignReplicaOperationRepositoryObservationMethods(
         authoritativeReadAttempted === true &&
         authoritativeReadFailed !== true
       ) {
-        // ABSENT is positive retirement evidence and terminalizes retiring
-        // operations, so a successful-but-empty authoritative read must be
-        // corroborated: while the local cache still holds a live (not
-        // removed/failed) row for this replica, the stores have diverged and
-        // absence is NOT proven. Fail closed to UNAVAILABLE so the stopping
-        // reconcile takes its defer/retry lane and re-dispatches the real
-        // deletion owner instead of resting terminal on stale actuals.
-        const contradictingCacheRow = this.getObservedReplicaRowFromCache(
+        return this.classifyCorroboratedReplicaAbsence(
           replicaId,
           partitionId,
           targetNodeId,
           readOptions,
         );
-        const contradictingLifecycle = contradictingCacheRow ?
-          this.normalizeObservedReplicaLifecycle(contradictingCacheRow) :
-          null;
-        if (
-          contradictingLifecycle !== null &&
-          contradictingLifecycle !== ReplicaStatus.REMOVED &&
-          contradictingLifecycle !== ReplicaStatus.FAILED
-        ) {
-          return Object.freeze({
-            state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
-            source: REPLICA_OPERATION_REPOSITORY_LITERAL
-              .AUTHORITATIVE_ABSENT_CACHE_BLOCKING,
-          });
-        }
-        return Object.freeze({
-          state: REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT,
-          source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
-        });
       }
       return Object.freeze({
         state: REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,

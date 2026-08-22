@@ -5,7 +5,7 @@
  * operation (REMOVE, or the source-retirement phase of REPLACE) may rest
  * terminal only on corroborated retirement evidence — a successful-but-empty
  * authoritative read contradicted by a live cache row fails closed into the
- * stopping defer/retry lane instead of terminalizing against stale actuals.
+ * stopping defer/retry lane instead of resting terminal on stale actuals.
  * The sibling stopping-reconcile suites pin that the honest completion,
  * handoff, visibility, and redrive paths are preserved.
  */
