@@ -1,0 +1,55 @@
+{
+  "id": "ledger-quorum-spread-hold-cure-drain-admission",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The operation-ledger quorum-spread hold cannot defer its own documented cure: once the spread sequence reaches a surplus placement with every distinct node occupied, the fenced standalone-safe surplus REMOVE that drains the hot node is admissible (or the hold disengages on distinct-nodes-at-target), so the hold always has a reachable release path.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "158ac155cdfced834e7e2c713dd1e25b90545e72"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "ledger-quorum-spread-hold-cure-drain-admission",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "ledger-quorum-spread-hold-cure-drain-admission-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "ledger-quorum-spread-hold-cure-drain-admission",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-safety-waiver",
+      "statement": "Whichever route is chosen (cure-class exemption for the fenced surplus REMOVE, or hold disengagement when distinct voter nodes reach target), the priority surplus-REMOVE placement fence, count/diversity monotonic safety, and the self-move serialization hold remain fully engaged; only the quorum-spread hold classification may change."
+    },
+    {
+      "id": "design-decision-open",
+      "statement": "Two candidate routes, deliberately not pre-decided: (A) add a cure move class to OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS for a REMOVE whose source is the concentrated partition's surplus replica and which passes the surplus fence; (B) make evaluateLedgerPartitionConcentration disengage (or mark spread-unactionable) when distinctVoterNodeIds.length >= targetReplicaCount so the ordinary drain path runs. Route B touches the evaluator consumed by admission and release paths; route A touches the hold policy matrix in the operation-ledger-self-move-waiter-fairness quest family's territory. The decision needs the fence quest history (priority-surplus-remove-authoritative-placement-fence, exhausted) and hold-policy review question in operation-ledger-hold-policy.js:24."
+    },
+    {
+      "id": "evidence-anchor",
+      "statement": "Deterministic-ish repro: user-table-metadata-fanout residual (~1-in-3 post Face A+C): cluster reaches 4 voters at 2-1-1 (seed 2, joiners 1+1), concentration reports overTarget true / spreadActionable true / feasibleTargetNodeIds [], and across 22+ pump-driven planning cycles NO surplus REMOVE is ever minted - zero removal activity in the entire run (fanout-loop-1 captured log: only provisioning-deferral and raft-truncation-refusal messages). The hold policy's own comment (operation-ledger-hold-policy.js:107-113) documents REMOVE as the drain step while classifying it DEPENDENT, which the engaged quorum-spread hold defers: the hold defers its own cure."
+    }
+  ]
+}
