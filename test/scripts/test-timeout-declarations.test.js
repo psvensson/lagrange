@@ -198,11 +198,16 @@ function runFixture(declaredMs, expectedSeconds, env) {
     `${JSON.stringify(expectedSeconds)});\n` +
     '  tt.end();\n' +
     '});\n');
+  // Strip any ambient lane-owned TAP_TIMEOUT before applying the case's own
+  // env: CI lanes legitimately export one (release.yml/ci.yml set 120), and
+  // the derivation cases must observe the runner's derived value, not the
+  // lane's. The explicit-caller case supplies its own value via `env`.
+  const {TAP_TIMEOUT: _ambientLaneCap, ...hermeticEnv} = process.env;
   try {
     execFileSync(process.execPath, [RUNNER, '--jobs=1', fixture], {
       cwd: process.cwd(),
       encoding: 'utf8',
-      env: {...process.env, ...env},
+      env: {...hermeticEnv, ...env},
     });
     return true;
   } finally {
