@@ -33,31 +33,8 @@ import {AdminControlSnapshotControlPlaneDiagnostics} from './admin-control-snaps
 import {isRecoverableControlSnapshotPublicationReadError} from './admin-control-snapshot-repair-diagnostics.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
+import {ADMIN_CONTROL_SNAPSHOT_LITERAL} from './admin-constants.js';
 // ── file-local constants ────────────────────────────────────────────────────
-const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
-  VALUE: '',
-  READY: 'ready',
-  UPDATEDAT: 'updatedAt',
-  UPDATED_AT: 'updated_at',
-  UNKNOWN_ERROR: 'unknown_error',
-  PUBLISHED: 'PUBLISHED',
-  NODEID: 'nodeId',
-  ID: 'id',
-  NAME: 'name',
-  CAPTUREDAT: 'capturedAt',
-  SOURCELEADERNODEID: 'sourceLeaderNodeId',
-  DECISIONTIMESTAMP: 'decisionTimestamp',
-  FAILEDAT: 'failedAt',
-  NEXTATTEMPTAT: 'nextAttemptAt',
-  TABLEID: 'tableId',
-  TABLE_NAME: 'table_name',
-  TABLENAME: 'tableName',
-  PARTITIONSTATE: 'partitionState',
-  REPLICAID: 'replicaId',
-  RAFTROLE: 'raftRole',
-  STATUS: 'status',
-  ADDRESS: 'address',
-});
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
 const MEMBERSHIP_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const MEMBERSHIP_PUBLICATION_RECONCILE_OPTIONS = Object.freeze({

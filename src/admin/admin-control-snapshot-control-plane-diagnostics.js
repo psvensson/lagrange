@@ -15,6 +15,7 @@ import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {
   ADMIN_CACHE_DUMP,
+  ADMIN_CONTROL_SNAPSHOT_LITERAL,
 } from './admin-constants.js';
 import {
   firstStringField,
@@ -26,31 +27,6 @@ import {AdminControlSnapshotCoverageGapEvaluation} from './admin-control-snapsho
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
-const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
-  VALUE: '',
-  READY: 'ready',
-  UPDATEDAT: 'updatedAt',
-  UPDATED_AT: 'updated_at',
-  UNKNOWN_ERROR: 'unknown_error',
-  PUBLISHED: 'PUBLISHED',
-  NODEID: 'nodeId',
-  ID: 'id',
-  NAME: 'name',
-  CAPTUREDAT: 'capturedAt',
-  SOURCELEADERNODEID: 'sourceLeaderNodeId',
-  DECISIONTIMESTAMP: 'decisionTimestamp',
-  FAILEDAT: 'failedAt',
-  NEXTATTEMPTAT: 'nextAttemptAt',
-  TABLEID: 'tableId',
-  TABLE_NAME: 'table_name',
-  TABLENAME: 'tableName',
-  PARTITIONSTATE: 'partitionState',
-  REPLICAID: 'replicaId',
-  RAFTROLE: 'raftRole',
-  STATUS: 'status',
-  ADDRESS: 'address',
-  UNKNOWN: 'unknown',
-});
 const STATUS_ACTIVE = 'active';
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;

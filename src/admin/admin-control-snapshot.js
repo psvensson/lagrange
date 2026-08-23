@@ -18,6 +18,7 @@ import {AUTHORITATIVE_REPAIR_TRIGGER} from './admin-authoritative-repair-policy.
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_CONTROL_SNAPSHOT_LITERAL,
   ADMIN_ERROR_MESSAGE,
   ADMIN_OPERATIONAL_DIAGNOSTICS,
   CONSISTENCY_MISMATCH_KIND,
@@ -46,30 +47,6 @@ import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
-const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
-  VALUE: '',
-  READY: 'ready',
-  UPDATEDAT: 'updatedAt',
-  UPDATED_AT: 'updated_at',
-  UNKNOWN_ERROR: 'unknown_error',
-  PUBLISHED: 'PUBLISHED',
-  NODEID: 'nodeId',
-  ID: 'id',
-  NAME: 'name',
-  CAPTUREDAT: 'capturedAt',
-  SOURCELEADERNODEID: 'sourceLeaderNodeId',
-  DECISIONTIMESTAMP: 'decisionTimestamp',
-  FAILEDAT: 'failedAt',
-  NEXTATTEMPTAT: 'nextAttemptAt',
-  TABLEID: 'tableId',
-  TABLE_NAME: 'table_name',
-  TABLENAME: 'tableName',
-  PARTITIONSTATE: 'partitionState',
-  REPLICAID: 'replicaId',
-  RAFTROLE: 'raftRole',
-  STATUS: 'status',
-  ADDRESS: 'address',
-});
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const PARTITION_STATE_UNKNOWN = 'unknown';

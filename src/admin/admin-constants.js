@@ -346,9 +346,39 @@ const ADMIN_OPERATIONAL_DIAGNOSTICS = Object.freeze({
   SQL_SCHEMA_VERSION: 1,
 });
 
+// Shared field-name vocabulary for the AdminControlSnapshot module family
+// (admin-control-snapshot.js and its split-out method modules). One owner:
+// the same table was previously triplicated across those files.
+const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
+  VALUE: '',
+  READY: 'ready',
+  UPDATEDAT: 'updatedAt',
+  UPDATED_AT: 'updated_at',
+  UNKNOWN_ERROR: 'unknown_error',
+  PUBLISHED: 'PUBLISHED',
+  NODEID: 'nodeId',
+  ID: 'id',
+  NAME: 'name',
+  CAPTUREDAT: 'capturedAt',
+  SOURCELEADERNODEID: 'sourceLeaderNodeId',
+  DECISIONTIMESTAMP: 'decisionTimestamp',
+  FAILEDAT: 'failedAt',
+  NEXTATTEMPTAT: 'nextAttemptAt',
+  TABLEID: 'tableId',
+  TABLE_NAME: 'table_name',
+  TABLENAME: 'tableName',
+  PARTITIONSTATE: 'partitionState',
+  REPLICAID: 'replicaId',
+  RAFTROLE: 'raftRole',
+  STATUS: 'status',
+  ADDRESS: 'address',
+  UNKNOWN: 'unknown',
+});
+
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
+  ADMIN_CONTROL_SNAPSHOT_LITERAL,
   ADMIN_DEBUG_ERROR_MSG,
   ADMIN_CLIENT,
   ADMIN_CACHE_DUMP,

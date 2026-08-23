@@ -19,7 +19,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // call-cell and write-health surfaces; one-way-baseline rule).
 // 2026-08-11: tightened 1444 -> 1443 per checker hint after the mutation
 // outcome normalizer removed one divergent gateway dependency.
-const BASELINE_UNUSED_EXPORT_COUNT = 1442;
+// 2026-08-23: tightened 1442 -> 1441 per checker hint after the
+// no-use-before-define sweep and admin literal-table extraction.
+const BASELINE_UNUSED_EXPORT_COUNT = 1441;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

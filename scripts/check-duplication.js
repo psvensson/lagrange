@@ -51,8 +51,10 @@ const RATCHET_TARGETS = [
     // proof-cone landings; one-way-baseline rule).
     // 2026-08-14: tightened 62/1970 -> 61/1941 after stored-readiness snapshot
     // construction was consolidated behind its owner method.
-    baselineCloneGroupCount: 61,
-    baselineDuplicatedLineCount: 1941,
+    // 2026-08-23: tightened 61/1941 -> 59/1889 after the AdminControlSnapshot
+    // literal table moved to its single owner in admin-constants.js.
+    baselineCloneGroupCount: 59,
+    baselineDuplicatedLineCount: 1889,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -109,8 +111,10 @@ const RATCHET_TARGETS = [
     // MovieLens module mocks with the comparison runner's owned test seam.
     // 2026-08-21: tightened 817/31236 -> 816/31209 after the model-contract
     // tests moved fresh-report execution behind one shared test helper.
-    baselineCloneGroupCount: 816,
-    baselineDuplicatedLineCount: 31209,
+    // 2026-08-23: tightened 816/31209 -> 810/31075 after the
+    // no-use-before-define hoisting sweep broke up duplicated tail blocks.
+    baselineCloneGroupCount: 810,
+    baselineDuplicatedLineCount: 31075,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
