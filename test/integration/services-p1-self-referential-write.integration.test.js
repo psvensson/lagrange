@@ -23,7 +23,6 @@ import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  INTEGRATION_TEST_TIMEOUT_MS,
   TEST_LEADERSHIP_WAIT_MS,
   TEST_STABILIZATION_MS,
 } from '../../src/test-helpers/test-timeout-constants.js';
@@ -46,6 +45,16 @@ const TEST_TIMEOUTS = {
   POLL_INTERVAL_MS: 50,
   WRITE_TIMEOUT_MS: 5000,
 };
+
+// This file boots a real seed node and runs ~23-25s locally, right under
+// tap's 30s default file budget; the 2-vCPU hosted runner's ~3x slowdown
+// crossed it at 42s on 2026-08-23 (ci.yml on d5e18ea3f) with the content
+// assertions passing. Same idiom as historical-artifact-batch-v2 /
+// dt6-cpu-saturation: the harness lifts TAP_TIMEOUT to the largest
+// per-test {timeout: NNNN} declaration - the previous
+// {timeout: INTEGRATION_TEST_TIMEOUT_MS} constant reference was inert
+// (scan matches literal digits only), so the file was silently capped at
+// tap's 30s default all along.
 
 /**
  * Wait for partition leader to be elected in partition services.
@@ -238,7 +247,7 @@ async function bootstrapSeedNodeWithRetry(seedNodeId, maxAttempts = 3) {
     new Error(`Bootstrap failed with EADDRINUSE after ${maxAttempts} attempts`);
 }
 
-test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TEST_TIMEOUT_MS},
+test('Services-P1 self-referential write integration', {timeout: 90000},
   async (t) => {
     t.beforeEach(() => {
       initializeTestEnvironment();
