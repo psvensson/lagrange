@@ -114,7 +114,20 @@ function childExit(command, args, options) {
   });
 }
 
-tap.test('tooling pins the production A2a authority', (t) => {
+// This file runs ~11s locally but 32-35s on the 2-vCPU hosted runner (it
+// spawns real CLI child processes, including a two-process lock race), which
+// deterministically crossed tap's 30s default file budget twice on 2026-08-23
+// (ci.yml run on 160e439fa, v0.1.1 release run 32646659437) while every
+// subtest passed. Same idiom as dt6-cpu-saturation-missed-budget-spike:
+// the harness lifts TAP_TIMEOUT to the largest per-test {timeout: NNNN}
+// declaration (underscored constants are deliberately NOT declarations),
+// and the file-level setTimeout must match or it silently becomes the
+// binding limit (run-test-files.js:198-213).
+const TEST_FILE_TIMEOUT_MS = 90_000;
+
+tap.setTimeout(TEST_FILE_TIMEOUT_MS);
+
+tap.test('tooling pins the production A2a authority', {timeout: 90000}, (t) => {
   const root = tempRoot();
   installFixture(root);
   const validation = validateHistoricalArtifactBatchTooling(root);

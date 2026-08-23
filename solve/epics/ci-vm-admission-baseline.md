@@ -97,6 +97,31 @@ Calibration lesson (first application, raft-logic SIGSEGV): constraint
 tuned too harsh changes which fault you sample - 11/11 iterations died
 in functional timeouts before teardown was reached.
 
+## Controlled-environment lane for long-running tests (2026-08-23 direction)
+
+Peter: long-running tests should run under controlled conditions - meaning
+GCP-provisioned VMs - rather than on contended developer hardware or
+below-baseline hosted defaults. A provisioned VM is the only VM whose
+envelope is actually controlled: chosen SKU, no desktop contention,
+reproducible from an image, and the admission probe passes by
+construction instead of by luck. Evidence from the v0.1.1 certificate
+campaign: three consecutive full-corpus runs on the (otherwise idle,
+20-core) dev box each failed on a different intermittent test - the
+flake tail is partly intrinsic races, but classification and rerolls
+burned hours that a controlled lane would not.
+
+Existing owned parts to build on: `scripts/build-gcp-harness-image.js`
+(versioned image family lagrange-distributed-harness, ready-marker,
+content-hash naming), `test/distributed/config/gcp-*.json`, GCP
+partial-stack teardown hardening (quest gcp-affinity work, commit
+16eee4d8f). Missing: a lane orchestrator that provisions from the image,
+checks out an exact SHA, runs the admission probe then the designated
+corpus (`check:release` or the heavy classes), collects a HEAD-bound
+receipt, and tears down. Natural routing seam: the resource-class
+manifests (`test/shards/resource-classes.json`) already classify tests -
+heavy/exclusive classes and the release certificate go to the controlled
+lane; the fast corpus stays local/hosted for pushes.
+
 ## Decision log
 
 - 2026-08-23 - Direction approved by Peter: measure a minimum baseline
