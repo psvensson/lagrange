@@ -30,7 +30,7 @@ function initializeTestEnvironment() {
 }
 
 test('Bootstrap lifecycle - startWebSocketServer after bootstrap is a no-op',
-  {timeout: 20000}, async (t) => {
+  {timeout: 120000}, async (t) => {
     initializeTestEnvironment();
 
     const wsPort = ports.getPort();

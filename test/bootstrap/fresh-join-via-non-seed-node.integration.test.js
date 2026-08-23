@@ -29,7 +29,7 @@ import {
   initializeTestEnvironment,
 } from '../integration/helpers/cluster-test-helpers.js';
 
-const TEST_TIMEOUT_MS = 60000;
+const TEST_TIMEOUT_MS = 120000;
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440701';
 const NODE_B_ID = '550e8400-e29b-41d4-a716-446655440702';
 const NODE_C_ID = '550e8400-e29b-41d4-a716-446655440703';

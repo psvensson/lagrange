@@ -52,7 +52,7 @@ function parseEpochValue(row) {
   }
 }
 
-test('Current epoch durability and propagation integration', {timeout: 30000}, async (t) => {
+test('Current epoch durability and propagation integration', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

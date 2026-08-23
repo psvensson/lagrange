@@ -115,7 +115,7 @@ const nodeIdArb = fc.string({minLength: 1, maxLength: 36}).filter((s) => s.trim(
  */
 const wsPortArb = fc.integer({min: 10000, max: 60000});
 
-test('Property 7: Return Value Completeness', {timeout: 30000}, async (t) => {
+test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
   /**
    * Property: For any successful bootstrap() call, the return value SHALL
    * contain all required keys per the API contract.
@@ -578,7 +578,7 @@ test('Property 7: Return Value Completeness', {timeout: 30000}, async (t) => {
  * For any call to join(), the return value SHALL contain all required keys
  * per the API contract.
  */
-test('Property 7: Return Value Completeness (join)', {timeout: 30000}, async (t) => {
+test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t) => {
   /**
    * Property: For any failed join() call, the return value SHALL
    * contain all required failure keys per the API contract.

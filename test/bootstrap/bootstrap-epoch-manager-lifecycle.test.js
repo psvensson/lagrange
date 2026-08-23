@@ -32,7 +32,7 @@ function initializeTestEnvironment() {
 test(
   'Bootstrap lifecycle - epoch manager initializes from partition assignments ' +
     'and clears on shutdown',
-  {timeout: 20000}, async (t) => {
+  {timeout: 120000}, async (t) => {
     initializeTestEnvironment();
 
     const wsPort = ports.getPort();

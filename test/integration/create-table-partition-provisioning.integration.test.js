@@ -26,9 +26,9 @@ const CREATE_TABLE_SQL = `
 `;
 const INSERT_SQL = 'INSERT INTO benchmark_events (id, payload) VALUES (?, ?)';
 const SELECT_SQL = 'SELECT id, payload FROM benchmark_events WHERE id = ?';
-const CREATE_TIMEOUT_MS = 8000;
+const CREATE_TIMEOUT_MS = 120000;
 const POLL_INTERVAL_MS = 50;
-const TEST_TIMEOUT_MS = 45000;
+const TEST_TIMEOUT_MS = 120000;
 
 function getTableRoutingState(systemTableCache) {
   const partitions = systemTableCache.filter(

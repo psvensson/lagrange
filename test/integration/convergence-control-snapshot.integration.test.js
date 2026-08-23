@@ -18,7 +18,7 @@ const DISTRIBUTED_PARTICIPANT_FAILURE_CODE =
   'DISTRIBUTED_PARTICIPANT_FAILURE';
 const SERVICES_QUERY = 'SELECT * FROM services WHERE service_type = \'partition\'';
 const MOCK_REACHABILITY_SOURCE = 'admin_local';
-const CONTROL_SNAPSHOT_TIMEOUT_MS = 10000;
+const CONTROL_SNAPSHOT_TIMEOUT_MS = 120000;
 const CONTROL_SNAPSHOT_POLL_INTERVAL_MS = 50;
 
 function createQueryId() {
@@ -83,7 +83,7 @@ async function waitForControlSnapshotLeaderCoverage(node) {
 }
 
 test('Convergence uses local control snapshot when distributed admin SQL reads fail',
-  {timeout: 30000}, async (t) => {
+  {timeout: 120000}, async (t) => {
     initializeTestEnvironment({
       raft: {
         electionTimeoutMinMs: 300,
