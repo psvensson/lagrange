@@ -364,9 +364,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               attemptedAddresses,
             );
             if (redirectRouterDeliveryOptions === null) {
+              // lastError || ERRORS.QUERY_FAILED, matching every other
+              // exhausted-candidates return in this method: the only
+              // errorMessage in this scope is declared later in the block, so
+              // referencing it here threw a temporal-dead-zone ReferenceError
+              // whenever a redirect exhausted delivery options before any
+              // failure had been recorded (full-gate run 32623687633).
               return {
                 ...buildFailureResult(
-                  lastError || errorMessage,
+                  lastError || ERRORS.QUERY_FAILED,
                   lastFailureDetails,
                 ),
               };
