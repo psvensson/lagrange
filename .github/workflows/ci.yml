@@ -34,6 +34,13 @@ on:
   pull_request:
     branches: [main]
 
+# Lane-scoped tap budget: the hosted 2-vCPU VM is ~3x slower than the dev
+# corpus was tuned on, and single tests near tap's 30s default cross it
+# there with green assertions (see release.yml note and epic
+# ci-vm-admission-baseline). The 600s per-file kill still bounds hangs.
+env:
+  TAP_TIMEOUT: '120'
+
 permissions:
   contents: read
 

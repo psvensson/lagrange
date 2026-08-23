@@ -19,6 +19,13 @@ concurrency:
 
 env:
   DOCKERHUB_IMAGE: docker.io/psvensson/lagrange
+  # Lane-scoped tap budget: CI VMs are slower than the dev corpus was
+  # tuned on, and three release attempts died on single tests crossing
+  # tap's 30s default (historical-artifact 33s, services-p1 42s,
+  # verification-handoff 34s) with all content assertions green. The
+  # harness honors an explicit caller TAP_TIMEOUT (run-test-files.js);
+  # the 600s per-file kill still bounds real hangs. Local dev keeps 30s.
+  TAP_TIMEOUT: '120'
 
 jobs:
   release:
