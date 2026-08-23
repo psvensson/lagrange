@@ -1,0 +1,47 @@
+{
+  "id": "latent-runner-red-static-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The three classes that each cost a hosted release-proof cycle are closed statically: no-use-before-define (variables) is enabled in eslint with the existing 57-finding debt triaged (dangerous in-block TDZ fixed, safe module-hoisting annotated or restructured), and the sub-100ms real-timer test census is swept to injectable clocks/schedulers, so runner-only failures cannot hide behind green local runs.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "58e99915bb98b513d17359f8a00d49dc990d03d5"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "latent-runner-red-static-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "latent-runner-red-static-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "latent-runner-red-static-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "evidence-anchor",
+      "statement": "Proven catchable: no-use-before-define ({functions:false, classes:false, variables:true}) flags the exact full-gate failure (query-executor-partition-delivery.js 369:32, run 32623687633) in milliseconds; the rule is absent from eslint.config.js. Repo-wide trial: 57 findings across 26 src files (top: admin-control-snapshot-membership-publication-reconcile 8, diagnostics/budget-timeout-accounting 7) - a mix of safe module-const hoisting and dangerous in-block TDZ; triage before enabling, ratchet if the safe class is kept. Timer census precedents: failure-detector-recovery.property (fixed, injectable clock), migration-recovery-trigger (fixed, injectable scheduler); grep class: real setTimeout/wait windows under 100ms in tests."
+    }
+  ]
+}
