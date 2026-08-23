@@ -574,7 +574,16 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
     messageRouter,
     systemCache,
   });
-  executor.queryTimeoutMs = 5;
+  // A 5ms real-clock budget encodes "fast machine" as a correctness
+  // assumption: the happy path is ~3ms of synchronous work, but a single
+  // >=5ms involuntary preemption (kernel descheduling on a shared CI
+  // runner) between budget creation and the first delivery exhausts the
+  // absolute deadline and fails closed with zero deliveries - reproduced
+  // at CI's ~50% rate by SIGSTOP-chopping the process (quest
+  // query-widening-hosted-assertion-flake). Success-path tests get a
+  // preemption-proof budget; the fail-closed tests keep 5ms because the
+  // small budget IS their scenario.
+  executor.queryTimeoutMs = 2000;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
@@ -786,7 +795,8 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
     messageRouter,
     systemCache,
   });
-  executor.queryTimeoutMs = 5;
+  // Preemption-proof budget; see the note on the widening test above.
+  executor.queryTimeoutMs = 2000;
   executor.leaderRetryDelayMs = 1;
 
   const result = await executor.executeOnPartition(
