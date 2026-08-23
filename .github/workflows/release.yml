@@ -22,7 +22,14 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-24.04
+    # The release proof runs on the controlled GCP runner (lagrange-ci-runner,
+    # e2-standard-8): GitHub's default 2-vCPU VMs are below the corpus's
+    # resource baseline (2026-08-23: seven consecutive hosted failures, all
+    # VM-starvation class, zero product bugs local runs had not already
+    # caught - see epic ci-vm-admission-baseline). The gcp label keeps this
+    # off the dev-box push-gate runner. Hosted stays for the fast per-push
+    # gate and the deliberately below-baseline nightly fuzz miner.
+    runs-on: [self-hosted, gcp]
     timeout-minutes: 180
     permissions:
       contents: write
