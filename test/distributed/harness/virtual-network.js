@@ -418,6 +418,26 @@ function createVirtualNetwork(options = {}) {
     }
   }
 
+  const api = Object.freeze({
+    now,
+    nodeNow,
+    nodeBusyUntil,
+    nodeState,
+    registerNode,
+    startNode,
+    killNode,
+    partition,
+    heal,
+    send,
+    setTimer,
+    networkTimeSource,
+    run,
+    runStep,
+    getRecords,
+    pendingEventCount,
+    random,
+  });
+
   function deliverMessage(event) {
     const target = nodes.get(event.to);
     if (!target || target.state !== VIRTUAL_NETWORK_NODE_STATE.RUNNING) {
@@ -637,26 +657,6 @@ function createVirtualNetwork(options = {}) {
   function pendingEventCount() {
     return queue.length;
   }
-
-  const api = Object.freeze({
-    now,
-    nodeNow,
-    nodeBusyUntil,
-    nodeState,
-    registerNode,
-    startNode,
-    killNode,
-    partition,
-    heal,
-    send,
-    setTimer,
-    networkTimeSource,
-    run,
-    runStep,
-    getRecords,
-    pendingEventCount,
-    random,
-  });
 
   return api;
 }

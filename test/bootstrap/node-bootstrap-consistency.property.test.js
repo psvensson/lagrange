@@ -69,6 +69,13 @@ async function cleanupTestEnvironment() {
   AddressManager.resetInstance();
 }
 
+const BOOTSTRAP_RETRY_CONFIG = Object.freeze({
+  maxAttempts: 2,
+  initialDelayMs: 25,
+  maxDelayMs: 100,
+  backoffMultiplier: 2,
+});
+
 // Create in-process HTTP POST function
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
@@ -117,13 +124,6 @@ const FAST_BOOTSTRAP_CONFIG = {
   leadershipWaitMaxDelayMs: 50,
   replicaStaggerDelayMs: 10,
 };
-
-const BOOTSTRAP_RETRY_CONFIG = Object.freeze({
-  maxAttempts: 2,
-  initialDelayMs: 25,
-  maxDelayMs: 100,
-  backoffMultiplier: 2,
-});
 
 test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
   t.beforeEach(() => {

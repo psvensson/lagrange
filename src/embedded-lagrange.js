@@ -66,6 +66,8 @@ function createEmbeddedLagrangeHandle(options) {
   let startupAbortController = null;
   let processClaim = null;
 
+  const handle = objectFreeze({openApplicationDatabase, start, stop});
+
   async function start() {
     if (state === EMBEDDED_RUNTIME_STATE.STARTED) return handle;
     if (state === EMBEDDED_RUNTIME_STATE.STARTING) return startPromise;
@@ -179,7 +181,6 @@ function createEmbeddedLagrangeHandle(options) {
     return runtime.openApplicationDatabase(options);
   }
 
-  const handle = objectFreeze({openApplicationDatabase, start, stop});
   return handle;
 }
 

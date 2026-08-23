@@ -319,118 +319,6 @@ function buildBudget({
   };
 }
 
-function selectActiveGateAttemptBudgetEvidence(activeGate) {
-  const snapshot = normalizeActiveGateBudgetSnapshot(activeGate);
-  return ACTIVE_GATE_ATTEMPT_BUDGET_RULES.find((rule) =>
-    rule.matches(snapshot),
-  ).build(snapshot);
-}
-
-function normalizeActiveGateBudgetSnapshot(activeGate) {
-  const snapshot = {
-    elapsedMs: finiteOrAbsent(activeGate.elapsedMs),
-    attempts: finiteOrAbsent(activeGate.attempts),
-    maxAttempts: finiteOrAbsent(activeGate.maxAttempts),
-    attemptsSinceProgress: finiteOrAbsent(activeGate.attemptsSinceProgress),
-    maxCoordinatorCycles: finiteOrAbsent(activeGate.maxCoordinatorCycles),
-    coordinatorCyclesSinceProgress: finiteOrAbsent(
-      activeGate.coordinatorCyclesSinceProgress,
-    ),
-    activeGateState: textOrUnknown(activeGate.state),
-    reasonCode: textOrUnknown(activeGate.reasonCode),
-  };
-  return {
-    ...snapshot,
-    terminal: ACTIVE_GATE_TERMINAL_DECISION_RULES.find((rule) =>
-      rule.matches(snapshot),
-    ).terminal,
-  };
-}
-
-const ACTIVE_GATE_TERMINAL_DECISION_RULES = Object.freeze([
-  Object.freeze({
-    terminal: true,
-    matches: (snapshot) =>
-      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT,
-  }),
-  Object.freeze({
-    terminal: true,
-    matches: (snapshot) =>
-      snapshot.reasonCode === ACTIVE_GATE_REASON_CODE_STALLED_NO_PROGRESS,
-  }),
-  Object.freeze({
-    terminal: true,
-    matches: (snapshot) =>
-      snapshot.attempts !== ABSENT_VALUE &&
-      snapshot.maxAttempts !== ABSENT_VALUE &&
-      snapshot.attempts >= snapshot.maxAttempts,
-  }),
-  Object.freeze({
-    terminal: true,
-    matches: (snapshot) =>
-      snapshot.attemptsSinceProgress !== ABSENT_VALUE &&
-      snapshot.maxAttempts !== ABSENT_VALUE &&
-      snapshot.attemptsSinceProgress >= snapshot.maxAttempts,
-  }),
-  Object.freeze({
-    terminal: true,
-    matches: (snapshot) =>
-      snapshot.coordinatorCyclesSinceProgress !== ABSENT_VALUE &&
-      snapshot.maxCoordinatorCycles !== ABSENT_VALUE &&
-      snapshot.coordinatorCyclesSinceProgress >= snapshot.maxCoordinatorCycles,
-  }),
-  Object.freeze({
-    terminal: false,
-    matches: () => true,
-  }),
-]);
-
-function selectActiveGateTimeoutBudgetEvidence(snapshot, configuredLimit) {
-  return ACTIVE_GATE_TIMEOUT_BUDGET_RULES.find((rule) =>
-    rule.matches(snapshot, configuredLimit),
-  ).build(snapshot, configuredLimit);
-}
-
-const ACTIVE_GATE_TIMEOUT_BUDGET_RULES = Object.freeze([
-  Object.freeze({
-    matches: (snapshot, configuredLimit) => configuredLimit !== ABSENT_VALUE,
-    build: (snapshot, configuredLimit) => buildBudgetEvidence({
-      observed: snapshot.elapsedMs,
-      limit: configuredLimit,
-      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
-      progressEvidence: buildObservedLimitProgressEvidence(
-        snapshot.elapsedMs,
-        configuredLimit,
-      ),
-    }),
-  }),
-  Object.freeze({
-    matches: (snapshot) =>
-      snapshot.terminal === true &&
-      snapshot.elapsedMs !== ABSENT_VALUE,
-    build: (snapshot) => buildBudgetEvidence({
-      observed: snapshot.elapsedMs,
-      limit: snapshot.elapsedMs,
-      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
-      progressEvidence: buildTerminalProgressEvidence(
-        BUDGET_REASON_ACTIVE_GATE_TERMINAL,
-      ),
-    }),
-  }),
-  Object.freeze({
-    matches: () => true,
-    build: (snapshot, configuredLimit) => buildBudgetEvidence({
-      observed: snapshot.elapsedMs,
-      limit: configuredLimit,
-      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
-      progressEvidence: buildObservedLimitProgressEvidence(
-        snapshot.elapsedMs,
-        configuredLimit,
-      ),
-    }),
-  }),
-]);
-
 const ACTIVE_GATE_ATTEMPT_BUDGET_RULES = Object.freeze([
   Object.freeze({
     matches: (snapshot) =>
@@ -482,17 +370,116 @@ const ACTIVE_GATE_ATTEMPT_BUDGET_RULES = Object.freeze([
   }),
 ]);
 
-function selectWorkflowStepBudgetEvidence(dominantWitness) {
-  const snapshot = {
-    observed: finiteOrAbsent(dominantWitness.stepAgeMs),
-    configuredLimit: finiteOrAbsent(dominantWitness.stepTimeoutMs),
-    retryAfterMs: finiteOrAbsent(dominantWitness.retryAfterMs),
-    waitMode: textOrUnknown(dominantWitness.waitMode),
-    timeoutReconcileDue: dominantWitness.timeoutReconcileDue === true,
-  };
-  return WORKFLOW_STEP_BUDGET_RULES.find((rule) =>
+function selectActiveGateAttemptBudgetEvidence(activeGate) {
+  const snapshot = normalizeActiveGateBudgetSnapshot(activeGate);
+  return ACTIVE_GATE_ATTEMPT_BUDGET_RULES.find((rule) =>
     rule.matches(snapshot),
   ).build(snapshot);
+}
+
+const ACTIVE_GATE_TERMINAL_DECISION_RULES = Object.freeze([
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.activeGateState === ACTIVE_GATE_STATE_TIMED_OUT,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.reasonCode === ACTIVE_GATE_REASON_CODE_STALLED_NO_PROGRESS,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.attempts !== ABSENT_VALUE &&
+      snapshot.maxAttempts !== ABSENT_VALUE &&
+      snapshot.attempts >= snapshot.maxAttempts,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.attemptsSinceProgress !== ABSENT_VALUE &&
+      snapshot.maxAttempts !== ABSENT_VALUE &&
+      snapshot.attemptsSinceProgress >= snapshot.maxAttempts,
+  }),
+  Object.freeze({
+    terminal: true,
+    matches: (snapshot) =>
+      snapshot.coordinatorCyclesSinceProgress !== ABSENT_VALUE &&
+      snapshot.maxCoordinatorCycles !== ABSENT_VALUE &&
+      snapshot.coordinatorCyclesSinceProgress >= snapshot.maxCoordinatorCycles,
+  }),
+  Object.freeze({
+    terminal: false,
+    matches: () => true,
+  }),
+]);
+
+function normalizeActiveGateBudgetSnapshot(activeGate) {
+  const snapshot = {
+    elapsedMs: finiteOrAbsent(activeGate.elapsedMs),
+    attempts: finiteOrAbsent(activeGate.attempts),
+    maxAttempts: finiteOrAbsent(activeGate.maxAttempts),
+    attemptsSinceProgress: finiteOrAbsent(activeGate.attemptsSinceProgress),
+    maxCoordinatorCycles: finiteOrAbsent(activeGate.maxCoordinatorCycles),
+    coordinatorCyclesSinceProgress: finiteOrAbsent(
+      activeGate.coordinatorCyclesSinceProgress,
+    ),
+    activeGateState: textOrUnknown(activeGate.state),
+    reasonCode: textOrUnknown(activeGate.reasonCode),
+  };
+  return {
+    ...snapshot,
+    terminal: ACTIVE_GATE_TERMINAL_DECISION_RULES.find((rule) =>
+      rule.matches(snapshot),
+    ).terminal,
+  };
+}
+
+const ACTIVE_GATE_TIMEOUT_BUDGET_RULES = Object.freeze([
+  Object.freeze({
+    matches: (snapshot, configuredLimit) => configuredLimit !== ABSENT_VALUE,
+    build: (snapshot, configuredLimit) => buildBudgetEvidence({
+      observed: snapshot.elapsedMs,
+      limit: configuredLimit,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+      progressEvidence: buildObservedLimitProgressEvidence(
+        snapshot.elapsedMs,
+        configuredLimit,
+      ),
+    }),
+  }),
+  Object.freeze({
+    matches: (snapshot) =>
+      snapshot.terminal === true &&
+      snapshot.elapsedMs !== ABSENT_VALUE,
+    build: (snapshot) => buildBudgetEvidence({
+      observed: snapshot.elapsedMs,
+      limit: snapshot.elapsedMs,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+      progressEvidence: buildTerminalProgressEvidence(
+        BUDGET_REASON_ACTIVE_GATE_TERMINAL,
+      ),
+    }),
+  }),
+  Object.freeze({
+    matches: () => true,
+    build: (snapshot, configuredLimit) => buildBudgetEvidence({
+      observed: snapshot.elapsedMs,
+      limit: configuredLimit,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_ELAPSED,
+      progressEvidence: buildObservedLimitProgressEvidence(
+        snapshot.elapsedMs,
+        configuredLimit,
+      ),
+    }),
+  }),
+]);
+
+function selectActiveGateTimeoutBudgetEvidence(snapshot, configuredLimit) {
+  return ACTIVE_GATE_TIMEOUT_BUDGET_RULES.find((rule) =>
+    rule.matches(snapshot, configuredLimit),
+  ).build(snapshot, configuredLimit);
 }
 
 const WORKFLOW_STEP_BUDGET_RULES = Object.freeze([
@@ -543,15 +530,15 @@ const WORKFLOW_STEP_BUDGET_RULES = Object.freeze([
   }),
 ]);
 
-function selectReadinessRetryBudgetEvidence(readinessFailure, progressSignal) {
+function selectWorkflowStepBudgetEvidence(dominantWitness) {
   const snapshot = {
-    observed: finiteOrAbsent(progressSignal.attemptsSinceProgress),
-    configuredLimit: finiteOrAbsent(progressSignal.maxAttempts),
-    retryAfterMs: finiteOrAbsent(progressSignal.retryAfterMs),
-    classCode: textOrUnknown(readinessFailure?.classCode),
-    terminalReason: textOrUnknown(readinessFailure?.terminalReason),
+    observed: finiteOrAbsent(dominantWitness.stepAgeMs),
+    configuredLimit: finiteOrAbsent(dominantWitness.stepTimeoutMs),
+    retryAfterMs: finiteOrAbsent(dominantWitness.retryAfterMs),
+    waitMode: textOrUnknown(dominantWitness.waitMode),
+    timeoutReconcileDue: dominantWitness.timeoutReconcileDue === true,
   };
-  return READINESS_RETRY_BUDGET_RULES.find((rule) =>
+  return WORKFLOW_STEP_BUDGET_RULES.find((rule) =>
     rule.matches(snapshot),
   ).build(snapshot);
 }
@@ -603,20 +590,17 @@ const READINESS_RETRY_BUDGET_RULES = Object.freeze([
   }),
 ]);
 
-function buildObservedLimitProgressEvidence(observed, limit) {
+function selectReadinessRetryBudgetEvidence(readinessFailure, progressSignal) {
   const snapshot = {
-    observed,
-    limit,
-    observedEvidence: observed === ABSENT_VALUE ?
-      BUDGET_EVIDENCE_ABSENT :
-      BUDGET_EVIDENCE_PRESENT,
-    limitEvidence: limit === ABSENT_VALUE ?
-      BUDGET_EVIDENCE_ABSENT :
-      BUDGET_EVIDENCE_PRESENT,
+    observed: finiteOrAbsent(progressSignal.attemptsSinceProgress),
+    configuredLimit: finiteOrAbsent(progressSignal.maxAttempts),
+    retryAfterMs: finiteOrAbsent(progressSignal.retryAfterMs),
+    classCode: textOrUnknown(readinessFailure?.classCode),
+    terminalReason: textOrUnknown(readinessFailure?.terminalReason),
   };
-  return OBSERVED_LIMIT_PROGRESS_RULES.find((rule) =>
+  return READINESS_RETRY_BUDGET_RULES.find((rule) =>
     rule.matches(snapshot),
-  ).build();
+  ).build(snapshot);
 }
 
 const OBSERVED_LIMIT_PROGRESS_RULES = Object.freeze([
@@ -642,6 +626,22 @@ const OBSERVED_LIMIT_PROGRESS_RULES = Object.freeze([
     build: () => DEFAULT_BUDGET_PROGRESS,
   }),
 ]);
+
+function buildObservedLimitProgressEvidence(observed, limit) {
+  const snapshot = {
+    observed,
+    limit,
+    observedEvidence: observed === ABSENT_VALUE ?
+      BUDGET_EVIDENCE_ABSENT :
+      BUDGET_EVIDENCE_PRESENT,
+    limitEvidence: limit === ABSENT_VALUE ?
+      BUDGET_EVIDENCE_ABSENT :
+      BUDGET_EVIDENCE_PRESENT,
+  };
+  return OBSERVED_LIMIT_PROGRESS_RULES.find((rule) =>
+    rule.matches(snapshot),
+  ).build();
+}
 
 function buildNextAttemptProgressEvidence(nextAttemptInMs) {
   return {
@@ -716,25 +716,6 @@ function resolveBudgetState({observed, limit, reportOutcome, terminalState}) {
   return BUDGET_STATE_RULES.find((rule) => rule.matches(snapshot)).state;
 }
 
-function buildCascades(budgets) {
-  return CASCADE_RULES.flatMap((rule) => {
-    const matches = rule.select(budgets);
-    if (matches.length === ZERO_COUNT) {
-      return [];
-    }
-    return [{
-      id: rule.id,
-      state: BUDGET_STATE.CASCADE,
-      reason: rule.reason,
-      budgetKinds: matches.map((budget) => budget.kind),
-      owners: uniqueValues(matches.map((budget) => budget.owner)),
-      boundaries: uniqueValues(matches.map((budget) => budget.boundary)),
-      ownershipStates: uniqueValues(matches.map((budget) => budget.ownershipState)),
-      nextRequiredActions: uniqueValues(matches.map((budget) => budget.nextRequiredAction)),
-    }];
-  });
-}
-
 const CASCADE_RULES = Object.freeze([
   Object.freeze({
     id: 'active-gate-timeout-cascade',
@@ -779,5 +760,24 @@ const CASCADE_RULES = Object.freeze([
     ),
   }),
 ]);
+
+function buildCascades(budgets) {
+  return CASCADE_RULES.flatMap((rule) => {
+    const matches = rule.select(budgets);
+    if (matches.length === ZERO_COUNT) {
+      return [];
+    }
+    return [{
+      id: rule.id,
+      state: BUDGET_STATE.CASCADE,
+      reason: rule.reason,
+      budgetKinds: matches.map((budget) => budget.kind),
+      owners: uniqueValues(matches.map((budget) => budget.owner)),
+      boundaries: uniqueValues(matches.map((budget) => budget.boundary)),
+      ownershipStates: uniqueValues(matches.map((budget) => budget.ownershipState)),
+      nextRequiredActions: uniqueValues(matches.map((budget) => budget.nextRequiredAction)),
+    }];
+  });
+}
 
 export {accountBudgets};

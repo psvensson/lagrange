@@ -73,10 +73,10 @@ test('Unit: _waitForBootstrapApi times out after bootstrap progress stalls',
     cluster._sleep = async () => {
       fakeNowMs += 5;
     };
+    let collected = false;
     cluster._collectFailureLogs = async () => {
       collected = true;
     };
-    let collected = false;
 
     await assert.rejects(
       async () => {

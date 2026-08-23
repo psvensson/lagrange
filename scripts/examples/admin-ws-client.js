@@ -83,6 +83,8 @@ class AdminWsClient {
         }
       };
 
+      let onOpen = null;
+      let onOpenError = null;
       const clearOpening = () => {
         if (timeout !== null) {
           clearTimeout(timeout);
@@ -92,7 +94,7 @@ class AdminWsClient {
         socket.off(LOCAL_STR_ERROR, onOpenError);
       };
 
-      const onOpen = () => {
+      onOpen = () => {
         clearOpening();
         releaseOpening();
         this._bindSocket(socket);
@@ -100,7 +102,7 @@ class AdminWsClient {
         resolve(socket);
       };
 
-      const onOpenError = (error) => {
+      onOpenError = (error) => {
         clearOpening();
         releaseOpening();
         reject(error);

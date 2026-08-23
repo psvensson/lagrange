@@ -31,6 +31,20 @@ afterEach(() => {
 });
 
 /**
+ * SQL reserved keywords to avoid in table names.
+ */
+const SQL_RESERVED_KEYWORDS = new Set([
+  'add', 'all', 'alter', 'and', 'as', 'asc', 'between', 'by', 'case', 'check',
+  'column', 'constraint', 'create', 'cross', 'current', 'default', 'delete',
+  'desc', 'distinct', 'drop', 'else', 'end', 'escape', 'except', 'exists',
+  'for', 'foreign', 'from', 'full', 'group', 'having', 'if', 'in', 'index',
+  'inner', 'insert', 'intersect', 'into', 'is', 'join', 'key', 'left', 'like',
+  'limit', 'not', 'null', 'on', 'or', 'order', 'outer', 'primary', 'references',
+  'right', 'select', 'set', 'table', 'then', 'to', 'union', 'unique', 'update',
+  'using', 'values', 'when', 'where', 'with',
+]);
+
+/**
  * Generate a random table schema.
  */
 const schemaArbitrary = fc.record({
@@ -59,20 +73,6 @@ const schemaArbitrary = fc.record({
     }));
   }),
 });
-
-/**
- * SQL reserved keywords to avoid in table names.
- */
-const SQL_RESERVED_KEYWORDS = new Set([
-  'add', 'all', 'alter', 'and', 'as', 'asc', 'between', 'by', 'case', 'check',
-  'column', 'constraint', 'create', 'cross', 'current', 'default', 'delete',
-  'desc', 'distinct', 'drop', 'else', 'end', 'escape', 'except', 'exists',
-  'for', 'foreign', 'from', 'full', 'group', 'having', 'if', 'in', 'index',
-  'inner', 'insert', 'intersect', 'into', 'is', 'join', 'key', 'left', 'like',
-  'limit', 'not', 'null', 'on', 'or', 'order', 'outer', 'primary', 'references',
-  'right', 'select', 'set', 'table', 'then', 'to', 'union', 'unique', 'update',
-  'using', 'values', 'when', 'where', 'with',
-]);
 
 /**
  * Generate a random table ID.

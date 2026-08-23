@@ -114,18 +114,6 @@ class MovePlannerMoveCalculationMethods {
         reason === MOVE_REASON.SPREAD_REPLICAS
       );
     };
-    const buildPriorityStandaloneRemoveSafety = (replicaId) => {
-      return evaluatePriorityStandaloneRemoveSafety({
-        replicaId,
-        activePlacementReplicas,
-        targetReplicaCount,
-        priorityPartition: this.isControlPlanePriorityPartition(),
-        prioritySpreadPolicy,
-        availableNodes: this.moveStateProvider.getAvailableNodes(),
-        analyzePrioritySpread: (...args) =>
-          this.analyzePrioritySpread(...args),
-      });
-    };
     const toExecutableRemove = (move) => {
       const {
         prioritySpreadStandaloneSafe: _prioritySpreadStandaloneSafe,
@@ -339,6 +327,18 @@ class MovePlannerMoveCalculationMethods {
       }
     }
     const targetReplicaCount = targetState.targetReplicaCount;
+    const buildPriorityStandaloneRemoveSafety = (replicaId) => {
+      return evaluatePriorityStandaloneRemoveSafety({
+        replicaId,
+        activePlacementReplicas,
+        targetReplicaCount,
+        priorityPartition: this.isControlPlanePriorityPartition(),
+        prioritySpreadPolicy,
+        availableNodes: this.moveStateProvider.getAvailableNodes(),
+        analyzePrioritySpread: (...args) =>
+          this.analyzePrioritySpread(...args),
+      });
+    };
     // Single-owner in-flight-aware replica accounting for this partition: the
     // one join of committed rows with in-flight operations. Every over-target /
     // deficit decision below derives its threshold from this breakdown so the

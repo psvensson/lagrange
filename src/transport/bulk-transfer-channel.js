@@ -108,7 +108,7 @@ function createByteRateTokenBucket(options = {}) {
     drainTimer.unref?.();
   };
 
-  const drainWaiters = () => {
+  function drainWaiters() {
     refill();
     while (waiters.length > 0 && waiters[0].bytes <= availableBytes) {
       const waiter = waiters.shift();
@@ -116,7 +116,7 @@ function createByteRateTokenBucket(options = {}) {
       waiter.resolve(Object.freeze({acquired: true}));
     }
     scheduleDrain();
-  };
+  }
 
   return Object.freeze({
     acquire(bytes, acquireOptions = {}) {

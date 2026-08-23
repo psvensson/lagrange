@@ -537,6 +537,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         replicaId: TEST_PRIORITY_CREATE_STATUS_REPLICA_ID,
       });
       const mockCDC = createMockCDCService(cache);
+      const serviceMutations = [];
       const replicaStateMachine = new ReplicaStateMachine({
         nodeId: 'test-node',
         systemTableCache: cache,
@@ -569,7 +570,6 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           },
         },
       });
-      const serviceMutations = [];
       let rowAtFactory = null;
       let localOnlyAtFactory = null;
       const handler = new ReplicaHandler({

@@ -151,7 +151,7 @@ async function collectAmbientIntrinsicViolations(pathsToScan, options) {
     [...DEFAULT_SCAN_ROOTS];
   return buildGuidelineViolationReport(
     entryPaths,
-    options,
+    {...options, governedRoots: [...DEFAULT_SCAN_ROOTS]},
     collectAmbientIntrinsicViolationsFromSource,
   );
 }

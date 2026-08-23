@@ -120,7 +120,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     return recoveryInFlight;
   };
 
-  const scheduleLeaderElectionRecovery = () => {
+  function scheduleLeaderElectionRecovery() {
     pendingLeaderElectionRecovery = true;
     if (recoveryInFlight) {
       return recoveryInFlight;
@@ -167,7 +167,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     recoveryTimer.unref?.();
     scheduledDueAtMs = dueAtMs;
     return null;
-  };
+  }
 
   const triggerRecovery = (reason) => {
     if (reason === MIGRATION_RECOVERY_REASON.LEADER_ELECTED) {

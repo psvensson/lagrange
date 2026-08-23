@@ -56,6 +56,16 @@ export default [
       }],
       'require-jsdoc': 'off',
       'valid-jsdoc': 'off',
+      // A block-scoped variable referenced before its declaration throws a
+      // temporal-dead-zone ReferenceError on paths tests may never take
+      // locally (full-gate run 32623687633 failed on exactly this in the
+      // query executor's leader-redirect exhaustion branch). Functions and
+      // classes hoist safely and stay exempt; variables do not.
+      'no-use-before-define': ['error', {
+        functions: false,
+        classes: false,
+        variables: true,
+      }],
       'new-cap': ['error', {
         capIsNewExceptions: [
           'EventEmitter',

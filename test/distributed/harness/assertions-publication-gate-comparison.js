@@ -68,6 +68,27 @@ function isAuthoritativePublicationRecoveryGateBlocker(
   return true;
 }
 
+const STALE_PUBLICATION_GATE_LAG_DECISION_TABLE = Object.freeze([
+  (evidence) =>
+    evidence.gateReady !== true &&
+    evidence.observationMode ===
+      ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED &&
+    evidence.snapshotRevisionState ===
+      CONTROL_PLANE_SNAPSHOT_REVISION_STATE.STALE_USABLE &&
+    (
+      (
+        evidence.gateState ===
+          PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING &&
+        evidence.prioritySpreadOnly === true
+      ) ||
+      (
+        evidence.gateState ===
+          PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE &&
+        evidence.prioritySpreadEvidenceUnavailableOnly === true
+      )
+    ),
+]);
+
 function isStalePublicationRecoveryGateLagRecord(
   record,
   readyPublicationGateEpochSet,
@@ -107,27 +128,6 @@ function normalizeStalePublicationGateEvidence(record) {
           .PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
   };
 }
-
-const STALE_PUBLICATION_GATE_LAG_DECISION_TABLE = Object.freeze([
-  (evidence) =>
-    evidence.gateReady !== true &&
-    evidence.observationMode ===
-      ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED &&
-    evidence.snapshotRevisionState ===
-      CONTROL_PLANE_SNAPSHOT_REVISION_STATE.STALE_USABLE &&
-    (
-      (
-        evidence.gateState ===
-          PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING &&
-        evidence.prioritySpreadOnly === true
-      ) ||
-      (
-        evidence.gateState ===
-          PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE &&
-        evidence.prioritySpreadEvidenceUnavailableOnly === true
-      )
-    ),
-]);
 
 export function buildPublicationRecoveryGateNotReadyMessage(records) {
   const summaries = records.map(

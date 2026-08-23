@@ -229,6 +229,8 @@ const EDGE_ALIASES = Object.freeze({
   [EDGE_ALIAS_READINESS]: EDGE_ID.READINESS_STARTUP_SUPPORT,
 });
 
+const ARGUMENT_ARTIFACT_INDEX = 2;
+
 function main(argv) {
   const parsedArgs = parseCliArgs(argv.slice(ARGUMENT_ARTIFACT_INDEX));
   if (parsedArgs.helpRequested) {
@@ -293,7 +295,6 @@ function main(argv) {
   }
 }
 
-const ARGUMENT_ARTIFACT_INDEX = 2;
 
 function parseCliArgs(args) {
   const positional = [];

@@ -85,12 +85,9 @@ function buildSilentCatchViolationIdentity(violation) {
 }
 
 async function collectSilentCatchViolations(pathsToScan, options) {
-  const entryPaths = pathsToScan.length > NUMERIC_LITERAL_ZERO ?
-    pathsToScan :
-    [...DEFAULT_SCAN_ROOTS];
   return buildGuidelineViolationReport(
-    entryPaths,
-    options,
+    pathsToScan,
+    {...options, governedRoots: [...DEFAULT_SCAN_ROOTS]},
     collectSilentCatchViolationsFromSource,
   );
 }

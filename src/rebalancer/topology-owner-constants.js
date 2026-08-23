@@ -504,13 +504,6 @@ function resolveOperationOwnerNextAttemptAtMs({action, currentTimeMs, delayMs}) 
     TOPOLOGY_OWNER_ABSENT_VALUE;
 }
 
-function resolveOperationOwnerResumeTerminalState(evidence, state) {
-  const selectedRule = OPERATION_OWNER_RESUME_TERMINAL_STATE_RULES.find((rule) =>
-    rule.matches({evidence, state}),
-  );
-  return selectedRule.terminalState;
-}
-
 const OPERATION_OWNER_RESUME_TERMINAL_STATE_RULES = Object.freeze([
   Object.freeze({
     terminalState: OPERATION_OWNER_TERMINAL_STATE.TERMINAL_DEGRADED,
@@ -536,11 +529,11 @@ const OPERATION_OWNER_RESUME_TERMINAL_STATE_RULES = Object.freeze([
   }),
 ]);
 
-function resolveOperationOwnerResumeTerminalReason(evidence, state) {
-  const selectedRule = OPERATION_OWNER_RESUME_TERMINAL_REASON_RULES.find((rule) =>
+function resolveOperationOwnerResumeTerminalState(evidence, state) {
+  const selectedRule = OPERATION_OWNER_RESUME_TERMINAL_STATE_RULES.find((rule) =>
     rule.matches({evidence, state}),
   );
-  return selectedRule.terminalReason;
+  return selectedRule.terminalState;
 }
 
 const OPERATION_OWNER_RESUME_TERMINAL_REASON_RULES = Object.freeze([
@@ -578,6 +571,13 @@ const OPERATION_OWNER_RESUME_TERMINAL_REASON_RULES = Object.freeze([
     matches: () => true,
   }),
 ]);
+
+function resolveOperationOwnerResumeTerminalReason(evidence, state) {
+  const selectedRule = OPERATION_OWNER_RESUME_TERMINAL_REASON_RULES.find((rule) =>
+    rule.matches({evidence, state}),
+  );
+  return selectedRule.terminalReason;
+}
 
 export {
   OPERATION_OWNER_INPUT,

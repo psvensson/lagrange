@@ -110,6 +110,8 @@ function attachServiceDefinition(cache) {
 
 function waitForCompletedReplace(coordinator) {
   return new Promise((resolve, reject) => {
+    let completedListener = null;
+    let failedListener = null;
     const cleanup = () => {
       coordinator.removeListener(
         REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
@@ -124,7 +126,7 @@ function waitForCompletedReplace(coordinator) {
       cleanup();
       reject(new Error('Timed out waiting for runtime-service REPLACE'));
     }, EVENT_WAIT_TIMEOUT_MS);
-    const completedListener = (event) => {
+    completedListener = (event) => {
       if (event?.operation?.type !== OperationType.REPLACE) {
         return;
       }
@@ -132,7 +134,7 @@ function waitForCompletedReplace(coordinator) {
       cleanup();
       resolve(event.operation);
     };
-    const failedListener = (event) => {
+    failedListener = (event) => {
       if (event?.operation?.type !== OperationType.REPLACE) {
         return;
       }

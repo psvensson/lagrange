@@ -113,6 +113,7 @@ function createCoordinatorHarness() {
     step: WORKFLOW_STEP.SYNCING,
   });
 
+  let coordinator = null;
   const sqlQueryEngine = {
     async executeQuery(sql, params = []) {
       const normalizedSql = String(sql).trim();
@@ -152,7 +153,7 @@ function createCoordinatorHarness() {
       return {success: true, rows: []};
     },
   };
-  const coordinator = new RebalanceCoordinator({
+  coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     systemTableCache: createMockCache(),
     cdcIntegrationService: {

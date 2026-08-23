@@ -24,6 +24,22 @@ const CONTROL_SNAPSHOT_ATTEMPT_STATE = Object.freeze({
 });
 const NO_CONTROL_SNAPSHOT_RETRY_RESULT = Symbol('noControlSnapshotRetryResult');
 
+const {
+  ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_ERROR_MESSAGE,
+  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
+  ADMIN_SERVICE_DISCOVERY,
+  ENDPOINT_SYNC_UNHEALTHY_POLICY,
+  HTTP_STATUS,
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  createTimeoutBudgetError,
+  normalizeIdentifier,
+  normalizeSql,
+  parseDiscoveryBooleanQuery,
+  parseDiscoveryListQuery,
+  parseServiceDiscoverySqlQuery,
+} = ADMIN_WEBSOCKET_API_SHARED;
+
 function createControlSnapshotRetryBudget(options, nowFn) {
   const queryTimeoutMs = Number(options?.queryTimeoutMs);
   if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
@@ -96,22 +112,6 @@ function resolveControlSnapshotTerminalResult(
     now: nowFn,
   });
 }
-
-const {
-  ADMIN_CONTROL_SNAPSHOT,
-  ADMIN_ERROR_MESSAGE,
-  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
-  ADMIN_SERVICE_DISCOVERY,
-  ENDPOINT_SYNC_UNHEALTHY_POLICY,
-  HTTP_STATUS,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  createTimeoutBudgetError,
-  normalizeIdentifier,
-  normalizeSql,
-  parseDiscoveryBooleanQuery,
-  parseDiscoveryListQuery,
-  parseServiceDiscoverySqlQuery,
-} = ADMIN_WEBSOCKET_API_SHARED;
 
 const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
   resolveServiceDiagnosticsReport() {

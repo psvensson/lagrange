@@ -810,11 +810,12 @@ export function waitForMessage(ws, timeout = 2000) {
  */
 export function waitForNoMessage(ws, timeout = 50) {
   return new Promise((resolve, reject) => {
+    let timer = null;
     const onMessage = () => {
       clearTimeout(timer);
       reject(new Error('Unexpected message received'));
     };
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       ws.off('message', onMessage);
       resolve();
     }, timeout);

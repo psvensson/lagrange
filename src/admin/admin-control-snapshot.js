@@ -43,6 +43,8 @@ import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordina
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
 import {AdminControlSnapshot} from './admin-control-snapshot-leadership-summary.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -360,5 +362,3 @@ assignAdminControlSnapshotLocalDiagnosticsMethods(AdminControlSnapshot, {
   uniqueSorted,
 });
 export {AdminControlSnapshot};
-import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
-  '../control-plane/membership-publication-row-contract.js';

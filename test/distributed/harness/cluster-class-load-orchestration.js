@@ -63,6 +63,9 @@ function normalizeRestartRecoveryHandoffProgressString(handoff, field) {
     RESTART_RECOVERY_FIELD_NONE;
 }
 
+const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT =
+  'joinReadySignalAttempt';
+
 function normalizeRestartRecoveryHandoffAttempt(handoff) {
   const attempt = readOwnRestartRecoveryHandoffDataProperty(
     handoff,
@@ -133,8 +136,6 @@ const RESTART_RECOVERY_FIELD_JOIN_PHASE = 'joinPhase';
 const RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE = 'joinLifecycleState';
 const RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET = 'joinCheckpointTarget';
 const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE = 'joinReadySignalGate';
-const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT =
-  'joinReadySignalAttempt';
 const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE =
   'joinReadySignalLastFailureCode';
 const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED =

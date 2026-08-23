@@ -190,10 +190,10 @@ async function waitForStartupConvergence(options = {}) {
           {kind: STARTUP_CONVERGENCE_SIGNAL.POLL_TICK} :
           null);
       }, waitMs);
-      const onSignal = (signal) => {
+      function onSignal(signal) {
         clearTimeoutFn(timer);
         resolve(signal);
-      };
+      }
       waitResolver = onSignal;
     });
   };

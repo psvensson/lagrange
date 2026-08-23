@@ -409,6 +409,8 @@ test('CDCPipelineReadinessGate — waitForReady polls until conditions met',
   async (t) => {
     const cache = createCacheStub();
     const clock = createManualClock();
+    const partitions = new Map();
+    const messageGroups = new Map();
     const gate = new CDCPipelineReadinessGate({
       systemTableCache: cache,
       cdcPropagatedTables: ['nodes'],
@@ -423,9 +425,6 @@ test('CDCPipelineReadinessGate — waitForReady polls until conditions met',
         });
       },
     });
-
-    const partitions = new Map();
-    const messageGroups = new Map();
 
     const context = {
       partitionServices: partitions,

@@ -221,6 +221,7 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
       cluster._recordClusterStage = (stage, details = {}) => {
         recordedStages.push({stage, details});
       };
+      let fakeNowMs = LOAD_READINESS_PARTIAL_COVERAGE_START_MS;
       let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
       cluster._sleep = async () => {
         sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
@@ -231,7 +232,6 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
       };
 
       let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
-      let fakeNowMs = LOAD_READINESS_PARTIAL_COVERAGE_START_MS;
       const originalDateNow = Date.now;
       Date.now = () => fakeNowMs;
       cluster._probeClusterActiveState = async () => {
@@ -710,6 +710,7 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
       cluster._recordClusterStage = (stage, details = {}) => {
         recordedStages.push({stage, details});
       };
+      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
       cluster._sleep = async (ms) => {
         fakeNowMs += Math.max(
           LOAD_READINESS_CANONICAL_ZERO_COUNT,
@@ -720,7 +721,6 @@ export function registerClusterLoadReadinessStabilityQuiescenceTests(context) {
         recordedStages.push({stage: 'failure_logs'});
       };
 
-      let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
       const originalDateNow = Date.now;
       Date.now = () => fakeNowMs;
       cluster._probeClusterActiveState = async () => {

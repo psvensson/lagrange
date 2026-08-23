@@ -14,6 +14,8 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {ChaosPrimitives} from '../chaos.js';
 
+const MAIN_NETWORK_ID = 'main-net-123';
+
 /**
  * Create a mock DockerProvider that records all calls.
  * Each method resolves immediately and pushes a call record.
@@ -104,8 +106,6 @@ function createMockNodes() {
     ['node-3', {containerId: 'container-ccc'}],
   ]);
 }
-
-const MAIN_NETWORK_ID = 'main-net-123';
 
 // --- Simple delegation tests (Req 4.1, 4.2) ---
 

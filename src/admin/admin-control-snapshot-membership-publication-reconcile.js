@@ -31,6 +31,8 @@ import {
 } from './admin-control-membership-publication-handoff-outcomes.js';
 import {AdminControlSnapshotControlPlaneDiagnostics} from './admin-control-snapshot-control-plane-diagnostics.js';
 import {isRecoverableControlSnapshotPublicationReadError} from './admin-control-snapshot-repair-diagnostics.js';
+import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
+  '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -838,5 +840,3 @@ class AdminControlSnapshotMembershipPublicationReconcile
   }
 }
 export {AdminControlSnapshotMembershipPublicationReconcile};
-import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
-  '../control-plane/membership-publication-row-contract.js';

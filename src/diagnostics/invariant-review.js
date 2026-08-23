@@ -80,34 +80,6 @@ const READINESS_INVARIANT_RULES = Object.freeze([
   }),
 ]);
 
-function reviewInvariants(input = {}) {
-  const normalized = normalizeCausalInput(input);
-  const graph = buildCausalGraph(input);
-  const budgetAccounting = accountBudgets(input);
-  const invariants = INVARIANT_RULES.map((rule) => rule.evaluate({
-    normalized,
-    graph,
-    budgetAccounting,
-  }));
-  return {
-    schemaVersion: SCHEMA_VERSION_INVARIANT_REVIEW_V1,
-    scenario: normalized.scenario,
-    invariants,
-    summary: {
-      invariantCount: invariants.length,
-      failedCount: invariants.filter((invariant) =>
-        invariant.state === INVARIANT_STATE.FAILED,
-      ).length,
-      unknownCount: invariants.filter((invariant) =>
-        invariant.state === INVARIANT_STATE.UNKNOWN,
-      ).length,
-      passedCount: invariants.filter((invariant) =>
-        invariant.state === INVARIANT_STATE.PASSED,
-      ).length,
-    },
-  };
-}
-
 const INVARIANT_RULES = Object.freeze([
   Object.freeze({
     kind: INVARIANT_KIND.NODE_COUNT_BOUNDS,
@@ -164,6 +136,34 @@ const INVARIANT_RULES = Object.freeze([
     evaluate: ({budgetAccounting}) => evaluateBudgetInvariant(budgetAccounting),
   }),
 ]);
+
+function reviewInvariants(input = {}) {
+  const normalized = normalizeCausalInput(input);
+  const graph = buildCausalGraph(input);
+  const budgetAccounting = accountBudgets(input);
+  const invariants = INVARIANT_RULES.map((rule) => rule.evaluate({
+    normalized,
+    graph,
+    budgetAccounting,
+  }));
+  return {
+    schemaVersion: SCHEMA_VERSION_INVARIANT_REVIEW_V1,
+    scenario: normalized.scenario,
+    invariants,
+    summary: {
+      invariantCount: invariants.length,
+      failedCount: invariants.filter((invariant) =>
+        invariant.state === INVARIANT_STATE.FAILED,
+      ).length,
+      unknownCount: invariants.filter((invariant) =>
+        invariant.state === INVARIANT_STATE.UNKNOWN,
+      ).length,
+      passedCount: invariants.filter((invariant) =>
+        invariant.state === INVARIANT_STATE.PASSED,
+      ).length,
+    },
+  };
+}
 
 function compareCountInvariant({
   kind,

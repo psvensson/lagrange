@@ -625,6 +625,8 @@ class NodeHandle {
       const ws = new WebSocket(url);
       this._pendingAdminSocketByLane.set(lane, ws);
       let settled = false;
+      let onOpen = null;
+      let onOpenError = null;
       const connectTimeout = setTimeout(() => {
         if (settled) {
           return;
@@ -648,7 +650,7 @@ class NodeHandle {
         connectTimeout.unref();
       }
 
-      const onOpen = () => {
+      onOpen = () => {
         if (settled) {
           return;
         }
@@ -661,7 +663,7 @@ class NodeHandle {
         resolve(ws);
       };
 
-      const onOpenError = (err) => {
+      onOpenError = (err) => {
         if (settled) {
           return;
         }

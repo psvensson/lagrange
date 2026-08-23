@@ -102,6 +102,10 @@ const PUBLICATION_RECOVERY_NODE_DEBT_STATE = Object.freeze({
   ABSENT: 'absent',
   PRESENT: 'present',
 });
+const PUBLICATION_RECOVERY_PROTOCOL_STATE = Object.freeze({
+  STEADY_PUBLISHED: 'steady_published',
+  UNPUBLISHED_OBSERVATION: 'unpublished_observation',
+});
 const PUBLICATION_RECOVERY_OWNER_RECONCILE_HANDOFF_MATCHERS = Object.freeze([
   Object.freeze({
     fieldName: PUBLICATION_RECOVERY_HANDOFF_FIELD.STATE,
@@ -144,10 +148,6 @@ const PUBLICATION_RECOVERY_ACTIVE_GATE_HANDOFF_EMISSION_RULES = Object.freeze([
 const PUBLICATION_RECOVERY_PUBLICATION_STATUS = Object.freeze({
   OPEN: 'OPEN',
   PUBLISHED: 'PUBLISHED',
-});
-const PUBLICATION_RECOVERY_PROTOCOL_STATE = Object.freeze({
-  STEADY_PUBLISHED: 'steady_published',
-  UNPUBLISHED_OBSERVATION: 'unpublished_observation',
 });
 const PUBLICATION_RECOVERY_CLOSED_UNPUBLISHED_REASON = Object.freeze({
   PUBLICATION_CONVERGENCE_MISSING: 'publication_convergence_missing',

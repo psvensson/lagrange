@@ -87,33 +87,6 @@ const READINESS_CLASSIFICATION_RULES = Object.freeze([
   }),
 ]);
 
-function classifyFailures(input = {}) {
-  const normalized = normalizeCausalInput(input);
-  const graph = buildCausalGraph(input);
-  const budgetAccounting = accountBudgets(input);
-  const observedClasses = FAILURE_RULES.flatMap((rule) => rule.classify({
-    normalized,
-    graph,
-    budgetAccounting,
-  }));
-  const classes = observedClasses.length > ZERO_COUNT ? observedClasses : [buildClass({
-    failureClass: FAILURE_CLASS.HEALTHY,
-    reason: REASON_NO_FAILURE,
-    evidencePath: ABSENT_VALUE,
-  })];
-  return {
-    schemaVersion: SCHEMA_VERSION_FAILURE_TAXONOMY_V1,
-    scenario: normalized.scenario,
-    classes,
-    dominantFailureClass: classes[ZERO_COUNT].failureClass,
-    resolutionStrategy: classes[ZERO_COUNT].resolutionStrategy,
-    summary: {
-      classCount: classes.length,
-      dominantReason: classes[ZERO_COUNT].reason,
-    },
-  };
-}
-
 const FAILURE_RULES = Object.freeze([
   Object.freeze({
     classify: ({graph}) => classifyTopologyEdge({
@@ -150,6 +123,33 @@ const FAILURE_RULES = Object.freeze([
     classify: ({normalized, graph}) => classifyEvidenceIncomplete(graph, normalized),
   }),
 ]);
+
+function classifyFailures(input = {}) {
+  const normalized = normalizeCausalInput(input);
+  const graph = buildCausalGraph(input);
+  const budgetAccounting = accountBudgets(input);
+  const observedClasses = FAILURE_RULES.flatMap((rule) => rule.classify({
+    normalized,
+    graph,
+    budgetAccounting,
+  }));
+  const classes = observedClasses.length > ZERO_COUNT ? observedClasses : [buildClass({
+    failureClass: FAILURE_CLASS.HEALTHY,
+    reason: REASON_NO_FAILURE,
+    evidencePath: ABSENT_VALUE,
+  })];
+  return {
+    schemaVersion: SCHEMA_VERSION_FAILURE_TAXONOMY_V1,
+    scenario: normalized.scenario,
+    classes,
+    dominantFailureClass: classes[ZERO_COUNT].failureClass,
+    resolutionStrategy: classes[ZERO_COUNT].resolutionStrategy,
+    summary: {
+      classCount: classes.length,
+      dominantReason: classes[ZERO_COUNT].reason,
+    },
+  };
+}
 
 function classifyTopologyEdge({
   graph,

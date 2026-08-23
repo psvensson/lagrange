@@ -2,6 +2,8 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
 
+const LOCAL_STR_BOOLEAN = 'boolean';
+
 function normalizeOptionalEvidenceValue(value) {
   return value || null;
 }
@@ -28,8 +30,6 @@ function buildMissingSelfLocalQueryTransportEvidence(localQueryTransport) {
   };
 }
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
-
-const LOCAL_STR_BOOLEAN = 'boolean';
 
 const {
   AuthoritativeControlPlaneView,

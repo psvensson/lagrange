@@ -53,14 +53,14 @@ function createRequestCancellationAwaiter(createShutdownFailure) {
         signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
         settle(value);
       };
-      const onAbort = () => {
+      function onAbort() {
         complete(
           reject,
           signal.reason instanceof Error ?
             signal.reason :
             createShutdownFailure(activeRequest),
         );
-      };
+      }
       signal.addEventListener(
         TRANSPORT_EVENT.ABORT,
         onAbort,

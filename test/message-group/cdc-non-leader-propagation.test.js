@@ -83,6 +83,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -97,7 +98,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-1',
@@ -206,6 +206,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -220,7 +221,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-retry',
@@ -290,6 +290,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -304,7 +305,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-1',
@@ -379,6 +379,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -393,7 +394,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-1',
@@ -470,6 +470,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -484,7 +485,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-replay-priority',
@@ -566,6 +566,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -580,7 +581,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-retry-cause-id',
@@ -657,6 +657,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -671,7 +672,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-unknown-leader-retry',
@@ -732,6 +732,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -746,7 +747,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-cache-leader',
@@ -814,6 +814,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -828,7 +829,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-stale-canonical-leader',
@@ -919,6 +919,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -933,7 +934,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-lagging-leader-metadata',
@@ -1016,6 +1016,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -1030,7 +1031,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-system-forward-strict',
@@ -1116,6 +1116,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -1130,7 +1131,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-system-forward-live-leader',
@@ -1219,6 +1219,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -1233,7 +1234,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-bootstrap-peer-forward',
@@ -1300,6 +1300,7 @@ test(
     const router = new MessageRouter({nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
+    let mg;
     let shutdownCalled = false;
     const cleanup = async () => {
       if (shutdownCalled) return;
@@ -1314,7 +1315,6 @@ test(
       await router.shutdown();
     };
 
-    let mg;
     try {
       mg = new MessageGroupService({
         groupId: 'mg-connected-relay',

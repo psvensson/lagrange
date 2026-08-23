@@ -47,38 +47,6 @@ import {summarizeInvariantBreaches} from './invariant-breaches.js';
 import {LogCollector} from './log-collector.js';
 import {LogAnalyzer} from './log-analyzer.js';
 import {PlaybackRecorder as OriginalPlaybackRecorder} from './playback-recorder.js';
-class PlaybackRecorder extends OriginalPlaybackRecorder {
-  async start(options = {}) {
-    const cluster = options.cluster;
-    if (cluster && cluster._config) {
-      const benchmarkControlTimeoutMs = cluster._config?.benchmark?.controlQueryTimeoutMs;
-      if (Number.isInteger(benchmarkControlTimeoutMs) && benchmarkControlTimeoutMs > 0) {
-        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = benchmarkControlTimeoutMs;
-        FETCH_TIMEOUT_MS = Math.max(
-          FETCH_TIMEOUT_DEFAULT_MS,
-          benchmarkControlTimeoutMs,
-        );
-        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = Math.max(
-          CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_DEFAULT_MS,
-          benchmarkControlTimeoutMs,
-        );
-        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = Math.max(
-          CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_DEFAULT_MS,
-          Math.floor(benchmarkControlTimeoutMs / 3),
-        );
-      } else {
-        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS =
-          CONTROL_SNAPSHOT_PROBE_TIMEOUT_DEFAULT_MS;
-        FETCH_TIMEOUT_MS = FETCH_TIMEOUT_DEFAULT_MS;
-        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS =
-          CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_DEFAULT_MS;
-        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS =
-          CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_DEFAULT_MS;
-      }
-    }
-    return super.start(options);
-  }
-}
 import {TraceArtifactRecorder} from './trace-artifact-recorder.js';
 import {
   buildActiveGateWaitPolicy,
@@ -146,6 +114,38 @@ let CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS =
   CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_DEFAULT_MS;
 let CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS =
   CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_DEFAULT_MS;
+class PlaybackRecorder extends OriginalPlaybackRecorder {
+  async start(options = {}) {
+    const cluster = options.cluster;
+    if (cluster && cluster._config) {
+      const benchmarkControlTimeoutMs = cluster._config?.benchmark?.controlQueryTimeoutMs;
+      if (Number.isInteger(benchmarkControlTimeoutMs) && benchmarkControlTimeoutMs > 0) {
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = benchmarkControlTimeoutMs;
+        FETCH_TIMEOUT_MS = Math.max(
+          FETCH_TIMEOUT_DEFAULT_MS,
+          benchmarkControlTimeoutMs,
+        );
+        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = Math.max(
+          CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_DEFAULT_MS,
+          benchmarkControlTimeoutMs,
+        );
+        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = Math.max(
+          CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_DEFAULT_MS,
+          Math.floor(benchmarkControlTimeoutMs / 3),
+        );
+      } else {
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS =
+          CONTROL_SNAPSHOT_PROBE_TIMEOUT_DEFAULT_MS;
+        FETCH_TIMEOUT_MS = FETCH_TIMEOUT_DEFAULT_MS;
+        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS =
+          CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_DEFAULT_MS;
+        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS =
+          CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_DEFAULT_MS;
+      }
+    }
+    return super.start(options);
+  }
+}
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
 const BOOTSTRAP_READY_STABLE_WINDOW_MS = 2000;
 const ADMIN_QUERY_TIMEOUT_MS = 30000;
@@ -696,6 +696,12 @@ function normalizeDiscoveryReasonCodes(reasons) {
   return normalizeDiscoveryReasons(reasons).map((reason) => reason.code);
 }
 
+const BENCHMARK_ADMISSION_RETRYABLE_ERROR_PATTERN =
+  /timeout|timed out|deadline exceeded|etimedout/i;
+const BENCHMARK_ADMISSION_REASONS_PATTERN = /reasons=([^)]+)/i;
+const BENCHMARK_ADMISSION_REASON_SEPARATOR = ',';
+const BENCHMARK_ADMISSION_REASON_DETAIL_SEPARATOR = '=';
+
 function normalizeBenchmarkAdmissionReasonCodes(reasonCodes) {
   return Array.isArray(reasonCodes) ?
     [
@@ -837,11 +843,6 @@ const ADMIN_QUERY_TRACE_OUTCOME_PENDING = 'pending';
 const ADMIN_QUERY_TRACE_OUTCOME_OK = 'ok';
 const ADMIN_QUERY_TRACE_OUTCOME_ERROR = 'error';
 const ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT = 'timeout';
-const BENCHMARK_ADMISSION_RETRYABLE_ERROR_PATTERN =
-  /timeout|timed out|deadline exceeded|etimedout/i;
-const BENCHMARK_ADMISSION_REASONS_PATTERN = /reasons=([^)]+)/i;
-const BENCHMARK_ADMISSION_REASON_SEPARATOR = ',';
-const BENCHMARK_ADMISSION_REASON_DETAIL_SEPARATOR = '=';
 const ADMIN_QUERY_TRACE_ERROR_UNKNOWN = 'unknown admin query error';
 const ERROR_MESSAGE_TIMEOUT_FRAGMENT = 'timed out';
 

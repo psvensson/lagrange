@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T20:55:37.144Z",
-  "rawViolationCount": 2440,
+  "generatedAt": "2026-08-23T07:57:41.596Z",
+  "rawViolationCount": 2437,
   "violations": [
     {
       "filePath": "scripts/analyze-cl039-link-rate.js",
@@ -6881,7 +6881,7 @@
     },
     {
       "filePath": "scripts/check-unified-system-metadata-gateway.js",
-      "line": 207,
+      "line": 209,
       "column": 5,
       "value": "'[\\'\"`][\\\\s\\\\S]{0,400}?\\\\b(?:FROM|INTO|UPDATE|DELETE\\\\s+FROM)\\\\s+'",
       "kind": "free_floating_string_literal",
@@ -7754,7 +7754,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 37,
+      "line": 43,
       "column": 15,
       "value": "'test does not pass WITH the fix; nothing to prove'",
       "kind": "free_floating_string_literal",
@@ -7763,7 +7763,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 41,
+      "line": 47,
       "column": 15,
       "value": "'reverting --src changed no bytes; the test does not exercise --src'",
       "kind": "free_floating_string_literal",
@@ -7772,7 +7772,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 45,
+      "line": 51,
       "column": 15,
       "value": "'test still PASSES with the fix reverted; it does not bind the mechanism'",
       "kind": "free_floating_string_literal",
@@ -7781,7 +7781,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 49,
+      "line": 55,
       "column": 15,
       "value": "'test did not return to GREEN after restore; result is not trustworthy'",
       "kind": "free_floating_string_literal",
@@ -7790,7 +7790,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 52,
+      "line": 58,
       "column": 13,
       "value": "'GREEN with fix, RED on revert, GREEN on restore'",
       "kind": "free_floating_string_literal",
@@ -7799,7 +7799,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 59,
+      "line": 74,
       "column": 17,
       "value": "'--test'",
       "kind": "free_floating_string_literal",
@@ -7808,7 +7808,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 61,
+      "line": 76,
       "column": 24,
       "value": "'--src'",
       "kind": "free_floating_string_literal",
@@ -7817,7 +7817,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 62,
+      "line": 77,
       "column": 53,
       "value": "'--'",
       "kind": "free_floating_string_literal",
@@ -7826,7 +7826,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 65,
+      "line": 80,
       "column": 24,
       "value": "'--record'",
       "kind": "free_floating_string_literal",
@@ -7835,7 +7835,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 67,
+      "line": 82,
       "column": 24,
       "value": "'--id'",
       "kind": "free_floating_string_literal",
@@ -7844,7 +7844,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 69,
+      "line": 84,
       "column": 24,
       "value": "'--frontier'",
       "kind": "free_floating_string_literal",
@@ -7853,7 +7853,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 88,
+      "line": 117,
       "column": 58,
       "value": "'blob'",
       "kind": "free_floating_string_literal",
@@ -7862,7 +7862,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 100,
+      "line": 130,
       "column": 17,
       "value": "'git'",
       "kind": "free_floating_string_literal",
@@ -7871,7 +7871,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 100,
+      "line": 130,
       "column": 25,
       "value": "'-C'",
       "kind": "free_floating_string_literal",
@@ -7880,7 +7880,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 100,
+      "line": 130,
       "column": 45,
       "value": "'checkout'",
       "kind": "free_floating_string_literal",
@@ -7889,17 +7889,8 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 100,
-      "column": 57,
-      "value": "'HEAD'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/dt-prove.js",
-      "line": 100,
-      "column": 65,
+      "line": 130,
+      "column": 66,
       "value": "'--'",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
@@ -7907,16 +7898,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 180,
-      "column": 26,
-      "value": "'usage: dt-prove --test <file> --src <path...> [--record --id <q> --frontier <f>]\\n'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/dt-prove.js",
-      "line": 186,
+      "line": 230,
       "column": 86,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -7925,17 +7907,8 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 194,
-      "column": 26,
-      "value": "'WARNING: --src not present at HEAD (revert = delete, proof may reflect '",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/dt-prove.js",
-      "line": 195,
-      "column": 60,
+      "line": 239,
+      "column": 68,
       "value": "', '",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
@@ -7943,7 +7916,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 209,
+      "line": 253,
       "column": 42,
       "value": "'PROVEN'",
       "kind": "free_floating_string_literal",
@@ -7952,7 +7925,7 @@
     },
     {
       "filePath": "scripts/dt-prove.js",
-      "line": 209,
+      "line": 253,
       "column": 53,
       "value": "'NOT PROVEN'",
       "kind": "free_floating_string_literal",
@@ -12380,7 +12353,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 211,
+      "line": 212,
       "column": 51,
       "value": "'/'",
       "kind": "free_floating_string_literal",
@@ -12389,7 +12362,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 292,
+      "line": 293,
       "column": 45,
       "value": "'changes'",
       "kind": "free_floating_string_literal",
@@ -12398,7 +12371,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 307,
+      "line": 308,
       "column": 22,
       "value": "'/dev/null'",
       "kind": "free_floating_string_literal",
@@ -12407,7 +12380,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 401,
+      "line": 402,
       "column": 55,
       "value": "'docs'",
       "kind": "free_floating_string_literal",
@@ -12416,7 +12389,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 405,
+      "line": 406,
       "column": 29,
       "value": "'test/'",
       "kind": "free_floating_string_literal",
@@ -12425,7 +12398,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 405,
+      "line": 406,
       "column": 46,
       "value": "'test'",
       "kind": "free_floating_string_literal",
@@ -12434,7 +12407,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 406,
+      "line": 407,
       "column": 29,
       "value": "'docs/'",
       "kind": "free_floating_string_literal",
@@ -12443,7 +12416,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 406,
+      "line": 407,
       "column": 63,
       "value": "'architecture/'",
       "kind": "free_floating_string_literal",
@@ -12452,7 +12425,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 407,
+      "line": 408,
       "column": 12,
       "value": "'docs'",
       "kind": "free_floating_string_literal",
@@ -12461,7 +12434,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 409,
+      "line": 410,
       "column": 10,
       "value": "'other'",
       "kind": "free_floating_string_literal",
@@ -12470,7 +12443,7 @@
     },
     {
       "filePath": "scripts/solve/change-artifact.js",
-      "line": 575,
+      "line": 576,
       "column": 19,
       "value": "'changeRef artifact must contain file paths from a patch'",
       "kind": "free_floating_string_literal",
@@ -20741,8 +20714,8 @@
     },
     {
       "filePath": "src/diagnostics/source-fingerprint.js",
-      "line": 86,
-      "column": 39,
+      "line": 74,
+      "column": 38,
       "value": "'utf8'",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
@@ -20750,7 +20723,7 @@
     },
     {
       "filePath": "src/diagnostics/source-fingerprint.js",
-      "line": 87,
+      "line": 75,
       "column": 15,
       "value": "':'",
       "kind": "free_floating_string_literal",
@@ -20759,7 +20732,7 @@
     },
     {
       "filePath": "src/diagnostics/source-fingerprint.js",
-      "line": 87,
+      "line": 75,
       "column": 20,
       "value": "'utf8'",
       "kind": "free_floating_string_literal",
@@ -20768,7 +20741,7 @@
     },
     {
       "filePath": "src/diagnostics/source-fingerprint.js",
-      "line": 92,
+      "line": 86,
       "column": 22,
       "value": "'hex'",
       "kind": "free_floating_string_literal",
@@ -21902,7 +21875,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-lifecycle-methods.js",
-      "line": 520,
+      "line": 521,
       "column": 35,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",

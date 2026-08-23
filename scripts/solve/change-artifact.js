@@ -13,6 +13,23 @@ import {
   commitDeltaChangedPaths,
 } from './content-addressed-change-artifact.js';
 
+const LOCAL_STR_GIT = 'git';
+const LOCAL_STR_MERGE_BASE = 'merge-base';
+const LOCAL_STR_IS_ANCESTOR = '--is-ancestor';
+const TEXT_ENCODING = 'utf8';
+const LOCAL_STR_GIT_STATUS_FAILED = 'git status failed';
+const LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR =
+  'commit changeRef head is not an ancestor of HEAD: the claimed ';
+const LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY =
+  'delta is not in current history';
+const LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED =
+  'commit changeRef could not verify claimed paths are clean: ';
+const LOCAL_STR_COMMIT_PATHS_DIRTY =
+  'commit changeRef claimed paths have uncommitted changes the ';
+const LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION =
+  'pinned receipt would not cover: commit or revert them first';
+const COMMIT_REF_PATTERN = /^commit:([0-9a-f]{40}):([0-9a-f]{40})$/u;
+
 // A measurement-only (repro-on-HEAD) changeRef names a COMMITTED tree-to-tree
 // delta `commit:<baseSha>:<headSha>` instead of a `diff:<path>` artifact, so a
 // quest whose implementation already landed can seal a measuring attempt
@@ -97,21 +114,6 @@ function gitIsAncestorShas(root, ancestor, descendant) {
     {cwd: root, encoding: TEXT_ENCODING}).status === 0;
 }
 
-const LOCAL_STR_GIT = 'git';
-const LOCAL_STR_MERGE_BASE = 'merge-base';
-const LOCAL_STR_IS_ANCESTOR = '--is-ancestor';
-const TEXT_ENCODING = 'utf8';
-const LOCAL_STR_GIT_STATUS_FAILED = 'git status failed';
-const LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR =
-  'commit changeRef head is not an ancestor of HEAD: the claimed ';
-const LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY =
-  'delta is not in current history';
-const LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED =
-  'commit changeRef could not verify claimed paths are clean: ';
-const LOCAL_STR_COMMIT_PATHS_DIRTY =
-  'commit changeRef claimed paths have uncommitted changes the ';
-const LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION =
-  'pinned receipt would not cover: commit or revert them first';
 const LOCAL_STR_COMMIT_RANGE_TOUCHES_NO_PATHS =
   'commit changeRef range touches no paths';
 const LOCAL_STR_SHA256_PREFIX = 'sha256:';
@@ -120,7 +122,6 @@ const LOCAL_STR_PROBLEM_WORKFLOW_SCOPE =
 const LOCAL_STR_PROBLEM_RUNTIME_SCOPE =
   'runtime changes must be recorded in a runtime Quest';
 const DIFF_PREFIX = 'diff:';
-const COMMIT_REF_PATTERN = /^commit:([0-9a-f]{40}):([0-9a-f]{40})$/u;
 const COMMIT_STORAGE_KIND = 'commit';
 const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';

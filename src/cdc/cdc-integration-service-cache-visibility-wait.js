@@ -136,26 +136,6 @@ class CDCIntegrationServiceCacheVisibilityWait {
       const timeoutBudget = createTimeoutBudget({
         configuredBudgetMs: timeoutMs,
       });
-      const cleanup = (
-        error = null,
-        result = buildSystemTableVisibilityResult(),
-      ) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        if (typeof cache.offCacheChange === 'function') {
-          cache.offCacheChange(listener);
-        }
-        if (timer) {
-          clearTimeout(timer);
-        }
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(result);
-      };
       const listener = (changedTable) => {
         if (changedTable !== tableName) {
           return;
@@ -287,6 +267,26 @@ class CDCIntegrationServiceCacheVisibilityWait {
           cleanup(timeoutError);
         })();
       }, cacheWaitBudgetMs);
+      function cleanup(
+        error = null,
+        result = buildSystemTableVisibilityResult(),
+      ) {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (typeof cache.offCacheChange === 'function') {
+          cache.offCacheChange(listener);
+        }
+        if (timer) {
+          clearTimeout(timer);
+        }
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(result);
+      }
       cache.onCacheChange(listener);
     });
   }

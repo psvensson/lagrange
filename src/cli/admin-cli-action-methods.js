@@ -441,9 +441,9 @@ const ADMIN_CLI_ACTION_METHODS = {
       this.forceRefresh();
     };
 
-    const wrappedHandler = (result) => {
+    function wrappedHandler(result) {
       resultHandler(result);
-    };
+    }
 
     timeoutId = setTimeout(() => {
       cleanup();

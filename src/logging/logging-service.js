@@ -484,15 +484,6 @@ class LoggingService {
       yieldMs,
     });
 
-    const scheduleNext = () => {
-      const timer = setTimeout(() => {
-        void processChunk();
-      }, yieldMs);
-      if (typeof timer.unref === 'function') {
-        timer.unref();
-      }
-    };
-
     const processChunk = async () => {
       try {
         let processedInChunk = 0;
@@ -529,6 +520,15 @@ class LoggingService {
         });
       }
     };
+
+    function scheduleNext() {
+      const timer = setTimeout(() => {
+        void processChunk();
+      }, yieldMs);
+      if (typeof timer.unref === 'function') {
+        timer.unref();
+      }
+    }
 
     scheduleNext();
   }

@@ -180,6 +180,9 @@ function combinePartialAggregateRows(partialRows, combineSpec, queryExecutor) {
   return internalRows.map((row) => projectFinalRow(combineSpec, row));
 }
 
+/** Hidden per-row list of star-projected raw column names. */
+const STAR_KEYS_PROPERTY = '__fanoutStarKeys';
+
 function buildInternalRow(combineSpec, groupRows) {
   const firstRow = groupRows[0] || {};
   const row = {};
@@ -224,9 +227,6 @@ function buildInternalRow(combineSpec, groupRows) {
   });
   return row;
 }
-
-/** Hidden per-row list of star-projected raw column names. */
-const STAR_KEYS_PROPERTY = '__fanoutStarKeys';
 
 function isInternalAlias(key) {
   return key.startsWith(PARTIAL_ALIAS.GROUP_KEY_PREFIX) ||

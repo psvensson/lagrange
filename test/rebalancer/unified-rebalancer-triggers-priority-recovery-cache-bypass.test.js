@@ -57,6 +57,32 @@ import {
   createMockReadinessService,
 } from './unified-rebalancer-test-support.js';
 
+const TEST_NUMBER = Object.freeze({
+  ZERO: 0,
+  ONE: 1,
+  READY_LEASE_DURATION_MS: 10000,
+  RETRY_AFTER_MS: 250,
+});
+const TEST_SCALAR = Object.freeze({
+  CONFIG_NODE_ID: 'test-node',
+  CONNECTION_STATE_CONNECTED: 'connected',
+  CONNECTION_STATE_READY: 'ready',
+  DEFAULT_NODE_ID: 'node-1',
+  DEFAULT_PARTITION_ID: 'partition-1',
+  DELIVERY_STATUS_COMPLETED: 'completed',
+  EXECUTED_OPERATION_ADD: 'add',
+  LOG_LEVEL_ERROR: 'error',
+  OPERATION_ID_PREFIX: 'op-',
+  PRIORITY_NON_LOCAL_MOVE_REASON: 'priority_non_local_move',
+  PRIORITY_PUBLICATION_ID: 'priority-publication',
+  SKIP_REASON_BUDGET_EXCEEDED: 'budget_exceeded',
+  TYPE_NUMBER: 'number',
+});
+const MOCK_DELIVERY_RESULT = Object.freeze({
+  acknowledged: true,
+  status: TEST_SCALAR.DELIVERY_STATUS_COMPLETED,
+});
+
 // Initialize test environment
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -282,31 +308,6 @@ const PRIORITY_SERIAL_WAIT_TRANSACTION_OPERATION_ID =
   'priority-serial-wait-transaction';
 const PRIORITY_RECOVERY_EXISTING_ORDINARY_OPERATION_ID =
   'priority-existing-ordinary-operation';
-const TEST_NUMBER = Object.freeze({
-  ZERO: 0,
-  ONE: 1,
-  READY_LEASE_DURATION_MS: 10000,
-  RETRY_AFTER_MS: 250,
-});
-const TEST_SCALAR = Object.freeze({
-  CONFIG_NODE_ID: 'test-node',
-  CONNECTION_STATE_CONNECTED: 'connected',
-  CONNECTION_STATE_READY: 'ready',
-  DEFAULT_NODE_ID: 'node-1',
-  DEFAULT_PARTITION_ID: 'partition-1',
-  DELIVERY_STATUS_COMPLETED: 'completed',
-  EXECUTED_OPERATION_ADD: 'add',
-  LOG_LEVEL_ERROR: 'error',
-  OPERATION_ID_PREFIX: 'op-',
-  PRIORITY_NON_LOCAL_MOVE_REASON: 'priority_non_local_move',
-  PRIORITY_PUBLICATION_ID: 'priority-publication',
-  SKIP_REASON_BUDGET_EXCEEDED: 'budget_exceeded',
-  TYPE_NUMBER: 'number',
-});
-const MOCK_DELIVERY_RESULT = Object.freeze({
-  acknowledged: true,
-  status: TEST_SCALAR.DELIVERY_STATUS_COMPLETED,
-});
 const TEST_NAME = Object.freeze({
   CONTAINED_ROUTER_PRESSURE:
     'checkRebalance lets blocked priority recovery continue under contained router pressure',

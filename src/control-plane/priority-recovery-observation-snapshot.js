@@ -17,6 +17,11 @@ import {LOCAL_EMPTY_LIST, PRIORITY_RECOVERY_CURRENT_SUMMARY_SCOPE, isRecord, nor
 import {buildPriorityRecoveryPartitionWitnesses} from './priority-recovery-observation-partition-witness.js';
 import {hasSelectedMissingPublishedEvidence, resolveObservationActiveGateContext, resolveObservationClosureField, resolveObservationPriorityPartitionSummary, resolveObservationPriorityRecoveryBlockedPartitionIds, resolveObservationPriorityRecoveryClosureWitness, resolveObservationPriorityRecoveryReasonCodes, resolveObservationPublicationConvergenceGate, resolveProjectionDiagnostics, resolveSelectedMissingPublishedEvidence, shouldApplyObservationClosureWitness} from './priority-recovery-observation-gate-resolution.js';
 
+const PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD = Object.freeze({
+  RECORD_ID: 'closureRecordId',
+  WITNESS_CLASS: 'closureWitnessClass',
+});
+
 function resolveObservationRecoveryProtocolState(
   publicationConvergence = null,
   publicationConvergenceGate = null,
@@ -360,11 +365,6 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
         0,
   });
 }
-
-const PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD = Object.freeze({
-  RECORD_ID: 'closureRecordId',
-  WITNESS_CLASS: 'closureWitnessClass',
-});
 
 export {
   buildPriorityRecoveryObservationSnapshot,

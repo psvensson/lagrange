@@ -50,7 +50,9 @@ function awaitDeliveryWithCancellation(deliveryPromise, signal) {
       signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
       settle(value);
     };
-    const onAbort = () => complete(reject, deliveryAbortReason(signal));
+    function onAbort() {
+      return complete(reject, deliveryAbortReason(signal));
+    }
     signal.addEventListener(
       TRANSPORT_EVENT.ABORT,
       onAbort,

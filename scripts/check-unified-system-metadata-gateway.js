@@ -40,6 +40,8 @@ const BOOTSTRAP_ONLY_RUNTIME_IMPORT_PATTERN =
 const PRESSURE_FAILURE_HELPER_PATTERN = /buildPressureAdmissionFailure\(/;
 const TRANSPORT_PRESSURE_SENSOR_PATTERN = /getOutboundPressureSummary\(/;
 
+const SYSTEM_TABLE_REFERENCE_PATTERN = buildSystemTableReferencePattern();
+
 const DIRECT_WRITER_ALLOWLIST = [
   'src/bootstrap/',
   'src/cdc/',
@@ -209,7 +211,6 @@ function buildSystemTableReferencePattern() {
   ].join(LOCAL_STR_PIPE), LOCAL_STR_I);
 }
 
-const SYSTEM_TABLE_REFERENCE_PATTERN = buildSystemTableReferencePattern();
 
 function collectFileViolations(relativePath, content) {
   const violations = [];

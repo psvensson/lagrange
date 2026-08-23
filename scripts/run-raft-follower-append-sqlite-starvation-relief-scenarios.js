@@ -10,6 +10,8 @@ import {
   computeSourceFingerprint,
 } from '../src/diagnostics/source-fingerprint.js';
 
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
 const SCENARIO = 'raft-follower-append-sqlite-starvation-relief';
 const GUARD_FILE = 'test/raft/liferaft-catchup-batching.test.js';
 const REPORT_DIRECTORY = 'test-output/reports';
@@ -594,7 +596,6 @@ function readLiveProfileEvidence(options) {
   };
 }
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 async function main(argv = applyIntrinsic(
   arraySliceIntrinsic,
   process.argv,

@@ -85,7 +85,7 @@ function armSnapshotOfferRouter(options) {
     return outcome;
   };
 
-  const peek = (data, isBinary) => {
+  function peek(data, isBinary) {
     if (terminal) {
       return;
     }
@@ -116,7 +116,7 @@ function armSnapshotOfferRouter(options) {
       raftGroupId,
       completion,
     }));
-  };
+  }
 
   connection.onMessage(peek);
   return Object.freeze({

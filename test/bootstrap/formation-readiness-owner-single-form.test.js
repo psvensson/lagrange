@@ -64,6 +64,7 @@ t.test(
     let now = 1000;
     let legacyPlacementReadCount = 0;
     let legacyOperationReadCount = 0;
+    let startupAuthority = null;
     const owner = buildFormationBarrierOwner({
       cache,
       now: () => now,
@@ -72,7 +73,7 @@ t.test(
         startupAuthority = withReady(startupAuthority, true);
       },
     });
-    let startupAuthority = withReady(
+    startupAuthority = withReady(
       owner.rebalanceCoordinator.controlPlaneReadinessService
         .getStartupAuthoritySnapshotSync(),
       false,

@@ -277,6 +277,7 @@ class MessageRouterConnectionLifecycleMethods {
       try {
         const ws = new WebSocket(connectionInfo.address);
         let connectionEstablished = false;
+        let connectTimeout = null;
         const clearConnectTimeout = () => {
           if (connectTimeout) {
             clearTimeout(connectTimeout);
@@ -298,7 +299,7 @@ class MessageRouterConnectionLifecycleMethods {
           30000,
           this.connectTimeoutMs + attempts * 5000,
         );
-        let connectTimeout = setTimeout(() => {
+        connectTimeout = setTimeout(() => {
           const error = new Error(
             `WebSocket connection timeout after ${currentConnectTimeoutMs}ms`,
           );

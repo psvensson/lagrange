@@ -195,6 +195,30 @@ function createDeterministicSimulator(options = {}) {
     });
   }
 
+  const api = Object.freeze({
+    get nowMs() {
+      return nowMs;
+    },
+    getEventLog,
+    heal,
+    killNode,
+    observe,
+    partition,
+    registerNode,
+    runUntilIdle,
+    schedule,
+    send,
+    snapshot,
+    startNode,
+    storage: Object.freeze({
+      append: storageAppend,
+      compareAndSwap: storageCompareAndSwap,
+      read: storageRead,
+      readLog: storageReadLog,
+      write: storageWrite,
+    }),
+  });
+
   function deliver(entry) {
     const event = entry.event;
     nowMs = entry.dueTimeMs;
@@ -333,30 +357,6 @@ function createDeterministicSimulator(options = {}) {
       storageLogs: Object.freeze(Object.fromEntries(storageLogs.entries())),
     });
   }
-
-  const api = Object.freeze({
-    get nowMs() {
-      return nowMs;
-    },
-    getEventLog,
-    heal,
-    killNode,
-    observe,
-    partition,
-    registerNode,
-    runUntilIdle,
-    schedule,
-    send,
-    snapshot,
-    startNode,
-    storage: Object.freeze({
-      append: storageAppend,
-      compareAndSwap: storageCompareAndSwap,
-      read: storageRead,
-      readLog: storageReadLog,
-      write: storageWrite,
-    }),
-  });
 
   return api;
 }

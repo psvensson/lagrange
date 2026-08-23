@@ -1,3 +1,8 @@
+import {
+  mergeWorkItemCompletionWaiters,
+  rejectWorkItemCompletionWaiters,
+} from './owner-key-reconcile-completion.js';
+
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
@@ -385,7 +390,3 @@ export {
   normalizeReconcileQueueRetryPolicy,
   wakeRetryWorkItem,
 };
-import {
-  mergeWorkItemCompletionWaiters,
-  rejectWorkItemCompletionWaiters,
-} from './owner-key-reconcile-completion.js';

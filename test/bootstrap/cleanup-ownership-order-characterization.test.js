@@ -405,26 +405,6 @@ test('join cleanup drains replica handler before CDC SQL teardown',
         events.push('messageRouter.shutdown');
       },
     };
-    const replicaHandler = {
-      unregisterFromRouter: (router) => {
-        t.equal(router, messageRouter,
-          'replica handler unregisters from the live message router');
-        events.push('replicaHandler.unregisterFromRouter');
-      },
-      shutdown: async () => {
-        t.equal(
-          cdcIntegrationService.sqlQueryEngine,
-          sqlQueryEngine,
-          'replica handler drains while CDC SQL query engine is attached',
-        );
-        t.equal(
-          delegates.getReplicaStateMachine(),
-          replicaStateMachine,
-          'replica handler drains while replica state machine is attached',
-        );
-        events.push('replicaHandler.shutdown');
-      },
-    };
     const delegates = {
       getLogger: () => silentLogger,
       getMessageGroupServices: () => new Map(),
@@ -464,6 +444,26 @@ test('join cleanup drains replica handler before CDC SQL teardown',
       },
       stopJoiningLifecycleOwners: () => {
         events.push('stopJoiningLifecycleOwners');
+      },
+    };
+    const replicaHandler = {
+      unregisterFromRouter: (router) => {
+        t.equal(router, messageRouter,
+          'replica handler unregisters from the live message router');
+        events.push('replicaHandler.unregisterFromRouter');
+      },
+      shutdown: async () => {
+        t.equal(
+          cdcIntegrationService.sqlQueryEngine,
+          sqlQueryEngine,
+          'replica handler drains while CDC SQL query engine is attached',
+        );
+        t.equal(
+          delegates.getReplicaStateMachine(),
+          replicaStateMachine,
+          'replica handler drains while replica state machine is attached',
+        );
+        events.push('replicaHandler.shutdown');
       },
     };
     delegates.replicaHandler = replicaHandler;

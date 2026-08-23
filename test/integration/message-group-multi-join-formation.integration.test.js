@@ -183,6 +183,7 @@ async function queryAdminWebSocket(port, sql) {
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let finalize = null;
     const socket = new WebSocket(endpoint);
     const timeoutId = setTimeout(() => {
       finalize(new Error(
@@ -193,7 +194,7 @@ async function queryAdminWebSocket(port, sql) {
       timeoutId.unref();
     }
 
-    const finalize = (error, rows = []) => {
+    finalize = (error, rows = []) => {
       if (settled) {
         return;
       }

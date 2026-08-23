@@ -150,9 +150,25 @@ async function buildGuidelineViolationReport(
   options,
   collectViolationsFromSource,
 ) {
+  // Each guideline owns its governed domain (options.governedRoots, falling
+  // back to the shared scan roots). Explicit relative path arguments outside
+  // that domain are dropped rather than scanned: the baselines are generated
+  // over the domain only, so an out-of-domain file (a root-level config, a
+  // test file for a src-only guideline) would surface findings that can
+  // never be baselined and hard-fail every staged commit that touches it.
+  // Absolute paths pass through untouched - out-of-tree invocation is a
+  // deliberate caller choice (fixture scans, scratch copies).
+  const governedRoots =
+    Array.isArray(options?.governedRoots) && options.governedRoots.length > 0 ?
+      options.governedRoots :
+      DEFAULT_SCAN_ROOTS;
+  const withinGovernedDomain = (candidatePath) =>
+    path.isAbsolute(candidatePath) ||
+    governedRoots.some((root) =>
+      candidatePath === root || candidatePath.startsWith(`${root}/`));
   const entryPaths = pathsToScan.length > 0 ?
-    pathsToScan :
-    [...DEFAULT_SCAN_ROOTS];
+    pathsToScan.filter(withinGovernedDomain) :
+    [...governedRoots];
   const fileSet = new Set();
   for (const entryPath of entryPaths) {
     for (const filePath of await collectJavaScriptFiles(entryPath)) {

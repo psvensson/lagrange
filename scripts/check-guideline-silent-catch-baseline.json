@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-16T16:51:02.874Z",
+  "generatedAt": "2026-08-23T07:57:42.459Z",
   "rawViolationCount": 98,
   "violations": [
     {
@@ -95,7 +95,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-runtime-methods.js",
-      "line": 323,
+      "line": 248,
       "column": 8,
       "functionName": "_getSystemTableCacheSafe",
       "kind": "silent_catch",
@@ -257,7 +257,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reads.js",
-      "line": 654,
+      "line": 656,
       "column": 6,
       "functionName": "_emitMembershipSwimDivergence",
       "kind": "silent_catch",
@@ -266,7 +266,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 741,
+      "line": 754,
       "column": 6,
       "functionName": "assertSingleMembershipPartition",
       "kind": "silent_catch",
@@ -446,7 +446,7 @@
     },
     {
       "filePath": "src/partition/partition-service-core-base.js",
-      "line": 717,
+      "line": 723,
       "column": 6,
       "functionName": "normalizeLeaderReplicaId",
       "kind": "silent_catch",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 833,
+      "line": 939,
       "column": 6,
       "functionName": "witnessCommandHlc",
       "kind": "silent_catch",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 713,
+      "line": 753,
       "column": 8,
       "functionName": "commitTransaction",
       "kind": "silent_catch",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 799,
+      "line": 839,
       "column": 10,
       "functionName": "rollbackTransaction",
       "kind": "silent_catch",
@@ -572,7 +572,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 114,
+      "line": 111,
       "column": 6,
       "functionName": "initLogger",
       "kind": "silent_catch",
@@ -581,7 +581,7 @@
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 476,
+      "line": 473,
       "column": 6,
       "functionName": "executeSelect",
       "kind": "silent_catch",
@@ -689,7 +689,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
-      "line": 430,
+      "line": 429,
       "column": 6,
       "functionName": "completeOperation",
       "kind": "silent_catch",
@@ -698,7 +698,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
-      "line": 591,
+      "line": 590,
       "column": 6,
       "functionName": "failOperation",
       "kind": "silent_catch",
@@ -860,7 +860,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 168,
+      "line": 173,
       "column": 4,
       "functionName": "clearRetryTimer",
       "kind": "silent_catch",
@@ -869,7 +869,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 208,
+      "line": 214,
       "column": 4,
       "functionName": "maybeUnrefTimer",
       "kind": "silent_catch",
@@ -878,7 +878,7 @@
     },
     {
       "filePath": "src/workflow/reconcile-queue-retry-ownership.js",
-      "line": 239,
+      "line": 245,
       "column": 8,
       "functionName": "scheduleRetryDrain",
       "kind": "silent_catch",

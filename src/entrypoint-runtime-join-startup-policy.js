@@ -30,14 +30,14 @@ function throwIfStartupAborted(signal) {
 function waitForJoinRetry(delayMs, signal) {
   throwIfStartupAborted(signal);
   return new Promise((resolve, reject) => {
-    const abort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
     const timer = setTimeout(() => {
       signal?.removeEventListener(LOCAL_STR_ABORT, abort);
       resolve();
     }, delayMs);
+    function abort() {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }
     signal?.addEventListener(LOCAL_STR_ABORT, abort, {once: true});
   });
 }
