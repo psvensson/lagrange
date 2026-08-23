@@ -27,15 +27,12 @@
 export const UNIT_TEST_TIMEOUT_MS = 2000;
 
 /**
- * Maximum duration for integration tests (30000ms = 30 seconds).
- *
- * Integration tests may take longer due to real Raft consensus,
- * multi-replica coordination, and network operations. However,
- * they must still complete within this limit.
- *
- * @see testing-guidelines.md - Integration Test Requirements
+ * INTEGRATION_TEST_TIMEOUT_MS (30s) was removed 2026-08-23: its value
+ * duplicated tap's own 30s default, and as a per-test {timeout:} option a
+ * constant reference is inert anyway (the harness's TAP_TIMEOUT lift scans
+ * literal digits only; see run-test-files.js). Files needing more than 30s
+ * declare a literal {timeout: NNNN} per the dt6 idiom.
  */
-export const INTEGRATION_TEST_TIMEOUT_MS = 30000;
 
 /**
  * Test-appropriate timeout for leadership election waits (1000ms = 1 second).
