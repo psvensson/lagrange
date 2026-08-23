@@ -1,0 +1,54 @@
+{
+  "id": "partition-leader-role-publication-visibility",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Single leadership authority (end state B, decided 2026-08-23): partitions.leader_node_id / message_groups.leader_node_id own leader identity per decision table leadership-authority-projection; every reader of the retired services.raft_role leader witness is migrated or deleted, the row-owner leader stamp is retired together with re-keying publishCanonicalLeaderNodeId, and the leader_node_id single writer is named.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "160e439fa6374b4a12b4ce73d9c55392cca1f15c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "partition-leader-role-publication-visibility",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-leader-role-publication-visibility-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "partition-leader-role-publication-visibility",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "notes": {
+    "fault": "test/integration/services-p1-self-referential-write.integration.test.js fails deterministically on qualified hardware: all 135 partition-service cache rows stuck raft_role=follower; only the message-group row shows leader. v0.1.0 passes; git bisect names b68b0e19a (2026-07-22, authoritative-row-mutation-helper retained-wake rewrite) as first bad commit.",
+    "mechanism": "services.raft_role has two writers with conflicting normalization and no interaction owner (doctrine s18 gap). (1) Role-mutation lane: partition-service-metadata-delivery-methods.js queueRoleUpdate collapses leader->follower (collapseLeaderToFollower:true, introduced 2026-03 \"wip stabilizing node join under load\"; message-group lane collapses identically). (2) Row-owner lane: PartitionServiceRowOwner.buildServiceRow stamps resolvePartitionRaftRole(service), which CAN be leader - but only fires at registration/activation. services-p1 activates BEFORE its 3-replica election completes, so the row is stamped follower and no lane ever upgrades it; mg-1 activation happens to run after its election, masking the same gap. At v0.1.0 the pre-rewrite helper let the row-owner leader survive; b68b0e19a changed which writer wins.",
+    "readers": "bootstrap-topology-snapshot-owner-published-views.js:198 (join topology snapshot filters partition leaders by services.raft_role - collapse-wedged cache hands joining nodes ZERO partition leaders), query/bootstrap-leader-selection.js:26, query/canonical-leader-routing.js:93.",
+    "fixOptions": "A (leaning): remove collapseLeaderToFollower from the partition role lane so the modern CAS/tenure-guarded helper publishes the true normalized role (candidate still collapses via projection table); retires the 2026-03 hack the helper rewrite obsoleted. B: re-trigger row-owner publication on LEADER_ELECTED (adds a second trigger to a foreign lane - ping-pong risk). C: migrate all readers to partitions.leader_node_id and retire leader semantics from services.raft_role for partitions (largest blast radius; mg asymmetry remains). MUST be adversarially verified against the March hack rationale and the canonical-leader tenure quests before any implementation.",
+    "evidence": "DIAG cache dump 2026-08-23 (137 followers / 1 leader); bisect log in session scratchpad.",
+    "decision": "2026-08-23 Peter: option B - finish the 2026-03 authority flip. Adversarial verifier + history archaeology + interaction-ownership map (session artifacts) all recorded: option A would be the return leg of a five-month ping-pong and require a parallel guard stack (forbidden dual authority).",
+    "releaseUnblock": "v0.1.1: test/integration/services-p1-self-referential-write.integration.test.js Phase 4 migrated from the retired 2026-01 contract (services.raft_role leader witness) to the authority contract (partitions.leader_node_id); decision table docs/specs/decision-tables/leadership-authority-projection.json committed alongside. No production semantics touched.",
+    "programScope": "Remaining program items (from the interaction map): (1) name the partitions.leader_node_id single writer and merge/contract the L-1 role-lane vs L-2 row-owner publication seam, re-keying publishCanonicalLeaderNodeId off live leadership; (2) migrate the two fallback-less readers first: bootstrap-join-admission-owner.js:718 getLeaderPartitionForTable and harness assertions-convergence-wait.js:283 SQL consistency extraction; (3) bootstrap-window liveness contract: routing overlay synthesizes leader_node_id FROM the raft_role stamp today (sql-query-engine-bootstrap-routing-overlay.js) - needs leader_node_id-published-before-first-routed-query or fail-closed; (4) migrate/delete the dormant leader-witness readers (canonical-leader-routing tier, publications tier-2, priority-recovery surrogate lane, topology-snapshot warn, backfill fallback, leader-readiness tie-break, move-planner role branch); (5) retire the row-owner raft_role leader stamp (partition + message-group) once (1)-(3) land; (6) wasm/meta exception stands until wasm services gain an owner row; (7) update pinned fixtures listed in the interaction map.",
+    "durableNullReproduction": "CONFIRMED pre-existing gap (v0.1.0 AND head 160e439fa, 2026-08-23): after single-node bootstrap with services-p1 elected, durable partitions.leader_node_id for services-p1 is NULL through a 3s poll (queryLocalAuthoritativeSystemTableRows on PARTITIONS); only the owner-local cache projection (seedLocalCanonicalLeaderNodeId) names the leader. The July theory fresh-cohort-to-canonical-leader-publication described this exact class; the parked movielens-local-leader-row-visibility quest is prior art. This makes program item (3) (bootstrap-window liveness) the highest-priority item: under end state B the authority column must actually be durably published. Reproduction recipe embedded as a comment in the services-p1 self-referential test Phase 4."
+  }
+}

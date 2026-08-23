@@ -293,16 +293,34 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
         t.ok(cdcIntegrationService, 'should have CDC integration service');
 
         // =========================================================================
-        // PHASE 4: Verify services-p1 leader already exists in cache
-        // This confirms the initial self-referential write during bootstrap worked
+        // PHASE 4: Verify services-p1 leadership is visible from bootstrap
+        // This confirms the initial self-referential write during bootstrap worked.
+        // Leadership authority contract (decision table
+        // leadership-authority-projection, 2026-08-23): partitions.leader_node_id
+        // owns partition leader identity; services.raft_role is role metadata
+        // whose published projection never carries leader for partitions, so the
+        // services rows are asserted present but not consulted for leadership.
         // =========================================================================
         const existingServices = systemTableCache.getAll(TABLES.SERVICES) || [];
-        const servicesP1LeaderInCache = existingServices.find((s) =>
-          s[COLUMN.PARTITION_ID] === 'services-p1' &&
-          s[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER,
+        const servicesP1Replicas = existingServices.filter((s) =>
+          s[COLUMN.PARTITION_ID] === 'services-p1',
         );
-        t.ok(servicesP1LeaderInCache,
-          'services-p1 leader should already exist in cache from bootstrap');
+        t.ok(servicesP1Replicas.length > 0,
+          'services-p1 replica rows should already exist in cache from bootstrap');
+        const servicesP1PartitionRow =
+          systemTableCache.get(TABLES.PARTITIONS, 'services-p1');
+        t.ok(servicesP1PartitionRow,
+          'services-p1 partitions row should already exist in cache from bootstrap');
+        t.equal(servicesP1PartitionRow?.[COLUMN.LEADER_NODE_ID], seedNodeId,
+          'services-p1 leadership should be published in partitions.leader_node_id');
+        // Known gap (quest partition-leader-role-publication-visibility,
+        // program item: bootstrap-window durable leader publication): the
+        // DURABLE partitions.leader_node_id stays null through single-node
+        // bootstrap on v0.1.0 and current HEAD alike - only the owner-local
+        // cache projection carries the leader. When that lane is fixed, this
+        // phase should additionally assert durable convergence via
+        // queryLocalAuthoritativeSystemTableRows(SYSTEM_TABLE_NAME.PARTITIONS,
+        // 'SELECT leader_node_id FROM partitions WHERE partition_id = ?').
 
         // =========================================================================
         // PHASE 5: Trigger a new self-referential write to services-p1

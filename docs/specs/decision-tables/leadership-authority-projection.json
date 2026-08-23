@@ -1,0 +1,149 @@
+{
+  "schema": "decision-table-v1",
+  "id": "leadership-authority-projection",
+  "owner": "src/raft/published-raft-role.js",
+  "boundary": "leadership_visibility",
+  "notes": "Records the 2026-08-23 owner decision (quest partition-leader-role-publication-visibility): finish the 2026-03 authority flip. partitions.leader_node_id (and message_groups.leader_node_id) own leader identity; services.raft_role is replica role METADATA whose published projection never carries leader for services that have an owner row. The 2026-01 contract (services.raft_role as sole leader source) is retired; readers still consuming the leader witness are migration debt tracked by the single-leadership-authority program, not license to re-open the leader lane. History: five interaction-blind fixes 2026-06..08 each perturbed this seam; this table is the interaction's owned contract (doctrine section 18). The wasm/meta lane publishes RAW roles today (no normalization is applied anywhere in src/wasm-service/); its rows are the only leadership source for meta-services until they gain an owner row.",
+  "inputs": [
+    {
+      "name": "serviceType",
+      "values": [
+        "partition",
+        "message_group",
+        "wasm_meta"
+      ]
+    },
+    {
+      "name": "trackedRole",
+      "values": [
+        "leader",
+        "follower",
+        "candidate",
+        "learner"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "publishedRaftRole",
+      "values": [
+        "leader",
+        "follower",
+        "candidate",
+        "learner"
+      ]
+    },
+    {
+      "name": "leaderIdentityAuthority",
+      "values": [
+        "partitions.leader_node_id",
+        "message_groups.leader_node_id",
+        "services.raft_role"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-leadership-authority",
+      "statement": "Each service type has exactly one durable leader-identity authority. For partition services it is partitions.leader_node_id (tenure-claimed, CAS-guarded, criticality-owned); for message-group services it is message_groups.leader_node_id (CAS-guarded; tenure claims and a criticality owner are program scope); services.raft_role never publishes leader for either. wasm/meta services have no owner row, so services.raft_role remains their declared authority by scoped exception until they gain one."
+    },
+    {
+      "id": "role-never-null",
+      "statement": "Collapse writes follower, never null or absence: voter-accounting gates (CL-021/CL-035 census) require a truthy voter role on every active replica row."
+    },
+    {
+      "id": "no-second-writer",
+      "statement": "The role-persistence lane is the sole writer of services.raft_role for its replica (control-plane Row Ownership Matrix). A row-creation owner stamping leader into raft_role is a shadow writer; retiring that stamp is program scope and must land together with re-keying publishCanonicalLeaderNodeId off live leadership instead of the stamped row."
+    },
+    {
+      "id": "reader-migration-not-reversal",
+      "statement": "A reader that needs leader identity and finds services.raft_role empty of leaders migrates to the authority column; it never motivates re-enabling the leader value in the projection (the 2026-03 collapse guards deferred stale-leader claims and stays)."
+    }
+  ],
+  "rules": [
+    {
+      "id": "partition-leader-collapses",
+      "when": {"serviceType": "partition", "trackedRole": "leader"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "partitions.leader_node_id"},
+      "reason": "A deferred stale leader claim in the background-deferrable role lane is a split-brain seed (2026-03 collapse rationale); leadership travels only through the guarded owner-row lane.",
+      "invariantRefs": ["single-leadership-authority", "role-never-null"]
+    },
+    {
+      "id": "partition-candidate-collapses",
+      "when": {"serviceType": "partition", "trackedRole": "candidate"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "partitions.leader_node_id"},
+      "reason": "A transient election state is not a distinct published role (published-raft-role projection table).",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "partition-follower-passes",
+      "when": {"serviceType": "partition", "trackedRole": "follower"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "partitions.leader_node_id"},
+      "reason": "Follower is the neutral published role; nothing to normalize.",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "partition-learner-passes",
+      "when": {"serviceType": "partition", "trackedRole": "learner"},
+      "outcome": {"publishedRaftRole": "learner", "leaderIdentityAuthority": "partitions.leader_node_id"},
+      "reason": "Learner must stay visible: the REPLACE remove-safety gate and voter census distinguish learner from voter roles (CL-035).",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "message-group-leader-collapses",
+      "when": {"serviceType": "message_group", "trackedRole": "leader"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "message_groups.leader_node_id"},
+      "reason": "Same split-brain-seed rationale as partitions; the group owner row carries leader identity.",
+      "invariantRefs": ["single-leadership-authority", "role-never-null"]
+    },
+    {
+      "id": "message-group-candidate-collapses",
+      "when": {"serviceType": "message_group", "trackedRole": "candidate"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "message_groups.leader_node_id"},
+      "reason": "A transient election state is not a distinct published role.",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "message-group-follower-passes",
+      "when": {"serviceType": "message_group", "trackedRole": "follower"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "message_groups.leader_node_id"},
+      "reason": "Follower is the neutral published role; nothing to normalize.",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "message-group-learner-passes",
+      "when": {"serviceType": "message_group", "trackedRole": "learner"},
+      "outcome": {"publishedRaftRole": "learner", "leaderIdentityAuthority": "message_groups.leader_node_id"},
+      "reason": "Learner visibility feeds the same census gates as partitions.",
+      "invariantRefs": ["role-never-null"]
+    },
+    {
+      "id": "wasm-leader-raw",
+      "when": {"serviceType": "wasm_meta", "trackedRole": "leader"},
+      "outcome": {"publishedRaftRole": "leader", "leaderIdentityAuthority": "services.raft_role"},
+      "reason": "Meta-services have no owner row; meta-service-router resolves leadership solely from services.raft_role, so the leader value must be published.",
+      "invariantRefs": ["single-leadership-authority"]
+    },
+    {
+      "id": "wasm-candidate-raw",
+      "when": {"serviceType": "wasm_meta", "trackedRole": "candidate"},
+      "outcome": {"publishedRaftRole": "candidate", "leaderIdentityAuthority": "services.raft_role"},
+      "reason": "Current reality, not aspiration: the wasm lane writes raw roles verbatim (no wasm-service code imports normalizePublishedRaftRole), so a candidate publishes as candidate. Routing the wasm lane through the projection owner (collapsing candidate to follower) is program scope.",
+      "invariantRefs": ["single-leadership-authority"]
+    },
+    {
+      "id": "wasm-follower-raw",
+      "when": {"serviceType": "wasm_meta", "trackedRole": "follower"},
+      "outcome": {"publishedRaftRole": "follower", "leaderIdentityAuthority": "services.raft_role"},
+      "reason": "Raw lane; follower publishes as follower.",
+      "invariantRefs": ["single-leadership-authority"]
+    },
+    {
+      "id": "wasm-learner-raw",
+      "when": {"serviceType": "wasm_meta", "trackedRole": "learner"},
+      "outcome": {"publishedRaftRole": "learner", "leaderIdentityAuthority": "services.raft_role"},
+      "reason": "Raw lane; learner publishes as learner.",
+      "invariantRefs": ["single-leadership-authority"]
+    }
+  ]
+}

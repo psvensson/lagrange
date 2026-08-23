@@ -1,0 +1,48 @@
+{
+  "id": "query-widening-hosted-assertion-flake",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "test/query/query-executor-executeonpartition-leader-resolution.test.js recovery-candidate widening subtests pass deterministically on constrained VMs (hosted full-gate) with the failure mechanism identified and fixed at its owner seam.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "160e439fa6374b4a12b4ce73d9c55392cca1f15c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "query-widening-hosted-assertion-flake",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "query-widening-hosted-assertion-flake-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "query-widening-hosted-assertion-flake",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "notes": {
+    "fault": "full-gate run 32632440994 (2026-08-23, head 160e439fa): subtests 1-3 of \"executeOnPartition widens recovery-owned system-table writes when the canonical leader service row is missing\" failed on the hosted runner (39ms, assertion mismatches, \"candidate widening should dispatch to a live replica instead of failing closed\"). Passes 64/64 locally on the same tree.",
+    "context": "Fifth distinct hosted-only full-gate failure in five runs (clock race, timer coalescing, TDZ, raft worker SIGSEGV, this). Test seeds fixed logical timestamps (now=240000, LAST_HEARTBEAT=now-5000), so the fragility is NOT a straightforward real-clock freshness window; suspect an async ordering or scheduler-dependent race in the widening path or test harness. Needs mechanism identification before any fix.",
+    "related": "latent-runner-red-static-closure quest (timer-fragile census); ci-vm-admission-baseline epic (constrained scenario lane is the right repro instrument)."
+  }
+}
