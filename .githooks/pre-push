@@ -151,5 +151,10 @@ else
   # aborts; fail-open where lm-sensors is absent (CI runners).
   node scripts/checks/wait-for-thermal-headroom.js
   echo "pre-push: static checks green — running the post-push test corpus (long)"
-  npm run -s test:gate:postpush
+  # Retry-failed-once (same owner policy as the CI lanes, 2026-08-24): a
+  # single intermittent among ~2000 files must not block a push; a failed
+  # file reruns standalone once, reported never hidden, and a standalone
+  # failure stays red (run-test-files.js owns the mechanics and the 5-file
+  # breakage cap).
+  LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi
