@@ -3,7 +3,8 @@
 # Repository configuration:
 #   variable DOCKERHUB_USERNAME — Docker Hub username (for example psvensson)
 #   secret   DOCKERHUB_TOKEN    — Docker Hub PAT with Read/Write scope
-#   secret   NPM_TOKEN          — bootstrap only; remove after trusted publishing
+#   npm publishing uses Trusted Publishing (OIDC) — configured on npmjs.com
+#   2026-08-24 for psvensson/lagrange release.yml; no npm token or secret.
 name: release
 
 on:
@@ -98,7 +99,9 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
-          registry-url: "https://registry.npmjs.org"
+          # No registry-url: it writes an .npmrc referencing NODE_AUTH_TOKEN,
+          # which is unset under trusted publishing and would fail npm config
+          # resolution. The publish step passes --registry explicitly.
 
       # Fail before the expensive gate if the tag, package version, or changelog
       # section disagree. The rendered files are reused by the final publish steps.
@@ -245,12 +248,12 @@ jobs:
           test -f "$NPM_TARBALL"
           sha256sum "$NPM_TARBALL" >> dist/SHA256SUMS
 
-      # Trusted publishing uses the job's OIDC identity. NPM_TOKEN is accepted
-      # only for the one-time first publication before npm can bind the trusted
-      # publisher; remove the secret immediately after that bootstrap release.
+      # Trusted publishing: npm >=11.5 exchanges the job's OIDC identity
+      # (id-token: write) for a publish credential bound to the trusted
+      # publisher configured on npmjs.com. No token env: a configured token
+      # would take precedence over OIDC and defeat the binding. Provenance
+      # (publishConfig.provenance) is generated natively on this path.
       - name: Publish npm package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
