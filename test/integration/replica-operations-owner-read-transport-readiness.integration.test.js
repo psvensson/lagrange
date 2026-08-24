@@ -116,8 +116,16 @@ test('replica_operations owner-read defers until local query transport is ready'
             decisionDimension:
               CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
           });
-        return deferredParticipation.reasonCode ===
-          CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY;
+        // Poll on the owner's real DECISION, not reasonCode alone: the
+        // planning snapshot owner's transitional deferred wrapper unions the
+        // stored snapshot's reason codes ahead of refresh-pending, so under
+        // source churn (slow CI hardware) the wrapper satisfies a
+        // reasonCode-only predicate while carrying decision 'blocked' and a
+        // nulled retry hint. The second poll below already uses decision.
+        return deferredParticipation.decision ===
+            CONTROL_PLANE_PARTICIPATION_DECISION.DEFER &&
+          deferredParticipation.reasonCode ===
+            CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY;
       }, 10000, 50);
       t.equal(
         deferredParticipation.decision,
