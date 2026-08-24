@@ -1432,7 +1432,15 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
       seedNodeAddress: 'http://localhost:8080',
       config: {
         httpTimeoutMs: 100,
-        leadershipWaitTimeoutMs: 400,
+        // Success-path retry tests: the wait budget is headroom, not the
+        // scenario (mocked I/O returns instantly; the tests assert attempt
+        // counts). The previous 200-400ms REAL-clock budgets raced event-loop
+        // stalls under load - the budget could expire between the first
+        // mocked failure and the retry check, so the retry never happened
+        // (~50% flake on a contended box, census quest
+        // latent-runner-red-static-closure). Budget-exhaustion tests keep
+        // tight budgets: the small value IS their scenario.
+        leadershipWaitTimeoutMs: 30000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 10,
       },
@@ -1529,7 +1537,7 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
       seedNodeAddress: 'http://localhost:8080',
       config: {
         httpTimeoutMs: 10000,
-        leadershipWaitTimeoutMs: 400,
+        leadershipWaitTimeoutMs: 30000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 10,
       },
@@ -1568,7 +1576,7 @@ test('NodeJoiningService - retries register-service request after timeout',
       seedNodeAddress: 'http://localhost:8080',
       config: {
         httpTimeoutMs: 1000,
-        leadershipWaitTimeoutMs: 200,
+        leadershipWaitTimeoutMs: 30000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 10,
         leadershipWaitBackoffMultiplier: 2,
@@ -1612,7 +1620,7 @@ test('NodeJoiningService - retries register-service on cache visibility timeout 
       seedNodeAddress: 'http://localhost:8080',
       config: {
         httpTimeoutMs: 1000,
-        leadershipWaitTimeoutMs: 200,
+        leadershipWaitTimeoutMs: 30000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 10,
         leadershipWaitBackoffMultiplier: 2,

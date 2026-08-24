@@ -118,9 +118,23 @@ test('waitForStartupConvergence re-evaluates on poll cadence without signals',
   });
 
 test('waitForStartupConvergence reports timeout context', async (t) => {
+  // Deterministic virtual clock: with the real clock, the no_progress
+  // classification requires the first evaluation to land in the same
+  // millisecond as startMs (the gate stamps its baseline signature
+  // observation as "progress"), so the assertion raced wall-clock
+  // granularity and flipped once per few full-corpus runs (census quest
+  // latent-runner-red-static-closure). Virtual time only advances when
+  // the gate waits, so the first evaluation is always at t=0.
+  let virtualNowMs = 0;
   try {
     await waitForStartupConvergence({
       timeoutMs: 20,
+      now: () => virtualNowMs,
+      setTimeoutFn: (fn, waitMs) => {
+        virtualNowMs += waitMs;
+        return setTimeout(fn, 0);
+      },
+      clearTimeoutFn: clearTimeout,
       evaluate: () => ({
         ready: false,
         reason: 'still_blocked',
