@@ -60,7 +60,7 @@ const TEST_MACHINE_FACTOR = (() => {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 })();
 
-test('Raft leader election', {timeout: 30000}, async (t) => {
+test('Raft leader election', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

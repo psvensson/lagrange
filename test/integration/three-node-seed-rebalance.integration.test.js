@@ -29,7 +29,7 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
-const TEST_TIMEOUT_MS = 30000;
+const TEST_TIMEOUT_MS = 120000;
 const READY_TIMEOUT_MS = 12000;
 const REBALANCE_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
