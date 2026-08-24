@@ -28,6 +28,8 @@ set -euo pipefail
 PUSHING_MAIN=0
 SAW_REF=0
 PUSHED_SHA=""
+ALL_PROVEN_TAG_REFS=1
+ZERO_SHA="0000000000000000000000000000000000000000"
 while read -r _local_ref local_sha remote_ref _remote_sha; do
   SAW_REF=1
   if [ -z "${PUSHED_SHA}" ]; then
@@ -36,9 +38,35 @@ while read -r _local_ref local_sha remote_ref _remote_sha; do
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
   fi
+  case "${remote_ref}" in
+    refs/tags/*)
+      if [ "${local_sha}" != "${ZERO_SHA}" ]; then
+        # Resolve annotated tags to the commit they point at.
+        tag_commit="$(git rev-parse --verify --quiet "${local_sha}^{commit}"           || echo "${local_sha}")"
+        git fetch origin main --quiet 2>/dev/null || true
+        if ! git merge-base --is-ancestor "${tag_commit}"           "$(git rev-parse origin/main)" 2>/dev/null; then
+          ALL_PROVEN_TAG_REFS=0
+        fi
+      fi
+      ;;
+    *)
+      ALL_PROVEN_TAG_REFS=0
+      ;;
+  esac
 done
 if [ "${SAW_REF}" = "0" ]; then
   PUSHING_MAIN=1
+  ALL_PROVEN_TAG_REFS=0
+fi
+
+# A push consisting only of tags whose target commits already sit on
+# origin/main (or tag deletions) introduces NO new tree: everything a tag
+# points at was proven when its commit was pushed. Re-running the corpus
+# for the release-tag push added ~15 min and two terminal timeouts on
+# 2026-08-23; skip the gauntlet entirely for that case.
+if [ "${ALL_PROVEN_TAG_REFS}" = "1" ]; then
+  echo "pre-push: tag-only push of commits already on origin/main - skipping gate"
+  exit 0
 fi
 
 # Red-main guard: refuse to push while the latest completed CI run on main is
