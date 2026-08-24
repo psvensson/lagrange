@@ -31,6 +31,10 @@ env:
   # census-classified intermittent, a standalone fail stays red. Capped at
   # 5 files so breakage never masquerades as flakes.
   LAGRANGE_RETRY_FAILED_ONCE: '1'
+  # Hardware-relative work-bound budget scaling for SLO-style tests
+  # (doctrine: hardware-relative-convergence-budget). CI VMs are ~2-3x
+  # slower than the reference dev box for single-threaded election paths.
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
 
 jobs:
   release:

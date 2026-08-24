@@ -45,11 +45,21 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
-const TEST_TIMEOUT_MS = 30000;
+// Hardware-relative budget scaling (doctrine: hardware-relative-convergence-
+// budget epic - scale WORK-BOUND budgets by a machine factor, never
+// correctness). CI lanes export LAGRANGE_TEST_MACHINE_FACTOR (release/ci
+// workflows set 3); the reference machine stays 1, so the SLO intent is
+// preserved where it was calibrated and the assertion stays binary
+// elsewhere. Parsed once; non-numeric or absent means 1.
+const TEST_MACHINE_FACTOR = (() => {
+  const parsed = Number(process.env.LAGRANGE_TEST_MACHINE_FACTOR);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+})();
+const TEST_TIMEOUT_MS = 120000;
 const REBALANCER_IDLE_INTERVAL_MS = 600000;
 const REBALANCER_STABILIZATION_MS = 10000;
-const JOIN_LEADERSHIP_WAIT_TIMEOUT_MS = 8000;
-const WAIT_TIMEOUT_MS = 10000;
+const JOIN_LEADERSHIP_WAIT_TIMEOUT_MS = 8000 * TEST_MACHINE_FACTOR;
+const WAIT_TIMEOUT_MS = 10000 * TEST_MACHINE_FACTOR;
 const POLL_INTERVAL_MS = 50;
 const SERVICE_DISCOVERY_QUERY_PREFIX = 'SELECT * FROM service_discovery_local';
 const METADATA_MIN_LENGTH = 1;

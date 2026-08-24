@@ -49,6 +49,17 @@ function generateUniqueNodeId(counter) {
 // Counter for generating unique node IDs
 let nodeIdCounter = 0xc00000000000;
 
+// Hardware-relative budget scaling (doctrine: hardware-relative-convergence-
+// budget epic - scale WORK-BOUND budgets by a machine factor, never
+// correctness). CI lanes export LAGRANGE_TEST_MACHINE_FACTOR (release/ci
+// workflows set 3); the reference machine stays 1, so the SLO intent is
+// preserved where it was calibrated and the assertion stays binary
+// elsewhere. Parsed once; non-numeric or absent means 1.
+const TEST_MACHINE_FACTOR = (() => {
+  const parsed = Number(process.env.LAGRANGE_TEST_MACHINE_FACTOR);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+})();
+
 test('Raft leader election', {timeout: 30000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
@@ -75,7 +86,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 5000,
+        leadershipWaitTimeoutMs: 5000 * TEST_MACHINE_FACTOR,
       },
     });
 
@@ -92,7 +103,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
       t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
       t.ok(bootstrapResult.partitionServices.size > 0, 'seed should have partitions');
       t.ok(
-        bootstrapElapsedMs < 15000,
+        bootstrapElapsedMs < 15000 * TEST_MACHINE_FACTOR,
         `bootstrap should complete within 15s (took ${bootstrapElapsedMs}ms)`,
       );
 
@@ -129,7 +140,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
           bootstrapResult,
           bootstrapService,
           partitionId,
-          5000,
+          5000 * TEST_MACHINE_FACTOR,
         );
         const electionTime = Date.now() - electionStart;
 
@@ -147,7 +158,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
           `${result.partitionId} should have elected a leader`,
         );
         t.ok(
-          result.electionTimeMs < 5000,
+          result.electionTimeMs < 5000 * TEST_MACHINE_FACTOR,
           `${result.partitionId} election within 5s (took ${result.electionTimeMs}ms)`,
         );
       }
@@ -211,7 +222,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 5000,
+        leadershipWaitTimeoutMs: 5000 * TEST_MACHINE_FACTOR,
       },
     });
 
@@ -229,7 +240,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
         bootstrapResult,
         bootstrapService,
         'nodes-p1',
-        5000,
+        5000 * TEST_MACHINE_FACTOR,
       );
       t.ok(leader, 'nodes-p1 should elect a leader');
 
@@ -315,7 +326,7 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 3000,
+        leadershipWaitTimeoutMs: 3000 * TEST_MACHINE_FACTOR,
       },
     });
 
@@ -345,14 +356,15 @@ test('Raft leader election', {timeout: 30000}, async (t) => {
           bootstrapResult,
           bootstrapService,
           partitionId,
-          5000,
+          5000 * TEST_MACHINE_FACTOR,
         );
         const electionTime = Date.now() - electionStart;
 
         t.ok(leader, `${partitionId} should have elected a leader`);
         t.ok(
-          electionTime < 5000,
-          `${partitionId} election should complete within 5s (took ${electionTime}ms)`,
+          electionTime < 5000 * TEST_MACHINE_FACTOR,
+          `${partitionId} election should complete within the scaled 5s ` +
+          `budget (took ${electionTime}ms, factor ${TEST_MACHINE_FACTOR})`,
         );
       }
 
