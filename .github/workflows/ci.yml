@@ -40,6 +40,11 @@ on:
 # ci-vm-admission-baseline). The 600s per-file kill still bounds hangs.
 env:
   TAP_TIMEOUT: '120'
+  # Retry-failed-once (owner policy 2026-08-23): a failed file is rerun
+  # standalone once by run-test-files.js; a standalone pass is a reported,
+  # census-classified intermittent, a standalone fail stays red. Capped at
+  # 5 files so breakage never masquerades as flakes.
+  LAGRANGE_RETRY_FAILED_ONCE: '1'
 
 permissions:
   contents: read

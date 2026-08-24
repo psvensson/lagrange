@@ -22,6 +22,23 @@ const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
 const FAILURE_EXIT_CODE = 1;
 const SUCCESS_EXIT_CODE = 0;
+// Lane-scoped retry-failed-once policy (owner decision 2026-08-23, recorded
+// with the release-certificate policy): a CI lane may export
+// LAGRANGE_RETRY_FAILED_ONCE=1 so each failed file is rerun standalone
+// exactly once - a standalone pass classifies the failure as an intrinsic
+// intermittent (census-quest scope) and is REPORTED, never hidden; a
+// standalone failure is a regression and stays red. The cap keeps the
+// policy honest: a run with many failed files is breakage, not a flake
+// profile, and is never retried.
+const RETRY_FAILED_ONCE_ENV = 'LAGRANGE_RETRY_FAILED_ONCE';
+const RETRY_FAILED_ONCE_ENABLED = '1';
+const RETRY_FAILED_ONCE_MAX_FILES = 5;
+const RETRY_FAILED_ONCE_BANNER_SUFFIX =
+  ' failed file(s) standalone (census-classified, never hidden)\n';
+const RETRY_FAILED_ONCE_OUTCOME = Object.freeze({
+  FAIL: 'fail',
+  PASS: 'pass',
+});
 const PROCESS_KILL_SIGNAL = 'SIGKILL';
 const TAP_RESULT_SUFFIX = '.tap';
 const STDERR_RESULT_SUFFIX = '.stderr';
@@ -449,7 +466,30 @@ async function main() {
     `# test-files total=${summary.total} pass=${summary.passed} ` +
     `fail=${summary.failed} assertions=${summary.assertions}\n`,
   );
-  return summary.ok ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
+  if (summary.ok) return SUCCESS_EXIT_CODE;
+  const retryOnce =
+    process.env[RETRY_FAILED_ONCE_ENV] === RETRY_FAILED_ONCE_ENABLED &&
+    summary.failed > 0 &&
+    summary.failed <= RETRY_FAILED_ONCE_MAX_FILES &&
+    summary.results.length > 0;
+  if (!retryOnce) return FAILURE_EXIT_CODE;
+  const failedFiles = summary.results
+    .filter((result) => !result.ok)
+    .map((result) => result.file);
+  process.stdout.write(
+    `# retry-failed-once: rerunning ${failedFiles.length}` +
+    RETRY_FAILED_ONCE_BANNER_SUFFIX,
+  );
+  let retriedAllGreen = true;
+  for (const file of failedFiles) {
+    const retried = await runTestFile(file, options);
+    const retriedOutcome = retried.ok ?
+      RETRY_FAILED_ONCE_OUTCOME.PASS :
+      RETRY_FAILED_ONCE_OUTCOME.FAIL;
+    process.stdout.write(`# retried-once ${retriedOutcome} ${file}\n`);
+    if (!retried.ok) retriedAllGreen = false;
+  }
+  return retriedAllGreen ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
 }
 
 const IS_MAIN = path.resolve(process.argv[1] || '') === fileURLToPath(import.meta.url);
