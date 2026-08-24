@@ -141,9 +141,18 @@ jobs:
         timeout-minutes: 30
         run: |
           set -euo pipefail
+          # gh (GitHub CLI) is preinstalled on hosted runners but NOT on the
+          # self-hosted GCP VM; the docker-push tag guard and the release
+          # publish step both spawn it (attempt 16 died exit-127 without it).
+          if ! command -v gh > /dev/null; then
+            curl -fsSL --connect-timeout 20 --max-time 60 --retry 2 --retry-max-time 60 https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+              | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+              | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          fi
           sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
           sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
-            ripgrep jq default-jre-headless postgresql-client curl
+            ripgrep jq default-jre-headless postgresql-client curl gh
           HELM_VERSION=v3.16.3
           HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
           cd "$RUNNER_TEMP"
