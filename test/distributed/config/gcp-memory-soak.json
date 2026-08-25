@@ -1,6 +1,6 @@
 {
   "size": 7,
-  "nodesPerHost": 4,
+  "nodesPerHost": 1,
   "docker": {},
   "image": "distributed-db:test",
   "timeouts": {
@@ -54,8 +54,8 @@
   "gcp": {
     "project": "something-2e584",
     "zone": "us-central1-a",
-    "machineType": "e2-standard-8",
-    "vmCount": 2,
+    "machineType": "e2-standard-4",
+    "vmCount": 7,
     "preemptible": false
   }
 }
