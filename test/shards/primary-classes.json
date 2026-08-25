@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1823,
+    "unit": 1824,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2074,
-  "digest": "fnv1a32-5b4e588d",
+  "censusSize": 2075,
+  "digest": "fnv1a32-cad8119a",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -549,6 +549,7 @@
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "unit",
     "test/control-plane/readiness-owner-authority-contract.test.js": "unit",
     "test/control-plane/readiness-per-change-reuse.test.js": "unit",
+    "test/control-plane/readiness-planning-diagnostics-retention.test.js": "unit",
     "test/control-plane/readiness-planning-liveness-veto.test.js": "unit",
     "test/control-plane/readiness-planning-publication-atomicity.test.js": "unit",
     "test/control-plane/readiness-planning-read-amplification.test.js": "unit",

@@ -7,7 +7,7 @@
     "bootstrap-membership": 240,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 164,
+    "control-plane": 165,
     "convergence-topology": 69,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2074,
-  "digest": "fnv1a32-2a284811",
+  "censusSize": 2075,
+  "digest": "fnv1a32-6c70392a",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
     "test/address/address-manager.test.js": "transport-messaging",
@@ -566,6 +566,7 @@
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "control-plane",
     "test/control-plane/readiness-owner-authority-contract.test.js": "control-plane",
     "test/control-plane/readiness-per-change-reuse.test.js": "control-plane",
+    "test/control-plane/readiness-planning-diagnostics-retention.test.js": "control-plane",
     "test/control-plane/readiness-planning-liveness-veto.test.js": "control-plane",
     "test/control-plane/readiness-planning-publication-atomicity.test.js": "control-plane",
     "test/control-plane/readiness-planning-read-amplification.test.js": "control-plane",

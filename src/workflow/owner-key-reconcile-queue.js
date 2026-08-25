@@ -42,9 +42,8 @@ import {
   resolveWorkItemCompletionWaiters,
 } from './owner-key-reconcile-completion.js';
 import {
-  appendSnapshotValue,
   buildReconcileQueueDiagnostics,
-  defineSnapshotValue,
+  recordStaleFenceDiagnosticSamples,
   snapshotMapEntries,
   snapshotSetValues,
 } from './owner-key-reconcile-queue-snapshots.js';
@@ -148,6 +147,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.fenceTokens = new MapConstructor();
     /** @type {Array<Object>} Recent stale-claim diagnostic entries. */
     this.staleClaims = [];
+    this._staleClaimIndex = 0;
     this.draining = false;
     this.stopped = false;
 
@@ -361,9 +361,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       currentToken: currentFence,
       timestamp: this.now(),
     };
-    appendSnapshotValue(this.staleClaims, diagnostic);
     this._staleFenceRejectionCount++;
-    this._pushStaleFenceSample(diagnostic);
+    recordStaleFenceDiagnosticSamples(
+      this,
+      diagnostic,
+      STALE_FENCE_SAMPLE_CAPACITY,
+    );
     this.emit(RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_ENQUEUE, diagnostic);
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, diagnostic);
     rejectStaleFenceCompletionWaiter(completionWaiter);
@@ -572,9 +575,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       reasons: snapshotSetValues(item.reasons),
       timestamp: this.now(),
     };
-    appendSnapshotValue(this.staleClaims, diagnostic);
     this._staleInFlightDeferralCount++;
-    this._pushStaleFenceSample(diagnostic);
+    recordStaleFenceDiagnosticSamples(
+      this,
+      diagnostic,
+      STALE_FENCE_SAMPLE_CAPACITY,
+    );
     this.emit(
       RECONCILE_QUEUE_EVENT.STALE_CLAIM_DEFERRED,
       diagnostic,
@@ -634,9 +640,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       currentToken,
       timestamp: this.now(),
     };
-    appendSnapshotValue(this.staleClaims, diagnostic);
     this._staleFenceRejectionCount++;
-    this._pushStaleFenceSample(diagnostic);
+    recordStaleFenceDiagnosticSamples(
+      this,
+      diagnostic,
+      STALE_FENCE_SAMPLE_CAPACITY,
+    );
     this.emit(
       RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_DRAIN,
       diagnostic,
@@ -650,28 +659,6 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, {
         ...diagnostic,
       });
-  }
-
-  /**
-   * Push a diagnostic sample into the bounded ring buffer.
-   * When the buffer reaches capacity, the oldest entry is
-   * overwritten.
-   *
-   * @param {Object} sample - Diagnostic event payload.
-   * @private
-   */
-  _pushStaleFenceSample(sample) {
-    if (this._staleFenceSamples.length < STALE_FENCE_SAMPLE_CAPACITY) {
-      appendSnapshotValue(this._staleFenceSamples, sample);
-    } else {
-      defineSnapshotValue(
-        this._staleFenceSamples,
-        this._staleFenceSampleIndex,
-        sample,
-      );
-    }
-    this._staleFenceSampleIndex =
-      (this._staleFenceSampleIndex + 1) % STALE_FENCE_SAMPLE_CAPACITY;
   }
 
   /**
@@ -782,6 +769,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     setClear(this.inFlight);
     mapClear(this.inFlightItems);
     mapClear(this.fenceTokens);
+    this.staleClaims = [];
+    this._staleClaimIndex = 0;
+    this._staleFenceSamples = [];
+    this._staleFenceSampleIndex = 0;
+    this._retryableDrainFailureSamples = [];
+    this._retryableDrainFailureSampleIndex = 0;
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {
       queue: this.name,
     });

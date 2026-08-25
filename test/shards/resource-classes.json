@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2057,
+    "ordinary": 2058,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2074,
-  "digest": "fnv1a32-1a4069b1",
+  "censusSize": 2075,
+  "digest": "fnv1a32-f50f62d6",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -548,6 +548,7 @@
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "ordinary",
     "test/control-plane/readiness-owner-authority-contract.test.js": "ordinary",
     "test/control-plane/readiness-per-change-reuse.test.js": "ordinary",
+    "test/control-plane/readiness-planning-diagnostics-retention.test.js": "ordinary",
     "test/control-plane/readiness-planning-liveness-veto.test.js": "ordinary",
     "test/control-plane/readiness-planning-publication-atomicity.test.js": "ordinary",
     "test/control-plane/readiness-planning-read-amplification.test.js": "ordinary",

@@ -31,12 +31,15 @@ import {
   readOwnerKey,
 } from './readiness-planning-formation-source.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
+import {ReadinessPlanningDiagnosticRetention} from
+  './readiness-planning-diagnostic-retention.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const mathMax = Math.max;
 const MapConstructor = Map;
 const mapDelete = Function.call.bind(Map.prototype.delete);
+const mapClear = Function.call.bind(Map.prototype.clear);
 const mapForEach = Function.call.bind(Map.prototype.forEach);
 const mapGet = Function.call.bind(Map.prototype.get);
 const mapHas = Function.call.bind(Map.prototype.has);
@@ -98,8 +101,7 @@ class ReadinessPlanningSnapshotOwner {
     this.logicalOwnerKeyByQueueOwnerKey = new MapConstructor();
     this.initialBootstrapConsumed = false;
     this.buildCount = 0;
-    this.buildOwnerKeys = [];
-    this.buildsByToken = new MapConstructor();
+    this.diagnosticRetention = new ReadinessPlanningDiagnosticRetention();
     this.snapshotListeners = new SetConstructor();
     this.snapshotListenerFailureCount = 0;
     // Lazily baselined on the first enqueue: an eager read here performs a
@@ -653,12 +655,7 @@ class ReadinessPlanningSnapshotOwner {
       readinessPlanningOwnerBuild: true,
     });
     this.buildCount++;
-    appendArrayValue(this.buildOwnerKeys, ownerKey);
-    mapSet(
-      this.buildsByToken,
-      capturedToken.tokenKey,
-      (mapGet(this.buildsByToken, capturedToken.tokenKey) || 0) + 1,
-    );
+    this.diagnosticRetention.record(ownerKey, capturedToken.tokenKey);
     const result = this.publishCompleted(
       ownerKey,
       snapshot,
@@ -691,10 +688,6 @@ class ReadinessPlanningSnapshotOwner {
       );
       appendArrayValue(completedOwnerKeys, ownerKey);
     });
-    const buildsByToken = objectCreate(null);
-    mapForEach(this.buildsByToken, (buildCount, tokenKey) => {
-      defineRecordValue(buildsByToken, tokenKey, buildCount);
-    });
     return objectFreeze({
       currentToken: this.captureToken(),
       completedOwnerKeys: objectFreeze(completedOwnerKeys),
@@ -707,12 +700,11 @@ class ReadinessPlanningSnapshotOwner {
         readLogicalQueueOwnerKey,
       )),
       buildCount: this.buildCount,
-      buildOwnerKeys: objectFreeze(copyDenseOwnDataArray(this.buildOwnerKeys)),
+      ...this.diagnosticRetention.snapshot(),
       snapshotListenerFailureCount: this.snapshotListenerFailureCount,
       completedTokenStatusByOwnerKey: objectFreeze(
         completedTokenStatusByOwnerKey,
       ),
-      buildsByToken: objectFreeze(buildsByToken),
       maxItemsPerDrain: queue.maxItemsPerDrain,
       retryingOwnerKeys: objectFreeze(
         arrayMap(
@@ -735,6 +727,15 @@ class ReadinessPlanningSnapshotOwner {
   shutdown() {
     this.queue.shutdown();
     setClear(this.snapshotListeners);
+    mapClear(this.completedSnapshotsByOwnerKey);
+    mapClear(this.completedSnapshotsByOwnerAndBuildKey);
+    mapClear(this.buildOptionsByOwnerAndBuildKey);
+    mapClear(this.logicalOwnerKeyByQueueOwnerKey);
+    if (this.deferredSnapshotMemoByOwnerKey) {
+      mapClear(this.deferredSnapshotMemoByOwnerKey);
+    }
+    setClear(this.prioritizedFormationOwnerKeys);
+    this.diagnosticRetention.clear();
   }
 }
 

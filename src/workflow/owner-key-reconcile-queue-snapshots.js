@@ -20,6 +20,30 @@ function appendSnapshotValue(snapshot, value) {
   defineSnapshotValue(snapshot, snapshot.length, value);
 }
 
+function appendBoundedSnapshotValue(snapshot, value, index, capacity) {
+  if (snapshot.length < capacity) {
+    appendSnapshotValue(snapshot, value);
+  } else {
+    defineSnapshotValue(snapshot, index, value);
+  }
+  return (index + 1) % capacity;
+}
+
+function recordStaleFenceDiagnosticSamples(queue, sample, capacity) {
+  queue._staleClaimIndex = appendBoundedSnapshotValue(
+    queue.staleClaims,
+    sample,
+    queue._staleClaimIndex,
+    capacity,
+  );
+  queue._staleFenceSampleIndex = appendBoundedSnapshotValue(
+    queue._staleFenceSamples,
+    sample,
+    queue._staleFenceSampleIndex,
+    capacity,
+  );
+}
+
 function copySnapshotValues(source) {
   const copy = [];
   for (let index = 0; index < source.length; index++) {
@@ -99,6 +123,7 @@ export {
   appendSnapshotValue,
   buildReconcileQueueDiagnostics,
   defineSnapshotValue,
+  recordStaleFenceDiagnosticSamples,
   snapshotMapEntries,
   snapshotSetValues,
 };
