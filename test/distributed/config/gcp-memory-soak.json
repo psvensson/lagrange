@@ -1,0 +1,61 @@
+{
+  "size": 7,
+  "nodesPerHost": 4,
+  "docker": {},
+  "image": "distributed-db:test",
+  "timeouts": {
+    "nodeStartup": 60000,
+    "convergence": 120000,
+    "quietWindow": 10000,
+    "scenarioDefault": 10800000
+  },
+  "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 120000,
+    "quietWindowMs": 10000,
+    "maxSustainedOverTargetMs": 10000,
+    "sampleIntervalMs": 500
+  },
+  "resourceLimits": {
+    "memory": "2g",
+    "cpus": "2.0"
+  },
+  "load": {
+    "defaultOpsPerSec": 120,
+    "defaultDuration": "1800s"
+  },
+  "benchmark": {
+    "controlQueryTimeoutMs": 15000,
+    "readyTimeoutMs": 120000,
+    "readyPollIntervalMs": 1000,
+    "quiescentTimeoutMs": 300000,
+    "quiescentPollIntervalMs": 1000,
+    "quiescentStableWindowMs": 3000,
+    "quiescentNoProgressTimeoutMs": 90000,
+    "postLoadDrainTimeoutMs": 300000,
+    "postLoadDrainPollIntervalMs": 1000,
+    "postLoadDrainStableWindowMs": 3000,
+    "postLoadDrainNoProgressTimeoutMs": 90000
+  },
+  "memoryLeak": {
+    "enabled": true,
+    "failOnDetection": true,
+    "requireSamples": true,
+    "minSamplesPerNode": 30,
+    "warmupFraction": 0.2,
+    "minWarmupMs": 300000,
+    "minAnalysisWindowMs": 900000,
+    "maxRssSlopeBytesPerMin": 524288,
+    "minRssGrowthBytes": 33554432,
+    "minPositiveDeltaRatio": 0.7,
+    "captureHeapArtifacts": true,
+    "heapSnapshotNearLimitCount": 2
+  },
+  "gcp": {
+    "project": "something-2e584",
+    "zone": "us-central1-a",
+    "machineType": "e2-standard-8",
+    "vmCount": 2,
+    "preemptible": false
+  }
+}
