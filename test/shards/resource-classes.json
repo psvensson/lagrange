@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2054,
+    "ordinary": 2055,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2071,
-  "digest": "fnv1a32-06d62481",
+  "censusSize": 2072,
+  "digest": "fnv1a32-7eeab574",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -1851,6 +1851,7 @@
     "test/solve/invariant-liveness.test.js": "ordinary",
     "test/solve/investigation-credit.test.js": "ordinary",
     "test/solve/ladder.test.js": "ordinary",
+    "test/solve/landing-envelope-contract.test.js": "ordinary",
     "test/solve/ledger-consistency.test.js": "ordinary",
     "test/solve/loop.test.js": "ordinary",
     "test/solve/machine-lock.test.js": "ordinary",

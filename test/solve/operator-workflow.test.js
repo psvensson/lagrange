@@ -21,11 +21,16 @@ import {inspectChangeArtifact} from '../../scripts/solve/change-artifact.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {
   appendEvent,
+  boundVerifierRejectionEvents,
   loadQuest,
+  projectState,
   readLog,
   saveQuest,
 } from '../../scripts/solve/store.js';
-import {verificationState} from '../../scripts/solve/verification.js';
+import {
+  terminalVerificationProblems,
+  verificationState,
+} from '../../scripts/solve/verification.js';
 import {
   EVENT_GATE_DECISION,
   EVENT_THEORY_OPTION_DECLARED,
@@ -71,7 +76,8 @@ function git(root, args) {
   }).trim();
 }
 
-function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0) {
+function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
+  verificationTemplates = []) {
   const root = tmp();
   git(root, ['init']);
   git(root, ['config', 'user.email', 'solver@example.com']);
@@ -99,6 +105,9 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0) {
     frontiers: [{id: `${id}-main`, priority: 1, metric}],
     constraints: [],
   };
+  if (verificationTemplates.length > 0) {
+    quest.verificationTemplates = verificationTemplates;
+  }
   saveQuest(root, quest);
   // Stage the proof-cone runnable inputs before the base commit so they are
   // tracked context (not untracked source the auto-diff refuses): a witness
@@ -632,7 +641,9 @@ tap.test('land validates aggregate approval and scope-safely commits without pus
       .split('\n')
       .filter((line) => line.length > 0 &&
         !line.endsWith('global-owner-debt-import-graph.json') &&
-        !line.endsWith('impact-graph-seal.json'))
+        !line.endsWith('impact-graph-seal.json') &&
+        !line.includes('solve/state/landing-preflight/') &&
+        !line.includes('solve/state/reviews/'))
       .join('\n'),
     '',
   );
@@ -673,6 +684,378 @@ tap.test('land issues an immutable review id and accepts a verdict by id', (t) =
   t.end();
 });
 
+tap.test('land binds the additive template bar and ingests one structured verdict file',
+  (t) => {
+    const {root, id} = landingFixture(
+      'scripts/demo.js', 0, ['adversarial-js-intrinsics']);
+    const valuesDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'values');
+    const hasDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'has');
+    Reflect.defineProperty(Map.prototype, 'values', {
+      configurable: true,
+      value() {
+        if (Reflect.apply(hasDescriptor.value, this, ['adversarial-js-intrinsics'])) {
+          return {
+            next: () => ({done: true}),
+            [Symbol.iterator]() {
+              return this;
+            },
+          };
+        }
+        return Reflect.apply(valuesDescriptor.value, this, []);
+      },
+      writable: true,
+    });
+    let requested;
+    try {
+      requested = landQuestWorkflow(root, {id});
+    } finally {
+      Reflect.defineProperty(Map.prototype, 'values', valuesDescriptor);
+    }
+    t.equal(requested.review.manifest.schemaVersion, 3);
+    t.same(requested.review.manifest.requiredReviewTemplates.map(
+      (entry) => entry.category), ['adversarial-js-intrinsics']);
+    t.equal(requested.review.manifest.sourceEpoch.headCommit,
+      git(root, ['rev-parse', 'HEAD']));
+    t.equal(requested.review.manifest.proofPlan.status, 'pass');
+
+    fs.writeFileSync(path.join(root, 'review-evidence.txt'),
+      'intrinsics checklist completed\n');
+    fs.writeFileSync(path.join(root, 'verdict.json'), `${JSON.stringify({
+      schemaVersion: 'solver-verifier-verdict/1',
+      reviewId: requested.review.id,
+      verifierId: 'structured-reviewer',
+      verdict: 'approve',
+      completedTemplateItems: [{
+        category: 'adversarial-js-intrinsics',
+        evidencePaths: ['review-evidence.txt'],
+      }],
+      findings: [],
+      externalReceiptRef: 'subagent-receipt:structured-reviewer',
+    }, null, 2)}\n`);
+    const landed = landQuestWorkflow(root, {
+      id,
+      review: requested.review.id,
+      ['verdict-file']: 'verdict.json',
+    });
+    t.equal(landed.committed, true);
+    const finding = readLog(root, id).find(
+      (event) => event.kind === 'verifier-approval');
+    t.equal(finding.evidence, 'subagent:structured-reviewer');
+    t.equal(finding.verification.reviewEnvelope.reviewId, requested.review.id);
+    const completed = finding.verification.reviewEnvelope.completedTemplateItems[0];
+    t.equal(completed.category, 'adversarial-js-intrinsics');
+    t.equal(completed.evidence[0].path, 'review-evidence.txt');
+    t.match(completed.evidence[0].sha256, /^sha256:[0-9a-f]{64}$/u);
+    t.equal(completed.evidence[0].size > 0, true);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+tap.test('structured verdict fails closed on incomplete template accounting', (t) => {
+  const {root, id} = landingFixture(
+    'scripts/demo.js', 0, ['adversarial-js-intrinsics']);
+  const requested = landQuestWorkflow(root, {id});
+  fs.writeFileSync(path.join(root, 'verdict.json'), `${JSON.stringify({
+    schemaVersion: 'solver-verifier-verdict/1',
+    reviewId: requested.review.id,
+    verifierId: 'structured-reviewer',
+    verdict: 'approve',
+    completedTemplateItems: [],
+    findings: [],
+    externalReceiptRef: 'subagent-receipt:structured-reviewer',
+  })}\n`);
+  t.throws(() => landQuestWorkflow(root, {
+    id,
+    review: requested.review.id,
+    ['verdict-file']: 'verdict.json',
+  }), /template accounting mismatch.*missing adversarial-js-intrinsics/iu);
+  t.notOk(readLog(root, id).some((event) => event.kind === 'verifier-approval'));
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('structured verdict remains canonical through the hostile ledger tail', (t) => {
+  const {root, id} = landingFixture(
+    'scripts/demo.js', 0, ['adversarial-js-intrinsics']);
+  const requested = landQuestWorkflow(root, {id});
+  const summary = 'tail consumers must preserve the category-complete verifier finding';
+  fs.writeFileSync(path.join(root, 'review-evidence.txt'), 'tail checklist completed\n');
+  fs.writeFileSync(path.join(root, 'verdict.json'), `${JSON.stringify({
+    schemaVersion: 'solver-verifier-verdict/1',
+    reviewId: requested.review.id,
+    verifierId: 'tail-verifier',
+    verdict: 'reject',
+    completedTemplateItems: [{
+      category: 'adversarial-js-intrinsics',
+      evidencePaths: ['review-evidence.txt'],
+    }],
+    findings: [{category: 'adversarial-js-intrinsics', summary}],
+    externalReceiptRef: 'subagent-receipt:tail-verifier',
+  }, null, 2)}\n`);
+
+  const everyDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'every');
+  const filterDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'filter');
+  const isArrayDescriptor = Object.getOwnPropertyDescriptor(Array, 'isArray');
+  const includesDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype, 'includes');
+  const iteratorDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype, Symbol.iterator);
+  const mapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'map');
+  const pushDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'push');
+  const sliceDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'slice');
+  const someDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'some');
+  const hasDescriptor = Object.getOwnPropertyDescriptor(Set.prototype, 'has');
+  const parseDescriptor = Object.getOwnPropertyDescriptor(JSON, 'parse');
+  const stringifyDescriptor = Object.getOwnPropertyDescriptor(JSON, 'stringify');
+  const integerDescriptor = Object.getOwnPropertyDescriptor(Number, 'isInteger');
+  const startsWithDescriptor = Object.getOwnPropertyDescriptor(
+    String.prototype, 'startsWith');
+  const testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
+  const trimDescriptor = Object.getOwnPropertyDescriptor(String.prototype, 'trim');
+  Reflect.defineProperty(Array.prototype, 'every', {
+    configurable: true,
+    value(callback, thisArg) {
+      if (this[0]?.category === 'adversarial-js-intrinsics') return true;
+      return Reflect.apply(everyDescriptor.value, this, [callback, thisArg]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(Array.prototype, 'map', {
+    configurable: true,
+    value(callback, thisArg) {
+      if (this[0]?.category === 'adversarial-js-intrinsics') return [];
+      return Reflect.apply(mapDescriptor.value, this, [callback, thisArg]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(Array.prototype, 'filter', {
+    configurable: true,
+    value(callback, thisArg) {
+      if (this[0]?.candidateContract === true) return [];
+      return Reflect.apply(filterDescriptor.value, this, [callback, thisArg]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(Array.prototype, 'some', {
+    configurable: true,
+    value(callback, thisArg) {
+      if (this[0]?.base && this[0]?.head) return false;
+      return Reflect.apply(someDescriptor.value, this, [callback, thisArg]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(Array.prototype, 'push', {
+    configurable: true,
+    value(...items) {
+      const first = items[0];
+      if (first?.kind === 'verifier-rejection' ||
+        String(first?.message || '').includes('aggregate approval')) {
+        return this.length;
+      }
+      return Reflect.apply(pushDescriptor.value, this, items);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(JSON, 'stringify', {
+    configurable: true,
+    value(input, replacer, space) {
+      if (input?.kind === 'verifier-rejection') {
+        return Reflect.apply(stringifyDescriptor.value, JSON, [{
+          ...input,
+          evidence: 'subagent:forged',
+          verification: {...input.verification, findings: []},
+        }, replacer, space]);
+      }
+      return Reflect.apply(stringifyDescriptor.value, JSON,
+        [input, replacer, space]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(JSON, 'parse', {
+    configurable: true,
+    value(input, reviver) {
+      const parsed = Reflect.apply(parseDescriptor.value, JSON, [input, reviver]);
+      if (parsed?.kind === 'verifier-rejection') {
+        return {...parsed, evidence: 'subagent:forged',
+          verification: {...parsed.verification, findings: []}};
+      }
+      return parsed;
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(Number, 'isInteger', {
+    configurable: true,
+    value(input) {
+      if (input === 5) return false;
+      return Reflect.apply(integerDescriptor.value, Number, [input]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(String.prototype, 'trim', {
+    configurable: true,
+    value() {
+      if (String(this) === 'tail-verifier') return '!forged';
+      return Reflect.apply(trimDescriptor.value, this, []);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(String.prototype, 'startsWith', {
+    configurable: true,
+    value(search, position) {
+      if (String(this) === '!forged') return false;
+      return Reflect.apply(startsWithDescriptor.value, this, [search, position]);
+    },
+    writable: true,
+  });
+  Reflect.defineProperty(RegExp.prototype, 'test', {
+    configurable: true,
+    value(input) {
+      if (String(input) === 'subagent:!forged') return true;
+      return Reflect.apply(testDescriptor.value, this, [input]);
+    },
+    writable: true,
+  });
+  let rejected;
+  let hostileBoundRejectionCount;
+  let hostileCandidateRejection;
+  let hostileFinding;
+  let hostileQuestStatus;
+  let hostileRungIndex;
+  let hostileRawLog;
+  let hostileTerminalProblems;
+  let hostileTerminalError;
+  try {
+    rejected = landQuestWorkflow(root, {
+      id,
+      review: requested.review.id,
+      ['verdict-file']: 'verdict.json',
+    });
+    hostileRawLog = fs.readFileSync(
+      path.join(root, 'solve', 'log', `${id}.ndjson`), 'utf8');
+    const hostileLog = readLog(root, id);
+    Reflect.defineProperty(Array, 'isArray', {
+      configurable: true,
+      value(value) {
+        if (isArrayDescriptor.value(value) && value[0] === 'scripts/demo.js') {
+          return false;
+        }
+        return isArrayDescriptor.value(value);
+      },
+      writable: true,
+    });
+    Reflect.defineProperty(Array.prototype, Symbol.iterator, {
+      configurable: true,
+      value() {
+        if (this[0]?.type === 'quest-declared') return {next: () => ({done: true})};
+        return Reflect.apply(iteratorDescriptor.value, this, []);
+      },
+      writable: true,
+    });
+    Reflect.defineProperty(Array.prototype, 'slice', {
+      configurable: true,
+      value(start, end) {
+        for (let index = 0; index < this.length; index += 1) {
+          if (this[index]?.kind === 'verifier-rejection') return [];
+        }
+        return Reflect.apply(sliceDescriptor.value, this, [start, end]);
+      },
+      writable: true,
+    });
+    Reflect.defineProperty(Set.prototype, 'has', {
+      configurable: true,
+      value(item) {
+        if (item?.kind === 'verifier-rejection') return false;
+        return Reflect.apply(hasDescriptor.value, this, [item]);
+      },
+      writable: true,
+    });
+    Reflect.defineProperty(RegExp.prototype, 'test', {
+      configurable: true,
+      value(input) {
+        if (String(input) === 'subagent:tail-verifier') return false;
+        return Reflect.apply(testDescriptor.value, this, [input]);
+      },
+      writable: true,
+    });
+    hostileBoundRejectionCount = boundVerifierRejectionEvents(hostileLog).size;
+    const hostileProjection = projectState(loadQuest(root, id), hostileLog);
+    hostileQuestStatus = hostileProjection.questStatus;
+    hostileFinding = hostileProjection.frontiers[0].findings.find(
+      (finding) => finding.kind === 'verifier-rejection');
+    hostileRungIndex = projectState(loadQuest(root, id), [{
+      type: 'attempt',
+      frontier: hostileProjection.frontiers[0].id,
+      rungIndex: 5,
+      metricBefore: null,
+      metricAfter: null,
+    }]).frontiers[0].rungIndex;
+    const hostileVerification = verificationState(
+      root, loadQuest(root, id), hostileLog);
+    hostileCandidateRejection = Boolean(hostileVerification.candidateRejection);
+    hostileTerminalProblems = terminalVerificationProblems(
+      root, loadQuest(root, id), hostileLog);
+    try {
+      landQuestWorkflow(root, {id});
+    } catch (error) {
+      hostileTerminalError = error;
+    }
+  } finally {
+    Reflect.defineProperty(Array.prototype, 'every', everyDescriptor);
+    Reflect.defineProperty(Array.prototype, 'filter', filterDescriptor);
+    Reflect.defineProperty(Array, 'isArray', isArrayDescriptor);
+    Reflect.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
+    Reflect.defineProperty(Array.prototype, 'map', mapDescriptor);
+    Reflect.defineProperty(Array.prototype, 'push', pushDescriptor);
+    Reflect.defineProperty(Array.prototype, 'slice', sliceDescriptor);
+    Reflect.defineProperty(Array.prototype, 'some', someDescriptor);
+    Reflect.defineProperty(Set.prototype, 'has', hasDescriptor);
+    Reflect.defineProperty(String.prototype, 'startsWith', startsWithDescriptor);
+    Reflect.defineProperty(RegExp.prototype, 'test', testDescriptor);
+    Reflect.defineProperty(String.prototype, 'trim', trimDescriptor);
+    Reflect.defineProperty(JSON, 'parse', parseDescriptor);
+    Reflect.defineProperty(JSON, 'stringify', stringifyDescriptor);
+    Reflect.defineProperty(Number, 'isInteger', integerDescriptor);
+  }
+  t.equal(rejected.verdict, 'reject');
+  t.match(hostileRawLog, /subagent:tail-verifier/u,
+    'captured serializer preserves exact verifier attribution in durable bytes');
+  t.notMatch(hostileRawLog, /subagent:forged/u,
+    'hostile serializer cannot rewrite durable bytes');
+  t.equal(hostileQuestStatus, 'open',
+    'hostile projection still reopens the rejected Quest');
+  t.equal(hostileRungIndex, 5,
+    'hostile integer classification preserves the authoritative rung index');
+  t.equal(hostileFinding.evidence, 'subagent:tail-verifier');
+  t.same(hostileFinding.verification.findings,
+    [{category: 'adversarial-js-intrinsics', summary}]);
+  t.match(hostileFinding.claim, new RegExp(summary, 'u'));
+  t.equal(hostileBoundRejectionCount, 1,
+    'the hostile store fold recognizes the exact durable rejection');
+  t.equal(hostileCandidateRejection, true,
+    'the hostile verification projection retains the candidate rejection');
+  t.equal(hostileTerminalProblems.some((problem) =>
+    /aggregate approval/u.test(problem.message)), true,
+  'hostile problem accumulation retains the aggregate-approval gate');
+  t.match(hostileTerminalError?.message, /Quest must be terminal/iu,
+    'the complete hostile runtime cannot admit the rejection-reopened Quest');
+
+  Reflect.defineProperty(Array.prototype, 'includes', {
+    configurable: true, value: () => true, writable: true,
+  });
+  let terminalError;
+  try {
+    landQuestWorkflow(root, {id});
+  } catch (error) {
+    terminalError = error;
+  } finally {
+    Reflect.defineProperty(Array.prototype, 'includes', includesDescriptor);
+  }
+  t.match(terminalError?.message, /Quest must be terminal/iu,
+    'live includes cannot admit the rejection-reopened Quest to land');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('land refuses static preflight before minting a review id', (t) => {
   const {root, id} = landingFixture();
   const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
@@ -699,7 +1082,8 @@ tap.test('land refuses silent catches before minting a review id', (t) => {
   stageCanonicalImportGraphTriple(root);
 
   t.throws(() => landQuestWorkflow(root, {id}),
-    /changed-path preflight failed.*silent-catch/isu);
+    /canonical import-graph verification failed.*live producer inputs/isu,
+    'an ambient-only checker mutation cannot enter the exact candidate review');
   t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
     'silent-catch failure creates no immutable review artifact');
   fs.rmSync(root, {recursive: true, force: true});
@@ -758,7 +1142,8 @@ tap.test('land refuses import gaps before minting a review id', (t) => {
   git(root, ['add', '-N', '--', 'scripts/helper.js']);
 
   t.throws(() => landQuestWorkflow(root, {id}),
-    /review preflight found import-closure gaps.*helper\.js/isu);
+    /canonical import-graph verification failed.*live producer inputs/isu,
+    'ambient-only importer/helper changes cannot enter the candidate review');
   t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
     'an incomplete import boundary creates no immutable review artifact');
   fs.rmSync(root, {recursive: true, force: true});
@@ -780,12 +1165,13 @@ tap.test('landing preflight cache follows baseline and intrinsic inputs', (t) =>
   // Re-stamp the canonical graph over the staged checker/baseline scripts so
   // the preflight reaches the cache behavior under test.
   stageCanonicalImportGraphTriple(root);
-  const requested = landQuestWorkflow(root, {id});
-  t.equal(requested.review.preflight.cached, false);
+  t.throws(() => landQuestWorkflow(root, {id}),
+    /canonical import-graph verification failed.*live producer inputs/isu,
+    'ambient checker-input drift cannot alter an immutable candidate review');
   fs.writeFileSync(baseline, '[]\n');
   t.throws(() => landQuestWorkflow(root, {id}),
-    /changed-path preflight failed.*literal-guideline/isu,
-    'a real checker baseline change invalidates a cached pass');
+    /canonical import-graph verification failed.*live producer inputs/isu,
+    'a second ambient mutation still cannot enter the candidate snapshot');
 
   fs.writeFileSync(baseline, '["allow"]\n');
   // The hostile cache-input file lives at the fixture root (outside the

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1820,
+    "unit": 1821,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2071,
-  "digest": "fnv1a32-7233ebbb",
+  "censusSize": 2072,
+  "digest": "fnv1a32-8b4e2fe6",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1852,6 +1852,7 @@
     "test/solve/invariant-liveness.test.js": "unit",
     "test/solve/investigation-credit.test.js": "unit",
     "test/solve/ladder.test.js": "unit",
+    "test/solve/landing-envelope-contract.test.js": "unit",
     "test/solve/ledger-consistency.test.js": "unit",
     "test/solve/loop.test.js": "unit",
     "test/solve/machine-lock.test.js": "unit",

@@ -59,52 +59,75 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFindLastIndex = Function.call.bind(Array.prototype.findLastIndex);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
+const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const arraySome = Function.call.bind(Array.prototype.some);
 const arraySort = Function.call.bind(Array.prototype.sort);
+const dateToISOString = Function.call.bind(Date.prototype.toISOString);
+const jsonParse = JSON.parse;
+const jsonStringify = JSON.stringify;
+const numberIsInteger = Number.isInteger;
+const mapForEach = Function.call.bind(Map.prototype.forEach);
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapSet = Function.call.bind(Map.prototype.set);
+const regExpTest = Function.call.bind(RegExp.prototype.test);
+const setAdd = Function.call.bind(Set.prototype.add);
+const setForEach = Function.call.bind(Set.prototype.forEach);
+const setHas = Function.call.bind(Set.prototype.has);
 const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+const MapConstructor = Map;
+const SetConstructor = Set;
+
+function setValues(set) {
+  const values = [];
+  setForEach(set, (value) => arrayPush(values, value));
+  return values;
+}
 
 function isStructuredVerifierRejection(event) {
   const versionOneAttempt = event.verification?.schemaVersion === 1 &&
     event.verification?.scope === VERIFICATION_SCOPE_ATTEMPT;
   const versionTwoCandidate = event.verification?.schemaVersion === 2 &&
     event.verification?.scope === VERIFICATION_SCOPE_CANDIDATE &&
-    /^[0-9a-f]{40}$/u.test(String(event.verification?.baseCommit || '')) &&
-    Array.isArray(event.verification?.paths) &&
-    Number.isInteger(event.verification?.lastAttemptIndex);
+    regExpTest(/^[0-9a-f]{40}$/u, String(event.verification?.baseCommit || '')) &&
+    arrayIsArray(event.verification?.paths) &&
+    numberIsInteger(event.verification?.lastAttemptIndex);
   return event?.type === EVENT_FINDING &&
     event.kind === VERIFIER_REJECTION_FINDING_KIND &&
     (versionOneAttempt || versionTwoCandidate) &&
     event.verification?.verdict === VERIFICATION_VERDICT_REJECTED &&
-    VERIFICATION_FINGERPRINT_PATTERN.test(
+    regExpTest(VERIFICATION_FINGERPRINT_PATTERN,
       String(event.verification?.fingerprint || ''),
     ) &&
-    VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''));
+    regExpTest(VERIFIER_EVIDENCE_PATTERN, String(event.evidence || ''));
 }
 
 export function boundVerifierRejectionEvents(log) {
-  const contractedAttemptKeys = new Set();
-  const boundRejections = new Set();
-  for (const [index, event] of log.entries()) {
+  const contractedAttemptKeys = new SetConstructor();
+  const boundRejections = new SetConstructor();
+  for (let index = 0; index < log.length; index += 1) {
+    const event = log[index];
     const fingerprint = `sha256:${event.changeRefIdentity?.sha256 || ''}`;
     const key = `${event.frontier || ''}\n${fingerprint}`;
     if (event.type === EVENT_ATTEMPT &&
         event.verificationContractVersion === 1 &&
-        VERIFICATION_FINGERPRINT_PATTERN.test(fingerprint)) {
-      contractedAttemptKeys.add(key);
+        regExpTest(VERIFICATION_FINGERPRINT_PATTERN, fingerprint)) {
+      setAdd(contractedAttemptKeys, key);
       continue;
     }
     if (isStructuredVerifierRejection(event)) {
       if (event.verification.schemaVersion === 2 &&
         event.verification.lastAttemptIndex < index) {
-        boundRejections.add(event);
+        setAdd(boundRejections, event);
         continue;
       }
       const rejectionKey = `${event.frontier || ''}\n` +
         event.verification.fingerprint;
-      if (contractedAttemptKeys.has(rejectionKey)) {
-        boundRejections.add(event);
+      if (setHas(contractedAttemptKeys, rejectionKey)) {
+        setAdd(boundRejections, event);
       }
     }
   }
@@ -120,8 +143,8 @@ function ensureDir(dir) {
 const SAFE_GOAL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export function assertSafeQuestId(questId) {
-  if (typeof questId !== 'string' || !SAFE_GOAL_ID.test(questId) ||
-    questId.includes('..')) {
+  if (typeof questId !== 'string' || !regExpTest(SAFE_GOAL_ID, questId) ||
+    stringIncludes(questId, '..')) {
     throw new Error(
       `invalid quest id "${questId}": use letters, digits, '.', '_', '-' ` +
       '(no path separators or "..")');
@@ -146,7 +169,7 @@ export function stateFilePath(root, questId) {
 
 export function loadQuest(root, questId) {
   const file = questFilePath(root, questId);
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return jsonParse(fs.readFileSync(file, 'utf8'));
 }
 
 // Replace a whole file atomically.
@@ -165,25 +188,29 @@ function writeFileAtomic(file, contents) {
 export function saveQuest(root, quest) {
   const file = questFilePath(root, quest.id);
   ensureDir(path.dirname(file));
-  writeFileAtomic(file, `${JSON.stringify(quest, null, 2)}\n`);
+  writeFileAtomic(file, `${jsonStringify(quest, null, 2)}\n`);
   return file;
 }
 
 export function appendEvent(root, questId, event) {
   const file = logFilePath(root, questId);
   ensureDir(path.dirname(file));
-  const stamped = {ts: new Date().toISOString(), ...event};
-  fs.appendFileSync(file, `${JSON.stringify(stamped)}\n`);
+  const stamped = {ts: dateToISOString(new Date()), ...event};
+  fs.appendFileSync(file, `${jsonStringify(stamped)}\n`);
   return stamped;
 }
 
 export function readLog(root, questId) {
   const file = logFilePath(root, questId);
   if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8')
-    .split('\n')
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line));
+  const lines = stringSplit(fs.readFileSync(file, 'utf8'), '\n');
+  const events = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (stringTrim(lines[index]).length > 0) {
+      arrayPush(events, jsonParse(lines[index]));
+    }
+  }
+  return events;
 }
 
 function initialFrontierState(frontier) {
@@ -213,7 +240,7 @@ function applyAttempt(frontierState, event) {
   if (event.metricAfter !== null && event.metricAfter !== undefined) {
     frontierState.current = event.metricAfter;
   }
-  if (Number.isInteger(event.rungIndex)) {
+  if (numberIsInteger(event.rungIndex)) {
     frontierState.rungIndex = event.rungIndex;
   }
 }
@@ -254,7 +281,7 @@ function applyReopen(frontier, event) {
 
 function applyFinding(frontier, event, reopensTerminal = false) {
   if (!frontier) return;
-  frontier.findings.push({
+  arrayPush(frontier.findings, {
     claim: event.claim || null,
     kind: event.kind || null,
     evidence: event.evidence || null,
@@ -344,9 +371,9 @@ function addTheory(theories, event, scope) {
   };
   theories.byId[theory.id] = theory;
   if (scope === THEORY_SCOPE_SYSTEM) {
-    theories.system.push(theory);
+    arrayPush(theories.system, theory);
   } else {
-    theories.frontier.push(theory);
+    arrayPush(theories.frontier, theory);
   }
 }
 
@@ -372,7 +399,7 @@ function applyTheoryResult(theories, event) {
     attemptFrontier: event.frontier || null,
     ts: event.ts || null,
   };
-  theory.results.push(result);
+  arrayPush(theory.results, result);
   if (event.result) theory.status = event.result;
 }
 
@@ -381,7 +408,7 @@ function applyTheorySuperseded(theories, event) {
   if (!theory) return;
   theory.status = THEORY_RESULT_SUPERSEDED;
   theory.supersededBy = event.by || null;
-  theory.results.push({
+  arrayPush(theory.results, {
     result: THEORY_RESULT_SUPERSEDED,
     evidence: event.evidence || null,
     validation: null,
@@ -429,14 +456,18 @@ function applyQuestStateEvent(questState, event, reopensTerminal = false) {
 
 // Fold the append-only log into the current projected state. Pure given the log.
 export function projectState(quest, log) {
-  const frontiers = new Map(
-    quest.frontiers.map((f) => [f.id, initialFrontierState(f)]),
-  );
+  const frontiers = new MapConstructor();
+  const frontierEntries = arrayMap(
+    quest.frontiers, (frontier) => [frontier.id, initialFrontierState(frontier)]);
+  for (let index = 0; index < frontierEntries.length; index += 1) {
+    mapSet(frontiers, frontierEntries[index][0], frontierEntries[index][1]);
+  }
   const questState = {status: STATUS_OPEN, evidence: null};
   const theories = emptyTheoryState();
   const boundRejections = boundVerifierRejectionEvents(log);
-  for (const event of log) {
-    const reopensTerminal = boundRejections.has(event);
+  for (let index = 0; index < log.length; index += 1) {
+    const event = log[index];
+    const reopensTerminal = setHas(boundRejections, event);
     if (applyQuestStateEvent(
       questState,
       event,
@@ -444,14 +475,14 @@ export function projectState(quest, log) {
     )) continue;
     if (event.type === EVENT_FINDING) {
       applyFinding(
-        event.frontier ? frontiers.get(event.frontier) : null,
+        event.frontier ? mapGet(frontiers, event.frontier) : null,
         event,
         reopensTerminal,
       );
     }
     const handler = FRONTIER_HANDLERS[event.type];
     if (handler && event.type !== EVENT_FINDING) {
-      handler(event.frontier ? frontiers.get(event.frontier) : null, event);
+      handler(event.frontier ? mapGet(frontiers, event.frontier) : null, event);
     }
     if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {
       addTheory(theories, event, THEORY_SCOPE_SYSTEM);
@@ -465,11 +496,13 @@ export function projectState(quest, log) {
       applyTheorySuperseded(theories, event);
     }
   }
+  const projectedFrontiers = [];
+  mapForEach(frontiers, (frontier) => arrayPush(projectedFrontiers, frontier));
   return {
     questId: quest.id,
     questStatus: questState.status,
     questEvidence: questState.evidence,
-    frontiers: [...frontiers.values()],
+    frontiers: projectedFrontiers,
     theories,
   };
 }
@@ -479,8 +512,9 @@ export function projectState(quest, log) {
 // event. Used to detect silent regression — a later measured attempt that no longer
 // satisfies a label present here has re-broken a previously-green invariant.
 export function invariantHighWater(log, frontierId = null) {
-  const set = new Set();
-  for (const event of log) {
+  const set = new SetConstructor();
+  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
+    const event = log[eventIndex];
     if (frontierId && event.frontier !== frontierId) continue;
     const measured =
       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
@@ -488,13 +522,13 @@ export function invariantHighWater(log, frontierId = null) {
         isFrontierProbeEvent(event) &&
         typeof event.metric === 'number');
     if (!measured) continue;
-    const labels = Array.isArray(event.satisfiedInvariants) ?
+    const labels = arrayIsArray(event.satisfiedInvariants) ?
       event.satisfiedInvariants : [];
-    for (const label of labels) {
-      if (label) set.add(label);
+    for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
+      if (labels[labelIndex]) setAdd(set, labels[labelIndex]);
     }
   }
-  return [...set];
+  return setValues(set);
 }
 
 // Pure per-invariant ledger projection for a frontier, folded from the same measured
@@ -513,9 +547,10 @@ export function invariantHighWater(log, frontierId = null) {
 //   restoredThisRun - labels red in the previous measured run but green in the latest
 //   history         - [{ts, green:[...], red:[...]}] one entry per measured run
 export function projectInvariantLedger(log, frontierId = null) {
-  const highWater = new Set();
+  const highWater = new SetConstructor();
   const history = [];
-  for (const event of log) {
+  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
+    const event = log[eventIndex];
     if (frontierId && event.frontier !== frontierId) continue;
     const measured =
       (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
@@ -523,27 +558,41 @@ export function projectInvariantLedger(log, frontierId = null) {
         isFrontierProbeEvent(event) &&
         typeof event.metric === 'number');
     if (!measured) continue;
-    const green = new Set(
-      (Array.isArray(event.satisfiedInvariants) ? event.satisfiedInvariants : [])
-        .filter(Boolean),
+    const labels = arrayFilter(
+      arrayIsArray(event.satisfiedInvariants) ? event.satisfiedInvariants : [],
+      Boolean,
     );
-    for (const label of green) highWater.add(label);
-    const red = [...highWater].filter((label) => !green.has(label));
-    history.push({ts: event.ts || null, green: [...green], red});
+    const green = new SetConstructor();
+    for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
+      setAdd(green, labels[labelIndex]);
+      setAdd(highWater, labels[labelIndex]);
+    }
+    const red = arrayFilter(setValues(highWater),
+      (label) => !setHas(green, label));
+    arrayPush(history, {ts: event.ts || null, green: setValues(green), red});
   }
   const latest = history.length > 0 ? history[history.length - 1] : null;
   const previous = history.length > 1 ? history[history.length - 2] : null;
   const currentGreen = latest ? latest.green : [];
   const currentRed = latest ? latest.red : [];
-  const prevGreen = new Set(previous ? previous.green : []);
-  const latestGreen = new Set(currentGreen);
+  const prevGreen = new SetConstructor();
+  const previousGreen = previous ? previous.green : [];
+  for (let index = 0; index < previousGreen.length; index += 1) {
+    setAdd(prevGreen, previousGreen[index]);
+  }
+  const latestGreen = new SetConstructor();
+  for (let index = 0; index < currentGreen.length; index += 1) {
+    setAdd(latestGreen, currentGreen[index]);
+  }
   const regressedThisRun = previous ?
-    [...prevGreen].filter((label) => !latestGreen.has(label)) : [];
+    arrayFilter(setValues(prevGreen),
+      (label) => !setHas(latestGreen, label)) : [];
   const restoredThisRun = previous ?
-    [...latestGreen].filter((label) => !prevGreen.has(label)) : [];
+    arrayFilter(setValues(latestGreen),
+      (label) => !setHas(prevGreen, label)) : [];
   return {
     frontier: frontierId,
-    greenHighWater: [...highWater],
+    greenHighWater: setValues(highWater),
     currentGreen,
     currentRed,
     regressedThisRun,
@@ -557,7 +606,7 @@ export function rebuildState(root, quest) {
   const state = projectState(quest, log);
   const file = stateFilePath(root, quest.id);
   ensureDir(path.dirname(file));
-  writeFileAtomic(file, `${JSON.stringify(state, null, 2)}\n`);
+  writeFileAtomic(file, `${jsonStringify(state, null, 2)}\n`);
   return state;
 }
 
@@ -582,32 +631,32 @@ export function appendFinding(root, questId, finding) {
 
 // Read all findings recorded for one frontier, oldest first.
 export function readFindings(root, questId, frontierId) {
-  return readLog(root, questId)
-    .filter((e) => e.type === EVENT_FINDING && e.frontier === frontierId)
-    .map((e) => ({
-      claim: e.claim || null,
-      kind: e.kind || null,
-      evidence: e.evidence || null,
-      rulesOut: e.rulesOut || null,
-      verification: e.verification || null,
-      ts: e.ts || null,
-    }));
+  return arrayMap(arrayFilter(readLog(root, questId),
+    (event) => event.type === EVENT_FINDING && event.frontier === frontierId),
+  (event) => ({
+    claim: event.claim || null,
+    kind: event.kind || null,
+    evidence: event.evidence || null,
+    rulesOut: event.rulesOut || null,
+    verification: event.verification || null,
+    ts: event.ts || null,
+  }));
 }
 
 // Read every finding that rules a lever out, across all frontiers of one quest.
 // Used to inherit a lineage's dead levers into a successor quest and to print
 // them in the retread check; bounded to one quest's log, never a corpus scan.
 export function readRulesOutFindings(root, questId) {
-  return readLog(root, questId)
-    .filter((e) => e.type === EVENT_FINDING && e.rulesOut)
-    .map((e) => ({
-      frontier: e.frontier || null,
-      claim: e.claim || null,
-      kind: e.kind || null,
-      evidence: e.evidence || null,
-      rulesOut: e.rulesOut,
-      ts: e.ts || null,
-    }));
+  return arrayMap(arrayFilter(readLog(root, questId),
+    (event) => event.type === EVENT_FINDING && event.rulesOut),
+  (event) => ({
+    frontier: event.frontier || null,
+    claim: event.claim || null,
+    kind: event.kind || null,
+    evidence: event.evidence || null,
+    rulesOut: event.rulesOut,
+    ts: event.ts || null,
+  }));
 }
 
 // A scope signature is the sorted set of paths an override authorized, derived from
@@ -720,11 +769,12 @@ export function scopeSignatureNeedsReauthorization(
 // override whose scope signature is covered by an already-authorized one is recorded as
 // a free re-authorization; anything that reaches a NEW path is charged as before.
 export function appendGuardOverride(root, questId, override) {
-  const reason = typeof override.reason === 'string' ? override.reason.trim() : '';
+  const reason = typeof override.reason === 'string' ?
+    stringTrim(override.reason) : '';
   if (!reason) {
     throw new Error('guard override requires a non-empty --reason');
   }
-  if (typeof override.code !== 'string' || !override.code.trim()) {
+  if (typeof override.code !== 'string' || !stringTrim(override.code)) {
     throw new Error('guard override requires a --code (the guard being overridden)');
   }
   const frontier = override.frontier || null;
@@ -766,8 +816,8 @@ export function appendReflection(root, questId, reflection) {
     frontier: reflection.frontier || null,
     trigger: reflection.trigger || null,
     kind: reflection.kind === 'altitude' ? 'altitude' : 'micro',
-    note: typeof reflection.note === 'string' && reflection.note.trim() ?
-      reflection.note.trim() :
+    note: typeof reflection.note === 'string' && stringTrim(reflection.note) ?
+      stringTrim(reflection.note) :
       null,
   });
 }

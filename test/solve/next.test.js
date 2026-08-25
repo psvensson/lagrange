@@ -38,10 +38,23 @@ tap.test('solve next', async (t) => {
     const {quest} = makeOracleQuest(root);
     runStep(root, quest);
 
-    const out = runNextCommand(root, 'demo');
+    const out = runNextCommand(root, 'demo', {verbose: true});
     t.match(out, /^Next \[command-template\]: node scripts\/solve\.js continue --id demo --summary/u);
     t.match(out, /advanced diagnostics to abort/u);
     t.match(out, /pending step: demo-main pinned at metric 3/u);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('default output is concise and verbose retains the full dossier', (t) => {
+    const root = tmp();
+    makeOracleQuest(root);
+    const concise = runNextCommand(root, 'demo');
+    const verbose = runNextCommand(root, 'demo', {verbose: true});
+    t.match(concise, /^Next \[executable-command\/begin-step\]:/u);
+    t.ok(concise.trim().split('\n').length <= 3);
+    t.match(verbose, /^Next \[executable-command\]:/u);
+    t.not(verbose, concise);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "solver-verifier-verdict/1",
+  "reviewId": "review-f8c814bb77be14fb0bff3415",
+  "verifierId": "verify_formation_cure",
+  "verdict": "approve",
+  "completedTemplateItems": [
+    {"category": "admission-gating", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "adversarial-js-intrinsics", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "concurrency-serialization", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "formation-circularity", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "harness-fidelity", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "recovery-replay", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "retry-loops", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "sweep-timer", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]},
+    {"category": "transport-delivery", "evidencePaths": ["solve/changes/solver-landing-review-envelope-v7/independent-verification.md"]}
+  ],
+  "findings": [],
+  "externalReceiptRef": "solve/changes/solver-landing-review-envelope-v7/independent-verification.md"
+}

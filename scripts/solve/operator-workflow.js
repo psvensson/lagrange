@@ -34,6 +34,7 @@ import {
   assertReviewCurrent,
   createReviewRequest,
 } from './review-request.js';
+import {loadVerifierVerdict} from './verifier-verdict.js';
 
 const VERDICT_APPROVE = 'approve';
 const VERDICT_REJECT = 'reject';
@@ -50,6 +51,19 @@ const AUTOMATIC_CHECKPOINT_REASON = 'milestone';
 const CHECKPOINT_OPERATION = 'checkpoint';
 const AUTO_DIFF_ARGUMENT = 'auto-diff';
 const REPLACE_REJECTED_OPERATION = 'replace-rejected-attempt';
+const VERDICT_FILE_ARGUMENT = 'verdict-file';
+const VERDICT_FILE_CONFLICT_PROBLEM =
+  'land: --verdict-file requires --review and replaces ' +
+  '--verifier/--verdict/--fingerprint/--receipt/--finding';
+const STRUCTURED_VERDICT_REQUIRED_PROBLEM =
+  'land: this review has required templates; use --review with --verdict-file';
+const arrayAt = Function.call.bind(Array.prototype.at);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 function requireId(args, command) {
   const id = args.id || args._?.[0];
@@ -68,7 +82,7 @@ function assertStructuredAction(action, questId) {
 
 function explicitCommitOptions(args) {
   const changeRef = typeof args.changeRef === 'string' ? args.changeRef : null;
-  const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
+  const summary = typeof args.summary === 'string' ? stringTrim(args.summary) : '';
   const autoDiff = args[AUTO_DIFF_ARGUMENT] === true ||
     (!changeRef && summary.length > 0);
   if (changeRef && autoDiff) {
@@ -176,9 +190,9 @@ export function continueQuestWorkflow(root, args = {}) {
 }
 
 function verifierEvidence(verifier) {
-  const value = typeof verifier === 'string' ? verifier.trim() : '';
+  const value = typeof verifier === 'string' ? stringTrim(verifier) : '';
   if (!value) throw new Error('land: --verifier <stable-id> is required');
-  return value.startsWith('subagent:') ? value : `subagent:${value}`;
+  return stringStartsWith(value, 'subagent:') ? value : `subagent:${value}`;
 }
 
 function candidateReceipt(state, fingerprint) {
@@ -192,7 +206,8 @@ function candidateReceipt(state, fingerprint) {
 }
 
 function aggregateReceipt(state, fingerprint) {
-  const attempts = state.attempts.filter((attempt) => attempt.candidateContract);
+  const attempts = arrayFilter(
+    state.attempts, (attempt) => attempt.candidateContract);
   if (!state.aggregate?.ok || state.aggregate.fingerprint !== fingerprint ||
     attempts.length === 0) {
     throw new Error('land: approval fingerprint does not match current aggregate bytes');
@@ -234,15 +249,67 @@ function assertApprovalCanCompleteAudit(root, quest, state) {
     audit.problems.length === 1 &&
     sameAuditProblem(audit.problems[0], expected);
   if (!alreadyApproved && !onlyExpectedReceiptProblem) {
-    const residual = audit.problems.filter((item) =>
+    const residual = arrayFilter(audit.problems, (item) =>
       !expected || !sameAuditProblem(item, expected));
     const reported = residual.length > 0 ? residual : audit.problems;
     throw new Error(
       'land: terminal audit has non-verification problems: ' +
-      (reported.map((item) => item.message).join('; ') ||
+      (arrayJoin(arrayMap(reported, (item) => item.message), '; ') ||
         'expected exactly one structured aggregate-approval problem'),
     );
   }
+}
+
+function resolveVerdictSubmission(root, args, quest, state, log) {
+  let reviewId = typeof args.review === 'string' ? stringTrim(args.review) : '';
+  const verdictFile = typeof args[VERDICT_FILE_ARGUMENT] === 'string' ?
+    stringTrim(args[VERDICT_FILE_ARGUMENT]) : '';
+  if (verdictFile && (!reviewId || args.verifier || args.verdict ||
+    args.fingerprint || args.receipt || args.finding)) {
+    throw new Error(VERDICT_FILE_CONFLICT_PROBLEM);
+  }
+  let verdict = typeof args.verdict === 'string' ? stringTrim(args.verdict) : '';
+  let fingerprint = typeof args.fingerprint === 'string' ?
+    stringTrim(args.fingerprint) : '';
+  let evidence;
+  let receiptRef = typeof args.receipt === 'string' ? stringTrim(args.receipt) : '';
+  let structuredVerdict = null;
+  let scope;
+  let receipt;
+  let request;
+  if (!reviewId) {
+    // Compatibility flags are only an adapter into the immutable review
+    // interaction; they never derive candidate facts or bypass preflight.
+    request = createReviewRequest(root, quest, state, log);
+    reviewId = request.id;
+    if (fingerprint) receiptForVerdict(state, verdict, fingerprint);
+  } else {
+    if (fingerprint) throw new Error(REVIEW_FINGERPRINT_CONFLICT);
+    request = assertReviewCurrent(root, quest, state, reviewId, log);
+  }
+  if (verdictFile) {
+    structuredVerdict = loadVerifierVerdict(root, verdictFile, request);
+    verdict = structuredVerdict.verdict;
+    evidence = verifierEvidence(structuredVerdict.verifierId);
+    receiptRef = structuredVerdict.externalReceiptRef;
+  } else {
+    if ((request.manifest.requiredReviewTemplates || []).length > 0) {
+      throw new Error(STRUCTURED_VERDICT_REQUIRED_PROBLEM);
+    }
+    evidence = verifierEvidence(args.verifier);
+  }
+  if (verdict === VERDICT_APPROVE) {
+    scope = VERIFICATION_SCOPE.AGGREGATE;
+    receipt = request.manifest.aggregate;
+  } else if (verdict === VERDICT_REJECT) {
+    scope = VERIFICATION_SCOPE.CANDIDATE;
+    receipt = request.manifest.candidate;
+  } else {
+    throw new Error(INVALID_VERDICT_PROBLEM);
+  }
+  fingerprint = receipt.fingerprint;
+  return {reviewId, verdict, fingerprint, evidence, receiptRef,
+    structuredVerdict, scope, receipt};
 }
 
 export function landQuestWorkflow(root, args = {}) {
@@ -250,13 +317,13 @@ export function landQuestWorkflow(root, args = {}) {
   const quest = loadQuest(root, id);
   const log = readLog(root, id);
   const before = buildNextProjection(root, id);
-  if (!['solved', 'exhausted'].includes(before.quest.status)) {
+  if (!arrayIncludes(['solved', 'exhausted'], before.quest.status)) {
     throw new Error('land: Quest must be terminal before recording a landing verdict');
   }
   const state = verificationState(root, quest, log);
   if (state.attempts.length === 0) {
     if (args.verifier || args.verdict || args.fingerprint || args.receipt ||
-      args.review) {
+      args.review || args[VERDICT_FILE_ARGUMENT]) {
       throw new Error('land: this candidate has no source changes and needs no verifier');
     }
     const commit = autoCommitQuest(root, id);
@@ -271,10 +338,12 @@ export function landQuestWorkflow(root, args = {}) {
       next: buildNextProjection(root, id),
     };
   }
-  const reviewId = typeof args.review === 'string' ? args.review.trim() : '';
+  const reviewId = typeof args.review === 'string' ? stringTrim(args.review) : '';
+  const verdictFile = typeof args[VERDICT_FILE_ARGUMENT] === 'string' ?
+    stringTrim(args[VERDICT_FILE_ARGUMENT]) : '';
   const hasVerdictInput = Boolean(
     args.verifier || args.verdict || args.fingerprint || args.receipt ||
-    args.finding || reviewId,
+    args.finding || reviewId || verdictFile,
   );
   if (!hasVerdictInput) {
     assertApprovalCanCompleteAudit(root, quest, state);
@@ -291,7 +360,7 @@ export function landQuestWorkflow(root, args = {}) {
         next: buildNextProjection(root, id),
       };
     }
-    const review = createReviewRequest(root, quest, state);
+    const review = createReviewRequest(root, quest, state, log);
     return {
       schemaVersion: 1,
       questId: id,
@@ -303,35 +372,13 @@ export function landQuestWorkflow(root, args = {}) {
       next: buildNextProjection(root, id),
     };
   }
-  const verdict = typeof args.verdict === 'string' ? args.verdict.trim() : '';
-  let fingerprint = typeof args.fingerprint === 'string' ?
-    args.fingerprint.trim() : '';
-  const evidence = verifierEvidence(args.verifier);
-  let scope;
-  let receipt;
-  if (reviewId) {
-    if (fingerprint) {
-      throw new Error(REVIEW_FINGERPRINT_CONFLICT);
-    }
-    const request = assertReviewCurrent(root, quest, state, reviewId);
-    if (verdict === VERDICT_APPROVE) {
-      scope = VERIFICATION_SCOPE.AGGREGATE;
-      receipt = request.manifest.aggregate;
-    } else if (verdict === VERDICT_REJECT) {
-      scope = VERIFICATION_SCOPE.CANDIDATE;
-      receipt = request.manifest.candidate;
-    } else {
-      throw new Error(INVALID_VERDICT_PROBLEM);
-    }
-    fingerprint = receipt.fingerprint;
-  } else {
-    ({scope, receipt} = receiptForVerdict(state, verdict, fingerprint));
-  }
+  const {verdict, fingerprint, evidence, receiptRef, structuredVerdict,
+    scope, receipt} = resolveVerdictSubmission(root, args, quest, state, log);
   const kind = verdict === VERDICT_APPROVE ? VERIFIER_APPROVAL : VERIFIER_REJECTION;
-  const latest = receipt.attempts?.at(-1) || state.attempts.at(-1);
+  const latest = (receipt.attempts ? arrayAt(receipt.attempts, -1) : null) ||
+    arrayAt(state.attempts, -1);
   const frontier = latest?.event?.frontier || quest.frontiers?.[0]?.id;
   if (!frontier) throw new Error('land: current candidate has no frontier');
-  const receiptRef = typeof args.receipt === 'string' ? args.receipt.trim() : '';
   if (!receiptRef) throw new Error('land: --receipt <verifier-receipt-ref> is required');
   if (verdict === VERDICT_APPROVE) {
     assertApprovalCanCompleteAudit(root, quest, state);
@@ -341,7 +388,7 @@ export function landQuestWorkflow(root, args = {}) {
   // `theory option --from-rejection`, and any later post-mortem all read this
   // event, and a pointer satisfies them mechanically with zero content.
   const rejectionFindings = verdict === VERDICT_REJECT ?
-    parseRejectionFindings(args.finding) : [];
+    (structuredVerdict?.findings || parseRejectionFindings(args.finding)) : [];
   if (verdict === VERDICT_REJECT) {
     if (rejectionFindings.length === 0) {
       throw new Error(
@@ -359,15 +406,22 @@ export function landQuestWorkflow(root, args = {}) {
     verificationSchemaVersion: VERIFICATION_CONTRACT_VERSION,
     rejectionFindings,
   });
+  if (reviewId) {
+    verification.reviewEnvelope = {
+      reviewId,
+      verdictFile: structuredVerdict?.file || null,
+      completedTemplateItems: structuredVerdict?.completedTemplateItems || [],
+    };
+  }
   appendFinding(root, id, {
     frontier,
     claim: verdict === VERDICT_APPROVE ?
       `independent landing verification passed${receiptRef ? ` (${receiptRef})` : ''}` :
       REJECTED_CLAIM_PREFIX +
         `${receiptRef ? ` (${receiptRef})` : ''}: ` +
-        rejectionFindings.map(
-          (finding) => `${finding.category}: ${finding.summary}`)
-          .join(REJECTION_FINDING_SEPARATOR),
+        arrayJoin(arrayMap(rejectionFindings,
+          (finding) => `${finding.category}: ${finding.summary}`),
+        REJECTION_FINDING_SEPARATOR),
     kind,
     evidence,
     verification,

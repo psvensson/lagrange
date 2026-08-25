@@ -178,6 +178,9 @@ function sealGoal(quest) {
       // against the declaration event, so the bar must be captured here or
       // it silently no-ops for every declared quest.
       verificationTemplates: quest.verificationTemplates || [],
+      // Optional staged evidence requirements are separate from doneWhen but
+      // equally goalpost-sensitive once declared.
+      landingRequirements: quest.landingRequirements || null,
       frontierIds: quest.frontiers.map((frontier) => frontier.id),
     });
   }

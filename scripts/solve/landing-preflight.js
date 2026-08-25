@@ -26,7 +26,7 @@ import {
 } from '../global-owner-debt-inventory/helpers.js';
 
 const CACHE_DIRECTORY = 'solve/state/landing-preflight';
-const CACHE_SCHEMA_VERSION = 1;
+const CACHE_SCHEMA_VERSION = 2;
 const TEXT_ENCODING = 'utf8';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
@@ -44,8 +44,10 @@ const SPAWN_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const IMPORT_GRAPH_PRODUCER_PATH =
   'scripts/generate-global-owner-debt-inventory.js';
 const IMPORT_GRAPH_VERIFY_ARGUMENT = '--verify-import-graph';
+const IMPORT_GRAPH_REFRESH_ARGUMENT = '--refresh-import-graph-only';
 const IMPORT_GRAPH_VERIFY_TIMEOUT_MS = 30_000;
 const IMPORT_GRAPH_VERIFY_KILL_SIGNAL = 'SIGKILL';
+const IMPORT_GRAPH_REFRESH_TIMEOUT_MS = 30_000;
 const CANONICAL_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 const IMPORT_GRAPH_REQUIRED_INPUTS = Object.freeze([
   IMPORT_GRAPH_PRODUCER_PATH,
@@ -66,6 +68,22 @@ const CHECKER_INPUTS = Object.freeze([
   'node_modules/.package-lock.json',
   'eslint.config.js',
   'package-lock.json',
+]);
+// This is an optimization registry, never a proof authority. Only this pure,
+// deterministic changed-path proof is reusable. Live/distributed, timing,
+// load, mutation/red-on-revert, random, network, and host-state proofs are
+// intentionally inexpressible here.
+const DETERMINISTIC_PROOF_CACHE_REGISTRY = Object.freeze([
+  Object.freeze({
+    id: 'changed-path-static-quality',
+    runner: process.execPath,
+    argv: Object.freeze(['eslint', 'literal-guideline',
+      'ambient-intrinsics', 'silent-catch']),
+    declaredInputs: CHECKER_INPUTS,
+    environmentAllowlist: Object.freeze([]),
+    excludedKinds: Object.freeze(['live-ab', 'distributed', 'timing', 'load',
+      'flaky', 'mutation', 'red-on-revert', 'network', 'random', 'host-state']),
+  }),
 ]);
 const arrayForEach = Function.call.bind(Array.prototype.forEach);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -98,6 +116,17 @@ function preflightKey(root, manifest, paths) {
       filePath,
       fileIdentity(root, filePath),
     ]),
+    proofRegistry: arrayMap(DETERMINISTIC_PROOF_CACHE_REGISTRY, (proof) => ({
+      id: proof.id,
+      runner: proof.runner,
+      argv: proof.argv,
+      declaredInputs: arrayMap(proof.declaredInputs, (filePath) => [
+        filePath, fileIdentity(root, filePath),
+      ]),
+      environmentAllowlist: proof.environmentAllowlist,
+      excludedKinds: proof.excludedKinds,
+    })),
+    runtime: {node: process.version, platform: process.platform, arch: process.arch},
   }));
 }
 
@@ -210,8 +239,41 @@ export function canonicalImportGraphProblem(
   return canonicalReceiptProblem(root, result.stdout);
 }
 
-export function landingReviewPreflight(root, manifest) {
-  const importClosure = importClosureGaps(root, manifest.candidate);
+function copyAmbientProofInput(ambientRoot, candidateRoot, relativePath) {
+  if (!ambientRoot || ambientRoot === candidateRoot) return;
+  const source = path.join(ambientRoot, relativePath);
+  if (!fs.existsSync(source) || !fs.lstatSync(source).isFile()) return;
+  const destination = path.join(candidateRoot, relativePath);
+  fs.mkdirSync(path.dirname(destination), {recursive: true});
+  fs.copyFileSync(source, destination);
+}
+
+export function prepareCandidateProofInputs(candidateRoot, ambientRoot = null) {
+  // Compatibility producers in focused fixtures verify already-canonical
+  // inputs; the real producer overwrites both copies from exact snapshot
+  // sources. A contaminated ambient graph therefore cannot survive the
+  // subsequent canonical source-digest check.
+  copyAmbientProofInput(ambientRoot, candidateRoot, IMPORT_GRAPH_PATH);
+  copyAmbientProofInput(ambientRoot, candidateRoot, IMPORT_GRAPH_SEAL_PATH);
+  const producer = path.join(candidateRoot, IMPORT_GRAPH_PRODUCER_PATH);
+  const result = spawnSync(process.execPath, [
+    producer, IMPORT_GRAPH_REFRESH_ARGUMENT,
+  ], {
+    cwd: candidateRoot,
+    encoding: TEXT_ENCODING,
+    maxBuffer: SPAWN_MAX_BUFFER_BYTES,
+    timeout: IMPORT_GRAPH_REFRESH_TIMEOUT_MS,
+    killSignal: IMPORT_GRAPH_VERIFY_KILL_SIGNAL,
+  });
+  if (result.status !== 0) {
+    throw new Error(`${IMPORT_GRAPH_PROBLEM_PREFIX}` +
+      `${result.stderr || result.error?.message || result.stdout}`);
+  }
+}
+
+export function landingReviewPreflight(root, manifest, options = {}) {
+  const candidateRoot = options.candidateRoot || root;
+  const importClosure = importClosureGaps(candidateRoot, manifest.candidate);
   if (importClosure.importGaps.length > 0) {
     throw new Error(IMPORT_CLOSURE_PROBLEM_PREFIX +
       arrayJoin(arrayMap(importClosure.importGaps, (gap) =>
@@ -224,17 +286,17 @@ export function landingReviewPreflight(root, manifest) {
   });
   arraySort(paths);
   const sourceDigest = manifest.aggregate.fingerprint;
-  const key = preflightKey(root, manifest, paths);
+  const key = preflightKey(candidateRoot, manifest, paths);
   const file = path.join(root, CACHE_DIRECTORY, `${key}.json`);
-  const importGraphProblem = canonicalImportGraphProblem(root);
+  const importGraphProblem = canonicalImportGraphProblem(candidateRoot);
   if (importGraphProblem) throw new Error(importGraphProblem);
-  const proofCone = landingProofCone(root, paths, sourceDigest);
+  const proofCone = landingProofCone(candidateRoot, paths, sourceDigest);
   if (readPassingCache(file, key)) {
     return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
       status: PREFLIGHT_PASS, cached: true, proofCone};
   }
-  const problems = staticQualityProblems(root, paths);
-  arrayForEach(silentCatchProblems(root, paths), (problem) =>
+  const problems = staticQualityProblems(candidateRoot, paths);
+  arrayForEach(silentCatchProblems(candidateRoot, paths), (problem) =>
     arrayPush(problems, problem));
   if (problems.length > 0) {
     throw new Error(
@@ -248,6 +310,7 @@ export function landingReviewPreflight(root, manifest) {
     sourceDigest,
     paths,
     status: PREFLIGHT_PASS,
+    proofIds: arrayMap(DETERMINISTIC_PROOF_CACHE_REGISTRY, (proof) => proof.id),
   }, null, 2)}\n`);
   return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
     status: PREFLIGHT_PASS, cached: false, proofCone};

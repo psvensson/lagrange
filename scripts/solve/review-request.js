@@ -4,15 +4,26 @@
 // the current projection byte-for-byte before it records that verdict.
 
 import crypto from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {landingReviewPreflight} from './landing-preflight.js';
+import {prepareCandidateProofInputs} from './landing-preflight.js';
+import {landingRequirementsReceipt} from './landing-requirements.js';
+import {generatedDependencyReceiptInSnapshot} from './generated-dependencies.js';
+import {withCandidateSnapshot} from './candidate-snapshot.js';
+import {sealedVerificationTemplates} from './rejection-findings.js';
+import {
+  loadTemplateCategories,
+  suggestVerificationTemplates,
+} from './verification-template-suggest.js';
+import {readLog} from './store.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 const TEXT_ENCODING = 'utf8';
 const MISSING_CANDIDATE_FINGERPRINT = 'missing candidate fingerprint';
@@ -30,14 +41,25 @@ const AGGREGATE_NOT_REVIEWABLE_PREFIX =
   'land: current aggregate is not reviewable: ';
 const REVIEW_ID_FIELD = 'id';
 const REVIEW_MANIFEST_FIELD = 'manifest';
+const SOURCE_EPOCH_PROBLEM = 'land: could not freeze the current source epoch';
+const TEMPLATE_SOURCE_SEALED = 'sealed';
+const TEMPLATE_SOURCE_MECHANICAL = 'mechanical';
+const EXCLUSIVE_CREATE_FLAG = 'wx';
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
+const mapForEach = Function.call.bind(Map.prototype.forEach);
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapSet = Function.call.bind(Map.prototype.set);
 const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
+const stringLocaleCompare = Function.call.bind(String.prototype.localeCompare);
 const stringSlice = Function.call.bind(String.prototype.slice);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 function sortedCopy(values) {
   return arraySort(arraySlice(values || []));
@@ -60,7 +82,62 @@ function coupledPairRegistryDigest(root) {
   return REGISTRY_UNAVAILABLE_DIGEST;
 }
 
-function currentReviewManifest(root, quest, state) {
+function sourceEpoch(root, aggregate) {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root,
+    encoding: TEXT_ENCODING,
+  });
+  const headCommit = stringTrim(result.stdout);
+  if (result.status !== 0 || !regExpTest(/^[0-9a-f]{40}$/u, headCommit)) {
+    throw new Error(SOURCE_EPOCH_PROBLEM);
+  }
+  return {headCommit, candidateBaseCommit: aggregate.baseCommit};
+}
+
+function requiredReviewTemplates(root, quest, state, log) {
+  const catalog = loadTemplateCategories(root);
+  const byCategory = new Map();
+  const sealed = sealedVerificationTemplates(quest, log);
+  for (let categoryIndex = 0; categoryIndex < sealed.length; categoryIndex += 1) {
+    const category = sealed[categoryIndex];
+    mapSet(byCategory, category, {
+      category,
+      template: mapGet(catalog, category),
+      sources: [TEMPLATE_SOURCE_SEALED],
+    });
+  }
+  for (let attemptIndex = 0; attemptIndex < state.attempts.length; attemptIndex += 1) {
+    const attempt = state.attempts[attemptIndex];
+    const suggestions = suggestVerificationTemplates(
+      root, attempt.inspection?.content || '');
+    for (let suggestionIndex = 0;
+      suggestionIndex < suggestions.length; suggestionIndex += 1) {
+      const suggestion = suggestions[suggestionIndex];
+      const current = mapGet(byCategory, suggestion.category);
+      if (current) {
+        if (!arrayIncludes(current.sources, TEMPLATE_SOURCE_MECHANICAL)) {
+          arrayPush(current.sources, TEMPLATE_SOURCE_MECHANICAL);
+        }
+      } else {
+        mapSet(byCategory, suggestion.category, {
+          ...suggestion,
+          sources: [TEMPLATE_SOURCE_MECHANICAL],
+        });
+      }
+    }
+  }
+  const templates = [];
+  mapForEach(byCategory, (template) => arrayPush(templates, template));
+  return arraySort(templates, (left, right) =>
+    stringLocaleCompare(left.category, right.category));
+}
+
+function stablePreflightReceipt(preflight) {
+  const {cached: _cacheState, ...receiptValue} = preflight;
+  return receiptValue;
+}
+
+function currentReviewManifest(root, quest, state, suppliedLog) {
   if (!state.candidate?.ok || !state.candidate.fingerprint) {
     throw new Error(
       CANDIDATE_NOT_REVIEWABLE_PREFIX +
@@ -80,18 +157,36 @@ function currentReviewManifest(root, quest, state) {
   if (contracted.length === 0) {
     throw new Error(SOURCE_ATTEMPT_REQUIRED_PROBLEM);
   }
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    questId: quest.id,
-    coupledPairRegistryDigest: coupledPairRegistryDigest(root),
-    candidate: receipt(state.candidate),
-    aggregate: receipt({
-      ...state.aggregate,
-      sourcePaths: state.aggregate.paths,
-      firstAttemptIndex: contracted[0].index,
-      lastAttemptIndex: contracted[contracted.length - 1].index,
-    }),
-  };
+  const aggregate = receipt({
+    ...state.aggregate,
+    sourcePaths: state.aggregate.paths,
+    firstAttemptIndex: contracted[0].index,
+    lastAttemptIndex: contracted[contracted.length - 1].index,
+  });
+  return withCandidateSnapshot(root, {
+    ...state.aggregate,
+    sourcePaths: state.aggregate.paths,
+  }, (candidateRoot) => {
+    prepareCandidateProofInputs(candidateRoot, root);
+    const base = {
+      schemaVersion: SCHEMA_VERSION,
+      questId: quest.id,
+      coupledPairRegistryDigest: coupledPairRegistryDigest(root),
+      candidate: receipt(state.candidate),
+      aggregate,
+      sourceEpoch: sourceEpoch(root, aggregate),
+      landingRequirements: landingRequirementsReceipt(root, quest),
+      generatedDependencies: generatedDependencyReceiptInSnapshot(candidateRoot, {
+        ...state.aggregate,
+        sourcePaths: state.aggregate.paths,
+      }),
+      requiredReviewTemplates: requiredReviewTemplates(
+        root, quest, state, suppliedLog || readLog(root, quest.id)),
+    };
+    const preflight = landingReviewPreflight(root, base, {candidateRoot});
+    return {manifest: {...base, proofPlan: stablePreflightReceipt(preflight)},
+      preflight};
+  });
 }
 
 function reviewIdFor(manifest) {
@@ -108,18 +203,24 @@ function reviewFile(root, reviewId) {
   return path.join(root, REVIEW_DIRECTORY, `${reviewId}.json`);
 }
 
-export function createReviewRequest(root, quest, state) {
-  const manifest = currentReviewManifest(root, quest, state);
-  const preflight = landingReviewPreflight(root, manifest);
+export function createReviewRequest(root, quest, state, log) {
+  const {manifest, preflight} = currentReviewManifest(root, quest, state, log);
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
   fs.mkdirSync(path.dirname(file), {recursive: true});
   if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, `${jsonStringify({
+    const bytes = `${jsonStringify({
       id,
       createdAt: new Date().toISOString(),
       manifest,
-    }, null, 2)}\n`);
+    }, null, 2)}\n`;
+    const temporary = `${file}.${process.pid}.tmp`;
+    try {
+      fs.writeFileSync(temporary, bytes, {flag: EXCLUSIVE_CREATE_FLAG});
+      fs.renameSync(temporary, file);
+    } finally {
+      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
   }
   return {id, manifest, file: path.relative(root, file), preflight};
 }
@@ -143,12 +244,20 @@ export function loadReviewRequest(root, reviewId) {
   return request;
 }
 
-export function assertReviewCurrent(root, quest, state, reviewId) {
+export function assertReviewCurrent(root, quest, state, reviewId, log) {
   const request = loadReviewRequest(root, reviewId);
   if (request.manifest.questId !== quest.id) {
     throw new Error(`land: review ${reviewId} belongs to another Quest`);
   }
-  const current = currentReviewManifest(root, quest, state);
+  if (state.candidate?.fingerprint !== request.manifest.candidate?.fingerprint ||
+    state.aggregate?.fingerprint !== request.manifest.aggregate?.fingerprint) {
+    throw new Error(
+      `land: review ${reviewId} no longer matches current candidate bytes ` +
+      REVIEW_DRIFT_REGISTRY_SUFFIX + FRESH_REVIEW_ACTION,
+    );
+  }
+  const {manifest: current, preflight} = currentReviewManifest(
+    root, quest, state, log);
   if (jsonStringify(current) !== jsonStringify(request.manifest)) {
     throw new Error(
       `land: review ${reviewId} no longer matches current candidate bytes ` +
@@ -156,5 +265,5 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
       FRESH_REVIEW_ACTION,
     );
   }
-  return {...request, preflight: landingReviewPreflight(root, current)};
+  return {...request, preflight};
 }

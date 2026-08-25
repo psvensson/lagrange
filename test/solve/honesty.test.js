@@ -289,4 +289,33 @@ tap.test('honesty checks (the only process)', async (t) => {
     t.same(validateGoalpostsImmutable(quest, declared), []);
     t.end();
   });
+
+  t.test('new declarations seal staged landing requirements', (t) => {
+    const metric = {probe: 'oracle', args: {file: 'o'}};
+    const landingRequirements = {schemaVersion: 1, reviewReady: [],
+      landReady: {independentVerification: true}};
+    const quest = {
+      authoringContractVersion: 1,
+      statement: 'The review envelope is ready.',
+      class: 'process',
+      constraints: [],
+      doneWhen: metric,
+      frontiers: [{id: 'review-main', metric}],
+      landingRequirements,
+    };
+    const declared = {sealed: {
+      authoringContractVersion: 1,
+      statement: quest.statement,
+      class: quest.class,
+      constraints: [],
+      doneWhen: metric,
+      frontierIds: ['review-main'],
+      frontierMetrics: [metric],
+      landingRequirements,
+    }};
+    t.same(validateGoalpostsImmutable(quest, declared), []);
+    t.match(validateGoalpostsImmutable({...quest, landingRequirements: null}, declared)
+      .join('\n'), /landingRequirements changed after declaration/u);
+    t.end();
+  });
 });

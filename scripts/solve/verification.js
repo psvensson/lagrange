@@ -58,6 +58,8 @@ const LOCAL_STR_COMMIT_MIXED_CANDIDATE =
 const LOCAL_STR_COMMIT_CLAIMED_DIRTY =
   'commit changeRef claimed path(s) have uncommitted changes the ' +
   'pinned receipt does not cover';
+const SOURCE_VERIFICATION_GIT_DIFF_FAILED_PREFIX =
+  'source verification Git diff failed: ';
 export const VERIFIER_REJECTION_FINDING_KIND = LOCAL_STR_OWNED_020;
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
@@ -101,13 +103,60 @@ const SOURCE_EPOCH_INSPECTION_PROBLEM =
   'source epoch could not verify committed path drift; checkpoint or land ' +
   'the active Quest before changing repository history';
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayAt = Function.call.bind(Array.prototype.at);
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayPush = Function.call.bind(Array.prototype.push);
+const arrayReverse = Function.call.bind(Array.prototype.reverse);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const arraySome = Function.call.bind(Array.prototype.some);
 const setHas = Function.call.bind(Set.prototype.has);
+const setAdd = Function.call.bind(Set.prototype.add);
 const arraySort = Function.call.bind(Array.prototype.sort);
+const arrayIsArray = Array.isArray;
+const numberIsInteger = Number.isInteger;
 const objectCreate = Object.create;
 const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
+const objectValues = Object.values;
+const jsonStringify = JSON.stringify;
+const regExpTest = Function.call.bind(RegExp.prototype.test);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
+const SetConstructor = Set;
+
+function appendAll(target, source) {
+  for (let index = 0; index < source.length; index += 1) {
+    arrayPush(target, source[index]);
+  }
+  return target;
+}
+
+function capturedSet(values = []) {
+  const result = new SetConstructor();
+  for (let index = 0; index < values.length; index += 1) {
+    setAdd(result, values[index]);
+  }
+  return result;
+}
+
+function findAfter(values, firstIndex, predicate) {
+  for (let index = firstIndex; index < values.length; index += 1) {
+    if (predicate(values[index], index)) return values[index];
+  }
+  return undefined;
+}
+
+function collectAttemptPaths(attempts, selectPaths) {
+  const groups = [];
+  for (let index = 0; index < attempts.length; index += 1) {
+    arrayPush(groups, selectPaths(attempts[index]));
+  }
+  return uniqueSortedPathGroups(groups);
+}
 
 function uniqueSortedPathGroups(pathGroups) {
   const seen = objectCreate(null);
@@ -129,7 +178,7 @@ function uniqueSortedPathUnion(left, right) {
 }
 
 export function baseCommitReachable(root, baseCommit) {
-  if (!COMMIT_PATTERN.test(String(baseCommit || ''))) return false;
+  if (!regExpTest(COMMIT_PATTERN, String(baseCommit || ''))) return false;
   return spawnSync('git', ['cat-file', '-e', `${baseCommit}^{commit}`],
     {cwd: root, encoding: 'utf8'}).status === 0;
 }
@@ -138,7 +187,7 @@ export function baseCommitReachable(root, baseCommit) {
 // base is a different, pre-existing condition ("requires a recorded Git base
 // commit") and keeps its own disposition.
 export function baseRecordedButUnreachable(root, baseCommit) {
-  return COMMIT_PATTERN.test(String(baseCommit || '')) &&
+  return regExpTest(COMMIT_PATTERN, String(baseCommit || '')) &&
     !baseCommitReachable(root, baseCommit);
 }
 
@@ -155,12 +204,12 @@ function hash(bytes) {
 }
 
 export function formatVerificationFingerprint(sha256) {
-  return typeof sha256 === 'string' && /^[0-9a-f]{64}$/u.test(sha256) ?
+  return typeof sha256 === 'string' && regExpTest(/^[0-9a-f]{64}$/u, sha256) ?
     `sha256:${sha256}` : null;
 }
 
 export function validVerificationFingerprint(value) {
-  return typeof value === 'string' && FINGERPRINT_PATTERN.test(value);
+  return typeof value === 'string' && regExpTest(FINGERPRINT_PATTERN, value);
 }
 
 export function attemptFingerprint(event) {
@@ -174,8 +223,8 @@ export function resolveWorkspaceBaseCommit(root) {
     encoding: 'utf8',
   });
   if (result.status !== 0) return null;
-  const sha = String(result.stdout || '').trim();
-  return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
+  const sha = stringTrim(String(result.stdout || ''));
+  return regExpTest(/^[0-9a-f]{40}$/u, sha) ? sha : null;
 }
 
 function reviewedChangePaths(inspection, questId) {
@@ -269,12 +318,12 @@ function verificationOf(event) {
 function structuredApprovalMatches(event, scope, fingerprint) {
   if (event.type !== EVENT_FINDING ||
     event.kind !== VERIFIER_APPROVAL_FINDING_KIND ||
-    !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
+    !regExpTest(VERIFIER_EVIDENCE_PATTERN, String(event.evidence || ''))) return false;
   const verification = verificationOf(event);
-  if (!verification || ![
+  if (!verification || !arrayIncludes([
     LEGACY_VERIFICATION_CONTRACT_VERSION,
     VERIFICATION_CONTRACT_VERSION,
-  ].includes(verification.schemaVersion) ||
+  ], verification.schemaVersion) ||
     verification.fingerprint !== fingerprint) return false;
   return verification.scope === scope || verification.scope === VERIFICATION_SCOPE.BOTH;
 }
@@ -282,7 +331,7 @@ function structuredApprovalMatches(event, scope, fingerprint) {
 function structuredRejectionMatches(event, fingerprint) {
   if (event.type !== EVENT_FINDING ||
     event.kind !== VERIFIER_REJECTION_FINDING_KIND ||
-    !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
+    !regExpTest(VERIFIER_EVIDENCE_PATTERN, String(event.evidence || ''))) return false;
   const verification = verificationOf(event);
   return verification?.schemaVersion === LEGACY_VERIFICATION_CONTRACT_VERSION &&
     verification.scope === VERIFICATION_SCOPE.ATTEMPT &&
@@ -292,13 +341,13 @@ function structuredRejectionMatches(event, fingerprint) {
 
 function legacyApprovalMatches(event, frontier) {
   if (event.type !== EVENT_FINDING || event.frontier !== frontier ||
-    !String(event.evidence || '').startsWith(LOCAL_STR_OWNED_006)) return false;
+    !stringStartsWith(String(event.evidence || ''), LOCAL_STR_OWNED_006)) return false;
   return event.kind === VERIFIER_APPROVAL_FINDING_KIND ||
-    LEGACY_APPROVAL_PATTERN.test(String(event.claim || ''));
+    regExpTest(LEGACY_APPROVAL_PATTERN, String(event.claim || ''));
 }
 
 function laterApproval(log, attempt, scope, fingerprint) {
-  return log.slice(attempt.index + 1).find((event) =>
+  return findAfter(log, attempt.index + 1, (event) =>
     event.frontier === attempt.event.frontier &&
     structuredApprovalMatches(event, scope, fingerprint));
 }
@@ -330,19 +379,21 @@ function rejectionDisposition(log, attempts, attempt, options = {}) {
 }
 
 function sourcePathSuperset(candidate, rejected) {
-  const candidatePaths = new Set(candidate.sourcePaths);
-  return rejected.sourcePaths.every((filePath) => candidatePaths.has(filePath));
+  const candidatePaths = capturedSet(candidate.sourcePaths);
+  return arrayEvery(rejected.sourcePaths,
+    (filePath) => setHas(candidatePaths, filePath));
 }
 
 function checkpointPathSuperset(candidate, superseded) {
-  const candidatePaths = new Set(candidate.reviewPaths);
-  return superseded.reviewPaths.every(
-    (filePath) => candidatePaths.has(filePath),
+  const candidatePaths = capturedSet(candidate.reviewPaths);
+  return arrayEvery(superseded.reviewPaths,
+    (filePath) => setHas(candidatePaths, filePath),
   );
 }
 
 function approvedCheckpointReplacement(log, attempts, superseded) {
-  for (const candidate of attempts) {
+  for (let index = 0; index < attempts.length; index += 1) {
+    const candidate = attempts[index];
     if (candidate.index <= superseded.index ||
         candidate.event.frontier !== superseded.event.frontier ||
         candidate.event.workspaceBaseCommit !==
@@ -378,7 +429,8 @@ export function findApprovedRejectionReplacement(
   const rejectedBaseUnreachable = Boolean(options.root) &&
     baseRecordedButUnreachable(
       options.root, rejectedAttempt.event.workspaceBaseCommit);
-  for (const candidate of attempts) {
+  for (let index = 0; index < attempts.length; index += 1) {
+    const candidate = attempts[index];
     const baseAcceptable = rejectedBaseUnreachable ?
       Boolean(options.root) &&
         baseCommitReachable(options.root, candidate.event.workspaceBaseCommit) :
@@ -411,18 +463,22 @@ export function findApprovedRejectionReplacement(
 }
 
 function gitStatusHasUntracked(root, paths) {
-  const result = spawnSync('git', ['status', '--porcelain', '--', ...paths], {
+  const gitArguments = ['status', '--porcelain', '--'];
+  appendAll(gitArguments, paths);
+  const result = spawnSync('git', gitArguments, {
     cwd: root,
     encoding: 'utf8',
   });
   if (result.status !== 0) return GIT_STATUS_UNAVAILABLE;
-  return String(result.stdout || '').split(LOCAL_STR_OWNED_007)
-    .some((line) => line.startsWith(LOCAL_STR_OWNED_008));
+  return arraySome(
+    stringSplit(String(result.stdout || ''), LOCAL_STR_OWNED_007),
+    (line) => stringStartsWith(line, LOCAL_STR_OWNED_008),
+  );
 }
 
 export function canonicalSourceDelta(root, baseCommit, paths) {
-  const sortedPaths = [...new Set(paths)].sort();
-  if (!/^[0-9a-f]{40}$/u.test(String(baseCommit || ''))) {
+  const sortedPaths = uniqueSortedPathGroups([paths]);
+  if (!regExpTest(/^[0-9a-f]{40}$/u, String(baseCommit || ''))) {
     return {ok: false, fingerprint: null, content: null,
       problem: LOCAL_STR_OWNED_009};
   }
@@ -444,17 +500,20 @@ export function canonicalSourceDelta(root, baseCommit, paths) {
     return {ok: false, fingerprint: null, content: null,
       problem: LOCAL_STR_OWNED_011};
   }
-  const result = spawnSync('git', [
+  const gitArguments = [
     'diff', '--binary', '--full-index', '--no-ext-diff', baseCommit,
-    '--', ...sortedPaths,
-  ], {
+    '--',
+  ];
+  appendAll(gitArguments, sortedPaths);
+  const result = spawnSync('git', gitArguments, {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: GIT_MAX_BUFFER_BYTES,
   });
   if (result.status !== 0 || typeof result.stdout !== 'string') {
     return {ok: false, fingerprint: null, content: null,
-      problem: `source verification Git diff failed: ${String(result.stderr || '').trim()}`};
+      problem: SOURCE_VERIFICATION_GIT_DIFF_FAILED_PREFIX +
+        stringTrim(String(result.stderr || ''))};
   }
   return {
     ok: true,
@@ -481,10 +540,13 @@ export function attemptBaseCorrectionProofProblem(
   )) {
     return 'attempt base correction sealed change artifact has drifted';
   }
-  for (const [label, baseCommit] of [
+  const bases = [
     ['recorded-base', correction.fromBase],
     ['target-base', correction.toBase],
-  ]) {
+  ];
+  for (let index = 0; index < bases.length; index += 1) {
+    const label = bases[index][0];
+    const baseCommit = bases[index][1];
     const delta = canonicalSourceDelta(
       root,
       baseCommit,
@@ -506,11 +568,11 @@ export function attemptBaseCorrectionProofProblem(
 // rather than launder provenance across ranges (parallel-session epic).
 // Returns null when the working-tree path should run instead.
 function commitRangeFingerprint(root, selected) {
-  const refs = selected.map((attempt) =>
+  const refs = arrayMap(selected, (attempt) =>
     parseCommitChangeRef(attempt.event.changeRef));
-  if (refs.some((ref) => ref === null)) return null; // a diff ref is present
-  const bases = new Set(refs.map((ref) => ref.base));
-  const heads = new Set(refs.map((ref) => ref.head));
+  if (arraySome(refs, (ref) => ref === null)) return null; // a diff ref is present
+  const bases = capturedSet(arrayMap(refs, (ref) => ref.base));
+  const heads = capturedSet(arrayMap(refs, (ref) => ref.head));
   if (bases.size !== 1 || heads.size !== 1) {
     return {mixed: true};
   }
@@ -518,7 +580,7 @@ function commitRangeFingerprint(root, selected) {
 }
 
 export function aggregateSourceFingerprint(root, attempts) {
-  const contracted = attempts.filter((attempt) => attempt.contracted);
+  const contracted = arrayFilter(attempts, (attempt) => attempt.contracted);
   if (contracted.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: [], baseCommit: null};
   }
@@ -529,9 +591,8 @@ export function aggregateSourceFingerprint(root, attempts) {
       problem: LOCAL_STR_COMMIT_MIXED_AGGREGATE};
   }
   if (commitRange) {
-    const commitPaths = contracted.flatMap((attempt) =>
-      attempt.candidateContract ?
-        attempt.reviewPaths : attempt.sourcePaths);
+    const commitPaths = collectAttemptPaths(contracted, (attempt) =>
+      attempt.candidateContract ? attempt.reviewPaths : attempt.sourcePaths);
     return {
       ...canonicalCommitDelta(
         root, commitRange.base, commitRange.head, commitPaths),
@@ -544,13 +605,13 @@ export function aggregateSourceFingerprint(root, attempts) {
   // Anchoring at an unresolvable name would make the terminal obligation
   // permanently unsatisfiable; anchoring later loses nothing because the union
   // keeps every recorded path in the reviewed delta.
-  const paths = contracted.flatMap((attempt) => attempt.candidateContract ?
-    attempt.reviewPaths : attempt.sourcePaths);
-  const anchor = contracted.find((attempt) =>
+  const paths = collectAttemptPaths(contracted, (attempt) =>
+    attempt.candidateContract ? attempt.reviewPaths : attempt.sourcePaths);
+  const anchor = arrayFind(contracted, (attempt) =>
     baseCommitReachable(root, attempt.event.workspaceBaseCommit));
   if (!anchor) {
     return {ok: false, fingerprint: null, content: null,
-      paths: [...new Set(paths)].sort(), baseCommit: null,
+      paths, baseCommit: null,
       code: BASE_UNREACHABLE_CODE,
       problem: 'terminal aggregate has no reachable recorded base ' +
         `(${BASE_UNREACHABLE_CODE}); record a fresh same-frontier attempt at ` +
@@ -580,9 +641,13 @@ function latestCheckpointCommit(root, questId) {
   });
   if (result.status !== 0) return null;
   const prefix = `checkpoint(quest): ${questId}:`;
-  for (const line of String(result.stdout || '').split(LOCAL_STR_OWNED_007)) {
-    const [commit, subject = ''] = line.split(LOCAL_STR_OWNED_013, 2);
-    if (/^[0-9a-f]{40}$/u.test(commit) && subject.startsWith(prefix)) return commit;
+  const lines = stringSplit(String(result.stdout || ''), LOCAL_STR_OWNED_007);
+  for (let index = 0; index < lines.length; index += 1) {
+    const fields = stringSplit(lines[index], LOCAL_STR_OWNED_013, 2);
+    const commit = fields[0];
+    const subject = fields[1] || '';
+    if (regExpTest(/^[0-9a-f]{40}$/u, commit) &&
+      stringStartsWith(subject, prefix)) return commit;
   }
   return null;
 }
@@ -596,7 +661,7 @@ function attemptIsAfterCheckpoint(root, attempt, checkpointCommit) {
   // receipts and the terminal aggregate covers every recorded path.
   if (baseRecordedButUnreachable(root, baseCommit)) return false;
   if (!checkpointCommit) return true;
-  if (!/^[0-9a-f]{40}$/u.test(String(baseCommit || ''))) return true;
+  if (!regExpTest(/^[0-9a-f]{40}$/u, String(baseCommit || ''))) return true;
   const result = spawnSync(
     'git', ['merge-base', '--is-ancestor', checkpointCommit, baseCommit],
     {cwd: root, encoding: 'utf8'},
@@ -607,54 +672,54 @@ function attemptIsAfterCheckpoint(root, attempt, checkpointCommit) {
 }
 
 function dirtyPathsSinceHead(root, paths) {
-  const sortedPaths = [...new Set(paths)].sort();
+  const sortedPaths = uniqueSortedPathGroups([paths]);
   if (sortedPaths.length === 0) return [];
+  const gitArguments = ['diff', '--name-only', '-z', 'HEAD', '--'];
+  appendAll(gitArguments, sortedPaths);
   const result = spawnSync(
-    'git', ['diff', '--name-only', '-z', 'HEAD', '--', ...sortedPaths],
+    'git', gitArguments,
     {cwd: root, encoding: 'utf8'},
   );
   if (result.status !== 0) return null;
-  return String(result.stdout || '').split(LOCAL_STR_OWNED_014).filter(Boolean);
+  return arrayFilter(
+    stringSplit(String(result.stdout || ''), LOCAL_STR_OWNED_014),
+    Boolean,
+  );
 }
 
 function findUncheckpointedApprovedAttempts(root, quest, log, state) {
-  const resolvedRejectedIndexes = new Set(
-    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
-  );
-  const approvedReplacementIndexes = new Set(
-    state.resolvedRejectedAttempts.map((entry) => entry.replacement.index),
-  );
+  const resolvedRejectedIndexes = capturedSet(arrayMap(
+    state.resolvedRejectedAttempts, (entry) => entry.attempt.index));
+  const approvedReplacementIndexes = capturedSet(arrayMap(
+    state.resolvedRejectedAttempts, (entry) => entry.replacement.index));
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
-  const candidates = state.attempts.filter((attempt) =>
+  const candidates = arrayFilter(state.attempts, (attempt) =>
     attempt.verificationVersion === LEGACY_VERIFICATION_CONTRACT_VERSION &&
-    !resolvedRejectedIndexes.has(attempt.index) &&
+    !setHas(resolvedRejectedIndexes, attempt.index) &&
     (
-      approvedReplacementIndexes.has(attempt.index) ||
+      setHas(approvedReplacementIndexes, attempt.index) ||
       attemptIsAfterCheckpoint(root, attempt, checkpointCommit)
     ));
-  const supersededIndexes = new Set(
-    candidates
-      .filter((attempt) => approvedCheckpointReplacement(
-        log,
-        candidates,
-        attempt,
-      ))
-      .map((attempt) => attempt.index),
-  );
-  return candidates.filter((attempt) => !supersededIndexes.has(attempt.index));
+  const superseded = arrayFilter(candidates, (attempt) =>
+    approvedCheckpointReplacement(log, candidates, attempt));
+  const supersededIndexes = capturedSet(arrayMap(
+    superseded, (attempt) => attempt.index));
+  return arrayFilter(candidates,
+    (attempt) => !setHas(supersededIndexes, attempt.index));
 }
 
 export function candidateReceiptOf(event) {
   const verification = verificationOf(event);
   if (event.type !== EVENT_FINDING ||
     verification?.schemaVersion !== VERIFICATION_CONTRACT_VERSION ||
-    ![VERIFICATION_SCOPE.CANDIDATE, VERIFICATION_SCOPE.BOTH]
-      .includes(verification.scope) ||
+    !arrayIncludes(
+      [VERIFICATION_SCOPE.CANDIDATE, VERIFICATION_SCOPE.BOTH],
+      verification.scope) ||
     !validVerificationFingerprint(verification.fingerprint) ||
-    !/^[0-9a-f]{40}$/u.test(String(verification.baseCommit || '')) ||
-    !Array.isArray(verification.paths) ||
-    !Number.isInteger(verification.firstAttemptIndex) ||
-    !Number.isInteger(verification.lastAttemptIndex)) return null;
+    !regExpTest(/^[0-9a-f]{40}$/u, String(verification.baseCommit || '')) ||
+    !arrayIsArray(verification.paths) ||
+    !numberIsInteger(verification.firstAttemptIndex) ||
+    !numberIsInteger(verification.lastAttemptIndex)) return null;
   return verification;
 }
 
@@ -666,7 +731,7 @@ function buildLandingCandidate(root, quest, attempts) {
   // and their rejections stay inside the candidate's log-scan range. Their
   // ancestry is unknowable, so they are kept for coverage rather than filtered
   // by a probe that cannot answer.
-  const selected = attempts.filter((attempt) =>
+  const selected = arrayFilter(attempts, (attempt) =>
     attempt.candidateContract &&
     (baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit) ||
       attemptIsAfterCheckpoint(root, attempt, checkpointCommit)));
@@ -675,10 +740,9 @@ function buildLandingCandidate(root, quest, attempts) {
       sourcePaths: [], baseCommit: null, attempts: [],
       firstAttemptIndex: null, lastAttemptIndex: null};
   }
-  const paths = [...new Set(selected.flatMap((attempt) =>
-    attempt.reviewPaths))].sort();
-  const sourcePaths = [...new Set(selected.flatMap((attempt) =>
-    attempt.sourcePaths))].sort();
+  const paths = collectAttemptPaths(selected, (attempt) => attempt.reviewPaths);
+  const sourcePaths = collectAttemptPaths(
+    selected, (attempt) => attempt.sourcePaths);
   const shared = {
     paths,
     sourcePaths,
@@ -702,18 +766,26 @@ function buildLandingCandidate(root, quest, attempts) {
   // Anchor the delta at the one reachable recorded base. Dead bases cannot
   // anchor a delta, but the union above keeps every recorded path under the
   // anchored review, so anchoring at the reachable base loses nothing.
-  const reachableBases = [...new Set(selected
-    .map((attempt) => attempt.event.workspaceBaseCommit)
-    .filter((base) => baseCommitReachable(root, base)))];
+  const recordedBases = arrayMap(
+    selected, (attempt) => attempt.event.workspaceBaseCommit);
+  const reachableBases = [];
+  const seenBases = capturedSet();
+  for (let index = 0; index < recordedBases.length; index += 1) {
+    const base = recordedBases[index];
+    if (baseCommitReachable(root, base) && !setHas(seenBases, base)) {
+      setAdd(seenBases, base);
+      arrayPush(reachableBases, base);
+    }
+  }
   if (reachableBases.length === 0) {
     return {ok: false, fingerprint: null, content: null, ...shared,
       baseCommit: null, code: BASE_UNREACHABLE_CODE,
       problem: 'landing candidate has no reachable recorded base ' +
         `(${BASE_UNREACHABLE_CODE}); record a fresh same-frontier attempt at ` +
-        `a live base covering: ${paths.join(', ')}`};
+        `a live base covering: ${arrayJoin(paths, ', ')}`};
   }
   if (reachableBases.length !== 1 ||
-    !/^[0-9a-f]{40}$/u.test(String(reachableBases[0] || ''))) {
+    !regExpTest(/^[0-9a-f]{40}$/u, String(reachableBases[0] || ''))) {
     return {ok: false, fingerprint: null, content: null, ...shared,
       baseCommit: reachableBases[0] || null,
       problem: 'landing candidate requires one recorded common Git base'};
@@ -774,7 +846,8 @@ export function sourceEpochCommittedDriftPaths(root, epoch, extraPaths = []) {
 
 export function sourceEpochDriftProblem(driftPaths) {
   return SOURCE_EPOCH_DRIFT_PREFIX +
-    driftPaths.join(SOURCE_EPOCH_PATH_SEPARATOR) + SOURCE_EPOCH_DRIFT_ACTION;
+    arrayJoin(driftPaths, SOURCE_EPOCH_PATH_SEPARATOR) +
+    SOURCE_EPOCH_DRIFT_ACTION;
 }
 
 function receiptMatchesProjection(receipt, projection) {
@@ -783,23 +856,23 @@ function receiptMatchesProjection(receipt, projection) {
     receipt.baseCommit === projection.baseCommit &&
     receipt.firstAttemptIndex === projection.firstAttemptIndex &&
     receipt.lastAttemptIndex === projection.lastAttemptIndex &&
-    JSON.stringify([...receipt.paths].sort()) ===
-      JSON.stringify([...(projection.paths || [])].sort());
+    jsonStringify(arraySort(arraySlice(receipt.paths))) ===
+      jsonStringify(arraySort(arraySlice(projection.paths || [])));
 }
 
 function validCandidateReceipt(receipt, fingerprint) {
   return receipt && receipt.fingerprint === fingerprint &&
-    /^[0-9a-f]{40}$/u.test(String(receipt.baseCommit || '')) &&
-    Array.isArray(receipt.paths) && receipt.paths.length > 0 &&
-    Array.isArray(receipt.sourcePaths) &&
-    Number.isInteger(receipt.firstAttemptIndex) &&
-    Number.isInteger(receipt.lastAttemptIndex) &&
+    regExpTest(/^[0-9a-f]{40}$/u, String(receipt.baseCommit || '')) &&
+    arrayIsArray(receipt.paths) && receipt.paths.length > 0 &&
+    arrayIsArray(receipt.sourcePaths) &&
+    numberIsInteger(receipt.firstAttemptIndex) &&
+    numberIsInteger(receipt.lastAttemptIndex) &&
     receipt.firstAttemptIndex <= receipt.lastAttemptIndex;
 }
 
 function candidateVerificationState(root, log, candidate) {
   if (!candidate.ok) {
-    const anchor = candidate.attempts.at(-1);
+    const anchor = arrayAt(candidate.attempts, -1);
     return {
       approval: null,
       rejection: null,
@@ -819,9 +892,12 @@ function candidateVerificationState(root, log, candidate) {
   }
   let approval = null;
   let rejection = null;
-  for (const event of log.slice(candidate.firstAttemptIndex + 1)) {
+  const tail = arraySlice(log, candidate.firstAttemptIndex + 1);
+  for (let index = 0; index < tail.length; index += 1) {
+    const event = tail[index];
     const receipt = candidateReceiptOf(event);
-    if (!receipt || !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) continue;
+    if (!receipt ||
+      !regExpTest(VERIFIER_EVIDENCE_PATTERN, String(event.evidence || ''))) continue;
     if (event.kind === VERIFIER_REJECTION_FINDING_KIND &&
       receipt.verdict === VERIFICATION_VERDICT_REJECTED) rejection = {event, receipt};
     if (event.kind === VERIFIER_APPROVAL_FINDING_KIND &&
@@ -833,7 +909,7 @@ function candidateVerificationState(root, log, candidate) {
     const problem = candidateRejectionProblem(root, candidate, rejection, log);
     if (problem) {
       unresolvedRejection = rejection;
-      problems.push(problem);
+      arrayPush(problems, problem);
     }
   }
   return {approval, rejection, unresolvedRejection, problems};
@@ -850,17 +926,20 @@ function candidateVerificationState(root, log, candidate) {
 // contribution receipt fields are ignored (fail-closed); events for other
 // fingerprints never contribute.
 export function rejectionDecompositionCoverage(root, log, rejection) {
-  const covered = new Set();
-  for (const event of log) {
+  const covered = new SetConstructor();
+  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
+    const event = log[eventIndex];
     if (event.type !== EVENT_REJECTION_DECOMPOSITION ||
       event.rejectedFingerprint !== rejection.receipt.fingerprint ||
-      !Array.isArray(event.coveredPaths) ||
-      !Array.isArray(event.contributionPaths) ||
+      !arrayIsArray(event.coveredPaths) ||
+      !arrayIsArray(event.contributionPaths) ||
       !validVerificationFingerprint(event.approvalFingerprint)) continue;
     const live = canonicalSourceDelta(
       root, event.approvalBaseCommit, event.contributionPaths);
     if (!live.ok || live.fingerprint !== event.approvalFingerprint) continue;
-    for (const filePath of event.coveredPaths) covered.add(filePath);
+    for (let pathIndex = 0; pathIndex < event.coveredPaths.length; pathIndex += 1) {
+      setAdd(covered, event.coveredPaths[pathIndex]);
+    }
   }
   return covered;
 }
@@ -881,7 +960,7 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
     (filePath) => !isVerificationBookkeeping(filePath, null) &&
       !setHas(covered, filePath));
   if (remainingPaths.length === 0) return null;
-  const replacementPaths = new Set(arrayFilter(candidate.paths || [],
+  const replacementPaths = capturedSet(arrayFilter(candidate.paths || [],
     (filePath) => !isVerificationBookkeeping(filePath, null)));
   const rejectedBaseDead = baseRecordedButUnreachable(
     root, rejection.receipt.baseCommit);
@@ -889,7 +968,8 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
     baseCommitReachable(root, candidate.baseCommit) :
     candidate.baseCommit === rejection.receipt.baseCommit;
   let coversRemainingPaths = true;
-  for (const filePath of remainingPaths) {
+  for (let index = 0; index < remainingPaths.length; index += 1) {
+    const filePath = remainingPaths[index];
     if (!setHas(replacementPaths, filePath)) {
       coversRemainingPaths = false;
       break;
@@ -901,7 +981,7 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
     coversRemainingPaths;
   if (replaced) return null;
   const remainingDetail = covered.size > 0 ?
-    ` covering the remaining rejected paths: ${remainingPaths.join(', ')}` :
+    ` covering the remaining rejected paths: ${arrayJoin(remainingPaths, ', ')}` :
     '';
   return {
     message: rejectedBaseDead ?
@@ -949,7 +1029,7 @@ export function verificationState(root, quest, log, options = {}) {
     log,
     options,
   );
-  const attemptProblems = correctionProblems.map((message) => ({
+  const attemptProblems = arrayMap(correctionProblems, (message) => ({
     message,
     ts: null,
     frontier: null,
@@ -957,12 +1037,13 @@ export function verificationState(root, quest, log, options = {}) {
   const pendingAttempts = [];
   const resolvedRejectedAttempts = [];
   const unresolvedRejectedAttempts = [];
-  for (const attempt of attempts) {
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
     if (!attempt.contracted) {
-      const approval = log.slice(attempt.index + 1)
-        .find((event) => legacyApprovalMatches(event, attempt.event.frontier));
+      const approval = findAfter(log, attempt.index + 1,
+        (event) => legacyApprovalMatches(event, attempt.event.frontier));
       if (!approval) {
-        attemptProblems.push(attemptProblem(
+        arrayPush(attemptProblems, attemptProblem(
           attempt,
           LOCAL_STR_OWNED_015,
         ));
@@ -970,17 +1051,17 @@ export function verificationState(root, quest, log, options = {}) {
       continue;
     }
     if (!attempt.fingerprint) {
-      attemptProblems.push(attemptProblem(
+      arrayPush(attemptProblems, attemptProblem(
         attempt,
         LOCAL_STR_OWNED_016,
       ));
-      pendingAttempts.push(attempt);
+      arrayPush(pendingAttempts, attempt);
       continue;
     }
     if (attempt.candidateContract) continue;
     const rejection = rejectionDisposition(log, attempts, attempt, {root});
     if (rejection?.replacement) {
-      resolvedRejectedAttempts.push({
+      arrayPush(resolvedRejectedAttempts, {
         attempt,
         rejection: rejection.rejection.event,
         replacement: rejection.replacement.attempt,
@@ -990,38 +1071,41 @@ export function verificationState(root, quest, log, options = {}) {
     }
     if (rejection) {
       const unresolved = unresolvedRejectionEntry(root, attempt, rejection);
-      attemptProblems.push(unresolved.problem);
-      unresolvedRejectedAttempts.push(unresolved.entry);
+      arrayPush(attemptProblems, unresolved.problem);
+      arrayPush(unresolvedRejectedAttempts, unresolved.entry);
       continue;
     }
     const approval = laterApproval(
       log, attempt, VERIFICATION_SCOPE.ATTEMPT, attempt.fingerprint);
     if (!approval) {
-      attemptProblems.push(attemptProblem(
+      arrayPush(attemptProblems, attemptProblem(
         attempt,
         `requires a later exact approval for ${attempt.fingerprint}`,
       ));
-      pendingAttempts.push(attempt);
+      arrayPush(pendingAttempts, attempt);
     }
   }
 
   const candidate = buildLandingCandidate(root, quest, attempts);
   const candidateState = candidateVerificationState(root, log, candidate);
-  attemptProblems.push(...candidateState.problems);
+  appendAll(attemptProblems, candidateState.problems);
 
   const aggregate = aggregateSourceFingerprint(root, attempts);
-  const latestContracted = [...attempts].reverse().find((attempt) => attempt.contracted);
+  const reversedAttempts = arrayReverse(arraySlice(attempts));
+  const latestContracted = arrayFind(
+    reversedAttempts, (attempt) => attempt.contracted);
   let aggregateApproval = null;
   if (latestContracted && aggregate.ok && aggregate.fingerprint) {
-    aggregateApproval = log.slice(latestContracted.index + 1).find((event) =>
+    aggregateApproval = findAfter(log, latestContracted.index + 1, (event) =>
       structuredApprovalMatches(
         event, VERIFICATION_SCOPE.AGGREGATE, aggregate.fingerprint));
   }
   const aggregateProblems = [];
   if (latestContracted && !aggregate.ok) {
-    aggregateProblems.push(attemptProblem(latestContracted, aggregate.problem));
+    arrayPush(aggregateProblems,
+      attemptProblem(latestContracted, aggregate.problem));
   } else if (latestContracted && !aggregateApproval) {
-    aggregateProblems.push(attemptProblem(
+    arrayPush(aggregateProblems, attemptProblem(
       latestContracted,
       `requires a later aggregate approval for ${aggregate.fingerprint}`,
     ));
@@ -1030,16 +1114,16 @@ export function verificationState(root, quest, log, options = {}) {
   // their obligations resolve elsewhere, or the Quest would read clean while
   // an unverifiable receipt sits in its history. Every disposition above is
   // unchanged by this projection.
-  const baseUnreachableAttempts = attempts
-    .filter((attempt) => attempt.contracted &&
-      baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit))
-    .map((attempt) => ({
-      attempt,
-      code: BASE_UNREACHABLE_CODE,
-      baseCommit: attempt.event.workspaceBaseCommit,
-      liveReceiptVerifiable: false,
-      countsAsVerification: false,
-    }));
+  const unreachableAttempts = arrayFilter(attempts,
+    (attempt) => attempt.contracted &&
+      baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit));
+  const baseUnreachableAttempts = arrayMap(unreachableAttempts, (attempt) => ({
+    attempt,
+    code: BASE_UNREACHABLE_CODE,
+    baseCommit: attempt.event.workspaceBaseCommit,
+    liveReceiptVerifiable: false,
+    countsAsVerification: false,
+  }));
   const state = {
     attempts,
     pendingAttempts,
@@ -1069,10 +1153,12 @@ function isCommitAttempt(attempt) {
 
 function checkpointCoveredPaths(state) {
   const uncheckpointed = state.uncheckpointedApprovedAttempts;
-  const coveredPaths = new Set(uncheckpointed.flatMap(
-    (attempt) => attempt.reviewPaths));
+  const coveredPaths = capturedSet(collectAttemptPaths(
+    uncheckpointed, (attempt) => attempt.reviewPaths));
   if (state.candidateApproval) {
-    for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
+    for (let index = 0; index < state.candidate.paths.length; index += 1) {
+      setAdd(coveredPaths, state.candidate.paths[index]);
+    }
   }
   return coveredPaths;
 }
@@ -1084,16 +1170,17 @@ function dirtyCheckpointPathProblems(root, contracted, coveredPaths) {
   // base→working-tree dirty check and the live base→tree receipt re-check do
   // not apply. Cleanliness for commit refs is enforced at record time (the
   // claimed paths must be clean and head an ancestor of HEAD when sealed).
-  const allAttemptPaths = contracted.flatMap((attempt) =>
+  const allAttemptPaths = collectAttemptPaths(contracted, (attempt) =>
     isCommitAttempt(attempt) ? [] : attempt.reviewPaths);
   const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
-  const anchor = [...contracted].reverse()[0];
+  const anchor = contracted.length > 0 ? contracted[contracted.length - 1] : null;
   if (dirtyPaths === null && anchor && allAttemptPaths.length > 0) {
-    problems.push(attemptProblem(anchor, LOCAL_STR_OWNED_019));
+    arrayPush(problems, attemptProblem(anchor, LOCAL_STR_OWNED_019));
   } else if (anchor) {
-    for (const dirtyPath of dirtyPaths) {
-      if (!coveredPaths.has(dirtyPath)) {
-        problems.push(attemptProblem(
+    for (let index = 0; index < dirtyPaths.length; index += 1) {
+      const dirtyPath = dirtyPaths[index];
+      if (!setHas(coveredPaths, dirtyPath)) {
+        arrayPush(problems, attemptProblem(
           anchor,
           `dirty path ${dirtyPath} has no uncheckpointed exact attempt receipt`,
         ));
@@ -1108,14 +1195,18 @@ function dirtyCommitClaimProblems(root, contracted) {
   // Commit-ref claimed paths are pinned by sha, but a later edit to one of
   // them at HEAD is not covered by the pinned receipt — surface it (the
   // handoff scope classifier catches source paths; this catches the rest).
-  for (const attempt of contracted) {
+  for (let index = 0; index < contracted.length; index += 1) {
+    const attempt = contracted[index];
     if (!isCommitAttempt(attempt)) continue;
     const claimed = attempt.reviewPaths || [];
     if (claimed.length === 0) continue;
-    const status = spawnSync('git', ['status', '--porcelain', '--', ...claimed],
+    const gitArguments = ['status', '--porcelain', '--'];
+    appendAll(gitArguments, claimed);
+    const status = spawnSync('git', gitArguments,
       {cwd: root, encoding: 'utf8'});
-    if (status.status === 0 && String(status.stdout || '').trim() !== '') {
-      problems.push(attemptProblem(
+    if (status.status === 0 &&
+      stringTrim(String(status.stdout || '')) !== '') {
+      arrayPush(problems, attemptProblem(
         attempt,
         LOCAL_STR_COMMIT_CLAIMED_DIRTY,
       ));
@@ -1126,7 +1217,8 @@ function dirtyCommitClaimProblems(root, contracted) {
 
 function liveAttemptReceiptProblems(root, uncheckpointed) {
   const problems = [];
-  for (const attempt of uncheckpointed) {
+  for (let index = 0; index < uncheckpointed.length; index += 1) {
+    const attempt = uncheckpointed[index];
     if (isCommitAttempt(attempt)) continue; // pinned by sha; see note above
     // The attempt receipt hashes the complete canonical changeRef payload. Re-diff
     // that same complete path set here: sourcePaths is intentionally narrower and
@@ -1134,9 +1226,9 @@ function liveAttemptReceiptProblems(root, uncheckpointed) {
     const live = canonicalSourceDelta(
       root, attempt.event.workspaceBaseCommit, attempt.reviewPaths);
     if (!live.ok) {
-      problems.push(attemptProblem(attempt, live.problem));
+      arrayPush(problems, attemptProblem(attempt, live.problem));
     } else if (live.fingerprint !== attempt.fingerprint) {
-      problems.push(attemptProblem(
+      arrayPush(problems, attemptProblem(
         attempt,
         `changed after approval (approved ${attempt.fingerprint}, current ${live.fingerprint})`,
       ));
@@ -1153,22 +1245,22 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const problems = [];
   if (state.candidate?.fingerprint) {
     if (!state.candidate.ok) {
-      problems.push(attemptProblem(
-        state.candidate.attempts.at(-1), state.candidate.problem));
+      arrayPush(problems, attemptProblem(
+        arrayAt(state.candidate.attempts, -1), state.candidate.problem));
     } else if (!state.candidateApproval) {
-      problems.push(attemptProblem(
-        state.candidate.attempts.at(-1),
+      arrayPush(problems, attemptProblem(
+        arrayAt(state.candidate.attempts, -1),
         `landing candidate requires exact approval for ${state.candidate.fingerprint}`));
     }
   }
   const uncheckpointed = state.uncheckpointedApprovedAttempts;
-  const contracted = state.attempts.filter((attempt) => attempt.contracted);
+  const contracted = arrayFilter(state.attempts,
+    (attempt) => attempt.contracted);
   const coveredPaths = checkpointCoveredPaths(state);
-  problems.push(
-    ...dirtyCheckpointPathProblems(root, contracted, coveredPaths),
-    ...dirtyCommitClaimProblems(root, contracted),
-    ...liveAttemptReceiptProblems(root, uncheckpointed),
-  );
+  appendAll(problems,
+    dirtyCheckpointPathProblems(root, contracted, coveredPaths));
+  appendAll(problems, dirtyCommitClaimProblems(root, contracted));
+  appendAll(problems, liveAttemptReceiptProblems(root, uncheckpointed));
   return problems;
 }
 
@@ -1204,12 +1296,12 @@ export function probeBaseReproducibility(root, attemptEvent, paths, options = {}
     return {reproducible: null, candidatesFound: null, commitsScanned: 0,
       scanTruncated: false, unprobedReason: 'git could not enumerate commits'};
   }
-  const commits = String(listed.stdout || '')
-    .split(LOCAL_STR_OWNED_007).filter(Boolean);
-  const scanned = commits.slice(0, limit);
+  const commits = arrayFilter(
+    stringSplit(String(listed.stdout || ''), LOCAL_STR_OWNED_007), Boolean);
+  const scanned = arraySlice(commits, 0, limit);
   let candidatesFound = 0;
-  for (const commit of scanned) {
-    const delta = canonicalSourceDelta(root, commit, paths);
+  for (let index = 0; index < scanned.length; index += 1) {
+    const delta = canonicalSourceDelta(root, scanned[index], paths);
     if (delta.ok && delta.fingerprint === fingerprint) candidatesFound += 1;
   }
   return {
@@ -1223,7 +1315,7 @@ export function probeBaseReproducibility(root, attemptEvent, paths, options = {}
 
 export function terminalVerificationProblems(root, quest, log, options = {}) {
   const state = verificationState(root, quest, log, options);
-  return [...state.attemptProblems, ...state.aggregateProblems];
+  return appendAll(arraySlice(state.attemptProblems), state.aggregateProblems);
 }
 
 export function buildVerificationFinding(args) {
@@ -1231,21 +1323,21 @@ export function buildVerificationFinding(args) {
   const isRejection = args.kind === VERIFIER_REJECTION_FINDING_KIND;
   if (!isApproval && !isRejection) return null;
   const label = isRejection ? 'verifier-rejection' : 'verifier-approval';
-  if (!VERIFIER_EVIDENCE_PATTERN.test(String(args.evidence || ''))) {
+  if (!regExpTest(VERIFIER_EVIDENCE_PATTERN, String(args.evidence || ''))) {
     throw new Error(
       `${label} requires --evidence subagent:<non-empty-stable-id>`,
     );
   }
   const scope = args.verificationScope;
-  if (!Object.values(VERIFICATION_SCOPE).includes(scope)) {
+  if (!arrayIncludes(objectValues(VERIFICATION_SCOPE), scope)) {
     throw new Error(
       `${label} requires --verification-scope attempt|aggregate|both`,
     );
   }
-  if (isRejection && ![
+  if (isRejection && !arrayIncludes([
     VERIFICATION_SCOPE.ATTEMPT,
     VERIFICATION_SCOPE.CANDIDATE,
-  ].includes(scope)) {
+  ], scope)) {
     throw new Error(
       'verifier-rejection requires --verification-scope attempt|candidate');
   }
@@ -1260,16 +1352,16 @@ export function buildVerificationFinding(args) {
   // later post-mortem. Category-complete content is required at record time.
   let rejectionFindings = null;
   if (isRejection) {
-    const findings = Array.isArray(args.rejectionFindings) ?
+    const findings = arrayIsArray(args.rejectionFindings) ?
       args.rejectionFindings : [];
-    const wellFormed = findings.length > 0 && findings.every((finding) =>
+    const wellFormed = findings.length > 0 && arrayEvery(findings, (finding) =>
       finding && typeof finding.category === 'string' && finding.category &&
       typeof finding.summary === 'string' &&
       finding.summary.length >= MIN_REJECTION_SUMMARY_LENGTH);
     if (!wellFormed) {
       throw new Error(REJECTION_FINDINGS_REQUIRED_PROBLEM);
     }
-    rejectionFindings = findings.map(
+    rejectionFindings = arrayMap(findings,
       ({category, summary}) => ({category, summary}));
   }
   const schemaVersion = args.verificationSchemaVersion ||
@@ -1287,8 +1379,8 @@ export function buildVerificationFinding(args) {
     fingerprint: args.verificationFingerprint,
     ...(schemaVersion === VERIFICATION_CONTRACT_VERSION && receipt ? {
       baseCommit: receipt.baseCommit,
-      paths: [...receipt.paths].sort(),
-      sourcePaths: [...(receipt.sourcePaths || [])].sort(),
+      paths: arraySort(arraySlice(receipt.paths)),
+      sourcePaths: arraySort(arraySlice(receipt.sourcePaths || [])),
       firstAttemptIndex: receipt.firstAttemptIndex,
       lastAttemptIndex: receipt.lastAttemptIndex,
     } : {}),

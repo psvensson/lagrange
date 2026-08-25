@@ -86,17 +86,41 @@ The normal Quest workflow has three verbs:
    It MUST NOT parse or execute the
    human-rendered action value, and it stops on every judgment, verification,
    audit-repair, or terminal action.
-3. `solve land --id <id>` freezes the exact terminal candidate and aggregate
-   manifest only after a cheap changed-path preflight passes, caches that pass
-   by exact source digest, and returns an immutable review id. A second `land --review <id>
-   --verifier <id> --verdict approve|reject --receipt <ref>` rechecks that
-   manifest against current bytes and constructs the receipt server-side.
+3. `solve land --id <id>` freezes one immutable review envelope only after a
+   cheap changed-path preflight passes. The envelope binds the exact terminal
+   candidate and aggregate, source epoch, sealed `landingRequirements`
+   evidence, additive sealed-plus-mechanical verification-template checklist,
+   exact-snapshot generated dependencies, and deterministic proof plan. A
+   second `land --review <id> --verdict-file <workspace.json>` validates a
+   bounded `solver-verifier-verdict/1` receipt, accounts for every checklist
+   item, rechecks the whole envelope, and constructs the content receipt
+   server-side. Older explicit verdict flags are compatibility adapters into
+   the same immutable review and are rejected whenever its template bar is
+   non-empty.
    Rejection records the fail-closed candidate verdict and never commits.
    Approval records the aggregate receipt, applies the full audit and scope-safe
    handoff, commits when eligible, and never pushes.
 
+`doneWhen` remains the sole SOLVED predicate. Optional sealed
+`landingRequirements.reviewReady` artifacts gate review, while
+`landReady.independentVerification=true` gates commit; verifier state is never
+placed inside `doneWhen`, avoiding a lifecycle cycle.
+The sealed requirement declares only the stable artifact `id`, `kind`, and
+workspace `path`; once that future evidence exists, the review owner computes
+and freezes its SHA-256 and size.
+
+Quest ownership is singular at both levels. The Quest seal owns requirements;
+the exact-candidate snapshot owns derived candidate bytes; the immutable review
+manifest owns the verification bar; the strict verdict schema owns the
+verifier-to-Solver interaction; and `land` alone owns the terminal transition.
+No compatibility adapter may derive candidate facts or become a second
+authority for an interaction.
+
 The stable `next` projection carries both the display `type`/`value` and machine
 `code`/`payload`; normal display values name only `continue` or `land`.
+The default text view reports the primary stable problem code and exact next
+command in at most a few lines; `--verbose` renders the complete dossier and
+`--json` preserves the full automation projection.
 Automation MUST dispatch only on `code` and validated
 payload. JSON failures use `{ok:false,error:{code,category,message,
 requiresJudgment,repair}}`; `repair` is an automation code and payload, never a

@@ -9,8 +9,8 @@
     "usage": "node scripts/solve.js continue --id <id> [--summary \"<what changed>\"] [--changeRef diff:<path>] [--json]"
   },
   "land": {
-    "summary": "For source work, freeze the exact terminal candidate and aggregate into an immutable review id; a later verdict by that id is drift-checked, recorded as a structured receipt, and on approval passed through the audit-gated scope-safe commit. Rejection never commits and requires category-complete findings; no path pushes.",
-    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verifier <stable-id> --verdict approve|reject --receipt <ref> [--finding \"<category>: <summary>\" ...]] [--json]"
+    "summary": "For source work, freeze one immutable review envelope containing the exact candidate/aggregate, source epoch, staged landing evidence, additive template checklist, generated-dependency receipts, and deterministic proof plan. A later structured verdict is drift-checked and ingested; approval passes through the audit-gated scope-safe commit, rejection never commits, and no path pushes.",
+    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verdict-file <workspace-receipt.json>] [--json]"
   },
   "decompose-rejection": {
     "summary": "Discharge a slice of a standing candidate rejection with fresh independently approved coverage: the current quest's exactly approved candidate, or a successor quest's candidate receipt that still matches current bytes at an acceptable base. Records an append-only rejection-decomposition event; the standing obligation shrinks to the uncovered remainder, so split scope stays dischargeable.",
@@ -101,8 +101,8 @@
     "usage": "node scripts/solve.js step-pending --id <id>"
   },
   "next": {
-    "summary": "Typed \"what do I do next?\" projection: folds pending-step state, the last recorded stop, the current-blocker card, advisories, and the exact checkpoint-readiness dossier. It delegates only structurally checkpoint-landable source candidates and distinguishes executable-command, command-template, manual-action, and terminal actions. Use --json for the stable machine-readable projection.",
-    "usage": "node scripts/solve.js next --id <id> [--json]"
+    "summary": "Typed \"what do I do next?\" projection. The default is a concise primary problem code plus exact next command; --verbose includes pending-step, blocker, advisory, and checkpoint-readiness dossier details, while --json returns the stable machine-readable projection.",
+    "usage": "node scripts/solve.js next --id <id> [--verbose|--json]"
   },
   "doctor": {
     "summary": "Read-only operator preflight. Reports Git/worktree state, absent/malformed/disabled/enabled local agent configuration, live adapter executability, the no-op example adapter, attribution validity, and the recommended autonomous or supervised mode. Use --json for the stable machine-readable report.",

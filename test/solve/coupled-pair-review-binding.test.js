@@ -23,7 +23,7 @@ const REGISTRY_DRIFT_DESCRIPTION = 'semantically changed after review minting';
 const DETERMINISTIC_TEST_NAME =
   'unchanged review manifests retain one deterministic identity';
 const LEGACY_TEST_NAME =
-  'legacy schema reviews require a fresh schema-v2 review';
+  'legacy schema reviews require a fresh current-schema review';
 const TAMPER_TEST_NAME =
   'review identity rejects a manifest changed after minting';
 const REGISTRY_DRIFT_TEST_NAME =
@@ -35,7 +35,7 @@ const LEGACY_ID_ASSERTION = 'the replacement does not reuse the legacy id';
 const APPROVAL_LOG_ASSERTION =
   'registry drift is rejected before an approval enters the durable log';
 const LEGACY_SCHEMA_VERSION = 1;
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 
 function requestReview(t) {

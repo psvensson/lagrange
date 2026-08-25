@@ -20,6 +20,8 @@ const LOCAL_STR_OWNED_004 = 'quest constraints changed after declaration';
 const LOCAL_STR_OWNED_005 = 'frontier identities changed after declaration';
 const LOCAL_STR_OWNED_006 =
   'quest.verificationTemplates changed after declaration';
+const LANDING_REQUIREMENTS_CHANGED =
+  'quest.landingRequirements changed after declaration';
 
 export const METRIC_DIRECTION_LOWER_IS_BETTER = 'lower-is-better';
 
@@ -225,6 +227,11 @@ function goalpostViolationsAgainst(quest, declaredEvent) {
       JSON.stringify(quest.verificationTemplates || []) !==
         JSON.stringify(declaredEvent.sealed.verificationTemplates || [])) {
       violations.push(LOCAL_STR_OWNED_006);
+    }
+    if (declaredEvent.sealed.landingRequirements !== undefined &&
+      JSON.stringify(quest.landingRequirements || null) !==
+        JSON.stringify(declaredEvent.sealed.landingRequirements || null)) {
+      violations.push(LANDING_REQUIREMENTS_CHANGED);
     }
   }
   return violations;

@@ -91,6 +91,23 @@ tap.test('Quest authoring lint', async (t) => {
     t.end();
   });
 
+  t.test('landing requirements are staged separately from doneWhen', (t) => {
+    const valid = lintQuest(quest({landingRequirements: {
+      schemaVersion: 1,
+      reviewReady: [{id: 'live-ab', kind: 'artifact',
+        path: 'solve/evidence/live-ab.json'}],
+      landReady: {independentVerification: true},
+    }}));
+    t.equal(valid.status, 'pass');
+    const invalid = lintQuest(quest({landingRequirements: {
+      schemaVersion: 1,
+      reviewReady: [],
+      landReady: {independentVerification: false},
+    }}));
+    t.match(invalid.errors.join('\n'), /independentVerification=true/u);
+    t.end();
+  });
+
   t.test('broad one-frontier statements are advisory', (t) => {
     const result = lintQuest(quest({
       statement: 'A passes and B passes while C passes, with D passing.',

@@ -58,6 +58,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
 const NODE_MODULES_PREFIX = 'node_modules/';
 const VERIFY_IMPORT_GRAPH_FLAG = '--verify-import-graph';
+const REFRESH_IMPORT_GRAPH_ONLY_FLAG = '--refresh-import-graph-only';
 const IMPORT_GRAPH_PRODUCER_MISMATCH_ERROR =
   'import graph does not match the canonical live producer';
 const IMPORT_GRAPH_SEAL_SCHEMA_VERSION = 1;
@@ -972,6 +973,12 @@ function writeInventory(root, inventory, output = OUTPUT) {
 
 async function runCli(args = process.argv.slice(2)) {
   if (args.includes(VERIFY_IMPORT_GRAPH_FLAG)) {
+    const receipt = await verifyImportGraphReport(process.cwd());
+    process.stdout.write(`${JSON.stringify(receipt)}\n`);
+    return;
+  }
+  if (args.includes(REFRESH_IMPORT_GRAPH_ONLY_FLAG)) {
+    await refreshImportGraphReport(process.cwd(), listJavaScriptFiles(process.cwd()));
     const receipt = await verifyImportGraphReport(process.cwd());
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return;

@@ -17,7 +17,7 @@
     "release-packaging": 10,
     "runtime-primitives": 22,
     "services-runtime": 166,
-    "solver-tooling": 88,
+    "solver-tooling": 89,
     "storage-partition": 139,
     "storage-raft": 75,
     "test-infrastructure": 98,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2071,
-  "digest": "fnv1a32-0b82bf2f",
+  "censusSize": 2072,
+  "digest": "fnv1a32-3caccdac",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
     "test/address/address-manager.test.js": "transport-messaging",
@@ -1869,6 +1869,7 @@
     "test/solve/invariant-liveness.test.js": "solver-tooling",
     "test/solve/investigation-credit.test.js": "solver-tooling",
     "test/solve/ladder.test.js": "solver-tooling",
+    "test/solve/landing-envelope-contract.test.js": "solver-tooling",
     "test/solve/ledger-consistency.test.js": "solver-tooling",
     "test/solve/loop.test.js": "solver-tooling",
     "test/solve/machine-lock.test.js": "solver-tooling",

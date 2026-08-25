@@ -975,7 +975,10 @@ function cmdStep(root, args) {
 function cmdNext(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error(NEXT_ID_REQUIRED);
-  process.stdout.write(runNextCommand(root, id, {json: args.json === true}));
+  process.stdout.write(runNextCommand(root, id, {
+    json: args.json === true,
+    verbose: args.verbose === true,
+  }));
 }
 
 function cmdDoctor(root, args) {

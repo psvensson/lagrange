@@ -365,9 +365,29 @@ export function buildNextLines(root, questId) {
   return lines;
 }
 
+export function buildNextSummaryLines(root, questId) {
+  const projection = buildNextProjection(root, questId);
+  const {action, lastStop, blocker, verification} = projection;
+  const lines = [
+    `Next [${action.type}/${action.code}]: ${action.value || 'nothing to execute'}`,
+    `quest: ${projection.quest.id} (${projection.quest.status})`,
+  ];
+  const preflightProblem = verification.checkpointPreflight.problems?.[0];
+  if (lastStop) {
+    lines.push(`problem [${lastStop.code}]: ${lastStop.problem || lastStop.disposition}`);
+  } else if (preflightProblem) {
+    lines.push(`problem [verification-preflight]: ${preflightProblem.message}`);
+  } else if (blocker) {
+    lines.push(`problem [${blocker.movement}]: ${blockerLabel(blocker)}`);
+  }
+  return lines;
+}
+
 export function runNextCommand(root, questId, options = {}) {
   if (options.json === true) {
     return `${JSON.stringify(buildNextProjection(root, questId), null, 2)}${LINE_SEPARATOR}`;
   }
-  return `${buildNextLines(root, questId).join(LINE_SEPARATOR)}${LINE_SEPARATOR}`;
+  const lines = options.verbose === true ?
+    buildNextLines(root, questId) : buildNextSummaryLines(root, questId);
+  return `${lines.join(LINE_SEPARATOR)}${LINE_SEPARATOR}`;
 }

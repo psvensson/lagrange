@@ -8,6 +8,7 @@ import path from 'node:path';
 import {loadQuest} from './store.js';
 import {questClass} from './closure-kind.js';
 import {loadTemplateCategories} from './verification-template-suggest.js';
+import {landingRequirementsLintProblems} from './landing-requirements.js';
 import {
   QUEST_CLASSES,
   QUEST_CLASS_PRODUCT,
@@ -151,6 +152,7 @@ function authoringErrors(quest, options) {
   }
   pushConstraintErrors(quest, errors);
   pushVerificationTemplateErrors(quest, errors, options);
+  errors.push(...landingRequirementsLintProblems(quest.landingRequirements));
   if (!validProbe(quest.doneWhen)) {
     errors.push(LOCAL_STR_OWNED_005);
   }
