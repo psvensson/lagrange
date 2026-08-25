@@ -1,0 +1,75 @@
+{
+  "id": "operation-ledger-self-move-waiter-fairness",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A disruptive operation-ledger self-move that first observes incumbent operations publishes one durable PENDING intent before waiting; that owner-visible intent prevents later dependent operation admissions from overtaking it, incumbents drain, and physical self-move dispatch occurs only after authoritative operation visibility proves no other live operation remains. Abandoned or transferred intents recover through the existing operation-owner lease and reaper lifecycle, while run-20 exclusive serialization, run-22 quorum-spread ordering, remove safety, topology fences, numeric budgets, and the 60-second formation bar remain unchanged. Deterministic evidence proves bounded admission under a continuous newcomer stream and red-on-revert safety controls; the unchanged five-node MovieLens formation gate then reaches 5/5 ACTIVE within 60 seconds.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "solve/epics/release-0-2.md",
+    "closesCL": [],
+    "parentQuest": "formation-ledger-spread-voter-ready-readiness-closure",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "03b4924f481e0a269bedcbdfabe1621f5228bd9b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "operation-ledger-self-move-waiter-fairness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-ledger-self-move-waiter-fairness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "operation-ledger-self-move-waiter-fairness",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "durable-owner-visible-intent",
+      "statement": "The waiting turn must be represented by the existing durable replica-operation intent and operation-owner lifecycle so every coordinator can observe it. Do not use a coordinator-local waiter boolean, process-local TTL, secondary queue, or new metadata store as the authority."
+    },
+    {
+      "id": "dispatch-time-idle-proof",
+      "statement": "Persisting a PENDING intent is not permission to reconfigure the ledger. The physical ADD/REMOVE/REPLACE dispatch must remain fail-closed until an authoritative incomplete-operation observation proves that no other live operation conflicts; unreadable or deferred visibility keeps dispatch parked."
+    },
+    {
+      "id": "no-interlock-weakening",
+      "statement": "Keep the run-20 rule that a disruptive ledger self-move never overlaps another live operation and that later dependent operations defer while the durable self-move intent is live. Keep the run-22 quorum-spread hold and emergency ADD exemption unchanged."
+    },
+    {
+      "id": "lifecycle-owned-abandonment",
+      "statement": "Cancellation, ownership transfer, retry, timeout, and terminal cleanup must reuse canonical operation-owner lease and recovery/reaper transitions; no raw age check may delete or bypass a waiting intent."
+    },
+    {
+      "id": "fairness-model",
+      "statement": "Because this changes a fairness boundary, extend or add the smallest TLA+ contract that distinguishes reader-preference starvation from a durable waiting-writer turn, and run npm run model:contracts. The model does not replace deterministic or live evidence."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "The focused deterministic guard must fail on current HEAD because a continuous finite newcomer stream overtakes the ledger self-move, then pass only when the durable intent blocks newcomers, incumbents drain, and dispatch occurs without overlap. Existing run-20, run-22, stale-ghost, terminal-hold, and remove-safety guards must remain green."
+    },
+    {
+      "id": "no-live-workaround",
+      "statement": "Do not alter formation timeouts, polling or retry cadence, numeric operation budgets, workload, cluster size, node activation predicates, remove safety, topology fences, or GCP runner ordering."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After deterministic proof, source verification, and checkpoint, run the unchanged dedicated five-node GCP formation/profile gate once. Stop on the first red result and diagnose the newly reached boundary before any rerun."
+    }
+  ]
+}

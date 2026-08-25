@@ -1,0 +1,215 @@
+diff --git a/examples/service-data-affinity/gcp-cluster-provider.js b/examples/service-data-affinity/gcp-cluster-provider.js
+index befaf2294782daf6536293935a1c329cb0ab735c..16aaf7b86be135c396e06b440b27b0870bd78b5e 100644
+--- a/examples/service-data-affinity/gcp-cluster-provider.js
++++ b/examples/service-data-affinity/gcp-cluster-provider.js
+@@ -57,11 +57,11 @@ const TEARDOWN_FAILURE_PREFIX =
+   'gcp-cluster-provider: best-effort teardown failed (infra may leak): ';
+ const LINE_SEPARATOR = '\n';
+ 
+-async function materializeGcpFullNodeLogs(cluster, outputDir) {
++async function materializeGcpFullNodeLogs(nodes, outputDir) {
+   if (!outputDir) {
+     return;
+   }
+-  await Promise.all(cluster.getNodes().map(async (node, index) => {
++  await Promise.all(nodes.map(async (node, index) => {
+     await pipeline(
+       createReadStream(fullLogDestPath(
+         outputDir,
+@@ -78,15 +78,26 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
+   let clusterStopError = null;
+   let logMaterializationError = null;
+   let provisionerDestroyError = null;
++  let teardownNodes = null;
+   try {
+-    await cluster.stop();
++    // Cluster.stop() finalizes the full-log streams and then clears its node
++    // registry. Retain only the immutable handles needed to map those
++    // finalized captures to the canonical node-N.log evidence paths.
++    teardownNodes = cluster.getNodes();
+   } catch (error) {
+-    clusterStopError = error;
++    logMaterializationError = error;
+   }
+   try {
+-    await materializeGcpFullNodeLogs(cluster, outputDir);
++    await cluster.stop();
+   } catch (error) {
+-    logMaterializationError = error;
++    clusterStopError = error;
++  }
++  if (!logMaterializationError) {
++    try {
++      await materializeGcpFullNodeLogs(teardownNodes, outputDir);
++    } catch (error) {
++      logMaterializationError = error;
++    }
+   }
+   try {
+     await provisioner.destroy();
+diff --git a/scripts/run-gcp-affinity-full-log-materialization-scenarios.js b/scripts/run-gcp-affinity-full-log-materialization-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..416709c312147f5fe94e341ead331ccc43c5a065
+--- /dev/null
++++ b/scripts/run-gcp-affinity-full-log-materialization-scenarios.js
+@@ -0,0 +1,72 @@
++#!/usr/bin/env node
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {runTestFileSync} from './run-test-files.js';
++
++const SCENARIO = 'gcp-affinity-full-log-materialization';
++const REPORT_DIRECTORY = 'test-output/reports';
++const GUARD_FILE = 'test/runtime/movielens-affinity-demo-wiring.test.js';
++const VERDICT_PASS = 'PASS';
++const VERDICT_FAIL = 'FAIL';
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
++
++function main() {
++  const guard = runTestFileSync(GUARD_FILE, {
++    print: false,
++    timeoutMs: 300000,
++  });
++  const passed = guard.ok === true;
++  const timestamp = new Date().toISOString();
++  const verdict = passed ? VERDICT_PASS : VERDICT_FAIL;
++  const report = {
++    timestamp,
++    scenario: SCENARIO,
++    producer: 'gcp-affinity-full-log-materialization-proof',
++    fidelity: 'deterministic-real-teardown-seam',
++    summary: {total: 1, passed: passed ? 1 : 0, failed: passed ? 0 : 1},
++    optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
++    standardSummary: {
++      scenarios: [{
++        scenario: SCENARIO,
++        passed,
++        current: {
++          passed,
++          verdict,
++          verdictReason: passed ? null : 'deterministic_guard_failed',
++        },
++        detail: {
++          guard: {
++            file: GUARD_FILE,
++            passed,
++            assertions: guard.assertions,
++            elapsedMs: guard.elapsedMs,
++            reasons: guard.reasons,
++            tapOutput: guard.output,
++            stderrOutput: guard.stderr,
++          },
++        },
++      }],
++    },
++  };
++  const reportDir = path.join(root, REPORT_DIRECTORY);
++  fs.mkdirSync(reportDir, {recursive: true});
++  const stamp = timestamp.replace(/[:.]/g, '-');
++  const reportPath = path.join(
++    reportDir,
++    `${SCENARIO}-${stamp}.report.json`,
++  );
++  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
++  process.stdout.write(
++    `${verdict} ${SCENARIO}\n` +
++    `report: ${path.relative(root, reportPath)}\n`,
++  );
++  process.exitCode = passed ? 0 : 1;
++}
++
++if (process.argv[1] === fileURLToPath(import.meta.url)) {
++  main();
++}
++
++export {main};
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index f3e85c99a9bd87c43a7974876b92a9a05fd341a9..b3f2e41e0a4bb86dcc9da8fe400e76f339aeb775 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -99,9 +99,13 @@ test('MovieLens GCP cleanup preserves full node logs before VM destruction',
+           await gzip(`node-${index}-complete\nprofile-window-${index}\n`),
+         );
+       }));
++      const clusterNodes = nodeIds.map((id) => ({id}));
+       const cluster = {
+-        getNodes: () => nodeIds.map((id) => ({id})),
+-        stop: async () => events.push('cluster-stopped'),
++        getNodes: () => [...clusterNodes],
++        stop: async () => {
++          events.push('cluster-stopped');
++          clusterNodes.length = 0;
++        },
+       };
+       const provisioner = {
+         destroy: async () => {
+@@ -128,6 +132,67 @@ test('MovieLens GCP cleanup preserves full node logs before VM destruction',
+     t.end();
+   });
+ 
++test('MovieLens GCP cleanup keeps teardown best-effort error precedence',
++  async (t) => {
++    const clusterStopError = new Error('cluster stop failed');
++    const snapshotError = new Error('node snapshot failed');
++    const destroyError = new Error('provisioner destroy failed');
++    const stopFirstEvents = [];
++    await assert.rejects(
++      stopGcpAffinityCluster({
++        cluster: {
++          getNodes: () => {
++            throw snapshotError;
++          },
++          stop: async () => {
++            stopFirstEvents.push('cluster-stopped');
++            throw clusterStopError;
++          },
++        },
++        provisioner: {
++          destroy: async () => {
++            stopFirstEvents.push('vms-destroyed');
++            throw destroyError;
++          },
++        },
++        outputDir: '/unused',
++      }),
++      (error) => error === clusterStopError,
++      'cluster-stop failure remains primary while later teardown still runs',
++    );
++    assert.deepEqual(stopFirstEvents, ['cluster-stopped', 'vms-destroyed']);
++
++    const outputDir = await mkdtemp(join(tmpdir(), 'affinity-gcp-errors-'));
++    const materializeFirstEvents = [];
++    try {
++      await assert.rejects(
++        stopGcpAffinityCluster({
++          cluster: {
++            getNodes: () => [{id: 'missing-capture'}],
++            stop: async () => materializeFirstEvents.push('cluster-stopped'),
++          },
++          provisioner: {
++            destroy: async () => {
++              materializeFirstEvents.push('vms-destroyed');
++              throw destroyError;
++            },
++          },
++          outputDir,
++        }),
++        (error) => error?.code === 'ENOENT',
++        'materialization failure remains primary over VM-destroy failure',
++      );
++      assert.deepEqual(
++        materializeFirstEvents,
++        ['cluster-stopped', 'vms-destroyed'],
++        'VM destruction is attempted after materialization failure',
++      );
++    } finally {
++      await rm(outputDir, {recursive: true, force: true});
++    }
++    t.end();
++  });
++
+ test('MovieLens admits schema after formation and before ratings CREATE',
+   async (t) => {
+     const runnerSource = await readFile(
