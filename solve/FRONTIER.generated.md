@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 34
+## Open quests — 33
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -58,7 +58,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
 | gcp-affinity-full-log-materialization | product | 1 | 0 | 2026-08-20 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
-| github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | ledger-quorum-spread-hold-cure-drain-admission-v2 | product | 1 | 0 | 2026-08-22 | — |
@@ -87,5 +86,5 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | schema-provisioning-collision-retry-closure | product | 5 | 0 | 2026-08-15 | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
-> 21 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 20 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

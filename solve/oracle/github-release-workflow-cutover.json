@@ -1,6 +1,28 @@
 {
-  "metric": 0.4,
+  "metric": 0,
   "target": 0,
-  "done": false,
-  "classification": "verifier-corrections-green-live-github-release-run-required"
+  "done": true,
+  "classification": "green-live-github-release-run-verified",
+  "detail": {
+    "meaning": "metric counts unmet closure conditions: verifier-approved corrected workflow AND one fully green live GitHub release run through every channel; target 0",
+    "liveRun": {
+      "workflow": "release",
+      "runId": "32733478926",
+      "attempt": 17,
+      "conclusion": "success",
+      "headSha": "c77c5b6b5133292c176caaee4c43734297aef6f5",
+      "tag": "v0.1.1",
+      "createdAt": "2026-08-24T13:34:24Z",
+      "runner": "lagrange-gcp-runner (self-hosted GCP, unattended self-wake/self-stop)",
+      "channelsVerified": [
+        "full release gate proof",
+        "npm publish (already-published version match check green)",
+        "docker.io/psvensson/lagrange 0.1.1 + latest pushed",
+        "Docker Hub description update",
+        "GitHub Release with checksummed SEA and Helm assets"
+      ],
+      "verifiedBy": "gh run view 32733478926 --repo psvensson/lagrange (conclusion success, event push, headSha above)"
+    },
+    "priorVerification": "attempt-2 workflow artifact sha256:228b7832d43c844e7263e0fbc823aa62cbc79dab84304f68babdb3c876aeddf1 approved by independent verifier subagent:release_migration_vet with no blocking findings (2026-07-26)"
+  }
 }
