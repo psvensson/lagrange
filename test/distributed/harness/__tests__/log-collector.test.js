@@ -510,27 +510,23 @@ test('collectFinalSnapshot returns empty when no node',
  */
 test('collectContainerFallback parses Docker logs',
   async (_t) => {
-    const mockDockerProvider = {
-      getContainerLogs: async (containerId) => {
-        if (containerId === 'c1') {
-          return 'Starting node\nListening on port 8081';
-        }
-        if (containerId === 'c2') {
-          return 'Joined cluster\nReady';
-        }
-        return '';
-      },
-    };
-
+    // Each node reads through its OWN provider (multi-host contract):
+    // distinct getLogs implementations prove per-node provider routing.
     const nodes = [
-      {id: 'node-1', containerId: 'c1'},
-      {id: 'node-2', containerId: 'c2'},
+      {
+        id: 'node-1',
+        containerId: 'c1',
+        getLogs: async () => 'Starting node\nListening on port 8081',
+      },
+      {
+        id: 'node-2',
+        containerId: 'c2',
+        getLogs: async () => 'Joined cluster\nReady',
+      },
     ];
 
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(
-      mockDockerProvider, nodes,
-    );
+    await collector.collectContainerFallback(nodes);
 
     const buffer = collector.getBuffer();
     assert.equal(buffer.length, 4);
@@ -564,21 +560,19 @@ test('collectContainerFallback demultiplexes Docker-framed logs',
     ]);
 
     let observedOptions = null;
-    const mockDockerProvider = {
-      getContainerLogs: async (_containerId, options) => {
-        observedOptions = options;
-        return multiplexed;
-      },
-    };
-
     const nodes = [
-      {id: 'node-1', containerId: 'c1'},
+      {
+        id: 'node-1',
+        containerId: 'c1',
+        getLogs: async (options) => {
+          observedOptions = options;
+          return multiplexed;
+        },
+      },
     ];
 
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(
-      mockDockerProvider, nodes,
-    );
+    await collector.collectContainerFallback(nodes);
 
     const buffer = collector.getBuffer();
     assert.equal(buffer.length, 3);
@@ -595,22 +589,19 @@ test('collectContainerFallback demultiplexes Docker-framed logs',
 test('collectContainerFallback requests bounded Docker tail to avoid oversized payloads',
   async (_t) => {
     let observedOptions = null;
-    const mockDockerProvider = {
-      getContainerLogs: async (_containerId, options) => {
-        observedOptions = options;
-        return '';
-      },
-    };
-
     const nodes = [
-      {id: 'node-1', containerId: 'c1'},
+      {
+        id: 'node-1',
+        containerId: 'c1',
+        getLogs: async (options) => {
+          observedOptions = options;
+          return '';
+        },
+      },
     ];
 
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(
-      mockDockerProvider,
-      nodes,
-    );
+    await collector.collectContainerFallback(nodes);
 
     assert.equal(observedOptions.tail, 50);
     assert.equal(observedOptions.rawBuffer, true);
@@ -622,24 +613,23 @@ test('collectContainerFallback requests bounded Docker tail to avoid oversized p
  */
 test('collectContainerFallback skips unreachable containers',
   async (_t) => {
-    const mockDockerProvider = {
-      getContainerLogs: async (containerId) => {
-        if (containerId === 'c1') {
-          throw new Error('container not found');
-        }
-        return 'OK line';
-      },
-    };
-
     const nodes = [
-      {id: 'node-1', containerId: 'c1'},
-      {id: 'node-2', containerId: 'c2'},
+      {
+        id: 'node-1',
+        containerId: 'c1',
+        getLogs: async () => {
+          throw new Error('container not found');
+        },
+      },
+      {
+        id: 'node-2',
+        containerId: 'c2',
+        getLogs: async () => 'OK line',
+      },
     ];
 
     const collector = new LogCollector(tempDir());
-    await collector.collectContainerFallback(
-      mockDockerProvider, nodes,
-    );
+    await collector.collectContainerFallback(nodes);
 
     const buffer = collector.getBuffer();
     // Only node-2 entries should be present

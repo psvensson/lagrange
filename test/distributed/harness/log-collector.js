@@ -150,15 +150,17 @@ class LogCollector {
   /**
    * Fall back to Docker container stdout/stderr collection.
    * Used when cluster is unreachable for live queries.
+   * Each node's logs are read through the node's OWN provider
+   * (NodeHandle.getLogs), so multi-host runs collect every host's
+   * containers instead of querying one daemon for all container ids
+   * (which silently returned nothing for non-primary hosts).
    * Req 7.6
-   * @param {Object} dockerProvider - DockerProvider instance
    * @param {Array<Object>} nodes - NodeHandle instances
    */
-  async collectContainerFallback(dockerProvider, nodes) {
+  async collectContainerFallback(nodes) {
     for (const node of nodes) {
       try {
-        const logs = await dockerProvider.getContainerLogs(
-          node.containerId,
+        const logs = await node.getLogs(
           {
             [DOCKER_LOG_OPTION_RAW_BUFFER]: true,
             [DOCKER_LOG_OPTION_TAIL]: CONTAINER_LOG_TAIL_LINES,

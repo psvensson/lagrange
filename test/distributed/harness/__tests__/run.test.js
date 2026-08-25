@@ -231,7 +231,7 @@ describe('runScenarios', () => {
   function buildFakeCluster() {
     const nodes = [{id: 'node-1'}];
     const collector = {
-      async collectContainerFallback(_provider, _nodes) {},
+      async collectContainerFallback(_nodes) {},
       async writeOutput(_scenarioName, _entries, _nodeIds) {},
       getBuffer() {
         return [];

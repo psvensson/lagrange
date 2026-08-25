@@ -574,12 +574,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         if (cluster) {
           try {
             const collector = cluster.getLogCollector();
-            const provider =
-              cluster._providers[cluster._hostAssignment[0]];
             const nodes = cluster.getNodes();
-            await collector.collectContainerFallback(
-              provider, nodes,
-            );
+            await collector.collectContainerFallback(nodes);
             const nodeIds = nodes.map((n) => n.id);
             await collector.writeOutput(
               scenario.name,
