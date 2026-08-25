@@ -48,11 +48,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 33
+## Open quests — 31
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| failed-replica-removal-transition-tolerance | product | 1 | 0 | 2026-08-22 | — |
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 | — |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
@@ -60,7 +59,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
-| ledger-quorum-spread-hold-cure-drain-admission-v2 | product | 1 | 0 | 2026-08-22 | — |
 | lone-seed-formation-admission-livelock-closure | product | 5 | 0 | 2026-08-16 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
