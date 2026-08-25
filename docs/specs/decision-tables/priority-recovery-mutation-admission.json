@@ -1,0 +1,131 @@
+{
+  "schema": "decision-table-v1",
+  "id": "priority-recovery-mutation-admission",
+  "owner": "src/control-plane/control-plane-mutation-readiness.js",
+  "boundary": "priority_recovery_operation_creation_to_local_mutation_admission",
+  "inputs": [
+    {
+      "name": "priorityControlPlanePartition",
+      "values": [
+        "yes",
+        "no"
+      ]
+    },
+    {
+      "name": "operationCreationAuthority",
+      "values": [
+        "yes",
+        "no"
+      ]
+    },
+    {
+      "name": "readinessSnapshotState",
+      "values": [
+        "fresh_recovery_open",
+        "fresh_recovery_closed",
+        "deferred_token_stale"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "mutationAdmissionAction",
+      "values": [
+        "relax_circular_dimensions",
+        "retain_readiness_veto"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "authority-survives-deferred-snapshot",
+      "statement": "A cycle-owned priority-recovery operation-creation authority survives only the explicit token-stale deferred readiness handoff; that synthetic snapshot cannot erase the verdict and veto its own cure."
+    },
+    {
+      "id": "fresh-readiness-remains-authoritative",
+      "statement": "A fresh readiness snapshot retains authority: a fresh open recovery lane uses the CL-028 break-glass and a fresh closed recovery lane rejects the move regardless of an older move marker."
+    },
+    {
+      "id": "no-background-floor-weakening",
+      "statement": "Ordinary partitions and priority work without either a fresh open recovery lane or an owner-issued operation-creation authority retain the local mutation veto; the exception relaxes only controlPlaneWritable and metadataPublicationHealthy."
+    }
+  ],
+  "rules": [
+    {
+      "id": "ordinary-partition-retains-veto",
+      "when": {
+        "priorityControlPlanePartition": "no",
+        "operationCreationAuthority": "*",
+        "readinessSnapshotState": "*"
+      },
+      "outcome": {
+        "mutationAdmissionAction": "retain_readiness_veto"
+      },
+      "reason": "A recovery capability cannot escape its priority control-plane partition scope.",
+      "invariantRefs": [
+        "no-background-floor-weakening"
+      ]
+    },
+    {
+      "id": "fresh-open-recovery-keeps-cl028-break-glass",
+      "when": {
+        "priorityControlPlanePartition": "yes",
+        "operationCreationAuthority": "*",
+        "readinessSnapshotState": "fresh_recovery_open"
+      },
+      "outcome": {
+        "mutationAdmissionAction": "relax_circular_dimensions"
+      },
+      "reason": "The canonical fresh readiness snapshot proves the recovery lane open.",
+      "invariantRefs": [
+        "fresh-readiness-remains-authoritative"
+      ]
+    },
+    {
+      "id": "fresh-closed-recovery-retains-veto",
+      "when": {
+        "priorityControlPlanePartition": "yes",
+        "operationCreationAuthority": "*",
+        "readinessSnapshotState": "fresh_recovery_closed"
+      },
+      "outcome": {
+        "mutationAdmissionAction": "retain_readiness_veto"
+      },
+      "reason": "A fresh closed verdict supersedes any earlier cycle-owned move authority.",
+      "invariantRefs": [
+        "fresh-readiness-remains-authoritative"
+      ]
+    },
+    {
+      "id": "deferred-snapshot-without-authority-retains-veto",
+      "when": {
+        "priorityControlPlanePartition": "yes",
+        "operationCreationAuthority": "no",
+        "readinessSnapshotState": "deferred_token_stale"
+      },
+      "outcome": {
+        "mutationAdmissionAction": "retain_readiness_veto"
+      },
+      "reason": "Token staleness alone cannot mint recovery admission authority.",
+      "invariantRefs": [
+        "no-background-floor-weakening"
+      ]
+    },
+    {
+      "id": "deferred-snapshot-consumes-operation-authority",
+      "when": {
+        "priorityControlPlanePartition": "yes",
+        "operationCreationAuthority": "yes",
+        "readinessSnapshotState": "deferred_token_stale"
+      },
+      "outcome": {
+        "mutationAdmissionAction": "relax_circular_dimensions"
+      },
+      "reason": "The deferred snapshot is an absence of a current readiness verdict, while the same cycle already proved this recovery operation must be created.",
+      "invariantRefs": [
+        "authority-survives-deferred-snapshot",
+        "no-background-floor-weakening"
+      ]
+    }
+  ]
+}

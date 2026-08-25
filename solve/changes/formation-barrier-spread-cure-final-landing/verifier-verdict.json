@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "solver-verifier-verdict/1",
+  "reviewId": "review-32d16f187a678b485c0d58a8",
+  "verifierId": "verify_formation_cure",
+  "verdict": "approve",
+  "completedTemplateItems": [
+    {
+      "category": "admission-gating",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "adversarial-js-intrinsics",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "concurrency-serialization",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "formation-circularity",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "harness-fidelity",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "recovery-replay",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "retry-loops",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "sweep-timer",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    },
+    {
+      "category": "transport-delivery",
+      "evidencePaths": ["solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"]
+    }
+  ],
+  "findings": [],
+  "externalReceiptRef": "solve/changes/formation-barrier-spread-cure-final-landing/independent-verification.md"
+}

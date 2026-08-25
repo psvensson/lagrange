@@ -28,12 +28,25 @@ import {
   OWNER_CONTRACT_STATE,
   buildOwnerContractOutcome,
 } from './owner-contract-outcome.js';
+import {
+  TOKEN_STATUS,
+  readOwnDataValue,
+} from './readiness-planning-version-contract.js';
 
 const CONTROL_PLANE_MUTATION_WORK_CLASS = Object.freeze({
   BACKGROUND: 'background',
   INTERACTIVE: 'interactive',
   CRITICAL: 'critical',
 });
+const CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD =
+  'priorityRecoveryOperationCreationRequired';
+
+function hasPriorityRecoveryOperationCreationAuthority(value) {
+  return readOwnDataValue(
+    value,
+    CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
+  ) === true;
+}
 
 const DEFAULT_REQUIRED_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
@@ -204,9 +217,28 @@ const PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
 ]);
 
-function isPriorityRecoveryWriteLaneOpen(readiness = null) {
+function isDeferredReadinessPlanningSnapshot(readiness = null) {
+  return readiness?.readinessPlanningTokenStatus === TOKEN_STATUS.STALE;
+}
+
+function isPriorityRecoveryWriteLaneOpen(
+  readiness = null,
+  operationCreationAuthority = false,
+) {
   if (!readiness || typeof readiness !== 'object') {
     return false;
+  }
+  // The planning owner may have proven that this exact recovery operation is
+  // required immediately before the versioned readiness owner invalidates its
+  // token. A strict sync read then returns a deliberately fail-closed deferred
+  // snapshot with every dimension and priorityRecovery.active set to false.
+  // Preserve the cycle-owned authority only across that explicit stale-token
+  // handoff; a fresh closed snapshot still wins and fails closed.
+  if (
+    operationCreationAuthority === true &&
+    isDeferredReadinessPlanningSnapshot(readiness)
+  ) {
+    return true;
   }
   const recoveryLaneEligible =
     readiness.dimensions?.[
@@ -221,11 +253,15 @@ function isPriorityRecoveryWriteLaneOpen(readiness = null) {
   );
 }
 
-function relaxFailedDimensionsForPriorityRecovery(failedDimensions, readiness) {
+function relaxFailedDimensionsForPriorityRecovery(
+  failedDimensions,
+  readiness,
+  operationCreationAuthority = false,
+) {
   if (
     !Array.isArray(failedDimensions) ||
     failedDimensions.length === 0 ||
-    !isPriorityRecoveryWriteLaneOpen(readiness)
+    !isPriorityRecoveryWriteLaneOpen(readiness, operationCreationAuthority)
   ) {
     return {failedDimensions, recoveryBypassApplied: false};
   }
@@ -270,6 +306,7 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
     const relaxed = relaxFailedDimensionsForPriorityRecovery(
       failedDimensions,
       readiness,
+      hasPriorityRecoveryOperationCreationAuthority(options),
     );
     failedDimensions = relaxed.failedDimensions;
     recoveryBypassApplied = relaxed.recoveryBypassApplied;
@@ -542,6 +579,7 @@ function buildSystemTableMutationRoutingGapFailure(options = {}) {
 }
 
 export {
+  CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
   buildLocalControlPlaneMutationReadinessFailure,
   buildSystemTableMutationRoutingGapFailure,
   CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING,
@@ -552,6 +590,7 @@ export {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
   getLocalControlPlaneMutationReadinessBlocker,
   getSystemTableMutationRoutingGapBlocker,
+  hasPriorityRecoveryOperationCreationAuthority,
   hasControlPlaneMutationRoutingGapFailureSignature,
   normalizeControlPlaneMutationWorkClass,
   requiresStableLocalControlPlaneMutationReadiness,

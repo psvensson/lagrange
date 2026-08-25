@@ -203,6 +203,9 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
     if (decision.shouldEnqueue !== true) {
       return false;
     }
+    if (decision.evidence.terminalProgress === true) {
+      this.currentInterval = this.getPriorityRetryDelayMs();
+    }
     this.enqueueRebalanceCheck(decision.reconcileReason);
     this.enqueueMembershipPublicationReconcile(decision.reconcileReason);
     return true;
@@ -256,6 +259,7 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
     if (decision.shouldEnqueue !== true) {
       return false;
     }
+    this.currentInterval = this.getPriorityRetryDelayMs();
     this.enqueueRebalanceCheck(decision.reconcileReason);
     this.enqueueMembershipPublicationReconcile(decision.reconcileReason);
     return true;

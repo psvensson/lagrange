@@ -4,6 +4,8 @@ import {
   applyUnifiedRebalancerCriticalTopologyMethods,
 } from './unified-rebalancer-critical-topology-methods.js';
 import {
+  FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
+  classifyFormationCohortSpreadCureNode,
   isStartupAuthorityControlPlanePlacementEligibleNode as
   isStartupAuthorityPlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
@@ -330,6 +332,23 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       localNodeId: this.nodeId,
       includeSelf: true,
     });
+  }
+
+  isFormationCohortSpreadCureTarget(nodeOrId) {
+    const node = typeof nodeOrId === 'string' ?
+      this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeOrId) :
+      nodeOrId;
+    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
+    return classifyFormationCohortSpreadCureNode({
+      node,
+      startupAuthorityNodeIds,
+      messageRouter: this.messageRouter,
+      localNodeId: this.nodeId,
+      includeSelf: true,
+      priorityRecoveryLane: this.isControlPlanePriorityPartition(),
+      priorityRecoveryActive:
+        this.isGlobalPriorityControlPlaneRecoveryActive(),
+    }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 
   /**

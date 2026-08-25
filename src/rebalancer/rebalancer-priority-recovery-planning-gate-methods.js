@@ -38,6 +38,7 @@ const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
 const PRIORITY_RECOVERY_OPERATION_CREATION_KIND = Object.freeze({
   LEDGER_SURPLUS_DRAIN: 'ledger_surplus_drain',
 });
+const PRIORITY_RECOVERY_CURE_OPERATION_TYPE = 'add';
 
 function normalizeLedgerSurplusDrainPlanningEvidence(concentration) {
   const targetReplicaCount = Number(concentration?.targetReplicaCount);
@@ -123,7 +124,17 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
           ] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      return detailPartitionId === operationCreationPartitionId;
+      if (detailPartitionId !== operationCreationPartitionId) {
+        return false;
+      }
+      const operationType = String(
+        detail?.type || detail?.operationType ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).toLowerCase();
+      const cohortCureInFlight =
+        operationType === PRIORITY_RECOVERY_CURE_OPERATION_TYPE &&
+        this.isFormationCohortSpreadCureTarget(detail?.targetNodeId);
+      return cohortCureInFlight !== true;
     });
   },
 

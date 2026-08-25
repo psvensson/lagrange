@@ -1,0 +1,166 @@
+{
+  "schema": "decision-table-v1",
+  "id": "formation-cohort-spread-cure",
+  "owner": "src/control-plane/startup-authority-placement-eligibility.js",
+  "boundary": "startup_authority_placement_to_priority_recovery_planning",
+  "inputs": [
+    {
+      "name": "priorityRecoveryLane",
+      "values": ["yes", "no"]
+    },
+    {
+      "name": "priorityRecoveryActive",
+      "values": ["yes", "no"]
+    },
+    {
+      "name": "nodeStage",
+      "values": ["joining", "other"]
+    },
+    {
+      "name": "startupAuthorityPlacementEligible",
+      "values": ["yes", "no"]
+    },
+    {
+      "name": "inFlightOperationType",
+      "values": ["add", "other"]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "classification",
+      "values": ["cure_target", "not_cure_target"]
+    },
+    {
+      "name": "settleAction",
+      "values": ["exclude_from_ready_lease_blocker", "retain_blocker"]
+    },
+    {
+      "name": "inFlightCureAction",
+      "values": ["allow_planning", "retain_serialization"]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "same-cohort-meaning-at-every-owner",
+      "statement": "A connected JOINING canonical startup-authority member admitted by the existing priority-recovery placement predicate has one cure-target meaning at placement, topology settling, and in-flight operation planning."
+    },
+    {
+      "id": "fail-closed-outside-formation-recovery",
+      "statement": "Any undeclared, inactive, non-priority, non-JOINING, or placement-ineligible state retains the existing topology and serialization blockers."
+    },
+    {
+      "id": "cure-is-not-its-own-blocker",
+      "statement": "The READY lease withheld by the global formation barrier and an in-flight ADD that cures its open priority spread gap cannot themselves defer evaluation of that cure."
+    }
+  ],
+  "rules": [
+    {
+      "id": "outside-priority-recovery-retains-blockers",
+      "when": {
+        "priorityRecoveryLane": "no",
+        "priorityRecoveryActive": "*",
+        "nodeStage": "*",
+        "startupAuthorityPlacementEligible": "*",
+        "inFlightOperationType": "*"
+      },
+      "outcome": {
+        "classification": "not_cure_target",
+        "settleAction": "retain_blocker",
+        "inFlightCureAction": "retain_serialization"
+      },
+      "reason": "Formation placement admission is exclusive to priority control-plane recovery.",
+      "invariantRefs": ["fail-closed-outside-formation-recovery"]
+    },
+    {
+      "id": "closed-recovery-retains-blockers",
+      "when": {
+        "priorityRecoveryLane": "yes",
+        "priorityRecoveryActive": "no",
+        "nodeStage": "*",
+        "startupAuthorityPlacementEligible": "*",
+        "inFlightOperationType": "*"
+      },
+      "outcome": {
+        "classification": "not_cure_target",
+        "settleAction": "retain_blocker",
+        "inFlightCureAction": "retain_serialization"
+      },
+      "reason": "The cohort carve-out closes when global priority recovery closes.",
+      "invariantRefs": ["fail-closed-outside-formation-recovery"]
+    },
+    {
+      "id": "non-joining-member-retains-blockers",
+      "when": {
+        "priorityRecoveryLane": "yes",
+        "priorityRecoveryActive": "yes",
+        "nodeStage": "other",
+        "startupAuthorityPlacementEligible": "*",
+        "inFlightOperationType": "*"
+      },
+      "outcome": {
+        "classification": "not_cure_target",
+        "settleAction": "retain_blocker",
+        "inFlightCureAction": "retain_serialization"
+      },
+      "reason": "The exception is for barrier-held JOINING members, not unready ACTIVE or failed lifecycle states.",
+      "invariantRefs": ["fail-closed-outside-formation-recovery"]
+    },
+    {
+      "id": "placement-ineligible-joiner-retains-blockers",
+      "when": {
+        "priorityRecoveryLane": "yes",
+        "priorityRecoveryActive": "yes",
+        "nodeStage": "joining",
+        "startupAuthorityPlacementEligible": "no",
+        "inFlightOperationType": "*"
+      },
+      "outcome": {
+        "classification": "not_cure_target",
+        "settleAction": "retain_blocker",
+        "inFlightCureAction": "retain_serialization"
+      },
+      "reason": "A joiner without canonical authority membership, connected registration, or live transport is not a reachable cure target.",
+      "invariantRefs": ["fail-closed-outside-formation-recovery"]
+    },
+    {
+      "id": "formation-cohort-non-add-retains-serialization",
+      "when": {
+        "priorityRecoveryLane": "yes",
+        "priorityRecoveryActive": "yes",
+        "nodeStage": "joining",
+        "startupAuthorityPlacementEligible": "yes",
+        "inFlightOperationType": "other"
+      },
+      "outcome": {
+        "classification": "cure_target",
+        "settleAction": "exclude_from_ready_lease_blocker",
+        "inFlightCureAction": "retain_serialization"
+      },
+      "reason": "Cohort classification removes the readiness blocker, but only an ADD can be the cure for the open replica-spread gap.",
+      "invariantRefs": [
+        "same-cohort-meaning-at-every-owner",
+        "fail-closed-outside-formation-recovery"
+      ]
+    },
+    {
+      "id": "formation-cohort-add-cure-target",
+      "when": {
+        "priorityRecoveryLane": "yes",
+        "priorityRecoveryActive": "yes",
+        "nodeStage": "joining",
+        "startupAuthorityPlacementEligible": "yes",
+        "inFlightOperationType": "add"
+      },
+      "outcome": {
+        "classification": "cure_target",
+        "settleAction": "exclude_from_ready_lease_blocker",
+        "inFlightCureAction": "allow_planning"
+      },
+      "reason": "The same reachable cohort member that placement can use to close the gap cannot have its curing ADD reclassified as the gap's blocker.",
+      "invariantRefs": [
+        "same-cohort-meaning-at-every-owner",
+        "cure-is-not-its-own-blocker"
+      ]
+    }
+  ]
+}

@@ -3,6 +3,10 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 import {
   canonicalizeRebalancerMove,
 } from './rebalancer-entity-identity.js';
+import {
+  CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
+  hasPriorityRecoveryOperationCreationAuthority,
+} from '../control-plane/control-plane-mutation-readiness.js';
 
 const {
   MOVE_REASON,
@@ -29,7 +33,11 @@ const PRE_EXECUTION_MOVE_COUNT_FIELD_BY_TYPE = Object.freeze({
 });
 
 function resolveCoordinatorMoveContext(rebalancer, move) {
-  const {entityType, entityId} = canonicalizeRebalancerMove(move, rebalancer);
+  const {entityType, entityId} = canonicalizeRebalancerMove({
+    entityType: move?.entityType,
+    entityId: move?.entityId,
+    partitionId: move?.partitionId,
+  }, rebalancer);
   return {
     partitionId: entityId,
     entityType,
@@ -37,9 +45,9 @@ function resolveCoordinatorMoveContext(rebalancer, move) {
   };
 }
 
-function buildCoordinatorOperationRequest(move, context) {
+function buildCoordinatorOperationRequest(move, context, operationType) {
   return {
-    type: move.operationType,
+    type: operationType,
     partitionId: context.partitionId,
     entityType: context.entityType,
     entityId: context.entityId,
@@ -48,6 +56,17 @@ function buildCoordinatorOperationRequest(move, context) {
     sourceNodeId: move.sourceNodeId,
     moveReason: move.reason,
     enforceConcurrentOperationBudget: true,
+  };
+}
+
+function buildCoordinatorMoveSafetyRequest(move, context) {
+  return {
+    type: move?.type,
+    partitionId: context.partitionId,
+    entityType: context.entityType,
+    entityId: context.entityId,
+    nodeId: move?.nodeId,
+    replicaId: move?.replicaId,
   };
 }
 
@@ -196,10 +215,9 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
     }
 
     const operationContext = resolveCoordinatorMoveContext(this, move);
-    const safetyError = await this.rebalanceCoordinator.getMoveSafetyError({
-      ...move,
-      ...operationContext,
-    });
+    const safetyError = await this.rebalanceCoordinator.getMoveSafetyError(
+      buildCoordinatorMoveSafetyRequest(move, operationContext),
+    );
     if (safetyError) {
       this.logger.debug(REBALANCER_LOG_MSG.MOVE_BLOCKED_BY_SAFETY_POLICY, {
         entityId: this.entityId,
@@ -219,10 +237,11 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       );
     }
 
-    const operationRequest = buildCoordinatorOperationRequest({
-      ...move,
-      operationType: this.resolveCoordinatorOperationType(move.type),
-    }, operationContext);
+    const operationRequest = buildCoordinatorOperationRequest(
+      move,
+      operationContext,
+      this.resolveCoordinatorOperationType(move.type),
+    );
     const membershipPublicationEpoch = Number.isInteger(
       move?.membershipPublicationEpoch,
     ) ?
@@ -237,6 +256,11 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
     if (move?.controlPlaneMutationWorkClass) {
       operationRequest.controlPlaneMutationWorkClass =
         move.controlPlaneMutationWorkClass;
+    }
+    if (hasPriorityRecoveryOperationCreationAuthority(move)) {
+      operationRequest[
+        CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD
+      ] = true;
     }
 
     // Create operation record via coordinator.

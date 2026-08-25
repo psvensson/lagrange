@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1821,
+    "unit": 1823,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2072,
-  "digest": "fnv1a32-8b4e2fe6",
+  "censusSize": 2074,
+  "digest": "fnv1a32-5b4e588d",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1407,6 +1407,8 @@
     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": "unit",
     "test/rebalancer/existing-group-add-topology-guard.test.js": "unit",
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": "unit",
+    "test/rebalancer/formation-barrier-recovery-mutation-admission.test.js": "unit",
+    "test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js": "unit",
     "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js": "unit",
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "unit",
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": "unit",

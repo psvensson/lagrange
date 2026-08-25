@@ -12,7 +12,9 @@ import {
   classifyPriorityRecoveryFollowUpCureCondition,
   resolvePlacementCure,
 } from './replica-placement-cure-policy.js';
-
+import {
+  CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
+} from '../control-plane/control-plane-mutation-readiness.js';
 const {
   EntityType,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
@@ -35,7 +37,6 @@ const {
   isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
 } = SHARED.UNIFIED_REBALANCER_SHARED;
-
 const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
   TARGET_NODES: 'targetNodes',
   TARGET_NODE_ID_SNAKE: 'target_node_id',
@@ -48,7 +49,6 @@ function readFollowUpText(record, ...fieldNames) {
   const fieldName = fieldNames.find((name) => record?.[name]);
   return String(fieldName ? record[fieldName] : '').trim();
 }
-
 function readFollowUpNodeId(record) {
   return readFollowUpText(
     record,
@@ -56,7 +56,6 @@ function readFollowUpNodeId(record) {
     PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL,
   );
 }
-
 function readFollowUpOperationPartitionId(operation) {
   return readFollowUpText(
     operation,
@@ -90,6 +89,7 @@ function buildPriorityRecoveryMoveFields({
     nodeId: targetNodeId,
     reason: cure.moveReason,
     controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
+    [CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD]: true,
     ...serialWaitMoveFields,
     ...(sourceNodeId ? {sourceNodeId, replicaId} : {}),
     [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:

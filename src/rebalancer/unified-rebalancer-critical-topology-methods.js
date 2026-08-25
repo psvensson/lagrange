@@ -23,7 +23,6 @@ const {
   normalizeServiceEndpointRow,
   resolveReplicaOperationSemanticPhase,
 } = UNIFIED_REBALANCER_SHARED;
-
 const CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
 const CRITICAL_NODE_KIND = Object.freeze({
   FAILED: 'failed',
@@ -87,6 +86,7 @@ function classifyCriticalNode(rebalancer, nodeRow, context) {
   if (!isWithinStartupAuthority(context, nodeId) || !status) {
     return null;
   }
+  if (rebalancer.isFormationCohortSpreadCureTarget(nodeRow)) return null;
   switch (status) {
   case NodeStatus.FAILED:
     return {kind: CRITICAL_NODE_KIND.FAILED, nodeId};

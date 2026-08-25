@@ -11,6 +11,39 @@ const STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES = new Set([
   NODE_STATE.ACTIVE,
   NODE_STATE.JOINING,
 ]);
+const FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION = Object.freeze({
+  CURE_TARGET: 'cure_target',
+  NOT_CURE_TARGET: 'not_cure_target',
+});
+const FORMATION_COHORT_SPREAD_CURE_STATE = Object.freeze({
+  OUTSIDE_PRIORITY_RECOVERY_LANE: 'outside_priority_recovery_lane',
+  RECOVERY_CLOSED: 'recovery_closed',
+  NOT_JOINING: 'not_joining',
+  PLACEMENT_INELIGIBLE: 'placement_ineligible',
+  CURE_TARGET: 'cure_target',
+});
+const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.OUTSIDE_PRIORITY_RECOVERY_LANE,
+    matches: (evidence) => evidence.priorityRecoveryLane !== true,
+  }),
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.RECOVERY_CLOSED,
+    matches: (evidence) => evidence.priorityRecoveryActive !== true,
+  }),
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.NOT_JOINING,
+    matches: (evidence) => evidence.joining !== true,
+  }),
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.PLACEMENT_INELIGIBLE,
+    matches: (evidence) => evidence.placementEligible !== true,
+  }),
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.CURE_TARGET,
+    matches: () => true,
+  }),
+]);
 
 function resolveStartupAuthorityNodeIdSet(startupAuthority) {
   if (startupAuthority?.authorityAvailable !== true) {
@@ -72,6 +105,30 @@ function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
 }
 
 /**
+ * Classify a barrier-held JOINING member at the shared placement owner. The
+ * decision is fail-closed: only an open priority-recovery lane plus the exact
+ * existing startup-authority placement predicate produces a cure target.
+ *
+ * @param {Object} options
+ * @return {string}
+ */
+function classifyFormationCohortSpreadCureNode(options = {}) {
+  const evidence = Object.freeze({
+    priorityRecoveryLane: options.priorityRecoveryLane === true,
+    priorityRecoveryActive: options.priorityRecoveryActive === true,
+    joining: options.node?.status === NODE_STATE.JOINING,
+    placementEligible:
+      isStartupAuthorityControlPlanePlacementEligibleNode(options),
+  });
+  const state = FORMATION_COHORT_SPREAD_CURE_STATE_TABLE.find((entry) =>
+    entry.matches(evidence),
+  )?.state;
+  return state === FORMATION_COHORT_SPREAD_CURE_STATE.CURE_TARGET ?
+    FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET :
+    FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.NOT_CURE_TARGET;
+}
+
+/**
  * Resolve every cache-backed node admitted by the shared formation predicate.
  *
  * @param {Object} options
@@ -108,6 +165,8 @@ function getStartupAuthorityControlPlanePlacementEligibleNodeIds(
 }
 
 export {
+  FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
+  classifyFormationCohortSpreadCureNode,
   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
   isStartupAuthorityControlPlanePlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
