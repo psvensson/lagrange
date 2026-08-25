@@ -48,14 +48,13 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 31
+## Open quests — 28
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 | — |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
-| gcp-affinity-full-log-materialization | product | 1 | 0 | 2026-08-20 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
@@ -66,8 +65,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 ⚠ stale | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 ⚠ stale | — |
-| operation-ledger-self-move-waiter-fairness | product | 4 | 0 | 2026-08-20 | — |
-| operation-ledger-self-move-waiter-fairness-v3 | product | 2 | 0 | 2026-08-20 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-14 ⚠ stale | — |
 | projection-readiness-deep-own-data-closure | product | 6 | 0 | 2026-08-15 ⚠ stale | — |
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
