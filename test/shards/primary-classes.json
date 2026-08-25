@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1824,
+    "unit": 1826,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2075,
-  "digest": "fnv1a32-cad8119a",
+  "censusSize": 2077,
+  "digest": "fnv1a32-ac2c7d5f",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -474,6 +474,7 @@
     "test/control-plane/failure-class-owner-path-regression.test.js": "unit",
     "test/control-plane/failure-class-registry.test.js": "unit",
     "test/control-plane/formation-placement-membership-handoff.test.js": "unit",
+    "test/control-plane/formation-release-handoff-closure.test.js": "unit",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend.test.js": "unit",
@@ -1762,6 +1763,7 @@
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "unit",
     "test/scripts/run-classified-test-files.test.js": "unit",
     "test/scripts/run-distributed-validation-ladder.test.js": "unit",
+    "test/scripts/run-formation-release-handoff-gcp.test.js": "unit",
     "test/scripts/run-live-repetitions.test.js": "unit",
     "test/scripts/run-test-ci.test.js": "unit",
     "test/scripts/run-test-files.test.js": "unit",
