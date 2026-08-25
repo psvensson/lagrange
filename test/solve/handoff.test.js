@@ -9,6 +9,7 @@ import {writeReport} from '../../scripts/solve/report.js';
 import {
   buildHandoff,
   classifyDirtyPaths,
+  gitDirtyFiles,
   renderHandoff,
   autoCommitQuest,
   refreshDerivedInventoriesForCommit,
@@ -90,6 +91,27 @@ function makeCanonicalDiff(root, questId, name, changedPath) {
 }
 
 tap.test('scope-safe handoff (Concern 4)', async (t) => {
+  t.test('dirty discovery keeps a bounded buffer above Node default', (t) => {
+    const pathCount = 24_000;
+    const status = Array.from({length: pathCount}, (_unused, index) =>
+      `?? test-output/reports/${String(index).padStart(5, '0')}-` +
+      'large-worktree-evidence-report.json\n').join('');
+    let options = null;
+    const files = gitDirtyFiles('/fixture', (_command, args, spawnOptions) => {
+      t.same(args, ['status', '--porcelain', '-uall']);
+      options = spawnOptions;
+      return status;
+    });
+
+    t.ok(Buffer.byteLength(status) > 1024 * 1024,
+      'fixture exceeds the child-process default that failed during landing');
+    t.ok(options.maxBuffer >= Buffer.byteLength(status),
+      'handoff owner applies its bounded Git buffer to dirty discovery');
+    t.equal(files.length, pathCount,
+      'large unrelated evidence corpus remains visible for scope exclusion');
+    t.end();
+  });
+
   t.test('classifies dirty files into in-scope and out-of-scope', (t) => {
     const scope = {
       files: ['solve/quests/demo.json', 'solve/log/demo.ndjson',

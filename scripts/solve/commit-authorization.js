@@ -33,6 +33,7 @@ const GIT_COMMAND = 'git';
 const LINE_SEPARATOR = '\n';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const CHECK_VERB = 'check';
 const FILE_NOT_FOUND_CODE = 'ENOENT';
 const AUTHORIZATION_PATHS_FIELD = 'paths';
@@ -103,6 +104,7 @@ function gitOutput(root, args) {
   return stringTrim(execFileSync(GIT_COMMAND, args, {
     cwd: root,
     encoding: TEXT_ENCODING,
+    maxBuffer: GIT_MAX_BUFFER_BYTES,
   }));
 }
 
@@ -139,7 +141,7 @@ function commitFingerprint(root, paths) {
   const content = execFileSync(
     GIT_COMMAND,
     [...GIT_DIFF_ARGUMENTS, '--', ...paths],
-    {cwd: root},
+    {cwd: root, maxBuffer: GIT_MAX_BUFFER_BYTES},
   );
   return crypto.createHash(HASH_ALGORITHM)
     .update(content).digest(HASH_ENCODING);
@@ -149,7 +151,7 @@ function stagedFingerprint(root, paths) {
   const content = execFileSync(
     GIT_COMMAND,
     [...GIT_STAGED_DIFF_ARGUMENTS, '--', ...paths],
-    {cwd: root},
+    {cwd: root, maxBuffer: GIT_MAX_BUFFER_BYTES},
   );
   return crypto.createHash(HASH_ALGORITHM)
     .update(content).digest(HASH_ENCODING);
@@ -184,17 +186,20 @@ function candidateCommitTree(root, paths) {
     execFileSync(GIT_COMMAND, GIT_READ_HEAD_ARGUMENTS, {
       cwd: root,
       env: environment,
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
     });
     if (paths.length > 0) {
       execFileSync(GIT_COMMAND, appendArguments(GIT_ADD_PATHS_PREFIX, paths), {
         cwd: root,
         env: environment,
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
       });
     }
     return stringTrim(execFileSync(GIT_COMMAND, GIT_WRITE_TREE_ARGUMENTS, {
       cwd: root,
       encoding: TEXT_ENCODING,
       env: environment,
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
     }));
   } finally {
     fs.rmSync(temporaryDirectory, {recursive: true, force: true});

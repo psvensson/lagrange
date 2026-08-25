@@ -229,13 +229,19 @@ export function classifyDirtyPaths(dirtyFiles, scope) {
   return {inScope: inScope.sort(), outOfScope: outOfScope.sort()};
 }
 
-function gitDirtyFiles(root) {
+export function gitDirtyFiles(root, execute = execFileSync) {
   // -uall lists individual untracked files; without it git collapses a wholly
   // untracked directory (e.g. a brand-new quest's solve/ tree) into one entry,
   // which would never match the Quest's per-file scope.
-  const output = execFileSync('git', ['status', '--porcelain', '-uall'], {
+  const output = execute('git', ['status', '--porcelain', '-uall'], {
     cwd: root,
     encoding: 'utf8',
+    // A report-heavy worktree can legitimately exceed Node's 1 MiB child
+    // process default. Dirty-path discovery is part of the same bounded Git
+    // interaction as reset/add/commit below, so it must use the owner's shared
+    // limit instead of failing before scope classification can exclude those
+    // unrelated files.
+    maxBuffer: GIT_MAX_BUFFER_BYTES,
   });
   const files = new Set();
   for (const line of output.split('\n')) {

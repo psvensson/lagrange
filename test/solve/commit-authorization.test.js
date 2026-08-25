@@ -238,6 +238,47 @@ tap.test('scope-safe commit-only authorization preserves foreign staged work',
     t.end();
   });
 
+tap.test('multi-megabyte exact diffs remain authorizable', (t) => {
+  const root = fs.mkdtempSync(path.join(
+    os.tmpdir(), 'commit-authorization-large-diff-'));
+  git(root, ['init', '--quiet']);
+  git(root, ['config', 'user.email', 'solver@example.com']);
+  git(root, ['config', 'user.name', 'Solver']);
+  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+  const sourcePath = path.join(root, 'src', 'large.js');
+  const lineCount = 48_000;
+  const source = (prefix) => Array.from({length: lineCount}, (_unused, index) =>
+    `export const ${prefix}_${String(index).padStart(5, '0')} = ${index};`)
+    .join('\n') + '\n';
+  fs.writeFileSync(sourcePath, source('before'));
+  git(root, ['add', '-A']);
+  git(root, ['commit', '--quiet', '-m', 'base']);
+  claimQuest(root, 'large-diff-quest');
+
+  fs.writeFileSync(sourcePath, source('after'));
+  git(root, ['add', 'src/large.js']);
+  const stagedDiff = execFileSync('git', [
+    'diff', '--cached', '--binary', '--full-index', '--no-ext-diff',
+    '--', 'src/large.js',
+  ], {cwd: root, maxBuffer: 64 * 1024 * 1024});
+  t.ok(fs.statSync(sourcePath).size > 1024 * 1024,
+    'fixture source exceeds the child-process default buffer');
+  t.ok(stagedDiff.length > 1024 * 1024,
+    'fixture reproduces the exact staged-diff buffer condition');
+  t.doesNotThrow(() => issueCommitAuthorization(root, {
+    questId: 'large-diff-quest',
+    mode: 'land',
+    paths: ['src/large.js'],
+  }), 'authorization hashes the complete large staged and working diffs');
+  t.equal(checkCommitAuthorization(root).authorized, true,
+    'the exact large authorization is consumed without weakening identity checks');
+
+  clearCommitAuthorization(root);
+  releaseSession(root);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('concurrent authorization checks have exactly one winner', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'commit-authorization-race-'));
   git(root, ['init', '--quiet']);
