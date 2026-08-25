@@ -197,10 +197,10 @@ database partition + run()
      |
      | small partial
      v
-        reduce()
-          |
-          v
-      20 KB result
+  reduce()
+     |
+     v
+20 KB result
 ```
 
 The expensive work happens beside each piece of data.
