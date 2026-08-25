@@ -186,6 +186,47 @@ const MODEL_TLC_TAIL_CONFIGS = Object.freeze([
     boundary: 'scheduler_cadence_without_mutation_admission_authority_counterexample',
     expectedFailurePattern: 'Temporal property JoinerHoldEventuallyReleases was violated',
   },
+  {
+    id: 'formation-release-handoff-closure-fixed',
+    mode: 'formation-release-handoff-closure-fixed',
+    module: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'formation-release-handoff-closure-fixed.model.report.json',
+    scenario: 'formation-release-handoff-closure-model',
+    owner: 'control_plane_readiness_startup_authority',
+    boundary: 'global_spread_release_to_joining_cohort_ready_publication',
+  },
+  {
+    id: 'formation-release-handoff-closure-instantaneous-release-bug',
+    mode: 'formation-release-handoff-closure-instantaneous-release-bug',
+    module: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure_instantaneous_release_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'formation-release-handoff-closure-instantaneous-release-bug.model.report.json',
+    scenario: 'formation-release-handoff-closure-model',
+    owner: 'control_plane_readiness_startup_authority',
+    boundary: 'instantaneous_spread_release_non_monotone_counterexample',
+    expectedFailurePattern:
+      'Temporal property JoinerCohortEventuallyReadyWithinBudget was violated',
+  },
 ]);
 
 export {MODEL_TLC_TAIL_CONFIGS};

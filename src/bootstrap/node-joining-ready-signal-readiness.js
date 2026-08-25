@@ -227,15 +227,15 @@ class NodeJoiningReadySignalReadiness
    * @return {Array<string>}
    * @private
    */
-  getPriorityPlacementFormationCandidateNodeIds(systemTableCache, now) {
+  async getPriorityPlacementFormationCandidateNodeIds(systemTableCache, now) {
     const startupAuthority =
-      this.getPriorityPlacementFormationStartupAuthority(now);
+      await this.getPriorityPlacementFormationStartupAuthority(now);
     return this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
       systemTableCache,
       startupAuthority,
     );
   }
-  getPriorityPlacementFormationStartupAuthority(now) {
+  async getPriorityPlacementFormationStartupAuthority(now) {
     const readinessService =
       this.rebalanceCoordinator?.controlPlaneReadinessService || null;
     if (
@@ -245,8 +245,26 @@ class NodeJoiningReadySignalReadiness
       return null;
     }
     try {
+      if (
+        typeof readinessService
+          .getFormationReleaseStartupAuthoritySnapshot === 'function'
+      ) {
+        return await readinessService.getFormationReleaseStartupAuthoritySnapshot(
+          this.seedNodeId || this.nodeId,
+          now,
+        );
+      }
+      if (
+        typeof readinessService
+          .getFormationReleaseStartupAuthoritySnapshotSync === 'function'
+      ) {
+        return readinessService.getFormationReleaseStartupAuthoritySnapshotSync(
+          this.seedNodeId || this.nodeId,
+          now,
+        );
+      }
       return readinessService.getStartupAuthoritySnapshotSync(
-        this.nodeId,
+        this.seedNodeId || this.nodeId,
         now,
       );
     } catch {

@@ -179,6 +179,7 @@ class MessageRouterServerLifecycle {
       ws,
       state: ConnectionState.CONNECTED,
       nodeId: null,
+      bootIncarnation: 0,
       isIncoming: true,
       retired: false,
       createdAt: Date.now(),

@@ -139,6 +139,11 @@ test('a stale-incarnation NODE_STATE_UPDATE is refused terminally and the ' +
     6,
     'the accepted update retains the freshest incarnation',
   );
+  t.equal(
+    gateway.updates[0].row.boot_incarnation,
+    6,
+    'the canonical full-row writer durably projects the accepted incarnation',
+  );
 
   service.stop();
 });
@@ -173,6 +178,12 @@ test('an UNKNOWN incarnation on either side never fences (compat policy)',
       1,
       'an absent payload incarnation is UNKNOWN and never fences',
     );
+    t.equal(
+      gateway.updates[0].row.boot_incarnation,
+      9,
+      'an UNKNOWN writer preserves the receiver high-water instead of ' +
+        'downgrading durable identity',
+    );
 
     // Known writer against an UNKNOWN stored incarnation.
     service.nodeBootIncarnationWatermarks.clear();
@@ -181,6 +192,16 @@ test('an UNKNOWN incarnation on either side never fences (compat policy)',
       gateway.updates.length,
       2,
       'an unknown receiver-side incarnation (0) never fences',
+    );
+    t.equal(gateway.updates[1].row.boot_incarnation, 2);
+
+    const heartbeatOnlyPayload = buildPayload({bootIncarnation: 3});
+    heartbeatOnlyPayload[ControlPlaneField.HEARTBEAT_ONLY] = true;
+    await service.handleNodeStateUpdate(heartbeatOnlyPayload);
+    t.equal(
+      gateway.updates[2].row.boot_incarnation,
+      3,
+      'heartbeat-only publication projects the accepted incarnation too',
     );
 
     service.stop();
@@ -255,6 +276,11 @@ test('a stale-incarnation writer on the missing-row upsert path is refused ' +
     5,
     'the accepted upsert retains the freshest incarnation',
   );
+  t.equal(
+    gateway.upserts[0].row.boot_incarnation,
+    5,
+    'the missing-row path persists the same fenced incarnation it accepted',
+  );
 
   service.stop();
 });
@@ -298,3 +324,148 @@ test('a STALE_NODE_INCARNATION error is never deferred (terminal refusal)',
 
     service.stop();
   });
+
+test('durable incarnation projection is stable under post-import mutable ' +
+  'intrinsic replacement', (t) => {
+  initEnv();
+  const service = createService({
+    cdcIntegrationService: createRecordingGateway().cdcIntegrationService,
+  });
+  const originals = {
+    arrayIsArray: Array.isArray,
+    mathMax: Math.max,
+    numberIsFinite: Number.isFinite,
+    stringTrim: String.prototype.trim,
+  };
+  let row;
+  try {
+    Array.isArray = () => false;
+    Math.max = () => 0;
+    Number.isFinite = () => false;
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    String.prototype.trim = () => '';
+    row = service.buildNodeStateUpdateRow({
+      existing: null,
+      nodeRow: {
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+        [COLUMN.NODE_ADDRESS]: 'localhost:8082',
+        [COLUMN.CPU_CORES]: 8,
+        [COLUMN.MEMORY_MB]: 16384,
+        [COLUMN.DISK_GB]: 500,
+      },
+      nextState: STATE.CONNECTED,
+      heartbeatAt: 10_000,
+      readyLeaseExpiresAt: null,
+      payloadNodeAddress: 'localhost:8082',
+      payload: buildPayload({bootIncarnation: 7}),
+      isHeartbeatOnly: false,
+      incarnationFence: {
+        payloadBootIncarnation: 7,
+        knownBootIncarnation: 5,
+      },
+    });
+  } finally {
+    Array.isArray = originals.arrayIsArray;
+    Math.max = originals.mathMax;
+    Number.isFinite = originals.numberIsFinite;
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    String.prototype.trim = originals.stringTrim;
+  }
+  t.equal(row.boot_incarnation, 7);
+  t.equal(row.capabilities, '["partition_replica"]');
+  service.stop();
+  t.end();
+});
+
+test('durable incarnation ingress rejects inherited, accessor, and coercive ' +
+  'identity under prototype pollution', async (t) => {
+  initEnv();
+  const gateway = createRecordingGateway();
+  const cacheNode = {
+    node_id: TEST_NODE_ID,
+    node_address: 'localhost:8082',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: Date.now() - 60_000,
+    boot_incarnation: 9,
+    created_at: Date.now() - 65_000,
+  };
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: gateway.cdcIntegrationService,
+  });
+  service.nodeBootIncarnationWatermarks.set(TEST_NODE_ID, 9);
+  const inheritedPayload = buildPayload({});
+  const accessorPayload = buildPayload({});
+  const objectPayload = buildPayload({bootIncarnation: {}});
+  let getterCalls = 0;
+  Object.defineProperty(
+    accessorPayload,
+    ControlPlaneField.BOOT_INCARNATION,
+    {
+      configurable: true,
+      get() {
+        getterCalls += 1;
+        return 10;
+      },
+    },
+  );
+  const originals = {
+    bootIncarnation: Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      ControlPlaneField.BOOT_INCARNATION,
+    ),
+    valueOf: Object.getOwnPropertyDescriptor(Object.prototype, 'valueOf'),
+    toString: Object.getOwnPropertyDescriptor(Object.prototype, 'toString'),
+  };
+  try {
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    Object.defineProperty(
+      Object.prototype,
+      ControlPlaneField.BOOT_INCARNATION,
+      {configurable: true, value: 7},
+    );
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    Object.defineProperty(Object.prototype, 'valueOf', {
+      configurable: true,
+      value: () => 7,
+      writable: true,
+    });
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    Object.defineProperty(Object.prototype, 'toString', {
+      configurable: true,
+      value: () => '7',
+      writable: true,
+    });
+    await service.handleNodeStateUpdate(inheritedPayload);
+    await service.handleNodeStateUpdate(accessorPayload);
+    await service.handleNodeStateUpdate(objectPayload);
+  } finally {
+    if (originals.bootIncarnation) {
+      // eslint-disable-next-line no-extend-native -- adversarial fixture
+      Object.defineProperty(
+        Object.prototype,
+        ControlPlaneField.BOOT_INCARNATION,
+        originals.bootIncarnation,
+      );
+    } else {
+      delete Object.prototype[ControlPlaneField.BOOT_INCARNATION];
+    }
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    Object.defineProperty(Object.prototype, 'valueOf', originals.valueOf);
+    // eslint-disable-next-line no-extend-native -- adversarial fixture
+    Object.defineProperty(Object.prototype, 'toString', originals.toString);
+  }
+  t.equal(getterCalls, 0, 'durable identity ingress never invokes accessors');
+  t.equal(gateway.updates.length, 3);
+  for (let index = 0; index < gateway.updates.length; index += 1) {
+    t.equal(gateway.updates[index].row.boot_incarnation, 9,
+      'malformed identity preserves the known durable fence without minting');
+  }
+  service.stop();
+  t.end();
+});

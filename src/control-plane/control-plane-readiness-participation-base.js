@@ -3,7 +3,8 @@ import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness
 import {resolveTimeSource} from '../time/time-source.js';
 import {ReadinessPlanningSnapshotOwner} from
   './readiness-planning-snapshot-owner.js';
-
+import {FormationReleaseHandoffClosureOwner} from './formation-release-handoff-closure-owner.js';
+import {FormationReleaseHandoffPublicationCoordinator} from './formation-release-handoff-publication-coordinator.js';
 const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
@@ -80,6 +81,11 @@ function syncNullableOwnerDependency(service, options, ownerName) {
 class ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
+    const configuredFormationAuthority = options.formationReleaseAuthorityNodeId;
+    this.formationReleaseAuthorityNodeId =
+      typeof configuredFormationAuthority === 'string' &&
+      configuredFormationAuthority.length > 0 ? configuredFormationAuthority :
+        this.nodeId;
     this.systemTableCache = options.systemTableCache || null;
     this.nodesOwner = options.nodesOwner || null;
     this.servicesOwner = options.servicesOwner || null;
@@ -275,11 +281,27 @@ class ControlPlaneReadinessParticipationBase {
         name: LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION,
         workflowCoordinator: this.readinessOperationWorkflowCoordinator,
       });
+    this.formationReleaseHandoffClosureOwner = options.formationReleaseHandoffClosureOwner ||
+      new FormationReleaseHandoffClosureOwner();
+    this.lastFormationReleaseHandoffAuthorityLogSignature = null;
     this.cacheChangeListener = null;
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(CONTROL_PLANE_READINESS_SUBSYSTEM) :
       console;
+    this.formationReleaseHandoffPublicationCoordinator =
+      options.formationReleaseHandoffPublicationCoordinator ||
+      new FormationReleaseHandoffPublicationCoordinator({
+        getStorageOwner: () =>
+          this.getFormationReleasePublicationStorageOwner(),
+        onDurable: (contract) =>
+          this.formationReleaseHandoffClosureOwner.acknowledgePublication(
+            contract.generation,
+          ),
+        onRearm: () =>
+          this.recordReadinessPlanningRecoveryEpochChange(),
+        logger: this.logger,
+      });
     this.authoritativeNodeEvidenceReconciler =
       options.authoritativeNodeEvidenceReconciler ||
       new AuthoritativeNodeEvidenceReconciler({
@@ -337,7 +359,11 @@ class ControlPlaneReadinessParticipationBase {
       });
     this.subscribeToCacheChanges();
   }
-
+  setFormationReleaseAuthorityNodeId(nodeId) {
+    if (typeof nodeId === 'string' && nodeId.length > 0) {
+      this.formationReleaseAuthorityNodeId = nodeId;
+    }
+  }
   /**
    * Log one-time diagnostics for missing readiness owners.
    * In non-strict mode the service degrades intentionally, so warn instead
@@ -517,6 +543,7 @@ class ControlPlaneReadinessParticipationBase {
   }
 
   shutdownReadinessPlanningOwner() {
+    this.formationReleaseHandoffPublicationCoordinator?.shutdown();
     this.readinessPlanningSnapshotOwner?.shutdown();
   }
 

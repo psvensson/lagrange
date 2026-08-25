@@ -1,5 +1,7 @@
 import {ControlPlaneReadinessPublicationPlanningResolution} from './control-plane-readiness-publication-planning-resolution.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {installControlPlaneReadinessFormationReleaseMethods} from
+  './control-plane-readiness-formation-release-methods.js';
 
 const {
   COLUMN,
@@ -125,8 +127,84 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     observedAt = this.now(),
   ) {
     try {
-      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
+      return this.applyFormationReleaseHandoff(
+        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+          this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
+        ),
+        observedAt,
+        this.formationReleaseAuthorityNodeId,
+        {
+          projectionNodeId: nodeId,
+          observeAuthority:
+            nodeId === this.formationReleaseAuthorityNodeId &&
+            this.nodeId === this.formationReleaseAuthorityNodeId,
+        },
+      );
+    } catch (error) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  getFormationReleaseStartupAuthoritySnapshotSync(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    try {
+      return this.applyFormationReleaseHandoff(
+        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+          this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
+        ),
+        observedAt,
+        this.formationReleaseAuthorityNodeId,
+        {
+          projectionNodeId: nodeId,
+          observeAuthority:
+            nodeId === this.formationReleaseAuthorityNodeId &&
+            this.nodeId === this.formationReleaseAuthorityNodeId,
+        },
+      );
+    } catch (error) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  async getFormationReleaseStartupAuthoritySnapshot(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    try {
+      const startupAuthority =
+        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+          await this.getPriorityRecoveryPlanningAnswerForOwnerRead(
+            nodeId,
+            observedAt,
+          ),
+        );
+      const observeAuthority =
+        nodeId === this.formationReleaseAuthorityNodeId &&
+        this.nodeId === this.formationReleaseAuthorityNodeId;
+      const publishedHandoff = observeAuthority ? null :
+        await this.readFormationReleaseHandoffFromAuthority(
+          this.formationReleaseAuthorityNodeId,
+          this.getFormationReleaseAuthorityBootIncarnation(
+            this.formationReleaseAuthorityNodeId,
+          ),
+        );
+      return this.applyFormationReleaseHandoff(
+        startupAuthority,
+        observedAt,
+        this.formationReleaseAuthorityNodeId,
+        {
+          observeAuthority,
+          publishedHandoff,
+          projectionNodeId: nodeId,
+        },
       );
     } catch (error) {
       return this.buildStartupAuthorityUnavailableSnapshot(
@@ -141,11 +219,32 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     observedAt = this.now(),
   ) {
     try {
-      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        await this.getPriorityRecoveryPlanningSnapshotBestEffort(
-          nodeId,
-          observedAt,
-        ),
+      const startupAuthority =
+        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+          await this.getPriorityRecoveryPlanningSnapshotBestEffort(
+            nodeId,
+            observedAt,
+          ),
+        );
+      const observeAuthority =
+        nodeId === this.formationReleaseAuthorityNodeId &&
+        this.nodeId === this.formationReleaseAuthorityNodeId;
+      const publishedHandoff = observeAuthority ? null :
+        await this.readFormationReleaseHandoffFromAuthority(
+          this.formationReleaseAuthorityNodeId,
+          this.getFormationReleaseAuthorityBootIncarnation(
+            this.formationReleaseAuthorityNodeId,
+          ),
+        );
+      return this.applyFormationReleaseHandoff(
+        startupAuthority,
+        observedAt,
+        this.formationReleaseAuthorityNodeId,
+        {
+          observeAuthority,
+          publishedHandoff,
+          projectionNodeId: nodeId,
+        },
       );
     } catch (error) {
       return this.buildStartupAuthorityUnavailableSnapshot(
@@ -548,5 +647,9 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     return this.getNodeRow(nodeId);
   }
 }
+
+installControlPlaneReadinessFormationReleaseMethods(
+  ControlPlaneReadinessStartupAuthorityHealth.prototype,
+);
 
 export {ControlPlaneReadinessStartupAuthorityHealth};

@@ -29,7 +29,9 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.RECOVERY_CLOSED,
-    matches: (evidence) => evidence.priorityRecoveryActive !== true,
+    matches: (evidence) =>
+      evidence.priorityRecoveryActive !== true &&
+      evidence.formationReleaseHandoffActive !== true,
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.NOT_JOINING,
@@ -116,6 +118,8 @@ function classifyFormationCohortSpreadCureNode(options = {}) {
   const evidence = Object.freeze({
     priorityRecoveryLane: options.priorityRecoveryLane === true,
     priorityRecoveryActive: options.priorityRecoveryActive === true,
+    formationReleaseHandoffActive:
+      options.formationReleaseHandoffActive === true,
     joining: options.node?.status === NODE_STATE.JOINING,
     placementEligible:
       isStartupAuthorityControlPlanePlacementEligibleNode(options),
