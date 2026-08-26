@@ -54,17 +54,19 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 32
+## Open quests — 34
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
+| formation-release-handoff-closure | product | 0 | 0 | 2026-08-25 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | lone-seed-formation-admission-livelock-closure | product | 5 | 0 | 2026-08-16 ⚠ stale | — |
+| managed-split-cutover-handoff-closure | product | 0 | 0 | 2026-08-25 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
