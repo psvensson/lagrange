@@ -2,6 +2,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {buildPublicationOwnerStreamState} from
+  '../../src/control-plane/publication-owner-state.js';
 
 const STARTUP_AUTHORITY_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
@@ -25,6 +27,28 @@ function createCache() {
       return [];
     },
     onCacheChange() {},
+  };
+}
+
+function buildLaggingSpreadPlanningAnswer(priorityPartitionSummary) {
+  const nodeIds = ['joiner-a', 'joiner-b', 'seed-node'];
+  const publicationOwnerStream = buildPublicationOwnerStreamState({
+    publicationRevision: 8,
+    desiredPublicationRevision: 8,
+    committedPublicationRevision: 8,
+    publicationStatus: 'PUBLISHED',
+    requiredAckNodeIds: nodeIds,
+    acknowledgedNodeIds: nodeIds,
+    prioritySpreadPending: false,
+  });
+  return {
+    publicationOwnerStream,
+    publicationEpoch: 8,
+    publicationStatus: 'PUBLISHED',
+    recoveryProtocolState: 'steady_published',
+    priorityPartitionSummary,
+    recoveryActiveNodeIds: nodeIds,
+    recoveryActiveNodeSource: 'published_membership',
   };
 }
 
@@ -72,6 +96,144 @@ test('ControlPlaneReadinessService builds recovery-pending startup authority sna
     state: 'publication_pending',
     pendingAckCount: 0,
   });
+  t.end();
+});
+
+test('ControlPlaneReadinessService atomically binds a false spread summary ' +
+  'when the publication stream reason projection lags', (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+  const snapshot = service.buildStartupAuthoritySnapshotFromPlanningAnswer(
+    buildLaggingSpreadPlanningAnswer({
+      satisfied: false,
+      missingPartitionIds: ['replica_operations-p1'],
+    }),
+  );
+
+  t.equal(snapshot.state, 'recovery_pending');
+  t.equal(snapshot.ready, false,
+    'READY cannot be paired with an explicitly false spread predicate');
+  t.same(snapshot.priorityRecoveryReasonCodes,
+    ['priority_partitions_not_spread'],
+    'the snapshot owner supplies the canonical reason in the same object');
+  t.equal(snapshot.priorityPartitionSummary.satisfied, false);
+  t.end();
+});
+
+test('ControlPlaneReadinessService atomic false-spread binding ignores ' +
+  'post-import collection intrinsic mutation', (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+  const planningAnswer = buildLaggingSpreadPlanningAnswer({
+    satisfied: false,
+    missingPartitionIds: ['replica_operations-p1'],
+  });
+  const SafeSet = globalThis.Set;
+  const setDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Set');
+  const setIteratorDescriptor = Object.getOwnPropertyDescriptor(
+    SafeSet.prototype,
+    Symbol.iterator,
+  );
+  const arrayIteratorDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype,
+    Symbol.iterator,
+  );
+  let snapshot = null;
+  let failure = null;
+  try {
+    Object.defineProperty(globalThis, 'Set', {
+      ...setDescriptor,
+      value: class HostileSet {
+        constructor() {
+          throw new Error('live Set constructor invoked');
+        }
+      },
+    });
+    Object.defineProperty(SafeSet.prototype, Symbol.iterator, {
+      ...setIteratorDescriptor,
+      value() {
+        throw new Error('live Set iterator invoked');
+      },
+    });
+    // eslint-disable-next-line no-extend-native -- adversarial intrinsic test
+    Object.defineProperty(Array.prototype, Symbol.iterator, {
+      ...arrayIteratorDescriptor,
+      value() {
+        throw new Error('live Array iterator invoked');
+      },
+    });
+    snapshot = service.buildStartupAuthoritySnapshotFromPlanningAnswer(
+      planningAnswer,
+    );
+  } catch (error) {
+    failure = error;
+  } finally {
+    Object.defineProperty(globalThis, 'Set', setDescriptor);
+    Object.defineProperty(
+      SafeSet.prototype,
+      Symbol.iterator,
+      setIteratorDescriptor,
+    );
+    // eslint-disable-next-line no-extend-native -- restore tested intrinsic
+    Object.defineProperty(
+      Array.prototype,
+      Symbol.iterator,
+      arrayIteratorDescriptor,
+    );
+  }
+
+  t.error(failure, 'the snapshot path uses captured indexed operations');
+  t.equal(snapshot?.state, 'recovery_pending');
+  t.equal(snapshot?.ready, false);
+  t.same(snapshot?.priorityRecoveryReasonCodes,
+    ['priority_partitions_not_spread']);
+  t.equal(snapshot?.priorityPartitionSummary?.satisfied, false);
+  t.end();
+});
+
+test('ControlPlaneReadinessService reads spread satisfaction as one own data ' +
+  'boolean and never invokes inherited or accessor evidence', (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+  let getterCalls = 0;
+  const inherited = Object.create({satisfied: false});
+  inherited.missingPartitionIds = ['replica_operations-p1'];
+  const inheritedSnapshot = service
+    .buildStartupAuthoritySnapshotFromPlanningAnswer(
+      buildLaggingSpreadPlanningAnswer(inherited),
+    );
+  const alternatingAccessor = {
+    missingPartitionIds: ['replica_operations-p1'],
+  };
+  Object.defineProperty(alternatingAccessor, 'satisfied', {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return getterCalls % 2 === 0;
+    },
+  });
+  const accessorSnapshot = service
+    .buildStartupAuthoritySnapshotFromPlanningAnswer(
+      buildLaggingSpreadPlanningAnswer(alternatingAccessor),
+    );
+
+  t.equal(getterCalls, 0, 'no accessor can become spread authority');
+  t.equal(inheritedSnapshot.ready, false);
+  t.equal(accessorSnapshot.ready, false);
+  t.notOk(Object.hasOwn(
+    inheritedSnapshot.priorityPartitionSummary || {},
+    'satisfied',
+  ));
+  t.notOk(Object.hasOwn(
+    accessorSnapshot.priorityPartitionSummary || {},
+    'satisfied',
+  ));
   t.end();
 });
 

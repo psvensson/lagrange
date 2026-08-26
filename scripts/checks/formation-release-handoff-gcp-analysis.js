@@ -1,6 +1,13 @@
 const arrayIsArray = Array.isArray;
 const arrayPrototypeIndexOf = Function.call.bind(Array.prototype.indexOf);
 import {formationReleaseCohortIdentity, formationReleaseGenerationIdentity} from '../../src/control-plane/formation-release-handoff-identity.js';
+import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from '../../src/control-plane/formation-release-handoff-policy.js';
+import {
+  FORMATION_RELEASE_HANDOFF_REASON,
+  FORMATION_RELEASE_HANDOFF_STATE,
+} from '../../src/control-plane/formation-release-handoff-contract.js';
+import {formationReleaseObservedNodeBootMatchesExpected} from
+  '../../src/control-plane/formation-release-handoff-state-grammar.js';
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
 const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
 const booleanConstructor = Boolean;
@@ -14,52 +21,128 @@ const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const stringIncludes = Function.call.bind(String.prototype.includes);
 
+const FIELD = Object.freeze({
+  AUTHORITY_BOOT_INCARNATION: 'authorityBootIncarnation',
+  AUTHORITY_NODE_ID: 'authorityNodeId',
+  BOOTED_SOURCE_FINGERPRINT: 'bootedSrcFingerprint',
+  CAPTURED_CANONICAL_NODE_IDS: 'capturedCanonicalNodeIds',
+  CAPTURED_PUBLICATION_EPOCH: 'capturedPublicationEpoch',
+  CODE: 'code',
+  CURRENT_PRIMARY_BOOT_INCARNATION: 'currentPrimaryBootIncarnation',
+  CURRENT_PRIMARY_PRESENT: 'currentPrimaryPresent',
+  ERROR_CODE: 'errorCode',
+  EXPECTED_BOOT_INCARNATION: 'expectedBootIncarnation',
+  EXPECTED_SOURCE_FINGERPRINT: 'expectedSrcFingerprint',
+  FORMATION_GENERATION: 'formationReleaseHandoffGeneration',
+  FORMATION_RELEASE_AUTHORIZED: 'formationReleaseHandoffReleaseAuthorized',
+  FORMATION_STATE: 'formationReleaseHandoffState',
+  GENERATION: 'generation',
+  MESSAGE: 'message',
+  MSG: 'msg',
+  NODE_BOOT_INCARNATION: 'nodeBootIncarnation',
+  NODE_ID: 'nodeId',
+  NODE_ID_SNAKE: 'node_id',
+  NODE_PRESENT: 'nodePresent',
+  OBSERVED_AUTHORITY_READY: 'observedAuthorityReady',
+  OBSERVED_PUBLICATION_EPOCH: 'observedPublicationEpoch',
+  OBSERVED_RECOVERY_REASON_CODES: 'observedRecoveryReasonCodes',
+  OBSERVED_STARTUP_AUTHORITY_FENCE_IDENTITY:
+    'observedStartupAuthorityFenceIdentity',
+  OBSERVED_STARTUP_AUTHORITY_PUBLICATION_EPOCH:
+    'observedStartupAuthorityPublicationEpoch',
+  OBSERVED_STARTUP_AUTHORITY_READY: 'observedStartupAuthorityReady',
+  OBSERVED_STARTUP_AUTHORITY_REASON_CODES:
+    'observedStartupAuthorityReasonCodes',
+  OBSERVED_STARTUP_AUTHORITY_STATE: 'observedStartupAuthorityState',
+  OBSERVED_STARTUP_PRIORITY_SPREAD_SATISFIED:
+    'observedStartupPrioritySpreadSatisfied',
+  PENDING_NODE_IDS: 'pendingNodeIds',
+  PENDING_TERMINAL_REASON: 'pendingTerminalReason',
+  PENDING_TERMINAL_STATE: 'pendingTerminalState',
+  READY_NODE_IDS: 'readyNodeIds',
+  REASON: 'reason',
+  RELEASE_AUTHORIZED: 'releaseAuthorized',
+  REQUIRED_COHORT: 'requiredCohort',
+  FENCE_IDENTITY: 'fenceIdentity',
+  SOURCE_FINGERPRINT_MATCHES: 'srcFingerprintMatches',
+  STATE: 'state',
+  TIME: 'time',
+  VALUE: 'value',
+});
+const ACTIVE_NODE_STATUS = 'active';
+const JOINING_NODE_STATUS = 'joining';
+const CONNECTED_NODE_STATE = 'connected';
+const READY_NODE_STATE = 'ready';
+
 const FORMATION_TRANSITION_MESSAGE =
   'Formation release handoff authority transition';
 const FORMATION_BARRIER_MESSAGE = 'Join priority-placement formation barrier';
 const FORMATION_TIMEOUT_CODE = 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT';
 const SPREAD_REOPEN_REASON = 'priority_partitions_not_spread';
-const ACTIVE_REASON = 'retained_until_captured_cohort_ready';
-const COMPLETE_REASON = 'captured_cohort_ready';
-const IDLE_REASON = 'no_satisfied_formation_cohort';
+const PROJECTION_SYNCHRONIZATION_REASON = 'publication_epoch_pending';
+const STARTUP_AUTHORITY_READY_STATE = 'ready';
+const STARTUP_AUTHORITY_RECOVERY_PENDING_STATE = 'recovery_pending';
+const STARTUP_AUTHORITY_OBSERVATION = Object.freeze({
+  READY: 'ready',
+  SPREAD_REOPEN: 'spread_reopen',
+  PROJECTION_SYNCHRONIZATION: 'projection_synchronization',
+});
+const ACTIVE_REASON = FORMATION_RELEASE_HANDOFF_REASON.RETAINED_UNTIL_READY;
+const TERMINAL_PENDING_STATE =
+  FORMATION_RELEASE_HANDOFF_STATE.TERMINAL_PENDING;
+const TERMINAL_PENDING_REASON =
+  FORMATION_RELEASE_HANDOFF_REASON.TERMINAL_DURABILITY_PENDING;
+const COMPLETE_REASON = FORMATION_RELEASE_HANDOFF_REASON.CAPTURED_COHORT_READY;
+const IDLE_REASON = FORMATION_RELEASE_HANDOFF_REASON.NO_SATISFIED_COHORT;
 const REVOKED_REASONS = Object.freeze([
-  'startup_authority_incompatible',
-  'captured_cohort_member_missing',
-  'captured_cohort_incarnation_changed',
-  'captured_cohort_member_ineligible',
+  FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
+  FORMATION_RELEASE_HANDOFF_REASON.COHORT_MEMBER_MISSING,
+  FORMATION_RELEASE_HANDOFF_REASON.COHORT_INCARNATION_CHANGED,
+  FORMATION_RELEASE_HANDOFF_REASON.COHORT_MEMBER_INELIGIBLE,
 ]);
 const NODE_COUNT = 5;
-const MINIMUM_COHORT_SIZE = 2;
 const CERTIFICATION_BUDGET_MS = 60_000;
 const REVERT_COUNTEREXAMPLE = Object.freeze({
-  CANONICAL_EXPANSION_REVOCATION:
-    'canonical_membership_expansion_revocation',
+  TRANSIENT_PROJECTION_OMISSION_REVOCATION:
+    'transient_projection_omission_revocation',
   FORMATION_TIMEOUT_WITHOUT_GENERATION:
     'formation_timeout_without_generation',
 });
 const EVENT_FIELDS = Object.freeze([
-  'authorityBootIncarnation',
-  'authorityNodeId',
-  'bootedSrcFingerprint',
-  'capturedPublicationEpoch',
-  'code',
+  FIELD.AUTHORITY_BOOT_INCARNATION,
+  FIELD.AUTHORITY_NODE_ID,
+  FIELD.BOOTED_SOURCE_FINGERPRINT,
+  'capturedCanonicalNodeIds',
+  FIELD.CAPTURED_PUBLICATION_EPOCH,
+  FIELD.CODE,
   'error',
-  'errorCode',
-  'expectedSrcFingerprint',
+  FIELD.ERROR_CODE,
+  FIELD.EXPECTED_SOURCE_FINGERPRINT,
   'formationReleaseHandoffGeneration',
-  'formationReleaseHandoffReleaseAuthorized',
-  'formationReleaseHandoffState',
-  'generation',
-  'observedAuthorityReady',
-  'observedPublicationEpoch',
-  'observedRecoveryReasonCodes',
-  'pendingNodeIds',
-  'readyNodeIds',
-  'reason',
-  'releaseAuthorized',
-  'requiredCohort',
-  'srcFingerprintMatches',
-  'state',
+  FIELD.FORMATION_RELEASE_AUTHORIZED,
+  FIELD.FORMATION_STATE,
+  FIELD.GENERATION,
+  'observedCanonicalNodeIds',
+  FIELD.OBSERVED_AUTHORITY_READY,
+  FIELD.OBSERVED_PUBLICATION_EPOCH,
+  FIELD.OBSERVED_RECOVERY_REASON_CODES,
+  FIELD.OBSERVED_STARTUP_AUTHORITY_FENCE_IDENTITY,
+  FIELD.OBSERVED_STARTUP_AUTHORITY_PUBLICATION_EPOCH,
+  FIELD.OBSERVED_STARTUP_AUTHORITY_READY,
+  FIELD.OBSERVED_STARTUP_AUTHORITY_REASON_CODES,
+  FIELD.OBSERVED_STARTUP_AUTHORITY_STATE,
+  FIELD.OBSERVED_STARTUP_PRIORITY_SPREAD_SATISFIED,
+  FIELD.PENDING_NODE_IDS,
+  FIELD.PENDING_TERMINAL_REASON,
+  FIELD.PENDING_TERMINAL_STATE,
+  'physicalCohortEvidence',
+  FIELD.READY_NODE_IDS,
+  FIELD.REASON,
+  FIELD.RELEASE_AUTHORIZED,
+  FIELD.REQUIRED_COHORT,
+  FIELD.FENCE_IDENTITY,
+  FIELD.SOURCE_FINGERPRINT_MATCHES,
+  FIELD.STATE,
 ]);
 
 function readOwnData(target, field) {
@@ -67,7 +150,7 @@ function readOwnData(target, field) {
     return undefined;
   }
   const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, 'value') ?
+  return descriptor && objectHasOwn(descriptor, FIELD.VALUE) ?
     descriptor.value :
     undefined;
 }
@@ -117,10 +200,10 @@ function projectLogEntry(entry) {
   const metadata = parseLogMetadata(entry);
   const event = copyKnownEventFields(metadata);
   event.time = logEntryTime(entry);
-  event.nodeId = readOwnData(entry, 'node_id') ||
-    readOwnData(entry, 'nodeId') || readOwnData(metadata, 'nodeId') || null;
-  event.msg = readOwnData(entry, 'message') ||
-    readOwnData(entry, 'msg') || readOwnData(metadata, 'msg') || null;
+  event.nodeId = readOwnData(entry, FIELD.NODE_ID_SNAKE) ||
+    readOwnData(entry, FIELD.NODE_ID) || readOwnData(metadata, FIELD.NODE_ID) || null;
+  event.msg = readOwnData(entry, FIELD.MESSAGE) ||
+    readOwnData(entry, FIELD.MSG) || readOwnData(metadata, FIELD.MSG) || null;
   return event;
 }
 
@@ -149,7 +232,7 @@ function normalizeUniqueStrings(values, minimumLength = 0) {
   for (let index = 0; index < values.length; index += 1) {
     if (!objectHasOwn(values, index)) return null;
     const descriptor = objectGetOwnPropertyDescriptor(values, index);
-    const value = descriptor && objectHasOwn(descriptor, 'value') ?
+    const value = descriptor && objectHasOwn(descriptor, FIELD.VALUE) ?
       descriptor.value :
       null;
     if (
@@ -173,10 +256,10 @@ function normalizeCohort(values) {
   for (let index = 0; index < values.length; index += 1) {
     if (!objectHasOwn(values, index)) return null;
     const descriptor = objectGetOwnPropertyDescriptor(values, index);
-    const member = descriptor && objectHasOwn(descriptor, 'value') ?
+    const member = descriptor && objectHasOwn(descriptor, FIELD.VALUE) ?
       descriptor.value :
       null;
-    const nodeId = readOwnString(member, 'nodeId');
+    const nodeId = readOwnString(member, FIELD.NODE_ID);
     const bootIncarnation = readOwnPositiveInteger(
       member,
       'bootIncarnation',
@@ -234,27 +317,96 @@ function activeListsAreExact(ready, pending, cohortNodeIds) {
 function buildTransitionParts(event) {
   return {
     event,
-    generation: readOwnString(event, 'generation'),
-    state: readOwnString(event, 'state'),
-    reason: readOwnString(event, 'reason'),
-    authorityNodeId: readOwnString(event, 'authorityNodeId'),
+    generation: readOwnString(event, FIELD.GENERATION),
+    state: readOwnString(event, FIELD.STATE),
+    reason: readOwnString(event, FIELD.REASON),
+    authorityNodeId: readOwnString(event, FIELD.AUTHORITY_NODE_ID),
     authorityBootIncarnation:
-      readOwnPositiveInteger(event, 'authorityBootIncarnation'),
+      readOwnPositiveInteger(event, FIELD.AUTHORITY_BOOT_INCARNATION),
     capturedPublicationEpoch:
-      readOwnPositiveInteger(event, 'capturedPublicationEpoch'),
+      readOwnPositiveInteger(event, FIELD.CAPTURED_PUBLICATION_EPOCH),
     observedPublicationEpoch:
-      readOwnPositiveInteger(event, 'observedPublicationEpoch'),
-    cohort: normalizeCohort(readOwnData(event, 'requiredCohort')),
-    readyNodeIds: normalizeUniqueStrings(readOwnData(event, 'readyNodeIds')),
+      readOwnPositiveInteger(event, FIELD.OBSERVED_PUBLICATION_EPOCH),
+    cohort: normalizeCohort(readOwnData(event, FIELD.REQUIRED_COHORT)),
+    readyNodeIds: normalizeUniqueStrings(readOwnData(event, FIELD.READY_NODE_IDS)),
     pendingNodeIds:
-      normalizeUniqueStrings(readOwnData(event, 'pendingNodeIds')),
-    observedAuthorityReady: readOwnData(event, 'observedAuthorityReady'),
-    releaseAuthorized: readOwnData(event, 'releaseAuthorized'),
+      normalizeUniqueStrings(readOwnData(event, FIELD.PENDING_NODE_IDS)),
+    observedAuthorityReady: readOwnData(event, FIELD.OBSERVED_AUTHORITY_READY),
+    releaseAuthorized: readOwnData(event, FIELD.RELEASE_AUTHORIZED),
     recoveryReasonCodes: normalizeUniqueStrings(
-      readOwnData(event, 'observedRecoveryReasonCodes'),
+      readOwnData(event, FIELD.OBSERVED_RECOVERY_REASON_CODES),
     ),
-    time: dateParse(readOwnString(event, 'time') || ''),
+    fenceIdentity: readOwnString(event, FIELD.FENCE_IDENTITY),
+    startupAuthorityState:
+      readOwnString(event, FIELD.OBSERVED_STARTUP_AUTHORITY_STATE),
+    startupAuthorityReady:
+      readOwnData(event, FIELD.OBSERVED_STARTUP_AUTHORITY_READY),
+    startupPrioritySpreadSatisfied: readOwnData(
+      event,
+      FIELD.OBSERVED_STARTUP_PRIORITY_SPREAD_SATISFIED,
+    ),
+    startupAuthorityReasonCodes: normalizeUniqueStrings(
+      readOwnData(event, FIELD.OBSERVED_STARTUP_AUTHORITY_REASON_CODES),
+    ),
+    startupAuthorityPublicationEpoch: readOwnPositiveInteger(
+      event,
+      FIELD.OBSERVED_STARTUP_AUTHORITY_PUBLICATION_EPOCH,
+    ),
+    startupAuthorityFenceIdentity: readOwnString(
+      event,
+      FIELD.OBSERVED_STARTUP_AUTHORITY_FENCE_IDENTITY,
+    ),
+    pendingTerminalState: readOwnString(event, FIELD.PENDING_TERMINAL_STATE),
+    pendingTerminalReason: readOwnString(event, FIELD.PENDING_TERMINAL_REASON),
+    time: dateParse(readOwnString(event, FIELD.TIME) || ''),
   };
+}
+
+function exactSingleReason(values, reason) {
+  return values !== null && values.length === 1 && values[0] === reason;
+}
+
+function exactProjectionSynchronizationReasons(values, spreadSatisfied) {
+  if (spreadSatisfied === true) {
+    return exactSingleReason(values, PROJECTION_SYNCHRONIZATION_REASON);
+  }
+  return spreadSatisfied === false && values !== null &&
+    values.length === 2 &&
+    values[0] === PROJECTION_SYNCHRONIZATION_REASON &&
+    values[1] === SPREAD_REOPEN_REASON;
+}
+
+function classifyStartupAuthorityObservation(parts) {
+  if (
+    parts.startupAuthorityPublicationEpoch === null ||
+    parts.startupAuthorityPublicationEpoch < parts.capturedPublicationEpoch ||
+    parts.fenceIdentity === null ||
+    parts.startupAuthorityFenceIdentity !== parts.fenceIdentity ||
+    parts.startupAuthorityReasonCodes === null
+  ) return null;
+  if (
+    parts.startupAuthorityState === STARTUP_AUTHORITY_READY_STATE &&
+    parts.startupAuthorityReady === true &&
+    parts.startupPrioritySpreadSatisfied === true &&
+    parts.startupAuthorityReasonCodes.length === 0
+  ) return STARTUP_AUTHORITY_OBSERVATION.READY;
+  if (
+    parts.startupAuthorityState ===
+      STARTUP_AUTHORITY_RECOVERY_PENDING_STATE &&
+    parts.startupAuthorityReady === false &&
+    parts.startupPrioritySpreadSatisfied === false &&
+    exactSingleReason(parts.startupAuthorityReasonCodes, SPREAD_REOPEN_REASON)
+  ) return STARTUP_AUTHORITY_OBSERVATION.SPREAD_REOPEN;
+  if (
+    parts.startupAuthorityState ===
+      STARTUP_AUTHORITY_RECOVERY_PENDING_STATE &&
+    parts.startupAuthorityReady === false &&
+    exactProjectionSynchronizationReasons(
+      parts.startupAuthorityReasonCodes,
+      parts.startupPrioritySpreadSatisfied,
+    )
+  ) return STARTUP_AUTHORITY_OBSERVATION.PROJECTION_SYNCHRONIZATION;
+  return null;
 }
 
 function transitionPartsPresent(parts) {
@@ -285,20 +437,39 @@ function transitionGenerationIsExact(parts, cohortIdentityValue) {
 }
 
 function transitionStateIsValid(parts, cohortNodeIds) {
-  if (parts.state === 'active') {
+  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) {
     if (parts.reason !== ACTIVE_REASON) return false;
-    return parts.pendingNodeIds.length > 0 && activeListsAreExact(
+    if (parts.pendingTerminalState || parts.pendingTerminalReason) return false;
+    return activeListsAreExact(
       parts.readyNodeIds,
       parts.pendingNodeIds,
       cohortNodeIds,
     );
   }
-  if (parts.state === 'complete') {
+  if (parts.state === TERMINAL_PENDING_STATE) {
+    if (parts.reason !== TERMINAL_PENDING_REASON) return false;
+    if (parts.pendingTerminalState === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE) {
+      return parts.pendingTerminalReason === COMPLETE_REASON &&
+        parts.pendingNodeIds.length === 0 &&
+        setEquals(parts.readyNodeIds, cohortNodeIds);
+    }
+    if (parts.pendingTerminalState === FORMATION_RELEASE_HANDOFF_STATE.REVOKED) {
+      return arrayPrototypeIndexOf(
+        REVOKED_REASONS,
+        parts.pendingTerminalReason,
+      ) !== -1 && parts.readyNodeIds.length === 0 &&
+        parts.pendingNodeIds.length === 0;
+    }
+    return false;
+  }
+  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE) {
+    if (parts.pendingTerminalState || parts.pendingTerminalReason) return false;
     if (parts.reason !== COMPLETE_REASON) return false;
     return parts.pendingNodeIds.length === 0 &&
       setEquals(parts.readyNodeIds, cohortNodeIds);
   }
-  if (parts.state === 'revoked') {
+  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.REVOKED) {
+    if (parts.pendingTerminalState || parts.pendingTerminalReason) return false;
     return arrayPrototypeIndexOf(REVOKED_REASONS, parts.reason) !== -1 &&
       parts.readyNodeIds.length === 0 &&
       parts.pendingNodeIds.length === 0;
@@ -307,7 +478,7 @@ function transitionStateIsValid(parts, cohortNodeIds) {
 }
 
 function transitionAuthorityFlagsAreValid(parts) {
-  const active = parts.state === 'active';
+  const active = parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE;
   if (active && parts.releaseAuthorized !== true &&
       parts.releaseAuthorized !== false) return false;
   if (!active && parts.releaseAuthorized !== false) return false;
@@ -328,6 +499,17 @@ function normalizeGenerationTransition(event) {
   }
   if (!transitionStateIsValid(parts, cohortNodeIds)) return null;
   if (!transitionAuthorityFlagsAreValid(parts)) return null;
+  const startupAuthorityObservation =
+    parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE ?
+      classifyStartupAuthorityObservation(parts) : null;
+  if (
+    parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    startupAuthorityObservation === null
+  ) return null;
+  if (
+    parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    !physicalEvidenceIsExact(event, {cohort: parts.cohort})
+  ) return null;
   return {
     event,
     time: parts.time,
@@ -343,29 +525,34 @@ function normalizeGenerationTransition(event) {
     readyNodeIds: parts.readyNodeIds,
     pendingNodeIds: parts.pendingNodeIds,
     recoveryReasonCodes: parts.recoveryReasonCodes,
+    pendingTerminalState: parts.pendingTerminalState,
+    pendingTerminalReason: parts.pendingTerminalReason,
+    startupAuthorityObservation,
   };
 }
 
 function nullGenerationTransitionIsNonAuthorizing(event) {
   return allTrue([
-    readOwnData(event, 'generation') === null,
-    readOwnData(event, 'state') === 'idle',
-    readOwnData(event, 'reason') === IDLE_REASON,
-    readOwnData(event, 'releaseAuthorized') === false,
-    readOwnData(event, 'authorityBootIncarnation') === null,
-    readOwnData(event, 'capturedPublicationEpoch') === null,
-    readOwnData(event, 'observedPublicationEpoch') === null,
-    readOwnData(event, 'observedAuthorityReady') === null,
-    listsEqual(normalizeUniqueStrings(readOwnData(event, 'readyNodeIds')), []),
+    readOwnData(event, FIELD.GENERATION) === null,
+    readOwnData(event, FIELD.STATE) === FORMATION_RELEASE_HANDOFF_STATE.IDLE,
+    readOwnData(event, FIELD.REASON) === IDLE_REASON,
+    readOwnData(event, FIELD.RELEASE_AUTHORIZED) === false,
+    readOwnData(event, FIELD.AUTHORITY_BOOT_INCARNATION) === null,
+    readOwnData(event, FIELD.CAPTURED_PUBLICATION_EPOCH) === null,
+    readOwnData(event, FIELD.OBSERVED_PUBLICATION_EPOCH) === null,
+    readOwnData(event, FIELD.OBSERVED_AUTHORITY_READY) === null,
+    readOwnData(event, FIELD.PENDING_TERMINAL_STATE) === null,
+    readOwnData(event, FIELD.PENDING_TERMINAL_REASON) === null,
+    listsEqual(normalizeUniqueStrings(readOwnData(event, FIELD.READY_NODE_IDS)), []),
     listsEqual(
-      normalizeUniqueStrings(readOwnData(event, 'pendingNodeIds')),
+      normalizeUniqueStrings(readOwnData(event, FIELD.PENDING_NODE_IDS)),
       [],
     ),
-    normalizeCohort(readOwnData(event, 'requiredCohort')) === null,
-    arrayIsArray(readOwnData(event, 'requiredCohort')),
-    readOwnData(event, 'requiredCohort').length === 0,
+    normalizeCohort(readOwnData(event, FIELD.REQUIRED_COHORT)) === null,
+    arrayIsArray(readOwnData(event, FIELD.REQUIRED_COHORT)),
+    readOwnData(event, FIELD.REQUIRED_COHORT).length === 0,
     listsEqual(normalizeUniqueStrings(
-      readOwnData(event, 'observedRecoveryReasonCodes'),
+      readOwnData(event, FIELD.OBSERVED_RECOVERY_REASON_CODES),
     ), []),
   ]);
 }
@@ -375,10 +562,10 @@ function selectGenerationTransitions(events) {
   let malformedCount = 0;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (readOwnString(event, 'msg') !== FORMATION_TRANSITION_MESSAGE) {
+    if (readOwnString(event, FIELD.MSG) !== FORMATION_TRANSITION_MESSAGE) {
       continue;
     }
-    const generation = readOwnData(event, 'generation');
+    const generation = readOwnData(event, FIELD.GENERATION);
     if (generation === null && nullGenerationTransitionIsNonAuthorizing(
       event,
     )) continue;
@@ -409,30 +596,45 @@ function firstTransition(transitions, predicate) {
 }
 
 function isCapturedTransition(transition) {
-  return transition.state === 'active' &&
+  return transition.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
     transition.releaseAuthorized === true;
 }
 
 function isPendingDurableCapture(transition) {
-  return transition.state === 'active' &&
+  return transition.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
     transition.releaseAuthorized === false &&
     transition.observedAuthorityReady === true;
 }
 
 function isReopenedTransition(transition) {
-  if (transition.state !== 'active') return false;
+  if (transition.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) return false;
   if (transition.releaseAuthorized !== true) return false;
   if (transition.observedAuthorityReady !== false) return false;
+  if (
+    transition.startupAuthorityObservation !==
+      STARTUP_AUTHORITY_OBSERVATION.SPREAD_REOPEN
+  ) return false;
   return transition.recoveryReasonCodes.length === 1 &&
     transition.recoveryReasonCodes[0] === SPREAD_REOPEN_REASON;
 }
 
+function isProjectionSynchronizationTransition(transition) {
+  return transition.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    transition.releaseAuthorized === true &&
+    transition.startupAuthorityObservation ===
+      STARTUP_AUTHORITY_OBSERVATION.PROJECTION_SYNCHRONIZATION;
+}
+
 function isCompletedTransition(transition) {
-  return transition.state === 'complete';
+  return transition.state === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE;
 }
 
 function isRevokedTransition(transition) {
-  return transition.state === 'revoked';
+  return transition.state === FORMATION_RELEASE_HANDOFF_STATE.REVOKED;
+}
+
+function isTerminalPendingTransition(transition) {
+  return transition.state === TERMINAL_PENDING_STATE;
 }
 
 function transitionTimesAreMonotonic(transitions) {
@@ -454,7 +656,7 @@ function releaseNeverRegresses(transitions) {
   let authorized = false;
   for (let index = 0; index < transitions.length; index += 1) {
     const transition = transitions[index];
-    if (transition.state !== 'active') continue;
+    if (transition.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) continue;
     if (transition.releaseAuthorized === true) {
       authorized = true;
       continue;
@@ -491,11 +693,23 @@ function terminalTransition(transitions) {
 }
 
 function terminalGrammarIsValid(transitions, completed, revoked) {
-  const completeCount = countTransitionState(transitions, 'complete');
-  const revokedCount = countTransitionState(transitions, 'revoked');
+  const completeCount = countTransitionState(transitions, FORMATION_RELEASE_HANDOFF_STATE.COMPLETE);
+  const revokedCount = countTransitionState(transitions, FORMATION_RELEASE_HANDOFF_STATE.REVOKED);
   if (completeCount + revokedCount !== 1) return false;
   const terminal = completed || revoked;
-  return terminal !== null && transitions[transitions.length - 1] === terminal;
+  if (terminal === null || transitions[transitions.length - 1] !== terminal) {
+    return false;
+  }
+  const pendingCount = countTransitionState(
+    transitions,
+    TERMINAL_PENDING_STATE,
+  );
+  if (pendingCount > 1) return false;
+  if (pendingCount === 0) return completed === null;
+  const pending = firstTransition(transitions, isTerminalPendingTransition);
+  return transitions[transitions.length - 2] === pending &&
+    pending.pendingTerminalState === terminal.state &&
+    pending.pendingTerminalReason === terminal.reason;
 }
 
 function completionHasRequiredCapture(completed, captured) {
@@ -511,8 +725,16 @@ function generationSequenceIsValid(group) {
   const initiated = transitions[0] || null;
   const captured = firstTransition(transitions, isCapturedTransition);
   const reopened = firstTransition(transitions, isReopenedTransition);
+  const projectionSynchronization = firstTransition(
+    transitions,
+    isProjectionSynchronizationTransition,
+  );
   const completed = firstTransition(transitions, isCompletedTransition);
   const revoked = firstTransition(transitions, isRevokedTransition);
+  const terminalPending = firstTransition(
+    transitions,
+    isTerminalPendingTransition,
+  );
   const cohortNodeIds = initiated?.cohortNodeIds || [];
   const terminal = terminalTransition(transitions);
   const completionMs = initiated && terminal ?
@@ -533,8 +755,10 @@ function generationSequenceIsValid(group) {
     initiated,
     captured,
     reopened,
+    projectionSynchronization,
     completed,
     revoked,
+    terminalPending,
     terminal,
     cohort: initiated?.cohort || [],
     cohortNodeIds,
@@ -577,15 +801,18 @@ function analyzeTransitionCadence(events) {
 
 function barrierConsumerIsValid(event, cadence, nodeIds, time, nodeId) {
   if (!nodeId || !numberIsFinite(time)) return false;
-  if (!cadence.captured || !cadence.terminal) return false;
-  if (readOwnData(event, 'formationReleaseHandoffState') !== 'active') {
+  if (!cadence.captured) return false;
+  if (readOwnData(event, FIELD.FORMATION_STATE) !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) {
     return false;
   }
   if (readOwnData(
     event,
-    'formationReleaseHandoffReleaseAuthorized',
+    FIELD.FORMATION_RELEASE_AUTHORIZED,
   ) !== true) return false;
-  if (time < cadence.captured.time || time > cadence.terminal.time) {
+  if (
+    time < cadence.captured.time ||
+    (cadence.terminal !== null && time > cadence.terminal.time)
+  ) {
     return false;
   }
   if (arrayPrototypeIndexOf(cadence.captured.cohortNodeIds, nodeId) === -1) {
@@ -600,15 +827,15 @@ function analyzeBootProof(events, expectedFingerprint) {
   let exact = true;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (!objectHasOwn(event, 'srcFingerprintMatches')) continue;
+    if (!objectHasOwn(event, FIELD.SOURCE_FINGERPRINT_MATCHES)) continue;
     bootEventCount += 1;
-    const nodeId = readOwnString(event, 'nodeId');
+    const nodeId = readOwnString(event, FIELD.NODE_ID);
     if (
       !nodeId ||
       arrayPrototypeIndexOf(nodeIds, nodeId) !== -1 ||
-      readOwnData(event, 'srcFingerprintMatches') !== true ||
-      readOwnString(event, 'bootedSrcFingerprint') !== expectedFingerprint ||
-      readOwnString(event, 'expectedSrcFingerprint') !== expectedFingerprint
+      readOwnData(event, FIELD.SOURCE_FINGERPRINT_MATCHES) !== true ||
+      readOwnString(event, FIELD.BOOTED_SOURCE_FINGERPRINT) !== expectedFingerprint ||
+      readOwnString(event, FIELD.EXPECTED_SOURCE_FINGERPRINT) !== expectedFingerprint
     ) {
       exact = false;
     } else {
@@ -636,7 +863,7 @@ function analyzeBarrierConsumers(events, generations) {
   let globalProblemCount = 0;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    if (readOwnString(event, 'msg') !== FORMATION_BARRIER_MESSAGE) continue;
+    if (readOwnString(event, FIELD.MSG) !== FORMATION_BARRIER_MESSAGE) continue;
     const generationId = readOwnData(
       event,
       'formationReleaseHandoffGeneration',
@@ -647,7 +874,7 @@ function analyzeBarrierConsumers(events, generations) {
     ) {
       if (readOwnData(
         event,
-        'formationReleaseHandoffReleaseAuthorized',
+        FIELD.FORMATION_RELEASE_AUTHORIZED,
       ) === true) {
         globalProblemCount += 1;
       }
@@ -666,8 +893,8 @@ function analyzeBarrierConsumers(events, generations) {
     }
     const cadence = generations[generationIndex];
     const result = results[generationIndex];
-    const time = dateParse(readOwnString(event, 'time') || '');
-    const nodeId = readOwnString(event, 'nodeId');
+    const time = dateParse(readOwnString(event, FIELD.TIME) || '');
+    const nodeId = readOwnString(event, FIELD.NODE_ID);
     const valid = barrierConsumerIsValid(
       event,
       cadence,
@@ -693,11 +920,11 @@ function countFormationTimeouts(events) {
   let count = 0;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
-    const msg = readOwnData(event, 'msg');
+    const msg = readOwnData(event, FIELD.MSG);
     const error = readOwnData(event, 'error');
     if (
-      readOwnData(event, 'code') === FORMATION_TIMEOUT_CODE ||
-      readOwnData(event, 'errorCode') === FORMATION_TIMEOUT_CODE ||
+      readOwnData(event, FIELD.CODE) === FORMATION_TIMEOUT_CODE ||
+      readOwnData(event, FIELD.ERROR_CODE) === FORMATION_TIMEOUT_CODE ||
       (
         typeof msg === 'string' &&
         stringIncludes(msg, FORMATION_TIMEOUT_CODE)
@@ -720,12 +947,23 @@ function classifyGenerationEvidence(generation, consumer) {
     consumer.malformedOrEarlyCount === 0;
   const withinBudget = generation.completed === null ||
     generation.completionMs <= CERTIFICATION_BUDGET_MS;
+  const synchronizationOrderValid =
+    generation.projectionSynchronization === null ||
+    (
+      generation.reopened !== null &&
+      generation.projectionSynchronization !== generation.reopened &&
+      generation.projectionSynchronization.time < generation.reopened.time
+    );
   const qualifying = allTrue([
     generation.valid,
     generation.completed !== null,
     generation.revoked === null,
+    generation.terminalPending !== null,
+    generation.terminalPending?.pendingTerminalState === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE,
     generation.reopened !== null,
-    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    synchronizationOrderValid,
+    generation.cohort.length >=
+      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
     consumerPassed,
   ]);
   return {consumerPassed, exactConsumers, qualifying, withinBudget};
@@ -782,6 +1020,7 @@ function projectQualifyingWitness(qualifying) {
       completionMs: null,
       durableAcknowledgedAt: null,
       reopenedAt: null,
+      projectionSynchronizedAt: null,
       requiredCohort: [],
       withinBudget: false,
     };
@@ -790,17 +1029,119 @@ function projectQualifyingWitness(qualifying) {
   return {
     barrierConsumerNodeIds: qualifying[0].consumer.nodeIds,
     canonicalGeneration: selected.generation,
-    capturedAt: readOwnString(selected.initiated.event, 'time'),
-    completedAt: readOwnString(selected.completed.event, 'time'),
+    capturedAt: readOwnString(selected.initiated.event, FIELD.TIME),
+    completedAt: readOwnString(selected.completed.event, FIELD.TIME),
     completionMs: selected.completionMs,
-    durableAcknowledgedAt: readOwnString(selected.captured.event, 'time'),
-    reopenedAt: readOwnString(selected.reopened.event, 'time'),
+    durableAcknowledgedAt: readOwnString(selected.captured.event, FIELD.TIME),
+    reopenedAt: readOwnString(selected.reopened.event, FIELD.TIME),
+    projectionSynchronizedAt: selected.projectionSynchronization === null ?
+      null :
+      readOwnString(selected.projectionSynchronization.event, FIELD.TIME),
     requiredCohort: selected.cohort,
     withinBudget: selected.completionMs <= CERTIFICATION_BUDGET_MS,
   };
 }
 
-function canonicalExpansionRevocationGenerationIsExact(generation) {
+function projectGenerationEvidence(generations, consumers) {
+  const result = [];
+  for (let index = 0; index < generations.length; index += 1) {
+    const generation = generations[index];
+    const consumer = consumers[index];
+    const classification = classifyGenerationEvidence(generation, consumer);
+    result[result.length] = {
+      generation: generation.generation,
+      valid: generation.valid,
+      qualifying: classification.qualifying,
+      capturedAt: generation.captured === null ? null :
+        readOwnString(generation.captured.event, FIELD.TIME),
+      projectionSynchronizedAt:
+        generation.projectionSynchronization === null ? null :
+          readOwnString(
+            generation.projectionSynchronization.event,
+            FIELD.TIME,
+          ),
+      reopenedAt: generation.reopened === null ? null :
+        readOwnString(generation.reopened.event, FIELD.TIME),
+      terminalPendingAt: generation.terminalPending === null ? null :
+        readOwnString(generation.terminalPending.event, FIELD.TIME),
+      terminalAt: generation.terminal === null ? null :
+        readOwnString(generation.terminal.event, FIELD.TIME),
+      terminalState: generation.terminal?.state || null,
+      completionMs: generation.completionMs,
+      requiredCohort: generation.cohort,
+      barrierConsumerNodeIds: consumer.nodeIds,
+      malformedOrEarlyBarrierCount: consumer.malformedOrEarlyCount,
+    };
+  }
+  return result;
+}
+
+function physicalStateIsEligible(evidence) {
+  const status = readOwnString(evidence, 'nodeStatus');
+  const connectionState = readOwnString(evidence, 'nodeConnectionState');
+  return (status === ACTIVE_NODE_STATUS || status === JOINING_NODE_STATUS) &&
+    (connectionState === CONNECTED_NODE_STATE ||
+      connectionState === READY_NODE_STATE);
+}
+
+function physicalEvidenceIsExact(event, generation) {
+  const values = readOwnData(event, 'physicalCohortEvidence');
+  if (!arrayIsArray(values)) return false;
+  const expected = [{
+    nodeId: readOwnString(event, FIELD.AUTHORITY_NODE_ID),
+    bootIncarnation: readOwnPositiveInteger(
+      event,
+      FIELD.AUTHORITY_BOOT_INCARNATION,
+    ),
+  }];
+  for (let index = 0; index < generation.cohort.length; index += 1) {
+    expected[expected.length] = generation.cohort[index];
+  }
+  if (values.length !== expected.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    const evidence = readOwnData(values, index);
+    const expectedIdentity = expected[index];
+    if (
+      readOwnString(evidence, FIELD.NODE_ID) !== expectedIdentity.nodeId ||
+      readOwnPositiveInteger(evidence, FIELD.EXPECTED_BOOT_INCARNATION) !==
+        expectedIdentity.bootIncarnation ||
+      readOwnData(evidence, FIELD.NODE_PRESENT) !== true ||
+      !formationReleaseObservedNodeBootMatchesExpected(
+        expectedIdentity.bootIncarnation,
+        readOwnData(evidence, FIELD.NODE_BOOT_INCARNATION),
+      ) ||
+      readOwnData(evidence, FIELD.CURRENT_PRIMARY_PRESENT) !== true ||
+      readOwnPositiveInteger(evidence, FIELD.CURRENT_PRIMARY_BOOT_INCARNATION) !==
+        expectedIdentity.bootIncarnation ||
+      !physicalStateIsEligible(evidence)
+    ) return false;
+  }
+  return true;
+}
+
+function capturedProjectionWasTransientlyOmitted(event, generation) {
+  const captured = normalizeUniqueStrings(
+    readOwnData(event, 'capturedCanonicalNodeIds'),
+    FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE + 1,
+  );
+  const observed = normalizeUniqueStrings(
+    readOwnData(event, 'observedCanonicalNodeIds'),
+  );
+  const authorityNodeId = readOwnString(event, FIELD.AUTHORITY_NODE_ID);
+  if (!captured || !observed || !authorityNodeId) return false;
+  if (arrayPrototypeIndexOf(captured, authorityNodeId) === -1) return false;
+  let omittedCapturedCohortMember = false;
+  for (let index = 0; index < generation.cohortNodeIds.length; index += 1) {
+    const nodeId = generation.cohortNodeIds[index];
+    if (arrayPrototypeIndexOf(captured, nodeId) === -1) return false;
+    if (arrayPrototypeIndexOf(observed, nodeId) === -1) {
+      omittedCapturedCohortMember = true;
+    }
+  }
+  return omittedCapturedCohortMember;
+}
+
+function transientProjectionOmissionRevocationGenerationIsExact(generation) {
   if (!generation || !generation.revoked) return false;
   const revoked = generation.revoked;
   return allTrue([
@@ -808,16 +1149,19 @@ function canonicalExpansionRevocationGenerationIsExact(generation) {
     generation.completed === null,
     generation.captured !== null,
     generation.reopened !== null,
-    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    generation.cohort.length >=
+      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
     generation.terminal === revoked,
-    revoked.reason === 'startup_authority_incompatible',
+    revoked.reason === FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
     revoked.observedPublicationEpoch > revoked.capturedPublicationEpoch,
     revoked.observedAuthorityReady === null,
     revoked.recoveryReasonCodes.length === 0,
+    capturedProjectionWasTransientlyOmitted(revoked.event, generation),
+    physicalEvidenceIsExact(revoked.event, generation),
   ]);
 }
 
-function canonicalExpansionRevocationIsExact(options) {
+function transientProjectionOmissionRevocationIsExact(options) {
   return allTrue([
     options.bootPassed,
     options.cadenceValid,
@@ -825,7 +1169,9 @@ function canonicalExpansionRevocationIsExact(options) {
     options.malformedOrEarlyBarrierCount === 0,
     options.timeoutCount === 0,
     options.generations.length === 1,
-    canonicalExpansionRevocationGenerationIsExact(options.generations[0]),
+    transientProjectionOmissionRevocationGenerationIsExact(
+      options.generations[0],
+    ),
   ]);
 }
 
@@ -840,8 +1186,8 @@ function timeoutWithoutGenerationIsExact(options) {
 }
 
 function classifyRevertedCounterexample(options) {
-  if (canonicalExpansionRevocationIsExact(options)) {
-    return REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION;
+  if (transientProjectionOmissionRevocationIsExact(options)) {
+    return REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION;
   }
   if (timeoutWithoutGenerationIsExact(options)) {
     return REVERT_COUNTEREXAMPLE.FORMATION_TIMEOUT_WITHOUT_GENERATION;
@@ -855,6 +1201,10 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
   const consumers = analyzeBarrierConsumers(events, cadence.generations);
   const timeoutCount = countFormationTimeouts(events);
   const aggregate = aggregateGenerationEvidence(
+    cadence.generations,
+    consumers.results,
+  );
+  const generationEvidence = projectGenerationEvidence(
     cadence.generations,
     consumers.results,
   );
@@ -883,15 +1233,18 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
     bootEventCount: boot.bootEventCount,
     bootProofPassed: boot.passed,
     positiveGenerationCount: cadence.generations.length,
+    generationEvidence,
     qualifyingGenerationCount: aggregate.qualifying.length,
     canonicalGeneration: witness.canonicalGeneration,
     requiredCohort: witness.requiredCohort,
     capturedAt: witness.capturedAt,
     durableAcknowledgedAt: witness.durableAcknowledgedAt,
+    projectionSynchronizedAt: witness.projectionSynchronizedAt,
     reopenedAt: witness.reopenedAt,
     completedAt: witness.completedAt,
     completionMs: witness.completionMs,
     malformedTransitionCount: cadence.malformedTransitionCount,
+    cadenceValid: cadence.valid,
     transitionCount: cadence.transitionCount,
     barrierConsumerNodeIds: witness.barrierConsumerNodeIds,
     malformedOrEarlyBarrierCount: consumers.globalProblemCount,

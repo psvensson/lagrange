@@ -22,6 +22,86 @@ import {
   PROJECTION_READINESS_REASON,
 } from './projection-readiness-constants.js';
 
+const arrayIsArray = Array.isArray;
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPrototypePush = Function.call.bind(Array.prototype.push);
+const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
+const objectDefineProperty = Object.defineProperty;
+const objectFreeze = Object.freeze;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
+const objectHasOwn = Object.hasOwn;
+const PRIORITY_PARTITION_SUMMARY_FIELD = 'priorityPartitionSummary';
+const reflectOwnKeys = Reflect.ownKeys;
+const OWN_DATA_VALUE_FIELD = 'value';
+const ARRAY_INDEX_ZERO_FIELD = '0';
+const ARRAY_INDEX_ONE_FIELD = '1';
+const ABSENT = Symbol('startup-authority-snapshot-absent');
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
+    return ABSENT;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value : ABSENT;
+}
+
+function copyOwnDataObject(value) {
+  if (!value || typeof value !== 'object') return null;
+  const copy = {};
+  const descriptors = objectGetOwnPropertyDescriptors(value);
+  const keys = reflectOwnKeys(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    const descriptor = descriptors[key];
+    if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
+      continue;
+    }
+    objectDefineProperty(copy, key, {
+      value: descriptor.value,
+      enumerable: descriptor.enumerable,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return copy;
+}
+
+function normalizePriorityPartitionSummary(value) {
+  const summary = copyOwnDataObject(value);
+  if (!summary) return {summary: null, satisfied: ABSENT};
+  const satisfied = readOwnData(summary, 'satisfied');
+  return {
+    summary: objectFreeze(summary),
+    satisfied:
+      satisfied === true || satisfied === false ? satisfied : ABSENT,
+  };
+}
+
+function appendOwnUniqueStrings(target, values, allowed = null) {
+  if (!arrayIsArray(values)) return;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = readOwnData(values, String(index));
+    if (typeof value !== 'string' || value.length === 0) continue;
+    if (allowed && !arrayPrototypeIncludes(allowed, value)) continue;
+    if (!arrayPrototypeIncludes(target, value)) arrayPrototypePush(target, value);
+  }
+}
+
+function buildUniqueStringList(first, second = null, finalValue = null) {
+  const values = [];
+  appendOwnUniqueStrings(values, first);
+  appendOwnUniqueStrings(values, second);
+  if (
+    typeof finalValue === 'string' && finalValue.length > 0 &&
+    !arrayPrototypeIncludes(values, finalValue)
+  ) {
+    arrayPrototypePush(values, finalValue);
+  }
+  return values;
+}
+
 function isStartupProjectionActiveGateServeEligibleInFlight(
   activeGate,
   prioritySpreadDurablySatisfied,
@@ -37,7 +117,7 @@ function isStartupProjectionActiveGateServeEligibleInFlight(
   if (prioritySpreadDurablySatisfied !== true) {
     return false;
   }
-  const reasonCodes = Array.isArray(activeGate?.reasonCodes) ?
+  const reasonCodes = arrayIsArray(activeGate?.reasonCodes) ?
     activeGate.reasonCodes :
     [];
   // FAIL-CLOSED allowlist: relax only when the active gate's serve-lane
@@ -50,12 +130,10 @@ function isStartupProjectionActiveGateServeEligibleInFlight(
   // RECOVERY_PENDING. An allowlist (not a disqualifier blocklist) stays safe if
   // new lane reasons are added later.
   return (
-    reasonCodes.includes(
+    arrayPrototypeIncludes(
+      reasonCodes,
       PROJECTION_READINESS_REASON.PRIORITY_RECOVERY_ACTIVE,
-    ) &&
-    reasonCodes.every((reasonCode) =>
-      reasonCode === PROJECTION_READINESS_REASON.PRIORITY_RECOVERY_ACTIVE,
-    )
+    ) && reasonCodes.length === 1
   );
 }
 
@@ -99,18 +177,48 @@ export const STARTUP_AUTHORITY_STATE = Object.freeze({
   BLOCKED: LOCAL_STR_BLOCKED,
 });
 
+function projectionSynchronizationReasonsAreExact(reasonCodes, spread) {
+  if (!arrayIsArray(reasonCodes)) return false;
+  const publicationPending =
+    CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING;
+  const spreadPending =
+    CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD;
+  if (spread === true) {
+    return reasonCodes.length === 1 &&
+      readOwnData(reasonCodes, ARRAY_INDEX_ZERO_FIELD) === publicationPending;
+  }
+  return spread === false && reasonCodes.length === 2 &&
+    readOwnData(reasonCodes, ARRAY_INDEX_ZERO_FIELD) === publicationPending &&
+    readOwnData(reasonCodes, ARRAY_INDEX_ONE_FIELD) === spreadPending;
+}
+
+export function isStartupAuthorityProjectionSynchronization(evidence) {
+  if (!evidence || typeof evidence !== 'object') return false;
+  const ready = readOwnData(evidence, 'ready');
+  const state = readOwnData(evidence, 'state');
+  const spread = readOwnData(evidence, 'prioritySpreadSatisfied');
+  const reasonCodes = readOwnData(evidence, 'recoveryReasonCodes');
+  return ready === false &&
+    state === STARTUP_AUTHORITY_STATE.RECOVERY_PENDING &&
+    projectionSynchronizationReasonsAreExact(reasonCodes, spread);
+}
+
 const STARTUP_AUTHORITY_PUBLICATION_STATE = Object.freeze({
   AUTHORITATIVE: 'authoritative',
   ESTABLISHING: 'establishing',
 });
-const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = new Set([
+const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = objectFreeze([
   PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,
   PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING,
   PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING,
 ]);
-const STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES = new Set(
-  Object.values(CONTROL_PLANE_PRIORITY_RECOVERY_REASON),
-);
+const STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES = objectFreeze([
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.RECOVERY_ELIGIBILITY_PENDING,
+]);
 
 function hasKnownStartupAuthorityString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -123,15 +231,14 @@ function hasStartupAuthorityTargetParticipationEvidence(targetParticipation) {
 function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
   targetParticipation,
 ) {
-  return Object.freeze(
-    [...new Set(
-      (Array.isArray(targetParticipation?.reasons) ? targetParticipation.reasons : [])
-        .filter((reasonCode) =>
-          typeof reasonCode === 'string' &&
-          STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES.has(reasonCode),
-        ),
-    )],
+  const normalized = [];
+  const reasons = readOwnData(targetParticipation, 'reasons');
+  appendOwnUniqueStrings(
+    normalized,
+    reasons,
+    STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES,
   );
+  return objectFreeze(normalized);
 }
 
 function hasStartupAuthorityPriorityPartitionEvidence(priorityPartitionSummary) {
@@ -153,7 +260,8 @@ export function hasTransitionalStartupAuthorityEvidence(options = {}) {
   }
   const activeGate =
     publicationRecoveryGate.active === true ||
-    STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE.has(
+    arrayPrototypeIncludes(
+      STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE,
       publicationRecoveryGate.state,
     );
   if (!activeGate) {
@@ -256,36 +364,45 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
 function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
   planningSnapshot,
 ) {
+  const safePlanningSnapshot = copyOwnDataObject(planningSnapshot);
+  const planningPriorityPartition = normalizePriorityPartitionSummary(
+    readOwnData(safePlanningSnapshot, PRIORITY_PARTITION_SUMMARY_FIELD),
+  );
+  if (planningPriorityPartition.summary) {
+    objectDefineProperty(
+      safePlanningSnapshot,
+      PRIORITY_PARTITION_SUMMARY_FIELD,
+      {
+        value: planningPriorityPartition.summary,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      },
+    );
+  }
   const publicationRecoveryGate =
-    buildPublicationRecoveryGateSnapshot(planningSnapshot);
+    buildPublicationRecoveryGateSnapshot(safePlanningSnapshot);
   const projectionReadinessContract =
     normalizeStartupProjectionReadinessContract(planningSnapshot);
   const projectionReadinessActiveGate =
     normalizeStartupProjectionActiveGate(projectionReadinessContract);
   const publicationStatus = publicationRecoveryGate.publicationStatus || null;
-  const priorityPartitionSummary =
-    publicationRecoveryGate.priorityPartitionSummary ||
-    planningSnapshot.priorityPartitionSummary ||
-    null;
+  const gatePriorityPartition = normalizePriorityPartitionSummary(
+    readOwnData(publicationRecoveryGate, 'priorityPartitionSummary'),
+  );
+  const priorityPartitionEvidence = gatePriorityPartition.summary ?
+    gatePriorityPartition : planningPriorityPartition;
+  const priorityPartitionSummary = priorityPartitionEvidence.summary;
+  const prioritySpreadSatisfied = priorityPartitionEvidence.satisfied;
   const recoveryActiveNodeIds =
     resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
   const formationPlacementNodeIds =
     planningSnapshot.membershipLifecycleSummary?.formationPlacementNodeIds;
-  const canonicalStartupNodeIds = [
-    ...(Array.isArray(recoveryActiveNodeIds) ? recoveryActiveNodeIds : []),
-    ...(Array.isArray(formationPlacementNodeIds) ?
-      formationPlacementNodeIds :
-      []),
-  ]
-    .filter((nodeId) =>
-      typeof nodeId === 'string' && nodeId.length > 0,
-    )
-    .filter((nodeId, index, nodeIds) =>
-      nodeIds.indexOf(nodeId) === index,
-    )
-    .sort((leftNodeId, rightNodeId) =>
-      leftNodeId.localeCompare(rightNodeId),
-    );
+  const canonicalStartupNodeIds = buildUniqueStringList(
+    recoveryActiveNodeIds,
+    formationPlacementNodeIds,
+  );
+  arrayPrototypeSort(canonicalStartupNodeIds);
   const publicationObservationState =
     publicationRecoveryGate.publicationObservationState;
   const targetParticipation =
@@ -311,10 +428,20 @@ function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
     normalizeStartupAuthorityTargetParticipationRecoveryReasons(
       targetParticipation,
     );
-  const priorityRecoveryReasonCodes = [...new Set([
-    ...publicationRecoveryGate.reasonCodes,
-    ...targetParticipationReasons,
-  ])];
+  // The priority summary is the canonical spread predicate.  Publication
+  // stream fields and their derived reason list can advance on adjacent cache
+  // observations, so bind a negative predicate to its recovery state here in
+  // the snapshot owner.  No consumer may observe READY alongside an explicit
+  // false spread summary merely because the stream reason arrived one event
+  // later.
+  const prioritySpreadUnsatisfied = prioritySpreadSatisfied === false;
+  const priorityRecoveryReasonCodes = buildUniqueStringList(
+    publicationRecoveryGate.reasonCodes,
+    targetParticipationReasons,
+    prioritySpreadUnsatisfied ?
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD :
+      null,
+  );
   const explicitAdmissionBlocked =
     admissionState === STARTUP_AUTHORITY_ADMISSION_STATE.BLOCKED;
 
@@ -355,11 +482,11 @@ function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
     publicationObservationState ===
       AUTHORITY_PUBLICATION_OBSERVATION_STATE.UNPUBLISHED
   ) {
-    const priorityRecoveryReasonCodes = [...new Set(
-      publicationRecoveryGate.reasonCodes.concat(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-      ),
-    )];
+    const priorityRecoveryReasonCodes = buildUniqueStringList(
+      publicationRecoveryGate.reasonCodes,
+      null,
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    );
     return buildStartupAuthoritySnapshotContract({
       state: STARTUP_AUTHORITY_STATE.SEED_LOCALLY_READY_UNPUBLISHED,
       ready: false,
@@ -448,7 +575,7 @@ function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
 
   if (
     !priorityPartitionSummary ||
-    typeof priorityPartitionSummary.satisfied !== 'boolean'
+    prioritySpreadSatisfied === ABSENT
   ) {
     if (transitionalRecoveryPending) {
       return buildStartupAuthoritySnapshotContract({
