@@ -8,17 +8,31 @@
       "name": "closureEvidence",
       "values": [
         "first_spread_satisfied_with_positive_current_connection_incarnations",
+        "strict_seed_base_projection_observed_before_handoff",
         "captured_generation_waiting_for_durable_readback",
         "durable_generation_acknowledged_for_current_authority_boot",
         "first_spread_satisfied_with_zero_or_missing_connection_identity",
         "published_generation_consumed_on_joiner",
         "published_generation_missing_or_incompatible",
         "seed_restart_with_compatible_active_publication",
+        "seed_restart_with_active_write_before_local_readback",
+        "seed_restart_with_reopened_active_publication",
+        "seed_restart_with_terminal_publication",
+        "compatible_publication_projection_synchronization",
         "compatible_canonical_membership_expansion",
+        "captured_member_transiently_omitted_from_current_projection",
         "non_cohort_projection_or_handoff_only_cure_target",
         "compatible_reopen_joiners_pending",
         "compatible_reopen_partially_ready",
+        "false_spread_summary_with_lagging_stream_reason",
+        "all_captured_incarnations_ready_before_reopen",
+        "simultaneous_first_reopen_and_all_ready",
+        "reopened_active_waiting_for_exact_durable_readback",
         "all_captured_incarnations_ready",
+        "terminal_intent_waiting_for_exact_durable_readback",
+        "terminal_intent_durably_acknowledged",
+        "restart_before_terminal_readback_with_persistent_terminal_cause",
+        "stale_active_at_or_below_terminal_high_water",
         "captured_member_missing_or_disconnected",
         "captured_incarnation_changed",
         "substantive_authority_block",
@@ -35,12 +49,16 @@
       "name": "action",
       "values": [
         "capture_publish_and_retain_release",
+        "latch_discovery_without_release",
         "persist_without_release",
         "acknowledge_and_rearm_release",
         "consume_published_release",
         "restore_seed_owned_release",
+        "restore_terminal_high_water",
         "retain_release",
+        "reject_stale_replay",
         "complete_and_close_release",
+        "persist_terminal_without_release",
         "revoke_fail_closed",
         "remain_idle"
       ]
@@ -53,15 +71,31 @@
     },
     {
       "id": "first-observation-positive-identity",
-      "statement": "The first satisfied observation captures the boot incarnation of each adopted current primary connection; node id alone, boot incarnation zero, or a high-water not bound to the adopted socket is non-authorizing."
+      "statement": "The first satisfied observation captures at least two JOINING members and the boot incarnation of each adopted current primary connection; a singleton, node id alone, boot incarnation zero, or a high-water not bound to the adopted socket is non-authorizing."
+    },
+    {
+      "id": "bilateral-primary-identity",
+      "statement": "An admitted incoming primary replies with exactly one IDENTIFY only after stale-incarnation fencing and adoption, allowing the dialer's same current-primary socket to bind the remote boot incarnation without opening admission or creating an IDENTIFY loop."
     },
     {
       "id": "durable-consumer-parity",
-      "statement": "A distinct joiner process receives the same seed-owned generation through the durable publication row and cannot locally mint, promote, or rotate formation-release authority."
+      "statement": "A distinct joiner process receives the same seed-owned generation through the existing seed bootstrap-readiness exchange and cannot locally mint, promote, or rotate formation-release authority."
+    },
+    {
+      "id": "seed-readiness-delivery",
+      "statement": "The optional bootstrap-readiness projection is a phase-scoped read of the seed owner's exact contract. It remains available while distributed publication reads are readiness-blocked, does not change the probe verdict, validates the consuming node against current physical identity evidence, and binds each request timeout to the existing formation-poll cadence so request plus poll consume at most two cadence ticks."
+    },
+    {
+      "id": "base-projection-is-nonauthorizing",
+      "statement": "Before a durable handoff exists, the strictly validated seed base projection may disclose immutable placement discovery evidence, but it cannot satisfy the barrier, grant cure authority, or publish READY."
     },
     {
       "id": "durable-ack-before-release",
       "statement": "First satisfaction captures a non-authorizing intent. Release becomes true only after the boot-disjoint publication write is read back through the canonical grammar, acknowledged by the interaction owner, and the readiness lane is rearmed."
+    },
+    {
+      "id": "durable-write-is-recoverable-evidence",
+      "statement": "A successful durable write and the old process's local readback callback are distinct facts. After restart, an exact same-boot ACTIVE row may be freshly authenticated even when the old callback never ran, but recovery remains nonauthorizing while it re-derives any persistent terminal intent."
     },
     {
       "id": "bounded-publication-coordinator",
@@ -73,15 +107,51 @@
     },
     {
       "id": "durable-recovery-replay",
-      "statement": "A restarted seed rehydrates its compatible active generation from the canonical publication row before observing new state; a changed peer boot, stale epoch, or malformed row cannot be restored."
+      "statement": "A restarted seed uses one full canonical recovery projection: compatible ACTIVE restores the exact generation and any recorded reopen edge, while COMPLETE/REVOKED restore the same-boot terminal epoch high-water before new observation. Consumer normalization remains release-only. A changed authority boot/key, stale epoch, malformed row, or ACTIVE generation at or below terminal high-water cannot be restored."
+    },
+    {
+      "id": "atomic-spread-authority",
+      "statement": "The startup-authority snapshot owner cannot emit READY with an explicitly false priority-spread summary: it atomically supplies RECOVERY_PENDING and the canonical priority_partitions_not_spread reason even when an adjacent publication-stream projection lags."
+    },
+    {
+      "id": "monotonic-terminal-replay",
+      "statement": "For one authority boot, COMPLETE or REVOKED advances the closure owner's terminal publication-epoch high-water. A cached or delayed durable ACTIVE row at or below that high-water cannot move the interaction backward."
     },
     {
       "id": "non-monotone-spread-safe",
       "statement": "A compatible priority-spread reopening cannot withdraw release before every captured JOINING incarnation publishes a current READY lease."
     },
     {
+      "id": "reopen-causality-before-terminal",
+      "statement": "READY leases alone do not close the captured generation. The interaction owner must first read back the exact compatible reopened ACTIVE projection; only a later existing evaluation may create a COMPLETE intent."
+    },
+    {
+      "id": "terminal-durable-before-high-water",
+      "statement": "COMPLETE and REVOKED are terminal authority only after the existing publication coordinator writes and reads back the exact terminal intent. Until then one local-only TERMINAL_PENDING projection is nonauthorizing, immutable, rejected by consumer normalization, and cannot advance terminal high-water."
+    },
+    {
+      "id": "terminal-recovery-rederives-intent",
+      "statement": "Recovery first prefers an exact same-boot terminal row, which commits terminal high-water without requiring a prior ACTIVE row. Otherwise it may authenticate a same-boot durable ACTIVE generation before operational evaluation; persistent readiness, membership, incarnation, or authority evidence then re-derives the same nonauthorizing terminal intent. If neither row exists, a changed authority boot remains disjoint and cannot inherit process-local intent."
+    },
+    {
+      "id": "terminal-row-independent-of-active-row",
+      "statement": "REVOKED may be the first successfully persisted formation row when an earlier ACTIVE write failed. Its exact durable row and boot identity are sufficient terminal recovery authority; terminal durability never depends on a prior ACTIVE acknowledgement."
+    },
+    {
+      "id": "pre-durable-loss-is-disjoint",
+      "statement": "If neither ACTIVE nor terminal intent reached durable storage before authority-process loss, the new positive boot incarnation clears the process-local intent and remains nonauthorizing; it does not claim same-boot rehydration."
+    },
+    {
       "id": "immutable-captured-cohort-scope",
-      "statement": "The generation retains its immutable captured canonical set and cohort when current canonical membership is a superset; later additions neither revoke the generation nor receive its release or handoff-only cure authority."
+      "statement": "The generation retains its immutable captured canonical set and cohort through transient current-projection churn; later additions neither revoke the generation nor receive its release or handoff-only cure authority."
+    },
+    {
+      "id": "projection-is-not-member-loss-authority",
+      "statement": "Current canonical startup node IDs and a positively classified publication-epoch synchronization transition are transient projections, not negative membership authority. Synchronization is exactly either sole publication_epoch_pending while spread remains satisfied, or canonical [publication_epoch_pending, priority_partitions_not_spread] while spread is false; the compound form retains authority without recording reopen, and only a later sole priority_partitions_not_spread observation owns reopen. Captured members remain valid while each exact positive current-primary boot remains adopted and its durable row boot is either zero (not yet projected) or that exact boot; only those physical owners can prove member loss. Compatible observations may churn between epochs above the immutable captured epoch floor, while any observation below that floor is incompatible."
+    },
+    {
+      "id": "active-handoff-placement-scope",
+      "statement": "While an acknowledged handoff is active, placement sees the union of current canonical IDs and immutable captured canonical IDs. Formation cure and release remain restricted to the immutable required cohort."
     },
     {
       "id": "incarnation-and-safety-fenced",
@@ -96,8 +166,18 @@
         "generation": "incompatible"
       },
       "outcome": {"action": "revoke_fail_closed"},
-      "reason": "Regressed publication epoch or changed incarnation fence cannot inherit release authority.",
+      "reason": "A publication epoch below the immutable captured generation floor or a changed incarnation fence cannot inherit release authority; transient observations may otherwise churn among later compatible epochs.",
       "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "strict-base-projection-latches-discovery",
+      "when": {
+        "closureEvidence": "strict_seed_base_projection_observed_before_handoff",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "latch_discovery_without_release"},
+      "reason": "Formation cohort discovery precedes the first satisfied capture. A valid seed base projection keeps that cohort engaged while the publication owner persists and acknowledges the handoff, but remains nonauthorizing until exact durable readback.",
+      "invariantRefs": ["seed-readiness-delivery", "base-projection-is-nonauthorizing", "durable-ack-before-release"]
     },
     {
       "id": "first-satisfaction-captures-and-publishes-generation",
@@ -106,8 +186,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "persist_without_release"},
-      "reason": "The first whole-plane satisfaction event captures the seed and peer current-primary boot incarnations as a non-authorizing desired generation. The bounded publication coordinator persists it before recovery activity can close.",
-      "invariantRefs": ["single-interaction-owner", "first-observation-positive-identity", "durable-ack-before-release", "bounded-publication-coordinator", "authority-boot-disjoint-storage"]
+      "reason": "The first whole-plane satisfaction event with at least two JOINING members captures the seed and peer current-primary boot incarnations as a non-authorizing desired generation. The bounded publication coordinator persists it before recovery activity can close.",
+      "invariantRefs": ["single-interaction-owner", "first-observation-positive-identity", "bilateral-primary-identity", "durable-ack-before-release", "bounded-publication-coordinator", "authority-boot-disjoint-storage"]
     },
     {
       "id": "durable-readback-authorizes-and-rearms",
@@ -136,7 +216,7 @@
         "generation": "compatible"
       },
       "outcome": {"action": "remain_idle"},
-      "reason": "A provisional node-id cohort cannot later inherit release authority; durable node-row confirmation may confirm an already captured positive connection identity but cannot create it retroactively.",
+      "reason": "A singleton or provisional node-id cohort cannot later inherit release authority; durable node-row confirmation may confirm an already captured positive connection identity but cannot create it retroactively.",
       "invariantRefs": ["first-observation-positive-identity", "incarnation-and-safety-fenced"]
     },
     {
@@ -146,8 +226,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "consume_published_release"},
-      "reason": "The joiner validates the seed publication against current authority, durable rows, and current process identity; its local formation owner remains idle.",
-      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+      "reason": "The joiner reads the seed's exact projection through the existing lightweight readiness probe, then validates it against current authority, durable rows, and current process identity; its local formation owner remains idle.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "seed-readiness-delivery", "incarnation-and-safety-fenced"]
     },
     {
       "id": "missing-publication-fails-closed",
@@ -156,8 +236,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "remain_idle"},
-      "reason": "A joiner cannot substitute its local view when the seed-owned durable contract is absent, stale, malformed, or bound to another incarnation.",
-      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+      "reason": "A joiner cannot substitute its local view when the strict seed base projection is absent, stale, malformed, outside the captured placement scope, or bound to another authority. An absent durable handoff on an otherwise valid base projection only latches discovery and never releases.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "seed-readiness-delivery", "incarnation-and-safety-fenced"]
     },
     {
       "id": "seed-restart-restores-one-owner-generation",
@@ -170,14 +250,64 @@
       "invariantRefs": ["single-interaction-owner", "durable-recovery-replay", "incarnation-and-safety-fenced"]
     },
     {
+      "id": "seed-restart-authenticates-active-write-before-old-callback",
+      "when": {
+        "closureEvidence": "seed_restart_with_active_write_before_local_readback",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_terminal_without_release"},
+      "reason": "The fresh owner reads and authenticates the exact durable ACTIVE row even though the old process never set its local acknowledgement bit. Persistent safety evidence re-derives terminal intent, and the fresh acknowledgement cannot reopen release.",
+      "invariantRefs": ["durable-write-is-recoverable-evidence", "terminal-recovery-rederives-intent", "terminal-durable-before-high-water"]
+    },
+    {
+      "id": "seed-restart-restores-durable-reopen-edge",
+      "when": {
+        "closureEvidence": "seed_restart_with_reopened_active_publication",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "restore_seed_owned_release"},
+      "reason": "The full recovery projection preserves the exact durable reopened ACTIVE evidence, so current READY authority cannot erase the causal edge or strand an all-READY cohort after restart.",
+      "invariantRefs": ["single-interaction-owner", "durable-recovery-replay", "reopen-causality-before-terminal"]
+    },
+    {
+      "id": "seed-restart-restores-terminal-high-water",
+      "when": {
+        "closureEvidence": "seed_restart_with_terminal_publication",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "restore_terminal_high_water"},
+      "reason": "A canonical COMPLETE or REVOKED row advances terminal high-water before observation, preventing the identical same-boot publication epoch from being recaptured after process restart. REVOKED remains sufficient when it was the first successful durable row and no ACTIVE row exists.",
+      "invariantRefs": ["single-interaction-owner", "durable-recovery-replay", "monotonic-terminal-replay", "terminal-row-independent-of-active-row"]
+    },
+    {
+      "id": "publication-projection-synchronization-retains-capture",
+      "when": {
+        "closureEvidence": "compatible_publication_projection_synchronization",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "An exact sole publication_epoch_pending transition with spread still satisfied, or the canonical compound [publication_epoch_pending, priority_partitions_not_spread] transition while spread is false, is synchronization evidence rather than reopen or authority rotation. The compound form retains release without recording reopen; only a later sole priority_partitions_not_spread observation owns reopen. Unknown, reordered, duplicate, missing, or extra reasons remain incompatible. The interaction owner preserves its previously durable restricted release only while the authority boot, fence, immutable cohort rows, and current-primary boots remain exact; additions receive no authority.",
+      "invariantRefs": ["single-interaction-owner", "projection-is-not-member-loss-authority", "immutable-captured-cohort-scope", "incarnation-and-safety-fenced"]
+    },
+    {
       "id": "canonical-expansion-retains-immutable-capture",
       "when": {
         "closureEvidence": "compatible_canonical_membership_expansion",
         "generation": "compatible"
       },
       "outcome": {"action": "retain_release"},
-      "reason": "The observational startup membership may expand during staggered joins. Every captured canonical ID remains present, so the immutable generation stays valid while additions remain non-authorizing.",
+      "reason": "The observational startup membership may expand during staggered joins. The immutable generation stays valid while additions remain non-authorizing.",
       "invariantRefs": ["non-monotone-spread-safe", "immutable-captured-cohort-scope"]
+    },
+    {
+      "id": "transient-projection-omission-retains-physical-capture",
+      "when": {
+        "closureEvidence": "captured_member_transiently_omitted_from_current_projection",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "A volatile placement projection cannot revoke an immutable captured member whose durable row and current-primary boot connection still match. Placement retains the captured scope until physical closure or revocation.",
+      "invariantRefs": ["projection-is-not-member-loss-authority", "active-handoff-placement-scope", "non-monotone-spread-safe"]
     },
     {
       "id": "non-cohort-projection-fails-closed",
@@ -210,14 +340,84 @@
       "invariantRefs": ["non-monotone-spread-safe"]
     },
     {
+      "id": "false-spread-summary-is-atomic-recovery",
+      "when": {
+        "closureEvidence": "false_spread_summary_with_lagging_stream_reason",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "The canonical false spread predicate and its RECOVERY_PENDING reason are one startup-authority snapshot; adjacent stream cadence cannot create a transient incompatible composite.",
+      "invariantRefs": ["atomic-spread-authority", "non-monotone-spread-safe"]
+    },
+    {
+      "id": "all-ready-before-reopen-remains-active",
+      "when": {
+        "closureEvidence": "all_captured_incarnations_ready_before_reopen",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "The captured READY leases are necessary but not sufficient: without the sealed non-monotone reopen observation, the owner preserves an honest all-READY ACTIVE projection and cannot publish terminal closure.",
+      "invariantRefs": ["reopen-causality-before-terminal", "non-monotone-spread-safe"]
+    },
+    {
+      "id": "simultaneous-reopen-and-ready-records-causality",
+      "when": {
+        "closureEvidence": "simultaneous_first_reopen_and_all_ready",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "If the first exact spread reopen and final READY lease arrive in one evaluation, the owner emits one honest authorized ACTIVE projection with the full ready cohort. It cannot create terminal intent until exact readback preserves that causal edge. No timer or fabricated pending member is introduced.",
+      "invariantRefs": ["atomic-spread-authority", "non-monotone-spread-safe", "reopen-causality-before-terminal"]
+    },
+    {
+      "id": "reopened-active-must-be-durable-before-complete",
+      "when": {
+        "closureEvidence": "reopened_active_waiting_for_exact_durable_readback",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "A process-local reopen cannot be coalesced away by a later terminal write. The full reopened ACTIVE contract is first written, read back, and acknowledged so restart recovery retains the causal edge.",
+      "invariantRefs": ["reopen-causality-before-terminal", "durable-recovery-replay"]
+    },
+    {
       "id": "all-current-ready-completes",
       "when": {
         "closureEvidence": "all_captured_incarnations_ready",
         "generation": "compatible"
       },
+      "outcome": {"action": "persist_terminal_without_release"},
+      "reason": "Every exact captured incarnation is READY after the durable reopen. The owner creates one immutable COMPLETE intent and exposes only local nonauthorizing TERMINAL_PENDING until exact terminal readback.",
+      "invariantRefs": ["single-interaction-owner", "incarnation-and-safety-fenced", "reopen-causality-before-terminal", "terminal-durable-before-high-water"]
+    },
+    {
+      "id": "terminal-intent-remains-pending",
+      "when": {
+        "closureEvidence": "terminal_intent_waiting_for_exact_durable_readback",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_terminal_without_release"},
+      "reason": "Write delay, failure, coalescing, or shutdown cannot convert process-local terminal intent into terminal history or release authority. Existing publication/readiness events retry and rearm without another timer.",
+      "invariantRefs": ["bounded-publication-coordinator", "terminal-durable-before-high-water"]
+    },
+    {
+      "id": "terminal-readback-commits-high-water",
+      "when": {
+        "closureEvidence": "terminal_intent_durably_acknowledged",
+        "generation": "compatible"
+      },
       "outcome": {"action": "complete_and_close_release"},
-      "reason": "Every exact captured incarnation has crossed the existing stable window and owns a fresh READY lease.",
-      "invariantRefs": ["single-interaction-owner", "incarnation-and-safety-fenced"]
+      "reason": "Only full equality with the immutable COMPLETE or REVOKED intent commits terminal high-water, clears the active generation, and exposes terminal state.",
+      "invariantRefs": ["terminal-durable-before-high-water", "monotonic-terminal-replay"]
+    },
+    {
+      "id": "restart-before-terminal-readback-rederives",
+      "when": {
+        "closureEvidence": "restart_before_terminal_readback_with_persistent_terminal_cause",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_terminal_without_release"},
+      "reason": "Recovery first authenticates the durable same-boot ACTIVE identity, then persistent current evidence re-derives the exact fail-closed terminal intent. It cannot mistake the older ACTIVE row for a committed terminal record.",
+      "invariantRefs": ["terminal-recovery-rederives-intent", "terminal-durable-before-high-water"]
     },
     {
       "id": "missing-or-disconnected-revokes",
@@ -246,8 +446,18 @@
         "generation": "compatible"
       },
       "outcome": {"action": "revoke_fail_closed"},
-      "reason": "Only the exact priority-not-spread reopening is retainable; admission, writability, eligibility, and evidence failures remain safety blocks.",
+      "reason": "Only the exact priority-not-spread reopening and the positively classified publication projection synchronization are retainable; admission, writability, eligibility, unknown transition, and evidence failures remain safety blocks.",
       "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "terminal-high-water-rejects-stale-active",
+      "when": {
+        "closureEvidence": "stale_active_at_or_below_terminal_high_water",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "reject_stale_replay"},
+      "reason": "A same-authority, same-boot ACTIVE publication cannot resurrect or rotate a generation after the closure owner recorded COMPLETE or REVOKED at the same or newer publication epoch.",
+      "invariantRefs": ["durable-recovery-replay", "monotonic-terminal-replay"]
     },
     {
       "id": "no-cohort-remains-idle",

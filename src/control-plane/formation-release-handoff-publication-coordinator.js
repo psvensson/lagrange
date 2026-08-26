@@ -7,18 +7,24 @@ import {formationReleaseContractsEqual} from './formation-release-handoff-identi
 
 const promiseResolve = Promise.resolve.bind(Promise);
 const stringConstructor = String;
+const STORAGE_OWNER_UNAVAILABLE_ERROR =
+  'formation release publication storage owner unavailable';
+const READBACK_MISMATCH_ERROR =
+  'formation release publication readback did not match intent';
+const PUBLICATION_DEFERRED_LOG =
+  'Formation release handoff publication deferred';
 
 function requireStorageOwner(storageOwner) {
   if (typeof storageOwner?.upsertPublication !== 'function') {
-    throw new Error('formation release publication storage owner unavailable');
+    throw new Error(STORAGE_OWNER_UNAVAILABLE_ERROR);
   }
   if (typeof storageOwner.getPublication !== 'function') {
-    throw new Error('formation release publication storage owner unavailable');
+    throw new Error(STORAGE_OWNER_UNAVAILABLE_ERROR);
   }
   return storageOwner;
 }
 
-async function readBackDurableContract(storageOwner, desired) {
+async function loadDurableContract(storageOwner, desired) {
   const publicationId = formationReleaseHandoffPublicationId(
     desired.contract.authorityNodeId,
     desired.contract.authorityBootIncarnation,
@@ -118,7 +124,7 @@ class FormationReleaseHandoffPublicationCoordinator {
         skipCacheWait: true,
       });
       this.writeCount += 1;
-      const durableContract = await readBackDurableContract(
+      const durableContract = await loadDurableContract(
         storageOwner,
         desired,
       );
@@ -127,7 +133,7 @@ class FormationReleaseHandoffPublicationCoordinator {
         !formationReleaseContractsEqual(durableContract, desired.contract)
       ) {
         throw new Error(
-          'formation release publication readback did not match intent',
+          READBACK_MISMATCH_ERROR,
         );
       }
       if (this.shutdownRequested) return;
@@ -137,7 +143,7 @@ class FormationReleaseHandoffPublicationCoordinator {
     } catch (error) {
       this.writeFailureCount += 1;
       this.logger?.warn?.(
-        'Formation release handoff publication deferred',
+        PUBLICATION_DEFERRED_LOG,
         {
           generation: desired.contract?.generation || null,
           error: error?.message || stringConstructor(error),

@@ -10,25 +10,145 @@ import {
   buildNodeEvidenceById,
   freezeCohort,
   formationReleaseCohortContainsNodeId,
+  isExactFormationReleaseSpreadReopen,
   isConnectedFormationMember,
   isCurrentReadyMember,
   isRetainableAuthority,
   normalizeFormationReleaseHandoffContract,
-  normalizePublishedConsumerContract,
-  validatePublishedContractAgainstCurrent,
+  normalizePublishedRecoveryContract,
   authorizeFormationReleaseHandoffPublicationIntent,
 } from './formation-release-handoff-contract.js';
+import {formationReleaseObservedNodeBootMatchesExpected} from
+  './formation-release-handoff-state-grammar.js';
+import {isStartupAuthorityProjectionSynchronization} from
+  './startup-authority-snapshot-owner.js';
 import {
   formationReleaseCohortIdentity,
   formationReleaseContractsEqual,
   formationReleaseGenerationIdentity,
 } from './formation-release-handoff-identity.js';
+import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from
+  './formation-release-handoff-policy.js';
 
 const arrayPrototypePush = Function.call.bind(Array.prototype.push);
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
 const mapPrototypeGet = Function.call.bind(Map.prototype.get);
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
+const DEFAULT_AUTHORITY_NODE_ID = 'formation-global';
+
+function createFormationReleaseNodeIdList() {
+  return [];
+}
+
+function compatibleProjectionTransitionMatchesGeneration(
+  authority,
+  generation,
+) {
+  return authority.publicationEpoch >= generation.publicationEpoch &&
+    authority.fenceIdentity === generation.fenceIdentity &&
+    isStartupAuthorityProjectionSynchronization(authority);
+}
+
+function generationIsAtOrBelowTerminal(generation, terminalGeneration) {
+  if (!generation || !terminalGeneration) return false;
+  return generation.authorityNodeId === terminalGeneration.authorityNodeId &&
+    generation.authorityBootIncarnation ===
+      terminalGeneration.authorityBootIncarnation &&
+    generation.publicationEpoch <= terminalGeneration.publicationEpoch;
+}
+
+function normalizedContractRecordsExactReopen(contract) {
+  if (
+    contract.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE ||
+    contract.releaseAuthorized !== true
+  ) {
+    return false;
+  }
+  return isExactFormationReleaseSpreadReopen({
+    ready: contract.observedAuthorityReady,
+    state: STARTUP_AUTHORITY_STATE.RECOVERY_PENDING,
+    prioritySpreadSatisfied: false,
+    recoveryReasonCodes: contract.observedRecoveryReasonCodes,
+  });
+}
+
+function durableAuthorityMatchesCurrentConnection(
+  contract,
+  authorityNodeId,
+  connectionEvidence,
+) {
+  if (contract.authorityNodeId !== authorityNodeId) return false;
+  const connectionsById = buildConnectionEvidenceById(connectionEvidence);
+  if (!connectionsById) return false;
+  const authorityConnection = mapPrototypeGet(
+    connectionsById,
+    authorityNodeId,
+  );
+  return authorityConnection?.bootIncarnation ===
+    contract.authorityBootIncarnation;
+}
+
+function generationFromRecoveryContract(contract) {
+  return objectFreeze({
+    id: contract.generation,
+    authorityNodeId: contract.authorityNodeId,
+    authorityBootIncarnation: contract.authorityBootIncarnation,
+    publicationEpoch: contract.capturedPublicationEpoch,
+    fenceIdentity: contract.fenceIdentity,
+    canonicalNodeIds: contract.canonicalNodeIds,
+    cohortSignature: formationReleaseCohortIdentity(contract.requiredCohort),
+    requiredCohort: contract.requiredCohort,
+  });
+}
+
+function recoverCompatibleAuthorityFromDurableActiveContract(contract) {
+  const exactReady = contract.observedAuthorityReady === true &&
+    contract.observedRecoveryReasonCodes.length === 0;
+  const exactReopen = normalizedContractRecordsExactReopen(contract);
+  if (!exactReady && !exactReopen) return null;
+  return objectFreeze({
+    ready: exactReady,
+    state: exactReady ? STARTUP_AUTHORITY_STATE.READY :
+      STARTUP_AUTHORITY_STATE.RECOVERY_PENDING,
+    publicationEpoch: contract.observedPublicationEpoch,
+    canonicalNodeIds: contract.canonicalNodeIds,
+    recoveryReasonCodes: contract.observedRecoveryReasonCodes,
+    prioritySpreadSatisfied: exactReady,
+    fenceIdentity: contract.fenceIdentity,
+  });
+}
+
+function buildNonAuthorizingActiveProjection(contract, generation) {
+  return buildContract({
+    state: FORMATION_RELEASE_HANDOFF_STATE.ACTIVE,
+    reason: FORMATION_RELEASE_HANDOFF_REASON.RETAINED_UNTIL_READY,
+    generation,
+    readyNodeIds: contract.readyNodeIds,
+    pendingNodeIds: contract.pendingNodeIds,
+    observedPublicationEpoch: contract.observedPublicationEpoch,
+    observedAuthorityReady: contract.observedAuthorityReady,
+    observedRecoveryReasonCodes: contract.observedRecoveryReasonCodes,
+    releaseAuthorized: false,
+  });
+}
+
+function buildTerminalPendingProjection(generation, terminalIntent) {
+  return buildContract({
+    state: FORMATION_RELEASE_HANDOFF_STATE.TERMINAL_PENDING,
+    reason: FORMATION_RELEASE_HANDOFF_REASON.TERMINAL_DURABILITY_PENDING,
+    generation,
+    readyNodeIds: terminalIntent.readyNodeIds,
+    pendingNodeIds: terminalIntent.pendingNodeIds,
+    observedPublicationEpoch: terminalIntent.observedPublicationEpoch,
+    observedAuthorityReady: terminalIntent.observedAuthorityReady,
+    observedRecoveryReasonCodes:
+      terminalIntent.observedRecoveryReasonCodes,
+    releaseAuthorized: false,
+    pendingTerminalState: terminalIntent.state,
+    pendingTerminalReason: terminalIntent.reason,
+  });
+}
 
 function captureCohortMember(
   nodeId,
@@ -43,10 +163,10 @@ function captureCohortMember(
   }
   const connection = mapPrototypeGet(connectionsById, nodeId);
   if (!connection) return null;
-  if (
-    node.bootIncarnation > 0 &&
-    node.bootIncarnation !== connection.bootIncarnation
-  ) {
+  if (!formationReleaseObservedNodeBootMatchesExpected(
+    connection.bootIncarnation,
+    node.bootIncarnation,
+  )) {
     return null;
   }
   return {
@@ -72,7 +192,8 @@ function captureFormationCohort(
     if (member === null) return null;
     if (member !== false) arrayPrototypePush(cohort, member);
   }
-  return cohort.length > 0 ? cohort : null;
+  return cohort.length >= FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE ?
+    cohort : null;
 }
 
 function capturedMemberProblem(member, node, connection) {
@@ -80,10 +201,10 @@ function capturedMemberProblem(member, node, connection) {
   if (!connection || connection.bootIncarnation !== member.bootIncarnation) {
     return FORMATION_RELEASE_HANDOFF_REASON.COHORT_MEMBER_INELIGIBLE;
   }
-  if (
-    node.bootIncarnation > 0 &&
-    node.bootIncarnation !== member.bootIncarnation
-  ) {
+  if (!formationReleaseObservedNodeBootMatchesExpected(
+    member.bootIncarnation,
+    node.bootIncarnation,
+  )) {
     return FORMATION_RELEASE_HANDOFF_REASON.COHORT_INCARNATION_CHANGED;
   }
   if (node.status !== NODE_STATE.JOINING && node.status !== NODE_STATE.ACTIVE) {
@@ -119,8 +240,13 @@ class FormationReleaseHandoffClosureOwner {
   constructor() {
     this.generation = null;
     this.publishedGeneration = null;
+    this.durableActiveContract = null;
+    this.durableReopenAcknowledged = false;
+    this.pendingTerminalIntent = null;
+    this.recoveryAwaitingEvidence = false;
     this.lastCompatibleAuthority = null;
     this.terminalGeneration = null;
+    this.reopenObserved = false;
     this.lastContract = buildContract({
       state: FORMATION_RELEASE_HANDOFF_STATE.IDLE,
       reason: FORMATION_RELEASE_HANDOFF_REASON.NO_SATISFIED_COHORT,
@@ -138,38 +264,59 @@ class FormationReleaseHandoffClosureOwner {
     if (this.generation) {
       return this.lastContract;
     }
-    const normalized = normalizePublishedConsumerContract(contract);
-    if (!normalized || normalized.authorityNodeId !== authorityNodeId) {
+    const normalized = normalizePublishedRecoveryContract(contract);
+    if (!normalized || !durableAuthorityMatchesCurrentConnection(
+      normalized,
+      authorityNodeId,
+      connectionEvidence,
+    )) {
       return this.lastContract;
     }
-    const current = validatePublishedContractAgainstCurrent(
+    const restoredGeneration = generationFromRecoveryContract(normalized);
+    if (generationIsAtOrBelowTerminal(
+      restoredGeneration,
+      this.terminalGeneration,
+    )) {
+      return this.lastContract;
+    }
+    if (normalized.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) {
+      return this.commitTerminalContract(normalized, restoredGeneration);
+    }
+    this.generation = restoredGeneration;
+    this.publishedGeneration = normalized.generation;
+    this.durableActiveContract = normalized;
+    this.durableReopenAcknowledged =
+      normalizedContractRecordsExactReopen(normalized);
+    this.pendingTerminalIntent = null;
+    this.recoveryAwaitingEvidence = true;
+    this.lastCompatibleAuthority =
+      recoverCompatibleAuthorityFromDurableActiveContract(normalized);
+    this.reopenObserved = normalizedContractRecordsExactReopen(normalized);
+    this.lastContract = buildNonAuthorizingActiveProjection(
       normalized,
+      restoredGeneration,
+    );
+    return this.observe(
       startupAuthority,
       nodeRows,
       observedAt,
+      authorityNodeId,
       connectionEvidence,
     );
-    if (!current) {
-      return this.lastContract;
-    }
-    this.generation = objectFreeze({
-      id: normalized.generation,
-      authorityNodeId: normalized.authorityNodeId,
-      authorityBootIncarnation: normalized.authorityBootIncarnation,
-      publicationEpoch: normalized.capturedPublicationEpoch,
-      fenceIdentity: normalized.fenceIdentity,
-      canonicalNodeIds: normalized.canonicalNodeIds,
-      cohortSignature: normalized.cohortSignature,
-      requiredCohort: normalized.requiredCohort,
-    });
-    this.publishedGeneration = normalized.generation;
-    this.lastCompatibleAuthority = current.authority;
-    return this.evaluateCapturedCohort(
-      current.authority,
-      current.rowsById,
-      current.connectionsById,
-      observedAt,
-    );
+  }
+
+  commitTerminalContract(contract, generation = this.generation) {
+    this.generation = null;
+    this.publishedGeneration = null;
+    this.durableActiveContract = null;
+    this.durableReopenAcknowledged = false;
+    this.pendingTerminalIntent = null;
+    this.recoveryAwaitingEvidence = false;
+    this.lastCompatibleAuthority = null;
+    this.terminalGeneration = generation || this.terminalGeneration;
+    this.reopenObserved = false;
+    this.lastContract = contract;
+    return this.lastContract;
   }
 
   captureGeneration(
@@ -196,11 +343,11 @@ class FormationReleaseHandoffClosureOwner {
     if (!cohort) return null;
     const requiredCohort = freezeCohort(cohort);
     const cohortSignature = formationReleaseCohortIdentity(requiredCohort);
-    if (
-      cohortSignature === this.terminalGeneration?.cohortSignature &&
-      authority.publicationEpoch <=
-        this.terminalGeneration.publicationEpoch
-    ) {
+    if (generationIsAtOrBelowTerminal({
+      authorityNodeId,
+      authorityBootIncarnation: authorityConnection.bootIncarnation,
+      publicationEpoch: authority.publicationEpoch,
+    }, this.terminalGeneration)) {
       return null;
     }
     return objectFreeze({
@@ -221,17 +368,20 @@ class FormationReleaseHandoffClosureOwner {
 
   revoke(reason, observedPublicationEpoch = null) {
     const generation = this.generation;
-    this.generation = null;
-    this.publishedGeneration = null;
-    this.lastCompatibleAuthority = null;
-    this.terminalGeneration = generation || this.terminalGeneration;
-    this.lastContract = buildContract({
+    if (!generation) return this.lastContract;
+    const terminalIntent = buildContract({
       state: FORMATION_RELEASE_HANDOFF_STATE.REVOKED,
       reason,
       generation,
       observedPublicationEpoch:
         observedPublicationEpoch ?? generation?.publicationEpoch ?? null,
     });
+    this.pendingTerminalIntent = terminalIntent;
+    this.recoveryAwaitingEvidence = false;
+    this.lastContract = buildTerminalPendingProjection(
+      generation,
+      terminalIntent,
+    );
     return this.lastContract;
   }
 
@@ -242,8 +392,14 @@ class FormationReleaseHandoffClosureOwner {
     observedAt,
   ) {
     const generation = this.generation;
-    const readyNodeIds = [];
-    const pendingNodeIds = [];
+    const firstReopenObservation =
+      isExactFormationReleaseSpreadReopen(authority) &&
+      this.reopenObserved === false;
+    if (isExactFormationReleaseSpreadReopen(authority)) {
+      this.reopenObserved = true;
+    }
+    const readyNodeIds = createFormationReleaseNodeIdList();
+    const pendingNodeIds = createFormationReleaseNodeIdList();
     for (
       let index = 0;
       index < generation.requiredCohort.length;
@@ -264,12 +420,13 @@ class FormationReleaseHandoffClosureOwner {
       }
     }
 
-    if (pendingNodeIds.length === 0) {
-      this.generation = null;
-      this.publishedGeneration = null;
-      this.lastCompatibleAuthority = null;
-      this.terminalGeneration = generation;
-      this.lastContract = buildContract({
+    if (
+      pendingNodeIds.length === 0 &&
+      this.reopenObserved === true &&
+      this.durableReopenAcknowledged === true &&
+      !firstReopenObservation
+    ) {
+      const terminalIntent = buildContract({
         state: FORMATION_RELEASE_HANDOFF_STATE.COMPLETE,
         reason: FORMATION_RELEASE_HANDOFF_REASON.CAPTURED_COHORT_READY,
         generation,
@@ -278,9 +435,17 @@ class FormationReleaseHandoffClosureOwner {
         observedAuthorityReady: authority.ready,
         observedRecoveryReasonCodes: authority.recoveryReasonCodes,
       });
+      this.pendingTerminalIntent = terminalIntent;
+      this.recoveryAwaitingEvidence = false;
+      this.lastContract = buildTerminalPendingProjection(
+        generation,
+        terminalIntent,
+      );
       return this.lastContract;
     }
 
+    const durableReopenContract = this.durableReopenAcknowledged ?
+      this.durableActiveContract : null;
     this.lastContract = buildContract({
       state: FORMATION_RELEASE_HANDOFF_STATE.ACTIVE,
       reason: FORMATION_RELEASE_HANDOFF_REASON.RETAINED_UNTIL_READY,
@@ -288,8 +453,11 @@ class FormationReleaseHandoffClosureOwner {
       readyNodeIds,
       pendingNodeIds,
       observedPublicationEpoch: authority.publicationEpoch,
-      observedAuthorityReady: authority.ready,
-      observedRecoveryReasonCodes: authority.recoveryReasonCodes,
+      observedAuthorityReady: durableReopenContract ?
+        durableReopenContract.observedAuthorityReady : authority.ready,
+      observedRecoveryReasonCodes: durableReopenContract ?
+        durableReopenContract.observedRecoveryReasonCodes :
+        authority.recoveryReasonCodes,
       releaseAuthorized: this.publishedGeneration === generation.id,
     });
     return this.lastContract;
@@ -299,9 +467,10 @@ class FormationReleaseHandoffClosureOwner {
     startupAuthority,
     nodeRows,
     observedAt,
-    authorityNodeId = 'formation-global',
+    authorityNodeId = DEFAULT_AUTHORITY_NODE_ID,
     connectionEvidence = [],
   ) {
+    if (this.pendingTerminalIntent) return this.lastContract;
     const observation = buildObservation(
       startupAuthority,
       nodeRows,
@@ -310,6 +479,7 @@ class FormationReleaseHandoffClosureOwner {
       connectionEvidence,
     );
     if (!observation) {
+      if (this.recoveryAwaitingEvidence) return this.lastContract;
       if (this.generation) {
         return this.revoke(
           FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
@@ -318,6 +488,7 @@ class FormationReleaseHandoffClosureOwner {
       return this.lastContract;
     }
     const {authority, rowsById, connectionsById} = observation;
+    this.recoveryAwaitingEvidence = false;
 
     if (!this.generation) {
       const generation = this.captureGeneration(
@@ -332,6 +503,10 @@ class FormationReleaseHandoffClosureOwner {
       }
       this.generation = generation;
       this.publishedGeneration = null;
+      this.durableActiveContract = null;
+      this.durableReopenAcknowledged = false;
+      this.pendingTerminalIntent = null;
+      this.reopenObserved = false;
     }
 
     const authorityConnection = mapPrototypeGet(
@@ -349,6 +524,23 @@ class FormationReleaseHandoffClosureOwner {
       );
     }
 
+    if (compatibleProjectionTransitionMatchesGeneration(
+      authority,
+      this.generation,
+    )) {
+      if (!this.lastCompatibleAuthority) {
+        return this.revoke(
+          FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
+          authority.publicationEpoch,
+        );
+      }
+      return this.evaluateCapturedCohort(
+        this.lastCompatibleAuthority,
+        rowsById,
+        connectionsById,
+        observedAt,
+      );
+    }
     if (!isRetainableAuthority(authority, this.generation)) {
       return this.revoke(
         FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
@@ -371,6 +563,7 @@ class FormationReleaseHandoffClosureOwner {
     authorityNodeId,
     connectionEvidence = [],
   ) {
+    if (this.pendingTerminalIntent) return this.lastContract;
     if (!this.generation) {
       return this.lastContract;
     }
@@ -412,6 +605,18 @@ class FormationReleaseHandoffClosureOwner {
   acknowledgePublication(durableContract) {
     const normalizedDurableContract =
       normalizeFormationReleaseHandoffContract(durableContract);
+    if (this.pendingTerminalIntent) {
+      if (!formationReleaseContractsEqual(
+        normalizedDurableContract,
+        this.pendingTerminalIntent,
+      )) {
+        return this.lastContract;
+      }
+      return this.commitTerminalContract(
+        normalizedDurableContract,
+        this.generation,
+      );
+    }
     const expectedDurableContract =
       authorizeFormationReleaseHandoffPublicationIntent(this.lastContract);
     if (
@@ -425,6 +630,9 @@ class FormationReleaseHandoffClosureOwner {
       return this.lastContract;
     }
     this.publishedGeneration = normalizedDurableContract.generation;
+    this.durableActiveContract = normalizedDurableContract;
+    this.durableReopenAcknowledged = this.durableReopenAcknowledged ||
+      normalizedContractRecordsExactReopen(normalizedDurableContract);
     this.lastContract = buildContract({
       state: this.lastContract.state,
       reason: this.lastContract.reason,
@@ -439,6 +647,10 @@ class FormationReleaseHandoffClosureOwner {
       releaseAuthorized: true,
     });
     return this.lastContract;
+  }
+
+  publicationIntent() {
+    return this.pendingTerminalIntent || this.lastContract;
   }
 }
 

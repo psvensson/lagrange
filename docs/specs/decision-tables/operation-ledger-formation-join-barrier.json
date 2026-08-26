@@ -1,0 +1,342 @@
+{
+  "schema": "decision-table-v1",
+  "id": "operation-ledger-formation-join-barrier",
+  "owner": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
+  "boundary": "seed_startup_authority_projection_to_joiner_ready_lease",
+  "inputs": [
+    {
+      "name": "participationState",
+      "values": ["none", "cold_wave_observed", "self_handoff_captured"]
+    },
+    {
+      "name": "bypassEvidence",
+      "values": [
+        "indeterminate",
+        "none",
+        "insufficient_authoritative_population",
+        "established_ready_floor"
+      ]
+    },
+    {
+      "name": "releaseVerdict",
+      "values": ["ready", "not_ready"]
+    },
+    {
+      "name": "deadline",
+      "values": ["discovery_open", "discovery_elapsed", "timeout_elapsed"]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "wait",
+        "release",
+        "bypass_to_ordinary_join",
+        "retryable_timeout"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-join-barrier-owner",
+      "statement": "NodeJoiningOperationLedgerFormationReadiness alone owns cold-wave observation, self participation, bypass, and timeout. Startup-authority owners contribute validated evidence and the current release verdict but never mutate joiner-local state."
+    },
+    {
+      "id": "cold-observation-is-not-participation",
+      "statement": "Observing a feasible cold cohort keeps liveness heartbeats active and suppresses later projection-shrink bypass, but it does not make a joiner a member of the immutable handoff cohort."
+    },
+    {
+      "id": "self-handoff-is-irreversible",
+      "statement": "An exact handoff containing this joiner is the only irreversible participation latch. Once captured, neither population shrink nor an established floor can bypass the exact current release verdict."
+    },
+    {
+      "id": "actual-ready-floor-only",
+      "statement": "A non-participant may use ordinary joining only after the current local evidence contains at least the target number of actual READY candidates; the waiting node is never counted prospectively."
+    },
+    {
+      "id": "small-population-before-cold-only",
+      "statement": "Authoritative population below target permits the small-cluster bypass only before any feasible cold wave was observed. Later population shrink is not negative cohort authority."
+    },
+    {
+      "id": "absence-proves-nothing",
+      "statement": "Unavailable or incomplete evidence remains indeterminate and reaches the unchanged retryable timeout."
+    },
+    {
+      "id": "release-precedes-timeout",
+      "statement": "For a self-captured joiner, an exact ready release verdict succeeds even at the timeout boundary."
+    }
+  ],
+  "rules": [
+    {
+      "id": "self-captured-ready-releases",
+      "when": {
+        "participationState": "self_handoff_captured",
+        "bypassEvidence": "*",
+        "releaseVerdict": "ready",
+        "deadline": "*"
+      },
+      "outcome": {"action": "release"},
+      "reason": "Exact self participation owns release and precedes timeout.",
+      "invariantRefs": [
+        "self-handoff-is-irreversible",
+        "release-precedes-timeout"
+      ]
+    },
+    {
+      "id": "self-captured-not-ready-waits",
+      "when": {
+        "participationState": "self_handoff_captured",
+        "bypassEvidence": "*",
+        "releaseVerdict": "not_ready",
+        "deadline": "discovery_open"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "No bypass evidence can replace the captured release owner.",
+      "invariantRefs": ["self-handoff-is-irreversible"]
+    },
+    {
+      "id": "self-captured-not-ready-after-discovery-waits",
+      "when": {
+        "participationState": "self_handoff_captured",
+        "bypassEvidence": "*",
+        "releaseVerdict": "not_ready",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "Discovery expiry is not release authority.",
+      "invariantRefs": ["self-handoff-is-irreversible"]
+    },
+    {
+      "id": "self-captured-not-ready-times-out",
+      "when": {
+        "participationState": "self_handoff_captured",
+        "bypassEvidence": "*",
+        "releaseVerdict": "not_ready",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "The unchanged timeout fails closed when exact release is absent.",
+      "invariantRefs": ["self-handoff-is-irreversible"]
+    },
+    {
+      "id": "cold-wave-discovery-waits",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "*",
+        "releaseVerdict": "*",
+        "deadline": "discovery_open"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "Cold-wave evidence keeps liveness active while the immutable cohort is selected.",
+      "invariantRefs": ["cold-observation-is-not-participation"]
+    },
+    {
+      "id": "cold-outsider-established-floor-bypasses",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "established_ready_floor",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "The captured cohort established the actual target floor, so an outsider uses ordinary join readiness.",
+      "invariantRefs": [
+        "cold-observation-is-not-participation",
+        "actual-ready-floor-only"
+      ]
+    },
+    {
+      "id": "cold-outsider-established-floor-at-timeout-bypasses",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "established_ready_floor",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "Positive floor evidence remains authoritative at the boundary.",
+      "invariantRefs": ["actual-ready-floor-only"]
+    },
+    {
+      "id": "cold-without-floor-after-discovery-waits",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "none",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "The cold wave is still below its actual ready floor.",
+      "invariantRefs": ["cold-observation-is-not-participation"]
+    },
+    {
+      "id": "cold-indeterminate-after-discovery-waits",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "indeterminate",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "Incomplete evidence cannot end a previously observed cold wait.",
+      "invariantRefs": ["absence-proves-nothing"]
+    },
+    {
+      "id": "cold-population-shrink-after-discovery-waits",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "insufficient_authoritative_population",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "Projection shrink cannot erase an observed cold wave.",
+      "invariantRefs": ["small-population-before-cold-only"]
+    },
+    {
+      "id": "cold-without-floor-times-out",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "none",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "Persistent cold formation fails closed at the existing bound.",
+      "invariantRefs": ["cold-observation-is-not-participation"]
+    },
+    {
+      "id": "cold-indeterminate-times-out",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "indeterminate",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "Persistent indeterminacy remains fail-closed.",
+      "invariantRefs": ["absence-proves-nothing"]
+    },
+    {
+      "id": "cold-population-shrink-times-out",
+      "when": {
+        "participationState": "cold_wave_observed",
+        "bypassEvidence": "insufficient_authoritative_population",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "A later smaller projection cannot authorize bypass.",
+      "invariantRefs": ["small-population-before-cold-only"]
+    },
+    {
+      "id": "unobserved-discovery-waits",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "*",
+        "releaseVerdict": "*",
+        "deadline": "discovery_open"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "The discovery window remains open for a feasible cohort.",
+      "invariantRefs": ["single-join-barrier-owner"]
+    },
+    {
+      "id": "unobserved-ready-floor-bypasses",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "established_ready_floor",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "The actual target floor already exists.",
+      "invariantRefs": ["actual-ready-floor-only"]
+    },
+    {
+      "id": "unobserved-ready-floor-at-timeout-bypasses",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "established_ready_floor",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "Positive floor evidence precedes timeout.",
+      "invariantRefs": ["actual-ready-floor-only"]
+    },
+    {
+      "id": "small-authoritative-population-bypasses",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "insufficient_authoritative_population",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "A current authoritative small cluster cannot form the target cohort.",
+      "invariantRefs": ["small-population-before-cold-only"]
+    },
+    {
+      "id": "small-authoritative-population-at-timeout-bypasses",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "insufficient_authoritative_population",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "bypass_to_ordinary_join"},
+      "reason": "Positive small-cluster evidence remains authoritative at the boundary.",
+      "invariantRefs": ["small-population-before-cold-only"]
+    },
+    {
+      "id": "unobserved-without-bypass-after-discovery-waits",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "none",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "No positive evidence authorizes release.",
+      "invariantRefs": ["single-join-barrier-owner"]
+    },
+    {
+      "id": "unobserved-indeterminate-after-discovery-waits",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "indeterminate",
+        "releaseVerdict": "*",
+        "deadline": "discovery_elapsed"
+      },
+      "outcome": {"action": "wait"},
+      "reason": "Absence does not prove a small cluster.",
+      "invariantRefs": ["absence-proves-nothing"]
+    },
+    {
+      "id": "unobserved-without-bypass-times-out",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "none",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "The existing liveness bound remains fail-closed.",
+      "invariantRefs": ["single-join-barrier-owner"]
+    },
+    {
+      "id": "unobserved-indeterminate-times-out",
+      "when": {
+        "participationState": "none",
+        "bypassEvidence": "indeterminate",
+        "releaseVerdict": "*",
+        "deadline": "timeout_elapsed"
+      },
+      "outcome": {"action": "retryable_timeout"},
+      "reason": "Persistent absence reaches the existing retryable timeout.",
+      "invariantRefs": ["absence-proves-nothing"]
+    }
+  ]
+}

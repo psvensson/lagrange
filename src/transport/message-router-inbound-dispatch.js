@@ -1,6 +1,18 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 
+const objectDefineProperty = Object.defineProperty;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const jsonParse = JSON.parse;
+const bufferIsBuffer = Buffer.isBuffer;
+const bufferToString = Function.call.bind(Buffer.prototype.toString);
+const OWN_DATA_VALUE_FIELD = 'value';
+const IDENTIFICATION_REPLY_SENT_FIELD = 'identificationReplySent';
+const PING_ID_FIELD = 'pingId';
+const UNSUPPORTED_FRAME_PAYLOAD_ERROR =
+  'Unsupported WebSocket frame payload';
+
 const {
   ConnectionState,
   INCOMING_CONNECTION_ADOPTION,
@@ -14,6 +26,45 @@ const {
   TRANSPORT_TYPEOF,
   normalizeToWebSocketAddress,
 } = MESSAGE_ROUTER_SHARED;
+
+function claimIdentificationReply(connection) {
+  const descriptor = objectGetOwnPropertyDescriptor(
+    connection,
+    IDENTIFICATION_REPLY_SENT_FIELD,
+  );
+  if (
+    !descriptor ||
+    !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ||
+    descriptor.value !== false
+  ) {
+    return false;
+  }
+  objectDefineProperty(connection, IDENTIFICATION_REPLY_SENT_FIELD, {
+    configurable: true,
+    enumerable: true,
+    value: true,
+    writable: true,
+  });
+  return true;
+}
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value : undefined;
+}
+
+function parseInboundFrame(data) {
+  const text = typeof data === 'string' ?
+    data : bufferIsBuffer(data) ? bufferToString(data) : null;
+  if (text === null) {
+    throw new TypeError(UNSUPPORTED_FRAME_PAYLOAD_ERROR);
+  }
+  return jsonParse(text);
+}
 
 /**
  * Inbound dispatch for the message router: parse incoming frames, record peer
@@ -42,48 +93,51 @@ class MessageRouterInboundDispatch {
   }
   handleMessage(connectionId, ws, data) {
     try {
-      const message = JSON.parse(data.toString());
+      const message = parseInboundFrame(data);
+      const messageType = readOwnData(message, 'type');
+      const messageId = readOwnData(message, 'messageId');
       this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
-        type: message.type,
-        messageId: message.messageId,
+        type: messageType,
+        messageId,
       });
-      if (message.type === RouterMessageType.IDENTIFY) {
+      if (messageType === RouterMessageType.IDENTIFY) {
         this.handleIdentification(connectionId, ws, message);
         return;
       }
-      if (message.type === RouterMessageType.PING) {
+      if (messageType === RouterMessageType.PING) {
         this.sendRaw(ws, {
           type: RouterMessageType.PONG,
-          pingId: message.pingId || null,
+          pingId: readOwnData(message, PING_ID_FIELD) || null,
           timestamp: Date.now(),
         });
         return;
       }
-      if (message.type === RouterMessageType.PONG) {
-        if (message.pingId && this.pendingPings.has(message.pingId)) {
-          const pending = this.pendingPings.get(message.pingId);
+      if (messageType === RouterMessageType.PONG) {
+        const pingId = readOwnData(message, PING_ID_FIELD);
+        if (pingId && this.pendingPings.has(pingId)) {
+          const pending = this.pendingPings.get(pingId);
           clearTimeout(pending.timeout);
-          this.pendingPings.delete(message.pingId);
+          this.pendingPings.delete(pingId);
           pending.resolve(true);
         }
         return;
       }
-      if (message.type === RouterMessageType.ACK) {
+      if (messageType === RouterMessageType.ACK) {
         this.handleAcknowledgment(message);
         return;
       }
-      if (message.type === RouterMessageType.SERVICE_RESPONSE) {
+      if (messageType === RouterMessageType.SERVICE_RESPONSE) {
         this.handleServiceResponse(message);
         return;
       }
-      if (message.type === RouterMessageType.SERVICE_MESSAGE) {
+      if (messageType === RouterMessageType.SERVICE_MESSAGE) {
         this.handleServiceMessage(ws, message);
         return;
       }
       this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
-        type: message.type,
+        type: messageType,
         connectionId,
       });
     } catch (error) {
@@ -102,15 +156,13 @@ class MessageRouterInboundDispatch {
    * @private
    */
   handleIdentification(connectionId, ws, message) {
-    const nodeId = message?.nodeId;
-    const nodeAddress = message?.nodeAddress || message?.address;
-    const bootIncarnation = this.connectionAuthorityOwner
-      .readIncomingBootIncarnation(message);
-    if (!nodeId || !nodeAddress) {
+    const identity = this.connectionAuthorityOwner
+      .readIncomingIdentificationEnvelope(message);
+    if (!identity) {
       this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
         connectionId,
-        hasNodeId: !!nodeId,
-        hasNodeAddress: !!nodeAddress,
+        hasNodeId: false,
+        hasNodeAddress: false,
       });
       try {
         ws.close();
@@ -123,6 +175,7 @@ class MessageRouterInboundDispatch {
       }
       return;
     }
+    const {nodeId, nodeAddress, channel, bootIncarnation} = identity;
     this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_RECEIVED, {
       connectionId,
       remoteNodeId: nodeId,
@@ -159,7 +212,7 @@ class MessageRouterInboundDispatch {
       // record mutation. The socket is handed to the bulk channel registry;
       // the primary per-peer connection is never rekeyed, evicted, or
       // reconnect-fought, and no NODE_CONNECTED/NODE_IDENTIFIED is emitted.
-      if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+      if (channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
         this.adoptBulkChannelSocket(connectionId, ws, nodeId);
         return;
       }
@@ -256,6 +309,14 @@ class MessageRouterInboundDispatch {
           connection,
           bootIncarnation,
         );
+        // IDENTIFY is a bilateral current-primary identity exchange. The
+        // dialer has already identified itself on this socket; reply exactly
+        // once, and only after admission, stale-incarnation fencing, and
+        // primary adoption have all succeeded. The dialer's outgoing branch
+        // consumes this reply without replying again.
+        if (claimIdentificationReply(connection)) {
+          this.sendIdentification(connection);
+        }
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
           newKey: nodeId,
@@ -317,7 +378,7 @@ class MessageRouterInboundDispatch {
         bootIncarnation,
       );
     }
-    if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+    if (channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
       // A bulk-channel IDENTIFY that did not match an incoming record above
       // has nothing to adopt and is never a primary identification.
       try {

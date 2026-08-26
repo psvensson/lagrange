@@ -64,6 +64,7 @@ function buildResumableJoinHarness(options = {}) {
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
     sleep: async () => {},
+    httpFetch: options.httpFetch,
     config: {
       autoResumeRetryableFailures: true,
       retryableFailureResumeMaxAttempts: options.maxAttempts ?? 3,
@@ -339,16 +340,18 @@ test('CL-006: a bare join HTTP request timeout is resume-eligible and ' +
 
   // And the real throw site produces the marker: drive httpPost into its
   // abort path via a fetch that never resolves before the timeout.
-  const {service: httpService} = buildResumableJoinHarness({});
-  httpService.config.httpTimeoutMs = 5;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (url, options) => new Promise((resolve, reject) => {
-    options.signal.addEventListener('abort', () => {
-      const abortError = new Error('aborted');
-      abortError.name = 'AbortError';
-      reject(abortError);
+  const timeoutFetch = (_url, requestOptions) =>
+    new Promise((_resolve, reject) => {
+      requestOptions.signal.addEventListener('abort', () => {
+        const abortError = new Error('aborted');
+        abortError.name = 'AbortError';
+        reject(abortError);
+      });
     });
+  const {service: httpService} = buildResumableJoinHarness({
+    httpFetch: timeoutFetch,
   });
+  httpService.config.httpTimeoutMs = 5;
   try {
     await httpService.httpPost('http://localhost:1/x', {});
     t.fail('httpPost should have timed out');
@@ -357,8 +360,6 @@ test('CL-006: a bare join HTTP request timeout is resume-eligible and ' +
       'httpPost abort path should surface the canonical timeout message');
     t.equal(thrown.deferRetry, true,
       'httpPost timeout must carry deferRetry so the resume preserves state');
-  } finally {
-    globalThis.fetch = originalFetch;
   }
 });
 

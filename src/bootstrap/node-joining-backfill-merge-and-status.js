@@ -3,6 +3,8 @@ import {NodeJoiningPublicationActivation} from './node-joining-publication-activ
 import {
   buildStartupRuntimeHandoffSnapshot,
 } from './shared/startup-sql-runtime-handoff.js';
+import {nodeJoiningHttpGetJson} from './node-joining-http-get-json.js';
+import {nodeJoiningHttpPost} from './node-joining-http-post.js';
 
 const {
   BootstrapTopologySnapshotOwner,
@@ -10,9 +12,6 @@ const {
   CDCPipelineReadinessGate,
   CDC_PROPAGATED_TABLES,
   COLUMN,
-  JOINING_ERROR_MSG,
-  JOINING_ERROR_NAME,
-  JOINING_HTTP,
   JOIN_BACKFILL_QUERY,
   JoiningPhase,
   NODE_JOINING_SERVICE_LITERAL,
@@ -32,6 +31,13 @@ const {
   isDeliveredTransportDeliveryOutcome,
   resolveCanonicalLeaderIdentitySnapshot,
 } = NODE_JOINING_SERVICE_SHARED;
+
+const DateConstructor = Date;
+const numberFunction = Number;
+const dateParse = DateConstructor.parse;
+const mathFloor = Math.floor;
+const mathMax = Math.max;
+const numberIsFinite = Number.isFinite;
 
 class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation {
   async resolveAuthoritativeBackfillRows(
@@ -306,78 +312,20 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    * @private
    */
   async httpPost(url, body, options = {}) {
-    const timeoutMs = Number.isFinite(options?.timeoutMs) &&
-      options.timeoutMs > 0 ?
-      Math.floor(options.timeoutMs) :
-      this.config.httpTimeoutMs;
-    // AbortController is a global in Node.js 22+
-    const controller = new globalThis.AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      timeoutMs,
-    );
-    try {
-      const response = await fetch(url, {
-        method: JOINING_HTTP.METHOD_POST,
-        headers: {
-          [JOINING_HTTP.HEADER_CONTENT_TYPE]: JOINING_HTTP.CONTENT_TYPE_JSON,
-          [JOINING_HTTP.HEADER_CONNECTION]: JOINING_HTTP.CONNECTION_CLOSE,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        const retryAfterHeader = response.headers.get(
-          JOINING_HTTP.HEADER_RETRY_AFTER,
-        );
-        const errorBody = await response.text();
-        let parsedBody = null;
-        try {
-          parsedBody = JSON.parse(errorBody);
-        } catch (_parseError) {
-          parsedBody = null;
-        }
-        const httpStatusError = JOINING_ERROR_MSG.httpStatus;
-        const error = new Error(httpStatusError(response.status, errorBody));
-        error.statusCode = response.status;
-        error.responseBody = errorBody;
-        error.responseJson = parsedBody;
-        const retryAfterHintMs = this.parseRetryAfterHeaderMs(retryAfterHeader);
-        const retryAfterBodyMs = Number.isFinite(parsedBody?.retryAfterMs) ?
-          Math.floor(parsedBody.retryAfterMs) :
-          null;
-        const retryAfterMs =
-          Number.isFinite(retryAfterHintMs) && Number.isFinite(retryAfterBodyMs) ?
-            Math.max(retryAfterHintMs, retryAfterBodyMs) :
-            Number.isFinite(retryAfterHintMs) ?
-              retryAfterHintMs :
-              retryAfterBodyMs;
-        if (Number.isFinite(retryAfterMs)) {
-          error.retryAfterMs = retryAfterMs;
-        }
-        throw error;
-      }
-      const responseBody = await response.json();
-      clearTimeout(timeoutId);
-      return responseBody;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === JOINING_ERROR_NAME.ABORT) {
-        const httpTimeoutError = JOINING_ERROR_MSG.httpTimeout;
-        const timeoutError = new Error(httpTimeoutError(timeoutMs));
-        // A request timeout is transient by nature. Mark it so the
-        // join-level retryable-resume classification preserves join state
-        // (CL-006) instead of running the destructive cleanup — phases with
-        // their own classifiers (seed contact, message-group registration)
-        // already treated this message as retryable in-phase, but the
-        // verdict was dropped once the bare error crossed the phase
-        // boundary (witness: querying_state failures in
-        // stat-gate-20260610T172830Z runs 1/3/4).
-        timeoutError.deferRetry = true;
-        throw timeoutError;
-      }
-      throw error;
-    }
+    return nodeJoiningHttpPost(url, body, {
+      timeoutMs: options?.timeoutMs,
+      fallbackTimeoutMs: this.config.httpTimeoutMs,
+      fetchFunction: this.httpFetch,
+      parseRetryAfterHeaderMs: (header) =>
+        this.parseRetryAfterHeaderMs(header),
+    });
+  }
+  async httpGetJson(url, options = {}) {
+    return nodeJoiningHttpGetJson(url, {
+      timeoutMs: options?.timeoutMs,
+      fallbackTimeoutMs: this.config.httpTimeoutMs,
+      fetchFunction: this.httpFetch,
+    });
   }
   /**
    * Parse Retry-After header into milliseconds when possible.
@@ -393,15 +341,15 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     ) {
       return null;
     }
-    const deltaSeconds = Number(retryAfterHeader);
-    if (Number.isFinite(deltaSeconds) && deltaSeconds >= 0) {
-      return Math.floor(deltaSeconds * TIME_MS.SECOND);
+    const deltaSeconds = numberFunction(retryAfterHeader);
+    if (numberIsFinite(deltaSeconds) && deltaSeconds >= 0) {
+      return mathFloor(deltaSeconds * TIME_MS.SECOND);
     }
-    const retryAtMs = Date.parse(retryAfterHeader);
-    if (!Number.isFinite(retryAtMs)) {
+    const retryAtMs = dateParse(retryAfterHeader);
+    if (!numberIsFinite(retryAtMs)) {
       return null;
     }
-    return Math.max(0, retryAtMs - this.now());
+    return mathMax(0, retryAtMs - this.now());
   }
   /**
    * Create the shared CDC pipeline readiness gate.
