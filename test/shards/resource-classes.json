@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2065,
+    "ordinary": 2066,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2082,
-  "digest": "fnv1a32-5fb78f33",
+  "censusSize": 2083,
+  "digest": "fnv1a32-dba4e210",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -1761,6 +1761,7 @@
     "test/scripts/publish-head.test.js": "ordinary",
     "test/scripts/quest-context.test.js": "ordinary",
     "test/scripts/release-content-digest.test.js": "ordinary",
+    "test/scripts/release-dockerhub-description.test.js": "ordinary",
     "test/scripts/release-notes.test.js": "ordinary",
     "test/scripts/release-npm-package.test.js": "ordinary",
     "test/scripts/rolling-restart-leadership-churn-attribution.test.js": "ordinary",

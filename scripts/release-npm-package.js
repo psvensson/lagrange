@@ -15,6 +15,8 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join, resolve, sep} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {readNpmRegistryMetadata} from './release-npm-registry.js';
+
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(SCRIPT_DIRECTORY, '..');
 const PACKAGE_NAME = 'lagrange-server';
@@ -30,6 +32,22 @@ const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const TEXT_ENCODING = 'utf8';
 const ARGUMENT_SEPARATOR = ' ';
 const RELEASE_ERROR_NAME = 'NpmReleaseError';
+const DATA_DESCRIPTOR_VALUE = 'value';
+const GIT_COMMAND = 'git';
+const GIT_SHOW_COMMAND = 'show';
+const HASH_ALGORITHM_SHA256 = 'sha256';
+const HASH_ENCODING_HEX = 'hex';
+const TAR_EXTRACT_FILE_ARGUMENT = '-xOf';
+const GIT_URL_PREFIX = 'git+';
+const GIT_URL_SUFFIX = '.git';
+const GIT_URL_PREFIX_LENGTH = 4;
+const URL_PATH_SEPARATOR = '/';
+const REGISTRY_FIELD = Object.freeze({
+  INTEGRITY: 'integrity',
+  GIT_HEAD: 'gitHead',
+  README: 'readme',
+  LATEST: 'latest',
+});
 const PACKAGE_ROOT_EXPORT = '.';
 const PUBLIC_API_MAIN = 'src/public-api.js';
 const PUBLIC_API_EXPORT = './src/public-api.js';
@@ -40,6 +58,8 @@ const PACKAGE_SOURCE_PATH = 'src/';
 const DISTRIBUTED_SQL_KEYWORD = 'distributed-sql';
 const PUBLIC_ACCESS = 'public';
 const PACKAGE_JSON_FILENAME = 'package.json';
+const README_FILENAME = 'README.md';
+const PACKED_README_PATH = `package/${README_FILENAME}`;
 const CONSUMER_PACKAGE_NAME = 'lagrange-server-install-smoke';
 const MODULE_PACKAGE_TYPE = 'module';
 const TAR_COMMAND = 'tar';
@@ -58,12 +78,6 @@ const COMMAND_ARGUMENT = Object.freeze({
   NODE_MODULE_INPUT: '--input-type=module',
   NODE_EVAL: '--eval',
   OPTION_PREFIX: '--',
-});
-const HTTP = Object.freeze({
-  CACHE_NO_STORE: 'no-store',
-  CACHE_NO_CACHE: 'no-cache',
-  CONTENT_TYPE_JSON: 'application/json',
-  NOT_FOUND: 404,
 });
 const INSTALL_PATH_LABEL = Object.freeze({
   LAGRANGE: 'lagrange bin',
@@ -85,6 +99,7 @@ const MANIFEST_ERROR = Object.freeze({
   ONE_ARTIFACT: 'expected one packed artifact',
   PACKED_VERSION: 'packed artifact version must match package.json',
   GIT_HEAD: 'candidate tarball must contain a full gitHead',
+  README: 'candidate tarball README.md must exactly match the tagged workspace README.md',
 });
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
 const CLI_USAGE =
@@ -100,6 +115,8 @@ const RELEASE_OUTCOME = Object.freeze({
   OCCUPIED_FOREIGN: 'OCCUPIED_FOREIGN',
   VERSION_CONTENT_CONFLICT: 'VERSION_CONTENT_CONFLICT',
   VERSION_COMMIT_CONFLICT: 'VERSION_COMMIT_CONFLICT',
+  VERSION_README_CONFLICT: 'VERSION_README_CONFLICT',
+  VERSION_NOT_LATEST: 'VERSION_NOT_LATEST',
   PACKAGE_MANIFEST_INVALID: 'PACKAGE_MANIFEST_INVALID',
   PACK_FAILED: 'PACK_FAILED',
   INSTALL_FAILED: 'INSTALL_FAILED',
@@ -112,6 +129,33 @@ const RELEASE_OUTCOME = Object.freeze({
   PUBLISH_FAILED: 'PUBLISH_FAILED',
   PARTIAL_RELEASE_CONFLICT: 'PARTIAL_RELEASE_CONFLICT',
 });
+
+const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor.bind(Object);
+const hasOwnProperty = Function.call.bind(Object.prototype.hasOwnProperty);
+const jsonParse = JSON.parse.bind(JSON);
+const scheduleTimeout = globalThis.setTimeout.bind(globalThis);
+const arrayIsArray = Array.isArray.bind(Array);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const regExpTest = Function.call.bind(RegExp.prototype.test);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const FULL_GIT_HEAD_PATTERN = /^[0-9a-f]{40}$/u;
+const DRY_RUN_COMPLETED_PATTERN = /Dry run completed/u;
+const AUTH_FAILURE_PATTERN = /ENEEDAUTH|E401|Unable to authenticate/iu;
+const PERMISSION_FAILURE_PATTERN = /E403|forbidden|permission/iu;
+
+function readOwnData(value, key) {
+  if ((typeof value !== 'object' || value === null) &&
+    typeof value !== 'function') {
+    return undefined;
+  }
+  const descriptor = getOwnPropertyDescriptor(value, key);
+  if (!descriptor || !hasOwnProperty(descriptor, DATA_DESCRIPTOR_VALUE)) {
+    return undefined;
+  }
+  return descriptor.value;
+}
 
 class NpmReleaseError extends Error {
   constructor(code, message, cause = undefined) {
@@ -148,7 +192,7 @@ function runChecked(command, args, options = {}, errorCode = RELEASE_OUTCOME.PAC
 }
 
 async function readJson(filePath) {
-  return JSON.parse(await readFile(filePath, TEXT_ENCODING));
+  return jsonParse(await readFile(filePath, TEXT_ENCODING));
 }
 
 function assertManifestCondition(condition, message) {
@@ -182,8 +226,9 @@ function validatePackageStructure(packageJson, packageLock) {
     packageJson.bin?.[ADMIN_BIN_NAME] === ADMIN_BIN_PATH,
     MANIFEST_ERROR.ADMIN_BIN,
   );
-  assertManifestCondition(Array.isArray(packageJson.files) &&
-    packageJson.files.includes(PACKAGE_SOURCE_PATH),
+  const packageFiles = readOwnData(packageJson, 'files');
+  assertManifestCondition(arrayIsArray(packageFiles) &&
+    arrayIncludes(packageFiles, PACKAGE_SOURCE_PATH),
   MANIFEST_ERROR.FILES);
 }
 
@@ -194,8 +239,10 @@ function validatePublicationMetadata(packageJson) {
     MANIFEST_ERROR.HOMEPAGE);
   assertManifestCondition(Boolean(packageJson.bugs?.url),
     MANIFEST_ERROR.BUGS);
-  assertManifestCondition(packageJson.keywords?.includes(DISTRIBUTED_SQL_KEYWORD),
-    MANIFEST_ERROR.KEYWORDS);
+  const packageKeywords = readOwnData(packageJson, 'keywords');
+  assertManifestCondition(arrayIsArray(packageKeywords) &&
+    arrayIncludes(packageKeywords, DISTRIBUTED_SQL_KEYWORD),
+  MANIFEST_ERROR.KEYWORDS);
   assertManifestCondition(packageJson.publishConfig?.access === PUBLIC_ACCESS,
     MANIFEST_ERROR.ACCESS);
   assertManifestCondition(packageJson.publishConfig?.provenance === true,
@@ -204,9 +251,9 @@ function validatePublicationMetadata(packageJson) {
     `package.json publishConfig.registry must be ${REGISTRY_URL}`);
 }
 
-async function validateWorkspaceManifest() {
-  const packageJson = await readJson(join(REPOSITORY_ROOT, 'package.json'));
-  const packageLock = await readJson(join(REPOSITORY_ROOT, 'package-lock.json'));
+async function validateWorkspaceManifest(repositoryRoot = REPOSITORY_ROOT) {
+  const packageJson = await readJson(join(repositoryRoot, 'package.json'));
+  const packageLock = await readJson(join(repositoryRoot, 'package-lock.json'));
   validatePackageStructure(packageJson, packageLock);
   validatePublicationMetadata(packageJson);
   return packageJson;
@@ -214,8 +261,8 @@ async function validateWorkspaceManifest() {
 
 function parsePackOutput(output) {
   try {
-    const parsed = JSON.parse(output);
-    if (!Array.isArray(parsed) || parsed.length !== 1) {
+    const parsed = jsonParse(output);
+    if (!arrayIsArray(parsed) || parsed.length !== 1) {
       throw new Error(MANIFEST_ERROR.ONE_ARTIFACT);
     }
     return parsed[0];
@@ -228,11 +275,11 @@ function parsePackOutput(output) {
   }
 }
 
-function resolveGitHead(explicitGitHead) {
+function resolveGitHead(explicitGitHead, repositoryRoot = REPOSITORY_ROOT) {
   const gitHead = explicitGitHead || runChecked(
-    'git', ['rev-parse', 'HEAD'], {}, RELEASE_OUTCOME.PACK_FAILED,
+    'git', ['rev-parse', 'HEAD'], {cwd: repositoryRoot}, RELEASE_OUTCOME.PACK_FAILED,
   ).trim();
-  if (!/^[0-9a-f]{40}$/u.test(gitHead)) {
+  if (!regExpTest(FULL_GIT_HEAD_PATTERN, gitHead)) {
     throw new NpmReleaseError(
       RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
       `git head must be a full 40-character commit hash, received ${gitHead}`,
@@ -242,8 +289,9 @@ function resolveGitHead(explicitGitHead) {
 }
 
 async function buildNpmPackage(options = {}) {
-  const packageJson = await validateWorkspaceManifest();
-  const gitHead = resolveGitHead(options.gitHead);
+  const repositoryRoot = resolve(options.repositoryRoot || REPOSITORY_ROOT);
+  const packageJson = await validateWorkspaceManifest(repositoryRoot);
+  const gitHead = resolveGitHead(options.gitHead, repositoryRoot);
   const outputDirectory = resolve(
     options.outputDirectory || join(REPOSITORY_ROOT, 'dist/npm'),
   );
@@ -262,7 +310,7 @@ async function buildNpmPackage(options = {}) {
       '--ignore-scripts',
       '--pack-destination',
       preliminaryDirectory,
-    ]));
+    ], {cwd: repositoryRoot}));
     const preliminaryTarball = join(preliminaryDirectory, preliminary.filename);
     const extractArguments = [
       COMMAND_ARGUMENT.TAR_EXTRACT_GZIP,
@@ -291,14 +339,41 @@ async function buildNpmPackage(options = {}) {
       `packed artifact name must be ${PACKAGE_NAME}`);
     assertManifestCondition(packed.version === packageJson.version,
       MANIFEST_ERROR.PACKED_VERSION);
+    const tarballPath = join(outputDirectory, packed.filename);
+    const [workspaceReadme, taggedReadme, packedReadme] = await Promise.all([
+      readFile(join(repositoryRoot, README_FILENAME), TEXT_ENCODING),
+      Promise.resolve(runChecked(
+        GIT_COMMAND,
+        [GIT_SHOW_COMMAND, `${gitHead}:${README_FILENAME}`],
+        {cwd: repositoryRoot},
+        RELEASE_OUTCOME.PACK_FAILED,
+      )),
+      readTarballText(tarballPath, PACKED_README_PATH),
+    ]);
+    assertManifestCondition(
+      workspaceReadme === taggedReadme && packedReadme === taggedReadme,
+      MANIFEST_ERROR.README,
+    );
     return {
       ...packed,
       gitHead,
-      tarballPath: join(outputDirectory, packed.filename),
+      readmeSha256: createHash(HASH_ALGORITHM_SHA256)
+        .update(packedReadme)
+        .digest(HASH_ENCODING_HEX),
+      tarballPath,
     };
   } finally {
     await rm(temporaryRoot, {recursive: true, force: true});
   }
+}
+
+function readTarballText(tarballPath, entryPath) {
+  return runChecked(
+    TAR_COMMAND,
+    [TAR_EXTRACT_FILE_ARGUMENT, resolve(tarballPath), entryPath],
+    {},
+    RELEASE_OUTCOME.PACK_FAILED,
+  );
 }
 
 function assertInstalledPath(actualPath, installedPackageRoot, label) {
@@ -416,7 +491,7 @@ async function verifyInstalledPackage(packed) {
       '--data-dir',
       join(temporaryRoot, 'data'),
     ], {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
-    if (!/Dry run completed/u.test(dryRunOutput)) {
+    if (!regExpTest(DRY_RUN_COMPLETED_PATTERN, dryRunOutput)) {
       throw new NpmReleaseError(
         RELEASE_OUTCOME.CLI_FAILED,
         DRY_RUN_ERROR,
@@ -435,108 +510,138 @@ async function buildAndVerifyNpmPackage(options = {}) {
 }
 
 async function inspectTarball(tarballPath) {
-  const manifestText = runChecked(
-    'tar',
-    ['-xOf', resolve(tarballPath), 'package/package.json'],
-    {},
-    RELEASE_OUTCOME.PACK_FAILED,
+  const manifestText = readTarballText(
+    tarballPath,
+    `package/${PACKAGE_JSON_FILENAME}`,
   );
-  const manifest = JSON.parse(manifestText);
-  assertManifestCondition(manifest.name === PACKAGE_NAME,
+  const readme = readTarballText(tarballPath, PACKED_README_PATH);
+  const manifest = jsonParse(manifestText);
+  const manifestName = readOwnData(manifest, 'name');
+  const manifestGitHead = readOwnData(manifest, 'gitHead');
+  assertManifestCondition(manifestName === PACKAGE_NAME,
     `candidate tarball name must be ${PACKAGE_NAME}`);
-  assertManifestCondition(/^[0-9a-f]{40}$/u.test(manifest.gitHead || ''),
+  assertManifestCondition(
+    typeof manifestGitHead === 'string' &&
+      regExpTest(FULL_GIT_HEAD_PATTERN, manifestGitHead),
     MANIFEST_ERROR.GIT_HEAD);
+  assertManifestCondition(readme.length > 0, MANIFEST_ERROR.README);
   const contents = await readFile(resolve(tarballPath));
   const integrity = `sha512-${createHash('sha512').update(contents).digest('base64')}`;
   return {
-    gitHead: manifest.gitHead,
+    gitHead: manifestGitHead,
     integrity,
     manifest,
+    readme,
+    readmeSha256: createHash(HASH_ALGORITHM_SHA256)
+      .update(readme)
+      .digest(HASH_ENCODING_HEX),
     tarballPath: resolve(tarballPath),
   };
 }
 
 function normalizeRepositoryUrl(repository) {
-  const raw = typeof repository === 'string' ? repository : repository?.url;
-  return String(raw || '')
-    .replace(/^git\+/u, '')
-    .replace(/\.git$/u, '')
-    .replace(/\/$/u, '');
+  const raw = typeof repository === 'string' ?
+    repository :
+    readOwnData(repository, 'url');
+  if (typeof raw !== 'string') {
+    return '';
+  }
+  let normalized = stringStartsWith(raw, GIT_URL_PREFIX) ?
+    stringSlice(raw, GIT_URL_PREFIX_LENGTH) : raw;
+  if (stringEndsWith(normalized, GIT_URL_SUFFIX)) {
+    normalized = stringSlice(normalized, 0, -GIT_URL_PREFIX_LENGTH);
+  }
+  if (stringEndsWith(normalized, URL_PATH_SEPARATOR)) {
+    normalized = stringSlice(normalized, 0, -1);
+  }
+  return normalized;
 }
 
 function classifyRegistryState(candidate, registryMetadata) {
   if (!registryMetadata) {
     return RELEASE_OUTCOME.NAME_AVAILABLE;
   }
-  const candidateRepository = normalizeRepositoryUrl(candidate.manifest.repository);
-  const registryRepository = normalizeRepositoryUrl(registryMetadata.repository);
+  const candidateManifest = readOwnData(candidate, 'manifest');
+  const candidateVersion = readOwnData(candidateManifest, 'version');
+  const candidateRepository = normalizeRepositoryUrl(
+    readOwnData(candidateManifest, 'repository'),
+  );
+  const registryRepository = normalizeRepositoryUrl(
+    readOwnData(registryMetadata, 'repository'),
+  );
   if (!candidateRepository || candidateRepository !== registryRepository) {
     return RELEASE_OUTCOME.OCCUPIED_FOREIGN;
   }
-  const publishedVersion = registryMetadata.versions?.[candidate.manifest.version];
+  const registryVersions = readOwnData(registryMetadata, 'versions');
+  const publishedVersion = readOwnData(registryVersions, candidateVersion);
   if (!publishedVersion) {
     return RELEASE_OUTCOME.VERSION_ABSENT;
   }
-  if (publishedVersion.dist?.integrity !== candidate.integrity) {
+  const publishedDistribution = readOwnData(publishedVersion, 'dist');
+  if (readOwnData(publishedDistribution, REGISTRY_FIELD.INTEGRITY) !==
+    readOwnData(candidate, REGISTRY_FIELD.INTEGRITY)) {
     return RELEASE_OUTCOME.VERSION_CONTENT_CONFLICT;
   }
-  if (publishedVersion.gitHead !== candidate.gitHead) {
+  if (readOwnData(publishedVersion, REGISTRY_FIELD.GIT_HEAD) !==
+    readOwnData(candidate, REGISTRY_FIELD.GIT_HEAD)) {
     return RELEASE_OUTCOME.VERSION_COMMIT_CONFLICT;
+  }
+  const distributionTags = readOwnData(registryMetadata, 'dist-tags');
+  const publishedAsLatest =
+    readOwnData(distributionTags, REGISTRY_FIELD.LATEST) === candidateVersion;
+  if (publishedAsLatest && readOwnData(registryMetadata, REGISTRY_FIELD.README) !==
+    readOwnData(candidate, REGISTRY_FIELD.README)) {
+    return RELEASE_OUTCOME.VERSION_README_CONFLICT;
   }
   return RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH;
 }
 
-async function readRegistryMetadata(packageName, registryUrl = REGISTRY_URL) {
-  const packageUrl = new URL(encodeURIComponent(packageName), registryUrl);
-  let response;
-  try {
-    const requestOptions = {
-      cache: HTTP.CACHE_NO_STORE,
-      headers: {
-        'accept': HTTP.CONTENT_TYPE_JSON,
-        'cache-control': HTTP.CACHE_NO_CACHE,
-      },
-    };
-    response = await fetch(packageUrl, requestOptions);
-  } catch (error) {
-    throw new NpmReleaseError(
-      RELEASE_OUTCOME.REGISTRY_UNAVAILABLE,
-      `npm registry request failed: ${error.message}`,
-      error,
-    );
+function classifyPublishedCandidateState(candidate, registryMetadata) {
+  const state = classifyRegistryState(candidate, registryMetadata);
+  if (state !== RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
+    return state;
   }
-  if (response.status === HTTP.NOT_FOUND) {
-    return null;
+  const candidateManifest = readOwnData(candidate, 'manifest');
+  const candidateVersion = readOwnData(candidateManifest, 'version');
+  const distributionTags = readOwnData(registryMetadata, 'dist-tags');
+  if (readOwnData(distributionTags, REGISTRY_FIELD.LATEST) !== candidateVersion) {
+    return RELEASE_OUTCOME.VERSION_NOT_LATEST;
   }
-  if (!response.ok) {
-    throw new NpmReleaseError(
-      RELEASE_OUTCOME.REGISTRY_UNAVAILABLE,
-      `npm registry returned HTTP ${response.status}`,
-    );
+  if (readOwnData(registryMetadata, REGISTRY_FIELD.README) !==
+    readOwnData(candidate, REGISTRY_FIELD.README)) {
+    return RELEASE_OUTCOME.VERSION_README_CONFLICT;
   }
-  return response.json();
+  return state;
+}
+
+function registryStateAllowsPublish(state) {
+  return state === RELEASE_OUTCOME.NAME_AVAILABLE ||
+    state === RELEASE_OUTCOME.VERSION_ABSENT;
 }
 
 function classifyPublishFailure(result) {
   const output = `${result.stdout}\n${result.stderr}`;
-  if (/ENEEDAUTH|E401|Unable to authenticate/iu.test(output)) {
+  if (regExpTest(AUTH_FAILURE_PATTERN, output)) {
     return RELEASE_OUTCOME.AUTH_UNAVAILABLE;
   }
-  if (/E403|forbidden|permission/iu.test(output)) {
+  if (regExpTest(PERMISSION_FAILURE_PATTERN, output)) {
     return RELEASE_OUTCOME.OWNERSHIP_DENIED;
   }
   return RELEASE_OUTCOME.PUBLISH_FAILED;
 }
 
 function delay(milliseconds) {
-  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+  return new Promise((resolveDelay) => scheduleTimeout(resolveDelay, milliseconds));
 }
 
 async function observePublishedCandidate(candidate) {
   let lastRegistryClassification = null;
   for (let attempt = 0; attempt < REGISTRY_OBSERVATION_ATTEMPTS; attempt += 1) {
-    const metadata = await readRegistryMetadata(candidate.manifest.name);
-    lastRegistryClassification = classifyRegistryState(candidate, metadata);
+    const metadata = await readNpmRegistryMetadata(
+      candidate.manifest.name,
+      REGISTRY_URL,
+    );
+    lastRegistryClassification = classifyPublishedCandidateState(candidate, metadata);
     if (lastRegistryClassification === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
       return RELEASE_OUTCOME.PUBLISHED_MATCH;
     }
@@ -558,13 +663,22 @@ async function publishNpmPackage(tarballPath, expectedGitHead) {
       `candidate gitHead ${candidate.gitHead} does not match ${expectedGitHead}`,
     );
   }
-  const metadata = await readRegistryMetadata(candidate.manifest.name);
+  const metadata = await readNpmRegistryMetadata(
+    candidate.manifest.name,
+    REGISTRY_URL,
+  );
   const existingState = classifyRegistryState(candidate, metadata);
   if (existingState === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
-    return {outcome: existingState, candidate};
+    const publishedState = classifyPublishedCandidateState(candidate, metadata);
+    if (publishedState === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
+      return {outcome: publishedState, candidate};
+    }
+    throw new NpmReleaseError(
+      publishedState,
+      `npm registry rejected candidate publication state: ${publishedState}`,
+    );
   }
-  if (![RELEASE_OUTCOME.NAME_AVAILABLE, RELEASE_OUTCOME.VERSION_ABSENT]
-    .includes(existingState)) {
+  if (!registryStateAllowsPublish(existingState)) {
     throw new NpmReleaseError(existingState,
       `npm registry rejected candidate preflight: ${existingState}`);
   }
@@ -629,6 +743,7 @@ async function main() {
       entryCount: packed.entryCount,
       integrity: packed.integrity,
       gitHead: packed.gitHead,
+      readmeSha256: packed.readmeSha256,
     }, null, 2));
     return;
   }
@@ -643,6 +758,7 @@ async function main() {
       version: result.candidate.manifest.version,
       integrity: result.candidate.integrity,
       gitHead: result.candidate.gitHead,
+      readmeSha256: result.candidate.readmeSha256,
     }, null, 2));
     return;
   }
@@ -671,9 +787,11 @@ export {
   buildAndVerifyNpmPackage,
   buildNpmPackage,
   classifyRegistryState,
+  classifyPublishedCandidateState,
   inspectTarball,
   normalizeRepositoryUrl,
   publishNpmPackage,
+  registryStateAllowsPublish,
   validateWorkspaceManifest,
   verifyInstalledPackage,
 };

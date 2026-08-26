@@ -51,7 +51,75 @@ const ACTIVE_RELEASE_SURFACES = [
   'charts/lagrange-node/values.yaml',
   'docs/dockerhub-overview.md',
   'scripts/release-notes.js',
+  'scripts/release-dockerhub-description.js',
+  'scripts/release-http-request.js',
+  'scripts/release-npm-package.js',
+  'scripts/release-npm-registry.js',
 ];
+
+function assertDockerhubReleaseOrdering(
+  release,
+  releaseText,
+  releaseGuideText,
+  descriptionPublisherText,
+) {
+  const releaseSteps = release.jobs.release.steps;
+  const preflightIndex = releaseSteps.findIndex(
+    (step) => step.name ===
+      'Preflight Docker Hub repository-description authority',
+  );
+  const proofIndex = releaseSteps.findIndex(
+    (step) => step.name === 'Full pre-release proof',
+  );
+  const npmPublishIndex = releaseSteps.findIndex(
+    (step) => step.name === 'Publish npm package',
+  );
+  const imagePushIndex = releaseSteps.findIndex(
+    (step) => step.name === 'Push Docker images',
+  );
+  const descriptionPublishIndex = releaseSteps.findIndex(
+    (step) => step.name ===
+      'Publish and verify Docker Hub repository description',
+  );
+  const githubReleaseIndex = releaseSteps.findIndex(
+    (step) => step.name === 'Publish GitHub Release',
+  );
+  assert.ok(preflightIndex >= 0 && preflightIndex < proofIndex,
+    'Docker Hub write authority must fail before the expensive release proof');
+  assert.ok(preflightIndex < npmPublishIndex && preflightIndex < imagePushIndex,
+    'Docker Hub write authority must be proven before publication');
+  assert.ok(
+    descriptionPublishIndex > imagePushIndex &&
+      descriptionPublishIndex < githubReleaseIndex,
+    'exact Docker readback follows image publication and precedes GitHub release',
+  );
+  const preflightStep = releaseSteps[preflightIndex];
+  const descriptionPublishStep = releaseSteps[descriptionPublishIndex];
+  assert.match(
+    preflightStep.run,
+    /release-dockerhub-description\.js preflight/u,
+  );
+  assert.match(
+    descriptionPublishStep.run,
+    /release-dockerhub-description\.js publish/u,
+  );
+  assert.notEqual(preflightStep['continue-on-error'], true);
+  assert.notEqual(descriptionPublishStep['continue-on-error'], true);
+  assert.doesNotMatch(releaseText, /peter-evans\/dockerhub-description/u);
+  assert.match(
+    releaseText,
+    /Docker Hub PAT with Read\/Write\/Delete scope,[\s#]*issued by the repository owner\/Admin account/u,
+  );
+  assert.match(
+    releaseGuideText,
+    /personal access token with\s+Read\/Write\/Delete scope, issued by the `psvensson` repository-owner account\s+\(or an account with repository Admin authority\)/u,
+  );
+  assert.doesNotMatch(releaseGuideText, /Read\/Write permission\./u);
+  assert.match(
+    descriptionPublisherText,
+    /token must have read\/write\/delete scope and repository owner\/Admin authority/u,
+  );
+}
 
 describe('project hardening contracts', () => {
   it('keeps network defaults local and mutation enforcement active', () => {
@@ -156,6 +224,10 @@ describe('project hardening contracts', () => {
     const ci = parse(ciText);
     const fullGate = parse(fullGateText);
     const release = parse(releaseText);
+    const [releaseGuideText, descriptionPublisherText] = await Promise.all([
+      readFile('RELEASE.md', UTF8),
+      readFile('scripts/release-dockerhub-description.js', UTF8),
+    ]);
 
     assert.deepEqual(ci.on.push.branches, ['main']);
     assert.deepEqual(ci.on.pull_request.branches, ['main']);
@@ -305,6 +377,12 @@ describe('project hardening contracts', () => {
     assert.match(releaseText, /matching-refs\/tags\/v/u);
     assert.match(releaseText, /vars\.DOCKERHUB_USERNAME/u);
     assert.match(releaseText, /secrets\.DOCKERHUB_TOKEN/u);
+    assertDockerhubReleaseOrdering(
+      release,
+      releaseText,
+      releaseGuideText,
+      descriptionPublisherText,
+    );
     assert.match(releaseText, /gh release create/u);
     assert.match(releaseText, /gh release upload/u);
     assert.match(releaseText, /--verify-tag/u);

@@ -19,7 +19,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
 | Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
 | Manual | `.github/workflows/full-gate.yml` | `npm run check:release` — the whole system, on demand. No longer nightly: a scheduled whole-system proof is a standing veto, and an unchanged tree cannot grow new behavioural debt. |
-| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update and exactly verify the Docker Hub overview → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
 
 ## Cutting a release
 
@@ -62,15 +62,25 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    reachable from `origin/main`. The npm owner records the tarball SHA-512 and
    `gitHead`; a rerun skips npm only when both match, and fails closed on a
    foreign package, immutable-version content conflict, or commit conflict. A
-   rerun of the current tag replaces existing GitHub release assets and notes,
+   tagged `README.md` must also be byte-identical to `package/README.md` in
+   the built tarball, and the npm registry's latest-package README must match
+   that candidate before publication is considered complete. The package
+   command reports the README SHA-256 alongside the artifact identity. A rerun
+   of the current tag replaces existing GitHub release assets and notes,
    then publishes any draft left by an interrupted first attempt.
 6. **Docker Hub overview updates itself.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
    section (from `CHANGELOG.md`) and PATCHes it to the repository description
    at <https://hub.docker.com/r/psvensson/lagrange> via the Hub API
-   (best-effort — a failed description update never sinks a release). Manual
-   fallback if the step warns:
+   and then reads the public description back until its bytes exactly match.
+   The Docker Hub token must have Read/Write/Delete scope and be issued by the
+   repository owner (or an account with repository Admin authority); a
+   forbidden update or mismatched readback fails the release. Before npm or image publication,
+   the same owner also performs an exact no-op PATCH/readback of the current
+   overview, so missing description authority cannot create another partial
+   public release. Manual recovery after correcting
+   the token or repository permission:
    `npm run release:notes -- --mode overview --version x.y.z` and paste the
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
@@ -105,7 +115,8 @@ tag:
 - repository variable `DOCKERHUB_USERNAME`: the Docker Hub account that owns
   `psvensson/lagrange`;
 - repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with
-  Read/Write permission.
+  Read/Write/Delete scope, issued by the `psvensson` repository-owner account
+  (or an account with repository Admin authority).
 
 The npm package is public and named `lagrange-server`. npm cannot configure a
 trusted publisher until the package exists, so bootstrap it once with a
