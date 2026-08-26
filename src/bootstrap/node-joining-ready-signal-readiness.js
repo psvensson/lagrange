@@ -4,6 +4,7 @@ import {
 } from './node-joining-operation-ledger-formation-readiness.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_RESPONSE_FIELD,
 } from './bootstrap-api-constants.js';
 import {
   LIFECYCLE_PHASE,
@@ -26,6 +27,7 @@ const {
   CDC_REESTABLISHMENT,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
+  JOINING_HTTP,
   JOINING_LOG_MSG,
   NODE_JOINING_SERVICE_LITERAL,
   NodeService,
@@ -48,9 +50,14 @@ const LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY =
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const numberIsSafeInteger = Number.isSafeInteger;
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPrototypeMap = Function.call.bind(Array.prototype.map);
+const encodeUriComponent = globalThis.encodeURIComponent;
 const OWN_DATA_VALUE_FIELD = 'value';
+const NODE_ID_FIELD = 'node_id';
 const INFRASTRUCTURE_JOIN_FAILURE_CODE_FIELD = 'code';
 const INFRASTRUCTURE_JOIN_FAILURE_NAME_FIELD = 'name';
+const FORMATION_STARTUP_AUTHORITY_ABSENT = null;
 // Named absence variant: the error carries no own string value for the
 // requested field (ARCH-0013 — raw null must not encode runtime state).
 const INFRASTRUCTURE_JOIN_CODE_ABSENT = null;
@@ -66,6 +73,15 @@ function readOwnInfrastructureJoinFailureCode(error, field) {
   return typeof descriptor.value === 'string' && descriptor.value.length > 0 ?
     descriptor.value :
     INFRASTRUCTURE_JOIN_CODE_ABSENT;
+}
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value : undefined;
 }
 
 class NodeJoiningReadySignalReadiness
@@ -235,16 +251,20 @@ class NodeJoiningReadySignalReadiness
       startupAuthority,
     );
   }
-  async getPriorityPlacementFormationStartupAuthority(now) {
+  async getPriorityPlacementFormationStartupAuthority(now, options = {}) {
     const readinessService =
       this.rebalanceCoordinator?.controlPlaneReadinessService || null;
-    if (
-      !readinessService ||
-      typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
-    ) {
-      return null;
-    }
+    if (!readinessService || typeof readinessService !== 'object') return null;
     try {
+      if (this.nodeId !== this.seedNodeId) {
+        return await this.getSeedProjectedFormationStartupAuthority(
+          readinessService,
+          options,
+        );
+      }
+      if (
+        typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
+      ) return null;
       if (
         typeof readinessService
           .getFormationReleaseStartupAuthoritySnapshot === 'function'
@@ -274,8 +294,44 @@ class NodeJoiningReadySignalReadiness
         now,
       );
     } catch {
-      return null;
+      return FORMATION_STARTUP_AUTHORITY_ABSENT;
     }
+  }
+  async getSeedProjectedFormationStartupAuthority(
+    readinessService,
+    options = {},
+  ) {
+    if (
+      typeof this.seedNodeAddress !== 'string' ||
+      this.seedNodeAddress.length === 0 ||
+      typeof this.nodeId !== 'string' ||
+      this.nodeId.length === 0 ||
+      typeof this.httpGetJson !== 'function' ||
+      typeof readinessService
+        .validateFormationReleaseStartupAuthorityProjection !== 'function'
+    ) {
+      return FORMATION_STARTUP_AUTHORITY_ABSENT;
+    }
+    const url = `${this.seedNodeAddress}${JOINING_HTTP.BOOTSTRAP_READY_PATH}` +
+      `?projectionNodeId=${encodeUriComponent(this.nodeId)}`;
+    const configuredPollMs = this.config?.priorityPlacementFormationPollMs;
+    const requestTimeoutMs =
+      numberIsSafeInteger(options.requestTimeoutMs) &&
+      options.requestTimeoutMs > 0 ?
+        options.requestTimeoutMs :
+        numberIsSafeInteger(configuredPollMs) && configuredPollMs > 0 ?
+          configuredPollMs :
+          JOINING_DEFAULT.priorityPlacementFormationPollMs;
+    const response = await this.httpGetJson(url, {timeoutMs: requestTimeoutMs});
+    const body = readOwnData(response, 'body');
+    const startupAuthority = readOwnData(
+      body,
+      BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY,
+    );
+    return readinessService.validateFormationReleaseStartupAuthorityProjection(
+      startupAuthority,
+      this.nodeId,
+    );
   }
   getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
     systemTableCache,
@@ -300,15 +356,18 @@ class NodeJoiningReadySignalReadiness
     ) {
       return [];
     }
-    const candidateNodeIdSet = new Set(candidateNodeIds);
-    return systemTableCache
-      .filter(
+    return arrayPrototypeMap(
+      systemTableCache.filter(
         TABLES.NODES,
-        (node) =>
-          candidateNodeIdSet.has(node?.node_id) &&
-          !isNodeRecordReady(node, {now}),
-      )
-      .map((node) => node.node_id);
+        (node) => {
+          const nodeId = readOwnData(node, NODE_ID_FIELD);
+          return typeof nodeId === 'string' &&
+            arrayPrototypeIncludes(candidateNodeIds, nodeId) &&
+            !isNodeRecordReady(node, {now});
+        },
+      ),
+      (node) => readOwnData(node, NODE_ID_FIELD),
+    );
   }
   resolveReadySignalMetadataPublicationReadinessSnapshot(snapshot) {
     if (snapshot && typeof snapshot === 'object') {

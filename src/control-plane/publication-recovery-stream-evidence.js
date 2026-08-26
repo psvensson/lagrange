@@ -22,8 +22,13 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from './membership-lifecycle-constants.js';
 import {
+  mergeDistinctStringArrays,
   normalizeDistinctStringArray,
 } from './publication-recovery-evidence-values.js';
+
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPrototypePush = Function.call.bind(Array.prototype.push);
+const objectFreeze = Object.freeze;
 
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim().length > 0 ?
@@ -210,11 +215,9 @@ function resolvePublicationPressureEvidence(
       pressureDeferred ?
         streamRetryAfterMs ?? optionRetryAfterMs :
         0,
-    pressureReasonCodes: normalizeDistinctStringArray([
-      ...normalizeDistinctStringArray(
-        publicationOwnerStream?.pressureReasonCodes,
-      ),
-      ...normalizeDistinctStringArray(options.pressureReasonCodes),
+    pressureReasonCodes: mergeDistinctStringArrays([
+      publicationOwnerStream?.pressureReasonCodes,
+      options.pressureReasonCodes,
     ]),
   });
 }
@@ -241,10 +244,14 @@ function resolvePublicationStreamPrioritySpreadPending(
 }
 
 function resolvePendingAckNodeIds(requiredAckNodeIds = [], acknowledgedNodeIds = []) {
-  const acknowledgedNodeIdSet = new Set(acknowledgedNodeIds);
-  return Object.freeze(
-    requiredAckNodeIds.filter((nodeId) => !acknowledgedNodeIdSet.has(nodeId)),
-  );
+  const pending = [];
+  for (let index = 0; index < requiredAckNodeIds.length; index += 1) {
+    const nodeId = requiredAckNodeIds[index];
+    if (!arrayPrototypeIncludes(acknowledgedNodeIds, nodeId)) {
+      arrayPrototypePush(pending, nodeId);
+    }
+  }
+  return objectFreeze(pending);
 }
 
 function hasClosedUnpublishedPendingAckEvidence(options = {}) {

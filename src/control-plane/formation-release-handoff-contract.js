@@ -2,11 +2,15 @@ import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from './control-plane-readiness-
 import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {COLUMN, NODE_STATE, STATE} from '../constants/index.js';
 import {
-  formationReleaseCanonicalContainsCapturedSet,
   formationReleaseCohortContainsNodeId,
   formationReleaseCohortIdentity,
   formationReleaseGenerationIdentity,
 } from './formation-release-handoff-identity.js';
+import {
+  formationReleaseAuthorityReadyFlagIsValid, formationReleaseContractListsAreValid,
+  formationReleaseObservedNodeBootMatchesExpected,
+  formationReleaseStateProjectionIsValid,
+} from './formation-release-handoff-state-grammar.js';
 const arrayIsArray = Array.isArray;
 const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
 const arrayPrototypeJoin = Function.call.bind(Array.prototype.join);
@@ -25,9 +29,13 @@ const objectGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
 const objectHasOwn = Object.hasOwn;
 const stringPrototypeToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const OWN_DATA_VALUE_FIELD = 'value';
+const EMPTY_FENCE_IDENTITY = 'none';
+const FENCE_IDENTITY_SEPARATOR = ':';
 const ABSENT = Symbol('formation-release-handoff-absent');
+const INVALID_FORMATION_RELEASE_CONTRACT = null;
 const FORMATION_RELEASE_HANDOFF_STATE = objectFreeze({
-  IDLE: 'idle', ACTIVE: 'active', COMPLETE: 'complete', REVOKED: 'revoked',
+  IDLE: 'idle', ACTIVE: 'active', TERMINAL_PENDING: 'terminal_pending',
+  COMPLETE: 'complete', REVOKED: 'revoked',
 });
 const FORMATION_RELEASE_HANDOFF_REASON = objectFreeze({
   NO_SATISFIED_COHORT: 'no_satisfied_formation_cohort', RETAINED_UNTIL_READY:
@@ -36,7 +44,8 @@ const FORMATION_RELEASE_HANDOFF_REASON = objectFreeze({
     'startup_authority_incompatible', COHORT_MEMBER_MISSING:
     'captured_cohort_member_missing', COHORT_INCARNATION_CHANGED:
     'captured_cohort_incarnation_changed', COHORT_MEMBER_INELIGIBLE:
-    'captured_cohort_member_ineligible',
+    'captured_cohort_member_ineligible', TERMINAL_DURABILITY_PENDING:
+    'terminal_durability_pending',
 });
 const RETAINABLE_RECOVERY_REASONS = objectFreeze(
   [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD]);
@@ -84,14 +93,14 @@ function normalizeOwnStringArray(target, field) {
   arrayPrototypeSort(normalized);
   return normalized;
 }
-function buildFenceIdentity(startupAuthority) {
+function buildFenceEvidence(startupAuthority) {
   const admission = readOwnData(startupAuthority, 'admission');
   if (!admission || typeof admission !== 'object') {
-    return 'none';
+    return objectFreeze({identity: EMPTY_FENCE_IDENTITY, admission: null});
   }
   const fence = readOwnData(admission, 'clusterIncarnationFence');
   if (fence === ABSENT || fence === null) {
-    return 'none';
+    return objectFreeze({identity: EMPTY_FENCE_IDENTITY, admission: null});
   }
   if (!fence || typeof fence !== 'object') {
     return null;
@@ -107,6 +116,7 @@ function buildFenceIdentity(startupAuthority) {
     'peerProofState',
   ];
   const parts = ['allowed'];
+  const fenceProjection = {allowed: true};
   for (let index = 0; index < identityFields.length; index += 1) {
     const field = identityFields[index];
     const value = readOwnData(fence, field);
@@ -114,12 +124,18 @@ function buildFenceIdentity(startupAuthority) {
       return null;
     }
     arrayPrototypePush(parts, value === ABSENT ? '' : value);
+    if (value !== ABSENT) fenceProjection[field] = value;
   }
-  return arrayPrototypeJoin(parts, ':');
+  return objectFreeze({
+    identity: arrayPrototypeJoin(parts, FENCE_IDENTITY_SEPARATOR),
+    admission: objectFreeze({
+      clusterIncarnationFence: objectFreeze(fenceProjection),
+    }),
+  });
 }
 function buildAuthorityEvidence(startupAuthority) {
   if (!startupAuthority || typeof startupAuthority !== 'object') {
-    return null;
+    return INVALID_FORMATION_RELEASE_CONTRACT;
   }
   const authorityAvailable = readOwnData(
     startupAuthority,
@@ -139,7 +155,7 @@ function buildAuthorityEvidence(startupAuthority) {
     startupAuthority,
     'canonicalStartupNodeIds',
   );
-  const recoveryReasonCodes = normalizeOwnStringArray(
+  const recoveryReasonCodes = normalizeOwnUniqueStringArray(
     startupAuthority,
     'priorityRecoveryReasonCodes',
   );
@@ -151,7 +167,8 @@ function buildAuthorityEvidence(startupAuthority) {
     prioritySummary && typeof prioritySummary === 'object' ?
       readOwnData(prioritySummary, 'satisfied') :
       ABSENT;
-  const fenceIdentity = buildFenceIdentity(startupAuthority);
+  const fenceEvidence = buildFenceEvidence(startupAuthority);
+  const fenceIdentity = fenceEvidence?.identity || null;
   if (!authorityScalarEvidenceValid({
     authorityAvailable,
     ready,
@@ -160,8 +177,10 @@ function buildAuthorityEvidence(startupAuthority) {
     publicationStatus,
     prioritySpreadSatisfied,
     fenceIdentity,
-  })) return null;
-  if (canonicalNodeIds === null || recoveryReasonCodes === null) return null;
+  })) return INVALID_FORMATION_RELEASE_CONTRACT;
+  if (canonicalNodeIds === null || recoveryReasonCodes === null) {
+    return INVALID_FORMATION_RELEASE_CONTRACT;
+  }
   return objectFreeze({
     ready,
     state,
@@ -171,6 +190,7 @@ function buildAuthorityEvidence(startupAuthority) {
     recoveryReasonCodes: objectFreeze(recoveryReasonCodes),
     prioritySpreadSatisfied,
     fenceIdentity,
+    admission: fenceEvidence.admission,
   });
 }
 function authorityScalarEvidenceValid(evidence) {
@@ -330,36 +350,6 @@ function normalizeOwnUniqueStringArray(target, field) {
   }
   return normalized;
 }
-function listIsSubset(values, allowed) {
-  for (let index = 0; index < values.length; index += 1) {
-    if (!arrayPrototypeIncludes(allowed, values[index])) {
-      return false;
-    }
-  }
-  return true;
-}
-function listsAreDisjoint(left, right) {
-  for (let index = 0; index < left.length; index += 1) {
-    if (arrayPrototypeIncludes(right, left[index])) {
-      return false;
-    }
-  }
-  return true;
-}
-function listCoversCohort(readyNodeIds, pendingNodeIds, cohortNodeIds) {
-  if (readyNodeIds.length + pendingNodeIds.length !== cohortNodeIds.length) {
-    return false;
-  }
-  for (let index = 0; index < cohortNodeIds.length; index += 1) {
-    if (
-      !arrayPrototypeIncludes(readyNodeIds, cohortNodeIds[index]) &&
-      !arrayPrototypeIncludes(pendingNodeIds, cohortNodeIds[index])
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
 function buildNormalizedContractParts(value) {
   const parts = {
     state: readOwnString(value, 'state'),
@@ -384,6 +374,8 @@ function buildNormalizedContractParts(value) {
     releaseAuthorized: readOwnData(value, 'releaseAuthorized'),
     active: readOwnData(value, 'active'),
     observedAuthorityReady: readOwnData(value, 'observedAuthorityReady'),
+    pendingTerminalState: readOwnData(value, 'pendingTerminalState'),
+    pendingTerminalReason: readOwnData(value, 'pendingTerminalReason'),
     cohortNodeIds: [],
   };
   if (!parts.requiredCohort) return parts;
@@ -410,58 +402,6 @@ function contractIdentityIsValid(parts) {
   if (parts.fenceIdentity === ABSENT) return false;
   return parts.generation === expectedContractGeneration(parts);
 }
-function contractListsAreValid(parts) {
-  if (parts.canonicalNodeIds === null) return false;
-  if (!parts.requiredCohort) return false;
-  if (parts.readyNodeIds === null || parts.pendingNodeIds === null) return false;
-  if (parts.recoveryReasonCodes === null) return false;
-  if (!listIsSubset(parts.cohortNodeIds, parts.canonicalNodeIds)) return false;
-  if (!listIsSubset(parts.readyNodeIds, parts.cohortNodeIds)) return false;
-  if (!listIsSubset(parts.pendingNodeIds, parts.cohortNodeIds)) return false;
-  return listsAreDisjoint(parts.readyNodeIds, parts.pendingNodeIds);
-}
-function authorityReadyFlagIsValid(value) {
-  if (value === true) return true;
-  if (value === false) return true;
-  return value === null;
-}
-function activeProjectionIsValid(parts, allowUnacknowledgedActive) {
-  if (parts.reason !== FORMATION_RELEASE_HANDOFF_REASON.RETAINED_UNTIL_READY) return false;
-  if (parts.active !== true) return false;
-  const releaseValid = parts.releaseAuthorized === true ||
-    (allowUnacknowledgedActive && parts.releaseAuthorized === false);
-  if (!releaseValid || parts.pendingNodeIds.length === 0) return false;
-  return listCoversCohort(parts.readyNodeIds, parts.pendingNodeIds, parts.cohortNodeIds);
-}
-function completeProjectionIsValid(parts) {
-  if (parts.reason !== FORMATION_RELEASE_HANDOFF_REASON.CAPTURED_COHORT_READY) return false;
-  if (parts.active !== false || parts.releaseAuthorized !== false) return false;
-  if (parts.pendingNodeIds.length !== 0) return false;
-  if (parts.readyNodeIds.length !== parts.cohortNodeIds.length) return false;
-  return listCoversCohort(parts.readyNodeIds, parts.pendingNodeIds, parts.cohortNodeIds);
-}
-function revokedProjectionIsValid(parts) {
-  const reasons = FORMATION_RELEASE_HANDOFF_REASON;
-  const allowedReasons = [
-    reasons.AUTHORITY_INCOMPATIBLE, reasons.COHORT_MEMBER_MISSING,
-    reasons.COHORT_INCARNATION_CHANGED, reasons.COHORT_MEMBER_INELIGIBLE,
-  ];
-  if (!arrayPrototypeIncludes(allowedReasons, parts.reason)) return false;
-  if (parts.active !== false || parts.releaseAuthorized !== false) return false;
-  return parts.readyNodeIds.length === 0 && parts.pendingNodeIds.length === 0;
-}
-function stateProjectionIsValid(parts, allowUnacknowledgedActive) {
-  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE) {
-    return activeProjectionIsValid(parts, allowUnacknowledgedActive);
-  }
-  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE) {
-    return completeProjectionIsValid(parts);
-  }
-  if (parts.state === FORMATION_RELEASE_HANDOFF_STATE.REVOKED) {
-    return revokedProjectionIsValid(parts);
-  }
-  return false;
-}
 function normalizeFormationReleaseHandoffContract(
   value,
   {allowUnacknowledgedActive = false} = {},
@@ -469,9 +409,16 @@ function normalizeFormationReleaseHandoffContract(
   if (!value || typeof value !== 'object') return null;
   const parts = buildNormalizedContractParts(value);
   if (!contractIdentityIsValid(parts)) return null;
-  if (!contractListsAreValid(parts)) return null;
-  if (!authorityReadyFlagIsValid(parts.observedAuthorityReady)) return null;
-  if (!stateProjectionIsValid(parts, allowUnacknowledgedActive)) return null;
+  if (!formationReleaseContractListsAreValid(parts)) return null;
+  if (!formationReleaseAuthorityReadyFlagIsValid(
+    parts.observedAuthorityReady,
+  )) return null;
+  if (!formationReleaseStateProjectionIsValid(
+    parts,
+    allowUnacknowledgedActive,
+    FORMATION_RELEASE_HANDOFF_STATE,
+    FORMATION_RELEASE_HANDOFF_REASON,
+  )) return null;
   return objectFreeze({
     state: parts.state,
     reason: parts.reason,
@@ -489,7 +436,20 @@ function normalizeFormationReleaseHandoffContract(
     readyNodeIds: objectFreeze(parts.readyNodeIds),
     pendingNodeIds: objectFreeze(parts.pendingNodeIds),
     observedRecoveryReasonCodes: objectFreeze(parts.recoveryReasonCodes),
+    pendingTerminalState: parts.pendingTerminalState,
+    pendingTerminalReason: parts.pendingTerminalReason,
   });
+}
+function normalizePublishedRecoveryContract(contract) {
+  const normalized = normalizeFormationReleaseHandoffContract(contract);
+  if (!normalized) return null;
+  if (
+    normalized.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    normalized.releaseAuthorized !== true
+  ) {
+    return null;
+  }
+  return normalized;
 }
 function authorizeFormationReleaseHandoffPublicationIntent(value) {
   const normalized = normalizeFormationReleaseHandoffContract(
@@ -497,7 +457,7 @@ function authorizeFormationReleaseHandoffPublicationIntent(value) {
     {allowUnacknowledgedActive: true},
   );
   if (!normalized) {
-    return null;
+    return INVALID_FORMATION_RELEASE_CONTRACT;
   }
   return objectFreeze({
     ...normalized,
@@ -549,13 +509,24 @@ function validatePublishedContractAgainstCurrent(
   if (!authority || !rowsById || !connectionsById) return null;
   if (!numberIsFinite(observedAt)) return null;
   if (!isRetainableAuthority(authority, generation)) return null;
+  return formationReleaseHandoffPhysicalEvidenceMatches(
+    normalizedContract,
+    rowsById,
+    connectionsById,
+  ) ? {authority, rowsById, connectionsById} : null;
+}
+function formationReleaseHandoffPhysicalEvidenceMatches(
+  normalizedContract,
+  rowsById,
+  connectionsById,
+) {
   const authorityConnection = mapPrototypeGet(
     connectionsById,
     normalizedContract.authorityNodeId,
   );
-  if (!authorityConnection) return null;
+  if (!authorityConnection) return false;
   if (authorityConnection.bootIncarnation !==
-      normalizedContract.authorityBootIncarnation) return null;
+      normalizedContract.authorityBootIncarnation) return false;
   for (
     let index = 0;
     index < normalizedContract.requiredCohort.length;
@@ -564,15 +535,47 @@ function validatePublishedContractAgainstCurrent(
     const member = normalizedContract.requiredCohort[index];
     const node = mapPrototypeGet(rowsById, member.nodeId);
     const connection = mapPrototypeGet(connectionsById, member.nodeId);
-    if (!publishedMemberMatchesCurrent(member, node, connection)) return null;
+    if (!publishedMemberMatchesCurrent(member, node, connection)) return false;
   }
-  return {authority, rowsById, connectionsById};
+  return true;
+}
+function formationReleaseHandoffConsumerEvidenceMatches(
+  normalizedContract,
+  projectionNodeId,
+  rowsById,
+  connectionsById,
+) {
+  const authorityConnection = mapPrototypeGet(
+    connectionsById,
+    normalizedContract.authorityNodeId,
+  );
+  if (
+    !authorityConnection ||
+    authorityConnection.bootIncarnation !==
+      normalizedContract.authorityBootIncarnation
+  ) {
+    return false;
+  }
+  for (
+    let index = 0;
+    index < normalizedContract.requiredCohort.length;
+    index += 1
+  ) {
+    const member = normalizedContract.requiredCohort[index];
+    if (member.nodeId !== projectionNodeId) continue;
+    return publishedMemberMatchesCurrent(
+      member,
+      mapPrototypeGet(rowsById, member.nodeId),
+      mapPrototypeGet(connectionsById, member.nodeId),
+    );
+  }
+  return false;
 }
 function publishedMemberMatchesCurrent(member, node, connection) {
   if (!node || !connection) return false;
   if (connection.bootIncarnation !== member.bootIncarnation) return false;
-  if (node.bootIncarnation > 0 &&
-      node.bootIncarnation !== member.bootIncarnation) return false;
+  if (!formationReleaseObservedNodeBootMatchesExpected(member.bootIncarnation,
+    node.bootIncarnation)) return false;
   if (node.status !== NODE_STATE.JOINING && node.status !== NODE_STATE.ACTIVE) {
     return false;
   }
@@ -602,10 +605,6 @@ function isRetainableAuthority(evidence, generation) {
   if (evidence.fenceIdentity !== generation.fenceIdentity) {
     return false;
   }
-  if (!formationReleaseCanonicalContainsCapturedSet(evidence, generation)) {
-    return false;
-  }
-  if (!cohortBelongsToCanonical(evidence, generation)) return false;
   if (evidence.ready === true) return readyAuthorityIsRetainable(evidence);
   return pendingAuthorityIsRetainable(evidence);
 }
@@ -613,19 +612,6 @@ function formationReleaseHandoffAuthorizesNode(contract, nodeId) {
   const normalized = normalizePublishedConsumerContract(contract);
   return normalized !== null &&
     formationReleaseCohortContainsNodeId(normalized, nodeId);
-}
-function cohortBelongsToCanonical(evidence, generation) {
-  for (
-    let index = 0;
-    index < generation.requiredCohort.length;
-    index += 1
-  ) {
-    const member = generation.requiredCohort[index];
-    if (!arrayPrototypeIncludes(evidence.canonicalNodeIds, member.nodeId)) {
-      return false;
-    }
-  }
-  return true;
 }
 function readyAuthorityIsRetainable(evidence) {
   return evidence.state === STARTUP_AUTHORITY_STATE.READY &&
@@ -651,6 +637,9 @@ function pendingAuthorityIsRetainable(evidence) {
   }
   return true;
 }
+function isExactFormationReleaseSpreadReopen(evidence) {
+  return evidence?.ready === false && pendingAuthorityIsRetainable(evidence);
+}
 function freezeCohort(values) {
   const cohort = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -672,6 +661,8 @@ function buildContract({
   observedAuthorityReady = null,
   observedRecoveryReasonCodes = [],
   releaseAuthorized = false,
+  pendingTerminalState = null,
+  pendingTerminalReason = null,
 }) {
   const generationFields = contractGenerationFields(generation);
   return objectFreeze({
@@ -695,17 +686,19 @@ function buildContract({
     requiredCohort: generationFields.requiredCohort,
     readyNodeIds: objectFreeze(arrayPrototypeSlice(readyNodeIds)),
     pendingNodeIds: objectFreeze(arrayPrototypeSlice(pendingNodeIds)),
+    pendingTerminalState,
+    pendingTerminalReason,
   });
 }
 function contractGenerationFields(generation) {
   if (!generation) {
     const empty = objectFreeze([]);
     return {
-      id: null,
-      authorityNodeId: null,
-      authorityBootIncarnation: null,
-      publicationEpoch: null,
-      fenceIdentity: null,
+      id: INVALID_FORMATION_RELEASE_CONTRACT,
+      authorityNodeId: INVALID_FORMATION_RELEASE_CONTRACT,
+      authorityBootIncarnation: INVALID_FORMATION_RELEASE_CONTRACT,
+      publicationEpoch: INVALID_FORMATION_RELEASE_CONTRACT,
+      fenceIdentity: INVALID_FORMATION_RELEASE_CONTRACT,
       canonicalNodeIds: empty,
       requiredCohort: empty,
     };
@@ -770,12 +763,23 @@ function validateFormationReleaseHandoffConsumerContract(
   ) {
     return null;
   }
-  return validatePublishedContractAgainstCurrent(
-    normalizedContract, startupAuthority,
-    nodeRows,
-    observedAt,
-    connectionEvidence,
-  ) ? contract : null;
+  const authority = buildAuthorityEvidence(startupAuthority);
+  const rowsById = buildNodeEvidenceById(nodeRows);
+  const connectionsById = buildConnectionEvidenceById(connectionEvidence);
+  if (
+    !authority || !rowsById || !connectionsById ||
+    !numberIsFinite(observedAt) ||
+    !isRetainableAuthority(authority, normalizedContract) ||
+    !formationReleaseHandoffConsumerEvidenceMatches(
+      normalizedContract,
+      projectionNodeId,
+      rowsById,
+      connectionsById,
+    )
+  ) {
+    return null;
+  }
+  return contract;
 }
 export {
   FORMATION_RELEASE_HANDOFF_REASON, FORMATION_RELEASE_HANDOFF_STATE,
@@ -783,9 +787,12 @@ export {
   authorizeFormationReleaseHandoffPublicationIntent, buildAuthorityEvidence,
   buildConnectionEvidenceById, buildContract, buildNodeEvidenceById,
   formationReleaseCohortContainsNodeId,
+  formationReleaseHandoffPhysicalEvidenceMatches,
+  formationReleaseHandoffConsumerEvidenceMatches,
   formationReleaseHandoffAuthorizesNode, freezeCohort,
   isConnectedFormationMember, isCurrentReadyMember,
-  isRetainableAuthority, normalizeFormationReleaseHandoffContract,
-  normalizePublishedConsumerContract,
-  validateFormationReleaseHandoffConsumerContract, validatePublishedContractAgainstCurrent,
+  isExactFormationReleaseSpreadReopen, isRetainableAuthority,
+  normalizeFormationReleaseHandoffContract, normalizePublishedConsumerContract,
+  normalizePublishedRecoveryContract, validateFormationReleaseHandoffConsumerContract,
+  validatePublishedContractAgainstCurrent,
 };

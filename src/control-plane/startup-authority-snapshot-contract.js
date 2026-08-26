@@ -6,6 +6,36 @@ import {
   PROJECTION_READINESS_ACTIVE_GATE_STATE,
 } from './projection-readiness-constants.js';
 
+const arrayIsArray = Array.isArray;
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPrototypePush = Function.call.bind(Array.prototype.push);
+const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
+const objectFreeze = Object.freeze;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const OWN_DATA_VALUE_FIELD = 'value';
+
+function normalizeDistinctOwnStrings(values, {sort = false} = {}) {
+  const normalized = [];
+  if (arrayIsArray(values)) {
+    for (let index = 0; index < values.length; index += 1) {
+      const descriptor = objectGetOwnPropertyDescriptor(values, String(index));
+      if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
+        continue;
+      }
+      const value = descriptor.value;
+      if (
+        typeof value === 'string' && value.length > 0 &&
+        !arrayPrototypeIncludes(normalized, value)
+      ) {
+        arrayPrototypePush(normalized, value);
+      }
+    }
+  }
+  if (sort) arrayPrototypeSort(normalized);
+  return objectFreeze(normalized);
+}
+
 const LOCAL_STR_ADMITTED = 'admitted';
 const LOCAL_STR_BLOCKED = 'blocked';
 const LOCAL_STR_UNAVAILABLE = 'unavailable';
@@ -17,14 +47,7 @@ export const STARTUP_AUTHORITY_ADMISSION_STATE = Object.freeze({
 });
 
 function normalizeCanonicalStartupNodeIds(values = []) {
-  return Object.freeze(
-    [...new Set(
-      (Array.isArray(values) ? values : [])
-        .filter((nodeId) =>
-          typeof nodeId === 'string' && nodeId.length > 0,
-        ),
-    )].sort(),
-  );
+  return normalizeDistinctOwnStrings(values, {sort: true});
 }
 
 export function normalizeStartupProjectionReadinessContract(source = {}) {
@@ -158,10 +181,8 @@ export function buildStartupAuthorityAdmissionDescriptor(details = {}) {
     details.admissionState.length > 0 ?
       details.admissionState :
       STARTUP_AUTHORITY_ADMISSION_STATE.UNAVAILABLE;
-  const reasonCodes = Object.freeze(
-    Array.isArray(details.admissionReasonCodes) ?
-      [...new Set(details.admissionReasonCodes)] :
-      [],
+  const reasonCodes = normalizeDistinctOwnStrings(
+    details.admissionReasonCodes,
   );
   const clusterIncarnationFence =
     details.clusterIncarnationFence &&
@@ -170,9 +191,9 @@ export function buildStartupAuthorityAdmissionDescriptor(details = {}) {
         ...details.clusterIncarnationFence,
         ...(Array.isArray(details.clusterIncarnationFence.reasonCodes) ?
           {
-            reasonCodes: Object.freeze([
-              ...details.clusterIncarnationFence.reasonCodes,
-            ]),
+            reasonCodes: normalizeDistinctOwnStrings(
+              details.clusterIncarnationFence.reasonCodes,
+            ),
           } :
           {}),
       }) :
@@ -230,10 +251,8 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
     recoveryProtocol,
     targetParticipationDetail,
     admission,
-    priorityRecoveryReasonCodes: Object.freeze(
-      Array.isArray(options.priorityRecoveryReasonCodes) ?
-        [...options.priorityRecoveryReasonCodes] :
-        [],
+    priorityRecoveryReasonCodes: normalizeDistinctOwnStrings(
+      options.priorityRecoveryReasonCodes,
     ),
     canonicalStartupNodeIds: normalizeCanonicalStartupNodeIds(
       options.canonicalStartupNodeIds,
@@ -302,9 +321,7 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
     recoveryProtocol: startupAuthority.recoveryProtocol,
     targetParticipationDetail: startupAuthority.targetParticipationDetail,
     admission: startupAuthority.admission,
-    priorityRecoveryReasonCodes: Object.freeze(
-      Array.isArray(reasonCodes) ? [...reasonCodes] : [],
-    ),
+    priorityRecoveryReasonCodes: normalizeDistinctOwnStrings(reasonCodes),
     startupAuthorityState: startupAuthority.state,
     canonicalStartupNodeIds: startupAuthority.canonicalStartupNodeIds,
     failure: startupAuthority.failure,

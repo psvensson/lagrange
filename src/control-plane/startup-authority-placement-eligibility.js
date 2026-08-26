@@ -4,8 +4,11 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {hasLiveTransportEvidence} from './live-transport-evidence.js';
+import {
+  FORMATION_RELEASE_HANDOFF_STATE,
+  normalizeFormationReleaseHandoffContract,
+} from './formation-release-handoff-contract.js';
 
-const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = new Set();
 const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
 const STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES = new Set([
   NODE_STATE.ACTIVE,
@@ -54,19 +57,93 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+const arrayIsArray = Array.isArray;
+const arrayPrototypeMap = Function.call.bind(Array.prototype.map);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectFreeze = Object.freeze;
+const SetConstructor = Set;
+const setPrototypeAdd = Function.call.bind(Set.prototype.add);
+const setPrototypeHas = Function.call.bind(Set.prototype.has);
+const setSizeGetter = objectGetOwnPropertyDescriptor(
+  Set.prototype,
+  'size',
+).get;
+const setSize = Function.call.bind(setSizeGetter);
+const stringPrototypeToLowerCase = Function.call.bind(
+  String.prototype.toLowerCase,
+);
+const OWN_DATA_VALUE_FIELD = 'value';
+const AUTHORITY_AVAILABLE_FIELD = 'authorityAvailable';
+const CANONICAL_STARTUP_NODE_IDS_FIELD = 'canonicalStartupNodeIds';
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object') return undefined;
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value : undefined;
+}
+
+function appendPlacementNodeIds(nodeIds, values) {
+  if (!arrayIsArray(values)) return;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = readOwnData(values, index);
+    if (typeof value === 'string' && value.length > 0) {
+      setPrototypeAdd(nodeIds, value);
+    }
+  }
+}
 
 function resolveStartupAuthorityNodeIdSet(startupAuthority) {
-  if (startupAuthority?.authorityAvailable !== true) {
-    return EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
+  if (readOwnData(startupAuthority, AUTHORITY_AVAILABLE_FIELD) !== true) {
+    return new SetConstructor();
   }
-  const nodeIds = Array.isArray(startupAuthority.canonicalStartupNodeIds) ?
-    startupAuthority.canonicalStartupNodeIds.filter(
-      (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-    ) :
-    [];
-  return nodeIds.length > 0 ?
-    new Set(nodeIds) :
-    EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
+  const nodeIds = new SetConstructor();
+  appendPlacementNodeIds(
+    nodeIds,
+    readOwnData(startupAuthority, CANONICAL_STARTUP_NODE_IDS_FIELD),
+  );
+  const handoff = normalizeFormationReleaseHandoffContract(
+    readOwnData(startupAuthority, 'formationReleaseHandoff'),
+  );
+  if (
+    handoff?.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    handoff.releaseAuthorized === true
+  ) {
+    appendPlacementNodeIds(nodeIds, handoff.canonicalNodeIds);
+  }
+  return nodeIds;
+}
+
+function startupAuthorityNodeIdSetHas(nodeIds, nodeId) {
+  try {
+    return setPrototypeHas(nodeIds, nodeId);
+  } catch {
+    return false;
+  }
+}
+
+function isStartupAuthorityNodeIdSet(nodeIds) {
+  try {
+    setSize(nodeIds);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startupAuthorityNodeIdSetSize(nodeIds) {
+  try {
+    return setSize(nodeIds);
+  } catch {
+    return 0;
+  }
+}
+
+function countStartupAuthorityNodeIds(startupAuthority) {
+  return startupAuthorityNodeIdSetSize(
+    resolveStartupAuthorityNodeIdSet(startupAuthority),
+  );
 }
 
 /**
@@ -87,19 +164,30 @@ function resolveStartupAuthorityNodeIdSet(startupAuthority) {
  */
 function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
   const node = options.node;
-  const nodeId = node?.node_id || node?.nodeId || null;
+  const snakeNodeId = readOwnData(node, 'node_id');
+  const camelNodeId = readOwnData(node, 'nodeId');
+  const nodeId = typeof snakeNodeId === 'string' ?
+    snakeNodeId :
+    typeof camelNodeId === 'string' ? camelNodeId : null;
+  const nodeStatus = readOwnData(node, 'status');
   if (
     typeof nodeId !== 'string' ||
     nodeId.length === 0 ||
-    !(options.startupAuthorityNodeIds instanceof Set) ||
-    !options.startupAuthorityNodeIds.has(nodeId) ||
-    !STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES.has(node?.status)
+    !startupAuthorityNodeIdSetHas(options.startupAuthorityNodeIds, nodeId) ||
+    !setPrototypeHas(
+      STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES,
+      nodeStatus,
+    )
   ) {
     return false;
   }
-  const connectionState = String(
-    node.connection_state || node.connectionState || '',
-  ).toLowerCase();
+  const snakeConnectionState = readOwnData(node, 'connection_state');
+  const camelConnectionState = readOwnData(node, 'connectionState');
+  const rawConnectionState = typeof snakeConnectionState === 'string' ?
+    snakeConnectionState :
+    typeof camelConnectionState === 'string' ? camelConnectionState : null;
+  const connectionState = typeof rawConnectionState === 'string' ?
+    stringPrototypeToLowerCase(rawConnectionState) : '';
   if (
     connectionState !== STATE.CONNECTED &&
     connectionState !== STATE.READY
@@ -123,20 +211,28 @@ function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
  * @return {string}
  */
 function classifyFormationCohortSpreadCureNode(options = {}) {
-  const evidence = Object.freeze({
+  const evidence = objectFreeze({
     priorityRecoveryLane: options.priorityRecoveryLane === true,
     priorityRecoveryActive: options.priorityRecoveryActive === true,
     formationReleaseHandoffActive:
       options.formationReleaseHandoffActive === true,
     formationReleaseHandoffCohortMember:
       options.formationReleaseHandoffCohortMember === true,
-    joining: options.node?.status === NODE_STATE.JOINING,
+    joining: readOwnData(options.node, 'status') === NODE_STATE.JOINING,
     placementEligible:
       isStartupAuthorityControlPlanePlacementEligibleNode(options),
   });
-  const state = FORMATION_COHORT_SPREAD_CURE_STATE_TABLE.find((entry) =>
-    entry.matches(evidence),
-  )?.state;
+  let state = null;
+  for (
+    let index = 0;
+    index < FORMATION_COHORT_SPREAD_CURE_STATE_TABLE.length;
+    index += 1
+  ) {
+    const entry = FORMATION_COHORT_SPREAD_CURE_STATE_TABLE[index];
+    if (!entry.matches(evidence)) continue;
+    state = entry.state;
+    break;
+  }
   return state === FORMATION_COHORT_SPREAD_CURE_STATE.CURE_TARGET ?
     FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET :
     FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.NOT_CURE_TARGET;
@@ -159,29 +255,37 @@ function getStartupAuthorityControlPlanePlacementEligibleNodeIds(
   const startupAuthorityNodeIds =
     resolveStartupAuthorityNodeIdSet(options.startupAuthority);
   if (
-    startupAuthorityNodeIds.size === 0 ||
+    startupAuthorityNodeIdSetSize(startupAuthorityNodeIds) === 0 ||
     !options.systemTableCache ||
     typeof options.systemTableCache.filter !== 'function'
   ) {
     return EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS;
   }
-  return options.systemTableCache
-    .filter(TABLES.NODES, (node) =>
+  return arrayPrototypeMap(
+    options.systemTableCache.filter(TABLES.NODES, (node) =>
       isStartupAuthorityControlPlanePlacementEligibleNode({
         node,
         startupAuthorityNodeIds,
         messageRouter: options.messageRouter,
         localNodeId: options.localNodeId || null,
         includeSelf: options.includeSelf === true,
-      }),
-    )
-    .map((node) => node.node_id);
+      })),
+    (node) => {
+      const snakeNodeId = readOwnData(node, 'node_id');
+      const camelNodeId = readOwnData(node, 'nodeId');
+      return typeof snakeNodeId === 'string' ? snakeNodeId : camelNodeId;
+    },
+  );
 }
 
 export {
   FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
   classifyFormationCohortSpreadCureNode,
+  countStartupAuthorityNodeIds,
   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
+  isStartupAuthorityNodeIdSet,
   isStartupAuthorityControlPlanePlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
+  startupAuthorityNodeIdSetHas,
+  startupAuthorityNodeIdSetSize,
 };
