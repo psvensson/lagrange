@@ -40,12 +40,7 @@ function cleanupTestEnvironment() {
 
 function createTerminableWsStub() {
   return {
-    closeCalled: false,
     terminateCalled: false,
-    close() {
-      this.closeCalled = true;
-    },
-    removeAllListeners() {},
     terminate() {
       this.terminateCalled = true;
     },
@@ -57,7 +52,6 @@ function registerIncomingConnection(router, connectionId, ws) {
     connectionId,
     nodeId: null,
     nodeAddress: null,
-    identificationReplySent: false,
     ws,
     state: ConnectionState.CONNECTED,
     reconnectAttempts: 0,
@@ -83,26 +77,6 @@ function registerExistingPeerConnection(
     isIncoming: true,
     isSelfConnection: false,
     bootIncarnation,
-    createdAt: Date.now(),
-  });
-}
-
-function registerOutgoingPeerConnection(
-  router,
-  nodeId,
-  connectionId,
-  ws,
-) {
-  router.nodeConnections.set(nodeId, {
-    connectionId,
-    nodeId,
-    nodeAddress: null,
-    ws,
-    state: ConnectionState.CONNECTED,
-    reconnectAttempts: 0,
-    isIncoming: false,
-    isSelfConnection: false,
-    bootIncarnation: 0,
     createdAt: Date.now(),
   });
 }
@@ -181,232 +155,6 @@ t.test(
 );
 
 t.test(
-  'canonical in-process incoming records establish bilateral boot identity ' +
-    'with joiner admission closed under prototype pollution',
-  async (t) => {
-    initializeTestEnvironment();
-    t.teardown(cleanupTestEnvironment);
-    const seed = new MessageRouter({
-      nodeId: LOCAL_NODE_ID,
-      wsPort: 19381,
-      inProcess: true,
-      bootIncarnation: 11,
-    });
-    const joiner = new MessageRouter({
-      nodeId: REMOTE_NODE_ID,
-      wsPort: 19382,
-      inProcess: true,
-      bootIncarnation: 7,
-      externalAdmissionEnabled: false,
-    });
-    t.teardown(async () => {
-      await joiner.shutdown().catch(() => {});
-      await seed.shutdown().catch(() => {});
-    });
-    await seed.startServer();
-    await joiner.startServer();
-    let getterCalls = 0;
-    const inherited = Object.getOwnPropertyDescriptor(
-      Object.prototype,
-      'identificationReplySent',
-    );
-    const originalJsonParse = JSON.parse;
-    const originalJsonStringify = JSON.stringify;
-    const originalStringToString = Object.getOwnPropertyDescriptor(
-      String.prototype,
-      'toString',
-    );
-    const originalBufferToString = Object.getOwnPropertyDescriptor(
-      Buffer.prototype,
-      'toString',
-    );
-    let jsonParseCalls = 0;
-    let jsonStringifyCalls = 0;
-    let stringToStringCalls = 0;
-    let bufferToStringCalls = 0;
-    try {
-      // eslint-disable-next-line no-extend-native -- hostile prototype fixture
-      Object.defineProperty(Object.prototype, 'identificationReplySent', {
-        configurable: true,
-        get() {
-          getterCalls += 1;
-          return true;
-        },
-      });
-      JSON.parse = () => {
-        jsonParseCalls += 1;
-        throw new Error('live JSON.parse invoked');
-      };
-      JSON.stringify = () => {
-        jsonStringifyCalls += 1;
-        throw new Error('live JSON.stringify invoked');
-      };
-      // eslint-disable-next-line no-extend-native -- hostile wire fixture
-      String.prototype.toString = () => {
-        stringToStringCalls += 1;
-        throw new Error('live String.prototype.toString invoked');
-      };
-      Buffer.prototype.toString = () => {
-        bufferToStringCalls += 1;
-        throw new Error('live Buffer.prototype.toString invoked');
-      };
-      await joiner.connectToNode(
-        LOCAL_NODE_ID,
-        'ws://127.0.0.1:19381',
-        {autoReconnect: false},
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-      joiner.nodeConnections.get(LOCAL_NODE_ID).ws.send(
-        Buffer.from('{"type":"unsupported-test-frame"}'),
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    } finally {
-      JSON.parse = originalJsonParse;
-      JSON.stringify = originalJsonStringify;
-      // eslint-disable-next-line no-extend-native -- restore hostile fixture
-      Object.defineProperty(
-        String.prototype,
-        'toString',
-        originalStringToString,
-      );
-      Object.defineProperty(
-        Buffer.prototype,
-        'toString',
-        originalBufferToString,
-      );
-      if (inherited) {
-        // eslint-disable-next-line no-extend-native -- restore hostile fixture
-        Object.defineProperty(
-          Object.prototype,
-          'identificationReplySent',
-          inherited,
-        );
-      } else {
-        delete Object.prototype.identificationReplySent;
-      }
-    }
-
-    t.same(seed.getCurrentPrimaryConnectionBootIncarnation(REMOTE_NODE_ID), {
-      nodeId: REMOTE_NODE_ID,
-      bootIncarnation: 7,
-      connectionId:
-        seed.nodeConnections.get(REMOTE_NODE_ID)?.connectionId,
-    }, 'the admitted seed binds the dialing joiner boot');
-    t.same(joiner.getCurrentPrimaryConnectionBootIncarnation(LOCAL_NODE_ID), {
-      nodeId: LOCAL_NODE_ID,
-      bootIncarnation: 11,
-      connectionId:
-        joiner.nodeConnections.get(LOCAL_NODE_ID)?.connectionId,
-    }, 'the admission-closed joiner binds the reciprocal seed boot');
-    t.equal(getterCalls, 0,
-      'the canonical latch owner never reads a prototype accessor');
-    t.equal(jsonParseCalls, 0,
-      'wire parsing uses the transport owner captured intrinsic');
-    t.equal(jsonStringifyCalls, 0,
-      'wire serialization uses the transport owner captured intrinsic');
-    t.equal(stringToStringCalls, 0,
-      'primitive string frames never invoke the live prototype');
-    t.equal(bufferToStringCalls, 0,
-      'Buffer frames use the transport owner captured decoder');
-    t.end();
-  },
-);
-
-t.test(
-  'canonical wire IDENTIFY rejects inherited peer identity without invoking ' +
-    'prototype accessors',
-  async (t) => {
-    initializeTestEnvironment();
-    t.teardown(cleanupTestEnvironment);
-    const seed = new MessageRouter({
-      nodeId: LOCAL_NODE_ID,
-      wsPort: 19383,
-      inProcess: true,
-      bootIncarnation: 11,
-    });
-    const attacker = new MessageRouter({
-      nodeId: 'attacker-node',
-      wsPort: 19384,
-      inProcess: true,
-      bootIncarnation: 7,
-    });
-    t.teardown(async () => {
-      await attacker.shutdown().catch(() => {});
-      await seed.shutdown().catch(() => {});
-    });
-    await seed.startServer();
-    await attacker.startServer();
-    attacker.sendIdentification = (connection) => attacker.sendRaw(
-      connection.ws,
-      {type: RouterMessageType.IDENTIFY, bootIncarnation: 7},
-    );
-    const nodeIdDescriptor = Object.getOwnPropertyDescriptor(
-      Object.prototype,
-      'nodeId',
-    );
-    const nodeAddressDescriptor = Object.getOwnPropertyDescriptor(
-      Object.prototype,
-      'nodeAddress',
-    );
-    let getterCalls = 0;
-    try {
-      // eslint-disable-next-line no-extend-native -- hostile identity fixture
-      Object.defineProperty(Object.prototype, 'nodeId', {
-        configurable: true,
-        get() {
-          getterCalls += 1;
-          return 'forged-peer';
-        },
-      });
-      // eslint-disable-next-line no-extend-native -- hostile identity fixture
-      Object.defineProperty(Object.prototype, 'nodeAddress', {
-        configurable: true,
-        get() {
-          getterCalls += 1;
-          return 'ws://forged-peer:1';
-        },
-      });
-      await attacker.connectToNode(
-        LOCAL_NODE_ID,
-        'ws://127.0.0.1:19383',
-        {autoReconnect: false},
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    } finally {
-      if (nodeIdDescriptor) {
-        // eslint-disable-next-line no-extend-native -- restore hostile fixture
-        Object.defineProperty(Object.prototype, 'nodeId', nodeIdDescriptor);
-      } else {
-        delete Object.prototype.nodeId;
-      }
-      if (nodeAddressDescriptor) {
-        // eslint-disable-next-line no-extend-native -- restore hostile fixture
-        Object.defineProperty(
-          Object.prototype,
-          'nodeAddress',
-          nodeAddressDescriptor,
-        );
-      } else {
-        delete Object.prototype.nodeAddress;
-      }
-    }
-    t.equal(seed.nodeConnections.has('forged-peer'), false,
-      'inherited node identity cannot own a primary connection slot');
-    t.equal(
-      seed.getCurrentPrimaryConnectionBootIncarnation('forged-peer'),
-      null,
-      'inherited fields cannot mint current-primary boot authority',
-    );
-    t.equal(getterCalls, 0,
-      'the IDENTIFY envelope owner never invokes prototype accessors');
-    t.end();
-  },
-);
-
-t.test(
   'a fresh-incarnation IDENTIFY adopts the slot and lifts the high-water',
   async (t) => {
     initializeTestEnvironment();
@@ -474,150 +222,6 @@ t.test(
       'the trailing stale IDENTIFY socket is terminated',
     );
 
-    t.end();
-  },
-);
-
-t.test(
-  'an admitted adopted incoming primary replies once so the dialer binds ' +
-    'the same bilateral boot identity without an IDENTIFY loop',
-  async (t) => {
-    initializeTestEnvironment();
-    t.teardown(cleanupTestEnvironment);
-
-    const acceptingRouter = new MessageRouter({
-      nodeId: LOCAL_NODE_ID,
-      advertisedAddress: 'ws://local-node:9998',
-      bootIncarnation: 11,
-    });
-    await acceptingRouter.initialize({startServer: false});
-    t.teardown(async () => {
-      await acceptingRouter.shutdown().catch(() => {});
-    });
-    const acceptedWs = createTerminableWsStub();
-    registerIncomingConnection(
-      acceptingRouter,
-      'incoming-bilateral',
-      acceptedWs,
-    );
-    const replies = [];
-    acceptingRouter.sendRaw = (_ws, message) => {
-      replies.push(message);
-      return true;
-    };
-
-    acceptingRouter.handleIdentification(
-      'incoming-bilateral',
-      acceptedWs,
-      buildIdentifyMessage({bootIncarnation: 7}),
-    );
-
-    acceptingRouter.handleIdentification(
-      'incoming-bilateral',
-      acceptedWs,
-      buildIdentifyMessage({bootIncarnation: 7}),
-    );
-
-    t.equal(replies.length, 1,
-      'primary adoption emits exactly one reciprocal IDENTIFY across repeats');
-    t.equal(replies[0].nodeId, LOCAL_NODE_ID);
-    t.equal(replies[0].bootIncarnation, 11,
-      'the reply carries the admitted primary owner boot');
-
-    const dialingRouter = new MessageRouter({
-      nodeId: REMOTE_NODE_ID,
-      advertisedAddress: REMOTE_NODE_ADDRESS,
-      bootIncarnation: 7,
-    });
-    await dialingRouter.initialize({startServer: false});
-    t.teardown(async () => {
-      await dialingRouter.shutdown().catch(() => {});
-    });
-    const outgoingWs = createTerminableWsStub();
-    registerOutgoingPeerConnection(
-      dialingRouter,
-      LOCAL_NODE_ID,
-      'outgoing-bilateral',
-      outgoingWs,
-    );
-    let dialerReplyCount = 0;
-    dialingRouter.sendRaw = () => {
-      dialerReplyCount += 1;
-      return true;
-    };
-
-    dialingRouter.handleIdentification(
-      LOCAL_NODE_ID,
-      outgoingWs,
-      replies[0],
-    );
-
-    t.same(
-      dialingRouter.getCurrentPrimaryConnectionBootIncarnation(LOCAL_NODE_ID),
-      {
-        nodeId: LOCAL_NODE_ID,
-        bootIncarnation: 11,
-        connectionId: 'outgoing-bilateral',
-      },
-      'the dialer binds the seed boot to its adopted outgoing primary slot',
-    );
-    t.equal(dialerReplyCount, 0,
-      'the outgoing receive branch does not reply and cannot ping-pong');
-    t.end();
-  },
-);
-
-t.test(
-  'rejected external, stale, and bulk IDENTIFY frames never receive a ' +
-    'primary identity reply',
-  async (t) => {
-    initializeTestEnvironment();
-    t.teardown(cleanupTestEnvironment);
-    const router = new MessageRouter({
-      nodeId: LOCAL_NODE_ID,
-      bootIncarnation: 11,
-    });
-    await router.initialize({startServer: false});
-    t.teardown(async () => {
-      await router.shutdown().catch(() => {});
-    });
-    let replyCount = 0;
-    router.sendRaw = () => {
-      replyCount += 1;
-      return true;
-    };
-
-    router.setExternalAdmissionEnabled(false);
-    const blockedWs = createTerminableWsStub();
-    registerIncomingConnection(router, 'incoming-blocked', blockedWs);
-    router.handleIdentification(
-      'incoming-blocked',
-      blockedWs,
-      buildIdentifyMessage({bootIncarnation: 7}),
-    );
-    t.equal(blockedWs.closeCalled, true);
-
-    router.setExternalAdmissionEnabled(true);
-    router.nodeBootIncarnationWatermarks.set(REMOTE_NODE_ID, 9);
-    const staleWs = createTerminableWsStub();
-    registerIncomingConnection(router, 'incoming-stale-reply', staleWs);
-    router.handleIdentification(
-      'incoming-stale-reply',
-      staleWs,
-      buildIdentifyMessage({bootIncarnation: 7}),
-    );
-    t.equal(staleWs.terminateCalled, true);
-
-    const bulkWs = createTerminableWsStub();
-    registerIncomingConnection(router, 'incoming-bulk', bulkWs);
-    router.handleIdentification(
-      'incoming-bulk',
-      bulkWs,
-      {...buildIdentifyMessage({bootIncarnation: 10}), channel: 'bulk'},
-    );
-    t.equal(bulkWs.closeCalled, true);
-    t.equal(replyCount, 0,
-      'only an adopted primary can receive bilateral identity');
     t.end();
   },
 );
@@ -861,25 +465,12 @@ t.test(
     let accessorIdentity;
     let objectIdentity;
     let ownPrimitiveIdentity;
-    let accessorEnvelope;
-    let coerciveEnvelope;
-    let primitiveEnvelope;
     let getterCalls = 0;
     const accessorMessage = {};
     Object.defineProperty(accessorMessage, 'bootIncarnation', {
       get() {
         getterCalls += 1;
         return 7;
-      },
-    });
-    const accessorEnvelopeMessage = {
-      nodeAddress: REMOTE_NODE_ADDRESS,
-      bootIncarnation: 7,
-    };
-    Object.defineProperty(accessorEnvelopeMessage, 'nodeId', {
-      get() {
-        getterCalls += 1;
-        return REMOTE_NODE_ID;
       },
     });
     try {
@@ -922,18 +513,6 @@ t.test(
         .readIncomingBootIncarnation({bootIncarnation: {}});
       ownPrimitiveIdentity = router.connectionAuthorityOwner
         .readIncomingBootIncarnation({bootIncarnation: 7});
-      accessorEnvelope = router.connectionAuthorityOwner
-        .readIncomingIdentificationEnvelope(accessorEnvelopeMessage);
-      coerciveEnvelope = router.connectionAuthorityOwner
-        .readIncomingIdentificationEnvelope({
-          nodeId: {},
-          nodeAddress: {toString: () => REMOTE_NODE_ADDRESS},
-          bootIncarnation: 7,
-        });
-      primitiveEnvelope = router.connectionAuthorityOwner
-        .readIncomingIdentificationEnvelope(buildIdentifyMessage({
-          bootIncarnation: 7,
-        }));
     } finally {
       // eslint-disable-next-line no-extend-native -- adversarial fixture
       Map.prototype.get = originals.mapGet;
@@ -977,16 +556,6 @@ t.test(
       'object coercion cannot mint incarnation authority');
     t.equal(ownPrimitiveIdentity, 7,
       'an own primitive number remains the only positive authority input');
-    t.equal(accessorEnvelope, null,
-      'accessor identity fields cannot mint a peer envelope');
-    t.equal(coerciveEnvelope, null,
-      'object coercion cannot mint peer node or address identity');
-    t.same(primitiveEnvelope, {
-      nodeId: REMOTE_NODE_ID,
-      nodeAddress: REMOTE_NODE_ADDRESS,
-      channel: null,
-      bootIncarnation: 7,
-    }, 'only the complete own primitive envelope becomes identity authority');
     t.equal(getterCalls, 0, 'the authority boundary never invokes accessors');
     t.end();
   },

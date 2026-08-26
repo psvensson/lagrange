@@ -1,9 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
-import {
-  startupAuthorityNodeIdSetHas,
-  startupAuthorityNodeIdSetSize,
-} from '../control-plane/startup-authority-placement-eligibility.js';
+
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -33,7 +30,8 @@ const CRITICAL_NODE_KIND = Object.freeze({
   READY: 'ready',
   UNREADY_ACTIVE: 'unready-active',
 });
-const REPLICA_OPERATION_ID_FIELDS = Object.freeze(['operationId', 'operation_id']);
+const REPLICA_OPERATION_ID_FIELDS =
+  Object.freeze(['operationId', 'operation_id']);
 function normalizeNodeIds(nodeIds) {
   return [
     ...new Set(
@@ -53,7 +51,8 @@ function buildCriticalNodeContext(rebalancer) {
   return {
     startupAuthorityNodeIds,
     constrainToStartupAuthority:
-      startupAuthorityNodeIdSetSize(startupAuthorityNodeIds) > 0,
+      startupAuthorityNodeIds instanceof Set &&
+      startupAuthorityNodeIds.size > 0,
     bypassPriorityStartupReadiness:
       rebalancer.shouldBypassLocalPriorityControlPlaneStartupReadiness(),
     readinessDecisionDimension:
@@ -62,7 +61,7 @@ function buildCriticalNodeContext(rebalancer) {
 }
 function isWithinStartupAuthority(context, nodeId) {
   return !context.constrainToStartupAuthority ||
-    startupAuthorityNodeIdSetHas(context.startupAuthorityNodeIds, nodeId);
+    context.startupAuthorityNodeIds.has(nodeId);
 }
 function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
   const readiness =
@@ -282,6 +281,7 @@ function collectVisibleNodeEndpointNodeIds(rows) {
   }
   return nodeIds;
 }
+
 function collectVisiblePostgresWireNodeIds(rows) {
   const nodeIds = new Set();
   for (const row of Array.isArray(rows) ? rows : []) {

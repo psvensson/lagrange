@@ -77,6 +77,7 @@ function syncNullableOwnerDependency(service, options, ownerName) {
     service[ownerName] = options[ownerName] || null;
   }
 }
+
 class ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
@@ -283,7 +284,6 @@ class ControlPlaneReadinessParticipationBase {
     this.formationReleaseHandoffClosureOwner = options.formationReleaseHandoffClosureOwner ||
       new FormationReleaseHandoffClosureOwner();
     this.lastFormationReleaseHandoffAuthorityLogSignature = null;
-    this.lastFormationReleaseHandoffAuthorityLogContract = null;
     this.cacheChangeListener = null;
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?

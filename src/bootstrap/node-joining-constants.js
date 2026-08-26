@@ -360,9 +360,7 @@ const JOINING_ERROR_NAME = Object.freeze({
 
 const JOINING_HTTP = Object.freeze({
   BOOTSTRAP_PATH: '/bootstrap',
-  BOOTSTRAP_READY_PATH: '/bootstrap/ready',
   REGISTER_SERVICE_PATH: '/register-service',
-  METHOD_GET: 'GET',
   METHOD_POST: 'POST',
   HEADER_CONTENT_TYPE: 'Content-Type',
   HEADER_CONNECTION: 'Connection',

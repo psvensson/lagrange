@@ -1,20 +1,10 @@
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from
   './control-plane-readiness-planning-shared.js';
 import {
-  FORMATION_RELEASE_HANDOFF_STATE,
   attachFormationReleaseHandoffToStartupAuthority,
-  buildAuthorityEvidence,
   formationReleaseHandoffAuthorizesNode,
   validateFormationReleaseHandoffConsumerContract,
 } from './formation-release-handoff-contract.js';
-import {formationReleaseContractsEqual} from
-  './formation-release-handoff-identity.js';
-import {
-  validateFormationReleaseHandoffSeedProjection,
-} from './formation-release-handoff-consumer.js';
-import {
-  buildFormationReleasePhysicalEvidence,
-} from './formation-release-handoff-diagnostics.js';
 import {
   formationReleaseHandoffPublicationId,
   readFormationReleaseHandoffPublicationFromCache,
@@ -31,90 +21,27 @@ const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
 
 const {COLUMN} = SHARED;
-const FORMATION_RELEASE_BOOT_INCARNATION_ABSENT = null;
-const FORMATION_RELEASE_PUBLICATION_ABSENT = null;
-const OWN_DATA_VALUE_FIELD = 'value';
-const SIGNATURE_LIST_SEPARATOR = ',';
-const SIGNATURE_PART_SEPARATOR = '|';
-const HANDOFF_FIELD = Object.freeze({
-  GENERATION: 'generation',
-  OBSERVED_AUTHORITY_READY: 'observedAuthorityReady',
-  OBSERVED_PUBLICATION_EPOCH: 'observedPublicationEpoch',
-  PENDING_NODE_IDS: 'pendingNodeIds',
-  PENDING_TERMINAL_REASON: 'pendingTerminalReason',
-  PENDING_TERMINAL_STATE: 'pendingTerminalState',
-  REASON: 'reason',
-  RELEASE_AUTHORIZED: 'releaseAuthorized',
-  STATE: 'state',
-  FENCE_IDENTITY: 'fenceIdentity',
-});
-const AUTHORITY_CANONICAL_NODE_IDS_FIELD = 'canonicalStartupNodeIds';
-const AUTHORITY_PRIORITY_SUMMARY_FIELD = 'priorityPartitionSummary';
-const AUTHORITY_PRIORITY_SUMMARY_SATISFIED_FIELD = 'satisfied';
-const AUTHORITY_REASON_CODES_FIELD = 'priorityRecoveryReasonCodes';
-const AUTHORITY_READY_FIELD = 'ready';
-const AUTHORITY_STATE_FIELD = 'state';
-const NORMALIZED_AUTHORITY_PUBLICATION_EPOCH_FIELD = 'publicationEpoch';
-const NORMALIZED_AUTHORITY_FENCE_IDENTITY_FIELD = 'fenceIdentity';
 
 function readOwnData(target, field) {
   if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
     return undefined;
   }
   const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+  return descriptor && objectHasOwn(descriptor, 'value') ?
     descriptor.value :
     undefined;
 }
 
-function formationReleaseLogSignature(
-  handoff,
-  startupAuthority,
-  normalizedAuthority,
-) {
+function formationReleaseLogSignature(handoff) {
   return arrayPrototypeJoin([
-    readOwnData(handoff, HANDOFF_FIELD.STATE) || '',
-    readOwnData(handoff, HANDOFF_FIELD.REASON) || '',
-    readOwnData(handoff, HANDOFF_FIELD.GENERATION) || '',
-    readOwnData(handoff, HANDOFF_FIELD.OBSERVED_PUBLICATION_EPOCH) || '',
-    readOwnData(handoff, HANDOFF_FIELD.OBSERVED_AUTHORITY_READY),
-    readOwnData(handoff, HANDOFF_FIELD.RELEASE_AUTHORIZED),
-    readOwnData(handoff, HANDOFF_FIELD.PENDING_TERMINAL_STATE) || '',
-    readOwnData(handoff, HANDOFF_FIELD.PENDING_TERMINAL_REASON) || '',
-    arrayPrototypeJoin(
-      readOwnData(handoff, HANDOFF_FIELD.PENDING_NODE_IDS) || [],
-      SIGNATURE_LIST_SEPARATOR,
-    ),
-    arrayPrototypeJoin(
-      readOwnData(startupAuthority, AUTHORITY_CANONICAL_NODE_IDS_FIELD) || [],
-      SIGNATURE_LIST_SEPARATOR,
-    ),
-    readOwnData(startupAuthority, AUTHORITY_STATE_FIELD) || '',
-    readOwnData(startupAuthority, AUTHORITY_READY_FIELD),
-    readOwnData(
-      readOwnData(startupAuthority, AUTHORITY_PRIORITY_SUMMARY_FIELD),
-      AUTHORITY_PRIORITY_SUMMARY_SATISFIED_FIELD,
-    ),
-    arrayPrototypeJoin(
-      readOwnData(startupAuthority, AUTHORITY_REASON_CODES_FIELD) || [],
-      SIGNATURE_LIST_SEPARATOR,
-    ),
-    readOwnData(
-      normalizedAuthority,
-      NORMALIZED_AUTHORITY_PUBLICATION_EPOCH_FIELD,
-    ) || '',
-    readOwnData(
-      normalizedAuthority,
-      NORMALIZED_AUTHORITY_FENCE_IDENTITY_FIELD,
-    ) || '',
-    readOwnData(handoff, HANDOFF_FIELD.FENCE_IDENTITY) || '',
-  ], SIGNATURE_PART_SEPARATOR);
-}
-
-function formationReleaseStateIsTerminalOrPending(state) {
-  return state === FORMATION_RELEASE_HANDOFF_STATE.TERMINAL_PENDING ||
-    state === FORMATION_RELEASE_HANDOFF_STATE.COMPLETE ||
-    state === FORMATION_RELEASE_HANDOFF_STATE.REVOKED;
+    readOwnData(handoff, 'state') || '',
+    readOwnData(handoff, 'reason') || '',
+    readOwnData(handoff, 'generation') || '',
+    readOwnData(handoff, 'observedPublicationEpoch') || '',
+    readOwnData(handoff, 'observedAuthorityReady'),
+    readOwnData(handoff, 'releaseAuthorized'),
+    arrayPrototypeJoin(readOwnData(handoff, 'pendingNodeIds') || [], ','),
+  ], '|');
 }
 
 function localConnectionIdentity(router) {
@@ -172,19 +99,6 @@ const formationReleaseMethods = {
       null;
   },
 
-  validateFormationReleaseStartupAuthorityProjection(
-    startupAuthority,
-    projectionNodeId,
-  ) {
-    return validateFormationReleaseHandoffSeedProjection(
-      startupAuthority,
-      this.getNodeRows(),
-      projectionNodeId,
-      this.formationReleaseAuthorityNodeId,
-      this.getFormationReleaseConnectionEvidence(),
-    );
-  },
-
   getFormationReleaseAuthorityBootIncarnation(authorityNodeId) {
     const evidence = this.getFormationReleaseConnectionEvidence();
     for (let index = 0; index < evidence.length; index += 1) {
@@ -192,9 +106,9 @@ const formationReleaseMethods = {
       if (readOwnData(current, 'nodeId') !== authorityNodeId) continue;
       const bootIncarnation = readOwnData(current, 'bootIncarnation');
       return numberIsSafeInteger(bootIncarnation) && bootIncarnation > 0 ?
-        bootIncarnation : FORMATION_RELEASE_BOOT_INCARNATION_ABSENT;
+        bootIncarnation : null;
     }
-    return FORMATION_RELEASE_BOOT_INCARNATION_ABSENT;
+    return null;
   },
 
   scheduleFormationReleaseHandoffPublication(handoff, observedAt) {
@@ -227,9 +141,7 @@ const formationReleaseMethods = {
     authorityBootIncarnation,
   ) {
     const storageOwner = this.getFormationReleasePublicationStorageOwner();
-    if (typeof storageOwner?.getPublication !== 'function') {
-      return FORMATION_RELEASE_PUBLICATION_ABSENT;
-    }
+    if (typeof storageOwner?.getPublication !== 'function') return null;
     const row = await storageOwner.getPublication(
       formationReleaseHandoffPublicationId(
         authorityNodeId,
@@ -310,31 +222,13 @@ const formationReleaseMethods = {
   logFormationReleaseHandoffAuthorityTransition(
     handoff,
     authorityNodeId,
-    startupAuthority,
-    connectionEvidence,
   ) {
     if (!handoff || typeof handoff !== 'object') return;
-    const handoffState = readOwnData(handoff, HANDOFF_FIELD.STATE);
-    if (
-      formationReleaseStateIsTerminalOrPending(handoffState) &&
-      formationReleaseContractsEqual(
-        handoff,
-        this.lastFormationReleaseHandoffAuthorityLogContract,
-      )
-    ) {
-      return;
-    }
-    const normalizedAuthority = buildAuthorityEvidence(startupAuthority);
-    const signature = formationReleaseLogSignature(
-      handoff,
-      startupAuthority,
-      normalizedAuthority,
-    );
+    const signature = formationReleaseLogSignature(handoff);
     if (signature === this.lastFormationReleaseHandoffAuthorityLogSignature) {
       return;
     }
     this.lastFormationReleaseHandoffAuthorityLogSignature = signature;
-    this.lastFormationReleaseHandoffAuthorityLogContract = handoff;
     this.logger?.info?.('Formation release handoff authority transition', {
       nodeId: this.nodeId,
       authorityNodeId,
@@ -351,36 +245,9 @@ const formationReleaseMethods = {
       observedAuthorityReady: readOwnData(handoff, 'observedAuthorityReady'),
       observedRecoveryReasonCodes:
         readOwnData(handoff, 'observedRecoveryReasonCodes'),
-      capturedCanonicalNodeIds: readOwnData(handoff, 'canonicalNodeIds'),
-      observedCanonicalNodeIds:
-        readOwnData(startupAuthority, 'canonicalStartupNodeIds'),
-      observedStartupAuthorityState:
-        readOwnData(startupAuthority, AUTHORITY_STATE_FIELD),
-      observedStartupAuthorityReady:
-        readOwnData(startupAuthority, AUTHORITY_READY_FIELD),
-      observedStartupPrioritySpreadSatisfied: readOwnData(
-        readOwnData(startupAuthority, AUTHORITY_PRIORITY_SUMMARY_FIELD),
-        'satisfied',
-      ),
-      observedStartupAuthorityReasonCodes:
-        readOwnData(startupAuthority, AUTHORITY_REASON_CODES_FIELD),
-      observedStartupAuthorityPublicationEpoch:
-        readOwnData(normalizedAuthority, 'publicationEpoch'),
-      observedStartupAuthorityFenceIdentity:
-        readOwnData(normalizedAuthority, 'fenceIdentity'),
-      fenceIdentity: readOwnData(handoff, 'fenceIdentity'),
-      physicalCohortEvidence: buildFormationReleasePhysicalEvidence(
-        handoff,
-        this.getNodeRows(),
-        connectionEvidence,
-      ),
       requiredCohort: readOwnData(handoff, 'requiredCohort'),
       readyNodeIds: readOwnData(handoff, 'readyNodeIds'),
       pendingNodeIds: readOwnData(handoff, 'pendingNodeIds'),
-      pendingTerminalState:
-        readOwnData(handoff, 'pendingTerminalState'),
-      pendingTerminalReason:
-        readOwnData(handoff, 'pendingTerminalReason'),
     });
   },
 
@@ -412,18 +279,10 @@ const formationReleaseMethods = {
         connectionEvidence,
       );
     if (observeAuthority) {
-      const publicationIntent =
-        this.formationReleaseHandoffClosureOwner?.publicationIntent?.() ||
-        handoff;
-      this.scheduleFormationReleaseHandoffPublication(
-        publicationIntent,
-        observedAt,
-      );
+      this.scheduleFormationReleaseHandoffPublication(handoff, observedAt);
       this.logFormationReleaseHandoffAuthorityTransition(
         handoff,
         authorityNodeId,
-        startupAuthority,
-        connectionEvidence,
       );
     }
     const projectedHandoff =

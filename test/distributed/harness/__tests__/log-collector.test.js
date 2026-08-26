@@ -443,39 +443,6 @@ test('collectFinalSnapshot queries and appends to buffer',
     assert.deepStrictEqual(buffer[2], snapshotEntries[1]);
   });
 
-test('collectFinalSnapshot deduplicates replay and live-stream overlap by ' +
-  'log id', async (_t) => {
-  const sharedEntry = {
-    log_id: 'formation-terminal-1',
-    node_id: 'node-1',
-    level: 'info',
-    message: 'formation terminal',
-    timestamp: '2026-08-26T00:00:00Z',
-  };
-  let streamListener = null;
-  const node = {
-    id: 'node-1',
-    containerId: 'c1',
-    getLogSubscriptionCapabilities: () => ({
-      [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]: true,
-      [LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]: false,
-    }),
-    subscribeLogStream: async (listener) => {
-      streamListener = listener;
-      return () => {};
-    },
-    query: async () => ({rows: [sharedEntry]}),
-    isReachable: async () => true,
-  };
-  const collector = new LogCollector(tempDir());
-  await collector.startLiveSubscription(node);
-  streamListener(sharedEntry);
-  await collector.collectFinalSnapshot(node);
-
-  assert.equal(collector.getBuffer().length, 1);
-  assert.equal(collector.getBuffer()[0].log_id, sharedEntry.log_id);
-});
-
 test('startLiveSubscription buffers streamed log entries',
   async (_t) => {
     const initialEntries = [

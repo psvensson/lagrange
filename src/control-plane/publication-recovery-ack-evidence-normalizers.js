@@ -6,7 +6,6 @@ import {
 } from './publication-recovery-pressure-evidence.js';
 import {
   isRecord,
-  mergeDistinctStringArrays,
   normalizeDistinctStringArray,
   normalizeMaximumNonNegativeInteger,
   normalizeOptionalString,
@@ -15,10 +14,6 @@ import {
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   PUBLICATION_RECOVERY_PUBLICATION_STATUS,
 } from './publication-recovery-evidence-values.js';
-
-const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
-const arrayPrototypePush = Function.call.bind(Array.prototype.push);
-const objectFreeze = Object.freeze;
 
 function buildPublicationRecoveryAckNodeListInput(value) {
   return Array.isArray(value) ?
@@ -119,14 +114,10 @@ function resolvePendingRequiredAckNodeIds(
   requiredAckNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
   acknowledgedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
 ) {
-  const pending = [];
-  for (let index = 0; index < requiredAckNodeIds.length; index += 1) {
-    const nodeId = requiredAckNodeIds[index];
-    if (!arrayPrototypeIncludes(acknowledgedNodeIds, nodeId)) {
-      arrayPrototypePush(pending, nodeId);
-    }
-  }
-  return objectFreeze(pending);
+  const acknowledgedNodeIdSet = new Set(acknowledgedNodeIds);
+  return Object.freeze(
+    requiredAckNodeIds.filter((nodeId) => !acknowledgedNodeIdSet.has(nodeId)),
+  );
 }
 
 function normalizePublicationRecoveryAckEvidence(options = {}) {
@@ -234,9 +225,9 @@ function resolvePublicationRecoveryPendingAckNodeIds({
   ) {
     return PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST;
   }
-  return mergeDistinctStringArrays([
-    normalizedOwnerPendingAckNodeIds,
-    fallbackPendingAckNodeIds,
+  return normalizeDistinctStringArray([
+    ...normalizedOwnerPendingAckNodeIds,
+    ...normalizeDistinctStringArray(fallbackPendingAckNodeIds),
   ]);
 }
 

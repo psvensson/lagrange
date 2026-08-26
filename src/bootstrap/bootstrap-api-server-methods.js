@@ -94,8 +94,8 @@ const bootstrapApiServerMethods = {
     });
 
     // Lightweight bootstrap-join readiness probe.
-    this.fastify.get(BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY, async (request, reply) => {
-      return this.handleBootstrapReadinessProbeRequest(request, reply);
+    this.fastify.get(BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY, async (_request, reply) => {
+      return this.handleBootstrapReadinessProbeRequest(reply);
     });
 
     // Health check endpoint

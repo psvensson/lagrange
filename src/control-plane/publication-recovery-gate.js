@@ -17,7 +17,6 @@ import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate-constants.js';
 import {
-  mergeDistinctStringArrays,
   normalizeDistinctStringArray,
 } from './publication-recovery-evidence-values.js';
 import {
@@ -371,19 +370,20 @@ function buildPublicationRecoveryGateSnapshotUntracked(options = {}) {
     !effectiveRetainedProvidedReasonCodes.includes(
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
     );
-  const dedupedReasonCodes = mergeDistinctStringArrays([
-    streamCompatibilityEvidence.publicationPending ? [
+  const reasonCodes = [
+    ...(streamCompatibilityEvidence.publicationPending ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-    ] : [],
-    effectiveRetainedProvidedReasonCodes,
-    effectiveAppendPrioritySpreadEvidenceUnavailableReason ? [
+    ] : []),
+    ...effectiveRetainedProvidedReasonCodes,
+    ...(effectiveAppendPrioritySpreadEvidenceUnavailableReason ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON
         .PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
-    ] : [],
-    streamCompatibilityEvidence.prioritySpreadPending ? [
+    ] : []),
+    ...(streamCompatibilityEvidence.prioritySpreadPending ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-    ] : [],
-  ]);
+    ] : []),
+  ];
+  const dedupedReasonCodes = normalizeDistinctStringArray(reasonCodes);
   const state = resolvePublicationRecoveryGateState({
     publicationOwnerStream,
     prioritySpreadPending: streamCompatibilityEvidence.prioritySpreadPending,
