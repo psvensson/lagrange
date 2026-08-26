@@ -1,42 +1,7 @@
 import {
   BOOTSTRAP_API_PROBE_SCOPE,
-  BOOTSTRAP_API_RESPONSE_FIELD,
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
-
-function validProjectionNodeId(value) {
-  return typeof value === 'string' && value.length > 0;
-}
-
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const STARTUP_AUTHORITY_PROJECTION_ABSENT = null;
-
-function readProjectionNodeId(request) {
-  const query = request?.query;
-  if (!query || typeof query !== 'object') return null;
-  const descriptor = objectGetOwnPropertyDescriptor(
-    query,
-    'projectionNodeId',
-  );
-  if (!descriptor || !objectHasOwn(descriptor, 'value')) return null;
-  return validProjectionNodeId(descriptor.value) ? descriptor.value : null;
-}
-
-function readProjectedStartupAuthority(service, request) {
-  if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
-    return service.getStartupAuthoritySnapshotSync(request);
-  }
-  if (typeof service.getStartupAuthoritySnapshot !== 'function') {
-    return STARTUP_AUTHORITY_PROJECTION_ABSENT;
-  }
-  const startupAuthority = service.getStartupAuthoritySnapshot(request);
-  if (startupAuthority && typeof startupAuthority.then === 'function') {
-    return STARTUP_AUTHORITY_PROJECTION_ABSENT;
-  }
-  return startupAuthority && typeof startupAuthority === 'object' ?
-    startupAuthority : STARTUP_AUTHORITY_PROJECTION_ABSENT;
-}
 
 const bootstrapApiReadinessMethods = {
   /**
@@ -74,20 +39,9 @@ const bootstrapApiReadinessMethods = {
    * @param {Object} reply - Fastify reply.
    * @return {Object} Probe payload.
    */
-  async handleBootstrapReadinessProbeRequest(request, reply) {
-    const response = await this.bootstrapReadinessOwner
+  handleBootstrapReadinessProbeRequest(reply) {
+    return this.bootstrapReadinessOwner
       .handleBootstrapReadinessProbeRequest(reply);
-    const projectionNodeId = readProjectionNodeId(request);
-    if (!projectionNodeId || !response || typeof response !== 'object') {
-      return response;
-    }
-    const startupAuthority =
-      this.getStartupAuthoritySnapshotForBootstrapResponse(projectionNodeId);
-    if (startupAuthority && typeof startupAuthority === 'object') {
-      response[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY] =
-        startupAuthority;
-    }
-    return response;
   },
 
   /**
@@ -162,23 +116,37 @@ const bootstrapApiReadinessMethods = {
 
   /**
    * Resolve the seed-owned startup authority snapshot advertised to joiners.
-   * @param {string} projectionNodeId
    * @param {number} [observedAt=Date.now()]
    * @return {Object|null}
    */
-  getStartupAuthoritySnapshotForBootstrapResponse(
-    projectionNodeId,
-    observedAt = Date.now(),
-  ) {
-    if (!validProjectionNodeId(projectionNodeId)) return null;
+  getStartupAuthoritySnapshotForBootstrapResponse(observedAt = Date.now()) {
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== 'object') return null;
+    if (!service || typeof service !== 'object') {
+      return null;
+    }
     try {
-      return readProjectedStartupAuthority(service, {
-        planningNodeId: this.seedNodeId,
-        projectionNodeId,
+      if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
+        return service.getStartupAuthoritySnapshotSync(
+          this.seedNodeId,
+          observedAt,
+        );
+      }
+      if (typeof service.getStartupAuthoritySnapshot !== 'function') {
+        return null;
+      }
+      const startupAuthority = service.getStartupAuthoritySnapshot(
+        this.seedNodeId,
         observedAt,
-      });
+      );
+      if (
+        startupAuthority &&
+        typeof startupAuthority.then === 'function'
+      ) {
+        return null;
+      }
+      return startupAuthority && typeof startupAuthority === 'object' ?
+        startupAuthority :
+        null;
     } catch (_error) {
       return null;
     }

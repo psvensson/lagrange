@@ -402,7 +402,6 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     const controlPlane = await ControlPlaneSetup.create({
       dataDir: this.dataDir,
       nodeId: this.nodeId,
-      formationReleaseAuthorityNodeId: this.seedNodeId,
       nodeAddress: this.nodeAddress,
       bootIncarnation: this.bootIncarnation,
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,

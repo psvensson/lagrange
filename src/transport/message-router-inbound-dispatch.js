@@ -104,8 +104,6 @@ class MessageRouterInboundDispatch {
   handleIdentification(connectionId, ws, message) {
     const nodeId = message?.nodeId;
     const nodeAddress = message?.nodeAddress || message?.address;
-    const bootIncarnation = this.connectionAuthorityOwner
-      .readIncomingBootIncarnation(message);
     if (!nodeId || !nodeAddress) {
       this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
         connectionId,
@@ -170,14 +168,14 @@ class MessageRouterInboundDispatch {
       if (
         this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
           nodeId,
-          bootIncarnation,
+          message.bootIncarnation,
         )
       ) {
         this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
           connectionId,
           remoteNodeId: nodeId,
           localNodeId: this.nodeId,
-          bootIncarnation,
+          bootIncarnation: message.bootIncarnation,
         });
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
@@ -199,19 +197,15 @@ class MessageRouterInboundDispatch {
       connection.configuredAddress = normalizedAddress;
       this.rememberReconnectAddress(connection, ws, normalizedAddress);
       const adoptionDecision =
-        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
-          nodeId,
-          bootIncarnation,
-        );
+        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(nodeId);
       const existing = adoptionDecision.existing;
       if (
         adoptionDecision.state ===
         INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION
       ) {
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
           nodeId,
-          existing,
-          bootIncarnation,
+          message.bootIncarnation,
         );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
@@ -251,10 +245,9 @@ class MessageRouterInboundDispatch {
           );
         }
         this.nodeConnections.set(nodeId, connection);
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
           nodeId,
-          connection,
-          bootIncarnation,
+          message.bootIncarnation,
         );
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
@@ -269,6 +262,10 @@ class MessageRouterInboundDispatch {
         // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
         this.startPingInterval(connection);
       } else {
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+          nodeId,
+          message.bootIncarnation,
+        );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
@@ -285,37 +282,7 @@ class MessageRouterInboundDispatch {
             error: error.message,
           });
         }
-        return;
       }
-    } else if (connection && connection.ws === ws) {
-      if (
-        this.connectionAuthorityOwner
-          .shouldRefuseStaleBootIncarnationIdentification(
-            nodeId,
-            bootIncarnation,
-          )
-      ) {
-        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
-          connectionId,
-          remoteNodeId: nodeId,
-          localNodeId: this.nodeId,
-          bootIncarnation,
-        });
-        try {
-          ws.terminate();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-            nodeId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-      this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-        nodeId,
-        connection,
-        bootIncarnation,
-      );
     }
     if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
       // A bulk-channel IDENTIFY that did not match an incoming record above

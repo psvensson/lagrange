@@ -1,7 +1,5 @@
 import {ControlPlaneReadinessPublicationPlanningResolution} from './control-plane-readiness-publication-planning-resolution.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
-import {installControlPlaneReadinessFormationReleaseMethods} from
-  './control-plane-readiness-formation-release-methods.js';
 
 const {
   COLUMN,
@@ -28,55 +26,6 @@ const {
   normalizeDiagnosticTimestampMs,
   unwrapRowReadResult,
 } = SHARED;
-
-const numberIsFinite = Number.isFinite;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-
-function readOwnRequestField(request, field) {
-  if (!request || typeof request !== 'object') return undefined;
-  const descriptor = objectGetOwnPropertyDescriptor(request, field);
-  return descriptor && objectHasOwn(descriptor, 'value') ?
-    descriptor.value : undefined;
-}
-
-function validProjectionNodeId(value) {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function normalizeExplicitStartupAuthorityRequest(request) {
-  const planningNodeId = readOwnRequestField(request, 'planningNodeId');
-  const projectionNodeId = readOwnRequestField(request, 'projectionNodeId');
-  const observedAt = readOwnRequestField(request, 'observedAt');
-  if (
-    !validProjectionNodeId(planningNodeId) ||
-    !validProjectionNodeId(projectionNodeId) ||
-    !numberIsFinite(observedAt)
-  ) {
-    throw new TypeError('invalid startup authority projection request');
-  }
-  return {planningNodeId, projectionNodeId, observedAt};
-}
-
-function normalizeStartupAuthoritySnapshotRequest(
-  requestOrNodeId,
-  positionalObservedAt,
-  defaultNodeId,
-  now,
-  requireExplicitProjection = false,
-) {
-  if (requestOrNodeId && typeof requestOrNodeId === 'object') {
-    return normalizeExplicitStartupAuthorityRequest(requestOrNodeId);
-  }
-  if (requireExplicitProjection) {
-    throw new TypeError('explicit formation release projection required');
-  }
-  const planningNodeId = validProjectionNodeId(requestOrNodeId) ?
-    requestOrNodeId : defaultNodeId;
-  const observedAt = numberIsFinite(positionalObservedAt) ?
-    positionalObservedAt : now();
-  return {planningNodeId, projectionNodeId: planningNodeId, observedAt};
-}
 
 class ControlPlaneReadinessStartupAuthorityHealth extends
   ControlPlaneReadinessPublicationPlanningResolution {
@@ -172,115 +121,12 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
   }
 
   getStartupAuthoritySnapshotSync(
-    requestOrNodeId = this.nodeId,
-    positionalObservedAt = this.now(),
+    nodeId = this.nodeId,
+    observedAt = this.now(),
   ) {
     try {
-      const {planningNodeId, projectionNodeId, observedAt} =
-        normalizeStartupAuthoritySnapshotRequest(
-          requestOrNodeId,
-          positionalObservedAt,
-          this.nodeId,
-          this.now,
-        );
-      return this.applyFormationReleaseHandoff(
-        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          this.getPriorityRecoveryPlanningAnswerSync(
-            planningNodeId,
-            observedAt,
-          ),
-        ),
-        observedAt,
-        this.formationReleaseAuthorityNodeId,
-        {
-          projectionNodeId,
-          observeAuthority:
-            planningNodeId === this.formationReleaseAuthorityNodeId &&
-            this.nodeId === this.formationReleaseAuthorityNodeId,
-        },
-      );
-    } catch (error) {
-      return this.buildStartupAuthorityUnavailableSnapshot(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
-        error,
-      );
-    }
-  }
-
-  getFormationReleaseStartupAuthoritySnapshotSync(
-    request,
-  ) {
-    try {
-      const {planningNodeId, projectionNodeId, observedAt} =
-        normalizeStartupAuthoritySnapshotRequest(
-          request,
-          undefined,
-          this.nodeId,
-          this.now,
-          true,
-        );
-      return this.applyFormationReleaseHandoff(
-        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          this.getPriorityRecoveryPlanningAnswerSync(
-            planningNodeId,
-            observedAt,
-          ),
-        ),
-        observedAt,
-        this.formationReleaseAuthorityNodeId,
-        {
-          projectionNodeId,
-          observeAuthority:
-            planningNodeId === this.formationReleaseAuthorityNodeId &&
-            this.nodeId === this.formationReleaseAuthorityNodeId,
-        },
-      );
-    } catch (error) {
-      return this.buildStartupAuthorityUnavailableSnapshot(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
-        error,
-      );
-    }
-  }
-
-  async getFormationReleaseStartupAuthoritySnapshot(
-    request,
-  ) {
-    try {
-      const {planningNodeId, projectionNodeId, observedAt} =
-        normalizeStartupAuthoritySnapshotRequest(
-          request,
-          undefined,
-          this.nodeId,
-          this.now,
-          true,
-        );
-      const startupAuthority =
-        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          await this.getPriorityRecoveryPlanningAnswerForOwnerRead(
-            planningNodeId,
-            observedAt,
-          ),
-        );
-      const observeAuthority =
-        planningNodeId === this.formationReleaseAuthorityNodeId &&
-        this.nodeId === this.formationReleaseAuthorityNodeId;
-      const publishedHandoff = observeAuthority ? null :
-        await this.readFormationReleaseHandoffFromAuthority(
-          this.formationReleaseAuthorityNodeId,
-          this.getFormationReleaseAuthorityBootIncarnation(
-            this.formationReleaseAuthorityNodeId,
-          ),
-        );
-      return this.applyFormationReleaseHandoff(
-        startupAuthority,
-        observedAt,
-        this.formationReleaseAuthorityNodeId,
-        {
-          observeAuthority,
-          publishedHandoff,
-          projectionNodeId,
-        },
+      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
       );
     } catch (error) {
       return this.buildStartupAuthorityUnavailableSnapshot(
@@ -291,43 +137,15 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
   }
 
   async getStartupAuthoritySnapshot(
-    requestOrNodeId = this.nodeId,
-    positionalObservedAt = this.now(),
+    nodeId = this.nodeId,
+    observedAt = this.now(),
   ) {
     try {
-      const {planningNodeId, projectionNodeId, observedAt} =
-        normalizeStartupAuthoritySnapshotRequest(
-          requestOrNodeId,
-          positionalObservedAt,
-          this.nodeId,
-          this.now,
-        );
-      const startupAuthority =
-        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          await this.getPriorityRecoveryPlanningSnapshotBestEffort(
-            planningNodeId,
-            observedAt,
-          ),
-        );
-      const observeAuthority =
-        planningNodeId === this.formationReleaseAuthorityNodeId &&
-        this.nodeId === this.formationReleaseAuthorityNodeId;
-      const publishedHandoff = observeAuthority ? null :
-        await this.readFormationReleaseHandoffFromAuthority(
-          this.formationReleaseAuthorityNodeId,
-          this.getFormationReleaseAuthorityBootIncarnation(
-            this.formationReleaseAuthorityNodeId,
-          ),
-        );
-      return this.applyFormationReleaseHandoff(
-        startupAuthority,
-        observedAt,
-        this.formationReleaseAuthorityNodeId,
-        {
-          observeAuthority,
-          publishedHandoff,
-          projectionNodeId,
-        },
+      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+        await this.getPriorityRecoveryPlanningSnapshotBestEffort(
+          nodeId,
+          observedAt,
+        ),
       );
     } catch (error) {
       return this.buildStartupAuthorityUnavailableSnapshot(
@@ -730,9 +548,5 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     return this.getNodeRow(nodeId);
   }
 }
-
-installControlPlaneReadinessFormationReleaseMethods(
-  ControlPlaneReadinessStartupAuthorityHealth.prototype,
-);
 
 export {ControlPlaneReadinessStartupAuthorityHealth};

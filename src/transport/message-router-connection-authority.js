@@ -36,20 +36,7 @@ import {CONNECTION_CLOSE_DISPOSITION, ConnectionState, EMPTY_ROUTER_REASON, INLI
 import {adjustInFlightPriorityCount, buildDerivedDeliverySource, buildPendingSourceSummary, buildRetiredPendingClassification, buildServiceResponseDisposition, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightReadinessReserve, countPendingByPriority, countPendingBySource, dequeueNextPendingItem, normalizeDeliveryOutcome, normalizeOutboundDeliveryPriority, normalizeRetryAfterMs, peekNextPendingItem, resolveBackgroundInFlightLimit, resolveBackgroundPendingLimit, resolveBoundedCriticalReserve, resolveDeliverySource, resolveNextPendingItemIndex, resolvePendingSourceLimit, resolveReadinessReserveInFlightLimit} from './message-router-outbound-queue-admission.js';
 import {INCOMING_CONNECTION_ADOPTION, OutboundDeliveryRegistryOwner} from './message-router-outbound-delivery-registry.js';
 
-const booleanConstructor = Boolean;
-const mapPrototypeGet = Function.call.bind(Map.prototype.get);
-const mapPrototypeSet = Function.call.bind(Map.prototype.set);
-const mathMax = Math.max;
-const numberIsFinite = Number.isFinite;
-const numberIsSafeInteger = Number.isSafeInteger;
-const objectFreeze = Object.freeze;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const stringPrototypeLocaleCompare = Function.call.bind(
-  String.prototype.localeCompare,
-);
-
-const RECONNECT_ADDRESS_SOURCE = objectFreeze({
+const RECONNECT_ADDRESS_SOURCE = Object.freeze({
   CANONICAL: 'canonical',
   CONFIGURED: 'configured',
   CURRENT: 'current',
@@ -71,31 +58,15 @@ const WEBSOCKET_CLOSED_BEFORE_CONNECTION_ESTABLISHED_MESSAGE =
  * @return {number} The known incarnation, or 0 when unknown.
  */
 function normalizeKnownBootIncarnation(value) {
-  return typeof value === typeof TRANSPORT_NUM.ZERO &&
-    numberIsSafeInteger(value) && value > TRANSPORT_NUM.ZERO ?
-    value :
-    TRANSPORT_NUM.ZERO;
-}
-
-function readOwnBootIncarnation(source) {
-  if (!source || typeof source !== TRANSPORT_TYPEOF.OBJECT) {
-    return TRANSPORT_NUM.ZERO;
-  }
-  const descriptor = objectGetOwnPropertyDescriptor(
-    source,
-    'bootIncarnation',
-  );
-  return descriptor && objectHasOwn(descriptor, 'value') ?
-    normalizeKnownBootIncarnation(descriptor.value) :
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > TRANSPORT_NUM.ZERO ?
+    numeric :
     TRANSPORT_NUM.ZERO;
 }
 
 class RouterConnectionAuthorityOwner {
   constructor(router) {
     this.router = router;
-  }
-  readIncomingBootIncarnation(message) {
-    return readOwnBootIncarnation(message);
   }
   /**
    * Incarnation fence for the identification slot: refuse an IDENTIFY whose
@@ -109,7 +80,7 @@ class RouterConnectionAuthorityOwner {
   shouldRefuseStaleBootIncarnationIdentification(nodeId, bootIncarnation) {
     const incomingIncarnation = normalizeKnownBootIncarnation(bootIncarnation);
     const knownIncarnation = normalizeKnownBootIncarnation(
-      mapPrototypeGet(this.router.nodeBootIncarnationWatermarks, nodeId),
+      this.router.nodeBootIncarnationWatermarks.get(nodeId),
     );
     return incomingIncarnation > TRANSPORT_NUM.ZERO &&
       knownIncarnation > TRANSPORT_NUM.ZERO &&
@@ -129,65 +100,12 @@ class RouterConnectionAuthorityOwner {
       return;
     }
     const knownIncarnation = normalizeKnownBootIncarnation(
-      mapPrototypeGet(this.router.nodeBootIncarnationWatermarks, nodeId),
+      this.router.nodeBootIncarnationWatermarks.get(nodeId),
     );
-    mapPrototypeSet(
-      this.router.nodeBootIncarnationWatermarks,
+    this.router.nodeBootIncarnationWatermarks.set(
       nodeId,
-      mathMax(incomingIncarnation, knownIncarnation),
+      Math.max(incomingIncarnation, knownIncarnation),
     );
-  }
-  /**
-   * Bind an IDENTIFY incarnation to the connection that actually owns the
-   * primary peer slot. A high-water is only a stale-writer fence; it is not
-   * evidence that the corresponding process owns the live socket.
-   * @param {string} nodeId - Identified peer node id.
-   * @param {Object|null} connection - Adopted primary connection record.
-   * @param {*} bootIncarnation - Incarnation stamped on IDENTIFY.
-   * @return {boolean} Whether a positive current-connection identity bound.
-   */
-  bindCurrentPrimaryBootIncarnation(nodeId, connection, bootIncarnation) {
-    if (
-      !connection ||
-      mapPrototypeGet(this.router.nodeConnections, nodeId) !== connection ||
-      connection.state !== ConnectionState.CONNECTED
-    ) {
-      return false;
-    }
-    const incarnation = normalizeKnownBootIncarnation(bootIncarnation);
-    connection.bootIncarnation = incarnation;
-    if (incarnation <= TRANSPORT_NUM.ZERO) {
-      return false;
-    }
-    this.recordAcceptedBootIncarnation(nodeId, incarnation);
-    return true;
-  }
-  /**
-   * Return immutable identity evidence for the currently adopted primary
-   * connection only. Disconnected/reconnecting/unidentified records are not
-   * process authority.
-   * @param {string} nodeId - Peer node id.
-   * @return {Object|null} Current connection identity, or null.
-   */
-  getCurrentPrimaryBootIncarnation(nodeId) {
-    const connection = mapPrototypeGet(this.router.nodeConnections, nodeId) ||
-      null;
-    const bootIncarnation = normalizeKnownBootIncarnation(
-      connection?.bootIncarnation,
-    );
-    if (
-      !connection ||
-      connection.state !== ConnectionState.CONNECTED ||
-      !connection.ws ||
-      bootIncarnation <= TRANSPORT_NUM.ZERO
-    ) {
-      return null;
-    }
-    return objectFreeze({
-      nodeId,
-      bootIncarnation,
-      connectionId: connection.connectionId,
-    });
   }
   buildObservedReconnectAddress(ws, candidateAddress = null) {
     const observedHost = ws?._socket?.remoteAddress;
@@ -201,7 +119,7 @@ class RouterConnectionAuthorityOwner {
       this.router.extractWebSocketPort(candidateAddress) ||
       Number(ws?._socket?.remotePort) ||
       null;
-    if (!numberIsFinite(port) || port <= TRANSPORT_NUM.ZERO) {
+    if (!Number.isFinite(port) || port <= TRANSPORT_NUM.ZERO) {
       return null;
     }
     return TRANSPORT_FORMAT.buildWebSocketAddress(
@@ -242,9 +160,8 @@ class RouterConnectionAuthorityOwner {
       connectionInfo.address = normalizedCandidateAddress;
     }
   }
-  resolveIncomingConnectionAdoption(nodeId, bootIncarnation = 0) {
-    const existing = mapPrototypeGet(this.router.nodeConnections, nodeId) ||
-      null;
+  resolveIncomingConnectionAdoption(nodeId) {
+    const existing = this.router.nodeConnections.get(nodeId) || null;
     const isSelfConnection =
       existing?.isSelfConnection && nodeId === this.router.nodeId;
     if (isSelfConnection) {
@@ -254,21 +171,9 @@ class RouterConnectionAuthorityOwner {
       };
     }
     const existingConnected =
-      booleanConstructor(existing) && existing.state === ConnectionState.CONNECTED;
-    const incomingIncarnation = normalizeKnownBootIncarnation(bootIncarnation);
-    const existingIncarnation = normalizeKnownBootIncarnation(
-      existing?.bootIncarnation,
-    );
-    const incomingOwnsNewerBoot =
-      existingConnected &&
-      incomingIncarnation > TRANSPORT_NUM.ZERO &&
-      (
-        existingIncarnation <= TRANSPORT_NUM.ZERO ||
-        incomingIncarnation > existingIncarnation
-      );
+      Boolean(existing) && existing.state === ConnectionState.CONNECTED;
     const preferIncomingConnection =
-      stringPrototypeLocaleCompare(this.router.nodeId, nodeId) >
-        TRANSPORT_NUM.ZERO;
+      this.router.nodeId.localeCompare(nodeId) > TRANSPORT_NUM.ZERO;
     const existingPreferredIncomingConnection =
       existingConnected &&
       preferIncomingConnection &&
@@ -276,7 +181,6 @@ class RouterConnectionAuthorityOwner {
     const shouldAdoptIncomingConnection =
       !existing ||
       !existingConnected ||
-      incomingOwnsNewerBoot ||
       (preferIncomingConnection && !existingPreferredIncomingConnection);
     return {
       state: shouldAdoptIncomingConnection ?
@@ -371,7 +275,7 @@ class RouterConnectionAuthorityOwner {
       key,
       expiresAt,
     ] of this.router.suppressedReconnectAddresses.entries()) {
-      if (!numberIsFinite(expiresAt) || expiresAt <= nowMs) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
         this.router.suppressedReconnectAddresses.delete(key);
       }
     }
@@ -383,7 +287,7 @@ class RouterConnectionAuthorityOwner {
     }
     this.pruneReconnectAddressSuppressions();
     const expiresAt = this.router.suppressedReconnectAddresses.get(key);
-    return numberIsFinite(expiresAt) && expiresAt > Date.now();
+    return Number.isFinite(expiresAt) && expiresAt > Date.now();
   }
   suppressReconnectAddress(targetNodeId, address) {
     const key = this.getReconnectAddressSuppressionKey(targetNodeId, address);
@@ -391,7 +295,7 @@ class RouterConnectionAuthorityOwner {
       return;
     }
     const suppressionMs =
-      numberIsFinite(this.router.reconnectAddressSuppressionMs) &&
+      Number.isFinite(this.router.reconnectAddressSuppressionMs) &&
       this.router.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
         this.router.reconnectAddressSuppressionMs :
         TRANSPORT_NUM.ZERO;
@@ -464,10 +368,7 @@ class RouterConnectionAuthorityOwner {
       candidatesByAddress.set(address, reconnectCandidate);
       candidates.push(reconnectCandidate);
     };
-    const existing = mapPrototypeGet(
-      this.router.nodeConnections,
-      targetNodeId,
-    ) || null;
+    const existing = this.router.nodeConnections.get(targetNodeId) || null;
     const canonicalAddress = existing ?
       this.refreshReconnectAuthority(existing, preferredAddress) :
       this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);

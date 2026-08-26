@@ -13,8 +13,6 @@ import {
 import {
   isEvidenceAbsentReadinessDenialSnapshot,
 } from '../control-plane/readiness-denial-classification.js';
-import {formationReleaseHandoffAuthorizesNode} from
-  '../control-plane/formation-release-handoff-contract.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -340,11 +338,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const node = typeof nodeOrId === 'string' ?
       this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeOrId) :
       nodeOrId;
-    const startupAuthority = this.getStartupAuthoritySnapshot();
-    const startupAuthorityNodeIds =
-      resolveStartupAuthorityNodeIdSet(startupAuthority);
-    const formationReleaseHandoff =
-      startupAuthority?.formationReleaseHandoff || null;
+    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
     return classifyFormationCohortSpreadCureNode({
       node,
       startupAuthorityNodeIds,
@@ -354,14 +348,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       priorityRecoveryLane: this.isControlPlanePriorityPartition(),
       priorityRecoveryActive:
         this.isGlobalPriorityControlPlaneRecoveryActive(),
-      formationReleaseHandoffActive:
-        formationReleaseHandoff?.active === true &&
-        formationReleaseHandoff?.releaseAuthorized === true,
-      formationReleaseHandoffCohortMember:
-        formationReleaseHandoffAuthorizesNode(
-          formationReleaseHandoff,
-          node?.node_id || node?.nodeId || null,
-        ),
     }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 

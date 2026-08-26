@@ -9,8 +9,6 @@ import {
 import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
-import {NodeJoiningReadySignalReadiness} from
-  '../../src/bootstrap/node-joining-ready-signal-readiness.js';
 
 function withReady(startupAuthority, ready) {
   return Object.freeze({
@@ -56,96 +54,6 @@ t.test('the real startup-authority owner emits the formation release verdict',
     t.equal(startupAuthority.authorityAvailable, true);
     t.equal(startupAuthority.ready, true,
       'published, acknowledged, durably spread priority placement is ready');
-  });
-
-t.test('formation loop passes its poll cadence as the seed projection request ' +
-  'budget', async (t) => {
-  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
-  let observedRequestTimeoutMs = null;
-  owner.nodeId = 'joining-node';
-  owner.seedNodeId = 'seed-node';
-  owner.startupMode = 'fresh_join';
-  owner.config = {
-    priorityPlacementFormationDiscoveryMs: 0,
-    priorityPlacementFormationPollMs: 500,
-    priorityPlacementFormationTimeoutMs: 120_000,
-    heartbeatIntervalMs: 1_000,
-  };
-  owner.now = () => 1_000;
-  owner.sleep = async () => {};
-  owner.logger = {info() {}, warn() {}, error() {}};
-  owner.rebalanceCoordinator = {
-    controlPlaneReadinessService: {
-      getStartupAuthoritySnapshotSync: () => ({}),
-    },
-  };
-  owner.getOperationLedgerFormationBarrierSnapshot = async (
-    requestTimeoutMs,
-  ) => {
-    observedRequestTimeoutMs = requestTimeoutMs;
-    return {
-      now: 1_000,
-      targetReplicaCount: 3,
-      startupAuthorityReady: true,
-      candidateNodeIds: ['seed-node', 'joining-node', 'joining-node-2'],
-      preReadyCandidateNodeIds: ['joining-node', 'joining-node-2'],
-    };
-  };
-  await owner.awaitOperationLedgerFormationBarrier();
-  t.equal(observedRequestTimeoutMs, 500,
-    'the 500ms poll cannot inherit the generic 10s join HTTP timeout');
-});
-
-t.test('seed base projection latches discovery without authorizing release',
-  async (t) => {
-    initializeEnvironment();
-    const cache = buildFormationCache();
-    let now = 1_000;
-    let requestCount = 0;
-    const states = [];
-    const owner = buildFormationBarrierOwner({
-      cache,
-      now: () => now,
-      isStartupAuthorityReady: () => true,
-      sleep: async (delayMs) => {
-        now += delayMs;
-      },
-    });
-    const readinessService =
-      owner.rebalanceCoordinator.controlPlaneReadinessService;
-    owner.httpGetJson = async () => {
-      requestCount += 1;
-      const authority = readinessService.getStartupAuthoritySnapshotSync();
-      return {
-        statusCode: 503,
-        body: {
-          startupAuthority: requestCount === 1 ?
-            {...authority, formationReleaseHandoff: null} :
-            {
-              ...authority,
-              formationReleaseHandoff: {
-                state: 'active',
-                releaseAuthorized: true,
-              },
-            },
-        },
-      };
-    };
-    owner.logger.info = (_message, fields) => states.push(fields.state);
-
-    try {
-      await owner.awaitOperationLedgerFormationBarrier();
-      t.equal(requestCount, 2,
-        'the base projection discovers the cohort but cannot release it');
-      t.same(states, [
-        'waiting_for_startup_authority',
-        'ledger_spread_satisfied',
-      ], 'the cohort latches before the durable handoff authorizes release');
-      t.equal(states.includes('bypassed_insufficient_formation_cohort'), false,
-        'discovery is not bypassed while the durable handoff is pending');
-    } finally {
-      resetEnvironment();
-    }
   });
 
 t.test(
