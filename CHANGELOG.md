@@ -10,6 +10,55 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.0]
+
+Experimental minor release focused on cold multi-node formation, bounded
+readiness diagnostics, and release-publication integrity.
+
+### Added
+- A seed-owned, versioned formation-release handoff, bound to node boot
+  incarnations. It retains compatible cohort authority across a transient
+  priority-spread reopening and revokes on physical identity loss or an
+  incompatible topology change.
+
+### Changed
+- GitHub Actions is the sole release owner. npm publication uses Trusted
+  Publishing (OIDC); the tagged npm tarball and registry README must match the
+  tagged `README.md`; and Docker Hub publication fails closed unless its public
+  overview exactly matches the rendered tagged source.
+- Release evidence preserves complete per-node logs and binds formation and
+  model results to exact source, controller, build-input, and change-artifact
+  identities.
+- Readiness-planning and owner-key queue diagnostics retain bounded recent
+  samples with exact drop accounting, and shutdown releases their subordinate
+  diagnostic graphs.
+
+### Fixed
+- Priority-recovery cure ADDs can progress during the global startup barrier
+  without weakening ordinary admission, REMOVE safety, or existing timing
+  floors.
+- Joiners no longer become stranded when priority spread becomes ready and
+  then reopens: the seed-owned handoff remains valid until the captured cohort
+  publishes current READY leases.
+- Non-cohort startup nodes can use an established ready floor, while a node
+  with a captured handoff remains bound to that handoff's exact release
+  decision.
+- Startup-authority snapshots no longer retain a stale
+  `priority_partitions_not_spread` reason when the canonical spread predicate
+  is satisfied.
+
+### Known limitations
+- Lagrange remains experimental / alpha. SQL, wire, admin, and cluster
+  management surfaces may change between `0.x` releases.
+- Rolling-restart convergence remains statistical, not a fixed-time
+  guarantee. The formation evidence covers exact five-node scenarios and is
+  not a universal startup SLA.
+- Node transport assumes a trusted private network and does not provide mTLS.
+  There is no supported backup, restore, PITR, or rolling-upgrade contract.
+- Bounded diagnostic retention closes the identified deterministic retention
+  owners; it is not a claim of universal leak freedom or a guaranteed RSS
+  plateau.
+
 ## [0.1.1] — 2026-08-22
 
 Maintenance release. First release published by the GitHub Actions release
@@ -114,6 +163,7 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0
