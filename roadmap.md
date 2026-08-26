@@ -65,6 +65,13 @@ substrate remains Community/AGPL where assigned there, while paid-only
 entitlements, advanced telemetry and secrets/KMS behavior remain in their
 commercial implementation homes.
 
+The architecture/specification target is
+[Installable Service Product Platform Contract](solve/specs/installable-service-product-platform/contract.md).
+It defines the shared owner boundaries, lifecycle, compatibility, configuration,
+managed OCI activation, upgrade/rollback, diagnostics, support-bundle, telemetry,
+commercial-extension and acceptance-consumer contracts without claiming those
+surfaces are implemented today.
+
 The customer-facing target is that a signed service can be installed into an
 existing cluster without a repository checkout or a second service manager.
 The shared platform therefore needs:
