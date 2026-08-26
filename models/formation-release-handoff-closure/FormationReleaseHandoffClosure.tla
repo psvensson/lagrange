@@ -580,11 +580,12 @@ CanonicalExpansionCannotAuthorizeAddedMember ==
   membershipExpanded => ~uncapturedReleaseAuthorized
 
 ProjectionOmissionCannotRevokePhysicalCohort ==
-  (projectionOmissionExercised /\ ~incarnationChanged /\
+  (projectionOmissionExercised /\ ownerAvailable /\ ~incarnationChanged /\
    readyCount < CohortSize) => releaseAuthority
 
 SeedProjectionBypassesBlockedDistributedRead ==
-  (phase = 2 /\ consumerCount > 0 /\
+  (phase = 2 /\ ownerAvailable /\ ~incarnationChanged /\
+   consumerCount > 0 /\
    ~DistributedPublicationReadAvailable) =>
     SeedProjectionTransportEnabled /\ releaseAuthority
 
@@ -604,5 +605,12 @@ SequentialGenerationsEventuallyCloseWithinBudget ==
   <> (incarnationChanged \/
       (completedGenerationCount = 1 /\ phase = 3 /\
        readyCount = CohortSize /\ elapsedTicks <= BarrierBudgetTicks))
+
+OwnerDowntimeEventuallyResolves ==
+  [] ((phase = 2 /\ consumerCount > 0 /\ ownerReloadExercised /\
+       ~ownerAvailable /\ ~incarnationChanged) =>
+      <> (incarnationChanged \/
+          (ownerAvailable /\ releaseAuthority /\
+           durableAuthorityBoot = authorityBoot)))
 
 =============================================================================

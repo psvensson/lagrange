@@ -510,8 +510,10 @@ async (t) => {
   joiningOwner.seedNodeId = 'seed';
   joiningOwner.seedNodeAddress = 'http://seed:8080';
   let requestedProjectionUrl = null;
+  let seedAvailable = true;
   joiningOwner.httpGetJson = async (url) => {
     requestedProjectionUrl = url;
+    if (!seedAvailable) throw new Error('seed unavailable');
     return {
       statusCode: 200,
       body: {startupAuthority: targetView},
@@ -531,7 +533,32 @@ async (t) => {
       },
     },
   };
-  await joiningOwner.getPriorityPlacementFormationStartupAuthority(NOW + 500);
+  const consumed =
+    await joiningOwner.getPriorityPlacementFormationStartupAuthority(
+      NOW + 500,
+    );
+  seedAvailable = false;
+  const unavailable =
+    await joiningOwner.getPriorityPlacementFormationStartupAuthority(
+      NOW + 501,
+    );
+  seedAvailable = true;
+  const restored =
+    await joiningOwner.getPriorityPlacementFormationStartupAuthority(
+      NOW + 502,
+    );
+  t.equal(
+    consumed.formationReleaseHandoff.generation,
+    captured.formationReleaseHandoff.generation,
+    'the joiner first consumes the exact durable seed generation',
+  );
+  t.equal(unavailable, null,
+    'seed downtime suspends release instead of reusing a cached generation');
+  t.equal(
+    restored.formationReleaseHandoff.generation,
+    captured.formationReleaseHandoff.generation,
+    'same-boot durable restoration resumes the exact generation',
+  );
   t.equal(
     requestedNodeIds[requestedNodeIds.length - 1],
     'joiner-a',
