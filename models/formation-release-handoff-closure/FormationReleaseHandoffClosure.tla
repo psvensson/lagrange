@@ -1,7 +1,9 @@
 --------------------- MODULE FormationReleaseHandoffClosure -------------------
 EXTENDS Naturals, TLC
 
-CONSTANTS FixEnabled, ExactMembershipEquality, CohortSize, StableWindowTicks,
+CONSTANTS FixEnabled, ExactMembershipEquality, ProjectionOmissionRevokes,
+          SeedProjectionTransportEnabled,
+          DistributedPublicationReadAvailable, CohortSize, StableWindowTicks,
           PublicationCadenceTicks, BarrierBudgetTicks
 
 VARIABLES phase, openGap, releaseAuthority, identityCount,
@@ -11,6 +13,8 @@ VARIABLES phase, openGap, releaseAuthority, identityCount,
           stableTicks, readyCount, elapsedTicks, sawSatisfied, sawReopen,
           incarnationChanged, ownerAvailable, ownerReloadExercised,
           staleWriterAttempted, membershipExpanded,
+          projectionOmissionExercised,
+          seedBaseProjectionObserved,
           uncapturedConsumerAttempted, uncapturedReleaseAuthorized,
           completedGenerationCount
 
@@ -21,6 +25,8 @@ vars == <<phase, openGap, releaseAuthority, identityCount,
           stableTicks, readyCount, elapsedTicks, sawSatisfied, sawReopen,
           incarnationChanged, ownerAvailable, ownerReloadExercised,
           staleWriterAttempted, membershipExpanded,
+          projectionOmissionExercised,
+          seedBaseProjectionObserved,
           uncapturedConsumerAttempted, uncapturedReleaseAuthorized,
           completedGenerationCount>>
 
@@ -47,6 +53,8 @@ Init ==
   /\ ownerReloadExercised = FALSE
   /\ staleWriterAttempted = FALSE
   /\ membershipExpanded = FALSE
+  /\ projectionOmissionExercised = FALSE
+  /\ seedBaseProjectionObserved = FALSE
   /\ uncapturedConsumerAttempted = FALSE
   /\ uncapturedReleaseAuthorized = FALSE
   /\ completedGenerationCount = 0
@@ -65,12 +73,35 @@ ObserveOneCurrentPrimaryIdentity ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
+
+ObserveSeedBaseProjectionForDiscovery ==
+  \* The strict seed projection can reveal placement scope before a durable
+  \* handoff exists, but this observation is never release authority.
+  /\ phase = 0
+  /\ SeedProjectionTransportEnabled
+  /\ identityCount = CohortSize
+  /\ ~seedBaseProjectionObserved
+  /\ seedBaseProjectionObserved' = TRUE
+  /\ elapsedTicks' = elapsedTicks + PublicationCadenceTicks
+  /\ UNCHANGED <<phase, openGap, releaseAuthority, identityCount,
+                  capturedIdentityCount, durableIdentityCount,
+                  authorityBoot, capturedAuthorityBoot, durableAuthorityBoot,
+                  generationPublished, durableAck, consumerCount,
+                  stableTicks, readyCount, sawSatisfied, sawReopen,
+                  incarnationChanged, ownerAvailable, ownerReloadExercised,
+                  staleWriterAttempted, membershipExpanded,
+                  projectionOmissionExercised,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
                   completedGenerationCount>>
 
 FirstSpreadSatisfied ==
   /\ phase = 0
   /\ openGap
   /\ identityCount = CohortSize
+  /\ seedBaseProjectionObserved
   /\ phase' = 1
   /\ openGap' = FALSE
   /\ capturedIdentityCount' = IF FixEnabled THEN identityCount ELSE 0
@@ -85,7 +116,8 @@ FirstSpreadSatisfied ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 PublishSeedGeneration ==
   /\ FixEnabled
@@ -105,7 +137,8 @@ PublishSeedGeneration ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 AcknowledgeDurableReadback ==
   /\ FixEnabled
@@ -125,7 +158,8 @@ AcknowledgeDurableReadback ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 SpreadGapReopens ==
   /\ phase = 1
@@ -144,7 +178,8 @@ SpreadGapReopens ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 ConfirmOneDurableNodeIncarnation ==
   /\ FixEnabled
@@ -161,11 +196,15 @@ ConfirmOneDurableNodeIncarnation ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 ConsumeSeedGenerationOnOneJoiner ==
+  \* PublicationCadenceTicks charges the bounded seed GET deadline plus the
+  \* existing formation-poll delay; the runtime binds each leg to pollMs.
   /\ phase = 2
   /\ ownerAvailable
+  /\ SeedProjectionTransportEnabled
   /\ releaseAuthority
   /\ generationPublished
   /\ durableAck
@@ -182,7 +221,30 @@ ConsumeSeedGenerationOnOneJoiner ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
+
+CapturedProjectionTemporarilyOmitsMember ==
+  /\ FixEnabled
+  /\ phase = 2
+  /\ durableAck
+  /\ releaseAuthority
+  /\ ~projectionOmissionExercised
+  /\ projectionOmissionExercised' = TRUE
+  /\ phase' = IF ProjectionOmissionRevokes THEN 4 ELSE phase
+  /\ releaseAuthority' =
+       IF ProjectionOmissionRevokes THEN FALSE ELSE releaseAuthority
+  /\ elapsedTicks' = elapsedTicks + 1
+  /\ UNCHANGED <<openGap, identityCount, capturedIdentityCount,
+                  durableIdentityCount, authorityBoot,
+                  capturedAuthorityBoot, durableAuthorityBoot,
+                  generationPublished, durableAck, consumerCount,
+                  stableTicks, readyCount, sawSatisfied, sawReopen,
+                  incarnationChanged, ownerAvailable, ownerReloadExercised,
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount, seedBaseProjectionObserved>>
 
 StableWindowEvent ==
   /\ phase = 2
@@ -202,7 +264,8 @@ StableWindowEvent ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 PublishOneReadyLease ==
   /\ phase = 2
@@ -223,7 +286,8 @@ PublishOneReadyLease ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 CrashInteractionOwner ==
   /\ FixEnabled
@@ -242,7 +306,8 @@ CrashInteractionOwner ==
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, staleWriterAttempted,
                   membershipExpanded, uncapturedConsumerAttempted,
-                  uncapturedReleaseAuthorized, completedGenerationCount>>
+                  uncapturedReleaseAuthorized, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 RehydrateSameBootGeneration ==
   /\ FixEnabled
@@ -263,7 +328,8 @@ RehydrateSameBootGeneration ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 RestartAuthorityBoot ==
   /\ FixEnabled
@@ -281,7 +347,8 @@ RestartAuthorityBoot ==
                   consumerCount, stableTicks, readyCount, sawSatisfied,
                   sawReopen, ownerReloadExercised, staleWriterAttempted,
                   membershipExpanded, uncapturedConsumerAttempted,
-                  uncapturedReleaseAuthorized, completedGenerationCount>>
+                  uncapturedReleaseAuthorized, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 CapturedPeerIncarnationChanges ==
   /\ FixEnabled
@@ -300,7 +367,8 @@ CapturedPeerIncarnationChanges ==
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
                   uncapturedReleaseAuthorized,
-                  completedGenerationCount>>
+                  completedGenerationCount, projectionOmissionExercised,
+                  seedBaseProjectionObserved>>
 
 OldAuthorityWriterCompletes ==
   /\ FixEnabled
@@ -316,7 +384,8 @@ OldAuthorityWriterCompletes ==
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
                   membershipExpanded, uncapturedConsumerAttempted,
-                  uncapturedReleaseAuthorized, completedGenerationCount>>
+                  uncapturedReleaseAuthorized, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 CanonicalMembershipExpands ==
   /\ FixEnabled
@@ -334,7 +403,8 @@ CanonicalMembershipExpands ==
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
                   staleWriterAttempted, uncapturedConsumerAttempted,
-                  uncapturedReleaseAuthorized, completedGenerationCount>>
+                  uncapturedReleaseAuthorized, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 AttemptUncapturedConsumer ==
   /\ FixEnabled
@@ -351,7 +421,8 @@ AttemptUncapturedConsumer ==
                   consumerCount, stableTicks, readyCount, sawSatisfied,
                   sawReopen, incarnationChanged, ownerAvailable,
                   ownerReloadExercised, staleWriterAttempted,
-                  membershipExpanded, completedGenerationCount>>
+                  membershipExpanded, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 CapturedCanonicalMemberRemoved ==
   /\ FixEnabled
@@ -370,7 +441,8 @@ CapturedCanonicalMemberRemoved ==
                   ownerAvailable, ownerReloadExercised,
                   staleWriterAttempted, membershipExpanded,
                   uncapturedConsumerAttempted,
-                  uncapturedReleaseAuthorized, completedGenerationCount>>
+                  uncapturedReleaseAuthorized, completedGenerationCount,
+                  projectionOmissionExercised, seedBaseProjectionObserved>>
 
 BeginSequentialGeneration ==
   /\ FixEnabled
@@ -396,12 +468,15 @@ BeginSequentialGeneration ==
   /\ membershipExpanded' = FALSE
   /\ uncapturedConsumerAttempted' = FALSE
   /\ uncapturedReleaseAuthorized' = FALSE
+  /\ projectionOmissionExercised' = FALSE
+  /\ seedBaseProjectionObserved' = FALSE
   /\ completedGenerationCount' = 1
   /\ UNCHANGED <<authorityBoot, incarnationChanged,
                   ownerReloadExercised, staleWriterAttempted>>
 
 Next ==
   ObserveOneCurrentPrimaryIdentity \/
+  ObserveSeedBaseProjectionForDiscovery \/
   FirstSpreadSatisfied \/
   PublishSeedGeneration \/
   AcknowledgeDurableReadback \/
@@ -416,6 +491,7 @@ Next ==
   CapturedPeerIncarnationChanges \/
   OldAuthorityWriterCompletes \/
   CanonicalMembershipExpands \/
+  CapturedProjectionTemporarilyOmitsMember \/
   AttemptUncapturedConsumer \/
   CapturedCanonicalMemberRemoved \/
   BeginSequentialGeneration
@@ -424,6 +500,7 @@ Spec ==
   /\ Init
   /\ [][Next]_vars
   /\ WF_vars(ObserveOneCurrentPrimaryIdentity)
+  /\ WF_vars(ObserveSeedBaseProjectionForDiscovery)
   /\ WF_vars(FirstSpreadSatisfied)
   /\ WF_vars(PublishSeedGeneration)
   /\ WF_vars(AcknowledgeDurableReadback)
@@ -434,6 +511,7 @@ Spec ==
   /\ WF_vars(PublishOneReadyLease)
   /\ WF_vars(RehydrateSameBootGeneration)
   /\ WF_vars(CanonicalMembershipExpands)
+  /\ WF_vars(CapturedProjectionTemporarilyOmitsMember)
   /\ WF_vars(AttemptUncapturedConsumer)
   /\ WF_vars(BeginSequentialGeneration)
 
@@ -460,6 +538,8 @@ TypeInvariant ==
   /\ ownerReloadExercised \in BOOLEAN
   /\ staleWriterAttempted \in BOOLEAN
   /\ membershipExpanded \in BOOLEAN
+  /\ projectionOmissionExercised \in BOOLEAN
+  /\ seedBaseProjectionObserved \in BOOLEAN
   /\ uncapturedConsumerAttempted \in BOOLEAN
   /\ uncapturedReleaseAuthorized \in BOOLEAN
   /\ completedGenerationCount \in 0..1
@@ -470,6 +550,9 @@ ReleaseRequiresDurableAck ==
     capturedIdentityCount = CohortSize /\
     capturedAuthorityBoot = authorityBoot /\
     durableAuthorityBoot = authorityBoot
+
+BaseProjectionNeverAuthorizesRelease ==
+  (seedBaseProjectionObserved /\ ~durableAck) => ~releaseAuthority
 
 PublishedGenerationIsIdentityBound ==
   generationPublished =>
@@ -495,6 +578,15 @@ ReloadRestoresOnlySameBootGeneration ==
 
 CanonicalExpansionCannotAuthorizeAddedMember ==
   membershipExpanded => ~uncapturedReleaseAuthorized
+
+ProjectionOmissionCannotRevokePhysicalCohort ==
+  (projectionOmissionExercised /\ ~incarnationChanged /\
+   readyCount < CohortSize) => releaseAuthority
+
+SeedProjectionBypassesBlockedDistributedRead ==
+  (phase = 2 /\ consumerCount > 0 /\
+   ~DistributedPublicationReadAvailable) =>
+    SeedProjectionTransportEnabled /\ releaseAuthority
 
 ReleaseRetainedAcrossReopen ==
   (sawReopen /\ durableAck /\ ownerAvailable /\

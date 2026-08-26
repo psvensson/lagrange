@@ -30,6 +30,10 @@ const mapPrototypeGet = Function.call.bind(Map.prototype.get);
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
 
+function createFormationReleaseNodeIdList() {
+  return [];
+}
+
 function captureCohortMember(
   nodeId,
   rowsById,
@@ -242,8 +246,8 @@ class FormationReleaseHandoffClosureOwner {
     observedAt,
   ) {
     const generation = this.generation;
-    const readyNodeIds = [];
-    const pendingNodeIds = [];
+    const readyNodeIds = createFormationReleaseNodeIdList();
+    const pendingNodeIds = createFormationReleaseNodeIdList();
     for (
       let index = 0;
       index < generation.requiredCohort.length;

@@ -32,8 +32,8 @@ const NODE_COUNT = 5;
 const MINIMUM_COHORT_SIZE = 2;
 const CERTIFICATION_BUDGET_MS = 60_000;
 const REVERT_COUNTEREXAMPLE = Object.freeze({
-  CANONICAL_EXPANSION_REVOCATION:
-    'canonical_membership_expansion_revocation',
+  TRANSIENT_PROJECTION_OMISSION_REVOCATION:
+    'transient_projection_omission_revocation',
   FORMATION_TIMEOUT_WITHOUT_GENERATION:
     'formation_timeout_without_generation',
 });
@@ -41,6 +41,7 @@ const EVENT_FIELDS = Object.freeze([
   'authorityBootIncarnation',
   'authorityNodeId',
   'bootedSrcFingerprint',
+  'capturedCanonicalNodeIds',
   'capturedPublicationEpoch',
   'code',
   'error',
@@ -50,10 +51,12 @@ const EVENT_FIELDS = Object.freeze([
   'formationReleaseHandoffReleaseAuthorized',
   'formationReleaseHandoffState',
   'generation',
+  'observedCanonicalNodeIds',
   'observedAuthorityReady',
   'observedPublicationEpoch',
   'observedRecoveryReasonCodes',
   'pendingNodeIds',
+  'physicalCohortEvidence',
   'readyNodeIds',
   'reason',
   'releaseAuthorized',
@@ -800,7 +803,69 @@ function projectQualifyingWitness(qualifying) {
   };
 }
 
-function canonicalExpansionRevocationGenerationIsExact(generation) {
+function physicalStateIsEligible(evidence) {
+  const status = readOwnString(evidence, 'nodeStatus');
+  const connectionState = readOwnString(evidence, 'nodeConnectionState');
+  return (status === 'active' || status === 'joining') &&
+    (connectionState === 'connected' || connectionState === 'ready');
+}
+
+function physicalEvidenceIsExact(event, generation) {
+  const values = readOwnData(event, 'physicalCohortEvidence');
+  if (!arrayIsArray(values)) return false;
+  const expected = [{
+    nodeId: readOwnString(event, 'authorityNodeId'),
+    bootIncarnation: readOwnPositiveInteger(
+      event,
+      'authorityBootIncarnation',
+    ),
+  }];
+  for (let index = 0; index < generation.cohort.length; index += 1) {
+    expected[expected.length] = generation.cohort[index];
+  }
+  if (values.length !== expected.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    const evidence = readOwnData(values, index);
+    const expectedIdentity = expected[index];
+    if (
+      readOwnString(evidence, 'nodeId') !== expectedIdentity.nodeId ||
+      readOwnPositiveInteger(evidence, 'expectedBootIncarnation') !==
+        expectedIdentity.bootIncarnation ||
+      readOwnData(evidence, 'nodePresent') !== true ||
+      readOwnPositiveInteger(evidence, 'nodeBootIncarnation') !==
+        expectedIdentity.bootIncarnation ||
+      readOwnData(evidence, 'currentPrimaryPresent') !== true ||
+      readOwnPositiveInteger(evidence, 'currentPrimaryBootIncarnation') !==
+        expectedIdentity.bootIncarnation ||
+      !physicalStateIsEligible(evidence)
+    ) return false;
+  }
+  return true;
+}
+
+function capturedProjectionWasTransientlyOmitted(event, generation) {
+  const captured = normalizeUniqueStrings(
+    readOwnData(event, 'capturedCanonicalNodeIds'),
+    MINIMUM_COHORT_SIZE + 1,
+  );
+  const observed = normalizeUniqueStrings(
+    readOwnData(event, 'observedCanonicalNodeIds'),
+  );
+  const authorityNodeId = readOwnString(event, 'authorityNodeId');
+  if (!captured || !observed || !authorityNodeId) return false;
+  if (arrayPrototypeIndexOf(captured, authorityNodeId) === -1) return false;
+  let omittedCapturedCohortMember = false;
+  for (let index = 0; index < generation.cohortNodeIds.length; index += 1) {
+    const nodeId = generation.cohortNodeIds[index];
+    if (arrayPrototypeIndexOf(captured, nodeId) === -1) return false;
+    if (arrayPrototypeIndexOf(observed, nodeId) === -1) {
+      omittedCapturedCohortMember = true;
+    }
+  }
+  return omittedCapturedCohortMember;
+}
+
+function transientProjectionOmissionRevocationGenerationIsExact(generation) {
   if (!generation || !generation.revoked) return false;
   const revoked = generation.revoked;
   return allTrue([
@@ -814,10 +879,12 @@ function canonicalExpansionRevocationGenerationIsExact(generation) {
     revoked.observedPublicationEpoch > revoked.capturedPublicationEpoch,
     revoked.observedAuthorityReady === null,
     revoked.recoveryReasonCodes.length === 0,
+    capturedProjectionWasTransientlyOmitted(revoked.event, generation),
+    physicalEvidenceIsExact(revoked.event, generation),
   ]);
 }
 
-function canonicalExpansionRevocationIsExact(options) {
+function transientProjectionOmissionRevocationIsExact(options) {
   return allTrue([
     options.bootPassed,
     options.cadenceValid,
@@ -825,7 +892,9 @@ function canonicalExpansionRevocationIsExact(options) {
     options.malformedOrEarlyBarrierCount === 0,
     options.timeoutCount === 0,
     options.generations.length === 1,
-    canonicalExpansionRevocationGenerationIsExact(options.generations[0]),
+    transientProjectionOmissionRevocationGenerationIsExact(
+      options.generations[0],
+    ),
   ]);
 }
 
@@ -840,8 +909,8 @@ function timeoutWithoutGenerationIsExact(options) {
 }
 
 function classifyRevertedCounterexample(options) {
-  if (canonicalExpansionRevocationIsExact(options)) {
-    return REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION;
+  if (transientProjectionOmissionRevocationIsExact(options)) {
+    return REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION;
   }
   if (timeoutWithoutGenerationIsExact(options)) {
     return REVERT_COUNTEREXAMPLE.FORMATION_TIMEOUT_WITHOUT_GENERATION;

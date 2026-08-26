@@ -6,6 +6,12 @@ import {
   validateFormationReleaseHandoffConsumerContract,
 } from './formation-release-handoff-contract.js';
 import {
+  validateFormationReleaseHandoffSeedProjection,
+} from './formation-release-handoff-consumer.js';
+import {
+  buildFormationReleasePhysicalEvidence,
+} from './formation-release-handoff-diagnostics.js';
+import {
   formationReleaseHandoffPublicationId,
   readFormationReleaseHandoffPublicationFromCache,
   readFormationReleaseHandoffPublicationRow,
@@ -21,6 +27,8 @@ const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
 
 const {COLUMN} = SHARED;
+const FORMATION_RELEASE_BOOT_INCARNATION_ABSENT = null;
+const FORMATION_RELEASE_PUBLICATION_ABSENT = null;
 
 function readOwnData(target, field) {
   if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
@@ -32,7 +40,7 @@ function readOwnData(target, field) {
     undefined;
 }
 
-function formationReleaseLogSignature(handoff) {
+function formationReleaseLogSignature(handoff, startupAuthority) {
   return arrayPrototypeJoin([
     readOwnData(handoff, 'state') || '',
     readOwnData(handoff, 'reason') || '',
@@ -41,6 +49,10 @@ function formationReleaseLogSignature(handoff) {
     readOwnData(handoff, 'observedAuthorityReady'),
     readOwnData(handoff, 'releaseAuthorized'),
     arrayPrototypeJoin(readOwnData(handoff, 'pendingNodeIds') || [], ','),
+    arrayPrototypeJoin(
+      readOwnData(startupAuthority, 'canonicalStartupNodeIds') || [],
+      ',',
+    ),
   ], '|');
 }
 
@@ -99,6 +111,19 @@ const formationReleaseMethods = {
       null;
   },
 
+  validateFormationReleaseStartupAuthorityProjection(
+    startupAuthority,
+    projectionNodeId,
+  ) {
+    return validateFormationReleaseHandoffSeedProjection(
+      startupAuthority,
+      this.getNodeRows(),
+      projectionNodeId,
+      this.formationReleaseAuthorityNodeId,
+      this.getFormationReleaseConnectionEvidence(),
+    );
+  },
+
   getFormationReleaseAuthorityBootIncarnation(authorityNodeId) {
     const evidence = this.getFormationReleaseConnectionEvidence();
     for (let index = 0; index < evidence.length; index += 1) {
@@ -106,9 +131,9 @@ const formationReleaseMethods = {
       if (readOwnData(current, 'nodeId') !== authorityNodeId) continue;
       const bootIncarnation = readOwnData(current, 'bootIncarnation');
       return numberIsSafeInteger(bootIncarnation) && bootIncarnation > 0 ?
-        bootIncarnation : null;
+        bootIncarnation : FORMATION_RELEASE_BOOT_INCARNATION_ABSENT;
     }
-    return null;
+    return FORMATION_RELEASE_BOOT_INCARNATION_ABSENT;
   },
 
   scheduleFormationReleaseHandoffPublication(handoff, observedAt) {
@@ -141,7 +166,9 @@ const formationReleaseMethods = {
     authorityBootIncarnation,
   ) {
     const storageOwner = this.getFormationReleasePublicationStorageOwner();
-    if (typeof storageOwner?.getPublication !== 'function') return null;
+    if (typeof storageOwner?.getPublication !== 'function') {
+      return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    }
     const row = await storageOwner.getPublication(
       formationReleaseHandoffPublicationId(
         authorityNodeId,
@@ -222,9 +249,14 @@ const formationReleaseMethods = {
   logFormationReleaseHandoffAuthorityTransition(
     handoff,
     authorityNodeId,
+    startupAuthority,
+    connectionEvidence,
   ) {
     if (!handoff || typeof handoff !== 'object') return;
-    const signature = formationReleaseLogSignature(handoff);
+    const signature = formationReleaseLogSignature(
+      handoff,
+      startupAuthority,
+    );
     if (signature === this.lastFormationReleaseHandoffAuthorityLogSignature) {
       return;
     }
@@ -245,6 +277,14 @@ const formationReleaseMethods = {
       observedAuthorityReady: readOwnData(handoff, 'observedAuthorityReady'),
       observedRecoveryReasonCodes:
         readOwnData(handoff, 'observedRecoveryReasonCodes'),
+      capturedCanonicalNodeIds: readOwnData(handoff, 'canonicalNodeIds'),
+      observedCanonicalNodeIds:
+        readOwnData(startupAuthority, 'canonicalStartupNodeIds'),
+      physicalCohortEvidence: buildFormationReleasePhysicalEvidence(
+        handoff,
+        this.getNodeRows(),
+        connectionEvidence,
+      ),
       requiredCohort: readOwnData(handoff, 'requiredCohort'),
       readyNodeIds: readOwnData(handoff, 'readyNodeIds'),
       pendingNodeIds: readOwnData(handoff, 'pendingNodeIds'),
@@ -283,6 +323,8 @@ const formationReleaseMethods = {
       this.logFormationReleaseHandoffAuthorityTransition(
         handoff,
         authorityNodeId,
+        startupAuthority,
+        connectionEvidence,
       );
     }
     const projectedHandoff =

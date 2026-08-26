@@ -21,6 +21,7 @@ import {
 import {
   FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
   classifyFormationCohortSpreadCureNode,
+  resolveStartupAuthorityNodeIdSet,
 } from '../../src/control-plane/startup-authority-placement-eligibility.js';
 import {
   ControlPlaneReadinessService,
@@ -28,6 +29,10 @@ import {
 import {
   NodeJoiningReadySignalReadiness,
 } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
+import {
+  BOOTSTRAP_API_RESPONSE_FIELD,
+  BOOTSTRAP_API_ROUTE,
+} from '../../src/bootstrap/bootstrap-api-constants.js';
 import fs from 'node:fs';
 
 const NOW = 10_000;
@@ -302,6 +307,63 @@ test('formation release handoff retains one generation across a reopened ' +
   t.end();
 });
 
+test('formation release owner treats transient canonical omission as projection ' +
+  'churn while physical cohort evidence owns revocation', (t) => {
+  const owner = new FormationReleaseHandoffClosureOwner();
+  const rows = buildFormationRows();
+  const captured = observeFormation(owner, buildAuthority(), rows, NOW);
+  const omitted = observeFormation(
+    owner,
+    buildAuthority({
+      ready: false,
+      satisfied: false,
+      canonicalNodeIds: ['seed'],
+      publicationEpoch: 42,
+    }),
+    rows,
+    NOW + 1,
+  );
+
+  t.equal(omitted.state, FORMATION_RELEASE_HANDOFF_STATE.ACTIVE,
+    'volatile placement projection loss cannot revoke a live captured member');
+  t.equal(omitted.generation, captured.generation,
+    'projection omission retains the exact durable generation');
+  t.equal(omitted.releaseAuthorized, true,
+    'durably acknowledged release remains authorized through omission');
+
+  const placementScope = resolveStartupAuthorityNodeIdSet(
+    attachFormationReleaseHandoffToStartupAuthority(
+      buildAuthority({
+        ready: false,
+        satisfied: false,
+        canonicalNodeIds: ['seed'],
+        publicationEpoch: 42,
+      }),
+      omitted,
+    ),
+  );
+  t.same([...placementScope].sort(), ['joiner-a', 'joiner-b', 'seed'],
+    'captured canonical scope remains placement-visible during omission');
+
+  const withoutJoinerConnection = buildConnectionEvidence(rows)
+    .filter((evidence) => evidence.nodeId !== 'joiner-a');
+  const physicallyMissing = owner.observe(
+    buildAuthority({
+      ready: false,
+      satisfied: false,
+      canonicalNodeIds: ['seed'],
+      publicationEpoch: 43,
+    }),
+    rows,
+    NOW + 2,
+    'seed',
+    withoutJoinerConnection,
+  );
+  t.equal(physicallyMissing.state, FORMATION_RELEASE_HANDOFF_STATE.REVOKED,
+    'current-primary connection loss remains the sole member-loss authority');
+  t.end();
+});
+
 test('formation cure classification consumes the retained handoff owner ' +
   'instead of instantaneous recovery activity', async (t) => {
   const node = buildPlacementNode('joiner-a');
@@ -446,22 +508,39 @@ async (t) => {
   );
   joiningOwner.nodeId = 'joiner-a';
   joiningOwner.seedNodeId = 'seed';
+  joiningOwner.seedNodeAddress = 'http://seed:8080';
+  let requestedProjectionUrl = null;
+  joiningOwner.httpGetJson = async (url) => {
+    requestedProjectionUrl = url;
+    return {
+      statusCode: 200,
+      body: {startupAuthority: targetView},
+    };
+  };
   joiningOwner.rebalanceCoordinator = {
     controlPlaneReadinessService: {
       getStartupAuthoritySnapshotSync() {
         return targetView;
       },
-      async getFormationReleaseStartupAuthoritySnapshot(request) {
-        requestedNodeIds.push(request.planningNodeId);
-        return targetView;
+      validateFormationReleaseStartupAuthorityProjection(
+        startupAuthority,
+        projectionNodeId,
+      ) {
+        requestedNodeIds.push(projectionNodeId);
+        return startupAuthority;
       },
     },
   };
   await joiningOwner.getPriorityPlacementFormationStartupAuthority(NOW + 500);
   t.equal(
     requestedNodeIds[requestedNodeIds.length - 1],
-    'seed',
-    'join barrier reads the seed/global identity rather than its target node',
+    'joiner-a',
+    'join barrier validates the seed projection for the consuming node',
+  );
+  t.equal(
+    requestedProjectionUrl,
+    'http://seed:8080/bootstrap/ready?projectionNodeId=joiner-a',
+    'join barrier requests the existing seed readiness projection directly',
   );
   t.end();
 });
@@ -531,6 +610,11 @@ test('the seed rebalancer read is the authoritative handoff observation ' +
     'durable readback rearms the canonical owner as authorizing');
   t.equal(transitions[2].details.observedAuthorityReady, false);
   t.equal(transitions[2].details.releaseAuthorized, true);
+  t.same(transitions[2].details.capturedCanonicalNodeIds,
+    ['joiner-a', 'joiner-b', 'seed']);
+  t.same(transitions[2].details.observedCanonicalNodeIds,
+    ['joiner-a', 'joiner-b', 'seed']);
+  t.equal(transitions[2].details.physicalCohortEvidence.length, 3);
   t.end();
 });
 
@@ -595,7 +679,11 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
     systemTableCache: cache,
     messageRouter: buildMessageRouter(() => rows, 'joiner-a'),
     membershipPublicationService: {
-      controlPlanePublicationsOwner: storageOwner,
+      controlPlanePublicationsOwner: {
+        async getPublication() {
+          throw new Error('planning_snapshot_refresh_pending');
+        },
+      },
     },
     now: () => NOW,
   });
@@ -618,6 +706,17 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
   );
   joiningOwner.nodeId = 'joiner-a';
   joiningOwner.seedNodeId = 'seed';
+  joiningOwner.seedNodeAddress = 'http://seed:8080';
+  let projectedUrl = null;
+  joiningOwner.httpGetJson = async (url) => {
+    projectedUrl = url;
+    return {
+      statusCode: 503,
+      body: {
+        [BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY]: seedAcknowledged,
+      },
+    };
+  };
   joiningOwner.rebalanceCoordinator = {
     controlPlaneReadinessService: service,
   };
@@ -634,6 +733,9 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
     authoritative.formationReleaseHandoff.generation,
     seedCapture.formationReleaseHandoff.generation,
   );
+  t.match(projectedUrl, new RegExp(
+    `^http://seed:8080${BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY}`,
+  ), 'the existing formation poll uses the lightweight seed readiness route');
   t.equal(
     service.formationReleaseHandoffClosureOwner.lastContract.state,
     FORMATION_RELEASE_HANDOFF_STATE.IDLE,
@@ -818,8 +920,8 @@ test('formation release handoff retains an immutable captured cohort across ' +
   t.end();
 });
 
-test('formation release handoff revokes on captured membership, incarnation, ' +
-  'and substantive authority changes', async (t) => {
+test('formation release handoff revokes on captured physical membership, ' +
+  'incarnation, and substantive authority changes', async (t) => {
   const removedCapturedOwner = new FormationReleaseHandoffClosureOwner();
   observeFormation(removedCapturedOwner,
     buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
@@ -831,11 +933,11 @@ test('formation release handoff revokes on captured membership, incarnation, ' +
       canonicalNodeIds: ['joiner-b', 'seed'],
       publicationEpoch: 42,
     }),
-    buildFormationRows(),
+    buildFormationRows().filter((row) => row.node_id !== 'joiner-a'),
     NOW + 100,
   );
   t.equal(removedCaptured.state, FORMATION_RELEASE_HANDOFF_STATE.REVOKED,
-    'removing a captured canonical member remains incompatible');
+    'removing a captured physical member remains incompatible');
 
   const incompleteOwner = new FormationReleaseHandoffClosureOwner();
   const incomplete = observeFormation(incompleteOwner,

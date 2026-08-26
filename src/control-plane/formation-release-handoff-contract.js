@@ -2,7 +2,6 @@ import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from './control-plane-readiness-
 import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {COLUMN, NODE_STATE, STATE} from '../constants/index.js';
 import {
-  formationReleaseCanonicalContainsCapturedSet,
   formationReleaseCohortContainsNodeId,
   formationReleaseCohortIdentity,
   formationReleaseGenerationIdentity,
@@ -26,6 +25,7 @@ const objectHasOwn = Object.hasOwn;
 const stringPrototypeToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const OWN_DATA_VALUE_FIELD = 'value';
 const ABSENT = Symbol('formation-release-handoff-absent');
+const INVALID_FORMATION_RELEASE_CONTRACT = null;
 const FORMATION_RELEASE_HANDOFF_STATE = objectFreeze({
   IDLE: 'idle', ACTIVE: 'active', COMPLETE: 'complete', REVOKED: 'revoked',
 });
@@ -84,14 +84,14 @@ function normalizeOwnStringArray(target, field) {
   arrayPrototypeSort(normalized);
   return normalized;
 }
-function buildFenceIdentity(startupAuthority) {
+function buildFenceEvidence(startupAuthority) {
   const admission = readOwnData(startupAuthority, 'admission');
   if (!admission || typeof admission !== 'object') {
-    return 'none';
+    return objectFreeze({identity: 'none', admission: null});
   }
   const fence = readOwnData(admission, 'clusterIncarnationFence');
   if (fence === ABSENT || fence === null) {
-    return 'none';
+    return objectFreeze({identity: 'none', admission: null});
   }
   if (!fence || typeof fence !== 'object') {
     return null;
@@ -107,6 +107,7 @@ function buildFenceIdentity(startupAuthority) {
     'peerProofState',
   ];
   const parts = ['allowed'];
+  const fenceProjection = {allowed: true};
   for (let index = 0; index < identityFields.length; index += 1) {
     const field = identityFields[index];
     const value = readOwnData(fence, field);
@@ -114,12 +115,18 @@ function buildFenceIdentity(startupAuthority) {
       return null;
     }
     arrayPrototypePush(parts, value === ABSENT ? '' : value);
+    if (value !== ABSENT) fenceProjection[field] = value;
   }
-  return arrayPrototypeJoin(parts, ':');
+  return objectFreeze({
+    identity: arrayPrototypeJoin(parts, ':'),
+    admission: objectFreeze({
+      clusterIncarnationFence: objectFreeze(fenceProjection),
+    }),
+  });
 }
 function buildAuthorityEvidence(startupAuthority) {
   if (!startupAuthority || typeof startupAuthority !== 'object') {
-    return null;
+    return INVALID_FORMATION_RELEASE_CONTRACT;
   }
   const authorityAvailable = readOwnData(
     startupAuthority,
@@ -151,7 +158,8 @@ function buildAuthorityEvidence(startupAuthority) {
     prioritySummary && typeof prioritySummary === 'object' ?
       readOwnData(prioritySummary, 'satisfied') :
       ABSENT;
-  const fenceIdentity = buildFenceIdentity(startupAuthority);
+  const fenceEvidence = buildFenceEvidence(startupAuthority);
+  const fenceIdentity = fenceEvidence?.identity || null;
   if (!authorityScalarEvidenceValid({
     authorityAvailable,
     ready,
@@ -160,8 +168,10 @@ function buildAuthorityEvidence(startupAuthority) {
     publicationStatus,
     prioritySpreadSatisfied,
     fenceIdentity,
-  })) return null;
-  if (canonicalNodeIds === null || recoveryReasonCodes === null) return null;
+  })) return INVALID_FORMATION_RELEASE_CONTRACT;
+  if (canonicalNodeIds === null || recoveryReasonCodes === null) {
+    return INVALID_FORMATION_RELEASE_CONTRACT;
+  }
   return objectFreeze({
     ready,
     state,
@@ -171,6 +181,7 @@ function buildAuthorityEvidence(startupAuthority) {
     recoveryReasonCodes: objectFreeze(recoveryReasonCodes),
     prioritySpreadSatisfied,
     fenceIdentity,
+    admission: fenceEvidence.admission,
   });
 }
 function authorityScalarEvidenceValid(evidence) {
@@ -497,7 +508,7 @@ function authorizeFormationReleaseHandoffPublicationIntent(value) {
     {allowUnacknowledgedActive: true},
   );
   if (!normalized) {
-    return null;
+    return INVALID_FORMATION_RELEASE_CONTRACT;
   }
   return objectFreeze({
     ...normalized,
@@ -549,13 +560,24 @@ function validatePublishedContractAgainstCurrent(
   if (!authority || !rowsById || !connectionsById) return null;
   if (!numberIsFinite(observedAt)) return null;
   if (!isRetainableAuthority(authority, generation)) return null;
+  return formationReleaseHandoffPhysicalEvidenceMatches(
+    normalizedContract,
+    rowsById,
+    connectionsById,
+  ) ? {authority, rowsById, connectionsById} : null;
+}
+function formationReleaseHandoffPhysicalEvidenceMatches(
+  normalizedContract,
+  rowsById,
+  connectionsById,
+) {
   const authorityConnection = mapPrototypeGet(
     connectionsById,
     normalizedContract.authorityNodeId,
   );
-  if (!authorityConnection) return null;
+  if (!authorityConnection) return false;
   if (authorityConnection.bootIncarnation !==
-      normalizedContract.authorityBootIncarnation) return null;
+      normalizedContract.authorityBootIncarnation) return false;
   for (
     let index = 0;
     index < normalizedContract.requiredCohort.length;
@@ -564,9 +586,9 @@ function validatePublishedContractAgainstCurrent(
     const member = normalizedContract.requiredCohort[index];
     const node = mapPrototypeGet(rowsById, member.nodeId);
     const connection = mapPrototypeGet(connectionsById, member.nodeId);
-    if (!publishedMemberMatchesCurrent(member, node, connection)) return null;
+    if (!publishedMemberMatchesCurrent(member, node, connection)) return false;
   }
-  return {authority, rowsById, connectionsById};
+  return true;
 }
 function publishedMemberMatchesCurrent(member, node, connection) {
   if (!node || !connection) return false;
@@ -602,10 +624,6 @@ function isRetainableAuthority(evidence, generation) {
   if (evidence.fenceIdentity !== generation.fenceIdentity) {
     return false;
   }
-  if (!formationReleaseCanonicalContainsCapturedSet(evidence, generation)) {
-    return false;
-  }
-  if (!cohortBelongsToCanonical(evidence, generation)) return false;
   if (evidence.ready === true) return readyAuthorityIsRetainable(evidence);
   return pendingAuthorityIsRetainable(evidence);
 }
@@ -613,19 +631,6 @@ function formationReleaseHandoffAuthorizesNode(contract, nodeId) {
   const normalized = normalizePublishedConsumerContract(contract);
   return normalized !== null &&
     formationReleaseCohortContainsNodeId(normalized, nodeId);
-}
-function cohortBelongsToCanonical(evidence, generation) {
-  for (
-    let index = 0;
-    index < generation.requiredCohort.length;
-    index += 1
-  ) {
-    const member = generation.requiredCohort[index];
-    if (!arrayPrototypeIncludes(evidence.canonicalNodeIds, member.nodeId)) {
-      return false;
-    }
-  }
-  return true;
 }
 function readyAuthorityIsRetainable(evidence) {
   return evidence.state === STARTUP_AUTHORITY_STATE.READY &&
@@ -701,11 +706,11 @@ function contractGenerationFields(generation) {
   if (!generation) {
     const empty = objectFreeze([]);
     return {
-      id: null,
-      authorityNodeId: null,
-      authorityBootIncarnation: null,
-      publicationEpoch: null,
-      fenceIdentity: null,
+      id: INVALID_FORMATION_RELEASE_CONTRACT,
+      authorityNodeId: INVALID_FORMATION_RELEASE_CONTRACT,
+      authorityBootIncarnation: INVALID_FORMATION_RELEASE_CONTRACT,
+      publicationEpoch: INVALID_FORMATION_RELEASE_CONTRACT,
+      fenceIdentity: INVALID_FORMATION_RELEASE_CONTRACT,
       canonicalNodeIds: empty,
       requiredCohort: empty,
     };
@@ -783,6 +788,7 @@ export {
   authorizeFormationReleaseHandoffPublicationIntent, buildAuthorityEvidence,
   buildConnectionEvidenceById, buildContract, buildNodeEvidenceById,
   formationReleaseCohortContainsNodeId,
+  formationReleaseHandoffPhysicalEvidenceMatches,
   formationReleaseHandoffAuthorizesNode, freezeCohort,
   isConnectedFormationMember, isCurrentReadyMember,
   isRetainableAuthority, normalizeFormationReleaseHandoffContract,

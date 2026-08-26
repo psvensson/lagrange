@@ -6,6 +6,8 @@ import {
 import {
   STATE,
 } from '../constants/index.js';
+import {FORMATION_RELEASE_HANDOFF_STATE} from
+  '../control-plane/formation-release-handoff-contract.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -63,7 +65,7 @@ class NodeJoiningOperationLedgerFormationReadiness
    * @return {Promise<Object>}
    * @private
    */
-  async getOperationLedgerFormationBarrierSnapshot() {
+  async getOperationLedgerFormationBarrierSnapshot(requestTimeoutMs) {
     const systemTableCache =
       NodeService.getInstance().getSystemTableCache();
     const partitionId =
@@ -76,7 +78,9 @@ class NodeJoiningOperationLedgerFormationReadiness
         null;
     const now = this.now();
     const startupAuthority =
-      await this.getPriorityPlacementFormationStartupAuthority(now);
+      await this.getPriorityPlacementFormationStartupAuthority(now, {
+        requestTimeoutMs,
+      });
     const candidateNodeIds =
       this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
         systemTableCache,
@@ -88,6 +92,8 @@ class NodeJoiningOperationLedgerFormationReadiness
         candidateNodeIds,
         now,
       );
+    const formationReleaseHandoff =
+      startupAuthority?.formationReleaseHandoff || null;
     return Object.freeze({
       now,
       partitionId,
@@ -95,7 +101,11 @@ class NodeJoiningOperationLedgerFormationReadiness
       startupAuthorityAvailable:
         startupAuthority?.authorityAvailable === true,
       startupAuthorityState: startupAuthority?.state || null,
-      startupAuthorityReady: startupAuthority?.ready === true,
+      startupAuthorityReady:
+        startupAuthority?.ready === true &&
+        formationReleaseHandoff?.state ===
+          FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+        formationReleaseHandoff?.releaseAuthorized === true,
       startupAuthorityRecoveryReasonCodes: Object.freeze(
         Array.isArray(startupAuthority?.priorityRecoveryReasonCodes) ?
           [...startupAuthority.priorityRecoveryReasonCodes] :
@@ -103,8 +113,7 @@ class NodeJoiningOperationLedgerFormationReadiness
       ),
       startupAuthorityPublicationRecoveryGateState:
         startupAuthority?.publicationRecoveryGate?.state || null,
-      formationReleaseHandoff:
-        startupAuthority?.formationReleaseHandoff || null,
+      formationReleaseHandoff,
       candidateNodeIds: Object.freeze(candidateNodeIds),
       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
     });
@@ -262,7 +271,7 @@ class NodeJoiningOperationLedgerFormationReadiness
 
     while (true) {
       const snapshot =
-        await this.getOperationLedgerFormationBarrierSnapshot();
+        await this.getOperationLedgerFormationBarrierSnapshot(pollMs);
       barrierEngaged = barrierEngaged ||
         this.hasSufficientOperationLedgerFormationCohort(snapshot);
       const state = resolveOperationLedgerFormationBarrierState({

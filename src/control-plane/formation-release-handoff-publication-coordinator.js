@@ -18,7 +18,7 @@ function requireStorageOwner(storageOwner) {
   return storageOwner;
 }
 
-async function readBackDurableContract(storageOwner, desired) {
+async function loadDurableContract(storageOwner, desired) {
   const publicationId = formationReleaseHandoffPublicationId(
     desired.contract.authorityNodeId,
     desired.contract.authorityBootIncarnation,
@@ -118,7 +118,7 @@ class FormationReleaseHandoffPublicationCoordinator {
         skipCacheWait: true,
       });
       this.writeCount += 1;
-      const durableContract = await readBackDurableContract(
+      const durableContract = await loadDurableContract(
         storageOwner,
         desired,
       );

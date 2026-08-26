@@ -267,7 +267,8 @@ async function resolveRuntimeBinding(argv, owners) {
 }
 
 function expectedRevertCounterexample(value) {
-  return value === REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION ||
+  return value ===
+    REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION ||
     value === REVERT_COUNTEREXAMPLE.FORMATION_TIMEOUT_WITHOUT_GENERATION;
 }
 

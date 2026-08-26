@@ -4,6 +4,10 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {hasLiveTransportEvidence} from './live-transport-evidence.js';
+import {
+  FORMATION_RELEASE_HANDOFF_STATE,
+  normalizeFormationReleaseHandoffContract,
+} from './formation-release-handoff-contract.js';
 
 const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = new Set();
 const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
@@ -54,19 +58,48 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const arrayIsArray = Array.isArray;
+const SetConstructor = Set;
+const setPrototypeAdd = Function.call.bind(Set.prototype.add);
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object') return undefined;
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, 'value') ?
+    descriptor.value : undefined;
+}
+
+function appendPlacementNodeIds(nodeIds, values) {
+  if (!arrayIsArray(values)) return;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = readOwnData(values, index);
+    if (typeof value === 'string' && value.length > 0) {
+      setPrototypeAdd(nodeIds, value);
+    }
+  }
+}
 
 function resolveStartupAuthorityNodeIdSet(startupAuthority) {
-  if (startupAuthority?.authorityAvailable !== true) {
+  if (readOwnData(startupAuthority, 'authorityAvailable') !== true) {
     return EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
   }
-  const nodeIds = Array.isArray(startupAuthority.canonicalStartupNodeIds) ?
-    startupAuthority.canonicalStartupNodeIds.filter(
-      (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-    ) :
-    [];
-  return nodeIds.length > 0 ?
-    new Set(nodeIds) :
-    EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
+  const nodeIds = new SetConstructor();
+  appendPlacementNodeIds(
+    nodeIds,
+    readOwnData(startupAuthority, 'canonicalStartupNodeIds'),
+  );
+  const handoff = normalizeFormationReleaseHandoffContract(
+    readOwnData(startupAuthority, 'formationReleaseHandoff'),
+  );
+  if (
+    handoff?.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
+    handoff.releaseAuthorized === true
+  ) {
+    appendPlacementNodeIds(nodeIds, handoff.canonicalNodeIds);
+  }
+  return nodeIds;
 }
 
 /**

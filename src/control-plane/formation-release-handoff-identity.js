@@ -66,23 +66,6 @@ function formationReleaseCohortContainsNodeId(value, nodeId) {
   return false;
 }
 
-function formationReleaseCanonicalContainsCapturedSet(evidence, generation) {
-  const currentNodeIds = readOwnData(evidence, 'canonicalNodeIds');
-  const capturedNodeIds = readOwnData(generation, 'canonicalNodeIds');
-  if (!arrayIsArray(currentNodeIds) || !arrayIsArray(capturedNodeIds)) {
-    return false;
-  }
-  for (let index = 0; index < capturedNodeIds.length; index += 1) {
-    const capturedNodeId = readOwnData(capturedNodeIds, index);
-    let found = false;
-    for (let scan = 0; scan < currentNodeIds.length; scan += 1) {
-      if (readOwnData(currentNodeIds, scan) === capturedNodeId) found = true;
-    }
-    if (!found) return false;
-  }
-  return true;
-}
-
 function formationReleaseGenerationIdentity(
   publicationEpoch,
   authorityNodeId,
@@ -152,7 +135,6 @@ function formationReleaseContractsEqual(left, right) {
 }
 
 export {
-  formationReleaseCanonicalContainsCapturedSet,
   formationReleaseCohortContainsNodeId,
   formationReleaseCohortIdentity,
   formationReleaseContractsEqual,

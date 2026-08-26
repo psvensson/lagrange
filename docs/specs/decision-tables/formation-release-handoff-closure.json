@@ -8,6 +8,7 @@
       "name": "closureEvidence",
       "values": [
         "first_spread_satisfied_with_positive_current_connection_incarnations",
+        "strict_seed_base_projection_observed_before_handoff",
         "captured_generation_waiting_for_durable_readback",
         "durable_generation_acknowledged_for_current_authority_boot",
         "first_spread_satisfied_with_zero_or_missing_connection_identity",
@@ -15,6 +16,7 @@
         "published_generation_missing_or_incompatible",
         "seed_restart_with_compatible_active_publication",
         "compatible_canonical_membership_expansion",
+        "captured_member_transiently_omitted_from_current_projection",
         "non_cohort_projection_or_handoff_only_cure_target",
         "compatible_reopen_joiners_pending",
         "compatible_reopen_partially_ready",
@@ -35,6 +37,7 @@
       "name": "action",
       "values": [
         "capture_publish_and_retain_release",
+        "latch_discovery_without_release",
         "persist_without_release",
         "acknowledge_and_rearm_release",
         "consume_published_release",
@@ -57,7 +60,15 @@
     },
     {
       "id": "durable-consumer-parity",
-      "statement": "A distinct joiner process receives the same seed-owned generation through the durable publication row and cannot locally mint, promote, or rotate formation-release authority."
+      "statement": "A distinct joiner process receives the same seed-owned generation through the existing seed bootstrap-readiness exchange and cannot locally mint, promote, or rotate formation-release authority."
+    },
+    {
+      "id": "seed-readiness-delivery",
+      "statement": "The optional bootstrap-readiness projection is a phase-scoped read of the seed owner's exact contract. It remains available while distributed publication reads are readiness-blocked, does not change the probe verdict, validates the consuming node against current physical identity evidence, and binds each request timeout to the existing formation-poll cadence so request plus poll consume at most two cadence ticks."
+    },
+    {
+      "id": "base-projection-is-nonauthorizing",
+      "statement": "Before a durable handoff exists, the strictly validated seed base projection may disclose immutable placement discovery evidence, but it cannot satisfy the barrier, grant cure authority, or publish READY."
     },
     {
       "id": "durable-ack-before-release",
@@ -81,7 +92,15 @@
     },
     {
       "id": "immutable-captured-cohort-scope",
-      "statement": "The generation retains its immutable captured canonical set and cohort when current canonical membership is a superset; later additions neither revoke the generation nor receive its release or handoff-only cure authority."
+      "statement": "The generation retains its immutable captured canonical set and cohort through transient current-projection churn; later additions neither revoke the generation nor receive its release or handoff-only cure authority."
+    },
+    {
+      "id": "projection-is-not-member-loss-authority",
+      "statement": "Current canonical startup node IDs are a transient placement projection, not negative membership authority. Captured members remain valid while their durable rows and exact current-primary boot connections remain valid; only those physical owners can prove member loss."
+    },
+    {
+      "id": "active-handoff-placement-scope",
+      "statement": "While an acknowledged handoff is active, placement sees the union of current canonical IDs and immutable captured canonical IDs. Formation cure and release remain restricted to the immutable required cohort."
     },
     {
       "id": "incarnation-and-safety-fenced",
@@ -98,6 +117,16 @@
       "outcome": {"action": "revoke_fail_closed"},
       "reason": "Regressed publication epoch or changed incarnation fence cannot inherit release authority.",
       "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "strict-base-projection-latches-discovery",
+      "when": {
+        "closureEvidence": "strict_seed_base_projection_observed_before_handoff",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "latch_discovery_without_release"},
+      "reason": "Formation cohort discovery precedes the first satisfied capture. A valid seed base projection keeps that cohort engaged while the publication owner persists and acknowledges the handoff, but remains nonauthorizing until exact durable readback.",
+      "invariantRefs": ["seed-readiness-delivery", "base-projection-is-nonauthorizing", "durable-ack-before-release"]
     },
     {
       "id": "first-satisfaction-captures-and-publishes-generation",
@@ -146,8 +175,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "consume_published_release"},
-      "reason": "The joiner validates the seed publication against current authority, durable rows, and current process identity; its local formation owner remains idle.",
-      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+      "reason": "The joiner reads the seed's exact projection through the existing lightweight readiness probe, then validates it against current authority, durable rows, and current process identity; its local formation owner remains idle.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "seed-readiness-delivery", "incarnation-and-safety-fenced"]
     },
     {
       "id": "missing-publication-fails-closed",
@@ -156,8 +185,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "remain_idle"},
-      "reason": "A joiner cannot substitute its local view when the seed-owned durable contract is absent, stale, malformed, or bound to another incarnation.",
-      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+      "reason": "A joiner cannot substitute its local view when the strict seed base projection is absent, stale, malformed, outside the captured placement scope, or bound to another authority. An absent durable handoff on an otherwise valid base projection only latches discovery and never releases.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "seed-readiness-delivery", "incarnation-and-safety-fenced"]
     },
     {
       "id": "seed-restart-restores-one-owner-generation",
@@ -176,8 +205,18 @@
         "generation": "compatible"
       },
       "outcome": {"action": "retain_release"},
-      "reason": "The observational startup membership may expand during staggered joins. Every captured canonical ID remains present, so the immutable generation stays valid while additions remain non-authorizing.",
+      "reason": "The observational startup membership may expand during staggered joins. The immutable generation stays valid while additions remain non-authorizing.",
       "invariantRefs": ["non-monotone-spread-safe", "immutable-captured-cohort-scope"]
+    },
+    {
+      "id": "transient-projection-omission-retains-physical-capture",
+      "when": {
+        "closureEvidence": "captured_member_transiently_omitted_from_current_projection",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "A volatile placement projection cannot revoke an immutable captured member whose durable row and current-primary boot connection still match. Placement retains the captured scope until physical closure or revocation.",
+      "invariantRefs": ["projection-is-not-member-loss-authority", "active-handoff-placement-scope", "non-monotone-spread-safe"]
     },
     {
       "id": "non-cohort-projection-fails-closed",

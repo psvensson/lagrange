@@ -21,6 +21,7 @@ const FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND =
   'formation_release_handoff';
 const FORMATION_RELEASE_HANDOFF_SUMMARY_FIELD =
   'formationReleaseHandoff';
+const FORMATION_RELEASE_PUBLICATION_ABSENT = null;
 
 function formationReleaseHandoffPublicationId(
   authorityNodeId,
@@ -32,7 +33,7 @@ function formationReleaseHandoffPublicationId(
     !numberIsSafeInteger(authorityBootIncarnation) ||
     authorityBootIncarnation <= 0
   ) {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   return 'formation-release-handoff:' +
     `${authorityNodeId}:${authorityBootIncarnation}`;
@@ -79,7 +80,7 @@ function readOwnJsonValue(target, field) {
 function readStrictStringList(target, field) {
   const values = readOwnJsonValue(target, field);
   if (!arrayIsArray(values)) {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   const result = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -217,7 +218,7 @@ function buildFormationReleaseHandoffPublicationRow(contract, now) {
     contract,
   );
   if (!normalized || !numberIsSafeInteger(now) || now <= 0) {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   const terminal =
     normalized.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE;
@@ -258,7 +259,7 @@ function readFormationReleaseHandoffPublicationRow(
   authorityBootIncarnation,
 ) {
   if (!row || typeof row !== 'object') {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   const contract = normalizeFormationReleaseHandoffContract(
     readFormationReleaseSummary(row),
@@ -276,7 +277,7 @@ function readFormationReleaseHandoffPublicationRow(
     !listProjectionMatches(row, contract) ||
     !lifecycleProjectionMatches(row, contract)
   ) {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   return contract;
 }
@@ -291,7 +292,7 @@ function readFormationReleaseHandoffPublicationFromCache(
     authorityBootIncarnation,
   );
   if (!publicationId || typeof systemTableCache?.get !== 'function') {
-    return null;
+    return FORMATION_RELEASE_PUBLICATION_ABSENT;
   }
   return readFormationReleaseHandoffPublicationRow(
     systemTableCache.get(TABLES.CONTROL_PLANE_PUBLICATIONS, publicationId),

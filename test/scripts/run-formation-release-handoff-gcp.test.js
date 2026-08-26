@@ -36,6 +36,22 @@ function buildCohort() {
     {nodeId: 'joiner-b', bootIncarnation: 5},
   ];
 }
+function buildPhysicalEvidence() {
+  return [
+    ['seed', 1, 'active', 'ready'],
+    ['joiner-a', 3, 'joining', 'connected'],
+    ['joiner-b', 5, 'joining', 'connected'],
+  ].map(([nodeId, bootIncarnation, nodeStatus, nodeConnectionState]) => ({
+    nodeId,
+    expectedBootIncarnation: bootIncarnation,
+    nodePresent: true,
+    nodeBootIncarnation: bootIncarnation,
+    nodeStatus,
+    nodeConnectionState,
+    currentPrimaryPresent: true,
+    currentPrimaryBootIncarnation: bootIncarnation,
+  }));
+}
 const GENERATION = formationReleaseGenerationIdentity(
   41,
   'seed',
@@ -229,7 +245,7 @@ function buildIdleTransitionEvent() {
   };
 }
 
-function buildCanonicalExpansionRevocationEvents() {
+function buildTransientProjectionOmissionRevocationEvents() {
   const events = buildPassingEvents();
   events.splice(8, 3, {
     ...events[10],
@@ -242,6 +258,9 @@ function buildCanonicalExpansionRevocationEvents() {
     releaseAuthorized: false,
     readyNodeIds: [],
     pendingNodeIds: [],
+    capturedCanonicalNodeIds: ['joiner-a', 'joiner-b', 'seed'],
+    observedCanonicalNodeIds: ['joiner-b', 'seed'],
+    physicalCohortEvidence: buildPhysicalEvidence(),
   });
   return events;
 }
@@ -500,11 +519,12 @@ test('formation GCP analyzer permits only exact nonauthorizing IDLE grammar ' +
   t.end();
 });
 
-test('formation GCP negative-control owner classifies only an exact canonical ' +
-  'expansion revocation', (t) => {
-  const expected = REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION;
+test('formation GCP negative-control owner classifies only an exact transient ' +
+  'projection-omission revocation', (t) => {
+  const expected =
+    REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION;
   const exact = analyzeFormationReleaseEvents(
-    buildCanonicalExpansionRevocationEvents(),
+    buildTransientProjectionOmissionRevocationEvents(),
     FINGERPRINT,
   );
   t.equal(exact.counterexampleClassification, expected);
@@ -539,9 +559,25 @@ test('formation GCP negative-control owner classifies only an exact canonical ' 
         });
       },
     },
+    {
+      name: 'physical member loss plus revocation',
+      mutate(events) {
+        events[8].physicalCohortEvidence[1].currentPrimaryPresent = false;
+      },
+    },
+    {
+      name: 'complete projection plus revocation',
+      mutate(events) {
+        events[8].observedCanonicalNodeIds = [
+          'joiner-a',
+          'joiner-b',
+          'seed',
+        ];
+      },
+    },
   ];
   for (let index = 0; index < cases.length; index += 1) {
-    const candidate = buildCanonicalExpansionRevocationEvents();
+    const candidate = buildTransientProjectionOmissionRevocationEvents();
     cases[index].mutate(candidate);
     const analysis = analyzeFormationReleaseEvents(candidate, FINGERPRINT);
     t.equal(analysis.counterexampleClassification, null, cases[index].name);
@@ -874,7 +910,7 @@ test('formation GCP runner binds clean committed endpoints to the canonical ' +
       reverseArtifactFile,
       reverseArtifactSha256,
       orderedRevertedPaths: ['src/example.js'],
-      expectedCounterexample: 'canonical_membership_expansion_revocation',
+      expectedCounterexample: 'transient_projection_omission_revocation',
     }, null, 2)}\n`);
     const binding = await resolveRunBinding([
       '--variant=reverted',

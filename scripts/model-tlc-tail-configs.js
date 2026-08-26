@@ -249,6 +249,28 @@ const MODEL_TLC_TAIL_CONFIGS = Object.freeze([
     expectedFailurePattern:
       'Invariant ReleaseRetainedAcrossReopen is violated',
   },
+  {
+    id: 'formation-release-handoff-closure-projection-omission-bug',
+    mode: 'formation-release-handoff-closure-projection-omission-bug',
+    module: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure_projection_omission_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'formation-release-handoff-closure-projection-omission-bug.model.report.json',
+    scenario: 'formation-release-handoff-closure-model',
+    owner: 'control_plane_readiness_startup_authority',
+    boundary: 'transient_projection_omission_revocation_counterexample',
+    expectedFailurePattern:
+      'Invariant ProjectionOmissionCannotRevokePhysicalCohort is violated',
+  },
 ]);
 
 export {MODEL_TLC_TAIL_CONFIGS};
