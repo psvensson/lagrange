@@ -9,7 +9,6 @@ import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 
 const RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT =
   'Raft write commit timed out';
-const numberIsSafeInteger = Number.isSafeInteger;
 
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Distributed operation failed due to participant failures',
@@ -120,8 +119,8 @@ function buildStaleNodeIncarnationError(options = {}) {
  * @return {number} The known incarnation, or 0 when unknown.
  */
 function normalizeKnownNodeBootIncarnation(value) {
-  return typeof value === 'number' && numberIsSafeInteger(value) && value > 0 ?
-    value : 0;
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : 0;
 }
 
 const MAX_LINKED_CONTROL_PLANE_FAILURES = NUM.EIGHT;

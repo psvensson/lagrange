@@ -20,25 +20,6 @@ const {
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
-const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
-const arrayIsArray = Array.isArray;
-const mapPrototypeGet = Function.call.bind(Map.prototype.get);
-const mapPrototypeSet = Function.call.bind(Map.prototype.set);
-const mathMax = Math.max;
-const numberIsFinite = Number.isFinite;
-const objectFreeze = Object.freeze;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const stringConstructor = String;
-const stringPrototypeTrim = Function.call.bind(String.prototype.trim);
-
-function readOwnData(source, field) {
-  if (!source || typeof source !== 'object') return undefined;
-  const descriptor = objectGetOwnPropertyDescriptor(source, field);
-  return descriptor && objectHasOwn(descriptor, 'value') ?
-    descriptor.value : undefined;
-}
-
 // The boot-incarnation fence, resolved against the receiver's best-known
 // incarnation for one nodeId (the durable row's boot_incarnation column when
 // visible, and always the retained per-node high-water map). A writer whose
@@ -47,13 +28,11 @@ function readOwnData(source, field) {
 // (0 / pre-incarnation) never fences, matching the clusterId UNKNOWN policy.
 function resolveNodeBootIncarnationFence(nodeId, payload, watermarks, existingRow) {
   const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
-    readOwnData(payload, ControlPlaneField.BOOT_INCARNATION),
+    payload?.[ControlPlaneField.BOOT_INCARNATION],
   );
-  const knownBootIncarnation = mathMax(
-    normalizeKnownNodeBootIncarnation(
-      readOwnData(existingRow, COLUMN.BOOT_INCARNATION),
-    ),
-    normalizeKnownNodeBootIncarnation(mapPrototypeGet(watermarks, nodeId)),
+  const knownBootIncarnation = Math.max(
+    normalizeKnownNodeBootIncarnation(existingRow?.[COLUMN.BOOT_INCARNATION]),
+    normalizeKnownNodeBootIncarnation(watermarks.get(nodeId)),
   );
   if (
     payloadBootIncarnation > 0 &&
@@ -73,28 +52,27 @@ function resolveNodeBootIncarnationFence(nodeId, payload, watermarks, existingRo
 // keeps working while the durable row is not yet visible.
 function retainNodeBootIncarnationWatermark(watermarks, nodeId, fence) {
   if (fence.payloadBootIncarnation > 0) {
-    mapPrototypeSet(
-      watermarks,
+    watermarks.set(
       nodeId,
-      mathMax(fence.payloadBootIncarnation, fence.knownBootIncarnation),
+      Math.max(fence.payloadBootIncarnation, fence.knownBootIncarnation),
     );
   }
 }
 
-const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
+const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
   enqueueNodeStateUpdate(payload, options = {}) {
     const nodeId = payload?.[ControlPlaneField.NODE_ID];
     const state = payload?.[ControlPlaneField.STATE];
     if (!nodeId || !state) {
       return false;
     }
-    if (!arrayPrototypeIncludes(CONTROL_PLANE_ALLOWED_STATES, state)) {
+    if (!CONTROL_PLANE_ALLOWED_STATES.includes(state)) {
       return false;
     }
 
     const nextWatermark = this.getNodeStateUpdateWatermark(payload);
     const previousWatermark =
-      mapPrototypeGet(this.nodeStateUpdateWatermarks, nodeId) || null;
+      this.nodeStateUpdateWatermarks.get(nodeId) || null;
     const awaitCompletion = options.awaitCompletion === true;
     if (
       !this.isNodeStateUpdateWatermarkNewer(previousWatermark, nextWatermark)
@@ -110,7 +88,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     }
 
     if (nextWatermark) {
-      mapPrototypeSet(this.nodeStateUpdateWatermarks, nodeId, nextWatermark);
+      this.nodeStateUpdateWatermarks.set(nodeId, nextWatermark);
     }
 
     if (this.replaceDeferredNodeStateUpdatePayload(nodeId, payload)) {
@@ -171,7 +149,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       return;
     }
 
-    if (!arrayPrototypeIncludes(CONTROL_PLANE_ALLOWED_STATES, state)) {
+    if (!CONTROL_PLANE_ALLOWED_STATES.includes(state)) {
       return;
     }
 
@@ -184,7 +162,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     );
     const payloadWatermark = this.getNodeStateUpdateWatermark(payload);
     const now = Date.now();
-    const existingConnectionState = stringConstructor(
+    const existingConnectionState = String(
       existing?.[COLUMN.CONNECTION_STATE] || '',
     ).toLowerCase();
     const existingReadyLeaseExpiresAt = Number(
@@ -193,13 +171,13 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     const requestedHeartbeatAt = Number(
       payload[ControlPlaneField.HEARTBEAT_AT],
     );
-    const heartbeatAt = numberIsFinite(requestedHeartbeatAt) ?
-      mathMax(requestedHeartbeatAt, now) :
+    const heartbeatAt = Number.isFinite(requestedHeartbeatAt) ?
+      Math.max(requestedHeartbeatAt, now) :
       now;
     const promotedToReadyFromConnected =
       state === STATE.CONNECTED &&
       existingConnectionState === STATE.READY &&
-      numberIsFinite(existingReadyLeaseExpiresAt) &&
+      Number.isFinite(existingReadyLeaseExpiresAt) &&
       existingReadyLeaseExpiresAt > now;
     const nextState = promotedToReadyFromConnected ? STATE.READY : state;
     // The canonical write owner grants the lease. Forwarding latency must not
@@ -283,7 +261,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       payloadNodeAddress: payload[ControlPlaneField.NODE_ADDRESS],
       payload,
       isHeartbeatOnly,
-      incarnationFence,
     });
 
     const updateResult =
@@ -382,7 +359,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       payloadNodeAddress,
       payload,
       isHeartbeatOnly,
-      incarnationFence,
     } = options || {};
 
     const baseNodeAddress =
@@ -390,18 +366,10 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       nodeRow?.[COLUMN.NODE_ADDRESS] ||
       existing?.[COLUMN.NODE_ADDRESS] ||
       STRING.UNKNOWN;
-    const durableBootIncarnation = mathMax(
-      normalizeKnownNodeBootIncarnation(
-        readOwnData(incarnationFence, 'payloadBootIncarnation'),
-      ),
-      normalizeKnownNodeBootIncarnation(
-        readOwnData(incarnationFence, 'knownBootIncarnation'),
-      ),
-    );
 
     if (isHeartbeatOnly === true) {
       const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
-      const capabilities = arrayIsArray(payloadCapabilities) ?
+      const capabilities = Array.isArray(payloadCapabilities) ?
         JSON.stringify(payloadCapabilities) :
         typeof payloadCapabilities === 'string' ?
           payloadCapabilities :
@@ -412,9 +380,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
         [COLUMN.CONNECTION_STATE]: nextState,
         [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
         [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
-        ...(durableBootIncarnation > 0 ? {
-          [COLUMN.BOOT_INCARNATION]: durableBootIncarnation,
-        } : {}),
       };
       if (
         nextState === STATE.READY &&
@@ -435,7 +400,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     }
 
     const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
-    const capabilities = arrayIsArray(payloadCapabilities) ?
+    const capabilities = Array.isArray(payloadCapabilities) ?
       JSON.stringify(payloadCapabilities) :
       typeof payloadCapabilities === 'string' ?
         payloadCapabilities :
@@ -444,26 +409,26 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     return {
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.NODE_ADDRESS]: baseNodeAddress,
-      [COLUMN.CPU_CORES]: numberIsFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
+      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
         nodeRow[COLUMN.CPU_CORES] :
         existing?.[COLUMN.CPU_CORES] || 0,
-      [COLUMN.MEMORY_MB]: numberIsFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
+      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
         nodeRow[COLUMN.MEMORY_MB] :
         existing?.[COLUMN.MEMORY_MB] || 0,
-      [COLUMN.DISK_GB]: numberIsFinite(nodeRow?.[COLUMN.DISK_GB]) ?
+      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
         nodeRow[COLUMN.DISK_GB] :
         existing?.[COLUMN.DISK_GB] || 0,
-      [COLUMN.CPU_USAGE_PERCENT]: numberIsFinite(
+      [COLUMN.CPU_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.CPU_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.CPU_USAGE_PERCENT] :
         existing?.[COLUMN.CPU_USAGE_PERCENT] || 0,
-      [COLUMN.MEMORY_USAGE_PERCENT]: numberIsFinite(
+      [COLUMN.MEMORY_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
         existing?.[COLUMN.MEMORY_USAGE_PERCENT] || 0,
-      [COLUMN.DISK_USAGE_PERCENT]: numberIsFinite(
+      [COLUMN.DISK_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.DISK_USAGE_PERCENT],
       ) ?
         nodeRow[COLUMN.DISK_USAGE_PERCENT] :
@@ -479,9 +444,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
       [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
-      ...(durableBootIncarnation > 0 ? {
-        [COLUMN.BOOT_INCARNATION]: durableBootIncarnation,
-      } : {}),
       ...this.resolveNodeStateUpdateBudgetFields(nodeRow),
     };
   },
@@ -530,9 +492,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       this.nodeBootIncarnationWatermarks,
       null,
     );
-    const nodeAddress = stringPrototypeTrim(stringConstructor(
-      baseRow?.[COLUMN.NODE_ADDRESS] || '',
-    ));
+    const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
     if (nodeAddress.length === 0 || nodeAddress === STRING.UNKNOWN) {
       return false;
     }
@@ -556,7 +516,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       if (upsertResult?.success === false) {
         const upsertError = new Error(
           'Failed to bootstrap missing node row from NODE_STATE_UPDATE: ' +
-            stringConstructor(
+            String(
               upsertResult.error || DISPATCH_READINESS_ERROR_REASON.UNKNOWN,
             ),
         );
@@ -565,7 +525,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
           REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED;
         if (upsertResult.deferRetry === true) {
           upsertError.deferRetry = true;
-          upsertError.retryAfterMs = numberIsFinite(upsertResult.retryAfterMs) ?
+          upsertError.retryAfterMs = Number.isFinite(upsertResult.retryAfterMs) ?
             upsertResult.retryAfterMs :
             this.nodeStateUpdateRetryAfterMs;
         }
@@ -589,7 +549,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       }
       if (error?.deferRetry === true || isRetryableControlPlaneError(error)) {
         error.deferRetry = true;
-        error.retryAfterMs = numberIsFinite(error?.retryAfterMs) ?
+        error.retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
           error.retryAfterMs :
           this.nodeStateUpdateRetryAfterMs;
       }

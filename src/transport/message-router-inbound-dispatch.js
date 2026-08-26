@@ -1,13 +1,6 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 
-const objectDefineProperty = Object.defineProperty;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const jsonParse = JSON.parse;
-const bufferIsBuffer = Buffer.isBuffer;
-const bufferToString = Function.call.bind(Buffer.prototype.toString);
-
 const {
   ConnectionState,
   INCOMING_CONNECTION_ADOPTION,
@@ -21,45 +14,6 @@ const {
   TRANSPORT_TYPEOF,
   normalizeToWebSocketAddress,
 } = MESSAGE_ROUTER_SHARED;
-
-function claimIdentificationReply(connection) {
-  const descriptor = objectGetOwnPropertyDescriptor(
-    connection,
-    'identificationReplySent',
-  );
-  if (
-    !descriptor ||
-    !objectHasOwn(descriptor, 'value') ||
-    descriptor.value !== false
-  ) {
-    return false;
-  }
-  objectDefineProperty(connection, 'identificationReplySent', {
-    configurable: true,
-    enumerable: true,
-    value: true,
-    writable: true,
-  });
-  return true;
-}
-
-function readOwnData(target, field) {
-  if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
-    return undefined;
-  }
-  const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, 'value') ?
-    descriptor.value : undefined;
-}
-
-function parseInboundFrame(data) {
-  const text = typeof data === 'string' ?
-    data : bufferIsBuffer(data) ? bufferToString(data) : null;
-  if (text === null) {
-    throw new TypeError('Unsupported WebSocket frame payload');
-  }
-  return jsonParse(text);
-}
 
 /**
  * Inbound dispatch for the message router: parse incoming frames, record peer
@@ -88,51 +42,48 @@ class MessageRouterInboundDispatch {
   }
   handleMessage(connectionId, ws, data) {
     try {
-      const message = parseInboundFrame(data);
-      const messageType = readOwnData(message, 'type');
-      const messageId = readOwnData(message, 'messageId');
+      const message = JSON.parse(data.toString());
       this.recordNodeInboundActivity(connectionId);
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
-        type: messageType,
-        messageId,
+        type: message.type,
+        messageId: message.messageId,
       });
-      if (messageType === RouterMessageType.IDENTIFY) {
+      if (message.type === RouterMessageType.IDENTIFY) {
         this.handleIdentification(connectionId, ws, message);
         return;
       }
-      if (messageType === RouterMessageType.PING) {
+      if (message.type === RouterMessageType.PING) {
         this.sendRaw(ws, {
           type: RouterMessageType.PONG,
-          pingId: readOwnData(message, 'pingId') || null,
+          pingId: message.pingId || null,
           timestamp: Date.now(),
         });
         return;
       }
-      if (messageType === RouterMessageType.PONG) {
-        const pingId = readOwnData(message, 'pingId');
-        if (pingId && this.pendingPings.has(pingId)) {
-          const pending = this.pendingPings.get(pingId);
+      if (message.type === RouterMessageType.PONG) {
+        if (message.pingId && this.pendingPings.has(message.pingId)) {
+          const pending = this.pendingPings.get(message.pingId);
           clearTimeout(pending.timeout);
-          this.pendingPings.delete(pingId);
+          this.pendingPings.delete(message.pingId);
           pending.resolve(true);
         }
         return;
       }
-      if (messageType === RouterMessageType.ACK) {
+      if (message.type === RouterMessageType.ACK) {
         this.handleAcknowledgment(message);
         return;
       }
-      if (messageType === RouterMessageType.SERVICE_RESPONSE) {
+      if (message.type === RouterMessageType.SERVICE_RESPONSE) {
         this.handleServiceResponse(message);
         return;
       }
-      if (messageType === RouterMessageType.SERVICE_MESSAGE) {
+      if (message.type === RouterMessageType.SERVICE_MESSAGE) {
         this.handleServiceMessage(ws, message);
         return;
       }
       this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
-        type: messageType,
+        type: message.type,
         connectionId,
       });
     } catch (error) {
@@ -151,13 +102,13 @@ class MessageRouterInboundDispatch {
    * @private
    */
   handleIdentification(connectionId, ws, message) {
-    const identity = this.connectionAuthorityOwner
-      .readIncomingIdentificationEnvelope(message);
-    if (!identity) {
+    const nodeId = message?.nodeId;
+    const nodeAddress = message?.nodeAddress || message?.address;
+    if (!nodeId || !nodeAddress) {
       this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
         connectionId,
-        hasNodeId: false,
-        hasNodeAddress: false,
+        hasNodeId: !!nodeId,
+        hasNodeAddress: !!nodeAddress,
       });
       try {
         ws.close();
@@ -170,7 +121,6 @@ class MessageRouterInboundDispatch {
       }
       return;
     }
-    const {nodeId, nodeAddress, channel, bootIncarnation} = identity;
     this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_RECEIVED, {
       connectionId,
       remoteNodeId: nodeId,
@@ -207,7 +157,7 @@ class MessageRouterInboundDispatch {
       // record mutation. The socket is handed to the bulk channel registry;
       // the primary per-peer connection is never rekeyed, evicted, or
       // reconnect-fought, and no NODE_CONNECTED/NODE_IDENTIFIED is emitted.
-      if (channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+      if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
         this.adoptBulkChannelSocket(connectionId, ws, nodeId);
         return;
       }
@@ -218,14 +168,14 @@ class MessageRouterInboundDispatch {
       if (
         this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
           nodeId,
-          bootIncarnation,
+          message.bootIncarnation,
         )
       ) {
         this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
           connectionId,
           remoteNodeId: nodeId,
           localNodeId: this.nodeId,
-          bootIncarnation,
+          bootIncarnation: message.bootIncarnation,
         });
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
@@ -247,19 +197,15 @@ class MessageRouterInboundDispatch {
       connection.configuredAddress = normalizedAddress;
       this.rememberReconnectAddress(connection, ws, normalizedAddress);
       const adoptionDecision =
-        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
-          nodeId,
-          bootIncarnation,
-        );
+        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(nodeId);
       const existing = adoptionDecision.existing;
       if (
         adoptionDecision.state ===
         INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION
       ) {
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
           nodeId,
-          existing,
-          bootIncarnation,
+          message.bootIncarnation,
         );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
@@ -299,19 +245,10 @@ class MessageRouterInboundDispatch {
           );
         }
         this.nodeConnections.set(nodeId, connection);
-        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
           nodeId,
-          connection,
-          bootIncarnation,
+          message.bootIncarnation,
         );
-        // IDENTIFY is a bilateral current-primary identity exchange. The
-        // dialer has already identified itself on this socket; reply exactly
-        // once, and only after admission, stale-incarnation fencing, and
-        // primary adoption have all succeeded. The dialer's outgoing branch
-        // consumes this reply without replying again.
-        if (claimIdentificationReply(connection)) {
-          this.sendIdentification(connection);
-        }
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
           newKey: nodeId,
@@ -325,6 +262,10 @@ class MessageRouterInboundDispatch {
         // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
         this.startPingInterval(connection);
       } else {
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+          nodeId,
+          message.bootIncarnation,
+        );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
@@ -341,39 +282,9 @@ class MessageRouterInboundDispatch {
             error: error.message,
           });
         }
-        return;
       }
-    } else if (connection && connection.ws === ws) {
-      if (
-        this.connectionAuthorityOwner
-          .shouldRefuseStaleBootIncarnationIdentification(
-            nodeId,
-            bootIncarnation,
-          )
-      ) {
-        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
-          connectionId,
-          remoteNodeId: nodeId,
-          localNodeId: this.nodeId,
-          bootIncarnation,
-        });
-        try {
-          ws.terminate();
-        } catch (error) {
-          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
-            nodeId,
-            error: error.message,
-          });
-        }
-        return;
-      }
-      this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
-        nodeId,
-        connection,
-        bootIncarnation,
-      );
     }
-    if (channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+    if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
       // A bulk-channel IDENTIFY that did not match an incoming record above
       // has nothing to adopt and is never a primary identification.
       try {

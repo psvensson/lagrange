@@ -188,7 +188,6 @@ const bootstrapRequestOwnerHandlerMethods = {
       const responseTimestamp = Date.now();
       const startupAuthority =
         this.getStartupAuthoritySnapshotForBootstrapResponse(
-          nodeId,
           responseTimestamp,
         );
       this.logBootstrapRequestDeferred({
@@ -446,7 +445,6 @@ const bootstrapRequestOwnerHandlerMethods = {
         const responseTimestamp = Date.now();
         const startupAuthority =
           this.getStartupAuthoritySnapshotForBootstrapResponse(
-            nodeId,
             responseTimestamp,
           );
         this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
@@ -543,10 +541,7 @@ const bootstrapRequestOwnerHandlerMethods = {
       const latencyTopologyHints = this.getLatencyTopologyHints(nodeId);
       const responseTimestamp = Date.now();
       const startupAuthority =
-        this.getStartupAuthoritySnapshotForBootstrapResponse(
-          nodeId,
-          responseTimestamp,
-        );
+        this.getStartupAuthoritySnapshotForBootstrapResponse(responseTimestamp);
       const seedNodeWsAddress = resolveAdvertisedWebSocketAddress({
         advertisedAddress: this.getSeedNodeWsAddress(),
         nodeAddress: this.getSeedNodeAddress() ||
@@ -621,7 +616,6 @@ const bootstrapRequestOwnerHandlerMethods = {
         const responseTimestamp = Date.now();
         const startupAuthority =
           this.getStartupAuthoritySnapshotForBootstrapResponse(
-            nodeId,
             responseTimestamp,
           );
         const requestExecutionBudgetExhausted =

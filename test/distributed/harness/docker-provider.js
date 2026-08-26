@@ -8,8 +8,6 @@
 import Docker from 'dockerode';
 import {createWriteStream, readdirSync} from 'node:fs';
 import path from 'node:path';
-import {computeFileSetFingerprint} from
-  '../../../src/diagnostics/source-fingerprint.js';
 import {Writable} from 'node:stream';
 import {
   PORTS,
@@ -133,18 +131,6 @@ function buildImageContext(contextPath, dockerfile) {
     context: contextPath,
     src: entries,
   };
-}
-
-async function resolveDockerBuildContextManifest(contextPath, dockerfile) {
-  const buildContext = buildImageContext(contextPath, dockerfile);
-  return Object.freeze({
-    buildInputDigest: await computeFileSetFingerprint(
-      contextPath,
-      buildContext.src,
-    ),
-    context: buildContext.context,
-    entries: Object.freeze([...buildContext.src]),
-  });
 }
 
 function normalizeContainerOptions(options) {
@@ -1464,5 +1450,4 @@ export {
   DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
   DockerProvider,
   parseContainerStats,
-  resolveDockerBuildContextManifest,
 };

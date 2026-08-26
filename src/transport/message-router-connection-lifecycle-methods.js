@@ -23,8 +23,6 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
-const numberIsSafeInteger = Number.isSafeInteger;
-const objectFreeze = Object.freeze;
 
 class MessageRouterConnectionLifecycleMethods {
   /**
@@ -248,7 +246,6 @@ class MessageRouterConnectionLifecycleMethods {
       reconnectDueAt: null,
       isIncoming: false,
       isSelfConnection: options.isSelfConnection || false,
-      bootIncarnation: TRANSPORT_NUM.ZERO,
       ackTimeoutStreak: TRANSPORT_NUM.ZERO,
       lastAckAt: null,
       lastAckTimeoutAt: null,
@@ -364,7 +361,6 @@ class MessageRouterConnectionLifecycleMethods {
           connectionEstablished = true;
           clearConnectTimeout();
           connectionInfo.ws = ws;
-          connectionInfo.bootIncarnation = TRANSPORT_NUM.ZERO;
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
           connectionInfo.reconnectDueAt = null;
@@ -469,7 +465,6 @@ class MessageRouterConnectionLifecycleMethods {
       return;
     }
     connectionInfo.ws = clientWs;
-    connectionInfo.bootIncarnation = TRANSPORT_NUM.ZERO;
     connectionInfo.state = ConnectionState.CONNECTED;
     connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
     connectionInfo.reconnectDueAt = null;
@@ -514,24 +509,6 @@ class MessageRouterConnectionLifecycleMethods {
       message.bootstrap = this.identifyPayload;
     }
     this.sendRaw(connectionInfo.ws, message);
-  }
-  getCurrentPrimaryConnectionBootIncarnation(nodeId) {
-    return this.connectionAuthorityOwner.getCurrentPrimaryBootIncarnation(
-      nodeId,
-    );
-  }
-  getLocalBootIncarnationIdentity() {
-    if (
-      !numberIsSafeInteger(this.bootIncarnation) ||
-      this.bootIncarnation <= TRANSPORT_NUM.ZERO
-    ) {
-      return null;
-    }
-    return objectFreeze({
-      nodeId: this.nodeId,
-      bootIncarnation: this.bootIncarnation,
-      connectionId: `local:${this.routerId}:${this.bootIncarnation}`,
-    });
   }
 }
 

@@ -4,10 +4,6 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {hasLiveTransportEvidence} from './live-transport-evidence.js';
-import {
-  FORMATION_RELEASE_HANDOFF_STATE,
-  normalizeFormationReleaseHandoffContract,
-} from './formation-release-handoff-contract.js';
 
 const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = new Set();
 const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
@@ -24,7 +20,6 @@ const FORMATION_COHORT_SPREAD_CURE_STATE = Object.freeze({
   RECOVERY_CLOSED: 'recovery_closed',
   NOT_JOINING: 'not_joining',
   PLACEMENT_INELIGIBLE: 'placement_ineligible',
-  OUTSIDE_HANDOFF_COHORT: 'outside_handoff_cohort',
   CURE_TARGET: 'cure_target',
 });
 const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
@@ -34,9 +29,7 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.RECOVERY_CLOSED,
-    matches: (evidence) =>
-      evidence.priorityRecoveryActive !== true &&
-      evidence.formationReleaseHandoffActive !== true,
+    matches: (evidence) => evidence.priorityRecoveryActive !== true,
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.NOT_JOINING,
@@ -47,59 +40,23 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
     matches: (evidence) => evidence.placementEligible !== true,
   }),
   Object.freeze({
-    state: FORMATION_COHORT_SPREAD_CURE_STATE.OUTSIDE_HANDOFF_COHORT,
-    matches: (evidence) =>
-      evidence.priorityRecoveryActive !== true &&
-      evidence.formationReleaseHandoffActive === true &&
-      evidence.formationReleaseHandoffCohortMember !== true,
-  }),
-  Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.CURE_TARGET,
     matches: () => true,
   }),
 ]);
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const arrayIsArray = Array.isArray;
-const SetConstructor = Set;
-const setPrototypeAdd = Function.call.bind(Set.prototype.add);
-
-function readOwnData(target, field) {
-  if (!target || typeof target !== 'object') return undefined;
-  const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, 'value') ?
-    descriptor.value : undefined;
-}
-
-function appendPlacementNodeIds(nodeIds, values) {
-  if (!arrayIsArray(values)) return;
-  for (let index = 0; index < values.length; index += 1) {
-    const value = readOwnData(values, index);
-    if (typeof value === 'string' && value.length > 0) {
-      setPrototypeAdd(nodeIds, value);
-    }
-  }
-}
 
 function resolveStartupAuthorityNodeIdSet(startupAuthority) {
-  if (readOwnData(startupAuthority, 'authorityAvailable') !== true) {
+  if (startupAuthority?.authorityAvailable !== true) {
     return EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
   }
-  const nodeIds = new SetConstructor();
-  appendPlacementNodeIds(
-    nodeIds,
-    readOwnData(startupAuthority, 'canonicalStartupNodeIds'),
-  );
-  const handoff = normalizeFormationReleaseHandoffContract(
-    readOwnData(startupAuthority, 'formationReleaseHandoff'),
-  );
-  if (
-    handoff?.state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
-    handoff.releaseAuthorized === true
-  ) {
-    appendPlacementNodeIds(nodeIds, handoff.canonicalNodeIds);
-  }
-  return nodeIds;
+  const nodeIds = Array.isArray(startupAuthority.canonicalStartupNodeIds) ?
+    startupAuthority.canonicalStartupNodeIds.filter(
+      (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
+    ) :
+    [];
+  return nodeIds.length > 0 ?
+    new Set(nodeIds) :
+    EMPTY_STARTUP_AUTHORITY_NODE_ID_SET;
 }
 
 /**
@@ -159,10 +116,6 @@ function classifyFormationCohortSpreadCureNode(options = {}) {
   const evidence = Object.freeze({
     priorityRecoveryLane: options.priorityRecoveryLane === true,
     priorityRecoveryActive: options.priorityRecoveryActive === true,
-    formationReleaseHandoffActive:
-      options.formationReleaseHandoffActive === true,
-    formationReleaseHandoffCohortMember:
-      options.formationReleaseHandoffCohortMember === true,
     joining: options.node?.status === NODE_STATE.JOINING,
     placementEligible:
       isStartupAuthorityControlPlanePlacementEligibleNode(options),

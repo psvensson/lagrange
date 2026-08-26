@@ -353,13 +353,9 @@ class BootstrapRequestOwner {
     return this.delegates.getLatencyTopologyHints?.(nodeId) || null;
   }
 
-  getStartupAuthoritySnapshotForBootstrapResponse(
-    projectionNodeId,
-    observedAt,
-  ) {
+  getStartupAuthoritySnapshotForBootstrapResponse(observedAt) {
     const startupAuthority =
       this.delegates.getStartupAuthoritySnapshotForBootstrapResponse?.(
-        projectionNodeId,
         observedAt,
       );
     return startupAuthority && typeof startupAuthority === 'object' ?
@@ -494,10 +490,7 @@ class BootstrapRequestOwner {
       retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
     });
     const startupAuthority =
-      this.getStartupAuthoritySnapshotForBootstrapResponse(
-        options.nodeId,
-        observedAt,
-      );
+      this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
     reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
     return this.buildBootstrapNotReadyResponse({
       error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
@@ -524,10 +517,7 @@ class BootstrapRequestOwner {
       retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
     });
     const startupAuthority =
-      this.getStartupAuthoritySnapshotForBootstrapResponse(
-        options.nodeId,
-        observedAt,
-      );
+      this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
     reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
     return this.buildBootstrapNotReadyResponse({
       error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,

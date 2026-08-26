@@ -29,8 +29,6 @@ import {
   CLUSTER_FACTORY_LAYER,
 } from '../../test/distributed/harness/cluster-factory-layer.js';
 import {buildImage} from '../../test/distributed/build-image.js';
-import {resolveDockerBuildContextManifest} from
-  '../../test/distributed/harness/docker-provider.js';
 import {
   applySourceFingerprintConfig,
 } from '../../test/distributed/source-fingerprint-config.js';
@@ -154,12 +152,7 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
  * @return {Promise<{cluster: Object, provisioner: Object, target: string,
  *   seedExternalIp: string, stop: Function}>}
  */
-async function startGcpAffinityCluster({
-  verbose = false,
-  outputDir,
-  buildRoot = process.cwd(),
-  expectedBuildInputDigest = null,
-} = {}) {
+async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
   const deploymentProfile = resolveGcpDemoDeploymentProfile();
   const provisioner = new GCPProvisioner(deploymentProfile.infrastructure);
   let provisioned = false;
@@ -179,19 +172,8 @@ async function startGcpAffinityCluster({
     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
     const config = await applySourceFingerprintConfig(
       buildGcpDemoClusterConfig(deploymentProfile),
-      buildRoot,
     );
-    const buildContextManifest = await resolveDockerBuildContextManifest(
-      buildRoot,
-      config.dockerfile || 'Dockerfile',
-    );
-    if (expectedBuildInputDigest !== null &&
-      buildContextManifest.buildInputDigest !== expectedBuildInputDigest) {
-      throw new Error('GCP runtime build-input digest mismatch');
-    }
-    config.image = `${config.image}-${config.docker.srcFingerprint}-` +
-      buildContextManifest.buildInputDigest.slice(0, 16);
-    await buildImage(config, false, null, {buildRoot});
+    await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);
 
     cluster = createCluster({

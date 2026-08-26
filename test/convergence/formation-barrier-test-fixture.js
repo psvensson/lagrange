@@ -162,8 +162,6 @@ function buildFormationBarrierOwner({
   NodeService.getInstance().setSystemCacheProxy(cache);
   const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
   owner.nodeId = JOINER_1_NODE_ID;
-  owner.seedNodeId = SEED_NODE_ID;
-  owner.seedNodeAddress = 'http://seed-node:8080';
   owner.startupMode = startupMode;
   owner.config = {
     priorityPlacementFormationDiscoveryMs: 0,
@@ -198,23 +196,6 @@ function buildFormationBarrierOwner({
       ready,
       authorityAvailable: true,
     });
-  };
-  readinessService.validateFormationReleaseStartupAuthorityProjection =
-    (startupAuthority) => startupAuthority;
-  owner.httpGetJson = async () => {
-    const current = readinessService.getStartupAuthoritySnapshotSync();
-    return {
-      statusCode: 503,
-      body: {
-        startupAuthority: {
-          ...current,
-          formationReleaseHandoff: {
-            state: 'active',
-            releaseAuthorized: current?.ready === true,
-          },
-        },
-      },
-    };
   };
   owner.rebalanceCoordinator = coordinator || {
     controlPlaneReadinessService: readinessService,
