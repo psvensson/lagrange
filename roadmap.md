@@ -54,6 +54,47 @@ Backup/restore/PITR, enterprise identity controls, secrets/KMS integration, and
 cross-region durability are separate product areas and must follow their edition
 and implementation-home decisions.
 
+## Cross-cutting milestone - Installable Service Product Platform
+
+Before first-party paid services such as Lagrange AI can be shipped to customers,
+Lagrange needs a coherent product boundary for installing and operating a
+service. This milestone draws together existing service-platform work that was
+previously spread across runtime, registry, external-kernel, observability and
+commercial-control tracks. It does not change edition ownership: shared service
+substrate remains Community/AGPL where assigned there, while paid-only
+entitlements, advanced telemetry and secrets/KMS behavior remain in their
+commercial implementation homes.
+
+The customer-facing target is that a signed service can be installed into an
+existing cluster without a repository checkout or a second service manager.
+The shared platform therefore needs:
+
+- signed, immutable OCI package/revision identity and verified acquisition;
+- real managed OCI service activation, restart and desired-state reconciliation;
+- kernel/service compatibility and dependency preflight before activation;
+- declarative configuration and health/readiness contracts;
+- one install/status/remove/upgrade surface with idempotent operations;
+- health-gated rollout and rollback to a prior known-good revision;
+- a stable service diagnostics/metrics contribution contract;
+- a customer-inspectable, redacted support-bundle format to which services can
+  contribute diagnostics;
+- customer-controlled telemetry/export plumbing that never doubles as a
+  licensing requirement;
+- air-gapped/mirrored artifact operation; and
+- clean integration points for commercial entitlement checks and
+  cluster-resolved secret references where the customer's edition provides them.
+
+The first acceptance consumer should be a real separately released service,
+with Lagrange AI a natural candidate. The proof is not merely that `INSTALL
+SERVICE` records a package: the service must become ready under Lagrange
+ownership, survive restart, expose useful diagnostics, upgrade and roll back
+through the supported lifecycle, and remove without leaving unmanaged runtime
+state.
+
+Implementation scope and sequencing remain governed by the AGPL feature map and
+edition matrix; this milestone is the product-level convergence gate those rows
+must satisfy together.
+
 ## Later - 1.0 Production Ready: production support
 
 A production-supported release requires explicit, evidence-backed guarantees:
@@ -67,6 +108,12 @@ A production-supported release requires explicit, evidence-backed guarantees:
 - support boundaries that distinguish implemented, tested, certified, and
   commercially supported behavior.
 
+A commercially supported installable service additionally depends on the
+Installable Service Product Platform milestone above; first-party services
+should consume that common lifecycle rather than introducing product-specific
+installers, telemetry transports, support collectors, secret stores, or
+upgraders.
+
 ## Future - 2.0 Deeper Distributed Execution
 
 Once the bounded call path and its operating contract are stable, deeper
@@ -75,9 +122,13 @@ execution can add:
 - multi-stage plans with streaming exchange and backpressure;
 - deeper call composition;
 - concurrent invocations on one Cell instance;
-- query-planner-initiated pushdown;
-- typed language SDKs and generated operation handles; and
-- an installable service ecosystem with dependency and upgrade handling.
+- query-planner-initiated pushdown; and
+- typed language SDKs and generated operation handles.
+
+The installable-service platform is no longer treated as an optional 2.0
+addition: its foundational product lifecycle is a prerequisite for separately
+released customer services. Phase 2.0 can deepen the external service API and
+placement model once that common lifecycle is usable.
 
 These extend the same model rather than introducing a second product:
 applications call one service, and Lagrange runs the relevant functions where
