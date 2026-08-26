@@ -62,15 +62,24 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    reachable from `origin/main`. The npm owner records the tarball SHA-512 and
    `gitHead`; a rerun skips npm only when both match, and fails closed on a
    foreign package, immutable-version content conflict, or commit conflict. A
-   rerun of the current tag replaces existing GitHub release assets and notes,
+   tagged `README.md` must also be byte-identical to `package/README.md` in
+   the built tarball, and the npm registry's latest-package README must match
+   that candidate before publication is considered complete. The package
+   command reports the README SHA-256 alongside the artifact identity. A rerun
+   of the current tag replaces existing GitHub release assets and notes,
    then publishes any draft left by an interrupted first attempt.
 6. **Docker Hub overview updates itself.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
    section (from `CHANGELOG.md`) and PATCHes it to the repository description
    at <https://hub.docker.com/r/psvensson/lagrange> via the Hub API
-   (best-effort — a failed description update never sinks a release). Manual
-   fallback if the step warns:
+   and then reads the public description back until its bytes exactly match.
+   The Docker Hub token must have Read/Write/Delete scope; a forbidden update
+   or mismatched readback fails the release. Before npm or image publication,
+   the same owner also performs an exact no-op PATCH/readback of the current
+   overview, so missing description authority cannot create another partial
+   public release. Manual recovery after correcting
+   the token or repository permission:
    `npm run release:notes -- --mode overview --version x.y.z` and paste the
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.

@@ -2,7 +2,7 @@
 #
 # Repository configuration:
 #   variable DOCKERHUB_USERNAME — Docker Hub username (for example psvensson)
-#   secret   DOCKERHUB_TOKEN    — Docker Hub PAT with Read/Write scope
+#   secret   DOCKERHUB_TOKEN    — Docker Hub PAT with Read/Write/Delete scope
 #   npm publishing uses Trusted Publishing (OIDC) — configured on npmjs.com
 #   2026-08-24 for psvensson/lagrange release.yml; no npm token or secret.
 name: release
@@ -131,6 +131,19 @@ jobs:
           echo "tagged_commit=$TAGGED_COMMIT" >> "$GITHUB_OUTPUT"
           echo "notes_dir=$NOTES_DIR" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      # Prove repository-description write authority before the expensive gate
+      # and before any immutable npm version or Docker image tag is published.
+      # This sends an exact no-op PATCH of the current public description
+      # through the same owner/API used by the final publication.
+      - name: Preflight Docker Hub repository-description authority
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/release-dockerhub-description.js preflight \
+            --repository psvensson/lagrange
 
       - name: Install gate CLI tools
         # Bounds a HANG, not the normal duration. Measured on hosted runners:
@@ -307,14 +320,19 @@ jobs:
           fi
           retry docker push "$DOCKERHUB_IMAGE:latest"
 
-      - name: Update Docker Hub repository description
-        continue-on-error: true
-        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: psvensson/lagrange
-          readme-filepath: ${{ steps.release.outputs.notes_dir }}/dockerhub-overview.md
+      # This is release-critical public documentation. The repository-owned
+      # publisher updates the overview and polls the public Hub API until its
+      # bytes exactly match the rendered tagged source. A forbidden PATCH or
+      # stale/mismatched readback fails the release instead of being hidden.
+      - name: Publish and verify Docker Hub repository description
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/release-dockerhub-description.js publish \
+            --repository psvensson/lagrange \
+            --readme-file "${{ steps.release.outputs.notes_dir }}/dockerhub-overview.md"
 
       - name: Publish GitHub Release
         env:
