@@ -515,8 +515,12 @@ class BootstrapAPI {
           getTablePolicies: () => this.getTablePolicies(),
           getLatencyTopologyHints: (nodeId) =>
             this.getLatencyTopologyHints(nodeId),
-          getStartupAuthoritySnapshotForBootstrapResponse: (observedAt) =>
-            this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt),
+          getStartupAuthoritySnapshotForBootstrapResponse:
+            (projectionNodeId, observedAt) =>
+              this.getStartupAuthoritySnapshotForBootstrapResponse(
+                projectionNodeId,
+                observedAt,
+              ),
         },
       });
     this.bootstrapClusterViewOwner =

@@ -4,7 +4,10 @@ import {formationReleaseCohortIdentity, formationReleaseGenerationIdentity} from
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
 const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
 const booleanConstructor = Boolean;
+const DateConstructor = Date;
 const dateParse = Date.parse;
+const dateToISOString = Function.call.bind(Date.prototype.toISOString);
+const jsonParse = JSON.parse;
 const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
@@ -18,9 +21,46 @@ const FORMATION_TIMEOUT_CODE = 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT';
 const SPREAD_REOPEN_REASON = 'priority_partitions_not_spread';
 const ACTIVE_REASON = 'retained_until_captured_cohort_ready';
 const COMPLETE_REASON = 'captured_cohort_ready';
+const IDLE_REASON = 'no_satisfied_formation_cohort';
+const REVOKED_REASONS = Object.freeze([
+  'startup_authority_incompatible',
+  'captured_cohort_member_missing',
+  'captured_cohort_incarnation_changed',
+  'captured_cohort_member_ineligible',
+]);
 const NODE_COUNT = 5;
 const MINIMUM_COHORT_SIZE = 2;
 const CERTIFICATION_BUDGET_MS = 60_000;
+const REVERT_COUNTEREXAMPLE = Object.freeze({
+  CANONICAL_EXPANSION_REVOCATION:
+    'canonical_membership_expansion_revocation',
+  FORMATION_TIMEOUT_WITHOUT_GENERATION:
+    'formation_timeout_without_generation',
+});
+const EVENT_FIELDS = Object.freeze([
+  'authorityBootIncarnation',
+  'authorityNodeId',
+  'bootedSrcFingerprint',
+  'capturedPublicationEpoch',
+  'code',
+  'error',
+  'errorCode',
+  'expectedSrcFingerprint',
+  'formationReleaseHandoffGeneration',
+  'formationReleaseHandoffReleaseAuthorized',
+  'formationReleaseHandoffState',
+  'generation',
+  'observedAuthorityReady',
+  'observedPublicationEpoch',
+  'observedRecoveryReasonCodes',
+  'pendingNodeIds',
+  'readyNodeIds',
+  'reason',
+  'releaseAuthorized',
+  'requiredCohort',
+  'srcFingerprintMatches',
+  'state',
+]);
 
 function readOwnData(target, field) {
   if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
@@ -40,6 +80,65 @@ function readOwnString(target, field) {
 function readOwnPositiveInteger(target, field) {
   const value = readOwnData(target, field);
   return numberIsSafeInteger(value) && value > 0 ? value : null;
+}
+
+function parseLogMetadata(entry) {
+  const rawMetadata = readOwnData(entry, 'metadata');
+  if (rawMetadata && typeof rawMetadata === 'object') return rawMetadata;
+  if (typeof rawMetadata !== 'string') return null;
+  try {
+    const parsed = jsonParse(rawMetadata);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function copyKnownEventFields(metadata) {
+  const event = {};
+  for (let index = 0; index < EVENT_FIELDS.length; index += 1) {
+    const field = EVENT_FIELDS[index];
+    const value = readOwnData(metadata, field);
+    if (value !== undefined) event[field] = value;
+  }
+  return event;
+}
+
+function logEntryTime(entry) {
+  const rawTimestamp = readOwnData(entry, 'timestamp');
+  const parsedTimestamp = typeof rawTimestamp === 'number' ?
+    rawTimestamp : dateParse(rawTimestamp || '');
+  return numberIsFinite(parsedTimestamp) ?
+    dateToISOString(new DateConstructor(parsedTimestamp)) : null;
+}
+
+function projectLogEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const metadata = parseLogMetadata(entry);
+  const event = copyKnownEventFields(metadata);
+  event.time = logEntryTime(entry);
+  event.nodeId = readOwnData(entry, 'node_id') ||
+    readOwnData(entry, 'nodeId') || readOwnData(metadata, 'nodeId') || null;
+  event.msg = readOwnData(entry, 'message') ||
+    readOwnData(entry, 'msg') || readOwnData(metadata, 'msg') || null;
+  return event;
+}
+
+function projectLiveLogEntriesToEvents(entries) {
+  if (!arrayIsArray(entries)) return [];
+  const events = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const event = projectLogEntry(readOwnData(entries, index));
+    if (event) events[events.length] = event;
+  }
+  return events;
+}
+
+function allTrue(values) {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] !== true) return false;
+  }
+  return true;
 }
 
 function normalizeUniqueStrings(values, minimumLength = 0) {
@@ -66,7 +165,7 @@ function normalizeUniqueStrings(values, minimumLength = 0) {
 }
 
 function normalizeCohort(values) {
-  if (!arrayIsArray(values) || values.length < MINIMUM_COHORT_SIZE) {
+  if (!arrayIsArray(values) || values.length < 1) {
     return null;
   }
   const result = [];
@@ -143,6 +242,8 @@ function buildTransitionParts(event) {
       readOwnPositiveInteger(event, 'authorityBootIncarnation'),
     capturedPublicationEpoch:
       readOwnPositiveInteger(event, 'capturedPublicationEpoch'),
+    observedPublicationEpoch:
+      readOwnPositiveInteger(event, 'observedPublicationEpoch'),
     cohort: normalizeCohort(readOwnData(event, 'requiredCohort')),
     readyNodeIds: normalizeUniqueStrings(readOwnData(event, 'readyNodeIds')),
     pendingNodeIds:
@@ -157,12 +258,21 @@ function buildTransitionParts(event) {
 }
 
 function transitionPartsPresent(parts) {
-  if (!parts.generation || !parts.state || !parts.reason) return false;
-  if (!parts.authorityNodeId || !parts.authorityBootIncarnation) return false;
-  if (!parts.capturedPublicationEpoch || !parts.cohort) return false;
-  if (!parts.readyNodeIds || !parts.pendingNodeIds) return false;
-  if (!parts.recoveryReasonCodes) return false;
-  return numberIsFinite(parts.time);
+  return allTrue([
+    parts.generation !== null,
+    parts.state !== null,
+    parts.reason !== null,
+    parts.authorityNodeId !== null,
+    parts.authorityBootIncarnation !== null,
+    parts.capturedPublicationEpoch !== null,
+    parts.observedPublicationEpoch !== null,
+    parts.observedPublicationEpoch >= parts.capturedPublicationEpoch,
+    parts.cohort !== null,
+    parts.readyNodeIds !== null,
+    parts.pendingNodeIds !== null,
+    parts.recoveryReasonCodes !== null,
+    numberIsFinite(parts.time),
+  ]);
 }
 
 function transitionGenerationIsExact(parts, cohortIdentityValue) {
@@ -189,7 +299,8 @@ function transitionStateIsValid(parts, cohortNodeIds) {
       setEquals(parts.readyNodeIds, cohortNodeIds);
   }
   if (parts.state === 'revoked') {
-    return parts.readyNodeIds.length === 0 &&
+    return arrayPrototypeIndexOf(REVOKED_REASONS, parts.reason) !== -1 &&
+      parts.readyNodeIds.length === 0 &&
       parts.pendingNodeIds.length === 0;
   }
   return false;
@@ -225,12 +336,38 @@ function normalizeGenerationTransition(event) {
     reason: parts.reason,
     releaseAuthorized: parts.releaseAuthorized,
     observedAuthorityReady: parts.observedAuthorityReady,
+    capturedPublicationEpoch: parts.capturedPublicationEpoch,
+    observedPublicationEpoch: parts.observedPublicationEpoch,
     cohort: parts.cohort,
     cohortNodeIds,
     readyNodeIds: parts.readyNodeIds,
     pendingNodeIds: parts.pendingNodeIds,
     recoveryReasonCodes: parts.recoveryReasonCodes,
   };
+}
+
+function nullGenerationTransitionIsNonAuthorizing(event) {
+  return allTrue([
+    readOwnData(event, 'generation') === null,
+    readOwnData(event, 'state') === 'idle',
+    readOwnData(event, 'reason') === IDLE_REASON,
+    readOwnData(event, 'releaseAuthorized') === false,
+    readOwnData(event, 'authorityBootIncarnation') === null,
+    readOwnData(event, 'capturedPublicationEpoch') === null,
+    readOwnData(event, 'observedPublicationEpoch') === null,
+    readOwnData(event, 'observedAuthorityReady') === null,
+    listsEqual(normalizeUniqueStrings(readOwnData(event, 'readyNodeIds')), []),
+    listsEqual(
+      normalizeUniqueStrings(readOwnData(event, 'pendingNodeIds')),
+      [],
+    ),
+    normalizeCohort(readOwnData(event, 'requiredCohort')) === null,
+    arrayIsArray(readOwnData(event, 'requiredCohort')),
+    readOwnData(event, 'requiredCohort').length === 0,
+    listsEqual(normalizeUniqueStrings(
+      readOwnData(event, 'observedRecoveryReasonCodes'),
+    ), []),
+  ]);
 }
 
 function selectGenerationTransitions(events) {
@@ -242,7 +379,9 @@ function selectGenerationTransitions(events) {
       continue;
     }
     const generation = readOwnData(event, 'generation');
-    if (generation === null) continue;
+    if (generation === null && nullGenerationTransitionIsNonAuthorizing(
+      event,
+    )) continue;
     const transition = normalizeGenerationTransition(event);
     if (!transition) {
       malformedCount += 1;
@@ -251,18 +390,6 @@ function selectGenerationTransitions(events) {
     }
   }
   return {normalized, malformedCount};
-}
-
-function uniqueGeneration(transitions) {
-  let generation = null;
-  for (let index = 0; index < transitions.length; index += 1) {
-    if (generation === null) {
-      generation = transitions[index].generation;
-    } else if (generation !== transitions[index].generation) {
-      return null;
-    }
-  }
-  return generation;
 }
 
 function sameCohortEverywhere(transitions, expectedNodeIds) {
@@ -308,12 +435,6 @@ function isRevokedTransition(transition) {
   return transition.state === 'revoked';
 }
 
-function cadenceOrderIsValid(captured, reopened, completed) {
-  if (!captured || !reopened || !completed) return false;
-  if (captured.time > reopened.time) return false;
-  return reopened.time <= completed.time;
-}
-
 function transitionTimesAreMonotonic(transitions) {
   for (let index = 1; index < transitions.length; index += 1) {
     if (transitions[index].time < transitions[index - 1].time) return false;
@@ -340,72 +461,123 @@ function releaseNeverRegresses(transitions) {
     }
     if (authorized) return false;
   }
-  return authorized;
+  return true;
 }
 
-function fullTransitionSequenceIsValid(transitions, cadence) {
-  if (transitions.length < 3) return false;
-  if (!transitionTimesAreMonotonic(transitions)) return false;
-  if (!isPendingDurableCapture(transitions[0])) return false;
-  if (countTransitionState(transitions, 'complete') !== 1) return false;
-  if (countTransitionState(transitions, 'revoked') !== 0) return false;
-  if (!releaseNeverRegresses(transitions)) return false;
-  if (transitions[transitions.length - 1] !== cadence.completed) return false;
-  const pendingTime = transitions[0].time;
-  if (pendingTime > cadence.captured.time) return false;
-  return cadenceOrderIsValid(
-    cadence.captured,
-    cadence.reopened,
-    cadence.completed,
-  );
-}
-
-function cadenceIsValid(selected, generation, cadence, expectedNodeIds) {
-  if (selected.malformedCount !== 0 || generation === null) return false;
-  if (!cadence.captured || !cadence.reopened || !cadence.completed) {
-    return false;
+function groupTransitionsByGeneration(transitions) {
+  const groups = [];
+  for (let index = 0; index < transitions.length; index += 1) {
+    const transition = transitions[index];
+    let group = null;
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      if (groups[groupIndex].generation === transition.generation) {
+        group = groups[groupIndex];
+        break;
+      }
+    }
+    if (!group) {
+      group = {generation: transition.generation, transitions: []};
+      groups[groups.length] = group;
+    }
+    group.transitions[group.transitions.length] = transition;
   }
-  if (cadence.revoked) return false;
-  if (!sameCohortEverywhere(selected.normalized, expectedNodeIds)) return false;
-  return fullTransitionSequenceIsValid(selected.normalized, cadence);
+  return groups;
 }
 
-function analyzeTransitionCadence(events) {
-  const selected = selectGenerationTransitions(events);
-  const generation = uniqueGeneration(selected.normalized);
-  const captured = firstTransition(selected.normalized, isCapturedTransition);
-  const reopened = firstTransition(selected.normalized, isReopenedTransition);
-  const completed = firstTransition(selected.normalized, isCompletedTransition);
-  const revoked = firstTransition(selected.normalized, isRevokedTransition);
-  const expectedNodeIds = captured?.cohortNodeIds || [];
-  const initiated = selected.normalized[0] || null;
-  const completionMs = initiated && completed ?
-    completed.time - initiated.time :
-    null;
-  const cadence = {captured, reopened, completed, revoked};
-  const valid = cadenceIsValid(
-    selected,
-    generation,
-    cadence,
-    expectedNodeIds,
-  );
+function terminalTransition(transitions) {
+  const completed = firstTransition(transitions, isCompletedTransition);
+  const revoked = firstTransition(transitions, isRevokedTransition);
+  return completed || revoked;
+}
+
+function terminalGrammarIsValid(transitions, completed, revoked) {
+  const completeCount = countTransitionState(transitions, 'complete');
+  const revokedCount = countTransitionState(transitions, 'revoked');
+  if (completeCount + revokedCount !== 1) return false;
+  const terminal = completed || revoked;
+  return terminal !== null && transitions[transitions.length - 1] === terminal;
+}
+
+function completionHasRequiredCapture(completed, captured) {
+  return completed === null || captured !== null;
+}
+
+function completionTimingIsValid(completionMs) {
+  return completionMs !== null && completionMs >= 0;
+}
+
+function generationSequenceIsValid(group) {
+  const transitions = group.transitions;
+  const initiated = transitions[0] || null;
+  const captured = firstTransition(transitions, isCapturedTransition);
+  const reopened = firstTransition(transitions, isReopenedTransition);
+  const completed = firstTransition(transitions, isCompletedTransition);
+  const revoked = firstTransition(transitions, isRevokedTransition);
+  const cohortNodeIds = initiated?.cohortNodeIds || [];
+  const terminal = terminalTransition(transitions);
+  const completionMs = initiated && terminal ?
+    terminal.time - initiated.time : null;
+  const baseValid = allTrue([
+    transitions.length >= 2,
+    transitionTimesAreMonotonic(transitions),
+    isPendingDurableCapture(initiated),
+    sameCohortEverywhere(transitions, cohortNodeIds),
+    releaseNeverRegresses(transitions),
+    terminalGrammarIsValid(transitions, completed, revoked),
+    completionHasRequiredCapture(completed, captured),
+    completionTimingIsValid(completionMs),
+  ]);
   return {
-    generation,
+    generation: group.generation,
+    transitions,
     initiated,
     captured,
     reopened,
     completed,
     revoked,
+    terminal,
+    cohort: initiated?.cohort || [],
+    cohortNodeIds,
     completionMs,
+    valid: baseValid,
+  };
+}
+
+function generationWindowsDoNotOverlap(generations) {
+  const ordered = arrayPrototypeSort(arrayPrototypeSlice(generations),
+    (left, right) => left.initiated.time - right.initiated.time);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].initiated.time < ordered[index - 1].terminal.time) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function analyzeTransitionCadence(events) {
+  const selected = selectGenerationTransitions(events);
+  const grouped = groupTransitionsByGeneration(selected.normalized);
+  const generations = [];
+  let transitionCount = 0;
+  let valid = selected.malformedCount === 0 && grouped.length > 0;
+  for (let index = 0; index < grouped.length; index += 1) {
+    const analyzed = generationSequenceIsValid(grouped[index]);
+    generations[generations.length] = analyzed;
+    transitionCount += analyzed.transitions.length;
+    if (!analyzed.valid) valid = false;
+  }
+  if (valid && !generationWindowsDoNotOverlap(generations)) valid = false;
+  return {
+    generations,
     malformedTransitionCount: selected.malformedCount,
-    transitionCount: selected.normalized.length,
+    transitionCount,
     valid,
   };
 }
 
 function barrierConsumerIsValid(event, cadence, nodeIds, time, nodeId) {
   if (!nodeId || !numberIsFinite(time)) return false;
-  if (!cadence.captured || !cadence.reopened || !cadence.completed) return false;
+  if (!cadence.captured || !cadence.terminal) return false;
   if (readOwnData(event, 'formationReleaseHandoffState') !== 'active') {
     return false;
   }
@@ -413,7 +585,7 @@ function barrierConsumerIsValid(event, cadence, nodeIds, time, nodeId) {
     event,
     'formationReleaseHandoffReleaseAuthorized',
   ) !== true) return false;
-  if (time < cadence.reopened.time || time > cadence.completed.time) {
+  if (time < cadence.captured.time || time > cadence.terminal.time) {
     return false;
   }
   if (arrayPrototypeIndexOf(cadence.captured.cohortNodeIds, nodeId) === -1) {
@@ -452,39 +624,68 @@ function analyzeBootProof(events, expectedFingerprint) {
   };
 }
 
-function analyzeBarrierConsumers(events, cadence) {
-  const nodeIds = [];
-  let malformedOrEarlyCount = 0;
+function analyzeBarrierConsumers(events, generations) {
+  const results = [];
+  for (let index = 0; index < generations.length; index += 1) {
+    results[results.length] = {
+      generation: generations[index].generation,
+      nodeIds: [],
+      malformedOrEarlyCount: 0,
+    };
+  }
+  let globalProblemCount = 0;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
+    if (readOwnString(event, 'msg') !== FORMATION_BARRIER_MESSAGE) continue;
+    const generationId = readOwnData(
+      event,
+      'formationReleaseHandoffGeneration',
+    );
     if (
-      readOwnString(event, 'msg') !== FORMATION_BARRIER_MESSAGE ||
-      readOwnData(event, 'formationReleaseHandoffGeneration') !==
-        cadence.generation
+      generationId === null ||
+      generationId === undefined
     ) {
+      if (readOwnData(
+        event,
+        'formationReleaseHandoffReleaseAuthorized',
+      ) === true) {
+        globalProblemCount += 1;
+      }
       continue;
     }
+    let generationIndex = -1;
+    for (let scan = 0; scan < generations.length; scan += 1) {
+      if (generations[scan].generation === generationId) {
+        generationIndex = scan;
+        break;
+      }
+    }
+    if (generationIndex < 0) {
+      globalProblemCount += 1;
+      continue;
+    }
+    const cadence = generations[generationIndex];
+    const result = results[generationIndex];
     const time = dateParse(readOwnString(event, 'time') || '');
     const nodeId = readOwnString(event, 'nodeId');
     const valid = barrierConsumerIsValid(
       event,
       cadence,
-      nodeIds,
+      result.nodeIds,
       time,
       nodeId,
     );
     if (!valid) {
-      malformedOrEarlyCount += 1;
+      result.malformedOrEarlyCount += 1;
+      globalProblemCount += 1;
     } else {
-      nodeIds[nodeIds.length] = nodeId;
+      result.nodeIds[result.nodeIds.length] = nodeId;
     }
   }
   return {
-    nodeIds,
-    malformedOrEarlyCount,
-    passed: malformedOrEarlyCount === 0 &&
-      cadence.captured !== null &&
-      setEquals(nodeIds, cadence.captured.cohortNodeIds),
+    results,
+    globalProblemCount,
+    passed: globalProblemCount === 0,
   };
 }
 
@@ -512,42 +713,192 @@ function countFormationTimeouts(events) {
   return count;
 }
 
+function classifyGenerationEvidence(generation, consumer) {
+  const exactConsumers = generation.completed === null ||
+    setEquals(consumer.nodeIds, generation.cohortNodeIds);
+  const consumerPassed = exactConsumers &&
+    consumer.malformedOrEarlyCount === 0;
+  const withinBudget = generation.completed === null ||
+    generation.completionMs <= CERTIFICATION_BUDGET_MS;
+  const qualifying = allTrue([
+    generation.valid,
+    generation.completed !== null,
+    generation.revoked === null,
+    generation.reopened !== null,
+    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    consumerPassed,
+  ]);
+  return {consumerPassed, exactConsumers, qualifying, withinBudget};
+}
+
+function closureEvidencePasses(options) {
+  return allTrue([
+    options.bootPassed,
+    options.cadenceValid,
+    options.everyConsumerObserved,
+    options.everyCompletedWithinBudget,
+    options.oneQualifyingGeneration,
+    options.selectedWithinBudget,
+    options.noTimeout,
+  ]);
+}
+
+function aggregateGenerationEvidence(generations, consumerResults) {
+  const qualifying = [];
+  let everyConsumerObserved = true;
+  let everyCompletedWithinBudget = true;
+  let revoked = false;
+  for (let index = 0; index < generations.length; index += 1) {
+    const generation = generations[index];
+    const evidence = classifyGenerationEvidence(
+      generation,
+      consumerResults[index],
+    );
+    if (generation.revoked !== null) revoked = true;
+    if (!evidence.consumerPassed) everyConsumerObserved = false;
+    if (!evidence.withinBudget) everyCompletedWithinBudget = false;
+    if (evidence.qualifying) {
+      qualifying[qualifying.length] = {
+        generation,
+        consumer: consumerResults[index],
+      };
+    }
+  }
+  return {
+    everyCompletedWithinBudget,
+    everyConsumerObserved,
+    qualifying,
+    revoked,
+  };
+}
+
+function projectQualifyingWitness(qualifying) {
+  if (qualifying.length !== 1) {
+    return {
+      barrierConsumerNodeIds: [],
+      canonicalGeneration: null,
+      capturedAt: null,
+      completedAt: null,
+      completionMs: null,
+      durableAcknowledgedAt: null,
+      reopenedAt: null,
+      requiredCohort: [],
+      withinBudget: false,
+    };
+  }
+  const selected = qualifying[0].generation;
+  return {
+    barrierConsumerNodeIds: qualifying[0].consumer.nodeIds,
+    canonicalGeneration: selected.generation,
+    capturedAt: readOwnString(selected.initiated.event, 'time'),
+    completedAt: readOwnString(selected.completed.event, 'time'),
+    completionMs: selected.completionMs,
+    durableAcknowledgedAt: readOwnString(selected.captured.event, 'time'),
+    reopenedAt: readOwnString(selected.reopened.event, 'time'),
+    requiredCohort: selected.cohort,
+    withinBudget: selected.completionMs <= CERTIFICATION_BUDGET_MS,
+  };
+}
+
+function canonicalExpansionRevocationGenerationIsExact(generation) {
+  if (!generation || !generation.revoked) return false;
+  const revoked = generation.revoked;
+  return allTrue([
+    generation.valid,
+    generation.completed === null,
+    generation.captured !== null,
+    generation.reopened !== null,
+    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    generation.terminal === revoked,
+    revoked.reason === 'startup_authority_incompatible',
+    revoked.observedPublicationEpoch > revoked.capturedPublicationEpoch,
+    revoked.observedAuthorityReady === null,
+    revoked.recoveryReasonCodes.length === 0,
+  ]);
+}
+
+function canonicalExpansionRevocationIsExact(options) {
+  return allTrue([
+    options.bootPassed,
+    options.cadenceValid,
+    options.malformedTransitionCount === 0,
+    options.malformedOrEarlyBarrierCount === 0,
+    options.timeoutCount === 0,
+    options.generations.length === 1,
+    canonicalExpansionRevocationGenerationIsExact(options.generations[0]),
+  ]);
+}
+
+function timeoutWithoutGenerationIsExact(options) {
+  return allTrue([
+    options.bootPassed,
+    options.generations.length === 0,
+    options.malformedTransitionCount === 0,
+    options.malformedOrEarlyBarrierCount === 0,
+    options.timeoutCount > 0,
+  ]);
+}
+
+function classifyRevertedCounterexample(options) {
+  if (canonicalExpansionRevocationIsExact(options)) {
+    return REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION;
+  }
+  if (timeoutWithoutGenerationIsExact(options)) {
+    return REVERT_COUNTEREXAMPLE.FORMATION_TIMEOUT_WITHOUT_GENERATION;
+  }
+  return null;
+}
+
 function analyzeFormationReleaseEvents(events, expectedFingerprint) {
   const boot = analyzeBootProof(events, expectedFingerprint);
   const cadence = analyzeTransitionCadence(events);
-  const consumers = analyzeBarrierConsumers(events, cadence);
+  const consumers = analyzeBarrierConsumers(events, cadence.generations);
   const timeoutCount = countFormationTimeouts(events);
-  const withinBudget = cadence.completionMs !== null &&
-    cadence.completionMs >= 0 &&
-    cadence.completionMs <= CERTIFICATION_BUDGET_MS;
-  const closurePassed = booleanConstructor(
-    boot.passed * cadence.valid * consumers.passed * withinBudget *
-    (timeoutCount === 0),
+  const aggregate = aggregateGenerationEvidence(
+    cadence.generations,
+    consumers.results,
   );
+  if (!consumers.passed) aggregate.everyConsumerObserved = false;
+  const witness = projectQualifyingWitness(aggregate.qualifying);
+  const counterexampleClassification = classifyRevertedCounterexample({
+    bootPassed: boot.passed,
+    cadenceValid: cadence.valid,
+    generations: cadence.generations,
+    malformedTransitionCount: cadence.malformedTransitionCount,
+    malformedOrEarlyBarrierCount: consumers.globalProblemCount,
+    timeoutCount,
+  });
+  const closurePassed = booleanConstructor(closureEvidencePasses({
+    bootPassed: boot.passed,
+    cadenceValid: cadence.valid,
+    everyConsumerObserved: aggregate.everyConsumerObserved,
+    everyCompletedWithinBudget: aggregate.everyCompletedWithinBudget,
+    oneQualifyingGeneration: aggregate.qualifying.length === 1,
+    selectedWithinBudget: witness.withinBudget,
+    noTimeout: timeoutCount === 0,
+  }));
   return {
     expectedFingerprint,
     bootNodeCount: boot.bootNodeIds.length,
     bootEventCount: boot.bootEventCount,
     bootProofPassed: boot.passed,
-    positiveGenerationCount: cadence.generation ? 1 : 0,
-    canonicalGeneration: cadence.generation,
-    requiredCohort: cadence.captured?.cohort || [],
-    capturedAt: cadence.initiated ?
-      readOwnString(cadence.initiated.event, 'time') : null,
-    durableAcknowledgedAt: cadence.captured ?
-      readOwnString(cadence.captured.event, 'time') : null,
-    reopenedAt: cadence.reopened ?
-      readOwnString(cadence.reopened.event, 'time') : null,
-    completedAt: cadence.completed ?
-      readOwnString(cadence.completed.event, 'time') : null,
-    completionMs: cadence.completionMs,
+    positiveGenerationCount: cadence.generations.length,
+    qualifyingGenerationCount: aggregate.qualifying.length,
+    canonicalGeneration: witness.canonicalGeneration,
+    requiredCohort: witness.requiredCohort,
+    capturedAt: witness.capturedAt,
+    durableAcknowledgedAt: witness.durableAcknowledgedAt,
+    reopenedAt: witness.reopenedAt,
+    completedAt: witness.completedAt,
+    completionMs: witness.completionMs,
     malformedTransitionCount: cadence.malformedTransitionCount,
     transitionCount: cadence.transitionCount,
-    barrierConsumerNodeIds: consumers.nodeIds,
-    malformedOrEarlyBarrierCount: consumers.malformedOrEarlyCount,
-    everyConsumerObserved: consumers.passed,
-    revoked: cadence.revoked !== null,
+    barrierConsumerNodeIds: witness.barrierConsumerNodeIds,
+    malformedOrEarlyBarrierCount: consumers.globalProblemCount,
+    everyConsumerObserved: aggregate.everyConsumerObserved,
+    revoked: aggregate.revoked,
     timeoutCount,
+    counterexampleClassification,
     closurePassed,
   };
 }
@@ -555,5 +906,8 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
 export {
   analyzeFormationReleaseEvents,
   analyzeTransitionCadence,
+  FORMATION_TIMEOUT_CODE,
   normalizeGenerationTransition,
+  projectLiveLogEntriesToEvents,
+  REVERT_COUNTEREXAMPLE,
 };

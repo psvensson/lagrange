@@ -1,7 +1,7 @@
 --------------------- MODULE FormationReleaseHandoffClosure -------------------
 EXTENDS Naturals, TLC
 
-CONSTANTS FixEnabled, CohortSize, StableWindowTicks,
+CONSTANTS FixEnabled, ExactMembershipEquality, CohortSize, StableWindowTicks,
           PublicationCadenceTicks, BarrierBudgetTicks
 
 VARIABLES phase, openGap, releaseAuthority, identityCount,
@@ -10,7 +10,9 @@ VARIABLES phase, openGap, releaseAuthority, identityCount,
           generationPublished, durableAck, consumerCount,
           stableTicks, readyCount, elapsedTicks, sawSatisfied, sawReopen,
           incarnationChanged, ownerAvailable, ownerReloadExercised,
-          staleWriterAttempted
+          staleWriterAttempted, membershipExpanded,
+          uncapturedConsumerAttempted, uncapturedReleaseAuthorized,
+          completedGenerationCount
 
 vars == <<phase, openGap, releaseAuthority, identityCount,
           capturedIdentityCount, durableIdentityCount,
@@ -18,7 +20,9 @@ vars == <<phase, openGap, releaseAuthority, identityCount,
           generationPublished, durableAck, consumerCount,
           stableTicks, readyCount, elapsedTicks, sawSatisfied, sawReopen,
           incarnationChanged, ownerAvailable, ownerReloadExercised,
-          staleWriterAttempted>>
+          staleWriterAttempted, membershipExpanded,
+          uncapturedConsumerAttempted, uncapturedReleaseAuthorized,
+          completedGenerationCount>>
 
 Init ==
   /\ phase = 0
@@ -42,6 +46,10 @@ Init ==
   /\ ownerAvailable = TRUE
   /\ ownerReloadExercised = FALSE
   /\ staleWriterAttempted = FALSE
+  /\ membershipExpanded = FALSE
+  /\ uncapturedConsumerAttempted = FALSE
+  /\ uncapturedReleaseAuthorized = FALSE
+  /\ completedGenerationCount = 0
 
 ObserveOneCurrentPrimaryIdentity ==
   /\ phase = 0
@@ -54,7 +62,10 @@ ObserveOneCurrentPrimaryIdentity ==
                   generationPublished, durableAck, consumerCount, stableTicks,
                   readyCount, sawSatisfied, sawReopen, incarnationChanged,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 FirstSpreadSatisfied ==
   /\ phase = 0
@@ -71,7 +82,10 @@ FirstSpreadSatisfied ==
                   durableAuthorityBoot, generationPublished, durableAck,
                   consumerCount, stableTicks, readyCount, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 PublishSeedGeneration ==
   /\ FixEnabled
@@ -88,7 +102,10 @@ PublishSeedGeneration ==
                   capturedAuthorityBoot, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 AcknowledgeDurableReadback ==
   /\ FixEnabled
@@ -105,7 +122,10 @@ AcknowledgeDurableReadback ==
                   durableAuthorityBoot, generationPublished, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 SpreadGapReopens ==
   /\ phase = 1
@@ -121,7 +141,10 @@ SpreadGapReopens ==
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, incarnationChanged,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 ConfirmOneDurableNodeIncarnation ==
   /\ FixEnabled
@@ -135,7 +158,10 @@ ConfirmOneDurableNodeIncarnation ==
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 ConsumeSeedGenerationOnOneJoiner ==
   /\ phase = 2
@@ -153,7 +179,10 @@ ConsumeSeedGenerationOnOneJoiner ==
                   generationPublished, durableAck, stableTicks, readyCount,
                   sawSatisfied, sawReopen, incarnationChanged,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 StableWindowEvent ==
   /\ phase = 2
@@ -170,7 +199,10 @@ StableWindowEvent ==
                   generationPublished, durableAck, consumerCount, readyCount,
                   sawSatisfied, sawReopen, incarnationChanged,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 PublishOneReadyLease ==
   /\ phase = 2
@@ -188,7 +220,10 @@ PublishOneReadyLease ==
                   generationPublished, durableAck, consumerCount,
                   stableTicks, sawSatisfied, sawReopen, incarnationChanged,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 CrashInteractionOwner ==
   /\ FixEnabled
@@ -205,7 +240,9 @@ CrashInteractionOwner ==
                   capturedAuthorityBoot, durableAuthorityBoot,
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
-                  incarnationChanged, staleWriterAttempted>>
+                  incarnationChanged, staleWriterAttempted,
+                  membershipExpanded, uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized, completedGenerationCount>>
 
 RehydrateSameBootGeneration ==
   /\ FixEnabled
@@ -223,7 +260,10 @@ RehydrateSameBootGeneration ==
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   incarnationChanged, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 RestartAuthorityBoot ==
   /\ FixEnabled
@@ -239,7 +279,9 @@ RestartAuthorityBoot ==
                   durableIdentityCount, capturedAuthorityBoot,
                   durableAuthorityBoot, generationPublished, durableAck,
                   consumerCount, stableTicks, readyCount, sawSatisfied,
-                  sawReopen, ownerReloadExercised, staleWriterAttempted>>
+                  sawReopen, ownerReloadExercised, staleWriterAttempted,
+                  membershipExpanded, uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized, completedGenerationCount>>
 
 CapturedPeerIncarnationChanges ==
   /\ FixEnabled
@@ -255,7 +297,10 @@ CapturedPeerIncarnationChanges ==
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
                   ownerAvailable, ownerReloadExercised,
-                  staleWriterAttempted>>
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized,
+                  completedGenerationCount>>
 
 OldAuthorityWriterCompletes ==
   /\ FixEnabled
@@ -269,7 +314,91 @@ OldAuthorityWriterCompletes ==
                   authorityBoot, capturedAuthorityBoot, durableAuthorityBoot,
                   generationPublished, durableAck, consumerCount,
                   stableTicks, readyCount, sawSatisfied, sawReopen,
-                  incarnationChanged, ownerAvailable, ownerReloadExercised>>
+                  incarnationChanged, ownerAvailable, ownerReloadExercised,
+                  membershipExpanded, uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized, completedGenerationCount>>
+
+CanonicalMembershipExpands ==
+  /\ FixEnabled
+  /\ phase = 2
+  /\ ~membershipExpanded
+  /\ membershipExpanded' = TRUE
+  /\ phase' = IF ExactMembershipEquality THEN 4 ELSE phase
+  /\ releaseAuthority' =
+       IF ExactMembershipEquality THEN FALSE ELSE releaseAuthority
+  /\ elapsedTicks' = elapsedTicks + 1
+  /\ UNCHANGED <<openGap, identityCount, capturedIdentityCount,
+                  durableIdentityCount, authorityBoot,
+                  capturedAuthorityBoot, durableAuthorityBoot,
+                  generationPublished, durableAck, consumerCount,
+                  stableTicks, readyCount, sawSatisfied, sawReopen,
+                  incarnationChanged, ownerAvailable, ownerReloadExercised,
+                  staleWriterAttempted, uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized, completedGenerationCount>>
+
+AttemptUncapturedConsumer ==
+  /\ FixEnabled
+  /\ phase = 2
+  /\ membershipExpanded
+  /\ ~uncapturedConsumerAttempted
+  /\ uncapturedConsumerAttempted' = TRUE
+  /\ uncapturedReleaseAuthorized' = FALSE
+  /\ elapsedTicks' = elapsedTicks + PublicationCadenceTicks
+  /\ UNCHANGED <<phase, openGap, releaseAuthority, identityCount,
+                  capturedIdentityCount, durableIdentityCount,
+                  authorityBoot, capturedAuthorityBoot,
+                  durableAuthorityBoot, generationPublished, durableAck,
+                  consumerCount, stableTicks, readyCount, sawSatisfied,
+                  sawReopen, incarnationChanged, ownerAvailable,
+                  ownerReloadExercised, staleWriterAttempted,
+                  membershipExpanded, completedGenerationCount>>
+
+CapturedCanonicalMemberRemoved ==
+  /\ FixEnabled
+  /\ phase = 2
+  /\ membershipExpanded
+  /\ ~incarnationChanged
+  /\ phase' = 4
+  /\ releaseAuthority' = FALSE
+  /\ incarnationChanged' = TRUE
+  /\ elapsedTicks' = elapsedTicks + 1
+  /\ UNCHANGED <<openGap, identityCount, capturedIdentityCount,
+                  durableIdentityCount, authorityBoot,
+                  capturedAuthorityBoot, durableAuthorityBoot,
+                  generationPublished, durableAck, consumerCount,
+                  stableTicks, readyCount, sawSatisfied, sawReopen,
+                  ownerAvailable, ownerReloadExercised,
+                  staleWriterAttempted, membershipExpanded,
+                  uncapturedConsumerAttempted,
+                  uncapturedReleaseAuthorized, completedGenerationCount>>
+
+BeginSequentialGeneration ==
+  /\ FixEnabled
+  /\ phase = 3
+  /\ completedGenerationCount = 0
+  /\ phase' = 0
+  /\ openGap' = TRUE
+  /\ releaseAuthority' = FALSE
+  /\ identityCount' = 0
+  /\ capturedIdentityCount' = 0
+  /\ durableIdentityCount' = 0
+  /\ capturedAuthorityBoot' = 0
+  /\ durableAuthorityBoot' = 0
+  /\ generationPublished' = FALSE
+  /\ durableAck' = FALSE
+  /\ consumerCount' = 0
+  /\ stableTicks' = 0
+  /\ readyCount' = 0
+  /\ elapsedTicks' = 0
+  /\ sawSatisfied' = FALSE
+  /\ sawReopen' = FALSE
+  /\ ownerAvailable' = TRUE
+  /\ membershipExpanded' = FALSE
+  /\ uncapturedConsumerAttempted' = FALSE
+  /\ uncapturedReleaseAuthorized' = FALSE
+  /\ completedGenerationCount' = 1
+  /\ UNCHANGED <<authorityBoot, incarnationChanged,
+                  ownerReloadExercised, staleWriterAttempted>>
 
 Next ==
   ObserveOneCurrentPrimaryIdentity \/
@@ -285,7 +414,11 @@ Next ==
   RehydrateSameBootGeneration \/
   RestartAuthorityBoot \/
   CapturedPeerIncarnationChanges \/
-  OldAuthorityWriterCompletes
+  OldAuthorityWriterCompletes \/
+  CanonicalMembershipExpands \/
+  AttemptUncapturedConsumer \/
+  CapturedCanonicalMemberRemoved \/
+  BeginSequentialGeneration
 
 Spec ==
   /\ Init
@@ -300,6 +433,9 @@ Spec ==
   /\ WF_vars(StableWindowEvent)
   /\ WF_vars(PublishOneReadyLease)
   /\ WF_vars(RehydrateSameBootGeneration)
+  /\ WF_vars(CanonicalMembershipExpands)
+  /\ WF_vars(AttemptUncapturedConsumer)
+  /\ WF_vars(BeginSequentialGeneration)
 
 TypeInvariant ==
   /\ phase \in 0..4
@@ -323,6 +459,10 @@ TypeInvariant ==
   /\ ownerAvailable \in BOOLEAN
   /\ ownerReloadExercised \in BOOLEAN
   /\ staleWriterAttempted \in BOOLEAN
+  /\ membershipExpanded \in BOOLEAN
+  /\ uncapturedConsumerAttempted \in BOOLEAN
+  /\ uncapturedReleaseAuthorized \in BOOLEAN
+  /\ completedGenerationCount \in 0..1
 
 ReleaseRequiresDurableAck ==
   releaseAuthority =>
@@ -353,6 +493,9 @@ ReloadRestoresOnlySameBootGeneration ==
   (ownerReloadExercised /\ ownerAvailable /\ releaseAuthority) =>
     durableAuthorityBoot = authorityBoot
 
+CanonicalExpansionCannotAuthorizeAddedMember ==
+  membershipExpanded => ~uncapturedReleaseAuthorized
+
 ReleaseRetainedAcrossReopen ==
   (sawReopen /\ durableAck /\ ownerAvailable /\
    readyCount < CohortSize /\ ~incarnationChanged) => releaseAuthority
@@ -364,5 +507,10 @@ JoinerCohortEventuallyReadyWithinBudget ==
   <> (incarnationChanged \/
       (sawReopen /\ readyCount = CohortSize /\
        elapsedTicks <= BarrierBudgetTicks))
+
+SequentialGenerationsEventuallyCloseWithinBudget ==
+  <> (incarnationChanged \/
+      (completedGenerationCount = 1 /\ phase = 3 /\
+       readyCount = CohortSize /\ elapsedTicks <= BarrierBudgetTicks))
 
 =============================================================================

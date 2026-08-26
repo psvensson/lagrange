@@ -3,6 +3,23 @@ import {
 } from './bootstrap-api-constants.js';
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
 
+function validProjectionNodeId(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function readProjectedStartupAuthority(service, request) {
+  if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
+    return service.getStartupAuthoritySnapshotSync(request);
+  }
+  if (typeof service.getStartupAuthoritySnapshot !== 'function') return null;
+  const startupAuthority = service.getStartupAuthoritySnapshot(request);
+  if (startupAuthority && typeof startupAuthority.then === 'function') {
+    return null;
+  }
+  return startupAuthority && typeof startupAuthority === 'object' ?
+    startupAuthority : null;
+}
+
 const bootstrapApiReadinessMethods = {
   /**
    * Handle process liveness probe.
@@ -116,37 +133,23 @@ const bootstrapApiReadinessMethods = {
 
   /**
    * Resolve the seed-owned startup authority snapshot advertised to joiners.
+   * @param {string} projectionNodeId
    * @param {number} [observedAt=Date.now()]
    * @return {Object|null}
    */
-  getStartupAuthoritySnapshotForBootstrapResponse(observedAt = Date.now()) {
+  getStartupAuthoritySnapshotForBootstrapResponse(
+    projectionNodeId,
+    observedAt = Date.now(),
+  ) {
+    if (!validProjectionNodeId(projectionNodeId)) return null;
     const service = this.getControlPlaneReadinessService();
-    if (!service || typeof service !== 'object') {
-      return null;
-    }
+    if (!service || typeof service !== 'object') return null;
     try {
-      if (typeof service.getStartupAuthoritySnapshotSync === 'function') {
-        return service.getStartupAuthoritySnapshotSync(
-          this.seedNodeId,
-          observedAt,
-        );
-      }
-      if (typeof service.getStartupAuthoritySnapshot !== 'function') {
-        return null;
-      }
-      const startupAuthority = service.getStartupAuthoritySnapshot(
-        this.seedNodeId,
+      return readProjectedStartupAuthority(service, {
+        planningNodeId: this.seedNodeId,
+        projectionNodeId,
         observedAt,
-      );
-      if (
-        startupAuthority &&
-        typeof startupAuthority.then === 'function'
-      ) {
-        return null;
-      }
-      return startupAuthority && typeof startupAuthority === 'object' ?
-        startupAuthority :
-        null;
+      });
     } catch (_error) {
       return null;
     }

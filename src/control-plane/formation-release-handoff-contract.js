@@ -1,7 +1,12 @@
 import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from './control-plane-readiness-constants.js';
 import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {COLUMN, NODE_STATE, STATE} from '../constants/index.js';
-import {formationReleaseCohortIdentity, formationReleaseGenerationIdentity} from './formation-release-handoff-identity.js';
+import {
+  formationReleaseCanonicalContainsCapturedSet,
+  formationReleaseCohortContainsNodeId,
+  formationReleaseCohortIdentity,
+  formationReleaseGenerationIdentity,
+} from './formation-release-handoff-identity.js';
 const arrayIsArray = Array.isArray;
 const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
 const arrayPrototypeJoin = Function.call.bind(Array.prototype.join);
@@ -597,25 +602,17 @@ function isRetainableAuthority(evidence, generation) {
   if (evidence.fenceIdentity !== generation.fenceIdentity) {
     return false;
   }
-  if (!sameCanonicalNodeIds(evidence, generation)) return false;
+  if (!formationReleaseCanonicalContainsCapturedSet(evidence, generation)) {
+    return false;
+  }
   if (!cohortBelongsToCanonical(evidence, generation)) return false;
   if (evidence.ready === true) return readyAuthorityIsRetainable(evidence);
   return pendingAuthorityIsRetainable(evidence);
 }
-function sameCanonicalNodeIds(evidence, generation) {
-  if (evidence.canonicalNodeIds.length !== generation.canonicalNodeIds.length) {
-    return false;
-  }
-  for (
-    let index = 0;
-    index < generation.canonicalNodeIds.length;
-    index += 1
-  ) {
-    if (evidence.canonicalNodeIds[index] !== generation.canonicalNodeIds[index]) {
-      return false;
-    }
-  }
-  return true;
+function formationReleaseHandoffAuthorizesNode(contract, nodeId) {
+  const normalized = normalizePublishedConsumerContract(contract);
+  return normalized !== null &&
+    formationReleaseCohortContainsNodeId(normalized, nodeId);
 }
 function cohortBelongsToCanonical(evidence, generation) {
   for (
@@ -760,10 +757,17 @@ function validateFormationReleaseHandoffConsumerContract(
   startupAuthority,
   nodeRows,
   observedAt,
+  projectionNodeId,
   connectionEvidence = [],
 ) {
   const normalizedContract = normalizePublishedConsumerContract(contract);
-  if (!normalizedContract) {
+  if (
+    !normalizedContract ||
+    !formationReleaseCohortContainsNodeId(
+      normalizedContract,
+      projectionNodeId,
+    )
+  ) {
     return null;
   }
   return validatePublishedContractAgainstCurrent(
@@ -778,7 +782,9 @@ export {
   attachFormationReleaseHandoffToStartupAuthority,
   authorizeFormationReleaseHandoffPublicationIntent, buildAuthorityEvidence,
   buildConnectionEvidenceById, buildContract, buildNodeEvidenceById,
-  freezeCohort, isConnectedFormationMember, isCurrentReadyMember,
+  formationReleaseCohortContainsNodeId,
+  formationReleaseHandoffAuthorizesNode, freezeCohort,
+  isConnectedFormationMember, isCurrentReadyMember,
   isRetainableAuthority, normalizeFormationReleaseHandoffContract,
   normalizePublishedConsumerContract,
   validateFormationReleaseHandoffConsumerContract, validatePublishedContractAgainstCurrent,

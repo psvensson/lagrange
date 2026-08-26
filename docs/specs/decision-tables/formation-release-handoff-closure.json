@@ -14,6 +14,8 @@
         "published_generation_consumed_on_joiner",
         "published_generation_missing_or_incompatible",
         "seed_restart_with_compatible_active_publication",
+        "compatible_canonical_membership_expansion",
+        "non_cohort_projection_or_handoff_only_cure_target",
         "compatible_reopen_joiners_pending",
         "compatible_reopen_partially_ready",
         "all_captured_incarnations_ready",
@@ -76,6 +78,10 @@
     {
       "id": "non-monotone-spread-safe",
       "statement": "A compatible priority-spread reopening cannot withdraw release before every captured JOINING incarnation publishes a current READY lease."
+    },
+    {
+      "id": "immutable-captured-cohort-scope",
+      "statement": "The generation retains its immutable captured canonical set and cohort when current canonical membership is a superset; later additions neither revoke the generation nor receive its release or handoff-only cure authority."
     },
     {
       "id": "incarnation-and-safety-fenced",
@@ -162,6 +168,26 @@
       "outcome": {"action": "restore_seed_owned_release"},
       "reason": "Recovery resumes the exact seed-owned generation and reevaluates its captured cohort; it does not wait for a second globally satisfied observation or mint a replacement owner.",
       "invariantRefs": ["single-interaction-owner", "durable-recovery-replay", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "canonical-expansion-retains-immutable-capture",
+      "when": {
+        "closureEvidence": "compatible_canonical_membership_expansion",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "The observational startup membership may expand during staggered joins. Every captured canonical ID remains present, so the immutable generation stays valid while additions remain non-authorizing.",
+      "invariantRefs": ["non-monotone-spread-safe", "immutable-captured-cohort-scope"]
+    },
+    {
+      "id": "non-cohort-projection-fails-closed",
+      "when": {
+        "closureEvidence": "non_cohort_projection_or_handoff_only_cure_target",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "remain_idle"},
+      "reason": "A later membership addition cannot consume or receive cure authority from a generation that did not capture its node and boot incarnation; ordinary active priority recovery remains separately owned.",
+      "invariantRefs": ["durable-consumer-parity", "immutable-captured-cohort-scope"]
     },
     {
       "id": "compatible-reopen-retains-release",

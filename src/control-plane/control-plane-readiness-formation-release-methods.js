@@ -2,6 +2,7 @@ import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from
   './control-plane-readiness-planning-shared.js';
 import {
   attachFormationReleaseHandoffToStartupAuthority,
+  formationReleaseHandoffAuthorizesNode,
   validateFormationReleaseHandoffConsumerContract,
 } from './formation-release-handoff-contract.js';
 import {
@@ -213,6 +214,7 @@ const formationReleaseMethods = {
       startupAuthority,
       this.getNodeRows(),
       observedAt,
+      projectionNodeId,
       connectionEvidence,
     );
   },
@@ -283,9 +285,14 @@ const formationReleaseMethods = {
         authorityNodeId,
       );
     }
+    const projectedHandoff =
+      projectionNodeId === authorityNodeId ||
+      formationReleaseHandoffAuthorizesNode(handoff, projectionNodeId) ?
+        handoff :
+        null;
     return attachFormationReleaseHandoffToStartupAuthority(
       startupAuthority,
-      handoff,
+      projectedHandoff,
     );
   },
 };

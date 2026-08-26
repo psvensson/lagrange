@@ -296,7 +296,7 @@ class ControlPlaneReadinessParticipationBase {
           this.getFormationReleasePublicationStorageOwner(),
         onDurable: (contract) =>
           this.formationReleaseHandoffClosureOwner.acknowledgePublication(
-            contract.generation,
+            contract,
           ),
         onRearm: () =>
           this.recordReadinessPlanningRecoveryEpochChange(),

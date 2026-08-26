@@ -219,15 +219,15 @@ export function registerBootstrapApiReadinessTests() {
     async (t) => {
       initializeTestEnvironment();
 
-      let observedStartupAuthorityNodeId =
+      let observedStartupAuthorityRequest =
       TEST_STARTUP_AUTHORITY_OBSERVATION_PENDING;
       const api = new BootstrapAPI({
         seedNodeId: TEST_SEED_NODE_ID,
         seedNodeAddress: TEST_SEED_NODE_ADDRESS,
         systemTableCache: createEmptySystemTableCache(),
         controlPlaneReadinessService: {
-          getStartupAuthoritySnapshotSync(seedNodeId) {
-            observedStartupAuthorityNodeId = seedNodeId;
+          getStartupAuthoritySnapshotSync(request) {
+            observedStartupAuthorityRequest = request;
             return TEST_SEED_CONTACT_STARTUP_AUTHORITY;
           },
         },
@@ -260,10 +260,14 @@ export function registerBootstrapApiReadinessTests() {
 
       t.equal(response.statusCode, HTTP_STATUS.OK,
         'bootstrap request should succeed');
-      t.equal(
-        observedStartupAuthorityNodeId,
-        TEST_SEED_NODE_ID,
-        'bootstrap response authority should be resolved for the seed node',
+      t.same(
+        observedStartupAuthorityRequest,
+        {
+          planningNodeId: TEST_SEED_NODE_ID,
+          projectionNodeId: TEST_BOOTSTRAP_REQUEST_NODE_ID,
+          observedAt: observedStartupAuthorityRequest.observedAt,
+        },
+        'bootstrap resolves seed planning for the explicit requesting process',
       );
       const body = JSON.parse(response.body);
       t.same(
