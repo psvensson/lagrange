@@ -3,6 +3,7 @@ EXTENDS Naturals, TLC
 
 CONSTANTS FixEnabled, ExactMembershipEquality, ProjectionOmissionRevokes,
           SeedProjectionTransportEnabled,
+          BilateralIdentifyEnabled, MinimumCohortSize,
           DistributedPublicationReadAvailable, CohortSize, StableWindowTicks,
           PublicationCadenceTicks, BarrierBudgetTicks
 
@@ -100,6 +101,7 @@ ObserveSeedBaseProjectionForDiscovery ==
 FirstSpreadSatisfied ==
   /\ phase = 0
   /\ openGap
+  /\ CohortSize >= MinimumCohortSize
   /\ identityCount = CohortSize
   /\ seedBaseProjectionObserved
   /\ phase' = 1
@@ -205,6 +207,7 @@ ConsumeSeedGenerationOnOneJoiner ==
   /\ phase = 2
   /\ ownerAvailable
   /\ SeedProjectionTransportEnabled
+  /\ BilateralIdentifyEnabled
   /\ releaseAuthority
   /\ generationPublished
   /\ durableAck
@@ -516,6 +519,8 @@ Spec ==
   /\ WF_vars(BeginSequentialGeneration)
 
 TypeInvariant ==
+  /\ MinimumCohortSize \in Nat \ {0}
+  /\ CohortSize \in Nat \ {0}
   /\ phase \in 0..4
   /\ openGap \in BOOLEAN
   /\ releaseAuthority \in BOOLEAN
@@ -556,6 +561,7 @@ BaseProjectionNeverAuthorizesRelease ==
 
 PublishedGenerationIsIdentityBound ==
   generationPublished =>
+    capturedIdentityCount >= MinimumCohortSize /\
     capturedIdentityCount = CohortSize /\
     capturedAuthorityBoot > 0 /\
     durableAuthorityBoot = capturedAuthorityBoot

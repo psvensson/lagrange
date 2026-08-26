@@ -56,7 +56,11 @@
     },
     {
       "id": "first-observation-positive-identity",
-      "statement": "The first satisfied observation captures the boot incarnation of each adopted current primary connection; node id alone, boot incarnation zero, or a high-water not bound to the adopted socket is non-authorizing."
+      "statement": "The first satisfied observation captures at least two JOINING members and the boot incarnation of each adopted current primary connection; a singleton, node id alone, boot incarnation zero, or a high-water not bound to the adopted socket is non-authorizing."
+    },
+    {
+      "id": "bilateral-primary-identity",
+      "statement": "An admitted incoming primary replies with exactly one IDENTIFY only after stale-incarnation fencing and adoption, allowing the dialer's same current-primary socket to bind the remote boot incarnation without opening admission or creating an IDENTIFY loop."
     },
     {
       "id": "durable-consumer-parity",
@@ -135,8 +139,8 @@
         "generation": "compatible"
       },
       "outcome": {"action": "persist_without_release"},
-      "reason": "The first whole-plane satisfaction event captures the seed and peer current-primary boot incarnations as a non-authorizing desired generation. The bounded publication coordinator persists it before recovery activity can close.",
-      "invariantRefs": ["single-interaction-owner", "first-observation-positive-identity", "durable-ack-before-release", "bounded-publication-coordinator", "authority-boot-disjoint-storage"]
+      "reason": "The first whole-plane satisfaction event with at least two JOINING members captures the seed and peer current-primary boot incarnations as a non-authorizing desired generation. The bounded publication coordinator persists it before recovery activity can close.",
+      "invariantRefs": ["single-interaction-owner", "first-observation-positive-identity", "bilateral-primary-identity", "durable-ack-before-release", "bounded-publication-coordinator", "authority-boot-disjoint-storage"]
     },
     {
       "id": "durable-readback-authorizes-and-rearms",
@@ -165,7 +169,7 @@
         "generation": "compatible"
       },
       "outcome": {"action": "remain_idle"},
-      "reason": "A provisional node-id cohort cannot later inherit release authority; durable node-row confirmation may confirm an already captured positive connection identity but cannot create it retroactively.",
+      "reason": "A singleton or provisional node-id cohort cannot later inherit release authority; durable node-row confirmation may confirm an already captured positive connection identity but cannot create it retroactively.",
       "invariantRefs": ["first-observation-positive-identity", "incarnation-and-safety-fenced"]
     },
     {

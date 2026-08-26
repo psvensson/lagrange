@@ -1,5 +1,7 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
+const jsonStringify = JSON.stringify;
+
 const {
   ConnectionState,
   METRICS_LOG_TAG,
@@ -260,7 +262,7 @@ export function tryDeliverRaftDirect(
     targetNodeId,
   });
   try {
-    connection.ws.send(JSON.stringify(message));
+    connection.ws.send(jsonStringify(message));
     return {
       messageId,
       acknowledged: true,
@@ -644,7 +646,7 @@ export function sendMessage(
       targetNodeId,
     });
     try {
-      connection.ws.send(JSON.stringify(message));
+      connection.ws.send(jsonStringify(message));
     } catch (_sendError) {
       clearTimeout(timeout);
       router.pendingMessages.delete(messageId);
@@ -655,7 +657,7 @@ export function sendMessage(
 
 export function sendRaw(router, ws, message) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+    ws.send(jsonStringify(message));
   }
 }
 

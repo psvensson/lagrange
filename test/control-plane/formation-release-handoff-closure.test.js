@@ -160,7 +160,11 @@ function observeFormation(
     contract;
 }
 
-function buildMessageRouter(getRows, localNodeId = 'seed') {
+function buildMessageRouter(
+  getRows,
+  localNodeId = 'seed',
+  visibleNodeIds = null,
+) {
   return {
     nodeId: localNodeId,
     bootIncarnation: 1,
@@ -172,6 +176,7 @@ function buildMessageRouter(getRows, localNodeId = 'seed') {
       };
     },
     getCurrentPrimaryConnectionBootIncarnation(nodeId) {
+      if (visibleNodeIds && !visibleNodeIds.includes(nodeId)) return null;
       return buildConnectionEvidence(getRows())
         .find((evidence) => evidence.nodeId === nodeId) || null;
     },
@@ -304,6 +309,37 @@ test('formation release handoff retains one generation across a reopened ' +
   t.equal(complete.state, FORMATION_RELEASE_HANDOFF_STATE.COMPLETE);
   t.equal(complete.releaseAuthorized, false,
     'authority closes only after every captured incarnation is READY');
+  t.end();
+});
+
+test('formation release capture ignores a singleton and captures the same ' +
+  'satisfied authority only after the shared two-member wave exists', (t) => {
+  const owner = new FormationReleaseHandoffClosureOwner();
+  const singletonRows = buildFormationRows().filter(
+    (row) => row.node_id !== 'joiner-b',
+  );
+  const singleton = observeFormation(
+    owner,
+    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
+    singletonRows,
+    NOW,
+  );
+  t.equal(singleton.state, FORMATION_RELEASE_HANDOFF_STATE.IDLE);
+  t.equal(singleton.generation, null,
+    'ordinary singleton growth cannot mint a formation handoff generation');
+
+  const wave = observeFormation(
+    owner,
+    buildAuthority(),
+    buildFormationRows(),
+    NOW + 1,
+  );
+  t.equal(wave.state, FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
+  t.equal(wave.releaseAuthorized, true);
+  t.same(wave.requiredCohort, [
+    {nodeId: 'joiner-a', bootIncarnation: 1},
+    {nodeId: 'joiner-b', bootIncarnation: 1},
+  ], 'the first eligible two-member wave is captured atomically');
   t.end();
 });
 
@@ -704,7 +740,11 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
     nodeId: 'joiner-a',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
-    messageRouter: buildMessageRouter(() => rows, 'joiner-a'),
+    messageRouter: buildMessageRouter(
+      () => rows,
+      'joiner-a',
+      ['joiner-a', 'seed'],
+    ),
     membershipPublicationService: {
       controlPlanePublicationsOwner: {
         async getPublication() {
@@ -853,14 +893,20 @@ test('a restarted seed rehydrates its one durable active generation during a ' +
 test('formation release handoff retains an immutable captured cohort across ' +
   'canonical expansion without authorizing the added node', async (t) => {
   const expandedOwner = new FormationReleaseHandoffClosureOwner();
+  const expandedRows = [
+    ...buildFormationRows(),
+    buildNode('joiner-c'),
+  ];
   const captured = observeFormation(expandedOwner,
-    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
+    buildAuthority(),
     buildFormationRows(),
     NOW,
   );
   const expanded = observeFormation(expandedOwner,
-    buildAuthority(),
-    buildFormationRows(),
+    buildAuthority({
+      canonicalNodeIds: ['joiner-a', 'joiner-b', 'joiner-c', 'seed'],
+    }),
+    expandedRows,
     NOW + 100,
   );
   t.equal(expanded.state, FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
@@ -868,6 +914,7 @@ test('formation release handoff retains an immutable captured cohort across ' +
     'membership additions do not rotate the captured generation');
   t.same(expanded.requiredCohort, [
     {nodeId: 'joiner-a', bootIncarnation: 1},
+    {nodeId: 'joiner-b', bootIncarnation: 1},
   ], 'the added JOINING node is not retroactively captured');
   t.equal(
     validateFormationReleaseHandoffConsumerContract(
@@ -875,8 +922,8 @@ test('formation release handoff retains an immutable captured cohort across ' +
       buildAuthority(),
       buildFormationRows(),
       NOW + 100,
-      'joiner-b',
-      buildConnectionEvidence(buildFormationRows()),
+      'joiner-c',
+      buildConnectionEvidence(expandedRows),
     ),
     null,
     'an added non-cohort process cannot consume the durable release',
@@ -921,18 +968,21 @@ test('formation release handoff retains an immutable captured cohort across ' +
 
   const delayedAckOwner = new FormationReleaseHandoffClosureOwner();
   const initialIntent = delayedAckOwner.observe(
-    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
+    buildAuthority(),
     buildFormationRows(),
     NOW,
     'seed',
     buildConnectionEvidence(buildFormationRows()),
   );
   const expandedIntent = delayedAckOwner.observe(
-    buildAuthority({publicationEpoch: 42}),
-    buildFormationRows(),
+    buildAuthority({
+      canonicalNodeIds: ['joiner-a', 'joiner-b', 'joiner-c', 'seed'],
+      publicationEpoch: 42,
+    }),
+    expandedRows,
     NOW + 100,
     'seed',
-    buildConnectionEvidence(buildFormationRows()),
+    buildConnectionEvidence(expandedRows),
   );
   const staleAcknowledgement = delayedAckOwner.acknowledgePublication(
     authorizeFormationReleaseHandoffPublicationIntent(initialIntent),
@@ -951,7 +1001,7 @@ test('formation release handoff revokes on captured physical membership, ' +
   'incarnation, and substantive authority changes', async (t) => {
   const removedCapturedOwner = new FormationReleaseHandoffClosureOwner();
   observeFormation(removedCapturedOwner,
-    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
+    buildAuthority(),
     buildFormationRows(),
     NOW,
   );

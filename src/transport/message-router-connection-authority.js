@@ -48,6 +48,9 @@ const objectHasOwn = Object.hasOwn;
 const stringPrototypeLocaleCompare = Function.call.bind(
   String.prototype.localeCompare,
 );
+const INCOMING_IDENTITY_FIELD_ABSENT = Symbol(
+  'incoming-identification-field-absent',
+);
 
 const RECONNECT_ADDRESS_SOURCE = objectFreeze({
   CANONICAL: 'canonical',
@@ -90,12 +93,53 @@ function readOwnBootIncarnation(source) {
     TRANSPORT_NUM.ZERO;
 }
 
+function readOwnPrimitiveString(source, field) {
+  if (!source || typeof source !== TRANSPORT_TYPEOF.OBJECT) return null;
+  const descriptor = objectGetOwnPropertyDescriptor(source, field);
+  if (!descriptor) return INCOMING_IDENTITY_FIELD_ABSENT;
+  return descriptor && objectHasOwn(descriptor, 'value') &&
+    typeof descriptor.value === TRANSPORT_TYPEOF.STRING &&
+    descriptor.value.length > TRANSPORT_NUM.ZERO ?
+    descriptor.value : null;
+}
+
 class RouterConnectionAuthorityOwner {
   constructor(router) {
     this.router = router;
   }
   readIncomingBootIncarnation(message) {
     return readOwnBootIncarnation(message);
+  }
+  readIncomingIdentificationEnvelope(message) {
+    const nodeId = readOwnPrimitiveString(message, 'nodeId');
+    const primaryNodeAddress = readOwnPrimitiveString(
+      message,
+      'nodeAddress',
+    );
+    const nodeAddress = primaryNodeAddress ===
+      INCOMING_IDENTITY_FIELD_ABSENT ?
+      readOwnPrimitiveString(message, 'address') : primaryNodeAddress;
+    const channelDescriptor = message &&
+      typeof message === TRANSPORT_TYPEOF.OBJECT ?
+      objectGetOwnPropertyDescriptor(message, 'channel') : null;
+    const channel = channelDescriptor ?
+      objectHasOwn(channelDescriptor, 'value') ?
+        channelDescriptor.value : INCOMING_IDENTITY_FIELD_ABSENT : null;
+    if (
+      nodeId === null || nodeId === INCOMING_IDENTITY_FIELD_ABSENT ||
+      nodeAddress === null ||
+      nodeAddress === INCOMING_IDENTITY_FIELD_ABSENT ||
+      channel === INCOMING_IDENTITY_FIELD_ABSENT ||
+      (channel !== null && typeof channel !== TRANSPORT_TYPEOF.STRING)
+    ) {
+      return null;
+    }
+    return objectFreeze({
+      nodeId,
+      nodeAddress,
+      channel,
+      bootIncarnation: readOwnBootIncarnation(message),
+    });
   }
   /**
    * Incarnation fence for the identification slot: refuse an IDENTIFY whose

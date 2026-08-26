@@ -8,6 +8,8 @@ import {
 } from '../constants/index.js';
 import {FORMATION_RELEASE_HANDOFF_STATE} from
   '../control-plane/formation-release-handoff-contract.js';
+import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from
+  '../control-plane/formation-release-handoff-policy.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -182,7 +184,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       snapshot.targetReplicaCount ||
       getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)?.length ||
       0;
-    const formationWaveNodeCount = Math.max(1, formationReplicaCount - 1);
+    const formationWaveNodeCount = Math.max(
+      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
+      formationReplicaCount - 1,
+    );
     return Number.isInteger(formationReplicaCount) &&
       formationReplicaCount > 0 &&
       snapshot.candidateNodeIds.length >= formationReplicaCount &&

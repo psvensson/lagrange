@@ -23,6 +23,8 @@ import {
   formationReleaseContractsEqual,
   formationReleaseGenerationIdentity,
 } from './formation-release-handoff-identity.js';
+import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from
+  './formation-release-handoff-policy.js';
 
 const arrayPrototypePush = Function.call.bind(Array.prototype.push);
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
@@ -76,7 +78,8 @@ function captureFormationCohort(
     if (member === null) return null;
     if (member !== false) arrayPrototypePush(cohort, member);
   }
-  return cohort.length > 0 ? cohort : null;
+  return cohort.length >= FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE ?
+    cohort : null;
 }
 
 function capturedMemberProblem(member, node, connection) {

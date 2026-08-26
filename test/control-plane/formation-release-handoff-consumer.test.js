@@ -99,7 +99,7 @@ test('seed projection validator accepts only the exact physical captured ' +
     rows,
     'joiner-a',
     'seed',
-    buildConnections(),
+    buildConnections().filter(({nodeId}) => nodeId !== 'joiner-b'),
   );
   t.equal(accepted.formationReleaseHandoff.releaseAuthorized, true,
     'the exact seed handoff remains the sole release contract');
@@ -108,10 +108,10 @@ test('seed projection validator accepts only the exact physical captured ' +
     rows,
     'joiner-a',
     'seed',
-    buildConnections(),
+    buildConnections().filter(({nodeId}) => nodeId !== 'joiner-b'),
   );
   t.equal(joinerValidated.formationReleaseHandoff.releaseAuthorized, true,
-    'canonical seed sanitization preserves joiner-side fence validation');
+    'consumer proves seed+self without owning pairwise joiner identity');
   t.equal(
     validateFormationReleaseHandoffSeedProjection(
       projected,

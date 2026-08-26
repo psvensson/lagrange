@@ -590,6 +590,38 @@ function formationReleaseHandoffPhysicalEvidenceMatches(
   }
   return true;
 }
+function formationReleaseHandoffConsumerEvidenceMatches(
+  normalizedContract,
+  projectionNodeId,
+  rowsById,
+  connectionsById,
+) {
+  const authorityConnection = mapPrototypeGet(
+    connectionsById,
+    normalizedContract.authorityNodeId,
+  );
+  if (
+    !authorityConnection ||
+    authorityConnection.bootIncarnation !==
+      normalizedContract.authorityBootIncarnation
+  ) {
+    return false;
+  }
+  for (
+    let index = 0;
+    index < normalizedContract.requiredCohort.length;
+    index += 1
+  ) {
+    const member = normalizedContract.requiredCohort[index];
+    if (member.nodeId !== projectionNodeId) continue;
+    return publishedMemberMatchesCurrent(
+      member,
+      mapPrototypeGet(rowsById, member.nodeId),
+      mapPrototypeGet(connectionsById, member.nodeId),
+    );
+  }
+  return false;
+}
 function publishedMemberMatchesCurrent(member, node, connection) {
   if (!node || !connection) return false;
   if (connection.bootIncarnation !== member.bootIncarnation) return false;
@@ -775,12 +807,23 @@ function validateFormationReleaseHandoffConsumerContract(
   ) {
     return null;
   }
-  return validatePublishedContractAgainstCurrent(
-    normalizedContract, startupAuthority,
-    nodeRows,
-    observedAt,
-    connectionEvidence,
-  ) ? contract : null;
+  const authority = buildAuthorityEvidence(startupAuthority);
+  const rowsById = buildNodeEvidenceById(nodeRows);
+  const connectionsById = buildConnectionEvidenceById(connectionEvidence);
+  if (
+    !authority || !rowsById || !connectionsById ||
+    !numberIsFinite(observedAt) ||
+    !isRetainableAuthority(authority, normalizedContract) ||
+    !formationReleaseHandoffConsumerEvidenceMatches(
+      normalizedContract,
+      projectionNodeId,
+      rowsById,
+      connectionsById,
+    )
+  ) {
+    return null;
+  }
+  return contract;
 }
 export {
   FORMATION_RELEASE_HANDOFF_REASON, FORMATION_RELEASE_HANDOFF_STATE,
@@ -789,6 +832,7 @@ export {
   buildConnectionEvidenceById, buildContract, buildNodeEvidenceById,
   formationReleaseCohortContainsNodeId,
   formationReleaseHandoffPhysicalEvidenceMatches,
+  formationReleaseHandoffConsumerEvidenceMatches,
   formationReleaseHandoffAuthorizesNode, freezeCohort,
   isConnectedFormationMember, isCurrentReadyMember,
   isRetainableAuthority, normalizeFormationReleaseHandoffContract,

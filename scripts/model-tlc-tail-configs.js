@@ -271,6 +271,28 @@ const MODEL_TLC_TAIL_CONFIGS = Object.freeze([
     expectedFailurePattern:
       'Invariant ProjectionOmissionCannotRevokePhysicalCohort is violated',
   },
+  {
+    id: 'formation-release-handoff-closure-one-way-identify-bug',
+    mode: 'formation-release-handoff-closure-one-way-identify-bug',
+    module: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure_one_way_identify_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'formation-release-handoff-closure-one-way-identify-bug.model.report.json',
+    scenario: 'formation-release-handoff-closure-model',
+    owner: 'control_plane_readiness_startup_authority',
+    boundary: 'one_way_identify_consumer_incarnation_counterexample',
+    expectedFailurePattern:
+      'Temporal property JoinerCohortEventuallyReadyWithinBudget was violated',
+  },
 ]);
 
 export {MODEL_TLC_TAIL_CONFIGS};

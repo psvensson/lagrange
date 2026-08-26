@@ -3,7 +3,7 @@ import {
   buildConnectionEvidenceById,
   buildNodeEvidenceById,
   formationReleaseCohortContainsNodeId,
-  formationReleaseHandoffPhysicalEvidenceMatches,
+  formationReleaseHandoffConsumerEvidenceMatches,
   normalizeFormationReleaseHandoffContract,
   normalizePublishedConsumerContract,
 } from './formation-release-handoff-contract.js';
@@ -84,8 +84,9 @@ function validateFormationReleaseHandoffSeedProjection(
   ) {
     return baseProjection;
   }
-  return formationReleaseHandoffPhysicalEvidenceMatches(
+  return formationReleaseHandoffConsumerEvidenceMatches(
     normalizedContract,
+    projectionNodeId,
     rowsById,
     connectionsById,
   ) ? buildCanonicalSeedProjection(authority, completeContract) :

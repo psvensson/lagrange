@@ -1,6 +1,7 @@
 const arrayIsArray = Array.isArray;
 const arrayPrototypeIndexOf = Function.call.bind(Array.prototype.indexOf);
 import {formationReleaseCohortIdentity, formationReleaseGenerationIdentity} from '../../src/control-plane/formation-release-handoff-identity.js';
+import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from '../../src/control-plane/formation-release-handoff-policy.js';
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
 const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
 const booleanConstructor = Boolean;
@@ -29,7 +30,6 @@ const REVOKED_REASONS = Object.freeze([
   'captured_cohort_member_ineligible',
 ]);
 const NODE_COUNT = 5;
-const MINIMUM_COHORT_SIZE = 2;
 const CERTIFICATION_BUDGET_MS = 60_000;
 const REVERT_COUNTEREXAMPLE = Object.freeze({
   TRANSIENT_PROJECTION_OMISSION_REVOCATION:
@@ -728,7 +728,8 @@ function classifyGenerationEvidence(generation, consumer) {
     generation.completed !== null,
     generation.revoked === null,
     generation.reopened !== null,
-    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    generation.cohort.length >=
+      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
     consumerPassed,
   ]);
   return {consumerPassed, exactConsumers, qualifying, withinBudget};
@@ -846,7 +847,7 @@ function physicalEvidenceIsExact(event, generation) {
 function capturedProjectionWasTransientlyOmitted(event, generation) {
   const captured = normalizeUniqueStrings(
     readOwnData(event, 'capturedCanonicalNodeIds'),
-    MINIMUM_COHORT_SIZE + 1,
+    FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE + 1,
   );
   const observed = normalizeUniqueStrings(
     readOwnData(event, 'observedCanonicalNodeIds'),
@@ -873,7 +874,8 @@ function transientProjectionOmissionRevocationGenerationIsExact(generation) {
     generation.completed === null,
     generation.captured !== null,
     generation.reopened !== null,
-    generation.cohort.length >= MINIMUM_COHORT_SIZE,
+    generation.cohort.length >=
+      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
     generation.terminal === revoked,
     revoked.reason === 'startup_authority_incompatible',
     revoked.observedPublicationEpoch > revoked.capturedPublicationEpoch,
