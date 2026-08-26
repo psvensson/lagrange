@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "active-gate-model-report-v1",
+  "modelReport": true,
+  "source": "tlc",
+  "mode": "operation-ledger-formation-outsider-fixed",
+  "scenario": "operation-ledger-formation-outsider-model",
+  "owner": "node_joining_operation_ledger_formation_readiness",
+  "boundary": "cold_wave_observation_to_noncohort_ready_floor_bypass",
+  "module": "models/operation-ledger-formation-outsider/OperationLedgerFormationOutsider.tla",
+  "config": "models/operation-ledger-formation-outsider/OperationLedgerFormationOutsider_fixed.cfg",
+  "converged": true,
+  "residual": 0,
+  "frontierCount": 0,
+  "livenessHolds": true,
+  "expectConverged": true,
+  "expectedFailurePattern": null,
+  "expectedFailureObserved": false,
+  "expectationMet": true,
+  "temporalViolated": false,
+  "exitCode": 0,
+  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-08-26 19:12:03.\nProgress(4) at 2026-08-26 19:12:03: 8 states generated, 6 distinct states found, 0 states left on queue.\nChecking 4 branches of temporal properties for the complete state space with 24 total distinct states at (2026-08-26 19:12:03)\nFinished checking temporal properties in 00s at 2026-08-26 19:12:03\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 6.5E-19\n8 states generated, 6 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 4.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-08-26 19:12:03)"
+}

@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "phase": "pre-run",
+  "recordedAt": "2026-08-26T19:11:40.305Z",
+  "headCommit": "710078448373ed8e1b754fa780a88aefc1c6475f",
+  "clean": true,
+  "candidateDiffBytes": 597721,
+  "candidateDiffSha256": "18ffa3ed6fe83968ce906cd528d0237a3764bd3129c4a15768c8fb2d18d71668",
+  "controllerDigest": "e0fd1c66240aae45f99e8e2b6a5d04a70a059885399e86202efe454da1785fcf",
+  "releaseContentDigest": "92362b89822bde21a7b279707de03fb86ff597c62cfd455f307c63b526114f42",
+  "sourceFingerprint": "475c84434a6e97a1",
+  "buildInputDigest": "7a46b36cbe7b7589c29c63d110251a41b14eb2d7eb05259c3f0ffb5cfe68242b",
+  "inputManifestSha256": "29f2f6f59b1a48ecc74c8c078c1475b137d317d3b1c1731830831e3de1d73afe",
+  "inputs": [
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure.tla",
+      "size": 57251,
+      "sha256": "9fdbf5dd5fa76fc978ddbf2b8480f53ba1e66bb381471eb7e2dddd885e2626df"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_durable_pending_restart_coverage.cfg",
+      "size": 640,
+      "sha256": "d194b0222dd8e3cef2861aeca04a76d37d587a237d113d7d4a960a4ac6ac6cc4"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_exact_membership_equality_bug.cfg",
+      "size": 1355,
+      "sha256": "844ef6a62a9bcc36c38e22cf6021c02c86416535e9d86d8a745dc276511e4e46"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_fixed.cfg",
+      "size": 1610,
+      "sha256": "8fe8c80e4e64ae824f3d72d121fc50a19cfa9290b751d59499b111429796f109"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_instantaneous_release_bug.cfg",
+      "size": 588,
+      "sha256": "4bd6f6fad5023d51b2dffe7635742a18627aa70c5e8702225c2466a8bb2b179c"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_one_way_identify_bug.cfg",
+      "size": 1474,
+      "sha256": "0d03668b52db8d361a4f31e176e478e14a029ee7497b0874435d405a7a877ffe"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_pre_durable_restart_coverage.cfg",
+      "size": 591,
+      "sha256": "f2009eef55cdcb32dab4224e56de3326b5464e3dfc247b27167c924ac685cb03"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_projection_omission_bug.cfg",
+      "size": 1456,
+      "sha256": "280651ac6e2f8661ead8a21a22e50ef5d670d48c05cbde8ed1bbf4cac87923bd"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_projection_synchronization_bug.cfg",
+      "size": 575,
+      "sha256": "94e3ccf32ed6e28c3736f75ab84acf703580b9dbeda681ccdec71cb03160c8ca"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_projection_synchronization_coverage.cfg",
+      "size": 693,
+      "sha256": "3953313ed229291edc6b6e5bb9741f2fea8c08277cf70c5e5dfd66ce597b9a48"
+    },
+    {
+      "path": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_terminal_replay_bug.cfg",
+      "size": 1322,
+      "sha256": "edab40917b49a318078e0c9b2111bf57d1176c57b976fb69d76080a5d5006fe4"
+    },
+    {
+      "path": "models/operation-ledger-formation-outsider/OperationLedgerFormationOutsider.tla",
+      "size": 5430,
+      "sha256": "0a3afd44b54de49928d541b21e8be8afac9e929010508e9a41213ed4069b1640"
+    },
+    {
+      "path": "models/operation-ledger-formation-outsider/OperationLedgerFormationOutsider_fixed.cfg",
+      "size": 515,
+      "sha256": "8510854b38a6f15de179ab3711b59f5581c168d66d1a5b1222d0aceb92ef1c74"
+    },
+    {
+      "path": "models/operation-ledger-formation-outsider/OperationLedgerFormationOutsider_scalar_latch_bug.cfg",
+      "size": 486,
+      "sha256": "72eddf7f22484eb748fea1caf0521afabc585a47fd8497769e9d4741c488a256"
+    },
+    {
+      "path": "scripts/model-tlc-configs.js",
+      "size": 29643,
+      "sha256": "96a2d16f1dfdc279086480eab7e997c61e37b8a605cad05f2702c241ccc90950"
+    },
+    {
+      "path": "scripts/model-tlc-tail-configs.js",
+      "size": 21277,
+      "sha256": "7d4f8ec3a7f5b72806075f2cf3b0a5f3344a3fa567621e598e9fe14d6ef05652"
+    },
+    {
+      "path": "scripts/model-tlc.js",
+      "size": 7934,
+      "sha256": "f426472a8f279aabf76e30ef2b2990c2297587e6ee6edb1ec25aa39daac63637"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "active-gate-model-report-v1",
+  "modelReport": true,
+  "source": "tlc",
+  "mode": "formation-release-handoff-closure-terminal-replay-bug",
+  "scenario": "formation-release-handoff-closure-model",
+  "owner": "control_plane_readiness_startup_authority",
+  "boundary": "terminal_generation_stale_active_replay_counterexample",
+  "module": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure.tla",
+  "config": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_terminal_replay_bug.cfg",
+  "converged": false,
+  "residual": 1,
+  "frontierCount": 1,
+  "livenessHolds": false,
+  "expectConverged": false,
+  "expectedFailurePattern": "Invariant TerminalReplayCannotReopen is violated",
+  "expectedFailureObserved": true,
+  "expectationMet": true,
+  "temporalViolated": false,
+  "exitCode": 12,
+  "outputTail": "/\\ generationPublished = FALSE\n/\\ pendingTerminalReloadExercised = FALSE\n/\\ sawReopen = TRUE\n/\\ releaseAuthority = TRUE\n/\\ terminalReloadExercised = FALSE\n/\\ ownerReloadExercised = FALSE\n/\\ uncapturedConsumerAttempted = FALSE\n\n220 states generated, 151 distinct states found, 81 states left on queue.\nThe depth of the complete state graph search is 10.\nFinished in 00s at (2026-08-26 19:12:03)\nTrace exploration spec path: /home/peter/lagrange-formation-v14-fixed/models/formation-release-handoff-closure/FormationReleaseHandoffClosure_TTrace_1787771522.tla"
+}

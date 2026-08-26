@@ -1,3 +1,12 @@
+const arrayIsArray = Array.isArray;
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPrototypePush = Function.call.bind(Array.prototype.push);
+const objectFreeze = Object.freeze;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const safeString = String;
+const stringPrototypeTrim = Function.call.bind(String.prototype.trim);
+const OWN_DATA_VALUE_FIELD = 'value';
 
 const PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_RECOVERY_ACK_NODE_LIST_INPUT_STATE = Object.freeze({
@@ -166,14 +175,45 @@ function isRecord(value) {
 }
 
 function normalizeDistinctStringArray(values = []) {
-  return Object.freeze(
-    [...new Set(
-      (Array.isArray(values) ? values : [])
-        .map((value) =>
-          String(value || PUBLICATION_RECOVERY_EVIDENCE_TEXT.EMPTY).trim())
-        .filter((value) => value.length > 0),
-    )],
-  );
+  const normalized = [];
+  if (!arrayIsArray(values)) return objectFreeze(normalized);
+  for (let index = 0; index < values.length; index += 1) {
+    const descriptor = objectGetOwnPropertyDescriptor(values, String(index));
+    if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
+      continue;
+    }
+    const text = stringPrototypeTrim(safeString(
+      descriptor.value || PUBLICATION_RECOVERY_EVIDENCE_TEXT.EMPTY,
+    ));
+    if (text.length > 0 && !arrayPrototypeIncludes(normalized, text)) {
+      arrayPrototypePush(normalized, text);
+    }
+  }
+  return objectFreeze(normalized);
+}
+
+function mergeDistinctStringArrays(lists = []) {
+  const merged = [];
+  if (!arrayIsArray(lists)) return objectFreeze(merged);
+  for (let listIndex = 0; listIndex < lists.length; listIndex += 1) {
+    const listDescriptor = objectGetOwnPropertyDescriptor(
+      lists,
+      String(listIndex),
+    );
+    if (
+      !listDescriptor ||
+      !objectHasOwn(listDescriptor, OWN_DATA_VALUE_FIELD)
+    ) {
+      continue;
+    }
+    const normalized = normalizeDistinctStringArray(listDescriptor.value);
+    for (let index = 0; index < normalized.length; index += 1) {
+      if (!arrayPrototypeIncludes(merged, normalized[index])) {
+        arrayPrototypePush(merged, normalized[index]);
+      }
+    }
+  }
+  return objectFreeze(merged);
 }
 
 function normalizePublicationEpoch(value) {
@@ -394,6 +434,7 @@ function resolveRelevantPublicationMembershipNodeIds(
 
 export {
   isRecord,
+  mergeDistinctStringArrays,
   normalizeDistinctStringArray,
   normalizePublicationEpoch,
   normalizeNonNegativeInteger,

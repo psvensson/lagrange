@@ -4,10 +4,18 @@ import {
   REVERT_COUNTEREXAMPLE,
   analyzeFormationReleaseEvents,
   executionOutcomeExpected,
+  liveObservationMatchesFinalAnalysis,
   observeFixedClosure,
   revertedCounterexampleObserved,
   resolveRunBinding,
 } from '../../scripts/checks/run-formation-release-handoff-gcp.js';
+import {
+  buildPassingEvents,
+  buildPhysicalEvidence,
+  buildStartupAuthorityObservation,
+  FINGERPRINT,
+  GENERATION,
+} from './formation-release-handoff-gcp-fixture.js';
 import {formationReleaseGenerationIdentity} from
   '../../src/control-plane/formation-release-handoff-identity.js';
 import {computeFileSetFingerprint, computeSourceFingerprint} from
@@ -25,22 +33,9 @@ import {
 import {resolveDockerBuildContextManifest} from
   '../../test/distributed/harness/docker-provider.js';
 
-const FINGERPRINT = '0123456789abcdef';
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../..',
-);
-function buildCohort() {
-  return [
-    {nodeId: 'joiner-a', bootIncarnation: 3},
-    {nodeId: 'joiner-b', bootIncarnation: 5},
-  ];
-}
-const GENERATION = formationReleaseGenerationIdentity(
-  41,
-  'seed',
-  1,
-  buildCohort(),
 );
 const FIXED_RELEASE_CONTENT_DIGEST = 'b'.repeat(64);
 
@@ -110,104 +105,6 @@ async function fixedBindingEvidence(fixedCommit = 'a'.repeat(40)) {
   };
 }
 
-function buildPassingEvents() {
-  const events = [];
-  const cohort = buildCohort();
-  for (let index = 0; index < 5; index += 1) {
-    events.push({
-      time: `2026-08-25T00:00:0${index}.000Z`,
-      nodeId: `node-${index}`,
-      bootedSrcFingerprint: FINGERPRINT,
-      expectedSrcFingerprint: FINGERPRINT,
-      srcFingerprintMatches: true,
-      msg: 'Distributed Database System starting',
-    });
-  }
-  events.push({
-    time: '2026-08-25T00:00:09.000Z',
-    nodeId: 'seed',
-    state: 'active',
-    reason: 'retained_until_captured_cohort_ready',
-    generation: GENERATION,
-    authorityNodeId: 'seed',
-    authorityBootIncarnation: 1,
-    capturedPublicationEpoch: 41,
-    observedPublicationEpoch: 41,
-    releaseAuthorized: false,
-    observedAuthorityReady: true,
-    observedRecoveryReasonCodes: [],
-    requiredCohort: cohort,
-    readyNodeIds: [],
-    pendingNodeIds: ['joiner-a', 'joiner-b'],
-    msg: 'Formation release handoff authority transition',
-  });
-  events.push({
-    time: '2026-08-25T00:00:10.000Z',
-    nodeId: 'seed',
-    state: 'active',
-    reason: 'retained_until_captured_cohort_ready',
-    generation: GENERATION,
-    authorityNodeId: 'seed',
-    authorityBootIncarnation: 1,
-    capturedPublicationEpoch: 41,
-    observedPublicationEpoch: 41,
-    releaseAuthorized: true,
-    observedAuthorityReady: true,
-    observedRecoveryReasonCodes: [],
-    requiredCohort: cohort,
-    readyNodeIds: [],
-    pendingNodeIds: ['joiner-a', 'joiner-b'],
-    msg: 'Formation release handoff authority transition',
-  });
-  events.push({
-    time: '2026-08-25T00:00:11.000Z',
-    nodeId: 'seed',
-    state: 'active',
-    reason: 'retained_until_captured_cohort_ready',
-    generation: GENERATION,
-    authorityNodeId: 'seed',
-    authorityBootIncarnation: 1,
-    capturedPublicationEpoch: 41,
-    observedPublicationEpoch: 41,
-    releaseAuthorized: true,
-    observedAuthorityReady: false,
-    observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
-    requiredCohort: cohort,
-    readyNodeIds: [],
-    pendingNodeIds: ['joiner-a', 'joiner-b'],
-    msg: 'Formation release handoff authority transition',
-  });
-  for (const nodeId of ['joiner-a', 'joiner-b']) {
-    events.push({
-      time: '2026-08-25T00:00:12.000Z',
-      nodeId,
-      formationReleaseHandoffState: 'active',
-      formationReleaseHandoffGeneration: GENERATION,
-      formationReleaseHandoffReleaseAuthorized: true,
-      msg: 'Join priority-placement formation barrier',
-    });
-  }
-  events.push({
-    time: '2026-08-25T00:00:40.000Z',
-    nodeId: 'seed',
-    state: 'complete',
-    reason: 'captured_cohort_ready',
-    generation: GENERATION,
-    authorityNodeId: 'seed',
-    authorityBootIncarnation: 1,
-    capturedPublicationEpoch: 41,
-    observedPublicationEpoch: 41,
-    releaseAuthorized: false,
-    observedAuthorityReady: false,
-    observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
-    requiredCohort: cohort,
-    readyNodeIds: ['joiner-a', 'joiner-b'],
-    pendingNodeIds: [],
-    msg: 'Formation release handoff authority transition',
-  });
-  return events;
-}
-
 function buildIdleTransitionEvent() {
   return {
     time: '2026-08-25T00:00:08.000Z',
@@ -225,14 +122,16 @@ function buildIdleTransitionEvent() {
     requiredCohort: [],
     readyNodeIds: [],
     pendingNodeIds: [],
+    pendingTerminalState: null,
+    pendingTerminalReason: null,
     msg: 'Formation release handoff authority transition',
   };
 }
 
-function buildCanonicalExpansionRevocationEvents() {
+function buildTransientProjectionOmissionRevocationEvents() {
   const events = buildPassingEvents();
-  events.splice(8, 3, {
-    ...events[10],
+  events.splice(9, 4, {
+    ...events[12],
     time: '2026-08-25T00:00:20.000Z',
     state: 'revoked',
     reason: 'startup_authority_incompatible',
@@ -242,6 +141,9 @@ function buildCanonicalExpansionRevocationEvents() {
     releaseAuthorized: false,
     readyNodeIds: [],
     pendingNodeIds: [],
+    capturedCanonicalNodeIds: ['joiner-a', 'joiner-b', 'seed'],
+    observedCanonicalNodeIds: ['joiner-b', 'seed'],
+    physicalCohortEvidence: buildPhysicalEvidence(),
   });
   return events;
 }
@@ -270,7 +172,9 @@ function buildGenerationEvents({
     authorityBootIncarnation: 1,
     capturedPublicationEpoch: publicationEpoch,
     observedPublicationEpoch: publicationEpoch,
+    ...buildStartupAuthorityObservation({publicationEpoch}),
     requiredCohort: cohort,
+    physicalCohortEvidence: buildPhysicalEvidence(cohort),
     readyNodeIds: [],
     pendingNodeIds: nodeIds,
     msg: 'Formation release handoff authority transition',
@@ -290,14 +194,39 @@ function buildGenerationEvents({
       observedAuthorityReady: true,
       observedRecoveryReasonCodes: [],
     },
+    {
+      ...common,
+      time: time(2),
+      releaseAuthorized: true,
+      observedAuthorityReady: true,
+      observedRecoveryReasonCodes: [],
+      ...buildStartupAuthorityObservation({
+        state: 'recovery_pending',
+        ready: false,
+        spreadSatisfied: false,
+        reasonCodes: [
+          'publication_epoch_pending',
+          'priority_partitions_not_spread',
+        ],
+        publicationEpoch: publicationEpoch + 1,
+      }),
+      physicalCohortEvidence: buildPhysicalEvidence(cohort),
+    },
   ];
   if (reopened) {
     events.push({
       ...common,
-      time: time(2),
+      time: time(3),
       releaseAuthorized: true,
       observedAuthorityReady: false,
       observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
+      ...buildStartupAuthorityObservation({
+        state: 'recovery_pending',
+        ready: false,
+        spreadSatisfied: false,
+        reasonCodes: ['priority_partitions_not_spread'],
+        publicationEpoch: publicationEpoch + 1,
+      }),
     });
   }
   for (const nodeId of nodeIds) {
@@ -313,14 +242,44 @@ function buildGenerationEvents({
   events.push({
     ...common,
     time: time(4),
+    state: 'terminal_pending',
+    reason: 'terminal_durability_pending',
+    releaseAuthorized: false,
+    observedAuthorityReady: reopened ? false : true,
+    observedRecoveryReasonCodes:
+      reopened ? ['priority_partitions_not_spread'] : [],
+    ...buildStartupAuthorityObservation(reopened ? {
+      state: 'recovery_pending',
+      ready: false,
+      spreadSatisfied: false,
+      reasonCodes: ['priority_partitions_not_spread'],
+      publicationEpoch: publicationEpoch + 1,
+    } : {publicationEpoch}),
+    readyNodeIds: nodeIds,
+    pendingNodeIds: [],
+    pendingTerminalState: 'complete',
+    pendingTerminalReason: 'captured_cohort_ready',
+  });
+  events.push({
+    ...common,
+    time: time(5),
     state: 'complete',
     reason: 'captured_cohort_ready',
     releaseAuthorized: false,
     observedAuthorityReady: reopened ? false : true,
     observedRecoveryReasonCodes:
       reopened ? ['priority_partitions_not_spread'] : [],
+    ...buildStartupAuthorityObservation(reopened ? {
+      state: 'recovery_pending',
+      ready: false,
+      spreadSatisfied: false,
+      reasonCodes: ['priority_partitions_not_spread'],
+      publicationEpoch: publicationEpoch + 1,
+    } : {publicationEpoch}),
     readyNodeIds: nodeIds,
     pendingNodeIds: [],
+    pendingTerminalState: null,
+    pendingTerminalReason: null,
   });
   return events;
 }
@@ -337,6 +296,299 @@ test('formation GCP analyzer requires one positive retained generation on ' +
   t.equal(analysis.canonicalGeneration, GENERATION);
   t.same(analysis.barrierConsumerNodeIds, ['joiner-a', 'joiner-b']);
   t.equal(analysis.completionMs, 31_000);
+  t.equal(
+    analysis.projectionSynchronizedAt,
+    '2026-08-25T00:00:11.000Z',
+  );
+  t.end();
+});
+
+test('formation GCP analyzer canonicalizes cross-node consumer arrival order',
+  (t) => {
+    const journalEvents = buildPassingEvents();
+    let barrierStart = -1;
+    const filenameEvents = [];
+    for (let index = 0; index < journalEvents.length; index += 1) {
+      filenameEvents[index] = journalEvents[index];
+      if (barrierStart === -1 &&
+        journalEvents[index].msg ===
+          'Join priority-placement formation barrier') barrierStart = index;
+    }
+    filenameEvents[barrierStart] = journalEvents[barrierStart + 1];
+    filenameEvents[barrierStart + 1] = journalEvents[barrierStart];
+    const journalAnalysis = analyzeFormationReleaseEvents(
+      journalEvents,
+      FINGERPRINT,
+    );
+    const filenameAnalysis = analyzeFormationReleaseEvents(
+      filenameEvents,
+      FINGERPRINT,
+    );
+
+    t.equal(journalAnalysis.closurePassed, true);
+    t.equal(filenameAnalysis.closurePassed, true);
+    t.same(journalAnalysis.barrierConsumerNodeIds,
+      ['joiner-a', 'joiner-b']);
+    t.same(filenameAnalysis.barrierConsumerNodeIds,
+      journalAnalysis.barrierConsumerNodeIds);
+    t.same(filenameAnalysis.generationEvidence[0].barrierConsumerNodeIds,
+      journalAnalysis.generationEvidence[0].barrierConsumerNodeIds);
+    t.equal(liveObservationMatchesFinalAnalysis({
+      closureObservation: {value: journalAnalysis},
+    }, filenameAnalysis), true,
+    'the exact binder accepts independently transported canonical evidence');
+    t.end();
+  });
+
+test('formation GCP analyzer admits only exact, fenced publication ' +
+  'projection synchronization evidence', (t) => {
+  const solePublicationPending = buildPassingEvents();
+  solePublicationPending[7].observedStartupPrioritySpreadSatisfied = true;
+  solePublicationPending[7].observedStartupAuthorityReasonCodes = [
+    'publication_epoch_pending',
+  ];
+  t.equal(analyzeFormationReleaseEvents(
+    solePublicationPending,
+    FINGERPRINT,
+  ).closurePassed, true,
+  'the pre-existing sole publication synchronization shape remains valid');
+
+  const unknownDurableBoots = buildPassingEvents();
+  unknownDurableBoots[7].physicalCohortEvidence[1].nodeBootIncarnation = 0;
+  unknownDurableBoots[7].physicalCohortEvidence[2].nodeBootIncarnation = 0;
+  t.equal(analyzeFormationReleaseEvents(
+    unknownDurableBoots,
+    FINGERPRINT,
+  ).closurePassed, true,
+  'zero row boot is unknown while exact positive current-primary boots bind');
+
+  const cases = [
+    {
+      name: 'extra reason',
+      mutate(event) {
+        event.observedStartupAuthorityReasonCodes = [
+          'publication_epoch_pending',
+          'unknown_reason',
+        ];
+      },
+    },
+    {
+      name: 'reverse compound order',
+      mutate(event) {
+        event.observedStartupAuthorityReasonCodes = [
+          'priority_partitions_not_spread',
+          'publication_epoch_pending',
+        ];
+      },
+    },
+    {
+      name: 'duplicate compound reason',
+      mutate(event) {
+        event.observedStartupAuthorityReasonCodes = [
+          'publication_epoch_pending',
+          'publication_epoch_pending',
+        ];
+      },
+    },
+    {
+      name: 'missing compound spread reason',
+      mutate(event) {
+        event.observedStartupAuthorityReasonCodes = [
+          'publication_epoch_pending',
+        ];
+      },
+    },
+    {
+      name: 'unknown startup state',
+      mutate(event) {
+        event.observedStartupAuthorityState = 'unknown';
+      },
+    },
+    {
+      name: 'spread disagreement',
+      mutate(event) {
+        event.observedStartupPrioritySpreadSatisfied = true;
+      },
+    },
+    {
+      name: 'backward epoch',
+      mutate(event) {
+        event.observedStartupAuthorityPublicationEpoch = 40;
+      },
+    },
+    {
+      name: 'fence mismatch',
+      mutate(event) {
+        event.observedStartupAuthorityFenceIdentity = 'allowed:other';
+      },
+    },
+    {
+      name: 'physical cohort mismatch',
+      mutate(event) {
+        event.physicalCohortEvidence[1].currentPrimaryBootIncarnation = 99;
+      },
+    },
+    {
+      name: 'different positive durable row boot',
+      mutate(event) {
+        event.physicalCohortEvidence[1].nodeBootIncarnation = 99;
+      },
+    },
+    {
+      name: 'negative durable row boot',
+      mutate(event) {
+        event.physicalCohortEvidence[1].nodeBootIncarnation = -1;
+      },
+    },
+    {
+      name: 'noninteger durable row boot',
+      mutate(event) {
+        event.physicalCohortEvidence[1].nodeBootIncarnation = 3.5;
+      },
+    },
+    {
+      name: 'missing durable row boot',
+      mutate(event) {
+        delete event.physicalCohortEvidence[1].nodeBootIncarnation;
+      },
+    },
+    {
+      name: 'missing ACTIVE physical evidence',
+      mutate(event) {
+        delete event.physicalCohortEvidence;
+      },
+    },
+  ];
+  for (let index = 0; index < cases.length; index += 1) {
+    const events = buildPassingEvents();
+    cases[index].mutate(events[7]);
+    const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
+    t.equal(analysis.closurePassed, false, cases[index].name);
+    t.equal(analysis.malformedTransitionCount, 1, cases[index].name);
+  }
+
+  let getterCalls = 0;
+  const accessorEvents = buildPassingEvents();
+  Object.defineProperty(
+    accessorEvents[7].physicalCohortEvidence[1],
+    'nodeBootIncarnation',
+    {
+      get() {
+        getterCalls += 1;
+        return 3;
+      },
+    },
+  );
+  const accessorAnalysis = analyzeFormationReleaseEvents(
+    accessorEvents,
+    FINGERPRINT,
+  );
+  t.equal(accessorAnalysis.closurePassed, false,
+    'accessor durable row boot is absent, not authority');
+  t.equal(accessorAnalysis.malformedTransitionCount, 1);
+  t.equal(getterCalls, 0, 'analyzer never invokes durable row accessors');
+
+  const inheritedEvents = buildPassingEvents();
+  const inheritedEvidence = Object.create({nodeBootIncarnation: 3});
+  Object.assign(
+    inheritedEvidence,
+    inheritedEvents[7].physicalCohortEvidence[1],
+  );
+  delete inheritedEvidence.nodeBootIncarnation;
+  inheritedEvents[7].physicalCohortEvidence[1] = inheritedEvidence;
+  const inheritedAnalysis = analyzeFormationReleaseEvents(
+    inheritedEvents,
+    FINGERPRINT,
+  );
+  t.equal(inheritedAnalysis.closurePassed, false,
+    'inherited durable row boot is absent, not authority');
+  t.equal(inheritedAnalysis.malformedTransitionCount, 1);
+  t.end();
+});
+
+test('formation GCP analyzer accepts projection churn above the immutable ' +
+  'captured epoch floor and rejects observations below it', (t) => {
+  const aboveFloor = buildPassingEvents();
+  aboveFloor[7].observedPublicationEpoch = 45;
+  aboveFloor[7].observedStartupAuthorityPublicationEpoch = 45;
+  aboveFloor[8].observedPublicationEpoch = 44;
+  aboveFloor[8].observedStartupAuthorityPublicationEpoch = 44;
+  t.equal(analyzeFormationReleaseEvents(
+    aboveFloor,
+    FINGERPRINT,
+  ).closurePassed, true,
+  '45 to 44 is compatible churn because both remain above captured epoch 41');
+
+  const belowFloor = buildPassingEvents();
+  belowFloor[8].observedPublicationEpoch = 40;
+  belowFloor[8].observedStartupAuthorityPublicationEpoch = 40;
+  const belowFloorAnalysis = analyzeFormationReleaseEvents(
+    belowFloor,
+    FINGERPRINT,
+  );
+  t.equal(belowFloorAnalysis.closurePassed, false);
+  t.equal(belowFloorAnalysis.malformedTransitionCount, 1,
+    'an observation below captured epoch is not compatible authority');
+  t.end();
+});
+
+test('formation GCP analyzer accepts the optional synchronization milestone ' +
+  'only when distinct and strictly before the raw spread reopen', (t) => {
+  const withoutSynchronization = buildPassingEvents();
+  withoutSynchronization.splice(7, 1);
+  const withoutSynchronizationAnalysis = analyzeFormationReleaseEvents(
+    withoutSynchronization,
+    FINGERPRINT,
+  );
+  t.equal(withoutSynchronizationAnalysis.closurePassed, true,
+    'capture to pure reopen is a legal general-spec schedule');
+  t.equal(withoutSynchronizationAnalysis.projectionSynchronizedAt, null,
+    'the optional lane is reported honestly when it was not exercised');
+
+  const lateSynchronization = buildPassingEvents();
+  const synchronization = lateSynchronization.splice(7, 1)[0];
+  synchronization.time = '2026-08-25T00:00:12.500Z';
+  lateSynchronization.splice(8, 0, synchronization);
+  const lateAnalysis = analyzeFormationReleaseEvents(
+    lateSynchronization,
+    FINGERPRINT,
+  );
+  t.equal(lateAnalysis.cadenceValid, true,
+    'the supported cadence remains grammatically valid');
+  t.equal(lateAnalysis.closurePassed, false,
+    'a post-reopen synchronization cannot certify this sealed lane');
+
+  const conflated = buildPassingEvents();
+  conflated.splice(8, 1);
+  conflated[7].observedAuthorityReady = false;
+  conflated[7].observedRecoveryReasonCodes = [
+    'priority_partitions_not_spread',
+  ];
+  const conflatedAnalysis = analyzeFormationReleaseEvents(
+    conflated,
+    FINGERPRINT,
+  );
+  t.equal(conflatedAnalysis.cadenceValid, true,
+    'the raw synchronization event remains individually well formed');
+  t.equal(conflatedAnalysis.closurePassed, false,
+    'one event cannot satisfy synchronization and reopen milestones');
+  t.end();
+});
+
+test('formation GCP analyzer reports incomplete generation consumers without ' +
+  'calling exact transport malformed', (t) => {
+  const events = buildPassingEvents();
+  events.splice(events.length - 2, 2);
+  const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
+  t.equal(analysis.closurePassed, false,
+    'an incomplete generation cannot certify closure');
+  t.equal(analysis.cadenceValid, false,
+    'the unfinished terminal cadence remains fail closed');
+  t.equal(analysis.malformedOrEarlyBarrierCount, 0,
+    'captured-cohort consumers are not malformed merely because terminal is pending');
+  t.same(analysis.generationEvidence[0].barrierConsumerNodeIds,
+    ['joiner-a', 'joiner-b']);
+  t.equal(analysis.generationEvidence[0].terminalAt, null);
   t.end();
 });
 
@@ -347,7 +599,7 @@ test('formation GCP analyzer rejects @0, missing consumer parity, rotation, ' +
       events[5].requiredCohort[0].bootIncarnation = 0;
     },
     (events) => {
-      events.splice(8, 1);
+      events.splice(9, 1);
     },
     (events) => {
       events.push({
@@ -406,11 +658,11 @@ test('formation GCP analyzer rejects extra malformed authority, duplicate ' +
       });
     },
     (events) => {
-      events[10].readyNodeIds = ['joiner-a', 'joiner-a'];
+      events[12].readyNodeIds = ['joiner-a', 'joiner-a'];
     },
     (events) => {
-      events[8].time = '2026-08-25T00:00:09.000Z';
       events[9].time = '2026-08-25T00:00:09.000Z';
+      events[10].time = '2026-08-25T00:00:09.000Z';
     },
   ];
   for (let index = 0; index < cases.length; index += 1) {
@@ -428,17 +680,28 @@ test('formation GCP analyzer rejects duplicate terminal, post-terminal active, '
   'release regression, and event-order/time-order disagreement', (t) => {
   const cases = [
     (events) => {
-      events.push({...events[10]});
+      events.splice(11, 1);
     },
     (events) => {
-      events.push({...events[7], time: '2026-08-25T00:00:41.000Z'});
+      events.push({...events[12]});
+    },
+    (events) => {
+      events.splice(12, 0, {
+        ...events[11],
+        time: '2026-08-25T00:00:39.500Z',
+        pendingTerminalState: 'revoked',
+        pendingTerminalReason: 'startup_authority_incompatible',
+      });
+    },
+    (events) => {
+      events.push({...events[8], time: '2026-08-25T00:00:41.000Z'});
     },
     (events) => {
       events.push({...events[6], time: '2026-08-25T00:00:08.000Z'});
     },
     (events) => {
-      events.splice(10, 0, {
-        ...events[7],
+      events.splice(11, 0, {
+        ...events[8],
         time: '2026-08-25T00:00:20.000Z',
         releaseAuthorized: false,
       });
@@ -500,11 +763,12 @@ test('formation GCP analyzer permits only exact nonauthorizing IDLE grammar ' +
   t.end();
 });
 
-test('formation GCP negative-control owner classifies only an exact canonical ' +
-  'expansion revocation', (t) => {
-  const expected = REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION;
+test('formation GCP negative-control owner classifies only an exact transient ' +
+  'projection-omission revocation', (t) => {
+  const expected =
+    REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION;
   const exact = analyzeFormationReleaseEvents(
-    buildCanonicalExpansionRevocationEvents(),
+    buildTransientProjectionOmissionRevocationEvents(),
     FINGERPRINT,
   );
   t.equal(exact.counterexampleClassification, expected);
@@ -539,9 +803,25 @@ test('formation GCP negative-control owner classifies only an exact canonical ' 
         });
       },
     },
+    {
+      name: 'physical member loss plus revocation',
+      mutate(events) {
+        events[9].physicalCohortEvidence[1].currentPrimaryPresent = false;
+      },
+    },
+    {
+      name: 'complete projection plus revocation',
+      mutate(events) {
+        events[9].observedCanonicalNodeIds = [
+          'joiner-a',
+          'joiner-b',
+          'seed',
+        ];
+      },
+    },
   ];
   for (let index = 0; index < cases.length; index += 1) {
-    const candidate = buildCanonicalExpansionRevocationEvents();
+    const candidate = buildTransientProjectionOmissionRevocationEvents();
     cases[index].mutate(candidate);
     const analysis = analyzeFormationReleaseEvents(candidate, FINGERPRINT);
     t.equal(analysis.counterexampleClassification, null, cases[index].name);
@@ -594,15 +874,25 @@ test('formation GCP negative-control owner requires exact boot proof for the ' +
   t.end();
 });
 
-test('formation GCP analyzer accepts durable acknowledgement after the spread ' +
-  'has already reopened', (t) => {
+test('formation GCP analyzer keeps post-reopen durable acknowledgement ' +
+  'well-formed without treating it as the sealed synchronization witness',
+(t) => {
   const events = buildPassingEvents();
   events.splice(6, 1);
+  events[6].releaseAuthorized = false;
+  events.splice(8, 0, {
+    ...events[6],
+    time: '2026-08-25T00:00:12.500Z',
+    releaseAuthorized: true,
+    observedAuthorityReady: false,
+    observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
+  });
   const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
-  t.equal(analysis.closurePassed, true);
-  t.equal(analysis.capturedAt, '2026-08-25T00:00:09.000Z');
-  t.equal(analysis.durableAcknowledgedAt, '2026-08-25T00:00:11.000Z');
-  t.equal(analysis.reopenedAt, analysis.durableAcknowledgedAt);
+  t.equal(analysis.cadenceValid, true,
+    'runtime-supported delayed acknowledgement is not malformed');
+  t.equal(analysis.closurePassed, false,
+    'the certification still requires an exact durable capture readback');
+  t.equal(analysis.qualifyingGenerationCount, 0);
   t.end();
 });
 
@@ -671,8 +961,10 @@ test('formation GCP analyzer charges delayed durable acknowledgement to the ' +
   events[6].time = '2026-08-25T00:01:10.000Z';
   events[7].time = '2026-08-25T00:01:11.000Z';
   events[8].time = '2026-08-25T00:01:12.000Z';
-  events[9].time = '2026-08-25T00:01:12.000Z';
-  events[10].time = '2026-08-25T00:01:20.000Z';
+  events[9].time = '2026-08-25T00:01:13.000Z';
+  events[10].time = '2026-08-25T00:01:13.000Z';
+  events[11].time = '2026-08-25T00:01:19.000Z';
+  events[12].time = '2026-08-25T00:01:20.000Z';
   const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
   t.equal(analysis.completionMs, 71_000);
   t.equal(analysis.closurePassed, false);
@@ -874,7 +1166,7 @@ test('formation GCP runner binds clean committed endpoints to the canonical ' +
       reverseArtifactFile,
       reverseArtifactSha256,
       orderedRevertedPaths: ['src/example.js'],
-      expectedCounterexample: 'canonical_membership_expansion_revocation',
+      expectedCounterexample: 'transient_projection_omission_revocation',
     }, null, 2)}\n`);
     const binding = await resolveRunBinding([
       '--variant=reverted',
@@ -914,32 +1206,141 @@ test('formation GCP runner binds clean committed endpoints to the canonical ' +
   }
   t.end();
 });
-
-test('formation GCP runner observes closure through the existing cluster ' +
-  'state and log-collector owners', async (t) => {
-  const entries = buildPassingEvents().map((event) => ({
-    timestamp: Date.parse(event.time),
-    node_id: event.nodeId,
-    message: event.msg,
-    metadata: JSON.stringify(event),
-  }));
-  let waitOptions = null;
-  const cluster = {
-    getLogCollector() {
-      return {getBuffer: () => entries};
-    },
-    async waitForState(predicate, options) {
-      waitOptions = options;
-      const value = await predicate(this);
-      return {satisfied: Boolean(value), value, polls: 1, elapsedMs: 0};
-    },
+function buildObservationCluster(options = {}) {
+  const events = options.events || [];
+  const journal = {
+    snapshot: options.snapshot || (() => ({
+      healthy: true,
+      byteSize: 1,
+      entryCount: events.length,
+      entries: events.map((event) => ({
+        nodeId: event.nodeId,
+        payload: JSON.stringify(event),
+      })),
+      observedNodeIds: [],
+    })),
   };
-  const observed = await observeFixedClosure(cluster, FINGERPRINT);
+  const unexpectedPoll = () => Promise.reject(new Error('unexpected evidence polling'));
+  return {events, journal, cluster: {
+    waitForState: options.waitForState || unexpectedPoll,
+  }};
+}
+async function observeReplayedEntries(entries, elapsedMs, state) {
+  const {cluster, journal} = buildObservationCluster({
+    events: entries,
+    snapshot() {
+      state.snapshotCalls += 1;
+      return {
+        healthy: true,
+        byteSize: 1,
+        entryCount: entries.length,
+        entries: entries.map((event) => ({
+          nodeId: event.nodeId,
+          payload: JSON.stringify(event),
+        })),
+        observedNodeIds: [],
+      };
+    },
+  });
+  const times = [0, elapsedMs];
+  return observeFixedClosure(
+    cluster,
+    FINGERPRINT,
+    journal,
+    () => times.shift(),
+  );
+}
+test('formation GCP runner observes closure through the pre-start raw-stream ' +
+  'journal owner', async (t) => {
+  const entries = buildPassingEvents();
+  const state = {snapshotCalls: 0};
+  const observed = await observeReplayedEntries(entries, 500, state);
+  const originalBoolean = globalThis.Boolean;
+  let boundary;
+  try {
+    globalThis.Boolean = () => false;
+    boundary = await observeReplayedEntries(entries, 60_000, state);
+  } finally {
+    globalThis.Boolean = originalBoolean;
+  }
   t.equal(observed.satisfied, true);
   t.equal(observed.value.closurePassed, true);
-  t.equal(waitOptions.timeoutMs, 60_000,
-    'the evidence wait cannot widen the sealed certification budget');
-  t.equal(waitOptions.throwOnTimeout, false,
-    'timeout remains materializable final evidence rather than a hidden throw');
+  const complete = analyzeFormationReleaseEvents(buildPassingEvents(), FINGERPRINT);
+  t.equal(observed.value.canonicalGeneration, complete.canonicalGeneration,
+    'live replay and complete history select the same generation');
+  t.equal(liveObservationMatchesFinalAnalysis(
+    {closureObservation: observed},
+    complete,
+  ), true, 'live replay and post-stop materialization bind the same witness');
+  t.equal(liveObservationMatchesFinalAnalysis(
+    {closureObservation: observed},
+    {...complete, completedAt: '2026-08-26T00:01:00.000Z'},
+  ), false, 'a different post-stop terminal cannot hitchhike on live success');
+  t.equal(state.snapshotCalls, 2, 'each observer reads one complete replay');
+  t.equal(observed.elapsedMs, 500, 'reported time includes journal replay');
+  t.equal(boundary.satisfied, true, 'closure at exactly 60s is admitted');
+  t.equal(boundary.elapsedMs, 60_000, 'inclusive boundary is reported exactly');
+});
+test('formation GCP runner fails closed when the raw evidence journal fails',
+  async (t) => {
+    const {cluster, journal} = buildObservationCluster({
+      snapshot: () => ({
+        healthy: false,
+        failure: 'raw stream unavailable',
+      }),
+    });
+    await t.rejects(
+      observeFixedClosure(cluster, FINGERPRINT, journal),
+      /evidence journal invalid: raw stream unavailable/,
+      'a known-incomplete raw journal cannot become evidence',
+    );
+    t.end();
+  });
+test('formation GCP runner observes a streamed terminal after empty replay ' +
+  'inside the remaining budget', async (t) => {
+  const entries = buildPassingEvents();
+  const state = {waitOptions: null};
+  const {cluster, events, journal} = buildObservationCluster({
+    async waitForState(predicate, options) {
+      state.waitOptions = options;
+      t.equal(await predicate(this), false, 'empty replay invents no closure');
+      events.push(...entries);
+      const value = await predicate(this);
+      return {satisfied: Boolean(value), value, polls: 2, elapsedMs: 200};
+    },
+  });
+  const observed = await observeFixedClosure(
+    cluster,
+    FINGERPRINT,
+    journal,
+    () => 2_000,
+  );
+  t.equal(observed.satisfied, true);
+  t.equal(observed.value.closurePassed, true);
+  t.equal(state.waitOptions.timeoutMs, 60_000, 'replay never widens budget');
   t.end();
 });
+test('formation GCP runner spends no polling budget after replay exhausts ' +
+  'the closure deadline', async (t) => {
+  let waitCalls = 0;
+  const {cluster, journal} = buildObservationCluster({
+    async waitForState() {
+      waitCalls += 1;
+    },
+  });
+  const times = [5_000, 65_000];
+  const observed = await observeFixedClosure(
+    cluster, FINGERPRINT, journal, () => times.shift());
+  t.same(observed,
+    {satisfied: false, elapsedMs: 60_000, polls: 1, value: false});
+  t.equal(waitCalls, 0, 'the original 60s envelope is terminal');
+  t.end();
+});
+test('formation GCP runner refuses observation without the raw journal owner',
+  async (t) => {
+    const {cluster} = buildObservationCluster();
+    await t.rejects(observeFixedClosure(cluster, FINGERPRINT, null),
+      /closure observation owner unavailable/,
+      'missing raw journal authority fails before evidence polling');
+    t.end();
+  });

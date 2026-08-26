@@ -151,6 +151,7 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
  * @param {Object} options
  * @param {boolean} [options.verbose]
  * @param {string} [options.outputDir]
+ * @param {Object} [options.rawLogEvidenceSink]
  * @return {Promise<{cluster: Object, provisioner: Object, target: string,
  *   seedExternalIp: string, stop: Function}>}
  */
@@ -159,6 +160,7 @@ async function startGcpAffinityCluster({
   outputDir,
   buildRoot = process.cwd(),
   expectedBuildInputDigest = null,
+  rawLogEvidenceSink = null,
 } = {}) {
   const deploymentProfile = resolveGcpDemoDeploymentProfile();
   const provisioner = new GCPProvisioner(deploymentProfile.infrastructure);
@@ -197,6 +199,7 @@ async function startGcpAffinityCluster({
     cluster = createCluster({
       ...config,
       ...(outputDir ? {outputDir} : {}),
+      ...(rawLogEvidenceSink ? {rawLogEvidenceSink} : {}),
       docker: {...config.docker, hosts, hostInfo, tls},
     });
     if (typeof cluster.setScenarioName === 'function') {

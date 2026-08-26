@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "scenario": "formation-release-handoff-closure",
+  "order": [
+    "fixed-1",
+    "fixed-2",
+    "fixed-3",
+    "reverted-1",
+    "reverted-2"
+  ],
+  "binding": {
+    "controllerDigest": "e0fd1c66240aae45f99e8e2b6a5d04a70a059885399e86202efe454da1785fcf",
+    "releaseContentDigest": "92362b89822bde21a7b279707de03fb86ff597c62cfd455f307c63b526114f42",
+    "fixedCommit": "710078448373ed8e1b754fa780a88aefc1c6475f",
+    "fixedSourceFingerprint": "475c84434a6e97a1",
+    "fixedBuildInputDigest": "7a46b36cbe7b7589c29c63d110251a41b14eb2d7eb05259c3f0ffb5cfe68242b",
+    "revertedCommit": "edd1edb5574f561c996f1ec6118acf6a9101283e",
+    "revertedSourceFingerprint": "84f1348dfe16e713",
+    "revertedBuildInputDigest": "d00e3ea2b7c6380b5bb41649aa69eb2edf3383d188f4541651f7268b43967e99",
+    "reverseArtifactSha256": "052aba54e00ba4ebd629d50b62290a127ebe39366afada300e5cc4ddbf6afe8b",
+    "reverseArtifactArchiveFile": "formation-v17-reverse.diff.gz",
+    "reverseArtifactArchiveSha256": "95edd3fbac19cf1c09ac54efe33d46513d0ebc768098fc9f21b0bbf311b15da8",
+    "revertedPathCount": 79
+  },
+  "fixed": {
+    "sampleCount": 3,
+    "passedCount": 3,
+    "completionMs": [
+      2244,
+      12314,
+      18636
+    ],
+    "cohortSizes": [
+      2,
+      2,
+      3
+    ],
+    "consumerCounts": [
+      2,
+      2,
+      3
+    ],
+    "malformedTransitionCounts": [
+      0,
+      0,
+      0
+    ],
+    "timeoutCounts": [
+      0,
+      0,
+      0
+    ],
+    "liveFinalEvidenceMatches": [
+      true,
+      true,
+      true
+    ],
+    "reportSha256": [
+      "3e30a91f147a6a24080c83593841012f45c5afa16c7b36ccfc5262a24f42b22f",
+      "d44e418a35184b497c726368993eb60cc029cb49595ec0070eaa711912323b18",
+      "8e5f0e37e11eb4d88e60c20bb122f7a1dc867383e815fb6f0ab095f7e3ede4ba"
+    ]
+  },
+  "reverted": {
+    "sampleCount": 2,
+    "strictReportPassedCount": 0,
+    "bootProofPassedCount": 2,
+    "closurePassedCount": 0,
+    "counterexampleClassification": [
+      null,
+      null
+    ],
+    "outcomes": [
+      "exact_boot_no_qualifying_closure_legacy_transitions_unverifiable",
+      "legacy_generation_revoked_unverifiably"
+    ],
+    "malformedTransitionCounts": [
+      7,
+      4
+    ],
+    "reportSha256": [
+      "304d74e243b3d5182e04bfc503327e686e759aad4e86112b4312e897048bbb70",
+      "e2741e4f130c50e38e43190c5455c36c4b6fb4ec81f188056e7b58bddb9d413a"
+    ]
+  },
+  "model": {
+    "modeCount": 12,
+    "expectedOutcomeCount": 12,
+    "headCommit": "710078448373ed8e1b754fa780a88aefc1c6475f",
+    "candidateDiffSha256": "18ffa3ed6fe83968ce906cd528d0237a3764bd3129c4a15768c8fb2d18d71668",
+    "inputManifestSha256": "29f2f6f59b1a48ecc74c8c078c1475b137d317d3b1c1731830831e3de1d73afe",
+    "preReceiptSha256": "77e4c7f964cf696fe52446c3308be70c9c2b699159a1508fd894c574d23d0424",
+    "logSha256": "5c3a4eac3957f463e7fb1f7777326e92d67ef7d516671eae015619cfb5cc2aec",
+    "receiptSha256": "72d000799f79862664b10c7611b96cb1c8c4cacbe07e64f5f34905aa1559792a",
+    "cleanBefore": true,
+    "cleanAfter": true
+  },
+  "falsifier": {
+    "report": "falsifiers/pre-symmetric-normalization-fixed-2.report.json",
+    "sha256": "e612e87e014c00050f2cd8b4ae34c1e176515432044b04b140b39aa0ffd04cf9",
+    "conclusion": "canonical spread=true plus stale priority_partitions_not_spread revoked the otherwise exact generation"
+  },
+  "conclusion": {
+    "fixedRequirementSatisfied": true,
+    "revertedOutcomesRecordedFailHonestly": true,
+    "narrowProjectionOmissionCounterexampleProvenLive": false,
+    "aggregateDivergenceObserved": true
+  }
+}

@@ -30,6 +30,13 @@ import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
 import {
+  FORMATION_RELEASE_HANDOFF_REASON,
+  FORMATION_RELEASE_HANDOFF_STATE,
+  buildContract,
+} from '../../src/control-plane/formation-release-handoff-contract.js';
+import {formationReleaseGenerationIdentity} from
+  '../../src/control-plane/formation-release-handoff-identity.js';
+import {
   STARTUP_JOIN_MODE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 
@@ -45,6 +52,38 @@ const JOINER_NODE_IDS = Object.freeze([
   JOINER_3_NODE_ID,
   JOINER_4_NODE_ID,
 ]);
+
+function buildFixtureFormationReleaseHandoff(joinerNodeIds, ready) {
+  const requiredCohort = Object.freeze(
+    joinerNodeIds.slice(0, 2).map((nodeId) => Object.freeze({
+      nodeId,
+      bootIncarnation: 1,
+    })),
+  );
+  const generation = {
+    id: formationReleaseGenerationIdentity(
+      1,
+      SEED_NODE_ID,
+      1,
+      requiredCohort,
+    ),
+    authorityNodeId: SEED_NODE_ID,
+    authorityBootIncarnation: 1,
+    publicationEpoch: 1,
+    fenceIdentity: 'none',
+    canonicalNodeIds: [SEED_NODE_ID, ...joinerNodeIds],
+    requiredCohort,
+  };
+  return buildContract({
+    state: FORMATION_RELEASE_HANDOFF_STATE.ACTIVE,
+    reason: FORMATION_RELEASE_HANDOFF_REASON.RETAINED_UNTIL_READY,
+    generation,
+    pendingNodeIds: joinerNodeIds.slice(0, 2),
+    observedPublicationEpoch: 1,
+    observedAuthorityReady: true,
+    releaseAuthorized: ready,
+  });
+}
 
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
@@ -162,6 +201,8 @@ function buildFormationBarrierOwner({
   NodeService.getInstance().setSystemCacheProxy(cache);
   const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
   owner.nodeId = JOINER_1_NODE_ID;
+  owner.seedNodeId = SEED_NODE_ID;
+  owner.seedNodeAddress = 'http://seed-node:8080';
   owner.startupMode = startupMode;
   owner.config = {
     priorityPlacementFormationDiscoveryMs: 0,
@@ -196,6 +237,23 @@ function buildFormationBarrierOwner({
       ready,
       authorityAvailable: true,
     });
+  };
+  readinessService.validateFormationReleaseStartupAuthorityProjection =
+    (startupAuthority) => startupAuthority;
+  owner.httpGetJson = async () => {
+    const current = readinessService.getStartupAuthoritySnapshotSync();
+    return {
+      statusCode: 503,
+      body: {
+        startupAuthority: {
+          ...current,
+          formationReleaseHandoff: buildFixtureFormationReleaseHandoff(
+            joinerNodeIds,
+            current?.ready === true,
+          ),
+        },
+      },
+    };
   };
   owner.rebalanceCoordinator = coordinator || {
     controlPlaneReadinessService: readinessService,

@@ -16,6 +16,7 @@ import {
   STALE_CAPTURE_GAP_MS,
 } from '../full-node-log-capture.js';
 
+const arrayPrototypeMap = Function.call.bind(Array.prototype.map);
 const STREAM_STDOUT = 1;
 const FRAME_HEADER_BYTES = 8;
 const SIZE_OFFSET = 4;
@@ -356,6 +357,128 @@ describe('createNodeLogStreamer', () => {
     assert.equal(status.lineCount, 2, 'boundary duplicate dropped, new line kept');
     const text = gunzipSync(await readFile(destPath)).toString('utf8');
     assert.equal(text, '{"n":1}\n{"n":2}\n');
+  });
+
+  it('forwards only accepted decoded payloads to one sink in capture order',
+    async () => {
+      const provider = makeFakeProvider();
+      const destPath = path.join(workspace, 'stream-evidence-sink.log.gz');
+      const timers = [];
+      const accepted = [];
+      const failures = [];
+      const streamer = createNodeLogStreamer({
+        provider,
+        containerId: 'c-evidence',
+        nodeId: 'node-a',
+        destPath,
+        acceptedPayloadSink: {
+          accept(entry) {
+            accepted.push(entry);
+          },
+          fail(error) {
+            failures.push(error);
+          },
+        },
+        nowMs: () => 1234,
+        setTimeoutFn: (fn) => {
+          timers.push(fn);
+          return timers.length;
+        },
+        clearTimeoutFn: () => {},
+      });
+      const first = await provider.nextAttach();
+      first.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+      streamer.markIncarnationBoundary(2, {nodeId: 'node-a'});
+      first.onLine('2026-06-09T13:00:01.000Z', '{"n":"old-tail"}');
+      first.onEnd();
+      const attachAgain = provider.nextAttach();
+      timers[0]();
+      const second = await attachAgain;
+      second.onLine('2026-06-09T13:00:01.000Z', '{"n":"old-tail"}');
+      second.onLine('2026-06-09T13:00:05.000Z', '{"n":2}');
+      await streamer.stop();
+
+      assert.deepEqual(arrayPrototypeMap(
+        accepted,
+        ({payload}) => JSON.parse(payload),
+      ), [
+        {n: 1},
+        {n: 'old-tail'},
+        {
+          nodeId: 'node-a',
+          harnessEvent: 'incarnation-boundary',
+          incarnation: 2,
+          wallMs: 1234,
+        },
+        {n: 2},
+      ]);
+      assert.deepEqual(
+        arrayPrototypeMap(accepted, ({containerId}) => containerId),
+        ['c-evidence', 'c-evidence', 'c-evidence', 'c-evidence'],
+      );
+      assert.deepEqual(
+        arrayPrototypeMap(accepted, ({nodeId}) => nodeId),
+        ['node-a', 'node-a', 'node-a', 'node-a'],
+      );
+      assert.deepEqual(failures, []);
+    });
+
+  it('keeps raw capture alive and reports an accepted-payload sink failure',
+    async () => {
+      const provider = makeFakeProvider();
+      const destPath = path.join(workspace, 'stream-evidence-failure.log.gz');
+      const failures = [];
+      const sinkFailure = new Error('evidence journal unavailable');
+      const streamer = createNodeLogStreamer({
+        provider,
+        containerId: 'c-evidence-failure',
+        destPath,
+        acceptedPayloadSink: {
+          accept() {
+            throw sinkFailure;
+          },
+          fail(error) {
+            failures.push(error);
+          },
+        },
+      });
+      const attached = await provider.nextAttach();
+      attached.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+      await streamer.stop();
+
+      assert.deepEqual(failures, [sinkFailure]);
+      assert.equal(
+        gunzipSync(await readFile(destPath)).toString('utf8'),
+        '{"n":1}\n',
+      );
+    });
+
+  it('does not invoke inherited or accessor sink methods', async () => {
+    const provider = makeFakeProvider();
+    const destPath = path.join(workspace, 'stream-evidence-accessor.log.gz');
+    let getterCalls = 0;
+    const inheritedSink = Object.create(null);
+    Object.defineProperty(inheritedSink, 'accept', {
+      get() {
+        getterCalls += 1;
+        throw new Error('must not invoke inherited/accessor sink authority');
+      },
+    });
+    const streamer = createNodeLogStreamer({
+      provider,
+      containerId: 'c-evidence-accessor',
+      destPath,
+      acceptedPayloadSink: Object.create(inheritedSink),
+    });
+    const attached = await provider.nextAttach();
+    attached.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+    await streamer.stop();
+
+    assert.equal(getterCalls, 0);
+    assert.equal(
+      gunzipSync(await readFile(destPath)).toString('utf8'),
+      '{"n":1}\n',
+    );
   });
 
   it('injects an incarnation-boundary marker so post-restart lines are filterable', async () => {

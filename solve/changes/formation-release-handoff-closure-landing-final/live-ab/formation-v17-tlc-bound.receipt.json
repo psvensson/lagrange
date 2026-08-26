@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "phase": "complete",
+  "recordedAt": "2026-08-26T19:12:04.719Z",
+  "preReceiptSha256": "77e4c7f964cf696fe52446c3308be70c9c2b699159a1508fd894c574d23d0424",
+  "headCommit": "710078448373ed8e1b754fa780a88aefc1c6475f",
+  "cleanBefore": true,
+  "cleanAfter": true,
+  "candidateDiffSha256": "18ffa3ed6fe83968ce906cd528d0237a3764bd3129c4a15768c8fb2d18d71668",
+  "inputManifestSha256": "29f2f6f59b1a48ecc74c8c078c1475b137d317d3b1c1731830831e3de1d73afe",
+  "log": {
+    "path": "/home/peter/formation-v17-tlc-bound.log",
+    "size": 3803,
+    "sha256": "5c3a4eac3957f463e7fb1f7777326e92d67ef7d516671eae015619cfb5cc2aec"
+  },
+  "reports": [
+    {
+      "mode": "formation-release-handoff-closure-fixed",
+      "path": "test-output/reports/formation-release-handoff-closure-fixed.model.report.json",
+      "size": 1783,
+      "sha256": "afb5df9620bafda8019ba7954874e8e545de63e914c965b4ae9b3a94a38993f6",
+      "converged": true,
+      "expectConverged": true,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-pre-durable-restart-coverage",
+      "path": "test-output/reports/formation-release-handoff-closure-pre-durable-restart-coverage.model.report.json",
+      "size": 1708,
+      "sha256": "c5640b22a7e5f49943a3d25549f8d7d8030c233beaf8945cb85df1d8e4b50a56",
+      "converged": true,
+      "expectConverged": true,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-durable-pending-restart-coverage",
+      "path": "test-output/reports/formation-release-handoff-closure-durable-pending-restart-coverage.model.report.json",
+      "size": 1722,
+      "sha256": "7ea3501361bed5415139f02d6336b0e95b83400a41a8a4be5eff892b31d36dd0",
+      "converged": true,
+      "expectConverged": true,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-projection-synchronization-coverage",
+      "path": "test-output/reports/formation-release-handoff-closure-projection-synchronization-coverage.model.report.json",
+      "size": 1749,
+      "sha256": "ff74c8f576d5daf2569a87916533d6fc00753ffdd9495c870de608577150962a",
+      "converged": true,
+      "expectConverged": true,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-instantaneous-release-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-instantaneous-release-bug.model.report.json",
+      "size": 1490,
+      "sha256": "6d3f54c2bcfbd7c8fc16bf01fd57d635120bc5d9ba382070bcd18cd9970c0641",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-exact-membership-equality-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-exact-membership-equality-bug.model.report.json",
+      "size": 1488,
+      "sha256": "d22eb9cda016e9c51ed3f2ed37c06caccf4b9e5e0592338e0d2c62d131fe8365",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-projection-omission-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-projection-omission-bug.model.report.json",
+      "size": 1471,
+      "sha256": "0bcfbd871930bb1040d13f86636b1e26b53b6713323af43ea78f6120e7a750ce",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-projection-synchronization-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-projection-synchronization-bug.model.report.json",
+      "size": 1498,
+      "sha256": "f6818be2d52e0c231270df03f68c6c1698fec59384c6565352bf3711085ee40d",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-one-way-identify-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-one-way-identify-bug.model.report.json",
+      "size": 1501,
+      "sha256": "3aca13e52dedcbd7d0979f88f71d13df46a31d59d77affaa24c5b2f3c676e1ca",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "formation-release-handoff-closure-terminal-replay-bug",
+      "path": "test-output/reports/formation-release-handoff-closure-terminal-replay-bug.model.report.json",
+      "size": 1447,
+      "sha256": "5a8fd044abc23ac512fdd8469915c8350f79af5fd4e1473c01806e39596f6e86",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    },
+    {
+      "mode": "operation-ledger-formation-outsider-fixed",
+      "path": "test-output/reports/operation-ledger-formation-outsider-fixed.model.report.json",
+      "size": 1710,
+      "sha256": "08b18db8c33fcec6511740e7896435579ed5d5b3b40f3dc0909182a8c1a94442",
+      "converged": true,
+      "expectConverged": true,
+      "expectationMet": true
+    },
+    {
+      "mode": "operation-ledger-formation-outsider-scalar-latch-bug",
+      "path": "test-output/reports/operation-ledger-formation-outsider-scalar-latch-bug.model.report.json",
+      "size": 1486,
+      "sha256": "9679262336dc165da93fa611b21912e28b8f5f85b8204f0032f4fde39c8077e7",
+      "converged": false,
+      "expectConverged": false,
+      "expectationMet": true
+    }
+  ],
+  "allExpectationsMet": true
+}

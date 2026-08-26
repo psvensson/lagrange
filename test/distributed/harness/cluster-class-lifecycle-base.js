@@ -270,6 +270,10 @@ const TEARDOWN_WARNING_STOP_CONTAINER_PREFIX =
 const TEARDOWN_WARNING_RECORD_STOPPED_PREFIX =
   'Failed to record stopped container for ';
 const TEARDOWN_WARNING_SEPARATOR = ': ';
+const RAW_LOG_EVIDENCE_FILE_MODE_UNSUPPORTED =
+  'raw log evidence sink is unavailable in file-logging mode';
+const RAW_LOG_EVIDENCE_STREAM_UNAVAILABLE =
+  'raw log evidence stream prerequisites are unavailable';
 // Loud-by-construction: best-effort teardown/capture failures are counted
 // per context (never silently swallowed) so a log-driven debug session can
 // see that suppression happened and where.
@@ -1258,13 +1262,26 @@ class ClusterLifecycleBase {
   // outputDir (unit-test clusters).
   _beginNodeLogStream(nodeId, node) {
     const outputDir = this._config?.outputDir;
+    const acceptedPayloadSink =
+      ownDataValue(this._config, 'rawLogEvidenceSink') || null;
+    const failEvidenceSink = ownDataValue(acceptedPayloadSink, 'fail');
     if (!outputDir || !node?._dockerProvider || !node?.containerId) {
+      if (acceptedPayloadSink) {
+        failEvidenceSink?.(
+          new Error(RAW_LOG_EVIDENCE_STREAM_UNAVAILABLE),
+        );
+      }
       return;
     }
     // In file-logging mode the node writes pino directly to the bind-mounted
     // host file (its stdout is empty), so there is no docker-logs stream to
     // follow — finalize reads the file instead.
     if (this._isFileLoggingEnabled()) {
+      if (acceptedPayloadSink) {
+        failEvidenceSink?.(
+          new Error(RAW_LOG_EVIDENCE_FILE_MODE_UNSUPPORTED),
+        );
+      }
       return;
     }
     if (this._nodeLogStreamers.has(nodeId)) {
@@ -1274,10 +1291,13 @@ class ClusterLifecycleBase {
       const streamer = createNodeLogStreamer({
         provider: node._dockerProvider,
         containerId: node.containerId,
+        nodeId,
         destPath: fullLogDestPath(outputDir, this._scenarioName, nodeId),
+        acceptedPayloadSink,
       });
       this._nodeLogStreamers.set(nodeId, streamer);
     } catch (err) {
+      failEvidenceSink?.(err);
       // Capture must never break the run.
       this._recordSuppressedBestEffortError(
         SUPPRESSED_BEST_EFFORT_CONTEXT.LOG_STREAM_START, err);

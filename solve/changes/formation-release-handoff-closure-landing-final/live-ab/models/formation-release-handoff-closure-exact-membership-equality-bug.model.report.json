@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "active-gate-model-report-v1",
+  "modelReport": true,
+  "source": "tlc",
+  "mode": "formation-release-handoff-closure-exact-membership-equality-bug",
+  "scenario": "formation-release-handoff-closure-model",
+  "owner": "control_plane_readiness_startup_authority",
+  "boundary": "canonical_membership_expansion_exact_equality_counterexample",
+  "module": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure.tla",
+  "config": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_exact_membership_equality_bug.cfg",
+  "converged": false,
+  "residual": 1,
+  "frontierCount": 1,
+  "livenessHolds": false,
+  "expectConverged": false,
+  "expectedFailurePattern": "Invariant CanonicalExpansionCannotRevokePhysicalCohort is violated",
+  "expectedFailureObserved": true,
+  "expectationMet": true,
+  "temporalViolated": false,
+  "exitCode": 12,
+  "outputTail": "/\\ generationPublished = TRUE\n/\\ pendingTerminalReloadExercised = FALSE\n/\\ sawReopen = TRUE\n/\\ releaseAuthority = FALSE\n/\\ terminalReloadExercised = FALSE\n/\\ ownerReloadExercised = FALSE\n/\\ uncapturedConsumerAttempted = FALSE\n\n53 states generated, 42 distinct states found, 22 states left on queue.\nThe depth of the complete state graph search is 9.\nFinished in 00s at (2026-08-26 19:11:58)\nTrace exploration spec path: /home/peter/lagrange-formation-v14-fixed/models/formation-release-handoff-closure/FormationReleaseHandoffClosure_TTrace_1787771517.tla"
+}

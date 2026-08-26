@@ -27,6 +27,8 @@ const UTF8 = 'utf8';
 const GZIP_SUFFIX = '.log.gz';
 const DEFAULT_REATTACH_DELAY_MS = 1000;
 const MILLISECONDS_PER_SECOND = 1000;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
 // Synthetic line injected into a node's capture at each restart so post-restart
 // ("second incarnation") output is filterable. The streamer/file capture keys the
 // destination by nodeId only, so without this marker both incarnations accumulate
@@ -44,6 +46,15 @@ const STALE_CAPTURE_GAP_MS = 60000;
 // Run-scoped subtree of the output dir holding the uncurated per-node logs,
 // kept distinct from the curated {scenario}/{nodeId}.log the LogCollector writes.
 const FULL_LOGS_DIRNAME = '.full-logs';
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, 'value') ?
+    descriptor.value : undefined;
+}
 
 // Dockerode passes `since` through to Docker's logs API, whose contract is Unix
 // seconds (or a duration), not the RFC3339 timestamp Docker prefixes onto each
@@ -156,12 +167,16 @@ async function captureFullNodeLog({readLogs, destPath}) {
 function createNodeLogStreamer({
   provider,
   containerId,
+  nodeId = containerId,
   destPath,
   reattachDelayMs = DEFAULT_REATTACH_DELAY_MS,
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   nowMs = () => Date.now(),
+  acceptedPayloadSink = null,
 }) {
+  const acceptPayload = readOwnData(acceptedPayloadSink, 'accept');
+  const failPayload = readOwnData(acceptedPayloadSink, 'fail');
   const gzipStream = createGzip();
   let fileOut = null;
   let lineCount = 0;
@@ -189,6 +204,19 @@ function createNodeLogStreamer({
     gzipStream.pipe(fileOut);
   })();
 
+  const forwardAcceptedPayload = (payload, rfc3339) => {
+    if (typeof acceptPayload !== 'function') return;
+    try {
+      acceptPayload({containerId, nodeId, payload, rfc3339});
+    } catch (error) {
+      try {
+        if (typeof failPayload === 'function') failPayload(error);
+      } catch {
+        // Evidence failure is reported by its own sink; raw capture continues.
+      }
+    }
+  };
+
   const onLine = (rfc3339, payload) => {
     // Never write after the gzip stream has been ended at stop() — an in-flight
     // demux 'data' event could otherwise trigger ERR_STREAM_WRITE_AFTER_END.
@@ -206,6 +234,7 @@ function createNodeLogStreamer({
     }
     lineCount += 1;
     lastLineWallMs = nowMs();
+    forwardAcceptedPayload(payload, rfc3339);
     // Backpressure is intentionally not propagated to the source socket here: the
     // convergence scenarios emit modest volume (hundreds of small JSON lines/sec)
     // that gzip+disk absorb easily, so the gzip internal queue stays bounded. If a
@@ -219,6 +248,7 @@ function createNodeLogStreamer({
       return false;
     }
     lineCount += 1;
+    forwardAcceptedPayload(payload, null);
     gzipStream.write(payload + NEWLINE);
     return true;
   };

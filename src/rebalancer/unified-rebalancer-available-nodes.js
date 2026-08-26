@@ -6,9 +6,12 @@ import {
 import {
   FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
   classifyFormationCohortSpreadCureNode,
+  isStartupAuthorityNodeIdSet,
   isStartupAuthorityControlPlanePlacementEligibleNode as
   isStartupAuthorityPlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
+  startupAuthorityNodeIdSetHas,
+  startupAuthorityNodeIdSetSize,
 } from '../control-plane/startup-authority-placement-eligibility.js';
 import {
   isEvidenceAbsentReadinessDenialSnapshot,
@@ -33,6 +36,43 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE = Object.freeze({
   PRIORITY_RECOVERY_OPEN: 'priority_recovery_open',
   PRIORITY_RECOVERY_CLOSED: 'priority_recovery_closed',
 });
+const SetConstructor = Set;
+const arrayIsArray = Array.isArray;
+const mapPrototypeGet = Function.call.bind(Map.prototype.get);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectFreeze = Object.freeze;
+const setPrototypeAdd = Function.call.bind(Set.prototype.add);
+const setPrototypeForEach = Function.call.bind(Set.prototype.forEach);
+const stringPrototypeToUpperCase = Function.call.bind(
+  String.prototype.toUpperCase,
+);
+const OWN_DATA_VALUE_FIELD = 'value';
+const PRIORITY_SUMMARY_SATISFIED_FIELD = 'satisfied';
+
+function readOwnData(target, field) {
+  if (!target || typeof target !== 'object') return undefined;
+  const descriptor = objectGetOwnPropertyDescriptor(target, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value : undefined;
+}
+
+function cloneNodeIdSet(nodeIds) {
+  if (!isStartupAuthorityNodeIdSet(nodeIds)) return null;
+  const result = new SetConstructor();
+  setPrototypeForEach(nodeIds, (nodeId) => setPrototypeAdd(result, nodeId));
+  return result;
+}
+
+function intersectNodeIdSets(left, right) {
+  const result = new SetConstructor();
+  setPrototypeForEach(left, (nodeId) => {
+    if (startupAuthorityNodeIdSetHas(right, nodeId)) {
+      setPrototypeAdd(result, nodeId);
+    }
+  });
+  return result;
+}
 
 const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION = Object.freeze({
   CONSTRAIN_TO_PUBLISHED_MEMBERSHIP: 'constrain_to_published_membership',
@@ -106,7 +146,10 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const evidence = this.buildAvailableNodeMembershipConstraintEvidence();
     const state = this.resolveAvailableNodeMembershipConstraintState(evidence);
     const action =
-      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION_BY_STATE.get(state) ||
+      mapPrototypeGet(
+        AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION_BY_STATE,
+        state,
+      ) ||
       AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION
         .CONSTRAIN_TO_PUBLISHED_MEMBERSHIP;
     return action ===
@@ -120,20 +163,27 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    */
   buildAvailableNodeMembershipConstraintEvidence() {
     const latestPublicationRow = this.getLatestMembershipPublicationRow();
+    const camelPriorityPartitionSummary = readOwnData(
+      latestPublicationRow,
+      'priorityPartitionSummary',
+    );
+    const snakePriorityPartitionSummary = readOwnData(
+      latestPublicationRow,
+      'priority_partition_summary',
+    );
     const priorityPartitionSummary =
-      latestPublicationRow?.priorityPartitionSummary &&
-        typeof latestPublicationRow.priorityPartitionSummary ===
-          'object' ?
-        latestPublicationRow.priorityPartitionSummary :
-        latestPublicationRow?.priority_partition_summary &&
-          typeof latestPublicationRow.priority_partition_summary ===
-            'object' ?
-          latestPublicationRow.priority_partition_summary :
+      camelPriorityPartitionSummary &&
+        typeof camelPriorityPartitionSummary === 'object' ?
+        camelPriorityPartitionSummary :
+        snakePriorityPartitionSummary &&
+          typeof snakePriorityPartitionSummary === 'object' ?
+          snakePriorityPartitionSummary :
           null;
-    const publicationStatus = String(
-      latestPublicationRow?.status || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase();
-    return Object.freeze({
+    const rawPublicationStatus = readOwnData(latestPublicationRow, 'status');
+    const publicationStatus = typeof rawPublicationStatus === 'string' ?
+      stringPrototypeToUpperCase(rawPublicationStatus) :
+      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
+    return objectFreeze({
       priorityPartition: this.isControlPlanePriorityPartition(),
       formationLivenessDependency:
         this.isFormationLivenessDependencyPartition(),
@@ -143,7 +193,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       recoveryActive: this.isGlobalPriorityControlPlaneRecoveryActive(),
       publicationPublished:
         publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
-      prioritySummarySatisfied: priorityPartitionSummary?.satisfied === true,
+      prioritySummarySatisfied:
+        readOwnData(
+          priorityPartitionSummary,
+          PRIORITY_SUMMARY_SATISFIED_FIELD,
+        ) === true,
     });
   }
 
@@ -153,12 +207,15 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @private
    */
   resolveAvailableNodeMembershipConstraintState(evidence) {
-    return (
-      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE.find((entry) =>
-        entry.matches(evidence),
-      )?.state ||
-      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY
-    );
+    for (
+      let index = 0;
+      index < AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE.length;
+      index += 1
+    ) {
+      const entry = AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE[index];
+      if (entry.matches(evidence)) return entry.state;
+    }
+    return AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY;
   }
 
   /**
@@ -172,18 +229,27 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
 
-    const nodeIds = Array.isArray(publicationRow.publishedActiveNodeIds) ?
-      publicationRow.publishedActiveNodeIds :
-      Array.isArray(publicationRow.published_active_node_ids) ?
-        publicationRow.published_active_node_ids :
-        [];
-    return new Set(
-      nodeIds.filter(
-        (nodeId) =>
-          typeof nodeId === 'string' &&
-          nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO,
-      ),
+    const camelNodeIds = readOwnData(publicationRow, 'publishedActiveNodeIds');
+    const snakeNodeIds = readOwnData(
+      publicationRow,
+      'published_active_node_ids',
     );
+    const nodeIds = arrayIsArray(camelNodeIds) ?
+      camelNodeIds :
+      arrayIsArray(snakeNodeIds) ?
+        snakeNodeIds :
+        [];
+    const result = new SetConstructor();
+    for (let index = 0; index < nodeIds.length; index += 1) {
+      const nodeId = readOwnData(nodeIds, index);
+      if (
+        typeof nodeId === 'string' &&
+        nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO
+      ) {
+        setPrototypeAdd(result, nodeId);
+      }
+    }
+    return result;
   }
 
   /**
@@ -195,18 +261,13 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    * @private
    */
   getAvailableNodesConstrainedToNodeIds(constrainedNodeIds = null) {
-    let effectiveNodeIds =
-      constrainedNodeIds instanceof Set ? new Set(constrainedNodeIds) : null;
+    let effectiveNodeIds = cloneNodeIdSet(constrainedNodeIds);
     const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
-    if (
-      startupAuthorityNodeIds instanceof Set &&
-      startupAuthorityNodeIds.size > 0
-    ) {
-      if (effectiveNodeIds instanceof Set) {
-        effectiveNodeIds = new Set(
-          [...effectiveNodeIds].filter((nodeId) =>
-            startupAuthorityNodeIds.has(nodeId),
-          ),
+    if (startupAuthorityNodeIdSetSize(startupAuthorityNodeIds) > 0) {
+      if (isStartupAuthorityNodeIdSet(effectiveNodeIds)) {
+        effectiveNodeIds = intersectNodeIdSets(
+          effectiveNodeIds,
+          startupAuthorityNodeIds,
         );
       } else {
         effectiveNodeIds = startupAuthorityNodeIds;
@@ -219,7 +280,10 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       if (!nodeId) {
         return false;
       }
-      if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
+      if (
+        isStartupAuthorityNodeIdSet(effectiveNodeIds) &&
+        !startupAuthorityNodeIdSetHas(effectiveNodeIds, nodeId)
+      ) {
         return false;
       }
       const readinessOptions = {
@@ -286,7 +350,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         Date.now(),
       );
       const nodeIds = resolveStartupAuthorityNodeIdSet(startupAuthority);
-      return nodeIds.size > 0 ? nodeIds : null;
+      return startupAuthorityNodeIdSetSize(nodeIds) > 0 ? nodeIds : null;
     } catch (_error) {
       return null;
     }
@@ -318,8 +382,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     }
     const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
     if (
-      !(startupAuthorityNodeIds instanceof Set) ||
-      !startupAuthorityNodeIds.has(nodeId)
+      !isStartupAuthorityNodeIdSet(startupAuthorityNodeIds) ||
+      !startupAuthorityNodeIdSetHas(startupAuthorityNodeIds, nodeId)
     ) {
       return false;
     }

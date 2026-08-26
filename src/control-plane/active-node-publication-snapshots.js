@@ -13,12 +13,15 @@ import {
   normalizeControlPlanePublicationRow,
 } from './system-row-normalizers.js';
 import {
+  mergeNodeIdLists,
   normalizeNodeIdList,
   normalizeNonNegativeInteger,
   normalizeOptionalString,
   normalizePendingAckEvidenceState,
   normalizeStringList,
 } from './active-node-projection-normalizers.js';
+
+const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
 
 const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
@@ -95,22 +98,16 @@ function resolveProjectionDiagnostics(publicationConvergence = null) {
 
 function resolveReadinessExcludedNodeIds(publicationConvergence = null) {
   const projectionDiagnostics = resolveProjectionDiagnostics(publicationConvergence);
-  return normalizeNodeIdList([
-    ...(Array.isArray(projectionDiagnostics?.readinessExcludedNodeIds) ?
-      projectionDiagnostics.readinessExcludedNodeIds :
-      []),
-    ...(Array.isArray(
-      projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
-    ) ?
-      projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds :
-      []),
+  return mergeNodeIdLists([
+    projectionDiagnostics?.readinessExcludedNodeIds,
+    projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
   ]);
 }
 
-function excludeUnavailableNodeIds(nodeIds = [], unavailableNodeIds = new Set()) {
+function excludeUnavailableNodeIds(nodeIds = [], unavailableNodeIds = []) {
   return normalizeNodeIdList(
     normalizeNodeIdList(nodeIds).filter((nodeId) =>
-      !unavailableNodeIds.has(nodeId),
+      !arrayPrototypeIncludes(unavailableNodeIds, nodeId),
     ),
   );
 }
@@ -354,45 +351,36 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   const projectionDiagnostics = resolveProjectionDiagnostics(
     normalizedPublicationConvergence,
   );
-  const admissionBlockedNodeIdSet = new Set(
-    resolveAdmissionBlockedNodeIds(normalizedPublicationConvergence),
+  const admissionBlockedNodeIds = resolveAdmissionBlockedNodeIds(
+    normalizedPublicationConvergence,
   );
-  const unavailableNodeIdSet = new Set([
-    ...admissionBlockedNodeIdSet,
-    ...resolveReadinessExcludedNodeIds(normalizedPublicationConvergence),
+  const unavailableNodeIds = mergeNodeIdLists([
+    admissionBlockedNodeIds,
+    resolveReadinessExcludedNodeIds(normalizedPublicationConvergence),
   ]);
   // The published baseline (the remove-safety denominator) applies the unavailable
   // set EXCEPT for grace-floored live nodes (cp-pub-01 regression fix). An
   // admission-blocked node is never floored even if it also has a grace miss.
-  const graceFlooredBaselineNodeIdSet = new Set(
-    resolveGraceFlooredBaselineNodeIds(normalizedPublicationConvergence),
+  const graceFlooredBaselineNodeIds = resolveGraceFlooredBaselineNodeIds(
+    normalizedPublicationConvergence,
   );
-  const publishedBaselineUnavailableNodeIdSet = new Set(
-    [...unavailableNodeIdSet].filter((nodeId) =>
-      admissionBlockedNodeIdSet.has(nodeId) ||
-      !graceFlooredBaselineNodeIdSet.has(nodeId),
-    ),
+  const publishedBaselineUnavailableNodeIds = unavailableNodeIds.filter(
+    (nodeId) =>
+      arrayPrototypeIncludes(admissionBlockedNodeIds, nodeId) ||
+      !arrayPrototypeIncludes(graceFlooredBaselineNodeIds, nodeId),
   );
   const publishedActiveNodeIds = normalizeNodeIdList(
     Array.isArray(normalizedPublicationConvergence?.publishedActiveNodeIds) ?
       normalizedPublicationConvergence.publishedActiveNodeIds :
       membershipLifecycleSummary?.publishedActiveNodeIds,
   );
-  const projectedServingNodeIds = normalizeNodeIdList([
-    ...(Array.isArray(normalizedPublicationConvergence?.projectedServingNodeIds) ?
-      normalizedPublicationConvergence.projectedServingNodeIds :
-      []),
-    ...(Array.isArray(membershipLifecycleSummary?.projectedServingNodeIds) ?
-      membershipLifecycleSummary.projectedServingNodeIds :
-      []),
+  const projectedServingNodeIds = mergeNodeIdLists([
+    normalizedPublicationConvergence?.projectedServingNodeIds,
+    membershipLifecycleSummary?.projectedServingNodeIds,
   ]);
-  const locallyEligibleNodeIds = normalizeNodeIdList([
-    ...(Array.isArray(normalizedPublicationConvergence?.locallyEligibleNodeIds) ?
-      normalizedPublicationConvergence.locallyEligibleNodeIds :
-      []),
-    ...(Array.isArray(membershipLifecycleSummary?.locallyEligibleNodeIds) ?
-      membershipLifecycleSummary.locallyEligibleNodeIds :
-      []),
+  const locallyEligibleNodeIds = mergeNodeIdLists([
+    normalizedPublicationConvergence?.locallyEligibleNodeIds,
+    membershipLifecycleSummary?.locallyEligibleNodeIds,
   ]);
   const recoveryEligibleIncludedNodeIds = normalizeNodeIdList(
     projectionDiagnostics?.recoveryEligibleIncludedNodeIds,
@@ -400,54 +388,42 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   const livenessFallbackIncludedNodeIds = normalizeNodeIdList(
     projectionDiagnostics?.livenessFallbackIncludedNodeIds,
   );
-  const explicitRecoveryActiveNodeIds = normalizeNodeIdList([
-    ...(Array.isArray(normalizedPublicationConvergence?.recoveryActiveNodeIds) ?
-      normalizedPublicationConvergence.recoveryActiveNodeIds :
-      []),
-    ...(Array.isArray(membershipLifecycleSummary?.recoveryActiveNodeIds) ?
-      membershipLifecycleSummary.recoveryActiveNodeIds :
-      []),
+  const explicitRecoveryActiveNodeIds = mergeNodeIdLists([
+    normalizedPublicationConvergence?.recoveryActiveNodeIds,
+    membershipLifecycleSummary?.recoveryActiveNodeIds,
   ]);
-  const missingPublishedRecoveryActiveNodeIds = normalizeNodeIdList([
-    ...(Array.isArray(
-      normalizedPublicationConvergence?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      normalizedPublicationConvergence.missingPublishedRecoveryActiveNodeIds :
-      []),
-    ...(Array.isArray(
-      membershipLifecycleSummary?.missingPublishedRecoveryActiveNodeIds,
-    ) ?
-      membershipLifecycleSummary.missingPublishedRecoveryActiveNodeIds :
-      []),
+  const missingPublishedRecoveryActiveNodeIds = mergeNodeIdLists([
+    normalizedPublicationConvergence?.missingPublishedRecoveryActiveNodeIds,
+    membershipLifecycleSummary?.missingPublishedRecoveryActiveNodeIds,
   ]);
   const admittedPublishedActiveNodeIds = excludeUnavailableNodeIds(
     publishedActiveNodeIds,
-    publishedBaselineUnavailableNodeIdSet,
+    publishedBaselineUnavailableNodeIds,
   );
   const admittedProjectedServingNodeIds = excludeUnavailableNodeIds(
     projectedServingNodeIds,
-    unavailableNodeIdSet,
+    unavailableNodeIds,
   );
   const admittedLocallyEligibleNodeIds = excludeUnavailableNodeIds(
     locallyEligibleNodeIds,
-    unavailableNodeIdSet,
+    unavailableNodeIds,
   );
   const admittedRecoveryEligibleIncludedNodeIds = excludeUnavailableNodeIds(
     recoveryEligibleIncludedNodeIds,
-    unavailableNodeIdSet,
+    unavailableNodeIds,
   );
   const admittedLivenessFallbackIncludedNodeIds = excludeUnavailableNodeIds(
     livenessFallbackIncludedNodeIds,
-    unavailableNodeIdSet,
+    unavailableNodeIds,
   );
   const admittedExplicitRecoveryActiveNodeIds = excludeUnavailableNodeIds(
     explicitRecoveryActiveNodeIds,
-    unavailableNodeIdSet,
+    unavailableNodeIds,
   );
   const admittedMissingPublishedRecoveryActiveNodeIds =
     excludeUnavailableNodeIds(
       missingPublishedRecoveryActiveNodeIds,
-      unavailableNodeIdSet,
+      unavailableNodeIds,
     );
   const explicitRecoveryActiveNodeSource =
     typeof normalizedPublicationConvergence?.recoveryActiveNodeSource ===
@@ -462,14 +438,13 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
         membershipLifecycleSummary.recoveryActiveNodeSource.trim() :
         null);
 
-  const publishedActiveNodeIdSet = new Set(admittedPublishedActiveNodeIds);
-  const projectionNodeIds = normalizeNodeIdList([
-    ...admittedLocallyEligibleNodeIds,
-    ...admittedProjectedServingNodeIds,
-    ...admittedRecoveryEligibleIncludedNodeIds,
+  const projectionNodeIds = mergeNodeIdLists([
+    admittedLocallyEligibleNodeIds,
+    admittedProjectedServingNodeIds,
+    admittedRecoveryEligibleIncludedNodeIds,
   ]);
   const projectionAddsNodes = projectionNodeIds.some((nodeId) =>
-    !publishedActiveNodeIdSet.has(nodeId),
+    !arrayPrototypeIncludes(admittedPublishedActiveNodeIds, nodeId),
   );
   const shouldUseProjectionCohort =
     projectionNodeIds.length > 0 && (
@@ -479,9 +454,9 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
       admittedLivenessFallbackIncludedNodeIds.length > 0
     );
   const buildProjectionCohortNodeIds = (candidateNodeIds) =>
-    normalizeNodeIdList([
-      ...admittedPublishedActiveNodeIds,
-      ...candidateNodeIds,
+    mergeNodeIdLists([
+      admittedPublishedActiveNodeIds,
+      candidateNodeIds,
     ]);
 
   let activeNodeIds = [];
@@ -519,9 +494,9 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   }
 
   if (admittedExplicitRecoveryActiveNodeIds.length > 0) {
-    activeNodeIds = normalizeNodeIdList([
-      ...activeNodeIds,
-      ...admittedExplicitRecoveryActiveNodeIds,
+    activeNodeIds = mergeNodeIdLists([
+      activeNodeIds,
+      admittedExplicitRecoveryActiveNodeIds,
     ]);
     if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
       source = explicitRecoveryActiveNodeSource ||
@@ -529,10 +504,10 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
     }
   }
   if (admittedMissingPublishedRecoveryActiveNodeIds.length > 0) {
-    activeNodeIds = normalizeNodeIdList([
-      ...activeNodeIds,
-      ...admittedPublishedActiveNodeIds,
-      ...admittedMissingPublishedRecoveryActiveNodeIds,
+    activeNodeIds = mergeNodeIdLists([
+      activeNodeIds,
+      admittedPublishedActiveNodeIds,
+      admittedMissingPublishedRecoveryActiveNodeIds,
     ]);
     if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
       source =
@@ -541,14 +516,20 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
   }
 
   return Object.freeze({
-    activeNodeIds: Object.freeze([...activeNodeIds]),
+    activeNodeIds: Object.freeze(normalizeNodeIdList(activeNodeIds)),
     source,
-    publishedActiveNodeIds: Object.freeze([...admittedPublishedActiveNodeIds]),
-    projectedServingNodeIds: Object.freeze([...admittedProjectedServingNodeIds]),
-    locallyEligibleNodeIds: Object.freeze([...admittedLocallyEligibleNodeIds]),
-    recoveryEligibleIncludedNodeIds: Object.freeze([
-      ...admittedRecoveryEligibleIncludedNodeIds,
-    ]),
+    publishedActiveNodeIds: Object.freeze(normalizeNodeIdList(
+      admittedPublishedActiveNodeIds,
+    )),
+    projectedServingNodeIds: Object.freeze(normalizeNodeIdList(
+      admittedProjectedServingNodeIds,
+    )),
+    locallyEligibleNodeIds: Object.freeze(normalizeNodeIdList(
+      admittedLocallyEligibleNodeIds,
+    )),
+    recoveryEligibleIncludedNodeIds: Object.freeze(normalizeNodeIdList(
+      admittedRecoveryEligibleIncludedNodeIds,
+    )),
     missingPublishedActiveNodeIds: Object.freeze(activeNodeIds.filter((nodeId) =>
       !admittedPublishedActiveNodeIds.includes(nodeId),
     )),

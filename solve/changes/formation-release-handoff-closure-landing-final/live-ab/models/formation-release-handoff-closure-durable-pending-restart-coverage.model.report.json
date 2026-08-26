@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "active-gate-model-report-v1",
+  "modelReport": true,
+  "source": "tlc",
+  "mode": "formation-release-handoff-closure-durable-pending-restart-coverage",
+  "scenario": "formation-release-handoff-closure-model",
+  "owner": "control_plane_readiness_startup_authority",
+  "boundary": "durable_pending_terminal_restart_coverage",
+  "module": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure.tla",
+  "config": "models/formation-release-handoff-closure/FormationReleaseHandoffClosure_durable_pending_restart_coverage.cfg",
+  "converged": true,
+  "residual": 0,
+  "frontierCount": 0,
+  "livenessHolds": true,
+  "expectConverged": true,
+  "expectedFailurePattern": null,
+  "expectedFailureObserved": false,
+  "expectationMet": true,
+  "temporalViolated": false,
+  "exitCode": 0,
+  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-08-26 19:11:55.\nProgress(9) at 2026-08-26 19:11:55: 13 states generated, 11 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 11 total distinct states at (2026-08-26 19:11:55)\nFinished checking temporal properties in 00s at 2026-08-26 19:11:55\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 1.2E-18\n13 states generated, 11 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 9.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-08-26 19:11:55)"
+}

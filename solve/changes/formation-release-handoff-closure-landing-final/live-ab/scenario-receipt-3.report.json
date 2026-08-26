@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-26T19:14:13.947Z",
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "total": 1
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0
+  },
+  "scenarios": [
+    {
+      "scenario": "formation-release-handoff-closure",
+      "passed": true,
+      "verdict": "pass",
+      "current": {
+        "passed": true,
+        "verdict": "pass"
+      },
+      "details": {
+        "fixedSample": {
+          "report": "fixed-3.report.json",
+          "sha256": "8e5f0e37e11eb4d88e60c20bb122f7a1dc867383e815fb6f0ab095f7e3ede4ba",
+          "completionMs": 18636,
+          "cohortSize": 3,
+          "consumerCount": 3
+        },
+        "revertedControls": [
+          {
+            "report": "reverted-1.report.json",
+            "sha256": "304d74e243b3d5182e04bfc503327e686e759aad4e86112b4312e897048bbb70",
+            "passed": false
+          },
+          {
+            "report": "reverted-2.report.json",
+            "sha256": "e2741e4f130c50e38e43190c5455c36c4b6fb4ec81f188056e7b58bddb9d413a",
+            "passed": false
+          }
+        ],
+        "tlcReceiptSha256": "72d000799f79862664b10c7611b96cb1c8c4cacbe07e64f5f34905aa1559792a"
+      }
+    }
+  ]
+}

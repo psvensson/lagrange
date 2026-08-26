@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "da97aefc60abb0c5cc9b7c0f9d4724d8eb6c9a7328b5d7800b91f3f71972b330"
+    "sourceSha256": "fd0ea0f479e06e8fa46b4556c51c419477817a572d9c1c98c0e52cb7bcb5d1ee"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 65,
-    "publicExportCount": 740,
+    "publicExportCount": 741,
     "importEdgeCount": 305,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
@@ -1428,6 +1428,7 @@
         "PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_RANK",
         "PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE",
         "isRecord",
+        "mergeDistinctStringArrays",
         "normalizeActiveGateProgressCount",
         "normalizeActiveGateProgressNodeIds",
         "normalizeBoolean",
@@ -1470,6 +1471,7 @@
         "PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_RANK",
         "PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE",
         "isRecord",
+        "mergeDistinctStringArrays",
         "normalizeActiveGateProgressCount",
         "normalizeActiveGateProgressNodeIds",
         "normalizeBoolean",
@@ -5249,7 +5251,7 @@
         },
         {
           "module": "src/control-plane/publication-recovery-evidence-values.js",
-          "implementationSha256": "de0082a5129df20250225bc75e9572b79c6fe0d1d22580f7869e1b40836a51aa"
+          "implementationSha256": "a6df22167ca13a61fe3ef6d7a09962283896b6a80aa8fdc5399b5f7ed0c2ae10"
         }
       ],
       "implementationPairs": [
@@ -5258,7 +5260,7 @@
             "src/control-plane/priority-recovery-observation-normalization.js",
             "src/control-plane/publication-recovery-evidence-values.js"
           ],
-          "similarity": 0.224
+          "similarity": 0.114
         }
       ],
       "confirmedDuplicateImplementation": false
@@ -5349,7 +5351,7 @@
         },
         {
           "module": "src/control-plane/publication-recovery-ack-evidence-normalizers.js",
-          "implementationSha256": "e5d1ef428fddf0a0d68684c4b4f9e73402169e994b772057dc2cece3834eab82"
+          "implementationSha256": "30f0fa043f28bf6f75ac3c0c73858284b3b05e361ff2e2721c5a200f5b53e60f"
         }
       ],
       "implementationPairs": [
@@ -5358,7 +5360,7 @@
             "src/control-plane/priority-recovery-observation-normalization.js",
             "src/control-plane/publication-recovery-ack-evidence-normalizers.js"
           ],
-          "similarity": 0.606
+          "similarity": 0.229
         }
       ],
       "confirmedDuplicateImplementation": false
