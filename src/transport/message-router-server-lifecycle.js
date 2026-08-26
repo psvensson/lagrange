@@ -180,7 +180,6 @@ class MessageRouterServerLifecycle {
       state: ConnectionState.CONNECTED,
       nodeId: null,
       bootIncarnation: 0,
-      identificationReplySent: false,
       isIncoming: true,
       retired: false,
       createdAt: Date.now(),

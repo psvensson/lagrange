@@ -61,37 +61,6 @@ const EXPECTED_FIXED_COMMIT_ARG = '--expected-fixed-commit=';
 const EXPECTED_BUILD_INPUT_DIGEST_ARG = '--expected-build-input-digest=';
 const RUNTIME_ROOT_ARG = '--runtime-root=';
 const REVERT_MANIFEST_ARG = '--revert-manifest=';
-const SHA256_ALGORITHM = 'sha256';
-const HEX_ENCODING = 'hex';
-const UTF8_ENCODING = 'utf8';
-const OWN_DATA_VALUE_FIELD = 'value';
-const OWN_DATA_MESSAGE_FIELD = 'message';
-const LOG_FILE_SUFFIX = '.log';
-const GIT_COMMIT_SHA_LENGTH = 40;
-const SHA256_HEX_LENGTH = 64;
-const REPORT_SCHEMA_VERSION = 3;
-const REPORT_SCENARIO = 'formation-release-handoff-closure-live-gcp';
-const REPORT_FIDELITY = 'live-gcp';
-const CLOSURE_OBSERVATION_LABEL = 'formation release handoff closure';
-const ERROR = Object.freeze({
-  COMMITTED_ENDPOINT_REQUIRED: 'exact committed endpoint is required',
-  RUNTIME_ENDPOINT_MISMATCH:
-    'runtime endpoint must be the exact clean commit',
-  CONTROLLER_DIGEST_MISMATCH:
-    'controller digest does not match expectation',
-  RELEASE_CONTENT_MISMATCH:
-    'release-content identity does not match expectation',
-  SOURCE_FINGERPRINT_MISMATCH:
-    'runtime source fingerprint does not match expectation',
-  BUILD_INPUT_DIGEST_MISMATCH:
-    'runtime build-input digest does not match expectation',
-  REVERTED_ROOT_REQUIRED:
-    'reverted runtime requires a separate source root',
-  REVERT_MANIFEST_MISMATCH:
-    'revert manifest does not bind the selected runtime',
-  OBSERVATION_OWNER_UNAVAILABLE:
-    'cluster closure observation owner unavailable',
-});
 const CLOSURE_OBSERVATION_TIMEOUT_MS = 60_000;
 const CLOSURE_OBSERVATION_INTERVAL_MS = 200;
 const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
@@ -103,7 +72,7 @@ const CONTROLLER_PATHS = Object.freeze([
 ]);
 
 function sha256(bytes) {
-  return createHash(SHA256_ALGORITHM).update(bytes).digest(HEX_ENCODING);
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function readOwnData(target, field) {
@@ -111,7 +80,7 @@ function readOwnData(target, field) {
     return undefined;
   }
   const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+  return descriptor && objectHasOwn(descriptor, 'value') ?
     descriptor.value :
     undefined;
 }
@@ -130,7 +99,7 @@ async function readLogEvents(outputDir) {
   const events = [];
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index];
-    if (!stringIncludes(name, LOG_FILE_SUFFIX)) continue;
+    if (!stringIncludes(name, '.log')) continue;
     const bytes = await fs.readFile(path.join(outputDir, name), 'utf8');
     const lines = stringSplit(bytes, '\n');
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
@@ -183,9 +152,7 @@ function allTrue(values) {
 }
 
 function commitShaIsExact(value) {
-  if (typeof value !== 'string' || value.length !== GIT_COMMIT_SHA_LENGTH) {
-    return false;
-  }
+  if (typeof value !== 'string' || value.length !== 40) return false;
   const allowed = '0123456789abcdef';
   for (let index = 0; index < value.length; index += 1) {
     if (!stringIncludes(allowed, value[index])) return false;
@@ -195,22 +162,22 @@ function commitShaIsExact(value) {
 
 function resolveCommittedEndpoint(root, expectedCommit) {
   if (!commitShaIsExact(expectedCommit)) {
-    throw new Error(ERROR.COMMITTED_ENDPOINT_REQUIRED);
+    throw new Error('exact committed endpoint is required');
   }
   const headCommit = execFileSync(
     'git',
     ['-C', root, 'rev-parse', 'HEAD'],
-    {encoding: UTF8_ENCODING, maxBuffer: GIT_MAX_BUFFER_BYTES},
+    {encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER_BYTES},
   );
   const dirty = execFileSync(
     'git',
     ['-C', root, 'status', '--porcelain', '--untracked-files=all'],
-    {encoding: UTF8_ENCODING, maxBuffer: GIT_MAX_BUFFER_BYTES},
+    {encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER_BYTES},
   );
   const normalizedHeadCommit = stringTrim(headCommit);
   const normalizedDirty = stringTrim(dirty);
   if (normalizedHeadCommit !== expectedCommit || normalizedDirty.length > 0) {
-    throw new Error(ERROR.RUNTIME_ENDPOINT_MISMATCH);
+    throw new Error('runtime endpoint must be the exact clean commit');
   }
   return normalizedHeadCommit;
 }
@@ -236,7 +203,7 @@ async function resolveControllerBinding(argv, owners) {
     CONTROLLER_PATHS,
   );
   if (controllerDigest !== expectedControllerDigest) {
-    throw new Error(ERROR.CONTROLLER_DIGEST_MISMATCH);
+    throw new Error('controller digest does not match expectation');
   }
   const expectedReleaseContentDigest = requireArgument(
     argv,
@@ -254,7 +221,7 @@ async function resolveControllerBinding(argv, owners) {
     releaseRecord.releaseContentDigest !== expectedReleaseContentDigest ||
     releaseRecord.headCommit !== expectedFixedCommit
   ) {
-    throw new Error(ERROR.RELEASE_CONTENT_MISMATCH);
+    throw new Error('release-content identity does not match expectation');
   }
   return {
     controllerDigest,
@@ -277,7 +244,7 @@ async function resolveRuntimeBinding(argv, owners) {
     path.join(runtimeRoot, 'src'),
   );
   if (runtimeSourceFingerprint !== expectedSourceFingerprint) {
-    throw new Error(ERROR.SOURCE_FINGERPRINT_MISMATCH);
+    throw new Error('runtime source fingerprint does not match expectation');
   }
   const expectedBuildInputDigest = requireArgument(
     argv,
@@ -287,7 +254,7 @@ async function resolveRuntimeBinding(argv, owners) {
   const buildContextManifest =
     await owners.resolveDockerBuildContextManifest(runtimeRoot, 'Dockerfile');
   if (buildContextManifest.buildInputDigest !== expectedBuildInputDigest) {
-    throw new Error(ERROR.BUILD_INPUT_DIGEST_MISMATCH);
+    throw new Error('runtime build-input digest does not match expectation');
   }
   return {
     buildContextManifest,
@@ -300,8 +267,7 @@ async function resolveRuntimeBinding(argv, owners) {
 }
 
 function expectedRevertCounterexample(value) {
-  return value ===
-    REVERT_COUNTEREXAMPLE.TRANSIENT_PROJECTION_OMISSION_REVOCATION ||
+  return value === REVERT_COUNTEREXAMPLE.CANONICAL_EXPANSION_REVOCATION ||
     value === REVERT_COUNTEREXAMPLE.FORMATION_TIMEOUT_WITHOUT_GENERATION;
 }
 
@@ -331,7 +297,7 @@ function revertEndpointManifestMatches(manifest, expected) {
 function revertArtifactManifestMatches(manifest, expected) {
   return allTrue([
     typeof manifest?.reverseArtifactSha256 === 'string',
-    manifest?.reverseArtifactSha256?.length === SHA256_HEX_LENGTH,
+    manifest?.reverseArtifactSha256?.length === 64,
     expected.reverseArtifactMatches,
     expected.revertedPaths !== null,
     expected.changedPathsMatch,
@@ -361,7 +327,7 @@ function canonicalArtifactMatches(delta, artifactBytes, expectedSha256) {
 
 async function resolveRevertBinding(argv, runtime, controller, owners) {
   if (!runtime.runtimeRootValue || runtime.runtimeRoot === ROOT) {
-    throw new Error(ERROR.REVERTED_ROOT_REQUIRED);
+    throw new Error('reverted runtime requires a separate source root');
   }
   const manifestPath = path.resolve(requireArgument(
     argv,
@@ -418,7 +384,7 @@ async function resolveRevertBinding(argv, runtime, controller, owners) {
     revertedPaths,
     runtimeSourceFingerprint: runtime.runtimeSourceFingerprint,
   })) {
-    throw new Error(ERROR.REVERT_MANIFEST_MISMATCH);
+    throw new Error('revert manifest does not bind the selected runtime');
   }
   return {
     revertManifest: {
@@ -472,7 +438,7 @@ async function observeFixedClosure(cluster, sourceFingerprint) {
     typeof cluster?.waitForState !== 'function' ||
     typeof cluster?.getLogCollector !== 'function'
   ) {
-    throw new Error(ERROR.OBSERVATION_OWNER_UNAVAILABLE);
+    throw new Error('cluster closure observation owner unavailable');
   }
   return cluster.waitForState((currentCluster) => {
     const entries = currentCluster.getLogCollector()?.getBuffer?.() || [];
@@ -483,7 +449,7 @@ async function observeFixedClosure(cluster, sourceFingerprint) {
     timeoutMs: CLOSURE_OBSERVATION_TIMEOUT_MS,
     intervalMs: CLOSURE_OBSERVATION_INTERVAL_MS,
     throwOnTimeout: false,
-    label: CLOSURE_OBSERVATION_LABEL,
+    label: 'formation release handoff closure',
   });
 }
 
@@ -564,7 +530,7 @@ function executionOutcomeExpected(variant, expected, analysis, error) {
   }
   if (analysis?.counterexampleClassification !== expected) return false;
   const code = readOwnData(error, 'code');
-  const message = readOwnData(error, OWN_DATA_MESSAGE_FIELD);
+  const message = readOwnData(error, 'message');
   return code === FORMATION_TIMEOUT_CODE ||
     (typeof message === 'string' &&
       stringIncludes(message, FORMATION_TIMEOUT_CODE));
@@ -589,7 +555,7 @@ function reportRevertEvidence(binding) {
 
 function errorMessage(error) {
   if (!error) return null;
-  return stringConstructor(readOwnData(error, OWN_DATA_MESSAGE_FIELD) || error);
+  return stringConstructor(readOwnData(error, 'message') || error);
 }
 
 function buildRunReport(options) {
@@ -610,9 +576,9 @@ function buildRunReport(options) {
     ),
   ]);
   return {
-    schemaVersion: REPORT_SCHEMA_VERSION,
-    scenario: REPORT_SCENARIO,
-    fidelity: REPORT_FIDELITY,
+    schemaVersion: 3,
+    scenario: 'formation-release-handoff-closure-live-gcp',
+    fidelity: 'live-gcp',
     variant: options.binding.variant,
     controllerRoot: ROOT,
     controllerDigest: options.binding.controllerDigest,

@@ -124,16 +124,13 @@ function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
     normalizedSummary?.missingPartitionIds,
   );
   const plannerByPartitionId = {};
-  for (let index = 0; index < blockedPartitions.length; index += 1) {
-    appendPriorityRecoveryBlockedPartitionPlanner(
-      plannerByPartitionId,
-      blockedPartitions[index],
-    );
+  for (const partition of blockedPartitions) {
+    appendPriorityRecoveryBlockedPartitionPlanner(plannerByPartitionId, partition);
   }
-  for (let index = 0; index < missingPartitionIds.length; index += 1) {
+  for (const partitionId of missingPartitionIds) {
     appendPriorityRecoveryMissingPartitionPlanner(
       plannerByPartitionId,
-      missingPartitionIds[index],
+      partitionId,
       normalizedSummary,
     );
   }

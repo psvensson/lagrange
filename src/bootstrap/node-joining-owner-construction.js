@@ -60,7 +60,6 @@ const {
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
 
-const defaultHttpFetch = globalThis.fetch;
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -122,7 +121,6 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       typeof options.sleep === 'function' ?
         options.sleep :
         (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
-    this.httpFetch = typeof options.httpFetch === 'function' ? options.httpFetch : defaultHttpFetch;
     this.joinSessionIdProvided =
       typeof options.joinSessionId === 'string' &&
       options.joinSessionId.length > 0;
@@ -795,5 +793,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.outerReattemptMembershipRestorePending = true;
   }
 }
+
 assignNodeJoiningDelegateBundleMethods(NodeJoiningOwnerConstruction);
+
 export {NodeJoiningOwnerConstruction};

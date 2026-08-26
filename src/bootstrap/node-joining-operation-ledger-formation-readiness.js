@@ -7,14 +7,6 @@ import {
   STATE,
 } from '../constants/index.js';
 import {
-  FORMATION_RELEASE_HANDOFF_STATE,
-  formationReleaseHandoffAuthorizesNode,
-} from '../control-plane/formation-release-handoff-contract.js';
-import {FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE} from
-  '../control-plane/formation-release-handoff-policy.js';
-import {countStartupAuthorityNodeIds} from
-  '../control-plane/startup-authority-placement-eligibility.js';
-import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
   getInitialReplicaIds,
@@ -41,42 +33,24 @@ const OPERATION_LEDGER_FORMATION_BARRIER_RELEASE_STATES = new Set([
 ]);
 const OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT_CODE =
   'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT';
-const OPERATION_LEDGER_FORMATION_LIVENESS_PUBLISH_FAILURE =
-  'formation_liveness_publish_failed';
-const arrayIsArray = Array.isArray;
-const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
-const mathMax = Math.max;
-const numberIsFinite = Number.isFinite;
-const numberIsInteger = Number.isInteger;
-const objectFreeze = Object.freeze;
-const setPrototypeHas = Function.call.bind(Set.prototype.has);
 
 function resolveFormationBarrierDuration(value, fallback, minimum) {
-  return numberIsFinite(value) ? mathMax(minimum, value) : fallback;
+  return Number.isFinite(value) ? Math.max(minimum, value) : fallback;
 }
 
 function resolveOperationLedgerFormationBarrierState({
   barrierEngaged,
-  bypassAuthorized,
   discoveryDeadline,
   snapshot,
 }) {
   if (!barrierEngaged) {
-    return snapshot.now >= discoveryDeadline &&
-      bypassAuthorized ?
-      OPERATION_LEDGER_FORMATION_BARRIER_STATE
-        .BYPASSED_INSUFFICIENT_COHORT :
+    return snapshot.now >= discoveryDeadline ?
+      OPERATION_LEDGER_FORMATION_BARRIER_STATE.BYPASSED_INSUFFICIENT_COHORT :
       OPERATION_LEDGER_FORMATION_BARRIER_STATE.WAITING_COHORT;
   }
   return snapshot.startupAuthorityReady === true ?
     OPERATION_LEDGER_FORMATION_BARRIER_STATE.SATISFIED :
     OPERATION_LEDGER_FORMATION_BARRIER_STATE.WAITING_STARTUP_AUTHORITY;
-}
-
-function resolveOperationLedgerFormationReplicaCount(snapshot) {
-  return snapshot.targetReplicaCount ||
-    getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)?.length ||
-    0;
 }
 
 class NodeJoiningOperationLedgerFormationReadiness
@@ -89,7 +63,7 @@ class NodeJoiningOperationLedgerFormationReadiness
    * @return {Promise<Object>}
    * @private
    */
-  async getOperationLedgerFormationBarrierSnapshot(requestTimeoutMs) {
+  async getOperationLedgerFormationBarrierSnapshot() {
     const systemTableCache =
       NodeService.getInstance().getSystemTableCache();
     const partitionId =
@@ -97,14 +71,12 @@ class NodeJoiningOperationLedgerFormationReadiness
     const initialReplicaIds =
       getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
     const targetReplicaCount =
-      arrayIsArray(initialReplicaIds) && initialReplicaIds.length > 0 ?
+      Array.isArray(initialReplicaIds) && initialReplicaIds.length > 0 ?
         initialReplicaIds.length :
         null;
     const now = this.now();
     const startupAuthority =
-      await this.getPriorityPlacementFormationStartupAuthority(now, {
-        requestTimeoutMs,
-      });
+      await this.getPriorityPlacementFormationStartupAuthority(now);
     const candidateNodeIds =
       this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
         systemTableCache,
@@ -116,36 +88,29 @@ class NodeJoiningOperationLedgerFormationReadiness
         candidateNodeIds,
         now,
       );
-    const formationReleaseHandoff =
-      startupAuthority?.formationReleaseHandoff || null;
-    return objectFreeze({
+    return Object.freeze({
       now,
       partitionId,
       targetReplicaCount,
       startupAuthorityAvailable:
         startupAuthority?.authorityAvailable === true,
       startupAuthorityState: startupAuthority?.state || null,
-      startupAuthorityReady:
-        startupAuthority?.ready === true &&
-        formationReleaseHandoff?.state ===
-          FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
-        formationReleaseHandoff?.releaseAuthorized === true,
-      startupAuthorityRecoveryReasonCodes: objectFreeze(
-        arrayIsArray(startupAuthority?.priorityRecoveryReasonCodes) ?
-          arrayPrototypeSlice(startupAuthority.priorityRecoveryReasonCodes) :
+      startupAuthorityReady: startupAuthority?.ready === true,
+      startupAuthorityRecoveryReasonCodes: Object.freeze(
+        Array.isArray(startupAuthority?.priorityRecoveryReasonCodes) ?
+          [...startupAuthority.priorityRecoveryReasonCodes] :
           [],
       ),
       startupAuthorityPublicationRecoveryGateState:
         startupAuthority?.publicationRecoveryGate?.state || null,
-      formationReleaseHandoff,
-      startupAuthorityNodeCount:
-        countStartupAuthorityNodeIds(startupAuthority),
-      candidateNodeIds: objectFreeze(candidateNodeIds),
-      preReadyCandidateNodeIds: objectFreeze(preReadyCandidateNodeIds),
+      formationReleaseHandoff:
+        startupAuthority?.formationReleaseHandoff || null,
+      candidateNodeIds: Object.freeze(candidateNodeIds),
+      preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
     });
   }
   resolveOperationLedgerFormationBarrierTiming() {
-    return objectFreeze({
+    return Object.freeze({
       discoveryMs: resolveFormationBarrierDuration(
         this.config.priorityPlacementFormationDiscoveryMs,
         JOINING_DEFAULT.priorityPlacementFormationDiscoveryMs,
@@ -191,9 +156,7 @@ class NodeJoiningOperationLedgerFormationReadiness
       this.logger.warn(JOINING_LOG_MSG.HEARTBEAT_FAILED, {
         nodeId: this.nodeId,
         gate: 'operation_ledger_formation',
-        error: typeof error?.message === 'string' ?
-          error.message :
-          OPERATION_LEDGER_FORMATION_LIVENESS_PUBLISH_FAILURE,
+        error: error?.message || String(error),
       });
       return false;
     }
@@ -207,45 +170,14 @@ class NodeJoiningOperationLedgerFormationReadiness
   }
   hasSufficientOperationLedgerFormationCohort(snapshot) {
     const formationReplicaCount =
-      resolveOperationLedgerFormationReplicaCount(snapshot);
-    const formationWaveNodeCount = mathMax(
-      FORMATION_RELEASE_HANDOFF_MINIMUM_COHORT_SIZE,
-      formationReplicaCount - 1,
-    );
-    const readyCandidateNodeCount =
-      snapshot.candidateNodeIds.length -
-      snapshot.preReadyCandidateNodeIds.length;
-    return numberIsInteger(formationReplicaCount) &&
+      snapshot.targetReplicaCount ||
+      getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)?.length ||
+      0;
+    const formationWaveNodeCount = Math.max(1, formationReplicaCount - 1);
+    return Number.isInteger(formationReplicaCount) &&
       formationReplicaCount > 0 &&
       snapshot.candidateNodeIds.length >= formationReplicaCount &&
-      snapshot.preReadyCandidateNodeIds.length <=
-        snapshot.candidateNodeIds.length &&
-      snapshot.preReadyCandidateNodeIds.length >= formationWaveNodeCount &&
-      readyCandidateNodeCount < formationReplicaCount;
-  }
-  hasPositiveOperationLedgerFormationBypassEvidence(snapshot) {
-    const formationReplicaCount =
-      resolveOperationLedgerFormationReplicaCount(snapshot);
-    if (
-      snapshot.startupAuthorityAvailable !== true ||
-      !numberIsInteger(formationReplicaCount) ||
-      formationReplicaCount <= 0 ||
-      !numberIsInteger(snapshot.startupAuthorityNodeCount) ||
-      snapshot.startupAuthorityNodeCount < 0
-    ) {
-      return false;
-    }
-    const readyCandidateNodeCount =
-      snapshot.candidateNodeIds.length -
-      snapshot.preReadyCandidateNodeIds.length;
-    return snapshot.startupAuthorityNodeCount < formationReplicaCount ||
-      readyCandidateNodeCount >= formationReplicaCount;
-  }
-  hasCapturedOperationLedgerFormationHandoff(snapshot) {
-    return formationReleaseHandoffAuthorizesNode(
-      snapshot.formationReleaseHandoff,
-      this.nodeId,
-    );
+      snapshot.preReadyCandidateNodeIds.length >= formationWaveNodeCount;
   }
   logOperationLedgerFormationBarrierState(state, snapshot) {
     this.logger.info(JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER, {
@@ -254,10 +186,6 @@ class NodeJoiningOperationLedgerFormationReadiness
       partitionId: snapshot.partitionId,
       candidateNodeCount: snapshot.candidateNodeIds.length,
       preReadyCandidateNodeCount: snapshot.preReadyCandidateNodeIds.length,
-      readyCandidateNodeCount:
-        snapshot.candidateNodeIds.length -
-        snapshot.preReadyCandidateNodeIds.length,
-      startupAuthorityNodeCount: snapshot.startupAuthorityNodeCount,
       targetReplicaCount: snapshot.targetReplicaCount,
       startupAuthorityAvailable: snapshot.startupAuthorityAvailable,
       startupAuthorityState: snapshot.startupAuthorityState,
@@ -292,13 +220,12 @@ class NodeJoiningOperationLedgerFormationReadiness
    * Hold the final ready-lease publication while a feasible cold-formation
    * cohort is curing operation-ledger concentration.
    *
-   * A short discovery window avoids penalizing intentionally small clusters
-   * and later join waves whose established READY members already satisfy the
-   * replica floor. Only a current available authority observation can prove
-   * that bypass is safe; absence keeps waiting and reaches the existing
-   * retryable timeout. Once a genuinely cold cohort or exact self-capturing
-   * handoff is observed, the owner latches the barrier and fails closed rather
-   * than opening ACTIVE over incomplete/concentrated evidence.
+   * A short discovery window avoids penalizing intentionally small (one- or
+   * two-node) clusters that cannot form a three-node spread. Once a sufficient
+   * cohort with multiple simultaneously pre-ready joiners is observed, the
+   * owner latches the barrier and fails closed on timeout rather than opening
+   * ACTIVE over incomplete/concentrated evidence. Sequential single-node
+   * growth retains the ordinary ready-then-rebalance path.
    *
    * @return {Promise<void>}
    * @private
@@ -335,15 +262,11 @@ class NodeJoiningOperationLedgerFormationReadiness
 
     while (true) {
       const snapshot =
-        await this.getOperationLedgerFormationBarrierSnapshot(pollMs);
+        await this.getOperationLedgerFormationBarrierSnapshot();
       barrierEngaged = barrierEngaged ||
-        this.hasSufficientOperationLedgerFormationCohort(snapshot) ||
-        this.hasCapturedOperationLedgerFormationHandoff(snapshot);
-      const bypassAuthorized =
-        this.hasPositiveOperationLedgerFormationBypassEvidence(snapshot);
+        this.hasSufficientOperationLedgerFormationCohort(snapshot);
       const state = resolveOperationLedgerFormationBarrierState({
         barrierEngaged,
-        bypassAuthorized,
         discoveryDeadline,
         snapshot,
       });
@@ -353,13 +276,10 @@ class NodeJoiningOperationLedgerFormationReadiness
         lastState = state;
       }
 
-      if (setPrototypeHas(
-        OPERATION_LEDGER_FORMATION_BARRIER_RELEASE_STATES,
-        state,
-      )) {
+      if (OPERATION_LEDGER_FORMATION_BARRIER_RELEASE_STATES.has(state)) {
         return;
       }
-      if (snapshot.now >= timeoutDeadline) {
+      if (barrierEngaged && snapshot.now >= timeoutDeadline) {
         throw this.buildOperationLedgerFormationBarrierTimeout(snapshot);
       }
       if (

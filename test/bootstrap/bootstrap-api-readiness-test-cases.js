@@ -315,67 +315,6 @@ export function registerBootstrapApiReadinessTests() {
       await api.shutdown();
     });
 
-  test('BootstrapAPI - bootstrap readiness transports an exact projected ' +
-    'startup authority without changing probe status', async (t) => {
-    initializeTestEnvironment();
-    const projectedRequests = [];
-    const readinessSnapshot = {
-      ready: false,
-      phase: 'INIT',
-      state: 'bootstrapping',
-      reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
-      retryAfterMs: TEST_READY_RETRY_AFTER_MS,
-      timestamp: 17_000,
-    };
-    const api = new BootstrapAPI({
-      seedNodeId: TEST_SEED_NODE_ID,
-      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
-      systemTableCache: createEmptySystemTableCache(),
-      readinessState: {
-        evaluate: () => readinessSnapshot,
-        getSnapshot: () => readinessSnapshot,
-        recordProbeResult() {},
-      },
-      controlPlaneReadinessService: {
-        getStartupAuthoritySnapshotSync(request) {
-          if (typeof request === 'object') projectedRequests.push(request);
-          return TEST_SEED_CONTACT_STARTUP_AUTHORITY;
-        },
-      },
-    });
-    await api.initialize(TEST_READY_STABLE_WINDOW_MS, {listen: false});
-
-    const projected = await api.getFastify().inject({
-      method: TEST_HTTP_METHOD_GET,
-      url: `${BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY}?projectionNodeId=` +
-        encodeURIComponent(TEST_BOOTSTRAP_REQUEST_NODE_ID),
-    });
-    t.equal(projected.statusCode, HTTP_STATUS.SERVICE_UNAVAILABLE,
-      'projection payload never upgrades the readiness verdict');
-    t.same(
-      JSON.parse(projected.body)[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
-      TEST_SEED_CONTACT_STARTUP_AUTHORITY,
-      '503 probe body still carries the exact seed-owned projection',
-    );
-    t.match(projectedRequests.at(-1), {
-      planningNodeId: TEST_SEED_NODE_ID,
-      projectionNodeId: TEST_BOOTSTRAP_REQUEST_NODE_ID,
-    }, 'projection identity is threaded to the existing startup owner');
-
-    const ordinary = await api.getFastify().inject({
-      method: TEST_HTTP_METHOD_GET,
-      url: BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
-    });
-    t.notOk(
-      Object.hasOwn(
-        JSON.parse(ordinary.body),
-        BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY,
-      ),
-      'legacy no-query probe shape remains unchanged',
-    );
-    await api.shutdown();
-  });
-
   test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', async (t) => {
     initializeTestEnvironment();
 

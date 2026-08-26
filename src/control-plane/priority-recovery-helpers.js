@@ -3,16 +3,6 @@ import {
   PRIORITY_RECOVERY_PRESSURE_STATE,
 } from './priority-recovery-diagnostics-constants.js';
 
-const arrayIsArray = Array.isArray;
-const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
-const arrayPrototypePush = Function.call.bind(Array.prototype.push);
-const arrayPrototypeSort = Function.call.bind(Array.prototype.sort);
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
-const safeString = String;
-const stringPrototypeTrim = Function.call.bind(String.prototype.trim);
-const OWN_DATA_VALUE_FIELD = 'value';
-
 const PRIORITY_RECOVERY_HELPER_LITERAL = Object.freeze({
   VALUE: '',
   PARTITION_SUFFIX: '-p',
@@ -36,22 +26,13 @@ function normalizePriorityRecoveryInteger(value) {
 }
 
 function normalizePriorityRecoveryStringList(values = []) {
-  const normalized = [];
-  if (!arrayIsArray(values)) return normalized;
-  for (let index = 0; index < values.length; index += 1) {
-    const descriptor = objectGetOwnPropertyDescriptor(values, String(index));
-    if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
-      continue;
-    }
-    const value = stringPrototypeTrim(safeString(
-      descriptor.value || PRIORITY_RECOVERY_HELPER_LITERAL.VALUE,
-    ));
-    if (value.length > 0 && !arrayPrototypeIncludes(normalized, value)) {
-      arrayPrototypePush(normalized, value);
-    }
-  }
-  arrayPrototypeSort(normalized);
-  return normalized;
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || PRIORITY_RECOVERY_HELPER_LITERAL.VALUE).trim())
+        .filter((value) => value.length > 0),
+    ),
+  ].sort();
 }
 
 function inferPriorityRecoveryTableNameFromPartitionId(partitionId) {

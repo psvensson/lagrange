@@ -2,13 +2,6 @@ const arrayIsArray = Array.isArray;
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
-const OWN_DATA_VALUE_FIELD = 'value';
-const IDENTITY_LENGTH_SEPARATOR = ':';
-const FIELD = Object.freeze({
-  BOOT_INCARNATION: 'bootIncarnation',
-  NODE_ID: 'nodeId',
-  REQUIRED_COHORT: 'requiredCohort',
-});
 
 const SCALAR_FIELDS = Object.freeze([
   'state',
@@ -22,8 +15,6 @@ const SCALAR_FIELDS = Object.freeze([
   'observedPublicationEpoch',
   'observedAuthorityReady',
   'fenceIdentity',
-  'pendingTerminalState',
-  'pendingTerminalReason',
 ]);
 const ARRAY_FIELDS = Object.freeze([
   'canonicalNodeIds',
@@ -35,13 +26,13 @@ const ARRAY_FIELDS = Object.freeze([
 function readOwnData(target, field) {
   if (!target || typeof target !== 'object') return undefined;
   const descriptor = objectGetOwnPropertyDescriptor(target, field);
-  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+  return descriptor && objectHasOwn(descriptor, 'value') ?
     descriptor.value : undefined;
 }
 
 function encodePrimitive(value) {
   const serialized = `${value}`;
-  return `${serialized.length}${IDENTITY_LENGTH_SEPARATOR}${serialized}`;
+  return `${serialized.length}:${serialized}`;
 }
 
 function formationReleaseCohortIdentity(cohort) {
@@ -49,13 +40,9 @@ function formationReleaseCohortIdentity(cohort) {
   let result = `c${cohort.length}:`;
   for (let index = 0; index < cohort.length; index += 1) {
     const descriptor = objectGetOwnPropertyDescriptor(cohort, index);
-    if (!descriptor ||
-        !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) return null;
-    const nodeId = readOwnData(descriptor.value, FIELD.NODE_ID);
-    const bootIncarnation = readOwnData(
-      descriptor.value,
-      FIELD.BOOT_INCARNATION,
-    );
+    if (!descriptor || !objectHasOwn(descriptor, 'value')) return null;
+    const nodeId = readOwnData(descriptor.value, 'nodeId');
+    const bootIncarnation = readOwnData(descriptor.value, 'bootIncarnation');
     if (
       typeof nodeId !== 'string' || nodeId.length === 0 ||
       !numberIsSafeInteger(bootIncarnation) || bootIncarnation <= 0
@@ -69,14 +56,31 @@ function formationReleaseCohortIdentity(cohort) {
 
 function formationReleaseCohortContainsNodeId(value, nodeId) {
   if (typeof nodeId !== 'string' || nodeId.length === 0) return false;
-  const cohort = readOwnData(value, FIELD.REQUIRED_COHORT);
+  const cohort = readOwnData(value, 'requiredCohort');
   if (!arrayIsArray(cohort)) return false;
   for (let index = 0; index < cohort.length; index += 1) {
-    if (readOwnData(readOwnData(cohort, index), FIELD.NODE_ID) === nodeId) {
+    if (readOwnData(readOwnData(cohort, index), 'nodeId') === nodeId) {
       return true;
     }
   }
   return false;
+}
+
+function formationReleaseCanonicalContainsCapturedSet(evidence, generation) {
+  const currentNodeIds = readOwnData(evidence, 'canonicalNodeIds');
+  const capturedNodeIds = readOwnData(generation, 'canonicalNodeIds');
+  if (!arrayIsArray(currentNodeIds) || !arrayIsArray(capturedNodeIds)) {
+    return false;
+  }
+  for (let index = 0; index < capturedNodeIds.length; index += 1) {
+    const capturedNodeId = readOwnData(capturedNodeIds, index);
+    let found = false;
+    for (let scan = 0; scan < currentNodeIds.length; scan += 1) {
+      if (readOwnData(currentNodeIds, scan) === capturedNodeId) found = true;
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 function formationReleaseGenerationIdentity(
@@ -107,8 +111,8 @@ function denseArrayEqual(left, right) {
     const leftDescriptor = objectGetOwnPropertyDescriptor(left, index);
     const rightDescriptor = objectGetOwnPropertyDescriptor(right, index);
     if (!leftDescriptor || !rightDescriptor ||
-        !objectHasOwn(leftDescriptor, OWN_DATA_VALUE_FIELD) ||
-        !objectHasOwn(rightDescriptor, OWN_DATA_VALUE_FIELD) ||
+        !objectHasOwn(leftDescriptor, 'value') ||
+        !objectHasOwn(rightDescriptor, 'value') ||
         leftDescriptor.value !== rightDescriptor.value) return false;
   }
   return true;
@@ -121,10 +125,10 @@ function cohortEqual(left, right) {
     const leftMember = readOwnData(left, index);
     const rightMember = readOwnData(right, index);
     if (!leftMember || !rightMember ||
-        readOwnData(leftMember, FIELD.NODE_ID) !==
-          readOwnData(rightMember, FIELD.NODE_ID) ||
-        readOwnData(leftMember, FIELD.BOOT_INCARNATION) !==
-          readOwnData(rightMember, FIELD.BOOT_INCARNATION)) return false;
+        readOwnData(leftMember, 'nodeId') !==
+          readOwnData(rightMember, 'nodeId') ||
+        readOwnData(leftMember, 'bootIncarnation') !==
+          readOwnData(rightMember, 'bootIncarnation')) return false;
   }
   return true;
 }
@@ -142,12 +146,13 @@ function formationReleaseContractsEqual(left, right) {
     }
   }
   return cohortEqual(
-    readOwnData(left, FIELD.REQUIRED_COHORT),
-    readOwnData(right, FIELD.REQUIRED_COHORT),
+    readOwnData(left, 'requiredCohort'),
+    readOwnData(right, 'requiredCohort'),
   );
 }
 
 export {
+  formationReleaseCanonicalContainsCapturedSet,
   formationReleaseCohortContainsNodeId,
   formationReleaseCohortIdentity,
   formationReleaseContractsEqual,
