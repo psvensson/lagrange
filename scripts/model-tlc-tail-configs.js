@@ -227,6 +227,28 @@ const MODEL_TLC_TAIL_CONFIGS = Object.freeze([
     expectedFailurePattern:
       'Temporal property JoinerCohortEventuallyReadyWithinBudget was violated',
   },
+  {
+    id: 'formation-release-handoff-closure-exact-membership-equality-bug',
+    mode: 'formation-release-handoff-closure-exact-membership-equality-bug',
+    module: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'formation-release-handoff-closure',
+      'FormationReleaseHandoffClosure_exact_membership_equality_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'formation-release-handoff-closure-exact-membership-equality-bug.model.report.json',
+    scenario: 'formation-release-handoff-closure-model',
+    owner: 'control_plane_readiness_startup_authority',
+    boundary: 'canonical_membership_expansion_exact_equality_counterexample',
+    expectedFailurePattern:
+      'Invariant ReleaseRetainedAcrossReopen is violated',
+  },
 ]);
 
 export {MODEL_TLC_TAIL_CONFIGS};

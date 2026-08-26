@@ -9,13 +9,20 @@ import {
   buildContract,
   buildNodeEvidenceById,
   freezeCohort,
+  formationReleaseCohortContainsNodeId,
   isConnectedFormationMember,
   isCurrentReadyMember,
   isRetainableAuthority,
+  normalizeFormationReleaseHandoffContract,
   normalizePublishedConsumerContract,
   validatePublishedContractAgainstCurrent,
+  authorizeFormationReleaseHandoffPublicationIntent,
 } from './formation-release-handoff-contract.js';
-import {formationReleaseCohortIdentity, formationReleaseGenerationIdentity} from './formation-release-handoff-identity.js';
+import {
+  formationReleaseCohortIdentity,
+  formationReleaseContractsEqual,
+  formationReleaseGenerationIdentity,
+} from './formation-release-handoff-identity.js';
 
 const arrayPrototypePush = Function.call.bind(Array.prototype.push);
 const arrayPrototypeSlice = Function.call.bind(Array.prototype.slice);
@@ -376,6 +383,12 @@ class FormationReleaseHandoffClosureOwner {
         connectionEvidence,
       );
     }
+    if (!formationReleaseCohortContainsNodeId(
+      this.generation,
+      authorityNodeId,
+    )) {
+      return null;
+    }
     const rowsById = buildNodeEvidenceById(nodeRows);
     const connectionsById = buildConnectionEvidenceById(connectionEvidence);
     if (
@@ -396,15 +409,22 @@ class FormationReleaseHandoffClosureOwner {
     );
   }
 
-  acknowledgePublication(generationId) {
+  acknowledgePublication(durableContract) {
+    const normalizedDurableContract =
+      normalizeFormationReleaseHandoffContract(durableContract);
+    const expectedDurableContract =
+      authorizeFormationReleaseHandoffPublicationIntent(this.lastContract);
     if (
       !this.generation ||
-      this.generation.id !== generationId ||
-      this.lastContract.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE
+      this.lastContract.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE ||
+      !formationReleaseContractsEqual(
+        normalizedDurableContract,
+        expectedDurableContract,
+      )
     ) {
       return this.lastContract;
     }
-    this.publishedGeneration = generationId;
+    this.publishedGeneration = normalizedDurableContract.generation;
     this.lastContract = buildContract({
       state: this.lastContract.state,
       reason: this.lastContract.reason,

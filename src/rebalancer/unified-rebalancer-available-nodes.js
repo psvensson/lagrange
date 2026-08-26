@@ -13,6 +13,8 @@ import {
 import {
   isEvidenceAbsentReadinessDenialSnapshot,
 } from '../control-plane/readiness-denial-classification.js';
+import {formationReleaseHandoffAuthorizesNode} from
+  '../control-plane/formation-release-handoff-contract.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -341,6 +343,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const startupAuthority = this.getStartupAuthoritySnapshot();
     const startupAuthorityNodeIds =
       resolveStartupAuthorityNodeIdSet(startupAuthority);
+    const formationReleaseHandoff =
+      startupAuthority?.formationReleaseHandoff || null;
     return classifyFormationCohortSpreadCureNode({
       node,
       startupAuthorityNodeIds,
@@ -351,8 +355,13 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       priorityRecoveryActive:
         this.isGlobalPriorityControlPlaneRecoveryActive(),
       formationReleaseHandoffActive:
-        startupAuthority?.formationReleaseHandoff?.active === true &&
-        startupAuthority?.formationReleaseHandoff?.releaseAuthorized === true,
+        formationReleaseHandoff?.active === true &&
+        formationReleaseHandoff?.releaseAuthorized === true,
+      formationReleaseHandoffCohortMember:
+        formationReleaseHandoffAuthorizesNode(
+          formationReleaseHandoff,
+          node?.node_id || node?.nodeId || null,
+        ),
     }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 

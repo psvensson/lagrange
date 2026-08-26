@@ -15,6 +15,10 @@ import {FormationReleaseHandoffPublicationCoordinator} from
 import {formationReleaseGenerationIdentity} from
   '../../src/control-plane/formation-release-handoff-identity.js';
 import {
+  authorizeFormationReleaseHandoffPublicationIntent,
+  validateFormationReleaseHandoffConsumerContract,
+} from '../../src/control-plane/formation-release-handoff-contract.js';
+import {
   FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION,
   classifyFormationCohortSpreadCureNode,
 } from '../../src/control-plane/startup-authority-placement-eligibility.js';
@@ -145,7 +149,9 @@ function observeFormation(
     connectionEvidence,
   );
   return contract.active && contract.releaseAuthorized === false ?
-    owner.acknowledgePublication(contract.generation) :
+    owner.acknowledgePublication(
+      authorizeFormationReleaseHandoffPublicationIntent(contract),
+    ) :
     contract;
 }
 
@@ -175,7 +181,14 @@ function buildPlacementNode(nodeId) {
   };
 }
 
-function buildPlacementOptions(node, handoffActive) {
+function buildPlacementOptions(
+  node,
+  handoffActive,
+  {
+    handoffCohortMember = true,
+    priorityRecoveryActive = false,
+  } = {},
+) {
   return {
     node,
     startupAuthorityNodeIds: new Set(['joiner-a', 'joiner-b', 'seed']),
@@ -187,8 +200,9 @@ function buildPlacementOptions(node, handoffActive) {
     localNodeId: 'seed',
     includeSelf: true,
     priorityRecoveryLane: true,
-    priorityRecoveryActive: false,
+    priorityRecoveryActive,
     formationReleaseHandoffActive: handoffActive,
+    formationReleaseHandoffCohortMember: handoffCohortMember,
   };
 }
 
@@ -376,14 +390,20 @@ async (t) => {
     currentAuthority;
 
   const pendingCapture = service.getFormationReleaseStartupAuthoritySnapshotSync(
-    'seed',
-    NOW,
+    {
+      planningNodeId: 'seed',
+      projectionNodeId: 'seed',
+      observedAt: NOW,
+    },
   );
   t.equal(pendingCapture.formationReleaseHandoff.releaseAuthorized, false);
   await service.formationReleaseHandoffPublicationCoordinator.whenIdle();
   const captured = service.getFormationReleaseStartupAuthoritySnapshotSync(
-    'seed',
-    NOW + 1,
+    {
+      planningNodeId: 'seed',
+      projectionNodeId: 'seed',
+      observedAt: NOW + 1,
+    },
   );
   currentAuthority = buildAuthority({ready: false, satisfied: false});
   const targetView = service.getStartupAuthoritySnapshotSync(
@@ -431,8 +451,8 @@ async (t) => {
       getStartupAuthoritySnapshotSync() {
         return targetView;
       },
-      async getFormationReleaseStartupAuthoritySnapshot(nodeId) {
-        requestedNodeIds.push(nodeId);
+      async getFormationReleaseStartupAuthoritySnapshot(request) {
+        requestedNodeIds.push(request.planningNodeId);
         return targetView;
       },
     },
@@ -701,10 +721,10 @@ test('a restarted seed rehydrates its one durable active generation during a ' +
   t.end();
 });
 
-test('formation release handoff revokes on incarnation, membership, and ' +
-  'substantive authority changes', async (t) => {
+test('formation release handoff retains an immutable captured cohort across ' +
+  'canonical expansion without authorizing the added node', async (t) => {
   const expandedOwner = new FormationReleaseHandoffClosureOwner();
-  observeFormation(expandedOwner,
+  const captured = observeFormation(expandedOwner,
     buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
     buildFormationRows(),
     NOW,
@@ -714,20 +734,108 @@ test('formation release handoff revokes on incarnation, membership, and ' +
     buildFormationRows(),
     NOW + 100,
   );
-  t.equal(expanded.state, FORMATION_RELEASE_HANDOFF_STATE.REVOKED);
-  const rotatedExpansion = observeFormation(expandedOwner,
-    buildAuthority(),
+  t.equal(expanded.state, FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
+  t.equal(expanded.generation, captured.generation,
+    'membership additions do not rotate the captured generation');
+  t.same(expanded.requiredCohort, [
+    {nodeId: 'joiner-a', bootIncarnation: 1},
+  ], 'the added JOINING node is not retroactively captured');
+  t.equal(
+    validateFormationReleaseHandoffConsumerContract(
+      expanded,
+      buildAuthority(),
+      buildFormationRows(),
+      NOW + 100,
+      'joiner-b',
+      buildConnectionEvidence(buildFormationRows()),
+    ),
+    null,
+    'an added non-cohort process cannot consume the durable release',
+  );
+  t.equal(
+    validateFormationReleaseHandoffConsumerContract(
+      expanded,
+      buildAuthority(),
+      buildFormationRows(),
+      NOW + 100,
+      'joiner-a',
+      buildConnectionEvidence(buildFormationRows()),
+    )?.generation,
+    captured.generation,
+    'the captured process consumes the same immutable generation',
+  );
+  t.equal(
+    classifyFormationCohortSpreadCureNode(
+      buildPlacementOptions(
+        buildPlacementNode('joiner-b'),
+        true,
+        {handoffCohortMember: false},
+      ),
+    ),
+    FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.NOT_CURE_TARGET,
+    'handoff-only cure authority cannot escape the immutable cohort',
+  );
+  t.equal(
+    classifyFormationCohortSpreadCureNode(
+      buildPlacementOptions(
+        buildPlacementNode('joiner-b'),
+        true,
+        {
+          handoffCohortMember: false,
+          priorityRecoveryActive: true,
+        },
+      ),
+    ),
+    FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET,
+    'ordinary active priority recovery retains the existing CL-044 path',
+  );
+
+  const delayedAckOwner = new FormationReleaseHandoffClosureOwner();
+  const initialIntent = delayedAckOwner.observe(
+    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
     buildFormationRows(),
-    NOW + 200,
+    NOW,
+    'seed',
+    buildConnectionEvidence(buildFormationRows()),
   );
-  t.same(
-    rotatedExpansion.requiredCohort,
-    [
-      {nodeId: 'joiner-a', bootIncarnation: 1},
-      {nodeId: 'joiner-b', bootIncarnation: 1},
-    ],
-    'canonical membership expansion rotates away from a partial generation',
+  const expandedIntent = delayedAckOwner.observe(
+    buildAuthority({publicationEpoch: 42}),
+    buildFormationRows(),
+    NOW + 100,
+    'seed',
+    buildConnectionEvidence(buildFormationRows()),
   );
+  const staleAcknowledgement = delayedAckOwner.acknowledgePublication(
+    authorizeFormationReleaseHandoffPublicationIntent(initialIntent),
+  );
+  t.equal(staleAcknowledgement.releaseAuthorized, false,
+    'a delayed pre-expansion readback cannot authorize newer local state');
+  const exactAcknowledgement = delayedAckOwner.acknowledgePublication(
+    authorizeFormationReleaseHandoffPublicationIntent(expandedIntent),
+  );
+  t.equal(exactAcknowledgement.releaseAuthorized, true,
+    'only exact durable contract readback authorizes the current intent');
+  t.end();
+});
+
+test('formation release handoff revokes on captured membership, incarnation, ' +
+  'and substantive authority changes', async (t) => {
+  const removedCapturedOwner = new FormationReleaseHandoffClosureOwner();
+  observeFormation(removedCapturedOwner,
+    buildAuthority({canonicalNodeIds: ['joiner-a', 'seed']}),
+    buildFormationRows(),
+    NOW,
+  );
+  const removedCaptured = observeFormation(removedCapturedOwner,
+    buildAuthority({
+      canonicalNodeIds: ['joiner-b', 'seed'],
+      publicationEpoch: 42,
+    }),
+    buildFormationRows(),
+    NOW + 100,
+  );
+  t.equal(removedCaptured.state, FORMATION_RELEASE_HANDOFF_STATE.REVOKED,
+    'removing a captured canonical member remains incompatible');
 
   const incompleteOwner = new FormationReleaseHandoffClosureOwner();
   const incomplete = observeFormation(incompleteOwner,

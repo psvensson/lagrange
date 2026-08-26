@@ -250,8 +250,11 @@ class NodeJoiningReadySignalReadiness
           .getFormationReleaseStartupAuthoritySnapshot === 'function'
       ) {
         return await readinessService.getFormationReleaseStartupAuthoritySnapshot(
-          this.seedNodeId || this.nodeId,
-          now,
+          {
+            planningNodeId: this.seedNodeId || this.nodeId,
+            projectionNodeId: this.nodeId,
+            observedAt: now,
+          },
         );
       }
       if (
@@ -259,8 +262,11 @@ class NodeJoiningReadySignalReadiness
           .getFormationReleaseStartupAuthoritySnapshotSync === 'function'
       ) {
         return readinessService.getFormationReleaseStartupAuthoritySnapshotSync(
-          this.seedNodeId || this.nodeId,
-          now,
+          {
+            planningNodeId: this.seedNodeId || this.nodeId,
+            projectionNodeId: this.nodeId,
+            observedAt: now,
+          },
         );
       }
       return readinessService.getStartupAuthoritySnapshotSync(

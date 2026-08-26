@@ -20,6 +20,7 @@ const FORMATION_COHORT_SPREAD_CURE_STATE = Object.freeze({
   RECOVERY_CLOSED: 'recovery_closed',
   NOT_JOINING: 'not_joining',
   PLACEMENT_INELIGIBLE: 'placement_ineligible',
+  OUTSIDE_HANDOFF_COHORT: 'outside_handoff_cohort',
   CURE_TARGET: 'cure_target',
 });
 const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
@@ -40,6 +41,13 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.PLACEMENT_INELIGIBLE,
     matches: (evidence) => evidence.placementEligible !== true,
+  }),
+  Object.freeze({
+    state: FORMATION_COHORT_SPREAD_CURE_STATE.OUTSIDE_HANDOFF_COHORT,
+    matches: (evidence) =>
+      evidence.priorityRecoveryActive !== true &&
+      evidence.formationReleaseHandoffActive === true &&
+      evidence.formationReleaseHandoffCohortMember !== true,
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.CURE_TARGET,
@@ -120,6 +128,8 @@ function classifyFormationCohortSpreadCureNode(options = {}) {
     priorityRecoveryActive: options.priorityRecoveryActive === true,
     formationReleaseHandoffActive:
       options.formationReleaseHandoffActive === true,
+    formationReleaseHandoffCohortMember:
+      options.formationReleaseHandoffCohortMember === true,
     joining: options.node?.status === NODE_STATE.JOINING,
     placementEligible:
       isStartupAuthorityControlPlanePlacementEligibleNode(options),

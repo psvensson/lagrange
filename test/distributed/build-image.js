@@ -8,7 +8,10 @@
  */
 
 import {execFile} from 'node:child_process';
-import {DockerProvider} from './harness/docker-provider.js';
+import {
+  DockerProvider,
+  resolveDockerBuildContextManifest,
+} from './harness/docker-provider.js';
 
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_LINE_EMPTY = '';
@@ -213,6 +216,9 @@ async function buildImage(
   dockerOperationSink = null,
   options = {},
 ) {
+  const buildRoot =
+    typeof options.buildRoot === 'string' && options.buildRoot.length > 0 ?
+      options.buildRoot : BUILD_CONTEXT_PATH;
   const extractBuildProgressLine =
     typeof options.extractBuildProgressLine === 'function' ?
       options.extractBuildProgressLine :
@@ -221,11 +227,15 @@ async function buildImage(
     socketPath: config.docker.socketPath,
     operationSink: dockerOperationSink,
   });
+  const buildContextManifest = await resolveDockerBuildContextManifest(
+    buildRoot,
+    config.dockerfile || DEFAULT_DOCKERFILE,
+  );
 
-  const gitHash = options.gitHash || await resolveGitHash();
+  const gitHash = options.gitHash || await resolveGitHash(buildRoot);
   const gitDirty = typeof options.gitDirty === 'boolean' ?
     options.gitDirty :
-    await resolveGitDirty();
+    await resolveGitDirty(buildRoot);
   const skipBuildOnDirty = config?.docker?.skipBuildOnDirty === true;
   const existingHash = await provider.getImageLabel(
     config.image,
@@ -241,7 +251,7 @@ async function buildImage(
     skipBuildOnDirty,
   });
   if (dirtyReuse) {
-    return dirtyReuse;
+    return {...dirtyReuse, ...buildContextManifest};
   }
 
   const cleanReuse = resolveCleanImageReuse({
@@ -252,13 +262,13 @@ async function buildImage(
     existingHash,
   });
   if (cleanReuse) {
-    return cleanReuse;
+    return {...cleanReuse, ...buildContextManifest};
   }
 
   logBuildStart({config, verbose, gitHash, gitDirty});
   const progressSink = buildProgressSink(verbose, extractBuildProgressLine);
   await provider.buildImage(
-    BUILD_CONTEXT_PATH,
+    buildRoot || BUILD_CONTEXT_PATH,
     config.image,
     config.dockerfile || DEFAULT_DOCKERFILE,
     progressSink,
@@ -268,7 +278,13 @@ async function buildImage(
     process.stdout.write(IMAGE_BUILT_LOG_PREFIX + config.image + NEWLINE);
   }
 
-  return {image: config.image, gitHash, gitDirty, reused: false};
+  return {
+    image: config.image,
+    gitHash,
+    gitDirty,
+    reused: false,
+    ...buildContextManifest,
+  };
 }
 
 export {buildImage};
