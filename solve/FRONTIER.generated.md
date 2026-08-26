@@ -54,19 +54,20 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 34
+## Open quests — 31
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
+| formation-barrier-spread-cure-liveness | product | 0 | 0 | 2026-08-25 | CL-044 |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
-| formation-release-handoff-closure | product | 0 | 0 | 2026-08-25 | — |
+| formation-release-handoff-closure | product | 0 | 0 | 2026-08-26 | — |
+| formation-release-handoff-closure-evidence-final | product | 0 | 0 | 2026-08-26 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | lone-seed-formation-admission-livelock-closure | product | 5 | 0 | 2026-08-16 ⚠ stale | — |
-| managed-split-cutover-handoff-closure | product | 0 | 0 | 2026-08-25 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
@@ -78,20 +79,16 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 ⚠ stale | — |
 | publication-readiness-hotpath-starvation-relief | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
-| raft-follower-append-sqlite-starvation-relief | product | 9 | 0 | 2026-08-20 | — |
+| raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 ⚠ stale | — |
 | readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 ⚠ stale | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
 | readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 ⚠ stale | — |
-| release-0-2-verification-v2 | product | 0 | 0 | 2026-08-25 | — |
 | restore-deterministic-cloud-gate | process | 2 | 0 | 2026-08-18 ⚠ stale | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | schema-provisioning-collision-retry-closure | product | 5 | 0 | 2026-08-15 ⚠ stale | — |
-| solver-landing-review-envelope-v3 | process | 3 | 0 | 2026-08-25 | — |
-| solver-landing-review-envelope-v4 | process | 3 | 0 | 2026-08-25 | — |
-| solver-landing-review-envelope-v6 | process | 1 | 0 | 2026-08-25 | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
-> 26 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 27 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 
