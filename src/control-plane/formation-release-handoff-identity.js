@@ -72,13 +72,10 @@ function formationReleaseCanonicalContainsCapturedSet(evidence, generation) {
   if (!arrayIsArray(currentNodeIds) || !arrayIsArray(capturedNodeIds)) {
     return false;
   }
+  if (currentNodeIds.length !== capturedNodeIds.length) return false;
   for (let index = 0; index < capturedNodeIds.length; index += 1) {
     const capturedNodeId = readOwnData(capturedNodeIds, index);
-    let found = false;
-    for (let scan = 0; scan < currentNodeIds.length; scan += 1) {
-      if (readOwnData(currentNodeIds, scan) === capturedNodeId) found = true;
-    }
-    if (!found) return false;
+    if (readOwnData(currentNodeIds, index) !== capturedNodeId) return false;
   }
   return true;
 }
