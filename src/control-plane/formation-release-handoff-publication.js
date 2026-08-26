@@ -21,26 +21,6 @@ const FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND =
   'formation_release_handoff';
 const FORMATION_RELEASE_HANDOFF_SUMMARY_FIELD =
   'formationReleaseHandoff';
-const FORMATION_RELEASE_HANDOFF_PUBLICATION_ID_PREFIX =
-  'formation-release-handoff:';
-const ROW_FIELD = Object.freeze({
-  ACKNOWLEDGED_NODE_IDS: 'acknowledged_node_ids',
-  AT: 'at',
-  PRIORITY_PARTITION_SUMMARY: 'priority_partition_summary',
-  PUBLICATION_EPOCH: 'publication_epoch',
-  PUBLICATION_ID: 'publication_id',
-  PUBLICATION_KIND: 'publication_kind',
-  PUBLISHED_ACTIVE_NODE_IDS: 'published_active_node_ids',
-  PUBLISHER_NODE_ID: 'publisher_node_id',
-  REASON_CODE: 'reason_code',
-  REQUIRED_ACK_NODE_IDS: 'required_ack_node_ids',
-  SOURCE_SNAPSHOT_VERSION: 'source_snapshot_version',
-  SOURCE_TOPOLOGY_EPOCH: 'source_topology_epoch',
-  STATE: 'state',
-  STATUS: 'status',
-  TRANSITION_REASON_CODE: 'reasonCode',
-});
-const FORMATION_RELEASE_PUBLICATION_ABSENT = null;
 
 function formationReleaseHandoffPublicationId(
   authorityNodeId,
@@ -52,9 +32,9 @@ function formationReleaseHandoffPublicationId(
     !numberIsSafeInteger(authorityBootIncarnation) ||
     authorityBootIncarnation <= 0
   ) {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
-  return FORMATION_RELEASE_HANDOFF_PUBLICATION_ID_PREFIX +
+  return 'formation-release-handoff:' +
     `${authorityNodeId}:${authorityBootIncarnation}`;
 }
 
@@ -99,7 +79,7 @@ function readOwnJsonValue(target, field) {
 function readStrictStringList(target, field) {
   const values = readOwnJsonValue(target, field);
   if (!arrayIsArray(values)) {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
   const result = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -164,10 +144,9 @@ function transitionHistoryMatches(row, contract, updatedAt) {
     descriptor,
     OWN_DATA_VALUE_FIELD,
   ) ? descriptor.value : null;
-  return readOwnString(transition, ROW_FIELD.STATE) === contract.state &&
-    readOwnString(transition, ROW_FIELD.TRANSITION_REASON_CODE) ===
-      contract.reason &&
-    readOwnPositiveInteger(transition, ROW_FIELD.AT) === updatedAt;
+  return readOwnString(transition, 'state') === contract.state &&
+    readOwnString(transition, 'reasonCode') === contract.reason &&
+    readOwnPositiveInteger(transition, 'at') === updatedAt;
 }
 
 function identityProjectionMatches(
@@ -176,33 +155,33 @@ function identityProjectionMatches(
   authorityNodeId,
   authorityBootIncarnation,
 ) {
-  return readOwnString(row, ROW_FIELD.PUBLICATION_ID) ===
+  return readOwnString(row, 'publication_id') ===
       formationReleaseHandoffPublicationId(
         authorityNodeId,
         authorityBootIncarnation,
       ) &&
-    readOwnString(row, ROW_FIELD.PUBLICATION_KIND) ===
+    readOwnString(row, 'publication_kind') ===
       FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND &&
-    readOwnString(row, ROW_FIELD.PUBLISHER_NODE_ID) === authorityNodeId &&
-    readOwnPositiveInteger(row, ROW_FIELD.PUBLICATION_EPOCH) ===
+    readOwnString(row, 'publisher_node_id') === authorityNodeId &&
+    readOwnPositiveInteger(row, 'publication_epoch') ===
       contract.capturedPublicationEpoch &&
-    readOwnPositiveInteger(row, ROW_FIELD.SOURCE_TOPOLOGY_EPOCH) ===
+    readOwnPositiveInteger(row, 'source_topology_epoch') ===
       contract.capturedPublicationEpoch &&
-    readOwnPositiveInteger(row, ROW_FIELD.SOURCE_SNAPSHOT_VERSION) ===
+    readOwnPositiveInteger(row, 'source_snapshot_version') ===
       contract.observedPublicationEpoch;
 }
 
 function listProjectionMatches(row, contract) {
   return listsEqual(
-    readStrictStringList(row, ROW_FIELD.PUBLISHED_ACTIVE_NODE_IDS),
+    readStrictStringList(row, 'published_active_node_ids'),
     contract.canonicalNodeIds,
   ) &&
     listsEqual(
-      readStrictStringList(row, ROW_FIELD.REQUIRED_ACK_NODE_IDS),
+      readStrictStringList(row, 'required_ack_node_ids'),
       cohortNodeIds(contract),
     ) &&
     listsEqual(
-      readStrictStringList(row, ROW_FIELD.ACKNOWLEDGED_NODE_IDS),
+      readStrictStringList(row, 'acknowledged_node_ids'),
       contract.readyNodeIds,
     );
 }
@@ -217,10 +196,9 @@ function lifecycleProjectionMatches(row, contract) {
   return createdAt !== null &&
     updatedAt !== null &&
     createdAt === updatedAt &&
-    readOwnString(row, ROW_FIELD.STATUS) ===
-      expectedPublicationStatus(contract) &&
-    readOwnString(row, ROW_FIELD.REASON_CODE) === contract.reason &&
-    readOwnJsonValue(row, ROW_FIELD.PRIORITY_PARTITION_SUMMARY) === null &&
+    readOwnString(row, 'status') === expectedPublicationStatus(contract) &&
+    readOwnString(row, 'reason_code') === contract.reason &&
+    readOwnJsonValue(row, 'priority_partition_summary') === null &&
     (
       terminal ?
         publishedAt === updatedAt && closedAt === updatedAt :
@@ -239,7 +217,7 @@ function buildFormationReleaseHandoffPublicationRow(contract, now) {
     contract,
   );
   if (!normalized || !numberIsSafeInteger(now) || now <= 0) {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
   const terminal =
     normalized.state !== FORMATION_RELEASE_HANDOFF_STATE.ACTIVE;
@@ -280,7 +258,7 @@ function readFormationReleaseHandoffPublicationRow(
   authorityBootIncarnation,
 ) {
   if (!row || typeof row !== 'object') {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
   const contract = normalizeFormationReleaseHandoffContract(
     readFormationReleaseSummary(row),
@@ -298,7 +276,7 @@ function readFormationReleaseHandoffPublicationRow(
     !listProjectionMatches(row, contract) ||
     !lifecycleProjectionMatches(row, contract)
   ) {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
   return contract;
 }
@@ -313,7 +291,7 @@ function readFormationReleaseHandoffPublicationFromCache(
     authorityBootIncarnation,
   );
   if (!publicationId || typeof systemTableCache?.get !== 'function') {
-    return FORMATION_RELEASE_PUBLICATION_ABSENT;
+    return null;
   }
   return readFormationReleaseHandoffPublicationRow(
     systemTableCache.get(TABLES.CONTROL_PLANE_PUBLICATIONS, publicationId),

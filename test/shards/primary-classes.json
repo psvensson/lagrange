@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1829,
+    "unit": 1826,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2080,
-  "digest": "fnv1a32-127d8bd4",
+  "censusSize": 2077,
+  "digest": "fnv1a32-ac2c7d5f",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -475,9 +475,6 @@
     "test/control-plane/failure-class-registry.test.js": "unit",
     "test/control-plane/formation-placement-membership-handoff.test.js": "unit",
     "test/control-plane/formation-release-handoff-closure.test.js": "unit",
-    "test/control-plane/formation-release-handoff-consumer.test.js": "unit",
-    "test/control-plane/formation-release-handoff-terminal-replay.test.js": "unit",
-    "test/control-plane/formation-release-projection-synchronization.test.js": "unit",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "unit",
     "test/control-plane/heartbeat-memory-trend.test.js": "unit",
