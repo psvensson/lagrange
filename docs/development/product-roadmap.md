@@ -146,6 +146,28 @@ Enterprise
 
 ---
 
+## Phase 0.3 — Queryable Core
+
+*"Ordinary SQL can reach the right data efficiently without physical-partition knowledge."*
+
+### Query Semantics and Access Paths — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Typed partition-key and tuple ordering | 🔲 | One type-aware total order for persisted boundaries and indexed tuples |
+| Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Use the already-persisted declared key rather than hardcoded fallbacks |
+| Local ordered index DDL | 🔲 | `CREATE INDEX` / `DROP INDEX`; ordinary and compound B-tree indexes; unsupported families fail closed |
+| Ordered and compound index planner semantics | 🔲 | Left-prefix, equality-prefix-plus-range, and sealed NULL/type/collation behavior |
+| Non-unique global secondary and compound indexes | 🔲 | Partitioned/replicated index datasets, resumable backfill, lifecycle/failure state, routed reads and `EXPLAIN DISTRIBUTED` |
+| Index state and backfill diagnostics | 🔲 | Ordinary SQL/catalog visibility suitable for 0.5 operator and onboarding UX |
+
+Phase 0.3 indexes are access paths: rejecting or losing an index may make a
+query slower but must not change base-table correctness. Unique global indexes
+are therefore intentionally assigned to the Phase 1.0 production-invariant
+boundary below.
+
+---
+
 ## Phase 0.5 — External Usability
 
 *"Developers can realistically try this."*
@@ -177,6 +199,7 @@ Enterprise
 | CLI wasm deploy | 🔲 |
 | CLI wasm scale | 🔲 |
 | Getting-started tutorial | 🔲 |
+| Indexed-query example and index-state inspection | 🔲 |
 
 ### 3. Debugging Tools — 🟢 Community
 
@@ -289,7 +312,17 @@ Enterprise
 | Topology convergence SLO | 🔲 |
 | Large-scale data-plane certification | 🔲 |
 
-### 7. Customer-Installable Service Product Platform — 🟢 core / 🟡🔴 commercial controls
+### 7. Production Index and Constraint Guarantees — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Unique global secondary indexes | 🔲 | Require synchronous maintenance capable of transactional uniqueness enforcement |
+| Transactional synchronous index maintenance | 🔲 | Required index partitions participate in the write/2PC correctness boundary |
+| Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure and supported recovery envelope |
+| Index write-amplification and capacity envelope | 🔲 | Publish representative costs for supported compound/global-index profiles |
+| Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the production subset exposed through PG metadata and constraints |
+
+### 8. Customer-Installable Service Product Platform — 🟢 core / 🟡🔴 commercial controls
 
 This is a cross-edition convergence milestone for separately released services such as Lagrange AI. It groups existing core and paid-platform work into one customer acceptance boundary; it does not change the implementation-home rules in `edition-matrix.md`.
 
@@ -328,6 +361,22 @@ Acceptance consumer: at least one separately released first-party service must i
 
 ---
 
+## Phase 1.x — SQL Breadth and Compatibility
+
+*"Broader SQL/index ergonomics after the core access path and production invariants are stable."*
+
+### Advanced Index Compatibility — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Partial indexes | 🔲 | Predicate-scoped membership and planner matching |
+| Expression indexes | 🔲 | Stable expression identity and evaluation semantics |
+| `INCLUDE` / covering syntax and index-only scans | 🔲 | Separate key from payload columns and prove visibility semantics |
+| Richer collation and operator semantics | 🔲 | Expand beyond the deliberately small 0.3 ordered-index contract |
+| Broader PostgreSQL index catalog/DDL compatibility | 🔲 | Include concurrent-build behavior where honestly supportable |
+
+---
+
 ## Phase 2.0 — Deeper Distributed Execution
 
 *"One product: services whose functions run across the data. This phase
@@ -344,7 +393,11 @@ deepens the shipped call surface rather than adding a separate platform."*
 | Plan diagnostics | ✅ |
 | Multi-stage plans | 🔲 |
 | Cost-based optimizer | 🔲 |
+| Statistics and cardinality estimates | 🔲 |
+| Cost-based index selection | 🔲 |
+| Index intersection / union and bitmap-style access plans | 🔲 |
 | Query hints | 🔲 |
+| Index recommendation / advisor tooling | 🔲 |
 
 ### 2. Advanced Runtime Services — 🟢 Community core / future service platform
 
@@ -352,7 +405,13 @@ deepens the shipped call surface rather than adding a separate platform."*
 |------|--------|
 | OCI container runtime | 🔧 |
 | Vector search service | 🔲 |
+| Full-text search service | 🔲 |
+| Spatial search/index service | 🔲 |
 | Embedding service | 🔲 |
+
+These specialized search families remain distinct from the ordinary ordered
+B-tree contract introduced in 0.3; they can use service-specific storage and
+semantics where appropriate.
 
 The foundational managed-OCI lifecycle needed by customer-installable services is now a Phase 1.0 product gate above. Phase 2.0 may deepen container/resource placement and service APIs; it should not create a second activation path.
 
