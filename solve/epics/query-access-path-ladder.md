@@ -7,10 +7,16 @@ graduatesTo: global-secondary-indexes
 
 # Query access path ladder
 
-Spans four roadmap rows: `RM-1.0-qs-typed-key-ordering`,
-`RM-1.0-qs-pk-partition-narrowing`, `RM-1.0-qs-local-index-ddl`,
-`RM-1.0-qs-global-secondary-indexes`. `roadmapRow` is null because no single
+Spans five Phase 0.3 roadmap rows: `RM-0.3-qs-typed-key-ordering`,
+`RM-0.3-qs-pk-partition-narrowing`, `RM-0.3-qs-local-index-ddl`,
+`RM-0.3-qs-compound-index-semantics`, and
+`RM-0.3-qs-global-secondary-indexes`. `roadmapRow` is null because no single
 row owns the ladder; Quests link the row for their own rung.
+
+The former Phase 1.0 planning row IDs (`RM-1.0-qs-*`) are retired and must not
+be reused. They were superseded when the query-access-path work became the
+Phase 0.3 Queryable Core milestone; the historical IDs remain valid only as
+references to older planning history.
 
 ## Intent (why now)
 
@@ -29,8 +35,13 @@ under different orders — three duplicated `localeCompare`-based helpers
 `partition-split-routing.js:248` during the split-replication window. Three
 disagreeing total orders (SQLite BINARY/numeric, ICU `localeCompare`, JS
 relational) touch the same persisted TEXT boundaries, and auto-split is live,
-so misrouting is reachable. That makes the ordering rung a candidate for a
-Quest ahead of its 1.0 phase position.
+so misrouting is reachable.
+
+The ladder now belongs before external-usability work because ordinary indexed
+SQL access is part of making the database itself credible, not a late
+production-only feature. Phase 0.3 remains deliberately narrower than 1.0:
+indexes are access paths here; global uniqueness and other relational
+constraints that require synchronous index participation remain 1.0 work.
 
 ## The ladder
 
@@ -38,7 +49,7 @@ Quest ahead of its 1.0 phase position.
    order-preserving key encoding; all four compare sites converge on it;
    persisted `partition_key_start/end` boundaries (stored as TEXT) need a
    migration or revalidation story. Everything below assumes a single total
-   order for keys.
+   order for keys and indexed tuples.
 2. **Primary-key narrowing** — the declared primary key is already persisted
    twice (comma-joined in `tables.partition_key`, and as `primaryKey` flags
    inside `schema_definition`), and split/merge workflows already read
@@ -62,8 +73,17 @@ Quest ahead of its 1.0 phase position.
    (`docs/current-capabilities-and-limitations.md` and
    `architecture/process-partitioning.md` previously claimed local
    `CREATE INDEX` works; corrected 2026-07-27.)
-4. **Global secondary indexes** — the only rung needing new cross-layer
-   machinery. Contract: `solve/specs/global-secondary-indexes/`.
+4. **Ordered and compound index semantics** — seal one B-tree-like contract
+   shared by local and global indexes: tuple ordering, NULL/type/collation
+   behavior, left-prefix matching, equality-prefix plus next-column range
+   behavior, and explicit rejection of unsupported index types or access
+   paths. The current `QueryOptimizer`'s any-matching-column fallback is not a
+   sufficient distributed planner contract and must not become externally
+   claimable semantics.
+5. **Global secondary indexes** — the only rung needing new cross-layer
+   storage and maintenance machinery. Global indexes are system-managed,
+   partitioned, replicated datasets keyed by indexed tuple plus base primary
+   key. Contract: `solve/specs/global-secondary-indexes/`.
 
 ## Options under discussion
 
@@ -73,28 +93,53 @@ Quest ahead of its 1.0 phase position.
   storage representation but forces a full boundary/key migration. Lean:
   comparator first with typed boundary metadata, encoding only if GSI storage
   needs it.
-- **Rung 4: synchronous (2PC-enlisted) vs asynchronous (CDC-maintained)
+- **Rung 4: exact ordered-index contract.** Lean toward one ordinary B-tree
+  family for 0.3 rather than carrying metadata for hash or other index kinds
+  that are not actually implemented. Compound semantics should be explicit
+  enough that `(a,b,c)` is routable for `a`, `(a,b)`, or an equality prefix
+  followed by a range, but not for an arbitrary predicate on `b` alone.
+- **Rung 5: synchronous (2PC-enlisted) vs asynchronous (CDC-maintained)
   index writes.** Sync gives read-your-index consistency but puts index
   partitions inside every write's commit path; async reuses the wired
   partition CDC delivery path and the CDC-fed system-table-cache precedent,
   but requires a typed staleness surface — and the promise-based
   `CDCConfirmationTracker` exists only under test today and would itself
-  need production wiring. Lean: async first with a sealed staleness
-  contract; sync as a later opt-in per index. Decision must be sealed in the
-  spec before any implementation Quest.
+  need production wiring. Lean: async first with a sealed staleness contract;
+  synchronous maintenance is the prerequisite for unique global indexes and
+  is therefore a Phase 1.0 production-invariant concern rather than a 0.3 exit
+  requirement. The consistency decision must still be sealed in the spec
+  before any implementation Quest.
 
 ## Open questions
 
 - Does the rung-1 boundary migration need a live-cluster path, or is
   recompute-on-upgrade acceptable for existing deployments?
-- Are unique secondary indexes in rung-4 scope at all, or deferred until a
-  sync maintenance mode exists (async cannot enforce uniqueness)?
+- What NULL and collation semantics form the smallest honest 0.3 ordered-index
+  contract, and which richer PostgreSQL semantics should be deferred to 1.x?
 - Does rung 3 expose `QueryOptimizer` hints to the distributed planner
-  immediately, or only create/maintain indexes first and integrate reads in
-  rung 4?
+  immediately, or only create/maintain indexes before rung 4 replaces the
+  current heuristic matching with sealed compound-index semantics?
 - Is the last-writer-wins `AND`-condition defect part of rung 2's key
   condition extraction scope, or a separate small fix landed alongside
   rung 1?
+
+## Deferred homes
+
+The milestone boundary is explicit so excluded work does not become an
+unowned backlog:
+
+- **Phase 1.0:** unique global secondary indexes, synchronous maintenance when
+  required for constraint correctness, and production rebuild/failover/write-
+  amplification guarantees.
+- **Phase 1.x:** partial and expression indexes, `INCLUDE`/covering syntax and
+  index-only scans, richer collations/operator semantics, and broader
+  PostgreSQL index DDL/catalog compatibility.
+- **Phase 2.0:** statistics/cardinality estimation, cost-based index choice,
+  index intersection/union and bitmap-style plans, richer hints, and index
+  recommendation/advisor tooling.
+- **Specialized later access paths/services:** vector, full-text, spatial, and
+  other search families whose storage and semantics differ materially from the
+  ordinary ordered-index contract.
 
 ## Decision log
 
@@ -108,3 +153,7 @@ Quest ahead of its 1.0 phase position.
   new-partition index creation, not row backfill; `CDCConfirmationTracker`
   is test-only; `bounded_index` is unbacked alongside `unique_index`; the
   capability docs overstate local `CREATE INDEX` support.
+- 2026-08-28 — Reframed the ladder as Phase 0.3 Queryable Core, inserted an
+  explicit compound-index semantics rung, retired the old `RM-1.0-qs-*` IDs,
+  and assigned excluded index work to 1.0, 1.x, 2.0, or specialized services
+  rather than leaving it implicit.
