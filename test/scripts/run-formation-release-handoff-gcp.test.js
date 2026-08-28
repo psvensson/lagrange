@@ -216,12 +216,74 @@ test('formation GCP analyzer accepts a healthy multi-epoch staggered ' +
 
 test('formation GCP analyzer fails a lucky quiet run that never exercises ' +
   'a non-monotone spread reopen', (t) => {
-  const events = buildPassingEvents().filter(
-    (event) => event.startupAuthorityState === undefined,
-  );
-  // Remove the reopen proof: drop the startup-authority boundary events.
+  // A genuinely quiet run: the generation is captured and completes with the
+  // owner observing the authority ready throughout (no true->false transition)
+  // AND no node traverses ready->recovery_pending->ready at the barrier. The
+  // formation completes successfully but never exercises the non-monotone
+  // reopen, so it must NOT prove the sealed condition it was introduced for.
+  const cohort = buildCohort();
+  const events = [];
+  for (let index = 0; index < 5; index += 1) {
+    events.push({
+      time: `2026-08-25T00:00:0${index}.000Z`,
+      nodeId: `node-${index}`,
+      bootedSrcFingerprint: FINGERPRINT,
+      expectedSrcFingerprint: FINGERPRINT,
+      srcFingerprintMatches: true,
+      msg: 'Distributed Database System starting',
+    });
+  }
+  events.push({
+    time: '2026-08-25T00:00:09.000Z',
+    nodeId: 'seed',
+    state: 'active',
+    reason: 'retained_until_captured_cohort_ready',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: true,
+    observedAuthorityReady: true,
+    observedRecoveryReasonCodes: [],
+    requiredCohort: cohort,
+    readyNodeIds: [],
+    pendingNodeIds: ['joiner-a', 'joiner-b'],
+    msg: 'Formation release handoff authority transition',
+  });
+  events.push({
+    time: '2026-08-25T00:00:12.000Z',
+    nodeId: 'joiner-a',
+    state: 'ledger_spread_satisfied',
+    startupAuthorityState: 'ready',
+    msg: 'Join priority-placement formation barrier',
+  });
+  events.push({
+    time: '2026-08-25T00:00:13.000Z',
+    nodeId: 'joiner-b',
+    state: 'ledger_spread_satisfied',
+    startupAuthorityState: 'ready',
+    msg: 'Join priority-placement formation barrier',
+  });
+  events.push({
+    time: '2026-08-25T00:00:40.000Z',
+    nodeId: 'seed',
+    state: 'complete',
+    reason: 'captured_cohort_ready',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: false,
+    observedAuthorityReady: true,
+    observedRecoveryReasonCodes: [],
+    requiredCohort: cohort,
+    readyNodeIds: ['joiner-a', 'joiner-b'],
+    pendingNodeIds: [],
+    msg: 'Formation release handoff authority transition',
+  });
   const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
-  t.equal(analysis.spreadReopenObserved, false);
+  t.equal(analysis.spreadReopenObserved, false,
+    'owner ready throughout + no single-node barrier reopen = no reopen');
   t.equal(analysis.closurePassed, false,
     'a run with no non-monotone spread reopen must not prove the sealed ' +
       'condition it was introduced to handle');
@@ -422,5 +484,209 @@ test('formation GCP analyzer is stable under post-import mutable intrinsic ' +
     Object.getOwnPropertyDescriptor = originals.objectGetOwnPropertyDescriptor;
   }
   t.equal(analysis.closurePassed, true);
+  t.end();
+});
+
+// Build the owner-observed reopen shape proved by the 2026-08-28T16-44 GCP
+// run: the captured generation's OWNER reports observedAuthorityReady true
+// while the generation is active, then false with a non-empty
+// recoveryReasonCodes set at completion (priority_partitions_not_spread),
+// with zero revocations and a constant generation id. No barrier
+// startupAuthorityState signal is present (sparse joiner polling), so only the
+// owner-observed detector can see this reopen.
+function buildOwnerObservedReopenEvents() {
+  const cohort = buildCohort();
+  const events = [];
+  for (let index = 0; index < 5; index += 1) {
+    events.push({
+      time: `2026-08-25T00:00:0${index}.000Z`,
+      nodeId: `node-${index}`,
+      bootedSrcFingerprint: FINGERPRINT,
+      expectedSrcFingerprint: FINGERPRINT,
+      srcFingerprintMatches: true,
+      msg: 'Distributed Database System starting',
+    });
+  }
+  const transition = (overrides) => ({
+    nodeId: 'seed',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    requiredCohort: cohort,
+    msg: 'Formation release handoff authority transition',
+    ...overrides,
+  });
+  // Captured + retained while the owner observes the authority ready.
+  events.push(transition({
+    time: '2026-08-25T00:00:09.000Z',
+    state: 'active',
+    reason: 'retained_until_captured_cohort_ready',
+    releaseAuthorized: true,
+    observedAuthorityReady: true,
+    observedRecoveryReasonCodes: [],
+    readyNodeIds: [],
+    pendingNodeIds: ['joiner-a', 'joiner-b'],
+  }));
+  // The owner's authority readiness goes non-monotone (spread not satisfied)
+  // while the SAME generation is still captured; it is retained (no revoke)
+  // and completes. The completion event is where the owner reports the gap.
+  events.push(transition({
+    time: '2026-08-25T00:00:40.000Z',
+    state: 'complete',
+    reason: 'captured_cohort_ready',
+    releaseAuthorized: false,
+    observedAuthorityReady: false,
+    observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
+    readyNodeIds: ['joiner-a', 'joiner-b'],
+    pendingNodeIds: [],
+  }));
+  // The barrier still releases (the cluster converges) — required for closure.
+  events.push({
+    time: '2026-08-25T00:00:41.000Z',
+    nodeId: 'joiner-a',
+    state: 'ledger_spread_satisfied',
+    msg: 'Join priority-placement formation barrier',
+  });
+  return events;
+}
+
+test('formation GCP analyzer passes an owner-observed reopen under sparse ' +
+  'joiner polling', (t) => {
+  const analysis = analyzeFormationReleaseEvents(
+    buildOwnerObservedReopenEvents(),
+    FINGERPRINT,
+  );
+  t.equal(analysis.spreadReopenObserved, true,
+    'the owner-observed true->false+reasons transition on a captured, ' +
+      'retained generation proves the non-monotone reopen');
+  t.equal(analysis.generationRetainedAcrossReopen, true);
+  t.equal(analysis.invalidRevocationCount, 0);
+  t.equal(analysis.closurePassed, true);
+  t.end();
+});
+
+test('formation GCP analyzer does not count staggered initial join as a ' +
+  'reopen', (t) => {
+  // Peers reach ready; the lagger's FIRST observation is recovery_pending
+  // before its generation is captured, then it becomes ready. There is no
+  // owner-level true->false transition on a captured generation, and no node
+  // traversed ready->recovery_pending->ready, so this must NOT count.
+  const cohort = buildCohort();
+  const events = [];
+  for (let index = 0; index < 5; index += 1) {
+    events.push({
+      time: `2026-08-25T00:00:0${index}.000Z`,
+      nodeId: `node-${index}`,
+      bootedSrcFingerprint: FINGERPRINT,
+      expectedSrcFingerprint: FINGERPRINT,
+      srcFingerprintMatches: true,
+      msg: 'Distributed Database System starting',
+    });
+  }
+  // Peers ready (no reopen — they never drop).
+  events.push({
+    time: '2026-08-25T00:00:09.000Z',
+    nodeId: 'joiner-a',
+    state: 'ledger_spread_satisfied',
+    startupAuthorityState: 'ready',
+    msg: 'Join priority-placement formation barrier',
+  });
+  // Lagger enters already recovery_pending (initial convergence), then ready.
+  events.push({
+    time: '2026-08-25T00:00:10.000Z',
+    nodeId: 'joiner-b',
+    state: 'waiting_for_startup_authority',
+    startupAuthorityState: 'recovery_pending',
+    msg: 'Join priority-placement formation barrier',
+  });
+  events.push({
+    time: '2026-08-25T00:00:30.000Z',
+    nodeId: 'joiner-b',
+    state: 'ledger_spread_satisfied',
+    startupAuthorityState: 'ready',
+    msg: 'Join priority-placement formation barrier',
+  });
+  // The generation is captured and completes with the owner ready throughout
+  // (NO owner-level non-monotone transition).
+  events.push({
+    time: '2026-08-25T00:00:31.000Z',
+    nodeId: 'seed',
+    state: 'active',
+    reason: 'retained_until_captured_cohort_ready',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: true,
+    observedAuthorityReady: true,
+    observedRecoveryReasonCodes: [],
+    requiredCohort: cohort,
+    readyNodeIds: [],
+    pendingNodeIds: ['joiner-a', 'joiner-b'],
+    msg: 'Formation release handoff authority transition',
+  });
+  events.push({
+    time: '2026-08-25T00:00:40.000Z',
+    nodeId: 'seed',
+    state: 'complete',
+    reason: 'captured_cohort_ready',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: false,
+    observedAuthorityReady: true,
+    observedRecoveryReasonCodes: [],
+    requiredCohort: cohort,
+    readyNodeIds: ['joiner-a', 'joiner-b'],
+    pendingNodeIds: [],
+    msg: 'Formation release handoff authority transition',
+  });
+  const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
+  t.equal(analysis.spreadReopenObserved, false,
+    'a lagger entering recovery_pending before its generation is captured ' +
+      '(with the owner ready throughout) is normal initial convergence, not ' +
+      'a non-monotone reopen');
+  t.equal(analysis.closurePassed, false);
+  t.end();
+});
+
+test('formation GCP analyzer fails a real reopen that revokes the captured ' +
+  'generation', (t) => {
+  // The owner observes ready -> not-spread under a captured generation, but
+  // the generation is then REVOKED (startup_authority_incompatible) instead of
+  // retained — the original capture-vs-retention defect. The reopen is
+  // observed but retention fails, so closure must not pass.
+  const events = buildOwnerObservedReopenEvents();
+  // Insert a revocation of the captured generation between the gap and the
+  // (now unreachable) completion; remove the completion so the generation is
+  // stranded+revoked.
+  const completionIndex = events.findIndex(
+    (event) => event.state === 'complete',
+  );
+  events.splice(completionIndex, 1, {
+    time: '2026-08-25T00:00:40.000Z',
+    nodeId: 'seed',
+    state: 'revoked',
+    reason: 'startup_authority_incompatible',
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: false,
+    observedAuthorityReady: false,
+    observedRecoveryReasonCodes: ['priority_partitions_not_spread'],
+    requiredCohort: buildCohort(),
+    readyNodeIds: [],
+    pendingNodeIds: [],
+    msg: 'Formation release handoff authority transition',
+  });
+  const analysis = analyzeFormationReleaseEvents(events, FINGERPRINT);
+  t.equal(analysis.invalidRevocationCount > 0, true,
+    'a revocation on startup_authority_incompatible is an invalid revocation');
+  t.equal(analysis.generationRetainedAcrossReopen, false,
+    'the captured generation was revoked across the reopen, not retained');
+  t.equal(analysis.closurePassed, false);
   t.end();
 });

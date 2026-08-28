@@ -376,28 +376,64 @@ function startupAuthorityTimeline(events) {
     if (state === null) continue;
     const time = dateParse(readOwnString(event, FIELD_TIME) || EMPTY_STRING);
     if (!numberIsFinite(time)) continue;
-    timeline[timeline.length] = {state, time};
+    timeline[timeline.length] = {
+      nodeId: readOwnString(event, FIELD_NODE_ID),
+      state,
+      time,
+    };
   }
   return timeline;
 }
 
-// A genuine non-monotone spread reopen is ready -> (recovery_pending|blocked)
-// -> ready under one authority/incarnation. This proves the prerequisite
-// became non-monotone; the release commitment surviving it is proven by the
-// revocation/stranding invariants.
+// A genuine non-monotone spread reopen observed at the startup-authority
+// boundary is ready -> (recovery_pending|blocked) -> ready ON A SINGLE NODE
+// under one authority/incarnation. Cross-node READY disagreement (peer ready
+// while a lagger enters recovery_pending) is ordinary staggered startup, not a
+// reopen, so the transition must be tracked per node.
 function detectNonMonotoneSpreadReopen(timeline) {
-  let sawReady = false;
-  let sawGap = false;
+  const perNode = new Map();
   for (let index = 0; index < timeline.length; index += 1) {
-    const state = timeline[index].state;
-    if (state === SA_STATE_READY) {
-      if (sawGap) return true;
-      sawReady = true;
+    const entry = timeline[index];
+    const nodeKey = entry.nodeId === null ? '' : entry.nodeId;
+    const state = perNode.get(nodeKey) || {sawReady: false, sawGap: false};
+    if (entry.state === SA_STATE_READY) {
+      if (state.sawGap) return true;
+      state.sawReady = true;
     } else if (
-      state === SA_STATE_RECOVERY_PENDING ||
-      state === SA_STATE_BLOCKED
+      entry.state === SA_STATE_RECOVERY_PENDING ||
+      entry.state === SA_STATE_BLOCKED
     ) {
-      if (sawReady) sawGap = true;
+      if (state.sawReady) state.sawGap = true;
+    }
+    perNode.set(nodeKey, state);
+  }
+  return false;
+}
+
+// Owner-observed reopen: the authoritative handoff owner reports, for one
+// captured generation, observedAuthorityReady true (while the generation is
+// captured/retained) -> false WITH a non-empty recoveryReasonCodes set (the
+// spread became non-monotone: priority_partitions_not_spread) while the same
+// generation id and authority/incarnation persist (no rotation). The lagger
+// case (a node entering recovery_pending before its own generation is
+// captured) is excluded because detection is keyed to a generation that was
+// already captured and observed ready first. Retention/completion across the
+// gap is proven separately by the revocation/stranding invariants.
+function detectOwnerObservedSpreadReopen(byGeneration) {
+  for (const [, list] of byGeneration) {
+    if (!list || list.length === 0) continue;
+    let sawReadyWhileCaptured = false;
+    for (let index = 0; index < list.length; index += 1) {
+      const transition = list[index];
+      const ready = transition.observedAuthorityReady === true;
+      const gapped =
+        transition.observedAuthorityReady === false &&
+        transition.recoveryReasonCodes.length > 0;
+      if (ready && transition.state === STATE_ACTIVE) {
+        sawReadyWhileCaptured = true;
+      } else if (gapped && sawReadyWhileCaptured) {
+        return true;
+      }
     }
   }
   return false;
@@ -489,7 +525,9 @@ function analyzeFormationInvariants(events) {
       null;
 
   const invalidRevocationCount = countInvalidRevocations(transitions);
-  const spreadReopenObserved = detectNonMonotoneSpreadReopen(timeline);
+  const spreadReopenObserved =
+    detectNonMonotoneSpreadReopen(timeline) ||
+    detectOwnerObservedSpreadReopen(byGeneration);
   // The reopen is "during a captured generation" when at least one generation
   // was captured (active) somewhere in the run — the formation window a
   // captured handoff covers. Retention across the reopen is then proven by the

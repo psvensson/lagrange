@@ -61,7 +61,7 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
-| formation-release-handoff-closure-v3 | product | 5 | 0 | 2026-08-28 | — |
+| formation-release-handoff-closure-v3 | product | 6 | 0 | 2026-08-28 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
