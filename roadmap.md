@@ -36,7 +36,34 @@ work is to make their useful envelope larger and their evidence easier to trust:
   component limit; and
 - bind every externally visible performance claim to reproducible evidence.
 
-## Next - 0.5 Easy To Try: pilot-ready operations
+## Next - 0.3 Queryable Core: normal SQL access paths
+
+A credible distributed database should not require callers to understand its
+physical partition key before ordinary queries become efficient. Phase 0.3
+makes keys, ordered access paths, and secondary indexes a coherent core
+capability rather than a collection of planner exceptions.
+
+The milestone includes:
+
+- one type-aware total order for persisted partition keys and indexed tuples;
+- primary-key and compound-primary-key partition narrowing beyond an implicit
+  `id` convention;
+- ordinary and compound local `CREATE INDEX` / `DROP INDEX` support using one
+  well-defined ordered B-tree index family;
+- correct left-prefix and equality-prefix-plus-range semantics for compound
+  indexes, with unsupported index kinds or access paths failing closed;
+- non-unique global secondary and compound indexes represented as
+  system-managed, partitioned, Raft-replicated datasets;
+- resumable backfill, restart-safe lifecycle, durable failure state, and safe
+  fallback to scatter-gather when an index is unavailable or not readable; and
+- planner integration and `EXPLAIN DISTRIBUTED` output that show which index was
+  selected, or why an available index was rejected.
+
+Global uniqueness is intentionally not part of 0.3. A secondary index in this
+milestone is an access path: losing or rejecting it may make a query slower, but
+must never make base-table results incorrect.
+
+## Then - 0.5 Easy To Try: pilot-ready operations
 
 A serious pilot needs a complete operational boundary, not just successful
 queries:
@@ -49,6 +76,12 @@ queries:
 - a supported topology and capacity envelope; and
 - one operational view that ties requests, shard runs, partials, placement,
   retries, and failures together.
+
+The 0.5 developer/operator surface should expose the 0.3 capabilities cleanly:
+index definitions and state should be inspectable through normal SQL/catalog
+surfaces, build/backfill progress and failures should be diagnosable, and the
+getting-started path should demonstrate indexed access without requiring
+cluster-internal knowledge.
 
 Backup/restore/PITR, enterprise identity controls, secrets/KMS integration, and
 cross-region durability are separate product areas and must follow their edition
@@ -102,7 +135,7 @@ Implementation scope and sequencing remain governed by the AGPL feature map and
 edition matrix; this milestone is the product-level convergence gate those rows
 must satisfy together.
 
-## Later - 1.0 Production Ready: production support
+## Later - 1.0 Production Ready: production support and relational invariants
 
 A production-supported release requires explicit, evidence-backed guarantees:
 
@@ -115,11 +148,36 @@ A production-supported release requires explicit, evidence-backed guarantees:
 - support boundaries that distinguish implemented, tested, certified, and
   commercially supported behavior.
 
+For indexing, 1.0 is where an access path may also become a relational
+invariant. It therefore owns:
+
+- unique global secondary indexes only with a synchronous maintenance mode that
+  participates in transaction correctness;
+- production guarantees for index rebuild/backfill, restart and failover;
+- measured bounds and supported envelopes for index write amplification and
+  rebuild pressure; and
+- the supported tuple-order, NULL, type and collation contract exposed through
+  PostgreSQL-facing metadata and constraint behavior.
+
 A commercially supported installable service additionally depends on the
 Installable Service Product Platform milestone above; first-party services
 should consume that common lifecycle rather than introducing product-specific
 installers, telemetry transports, support collectors, secret stores, or
 upgraders.
+
+## Later 1.x - SQL Breadth and Compatibility
+
+Once the ordered-index foundation and production invariants are stable, SQL
+breadth can expand without changing the core distributed index architecture.
+This is the home for features such as:
+
+- partial and expression indexes;
+- `INCLUDE` / covering-index syntax and index-only scans;
+- richer collation and operator semantics;
+- broader PostgreSQL index catalog and DDL compatibility, including concurrent
+  build behavior where Lagrange can support it honestly; and
+- other relational conveniences that improve compatibility but are not needed
+  to make ordinary indexed access correct.
 
 ## Future - 2.0 Deeper Distributed Execution
 
@@ -131,6 +189,17 @@ execution can add:
 - concurrent invocations on one Cell instance;
 - query-planner-initiated pushdown; and
 - typed language SDKs and generated operation handles.
+
+The query planner can also become substantially more sophisticated here rather
+than pulling optimizer research into 0.3. Phase 2.0 is the natural home for
+statistics and cardinality estimates, cost-based index selection, index
+intersection/union and bitmap-style access plans, richer query hints, and
+index-advisor or recommendation tooling.
+
+Specialized search families should remain distinct from the ordinary ordered
+index contract. Vector, full-text, spatial, and similar indexes may be delivered
+as specialized services or later access-path families where their semantics and
+storage warrant it.
 
 The installable-service platform is no longer treated as an optional 2.0
 addition: its foundational product lifecycle is a prerequisite for separately
