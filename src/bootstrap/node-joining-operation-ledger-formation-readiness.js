@@ -76,7 +76,7 @@ class NodeJoiningOperationLedgerFormationReadiness
         null;
     const now = this.now();
     const startupAuthority =
-      this.getPriorityPlacementFormationStartupAuthority(now);
+      await this.getPriorityPlacementFormationStartupAuthority(now);
     const candidateNodeIds =
       this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
         systemTableCache,
@@ -103,6 +103,8 @@ class NodeJoiningOperationLedgerFormationReadiness
       ),
       startupAuthorityPublicationRecoveryGateState:
         startupAuthority?.publicationRecoveryGate?.state || null,
+      formationReleaseHandoff:
+        startupAuthority?.formationReleaseHandoff || null,
       candidateNodeIds: Object.freeze(candidateNodeIds),
       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
     });
@@ -192,6 +194,16 @@ class NodeJoiningOperationLedgerFormationReadiness
         snapshot.startupAuthorityRecoveryReasonCodes,
       startupAuthorityPublicationRecoveryGateState:
         snapshot.startupAuthorityPublicationRecoveryGateState,
+      formationReleaseHandoffState:
+        snapshot.formationReleaseHandoff?.state || null,
+      formationReleaseHandoffGeneration:
+        snapshot.formationReleaseHandoff?.generation || null,
+      formationReleaseHandoffReleaseAuthorized:
+        snapshot.formationReleaseHandoff?.releaseAuthorized === true,
+      formationReleaseHandoffRequiredCohort:
+        snapshot.formationReleaseHandoff?.requiredCohort || [],
+      formationReleaseHandoffPendingNodeIds:
+        snapshot.formationReleaseHandoff?.pendingNodeIds || [],
     });
   }
   buildOperationLedgerFormationBarrierTimeout(snapshot) {
@@ -226,7 +238,13 @@ class NodeJoiningOperationLedgerFormationReadiness
       this.rebalanceCoordinator?.controlPlaneReadinessService || null;
     if (
       !readinessService ||
-      typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
+      (
+        typeof readinessService
+          .getFormationReleaseStartupAuthoritySnapshot !== 'function' &&
+        typeof readinessService
+          .getFormationReleaseStartupAuthoritySnapshotSync !== 'function' &&
+        typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
+      )
     ) {
       return;
     }

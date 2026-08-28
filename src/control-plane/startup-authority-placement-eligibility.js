@@ -29,7 +29,9 @@ const FORMATION_COHORT_SPREAD_CURE_STATE_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.RECOVERY_CLOSED,
-    matches: (evidence) => evidence.priorityRecoveryActive !== true,
+    matches: (evidence) =>
+      evidence.priorityRecoveryActive !== true &&
+      evidence.formationReleaseHandoffActive !== true,
   }),
   Object.freeze({
     state: FORMATION_COHORT_SPREAD_CURE_STATE.NOT_JOINING,
@@ -75,24 +77,36 @@ function resolveStartupAuthorityNodeIdSet(startupAuthority) {
  * @param {boolean} options.includeSelf
  * @return {boolean}
  */
-function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
-  const node = options.node;
+function readStartupAuthorityPlacementNodeId(node) {
   const nodeId = node?.node_id || node?.nodeId || null;
-  if (
-    typeof nodeId !== 'string' ||
-    nodeId.length === 0 ||
-    !(options.startupAuthorityNodeIds instanceof Set) ||
-    !options.startupAuthorityNodeIds.has(nodeId) ||
-    !STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES.has(node?.status)
-  ) {
-    return false;
-  }
+  return typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : null;
+}
+
+function isStartupAuthorityPlacementMember(nodeId, node, startupAuthorityNodeIds) {
+  return startupAuthorityNodeIds instanceof Set &&
+    startupAuthorityNodeIds.has(nodeId) &&
+    STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES.has(node?.status);
+}
+
+function isStartupAuthorityPlacementConnected(node) {
   const connectionState = String(
     node.connection_state || node.connectionState || '',
   ).toLowerCase();
+  return connectionState === STATE.CONNECTED ||
+    connectionState === STATE.READY;
+}
+
+function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
+  const node = options.node;
+  const nodeId = readStartupAuthorityPlacementNodeId(node);
   if (
-    connectionState !== STATE.CONNECTED &&
-    connectionState !== STATE.READY
+    nodeId === null ||
+    !isStartupAuthorityPlacementMember(
+      nodeId,
+      node,
+      options.startupAuthorityNodeIds,
+    ) ||
+    !isStartupAuthorityPlacementConnected(node)
   ) {
     return false;
   }
@@ -116,6 +130,8 @@ function classifyFormationCohortSpreadCureNode(options = {}) {
   const evidence = Object.freeze({
     priorityRecoveryLane: options.priorityRecoveryLane === true,
     priorityRecoveryActive: options.priorityRecoveryActive === true,
+    formationReleaseHandoffActive:
+      options.formationReleaseHandoffActive === true,
     joining: options.node?.status === NODE_STATE.JOINING,
     placementEligible:
       isStartupAuthorityControlPlanePlacementEligibleNode(options),

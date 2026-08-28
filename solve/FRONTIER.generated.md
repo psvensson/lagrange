@@ -61,7 +61,7 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | five-node-gcp-formation-certification-90s | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 ⚠ stale | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-22 | — |
-| formation-release-handoff-closure | product | 0 | 0 | 2026-08-25 | — |
+| formation-release-handoff-closure-v3 | product | 4 | 0 | 2026-08-28 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
 | harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 ⚠ stale | — |
@@ -78,7 +78,7 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 ⚠ stale | — |
 | publication-readiness-hotpath-starvation-relief | product | 0 | 0 | 2026-08-14 ⚠ stale | — |
-| raft-follower-append-sqlite-starvation-relief | product | 9 | 0 | 2026-08-20 | — |
+| raft-follower-append-sqlite-starvation-relief | product | 9 | 0 | 2026-08-20 ⚠ stale | — |
 | readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 ⚠ stale | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 ⚠ stale | — |
 | readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 ⚠ stale | — |
@@ -93,5 +93,5 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | solver-landing-review-envelope-v6 | process | 1 | 0 | 2026-08-25 | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
-> 26 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 27 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

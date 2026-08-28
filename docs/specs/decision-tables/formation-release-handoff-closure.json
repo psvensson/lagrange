@@ -1,0 +1,237 @@
+{
+  "schema": "decision-table-v1",
+  "id": "formation-release-handoff-closure",
+  "owner": "control_plane_readiness_startup_authority",
+  "boundary": "global_spread_release_to_joining_cohort_ready_publication",
+  "inputs": [
+    {
+      "name": "closureEvidence",
+      "values": [
+        "first_spread_satisfied_with_positive_current_connection_incarnations",
+        "captured_generation_waiting_for_durable_readback",
+        "durable_generation_acknowledged_for_current_authority_boot",
+        "first_spread_satisfied_with_zero_or_missing_connection_identity",
+        "published_generation_consumed_on_joiner",
+        "published_generation_missing_or_incompatible",
+        "seed_restart_with_compatible_active_publication",
+        "compatible_reopen_joiners_pending",
+        "compatible_reopen_partially_ready",
+        "all_captured_incarnations_ready",
+        "captured_member_missing_or_disconnected",
+        "captured_incarnation_changed",
+        "substantive_authority_block",
+        "no_satisfied_cohort_or_malformed"
+      ]
+    },
+    {
+      "name": "generation",
+      "values": ["compatible", "incompatible"]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "capture_publish_and_retain_release",
+        "persist_without_release",
+        "acknowledge_and_rearm_release",
+        "consume_published_release",
+        "restore_seed_owned_release",
+        "retain_release",
+        "complete_and_close_release",
+        "revoke_fail_closed",
+        "remain_idle"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-interaction-owner",
+      "statement": "Only the seed startup-authority readiness owner captures and closes the formation-release generation; the generic publications owner stores that exact contract, while bootstrap, joiners, and rebalancer only validate or consume it."
+    },
+    {
+      "id": "first-observation-positive-identity",
+      "statement": "The first satisfied observation captures the boot incarnation of each adopted current primary connection; node id alone, boot incarnation zero, or a high-water not bound to the adopted socket is non-authorizing."
+    },
+    {
+      "id": "durable-consumer-parity",
+      "statement": "A distinct joiner process receives the same seed-owned generation through the durable publication row and cannot locally mint, promote, or rotate formation-release authority."
+    },
+    {
+      "id": "durable-ack-before-release",
+      "statement": "First satisfaction captures a non-authorizing intent. Release becomes true only after the boot-disjoint publication write is read back through the canonical grammar, acknowledged by the interaction owner, and the readiness lane is rearmed."
+    },
+    {
+      "id": "bounded-publication-coordinator",
+      "statement": "Publication has exactly one in-flight write and one latest desired value; observations coalesce, shutdown discards pending desire, and no timer or unbounded promise tail owns progress."
+    },
+    {
+      "id": "authority-boot-disjoint-storage",
+      "statement": "The durable key and generation bind the seed authority node and positive current-primary boot incarnation, so an in-flight writer from an earlier seed boot cannot overwrite or authorize the current seed boot."
+    },
+    {
+      "id": "durable-recovery-replay",
+      "statement": "A restarted seed rehydrates its compatible active generation from the canonical publication row before observing new state; a changed peer boot, stale epoch, or malformed row cannot be restored."
+    },
+    {
+      "id": "non-monotone-spread-safe",
+      "statement": "A compatible priority-spread reopening cannot withdraw release before every captured JOINING incarnation publishes a current READY lease."
+    },
+    {
+      "id": "incarnation-and-safety-fenced",
+      "statement": "Missing membership, disconnect, boot-incarnation change, incompatible publication identity, substantive safety denial, or malformed authority revokes release fail closed."
+    }
+  ],
+  "rules": [
+    {
+      "id": "incompatible-generation-revokes",
+      "when": {
+        "closureEvidence": "*",
+        "generation": "incompatible"
+      },
+      "outcome": {"action": "revoke_fail_closed"},
+      "reason": "Regressed publication epoch or changed incarnation fence cannot inherit release authority.",
+      "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "first-satisfaction-captures-and-publishes-generation",
+      "when": {
+        "closureEvidence": "first_spread_satisfied_with_positive_current_connection_incarnations",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_without_release"},
+      "reason": "The first whole-plane satisfaction event captures the seed and peer current-primary boot incarnations as a non-authorizing desired generation. The bounded publication coordinator persists it before recovery activity can close.",
+      "invariantRefs": ["single-interaction-owner", "first-observation-positive-identity", "durable-ack-before-release", "bounded-publication-coordinator", "authority-boot-disjoint-storage"]
+    },
+    {
+      "id": "durable-readback-authorizes-and-rearms",
+      "when": {
+        "closureEvidence": "durable_generation_acknowledged_for_current_authority_boot",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "acknowledge_and_rearm_release"},
+      "reason": "Only exact canonical readback for the current seed boot acknowledges the captured generation; acknowledgement rearms the existing readiness owner, which then projects release authority.",
+      "invariantRefs": ["single-interaction-owner", "durable-ack-before-release", "authority-boot-disjoint-storage"]
+    },
+    {
+      "id": "pending-publication-remains-non-authorizing",
+      "when": {
+        "closureEvidence": "captured_generation_waiting_for_durable_readback",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_without_release"},
+      "reason": "Write failure, delayed storage, or shutdown cannot turn process-local capture into release authority.",
+      "invariantRefs": ["durable-ack-before-release", "bounded-publication-coordinator"]
+    },
+    {
+      "id": "zero-or-missing-identity-remains-idle",
+      "when": {
+        "closureEvidence": "first_spread_satisfied_with_zero_or_missing_connection_identity",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "remain_idle"},
+      "reason": "A provisional node-id cohort cannot later inherit release authority; durable node-row confirmation may confirm an already captured positive connection identity but cannot create it retroactively.",
+      "invariantRefs": ["first-observation-positive-identity", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "joiner-consumes-durable-generation",
+      "when": {
+        "closureEvidence": "published_generation_consumed_on_joiner",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "consume_published_release"},
+      "reason": "The joiner validates the seed publication against current authority, durable rows, and current process identity; its local formation owner remains idle.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "missing-publication-fails-closed",
+      "when": {
+        "closureEvidence": "published_generation_missing_or_incompatible",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "remain_idle"},
+      "reason": "A joiner cannot substitute its local view when the seed-owned durable contract is absent, stale, malformed, or bound to another incarnation.",
+      "invariantRefs": ["single-interaction-owner", "durable-consumer-parity", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "seed-restart-restores-one-owner-generation",
+      "when": {
+        "closureEvidence": "seed_restart_with_compatible_active_publication",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "restore_seed_owned_release"},
+      "reason": "Recovery resumes the exact seed-owned generation and reevaluates its captured cohort; it does not wait for a second globally satisfied observation or mint a replacement owner.",
+      "invariantRefs": ["single-interaction-owner", "durable-recovery-replay", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "compatible-reopen-retains-release",
+      "when": {
+        "closureEvidence": "compatible_reopen_joiners_pending",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "Spread is explicitly non-monotone until the captured cohort publishes READY; the retained owner remains cure and join-release authority.",
+      "invariantRefs": ["non-monotone-spread-safe"]
+    },
+    {
+      "id": "partial-ready-retains-release",
+      "when": {
+        "closureEvidence": "compatible_reopen_partially_ready",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "retain_release"},
+      "reason": "READY publication is a whole captured-cohort closure, not a first-node or majority threshold.",
+      "invariantRefs": ["non-monotone-spread-safe"]
+    },
+    {
+      "id": "all-current-ready-completes",
+      "when": {
+        "closureEvidence": "all_captured_incarnations_ready",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "complete_and_close_release"},
+      "reason": "Every exact captured incarnation has crossed the existing stable window and owns a fresh READY lease.",
+      "invariantRefs": ["single-interaction-owner", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "missing-or-disconnected-revokes",
+      "when": {
+        "closureEvidence": "captured_member_missing_or_disconnected",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "revoke_fail_closed"},
+      "reason": "The captured cohort cannot silently shrink while its process authority is unresolved.",
+      "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "incarnation-change-revokes",
+      "when": {
+        "closureEvidence": "captured_incarnation_changed",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "revoke_fail_closed"},
+      "reason": "A READY lease from one boot cannot close another boot's captured obligation.",
+      "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "substantive-block-revokes",
+      "when": {
+        "closureEvidence": "substantive_authority_block",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "revoke_fail_closed"},
+      "reason": "Only the exact priority-not-spread reopening is retainable; admission, writability, eligibility, and evidence failures remain safety blocks.",
+      "invariantRefs": ["incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "no-cohort-remains-idle",
+      "when": {
+        "closureEvidence": "no_satisfied_cohort_or_malformed",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "remain_idle"},
+      "reason": "Absent a complete first-satisfaction witness with a valid JOINING cohort, no release generation is minted.",
+      "invariantRefs": ["single-interaction-owner", "incarnation-and-safety-fenced"]
+    }
+  ]
+}

@@ -175,6 +175,7 @@ class ControlPlaneSetup {
   static async create(options) {
     const {
       nodeId,
+      formationReleaseAuthorityNodeId,
       nodeAddress,
       advertisedNodeWsAddress,
       bootIncarnation,
@@ -282,6 +283,7 @@ class ControlPlaneSetup {
     if (!controlPlaneReadinessService) {
       controlPlaneReadinessService = new ControlPlaneReadinessService({
         nodeId,
+        formationReleaseAuthorityNodeId,
         systemTableCache,
         cacheMutationTarget: systemTableCache,
         messageRouter,
@@ -293,6 +295,9 @@ class ControlPlaneSetup {
         strictOwnerDependencies: true,
       });
     }
+    controlPlaneReadinessService.setFormationReleaseAuthorityNodeId?.(
+      formationReleaseAuthorityNodeId || nodeId,
+    );
 
     let storageAdmissionService =
       rebalanceCoordinator?.storageAdmissionService || null;
