@@ -38,8 +38,11 @@ function displayPath(root, resolvedPath, originalPath) {
   return originalPath || resolvedPath;
 }
 
-function evidenceClass(value) {
-  return Object.values(EVIDENCE_CLASS).includes(value) ? value : EVIDENCE_CLASS.LIVE;
+function classifyEvidence(value) {
+  if (value === EVIDENCE_CLASS.DETERMINISTIC ||
+      value === EVIDENCE_CLASS.EXTERNAL ||
+      value === EVIDENCE_CLASS.LIVE) return value;
+  return EVIDENCE_CLASS.LIVE;
 }
 
 function legacyFingerprint(identity) {
@@ -66,7 +69,7 @@ function semanticFingerprint(identity) {
     evidenceClass: identity.evidenceClass,
     probeKey: identity.semanticProbeKey,
     exists: identity.exists,
-    sha256: identity.sha256,
+    semanticSha256: identity.semanticSha256,
   };
   if (!identity.exists) descriptor.path = identity.path;
   return sha256(stableStringify(descriptor));
@@ -75,7 +78,7 @@ function semanticFingerprint(identity) {
 export function buildEvidenceIdentity(root, evidencePath, metadata = {}) {
   const resolvedPath = resolveEvidencePath(root, evidencePath);
   const observedAt = new Date().toISOString();
-  const classification = evidenceClass(metadata.evidenceClass);
+  const classification = classifyEvidence(metadata.evidenceClass);
   const shared = {
     schemaVersion: EVIDENCE_IDENTITY_SCHEMA_VERSION,
     evidenceClass: classification,
@@ -93,6 +96,7 @@ export function buildEvidenceIdentity(root, evidencePath, metadata = {}) {
       size: null,
       mtimeMs: null,
       sha256: null,
+      semanticSha256: null,
     };
     const legacy = legacyFingerprint(missingIdentity);
     return {
@@ -105,6 +109,10 @@ export function buildEvidenceIdentity(root, evidencePath, metadata = {}) {
 
   const stat = fs.statSync(resolvedPath);
   const content = fs.readFileSync(resolvedPath);
+  const rawSha256 = sha256(content);
+  const semanticSha256 = classification === EVIDENCE_CLASS.DETERMINISTIC &&
+    metadata.semanticContent !== undefined ?
+    sha256(metadata.semanticContent) : rawSha256;
   const identity = {
     ...shared,
     path: displayPath(root, resolvedPath, evidencePath),
@@ -112,7 +120,8 @@ export function buildEvidenceIdentity(root, evidencePath, metadata = {}) {
     exists: true,
     size: stat.size,
     mtimeMs: stat.mtimeMs,
-    sha256: sha256(content),
+    sha256: rawSha256,
+    semanticSha256,
   };
   const legacy = legacyFingerprint(identity);
   return {
@@ -131,6 +140,7 @@ export function attachEvidenceIdentity(root, probeSpec, result) {
       args: probeSpec?.args || null,
       evidenceClass: result?.evidenceClass,
       identityArgs: result?.evidenceIdentityArgs,
+      semanticContent: result?.evidenceSemanticContent,
     }) :
     null;
   if (!identity) return result;
