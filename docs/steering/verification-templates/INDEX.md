@@ -23,6 +23,7 @@ checklist entry that catches nothing is noise.
 | Concurrency / locking / single-flight | [concurrency-serialization.md](concurrency-serialization.md) |
 | Formation-vs-steady-state circularity | [formation-circularity.md](formation-circularity.md) |
 | Test-harness / fixture fidelity | [harness-fidelity.md](harness-fidelity.md) |
+| Registered cross-owner / coupled interaction | [owner-interaction.md](owner-interaction.md) |
 | Guard/contract modules validating hostile input | [adversarial-js-intrinsics.md](adversarial-js-intrinsics.md) |
 
 Usage in a verification prompt: paste the relevant checklist, replace each
