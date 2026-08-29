@@ -10,6 +10,55 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+Work toward the 0.2 _Stable Core_ release (`RM-0.2-*` rows in
+`docs/steering/agpl-feature-map.md`). Everything below is landed on the
+release branch with Solver-verified evidence; the 0.2 exit criteria (three
+consecutive clean five-node runs, topology-safety terminal evidence,
+compacted-follower snapshot catch-up verification, an enforcing memory-soak
+run) are tracked by the `release-0-2-*` Quests and are not yet all met.
+
+### Added
+- Five-node cold formation: an operation-ledger formation barrier with a
+  spread cure (closure CL-044) so joiners held on priority spread no longer
+  stall cold formation, and a versioned, incarnation-bound formation-release
+  handoff authority that carries the whole-plane priority-spread observation
+  through to release.
+- Startup active-gate convergence after authoritative-discovery repair
+  backoff: the active-gate owner re-evaluates cluster-ACTIVE when the repair
+  owner's evidence revision advances, without re-admitting repair or weakening
+  the anti-storm backoff (`architecture/contracts/active-gate-convergence.md`).
+- Release scenario producers for the sealed 0.2 frontiers: G2 five-node
+  convergence (cold formation, user-table readiness, runtime-service
+  placement) and G3 compacted-follower snapshot integration, plus the GCP
+  memory-soak configuration (one node per VM) and a GCP A/B runner whose
+  fixed/reverted sources must differ by fingerprint before a run is admitted.
+- Memory-soak enforcement: leak admission consumes only node-owned process
+  RSS, container capacity shares one reclaimable-cache-adjusted working-set
+  owner, and the sustained-write soak fails closed when required per-node
+  analysis is missing.
+- Readiness-planning and owner-key reconcile-queue diagnostics with fixed
+  retention bounds and exact drop accounting; GCP affinity teardown
+  materializes every captured full-node log; harness failure bundles collect
+  each node's logs through that node's own provider.
+
+### Changed
+- Topology-operation safety: removing a FAILED or SYNCING replica succeeds
+  through every removal writer; a replica operation that retires a source
+  replica rests terminal only when the retired replica's ACTIVE service is
+  gone from routing; a replica CREATE failure is published only after any
+  created local PartitionService is non-promotable and unroutable.
+- Operation ledger: the quorum-spread hold can no longer defer its own cure
+  once a surplus placement occupies every distinct node; a disruptive
+  self-move publishes one durable PENDING intent before waiting so dependent
+  admissions cannot starve it.
+- Release automation: npm publishing uses Trusted Publishing (OIDC) instead
+  of a stored token; the GCP release runner wakes and stops itself around a
+  tag push; `gh` is installed with the gate tools; the local push-gate test
+  corpus retries a failed file once.
+- Solver tooling (internal): landing review has one owner per subsystem with
+  an immutable review envelope, and landing tolerates candidate diffs larger
+  than the default child-process buffer.
+
 ## [0.1.1] — 2026-08-22
 
 Maintenance release. First release published by the GitHub Actions release
