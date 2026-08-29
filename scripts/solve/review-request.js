@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {candidateContentIdentity} from './candidate-content-identity.js';
+import {projectCandidateMeasurements} from './candidate-measurement.js';
 import {withCandidateWorkspace} from './candidate-workspace.js';
 import {landingReviewPreflight} from './landing-preflight.js';
 
@@ -108,6 +109,11 @@ function shadowContentIdentity(root, manifest) {
 
 function preparedReview(root, quest, state) {
   const projection = reviewProjection(quest, state);
+  const candidateMeasurements = projectCandidateMeasurements(
+    root,
+    quest,
+    state.attempts.filter((attempt) => attempt.candidateContract),
+  );
   return withCandidateWorkspace(root, projection.aggregate, (candidateRoot) => {
     const manifest = {
       ...projection,
@@ -117,6 +123,7 @@ function preparedReview(root, quest, state) {
       manifest,
       preflight: landingReviewPreflight(candidateRoot, manifest),
       shadowContentIdentity: shadowContentIdentity(candidateRoot, manifest),
+      candidateMeasurements,
     };
   });
 }
@@ -154,6 +161,7 @@ export function createReviewRequest(root, quest, state) {
     file: path.relative(root, file),
     preflight: prepared.preflight,
     shadowContentIdentity: prepared.shadowContentIdentity,
+    candidateMeasurements: prepared.candidateMeasurements,
   };
 }
 
@@ -193,5 +201,6 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
     ...request,
     preflight: prepared.preflight,
     shadowContentIdentity: prepared.shadowContentIdentity,
+    candidateMeasurements: prepared.candidateMeasurements,
   };
 }
