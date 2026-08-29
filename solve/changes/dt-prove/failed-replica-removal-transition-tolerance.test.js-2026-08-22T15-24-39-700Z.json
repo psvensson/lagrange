@@ -1,0 +1,25 @@
+{
+  "test": "test/node/failed-replica-removal-transition-tolerance.test.js",
+  "src": [
+    "src/node/replica-state-machine-constants.js"
+  ],
+  "base": "HEAD",
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "revertRunOutputTail": "            'the admitted removal must be able to reach REMOVED');\n        });\n      diff: |\n        --- expected\n        +++ actual\n        @@ -1,1 +1,1 @@\n        -true\n        +false\n      ...\n    \n    1..3\nnot ok 1 - a SYNCING replica accepts the removal transition so a failed ADD cleanup REMOVE cannot strand it # time=54.151ms\n  ---\n  at:\n    fileName: test/node/failed-replica-removal-transition-tolerance.test.js\n    lineNumber: 50\n    columnNumber: 1\n    isToplevel: true\n  source: |\n    }\n  \n    test('a SYNCING replica accepts the removal transition so a failed ADD ' +\n    ^\n      'cleanup REMOVE cannot strand it', async (t) => {\n      initializeTestEnvironment();\n  ...\n\n{\"level\":50,\"time\":\"2026-08-22T15:24:38.911Z\",\"nodeId\":\"3a32cc67-150d-466f-8bb5-2f38ef99a87f\",\"pid\":3102505,\"subsystem\":\"replica-state-machine\",\"replicaId\":\"replica_operations-p1-r5\",\"currentState\":\"failed\",\"attemptedState\":\"removing\",\"reason\":\"must-stay-invalid\",\"nodeId\":\"3a32cc67-150d-466f-8bb5-2f38ef99a87f\",\"contextNodeId\":\"test-node\",\"msg\":\"Invalid state transition attempted\"}\n# Subtest: FAILED stays terminal for lifecycle transitions: the executor skip tolerance, not a matrix edge, owns failed-replica removal\n    ok 1 - FAILED -> REMOVING must remain invalid; failed replicas take the durable-cleanup skip path that deletes the row directly\n    ok 2 - the FAILED row of the matrix must keep exactly its terminal edge\n    1..2\nok 2 - FAILED stays terminal for lifecycle transitions: the executor skip tolerance, not a matrix edge, owns failed-replica removal # time=21.87ms\n\n{\"level\":50,\"time\":\"2026-08-22T15:24:38.887Z\",\"nodeId\":\"24a7c067-faac-4166-b889-044218e9f988\",\"pid\":3102505,\"subsystem\":\"replica-state-machine\",\"replicaId\":\"replica_operations-p1-r4\",\"currentState\":\"syncing\",\"attemptedState\":\"removed\",\"reason\":\"failed-add-cleanup-complete\",\"nodeId\":\"24a7c067-faac-4166-b889-044218e9f988\",\"contextNodeId\":\"test-node\",\"msg\":\"Invalid state transition attempted\"}\n1..2\n# { total: 5, pass: 2, fail: 3 }\n# time=80.84ms\n# test-files total=1 pass=0 fail=1 assertions=7\n",
+  "revertRunFailureLines": [
+    "not ok test/node/failed-replica-removal-transition-tolerance.test.js (7 assertions, 1008ms)",
+    "    not ok 1 - SYNCING -> REMOVING must be admitted; rejecting it leaves a failed ADD replica un-removable and blocks ledger spread forever",
+    "    not ok 2 - the replica should be tracked as REMOVING after admission",
+    "    not ok 3 - the admitted removal must be able to reach REMOVED",
+    "not ok 1 - a SYNCING replica accepts the removal transition so a failed ADD cleanup REMOVE cannot strand it # time=54.151ms"
+  ],
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-22T15:24:39.620Z"
+}

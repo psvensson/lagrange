@@ -1,0 +1,726 @@
+{
+  "timestamp": "2026-08-20T15:47:01.156Z",
+  "scenario": "movielens-lagrange-service-affinity-live",
+  "producer": "service-data-affinity-demo",
+  "fidelity": "live",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 1
+  },
+  "standardSummary": {
+    "scenarios": [
+      {
+        "scenario": "movielens-lagrange-service-affinity-live",
+        "passed": false,
+        "current": {
+          "passed": false,
+          "verdict": "FAIL"
+        },
+        "detail": {
+          "result": null,
+          "schemaAdmission": {
+            "admitted": true,
+            "state": "admitted",
+            "snapshot": {
+              "state": "quiescent",
+              "canonicalBlocker": null,
+              "reasonCodes": [],
+              "reasons": [],
+              "ready": true,
+              "stableElapsedMs": 63382,
+              "leaderQuietElapsedMs": 63382,
+              "criticalSystemTopology": {
+                "enabled": true,
+                "ready": true,
+                "totalSpreadGap": 0,
+                "prioritySpreadGap": 0,
+                "blockedPartitions": [],
+                "missingLeaderPartitionCount": 0,
+                "missingLeaderPartitionIds": [],
+                "observationState": "available",
+                "source": "controlPlaneDiagnostics.currentPriorityPlacementObservation"
+              },
+              "effectiveInFlightCount": 0,
+              "staleInFlightCount": 0,
+              "additionalInFlightDiscountCount": 0,
+              "appliedAdditionalInFlightDiscountCount": 0,
+              "staleInFlightDiscountCount": 0,
+              "ignoreStaleInFlightReplicaOperations": true,
+              "controlPlanePressureSignals": [],
+              "candidateWindowReset": {
+                "reason": "none",
+                "state": null,
+                "canonicalBlocker": null,
+                "reasonCodes": [],
+                "reasons": [],
+                "observedAtMs": null
+              },
+              "cacheVisibleSatisfiedPriorityRecoveryOperationCount": 0,
+              "readyLeaseAgeWitness": {
+                "schemaVersion": 1,
+                "state": "unavailable",
+                "reason": "no_stale_active_node"
+              },
+              "latestTopologyDrainAtMs": 1787240100466,
+              "latestTopologyDrainOperationId": "d4a4d817-64be-43b0-b25b-eb9420315de3"
+            },
+            "stableConfirmationCount": 2,
+            "transitionHistory": {
+              "schemaVersion": 1,
+              "limit": 64,
+              "droppedTransitionCount": 0,
+              "transitions": [
+                {
+                  "firstObservedAtMs": 1787240031014,
+                  "lastObservedAtMs": 1787240031014,
+                  "observationCount": 1,
+                  "state": "critical_spread_open",
+                  "canonicalBlocker": "critical_system_spread_open",
+                  "reasonCodes": [
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 7,
+                    "prioritySpreadGap": 7,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240033048,
+                  "lastObservedAtMs": 1787240033048,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 5,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 7,
+                    "prioritySpreadGap": 7,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240035144,
+                  "lastObservedAtMs": 1787240038150,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 4,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 7,
+                    "prioritySpreadGap": 7,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240040407,
+                  "lastObservedAtMs": 1787240042453,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 2,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 7,
+                    "prioritySpreadGap": 7,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240045896,
+                  "lastObservedAtMs": 1787240048972,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 2,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 4,
+                    "prioritySpreadGap": 4,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240051162,
+                  "lastObservedAtMs": 1787240051162,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 1,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 4,
+                    "prioritySpreadGap": 4,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240053220,
+                  "lastObservedAtMs": 1787240055992,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 2,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 4,
+                    "prioritySpreadGap": 4,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240058812,
+                  "lastObservedAtMs": 1787240058812,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 3,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 4,
+                    "prioritySpreadGap": 4,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240061218,
+                  "lastObservedAtMs": 1787240061218,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 3,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 3,
+                    "prioritySpreadGap": 3,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240063747,
+                  "lastObservedAtMs": 1787240063747,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 1,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 3,
+                    "prioritySpreadGap": 3,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240066082,
+                  "lastObservedAtMs": 1787240066082,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 2,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 2,
+                    "prioritySpreadGap": 2,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240069612,
+                  "lastObservedAtMs": 1787240071815,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight",
+                    "critical_system_spread_open"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 1,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 2,
+                    "prioritySpreadGap": 2,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240075468,
+                  "lastObservedAtMs": 1787240075468,
+                  "observationCount": 1,
+                  "state": "observation_unavailable",
+                  "canonicalBlocker": "snapshot_query_error",
+                  "reasonCodes": [
+                    "snapshot_query_error"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": null,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": false,
+                    "observationState": "available",
+                    "totalSpreadGap": 2,
+                    "prioritySpreadGap": 2,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240078945,
+                  "lastObservedAtMs": 1787240081466,
+                  "observationCount": 2,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 2,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "inactive",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240084335,
+                  "lastObservedAtMs": 1787240084335,
+                  "observationCount": 1,
+                  "state": "quiescence_candidate",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 1793,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "started",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240082542,
+                  "lastQuiescentObservationAtMs": 1787240084335,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240087202,
+                  "lastObservedAtMs": 1787240096333,
+                  "observationCount": 5,
+                  "state": "quiescence_candidate",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 13791,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "observing",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240082542,
+                  "lastQuiescentObservationAtMs": 1787240096333,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240100218,
+                  "lastObservedAtMs": 1787240100218,
+                  "observationCount": 1,
+                  "state": "operation_drain_progressing",
+                  "canonicalBlocker": "replica_operations_in_flight",
+                  "reasonCodes": [
+                    "replica_operations_in_flight"
+                  ],
+                  "ready": false,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 0,
+                  "effectiveInFlightCount": 1,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "reset",
+                  "windowPhase": "inactive",
+                  "windowStartedAtMs": 0,
+                  "lastQuiescentObservationAtMs": null,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240102516,
+                  "lastObservedAtMs": 1787240102516,
+                  "observationCount": 1,
+                  "state": "quiescence_candidate",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 2050,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "started",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240100466,
+                  "lastQuiescentObservationAtMs": 1787240102516,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240104842,
+                  "lastObservedAtMs": 1787240158768,
+                  "observationCount": 22,
+                  "state": "quiescence_candidate",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 58302,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "observing",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240100466,
+                  "lastQuiescentObservationAtMs": 1787240158768,
+                  "stableConfirmationCount": 0
+                },
+                {
+                  "firstObservedAtMs": 1787240161788,
+                  "lastObservedAtMs": 1787240161788,
+                  "observationCount": 1,
+                  "state": "quiescent",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 61322,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "observing",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240100466,
+                  "lastQuiescentObservationAtMs": 1787240161788,
+                  "stableConfirmationCount": 1
+                },
+                {
+                  "firstObservedAtMs": 1787240163848,
+                  "lastObservedAtMs": 1787240163848,
+                  "observationCount": 1,
+                  "state": "quiescent",
+                  "canonicalBlocker": null,
+                  "reasonCodes": [],
+                  "ready": true,
+                  "stabilityWindowHeld": false,
+                  "stableElapsedMs": 63382,
+                  "effectiveInFlightCount": 0,
+                  "controlPlanePressureReasonCodes": [],
+                  "criticalSystemTopology": {
+                    "ready": true,
+                    "observationState": "available",
+                    "totalSpreadGap": 0,
+                    "prioritySpreadGap": 0,
+                    "missingLeaderPartitionCount": 0
+                  },
+                  "windowTransition": "observing",
+                  "windowPhase": "observing",
+                  "windowStartedAtMs": 1787240100466,
+                  "lastQuiescentObservationAtMs": 1787240163848,
+                  "stableConfirmationCount": 2
+                }
+              ]
+            },
+            "target": "ws://127.0.0.1:8081/api/admin/stream?lane=snapshot"
+          },
+          "preloadAdmission": {
+            "admitted": true,
+            "snapshot": {
+              "state": "quiescent",
+              "canonicalBlocker": null,
+              "reasonCodes": [],
+              "reasons": [],
+              "ready": true,
+              "stableElapsedMs": 0,
+              "leaderQuietElapsedMs": 0,
+              "criticalSystemTopology": {
+                "enabled": true,
+                "ready": true,
+                "totalSpreadGap": 0,
+                "prioritySpreadGap": 0,
+                "blockedPartitions": [],
+                "missingLeaderPartitionCount": 0,
+                "missingLeaderPartitionIds": [],
+                "observationState": "available",
+                "source": "controlPlaneDiagnostics.currentPriorityPlacementObservation"
+              },
+              "effectiveInFlightCount": 0,
+              "staleInFlightCount": 0,
+              "additionalInFlightDiscountCount": 0,
+              "appliedAdditionalInFlightDiscountCount": 0,
+              "staleInFlightDiscountCount": 0,
+              "ignoreStaleInFlightReplicaOperations": true,
+              "controlPlanePressureSignals": [],
+              "candidateWindowReset": {
+                "reason": "none",
+                "state": null,
+                "canonicalBlocker": null,
+                "reasonCodes": [],
+                "reasons": [],
+                "observedAtMs": null
+              },
+              "cacheVisibleSatisfiedPriorityRecoveryOperationCount": 0,
+              "readyLeaseAgeWitness": {
+                "schemaVersion": 1,
+                "state": "unavailable",
+                "reason": "no_stale_active_node"
+              },
+              "latestTopologyDrainAtMs": 1787240171888,
+              "latestTopologyDrainOperationId": "schema-job-67f4035f1e5f9fd2a0245f5d35ff9de9:operation:618661ee-7dd0-47e3-8cfe-4bb4c8873c3d"
+            },
+            "loadLaneAdmission": {
+              "admitted": true,
+              "state": "admitted",
+              "error": ""
+            },
+            "targets": {
+              "snapshot": "ws://127.0.0.1:8081/api/admin/stream?lane=snapshot",
+              "load": "ws://127.0.0.1:8081/api/admin/stream?lane=load"
+            }
+          },
+          "hostScheduling": {
+            "perNode": [
+              {
+                "nodeId": "node-0",
+                "gapCount": 38,
+                "totalGapMs": 62967,
+                "maxGapMs": 5024,
+                "unexplainedTotalMs": 3671,
+                "unexplainedMaxGapMs": 1426,
+                "blockedPercentOfLogSpan": 0.42542638246191034
+              }
+            ],
+            "exceeded": false,
+            "budget": {
+              "maxSingleGapMs": 10000,
+              "maxTotalGapMs": 60000,
+              "maxBlockedPercent": 20
+            }
+          },
+          "error": "Timed out waiting for ratings partitions on at least two nodes after 600000ms"
+        }
+      }
+    ]
+  }
+}

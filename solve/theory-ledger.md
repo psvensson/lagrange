@@ -818,3 +818,17 @@ Each entry must include these labels:
 - Supersedes: theory-20260531-rolling-restart-representative-rerun-progress-model-coverage-binding
 - Superseded by: none
 - Next implication: Scaffold the successor package to implement a scheduling-layer retry timer for rebalancer handoff when stuck in event-driven wait.
+
+## theory-20260825-managed-split-cutover-handoff-closure
+
+- Status: active
+- Scenario/gate: N>=2 exact-source fixed versus source-cleanup-status revert under concurrent writes; fixed must preserve source routability until whole-plane closure
+- Owner/boundary: managed_split_workflow / split_cutover_handoff_closure
+- Hypothesis: CLEANUP_COMPLETED source-local replay progress became whole-plane dissolution authority without a versioned query-plan and explicit-transaction barrier
+- Probe: `node scripts/model-tlc.js --mode split-cutover-handoff-closure-fixed`
+- Artifact/result: test-output/reports/release-0-2-five-node-gcp-f9b82ded/movielens-lagrange-service-affinity-live-2026-08-25T17-07-12-451Z.report.json records the pre-fix terminal Partition service not found; fixed evidence pending
+- Representative movement: source descriptor deletion moves after exact query-cohort acknowledgements; no Partition service not found terminal write
+- Linked packages: `solve/quests/managed-split-cutover-handoff-closure.json`
+- Supersedes: none
+- Superseded by: none
+- Next implication: If exact-source GCP still fails, inspect the first non-shrinking interaction frontier without weakening source retention, fencing, recovery, or delivery floors

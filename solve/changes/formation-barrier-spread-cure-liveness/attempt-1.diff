@@ -1,0 +1,372 @@
+diff --git a/test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js b/test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..eb5db755ed9c55655bb76612db7e1f98f5528c91
+--- /dev/null
++++ b/test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+@@ -0,0 +1,366 @@
++/**
++ * CL-044 fail-honest lane-discrimination witness.
++ *
++ * The fixture models the run-4 cold-formation split: three READY nodes and
++ * two startup-authority cohort members whose READY leases are withheld by the
++ * global formation barrier. Both joiners remain CONNECTED and are admitted by
++ * the real startup-authority placement predicate as spread-cure targets.
++ *
++ * HEAD is expected to fail the first three tests and pass the final lane pin:
++ * the cure subjects are classified as topology-settling blockers, an in-flight
++ * ADD target wins the defer row above operation-creation-required, and a
++ * terminal edge enqueues without resetting the escalated interval. The lane
++ * pin proves the priority blocked-spread sleep is not the binding branch.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  EntityType,
++  UnifiedRebalancer,
++} from '../../src/rebalancer/unified-rebalancer.js';
++import {
++  REBALANCE_COORDINATOR_EVENT,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {
++  REBALANCE_PLANNING_GATE,
++  TOPOLOGY_SETTLING_PLANNING_STATE,
++} from '../../src/rebalancer/rebalancer-planning-gate-constants.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++const FAKE_NOW_MS = 1_800_000_000_000;
++const READY_LEASE_EXPIRES_AT_MS = FAKE_NOW_MS + 600_000;
++const SEED_NODE_ID = 'formation-seed';
++const READY_NODE_IDS = Object.freeze([
++  SEED_NODE_ID,
++  'formation-ready-2',
++  'formation-ready-3',
++]);
++const COHORT_NODE_IDS = Object.freeze([
++  'formation-cohort-4',
++  'formation-cohort-5',
++]);
++const STARTUP_AUTHORITY_NODE_IDS = Object.freeze([
++  ...READY_NODE_IDS,
++  ...COHORT_NODE_IDS,
++]);
++const PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
++const OPEN_SPREAD_GAP = 1;
++const TARGET_REPLICA_COUNT = 3;
++const EXPECTED_HEALTHY_NODE_COUNT = 3;
++const TERMINAL_OPERATION_ID = 'formation-cure-add-1';
++
++function initializeTestEnvironment() {
++  ConfigurationManager.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  if (!config.isInitialized()) {
++    config.initialize({
++      node: {id: SEED_NODE_ID},
++      logging: {level: 'error'},
++    });
++  }
++  const logging = LoggingService.getInstance();
++  if (!logging.isInitialized()) {
++    logging.initialize({level: 'error'});
++  }
++}
++
++function createNodeRows() {
++  return [
++    ...READY_NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      status: 'active',
++      connection_state: 'ready',
++      ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
++    })),
++    ...COHORT_NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      status: 'joining',
++      connection_state: 'connected',
++      ready_lease_expires_at: 0,
++    })),
++  ];
++}
++
++function createCache() {
++  const rows = {
++    nodes: createNodeRows(),
++    partitions: [
++      {
++        partition_id: PRIORITY_PARTITION_ID,
++        table_id: 'control_plane_publications',
++      },
++    ],
++    tables: [],
++    services: [],
++    replica_operations: [],
++    node_endpoints: READY_NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      transport_type: 'ws',
++      status: 'active',
++    })),
++    service_endpoints: READY_NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      service_id: 'sys-postgres-wire',
++      health_status: 'healthy',
++    })),
++    control_plane_publications: [],
++  };
++  return {
++    get(tableName, key) {
++      return (rows[tableName] || []).find((row) =>
++        row.node_id === key || row.partition_id === key,
++      ) || null;
++    },
++    getAll(tableName) {
++      return rows[tableName] || [];
++    },
++    filter(tableName, predicate) {
++      return (rows[tableName] || []).filter(predicate);
++    },
++  };
++}
++
++function buildReadiness(nodeId) {
++  const ready = READY_NODE_IDS.includes(nodeId);
++  return {
++    nodeId,
++    dimensions: {
++      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION
++        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
++      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
++    },
++    reasons: ready ? [] : [{code: 'ready_lease_missing'}],
++  };
++}
++
++function createReadinessService() {
++  const publicationRow = {
++    status: 'PUBLISHED',
++    priorityPartitionSummary: {
++      satisfied: false,
++      blockedPartitions: buildOpenSpreadBlocker().blockedPartitions,
++    },
++  };
++  return {
++    getNodeReadinessSync: buildReadiness,
++    membershipPublicationService: {
++      getLatestClusterPublicationSync: () => publicationRow,
++      getLatestPublishedClusterPublicationSync: () => publicationRow,
++    },
++    getStartupAuthoritySnapshotSync() {
++      return {
++        authorityAvailable: true,
++        ready: false,
++        state: 'recovery_pending',
++        priorityRecoveryActive: true,
++        priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
++        canonicalStartupNodeIds: [...STARTUP_AUTHORITY_NODE_IDS],
++      };
++    },
++  };
++}
++
++function createCoordinator() {
++  return {
++    getMoveSafetyError: () => null,
++    getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
++    storageAccountingService: {estimateReplicaBytes: () => 1},
++    storageAdmissionService: {
++      checkAdd: async () => ({decision: 'allow'}),
++      checkReplace: async () => ({decision: 'allow'}),
++    },
++  };
++}
++
++function buildOpenSpreadBlocker() {
++  return {
++    requiredDistinctNodeCount: TARGET_REPLICA_COUNT,
++    blockedPartitions: [{
++      partitionId: PRIORITY_PARTITION_ID,
++      expectedReplicaCount: TARGET_REPLICA_COUNT,
++      readyReplicaCount: TARGET_REPLICA_COUNT,
++      readyDistinctNodeCount: TARGET_REPLICA_COUNT - OPEN_SPREAD_GAP,
++      spreadGap: OPEN_SPREAD_GAP,
++      exclusionReasonCounts: {ready_lease_missing: COHORT_NODE_IDS.length},
++    }],
++  };
++}
++
++function createRebalancer(entityId = PRIORITY_PARTITION_ID) {
++  const rebalancer = new UnifiedRebalancer({
++    entityId,
++    entityType: EntityType.PARTITION,
++    nodeId: SEED_NODE_ID,
++    systemTableCache: createCache(),
++    cdcIntegrationService: {
++      insertSystemTableRow: async () => ({success: true}),
++      updateSystemTableRow: async () => ({success: true}),
++    },
++    tablePolicyService: {
++      getPolicyForPartition: () => ({targetReplicaCount: TARGET_REPLICA_COUNT}),
++    },
++    messageRouter: {
++      getConnectionState: () => 'connected',
++      getConnectedNodes: () => [...STARTUP_AUTHORITY_NODE_IDS],
++      isOutboundQueueAvailable: () => true,
++    },
++    rebalanceCoordinator: createCoordinator(),
++    sqlQueryEngine: {
++      async executeQuery() {
++        return {success: true, rows: []};
++      },
++    },
++    controlPlaneReadinessService: createReadinessService(),
++    nowFn: () => FAKE_NOW_MS,
++    randomSource: {random: () => 0},
++  });
++  rebalancer.getControlPlanePrioritySpreadBlocker = buildOpenSpreadBlocker;
++  return rebalancer;
++}
++
++function assertRecoveryCohortTargets(t, rebalancer) {
++  const availableNodeIds = rebalancer.getAvailableNodes()
++    .map((node) => node.node_id);
++  for (const cohortNodeId of COHORT_NODE_IDS) {
++    t.ok(
++      availableNodeIds.includes(cohortNodeId),
++      `${cohortNodeId} is admitted by the real recovery-target predicate`,
++    );
++  }
++}
++
++test('CL-044 cohort-not-a-blocker: valid barrier-held recovery targets do ' +
++  'not defer priority cure planning', async (t) => {
++  initializeTestEnvironment();
++  const rebalancer = createRebalancer();
++
++  assertRecoveryCohortTargets(t, rebalancer);
++  const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
++  t.match(blocker, {
++    reason: 'node_ready_lease_incomplete',
++    unreadyNodeIds: [...COHORT_NODE_IDS],
++    healthyNodeCount: EXPECTED_HEALTHY_NODE_COUNT,
++  }, 'the witness reaches the full run-4 NODE_READY_LEASE_INCOMPLETE row');
++
++  const decision = await rebalancer.resolveTopologySettlingPlanningGateDecision();
++  t.equal(
++    decision,
++    null,
++    `valid recovery-cohort cure targets must not defer planning; blocker=${JSON.stringify(blocker)}`,
++  );
++});
++
++test('CL-044 target-in-flight: a cure ADD aimed at a barrier-held cohort ' +
++  'member does not win the defer row', (t) => {
++  initializeTestEnvironment();
++  const rebalancer = createRebalancer();
++  assertRecoveryCohortTargets(t, rebalancer);
++  const targetNodeId = COHORT_NODE_IDS[0];
++  const blocker = {
++    reason: 'topology_operations_in_flight',
++    inFlightReplicaOperations: 1,
++    inFlightReplicaOperationDetails: [{
++      operationId: TERMINAL_OPERATION_ID,
++      partitionId: PRIORITY_PARTITION_ID,
++      targetNodeId,
++      operationType: 'add',
++    }],
++  };
++  const evaluationContext = {
++    resolvePriorityRecoveryOperationCreationGate: () => ({
++      operationCreationRequired: true,
++      operationCreationPartitionId: PRIORITY_PARTITION_ID,
++      operationCreationScope: 'current_partition',
++    }),
++  };
++
++  const snapshot = rebalancer.buildTopologySettlingPlanningGateSnapshot(
++    blocker,
++    evaluationContext,
++  );
++  t.equal(
++    snapshot.shouldDefer,
++    false,
++    `cure target ${targetNodeId} is a cohort member, not a target-in-flight blocker; state=${snapshot.planningState}`,
++  );
++  t.end();
++});
++
++test('CL-044 operation-terminal edge resets an escalated settle interval ' +
++  'to the priority base cadence', (t) => {
++  initializeTestEnvironment();
++  const rebalancer = createRebalancer();
++  rebalancer.isLeader = true;
++  const enqueuedReasons = [];
++  rebalancer.enqueueRebalanceCheck = (reason) => {
++    enqueuedReasons.push(reason);
++    return true;
++  };
++  rebalancer.currentInterval = rebalancer.maxInterval;
++
++  const handled = rebalancer.handleCoordinatorProgressEvent(
++    REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
++    {
++      operation: {
++        operationId: TERMINAL_OPERATION_ID,
++        entityType: EntityType.PARTITION,
++        entityId: PRIORITY_PARTITION_ID,
++        partitionId: PRIORITY_PARTITION_ID,
++        targetNodeId: COHORT_NODE_IDS[0],
++      },
++    },
++  );
++
++  t.equal(handled, true, 'the existing terminal edge re-enqueues evaluation');
++  t.equal(enqueuedReasons.length, 1, 'one terminal edge produces one wake');
++  t.equal(
++    rebalancer.currentInterval,
++    rebalancer.getPriorityRetryDelayMs(),
++    'terminal progress re-arms the next evaluation at base cadence',
++  );
++  t.end();
++});
++
++test('CL-044 lane pin: settle-gate escalation binds while the blocked-spread ' +
++  'sleep is not applicable to priority partitions', async (t) => {
++  initializeTestEnvironment();
++  const settlingRebalancer = createRebalancer();
++  const baseSettleIntervalMs = settlingRebalancer.currentInterval;
++  const settleDecision =
++    await settlingRebalancer.resolveTopologySettlingPlanningGateDecision();
++
++  t.equal(
++    settleDecision?.gate,
++    REBALANCE_PLANNING_GATE.TOPOLOGY_SETTLING,
++    'the run-4 cohort state reaches topology settling',
++  );
++  t.ok(
++    settleDecision.scheduleDelayMs > baseSettleIntervalMs,
++    'topology settling consumes the escalating 75-120s interval lane',
++  );
++
++  const priorityRebalancer = createRebalancer();
++  const prioritySpreadDecision =
++    priorityRebalancer.resolvePrioritySpreadPlanningGateDecision();
++  t.equal(
++    prioritySpreadDecision,
++    null,
++    'the 70-80s blocked-spread branch is NOT_APPLICABLE to priority partitions',
++  );
++  t.not(
++    settleDecision?.logContext?.planningState,
++    TOPOLOGY_SETTLING_PLANNING_STATE.CLEAR,
++    'lane discrimination remains pinned to the settle-gate state',
++  );
++});

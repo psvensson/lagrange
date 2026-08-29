@@ -1,0 +1,524 @@
+diff --git a/src/control-plane/readiness-planning-diagnostic-retention.js b/src/control-plane/readiness-planning-diagnostic-retention.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ca75f03492c828040ee62d6b6247445f69128ec
+--- /dev/null
++++ b/src/control-plane/readiness-planning-diagnostic-retention.js
+@@ -0,0 +1,120 @@
++import {appendArrayValue} from
++  './readiness-planning-version-contract.js';
++import {defineRecordValue} from
++  './readiness-planning-publication-contract.js';
++import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
++
++const MapConstructor = Map;
++const mapClear = Function.call.bind(Map.prototype.clear);
++const mapDelete = Function.call.bind(Map.prototype.delete);
++const mapForEach = Function.call.bind(Map.prototype.forEach);
++const mapGet = Function.call.bind(Map.prototype.get);
++const mapHas = Function.call.bind(Map.prototype.has);
++const mapSet = Function.call.bind(Map.prototype.set);
++const mapSize = Function.call.bind(
++  Object.getOwnPropertyDescriptor(Map.prototype, 'size').get,
++);
++const objectCreate = Object.create;
++const objectFreeze = Object.freeze;
++const READINESS_PLANNING_DIAGNOSTIC_SAMPLE_CAPACITY = 256;
++
++class ReadinessPlanningDiagnosticRetention {
++  constructor() {
++    this.buildOwnerKeys = [];
++    this.nextBuildOwnerKeySampleIndex = 0;
++    this.droppedBuildOwnerKeySampleCount = 0;
++    this.buildsByToken = new MapConstructor();
++    this.droppedBuildTokenSampleCount = 0;
++  }
++
++  record(ownerKey, tokenKey) {
++    this._recordOwnerKey(ownerKey);
++    this._recordToken(tokenKey);
++  }
++
++  _recordOwnerKey(ownerKey) {
++    if (
++      this.buildOwnerKeys.length <
++      READINESS_PLANNING_DIAGNOSTIC_SAMPLE_CAPACITY
++    ) {
++      appendArrayValue(this.buildOwnerKeys, ownerKey);
++      return;
++    }
++    defineRecordValue(
++      this.buildOwnerKeys,
++      this.nextBuildOwnerKeySampleIndex,
++      ownerKey,
++    );
++    this.nextBuildOwnerKeySampleIndex =
++      (this.nextBuildOwnerKeySampleIndex + 1) %
++      READINESS_PLANNING_DIAGNOSTIC_SAMPLE_CAPACITY;
++    this.droppedBuildOwnerKeySampleCount++;
++  }
++
++  _recordToken(tokenKey) {
++    if (mapHas(this.buildsByToken, tokenKey)) {
++      mapSet(
++        this.buildsByToken,
++        tokenKey,
++        (mapGet(this.buildsByToken, tokenKey) || 0) + 1,
++      );
++      return;
++    }
++    if (
++      mapSize(this.buildsByToken) >=
++      READINESS_PLANNING_DIAGNOSTIC_SAMPLE_CAPACITY
++    ) {
++      let oldestTokenKey = '';
++      let oldestTokenKeyFound = false;
++      mapForEach(this.buildsByToken, (_count, candidateTokenKey) => {
++        if (!oldestTokenKeyFound) {
++          oldestTokenKey = candidateTokenKey;
++          oldestTokenKeyFound = true;
++        }
++      });
++      if (oldestTokenKeyFound) {
++        mapDelete(this.buildsByToken, oldestTokenKey);
++        this.droppedBuildTokenSampleCount++;
++      }
++    }
++    mapSet(this.buildsByToken, tokenKey, 1);
++  }
++
++  snapshot() {
++    const buildsByToken = objectCreate(null);
++    mapForEach(this.buildsByToken, (buildCount, tokenKey) => {
++      defineRecordValue(buildsByToken, tokenKey, buildCount);
++    });
++    return objectFreeze({
++      diagnosticSampleCapacity:
++        READINESS_PLANNING_DIAGNOSTIC_SAMPLE_CAPACITY,
++      buildOwnerKeys: objectFreeze(this._copyBuildOwnerKeys()),
++      droppedBuildOwnerKeySampleCount:
++        this.droppedBuildOwnerKeySampleCount,
++      buildsByToken: objectFreeze(buildsByToken),
++      droppedBuildTokenSampleCount: this.droppedBuildTokenSampleCount,
++    });
++  }
++
++  _copyBuildOwnerKeys() {
++    if (this.droppedBuildOwnerKeySampleCount === 0) {
++      return copyDenseOwnDataArray(this.buildOwnerKeys);
++    }
++    const samples = [];
++    for (let offset = 0; offset < this.buildOwnerKeys.length; offset++) {
++      const index =
++        (this.nextBuildOwnerKeySampleIndex + offset) %
++        this.buildOwnerKeys.length;
++      appendArrayValue(samples, this.buildOwnerKeys[index]);
++    }
++    return samples;
++  }
++
++  clear() {
++    this.buildOwnerKeys = [];
++    this.nextBuildOwnerKeySampleIndex = 0;
++    mapClear(this.buildsByToken);
++  }
++}
++
++export {ReadinessPlanningDiagnosticRetention};
+diff --git a/src/control-plane/readiness-planning-snapshot-owner.js b/src/control-plane/readiness-planning-snapshot-owner.js
+index 4e60a1e502b67f7e45bfae442429d2ad34d80146..c9755e3eab17d0c0ecdd842c5d012994ac0fc716 100644
+--- a/src/control-plane/readiness-planning-snapshot-owner.js
++++ b/src/control-plane/readiness-planning-snapshot-owner.js
+@@ -31,12 +31,15 @@ import {
+   readOwnerKey,
+ } from './readiness-planning-formation-source.js';
+ import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
++import {ReadinessPlanningDiagnosticRetention} from
++  './readiness-planning-diagnostic-retention.js';
+ 
+ const arrayIncludes = Function.call.bind(Array.prototype.includes);
+ const arrayMap = Function.call.bind(Array.prototype.map);
+ const mathMax = Math.max;
+ const MapConstructor = Map;
+ const mapDelete = Function.call.bind(Map.prototype.delete);
++const mapClear = Function.call.bind(Map.prototype.clear);
+ const mapForEach = Function.call.bind(Map.prototype.forEach);
+ const mapGet = Function.call.bind(Map.prototype.get);
+ const mapHas = Function.call.bind(Map.prototype.has);
+@@ -98,8 +101,7 @@ class ReadinessPlanningSnapshotOwner {
+     this.logicalOwnerKeyByQueueOwnerKey = new MapConstructor();
+     this.initialBootstrapConsumed = false;
+     this.buildCount = 0;
+-    this.buildOwnerKeys = [];
+-    this.buildsByToken = new MapConstructor();
++    this.diagnosticRetention = new ReadinessPlanningDiagnosticRetention();
+     this.snapshotListeners = new SetConstructor();
+     this.snapshotListenerFailureCount = 0;
+     // Lazily baselined on the first enqueue: an eager read here performs a
+@@ -653,12 +655,7 @@ class ReadinessPlanningSnapshotOwner {
+       readinessPlanningOwnerBuild: true,
+     });
+     this.buildCount++;
+-    appendArrayValue(this.buildOwnerKeys, ownerKey);
+-    mapSet(
+-      this.buildsByToken,
+-      capturedToken.tokenKey,
+-      (mapGet(this.buildsByToken, capturedToken.tokenKey) || 0) + 1,
+-    );
++    this.diagnosticRetention.record(ownerKey, capturedToken.tokenKey);
+     const result = this.publishCompleted(
+       ownerKey,
+       snapshot,
+@@ -691,10 +688,6 @@ class ReadinessPlanningSnapshotOwner {
+       );
+       appendArrayValue(completedOwnerKeys, ownerKey);
+     });
+-    const buildsByToken = objectCreate(null);
+-    mapForEach(this.buildsByToken, (buildCount, tokenKey) => {
+-      defineRecordValue(buildsByToken, tokenKey, buildCount);
+-    });
+     return objectFreeze({
+       currentToken: this.captureToken(),
+       completedOwnerKeys: objectFreeze(completedOwnerKeys),
+@@ -707,12 +700,11 @@ class ReadinessPlanningSnapshotOwner {
+         readLogicalQueueOwnerKey,
+       )),
+       buildCount: this.buildCount,
+-      buildOwnerKeys: objectFreeze(copyDenseOwnDataArray(this.buildOwnerKeys)),
++      ...this.diagnosticRetention.snapshot(),
+       snapshotListenerFailureCount: this.snapshotListenerFailureCount,
+       completedTokenStatusByOwnerKey: objectFreeze(
+         completedTokenStatusByOwnerKey,
+       ),
+-      buildsByToken: objectFreeze(buildsByToken),
+       maxItemsPerDrain: queue.maxItemsPerDrain,
+       retryingOwnerKeys: objectFreeze(
+         arrayMap(
+@@ -735,6 +727,15 @@ class ReadinessPlanningSnapshotOwner {
+   shutdown() {
+     this.queue.shutdown();
+     setClear(this.snapshotListeners);
++    mapClear(this.completedSnapshotsByOwnerKey);
++    mapClear(this.completedSnapshotsByOwnerAndBuildKey);
++    mapClear(this.buildOptionsByOwnerAndBuildKey);
++    mapClear(this.logicalOwnerKeyByQueueOwnerKey);
++    if (this.deferredSnapshotMemoByOwnerKey) {
++      mapClear(this.deferredSnapshotMemoByOwnerKey);
++    }
++    setClear(this.prioritizedFormationOwnerKeys);
++    this.diagnosticRetention.clear();
+   }
+ }
+ 
+diff --git a/src/workflow/owner-key-reconcile-queue-snapshots.js b/src/workflow/owner-key-reconcile-queue-snapshots.js
+index d7a87e0ec79d3ca868f158af2ffd2693e4aa41be..9ff9da31e084461ffdc4f6bbdef6028ecaf8987d 100644
+--- a/src/workflow/owner-key-reconcile-queue-snapshots.js
++++ b/src/workflow/owner-key-reconcile-queue-snapshots.js
+@@ -20,6 +20,30 @@ function appendSnapshotValue(snapshot, value) {
+   defineSnapshotValue(snapshot, snapshot.length, value);
+ }
+ 
++function appendBoundedSnapshotValue(snapshot, value, index, capacity) {
++  if (snapshot.length < capacity) {
++    appendSnapshotValue(snapshot, value);
++  } else {
++    defineSnapshotValue(snapshot, index, value);
++  }
++  return (index + 1) % capacity;
++}
++
++function recordStaleFenceDiagnosticSamples(queue, sample, capacity) {
++  queue._staleClaimIndex = appendBoundedSnapshotValue(
++    queue.staleClaims,
++    sample,
++    queue._staleClaimIndex,
++    capacity,
++  );
++  queue._staleFenceSampleIndex = appendBoundedSnapshotValue(
++    queue._staleFenceSamples,
++    sample,
++    queue._staleFenceSampleIndex,
++    capacity,
++  );
++}
++
+ function copySnapshotValues(source) {
+   const copy = [];
+   for (let index = 0; index < source.length; index++) {
+@@ -99,6 +123,7 @@ export {
+   appendSnapshotValue,
+   buildReconcileQueueDiagnostics,
+   defineSnapshotValue,
++  recordStaleFenceDiagnosticSamples,
+   snapshotMapEntries,
+   snapshotSetValues,
+ };
+diff --git a/src/workflow/owner-key-reconcile-queue.js b/src/workflow/owner-key-reconcile-queue.js
+index 2c1cdc5daddc7bc34b6a043279411dfb6cb8aa47..f67c049be50d5fdc5ce0e4661da8b0f5ab8bd640 100644
+--- a/src/workflow/owner-key-reconcile-queue.js
++++ b/src/workflow/owner-key-reconcile-queue.js
+@@ -42,9 +42,8 @@ import {
+   resolveWorkItemCompletionWaiters,
+ } from './owner-key-reconcile-completion.js';
+ import {
+-  appendSnapshotValue,
+   buildReconcileQueueDiagnostics,
+-  defineSnapshotValue,
++  recordStaleFenceDiagnosticSamples,
+   snapshotMapEntries,
+   snapshotSetValues,
+ } from './owner-key-reconcile-queue-snapshots.js';
+@@ -148,6 +147,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+     this.fenceTokens = new MapConstructor();
+     /** @type {Array<Object>} Recent stale-claim diagnostic entries. */
+     this.staleClaims = [];
++    this._staleClaimIndex = 0;
+     this.draining = false;
+     this.stopped = false;
+ 
+@@ -361,9 +361,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+       currentToken: currentFence,
+       timestamp: this.now(),
+     };
+-    appendSnapshotValue(this.staleClaims, diagnostic);
+     this._staleFenceRejectionCount++;
+-    this._pushStaleFenceSample(diagnostic);
++    recordStaleFenceDiagnosticSamples(
++      this,
++      diagnostic,
++      STALE_FENCE_SAMPLE_CAPACITY,
++    );
+     this.emit(RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_ENQUEUE, diagnostic);
+     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, diagnostic);
+     rejectStaleFenceCompletionWaiter(completionWaiter);
+@@ -572,9 +575,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+       reasons: snapshotSetValues(item.reasons),
+       timestamp: this.now(),
+     };
+-    appendSnapshotValue(this.staleClaims, diagnostic);
+     this._staleInFlightDeferralCount++;
+-    this._pushStaleFenceSample(diagnostic);
++    recordStaleFenceDiagnosticSamples(
++      this,
++      diagnostic,
++      STALE_FENCE_SAMPLE_CAPACITY,
++    );
+     this.emit(
+       RECONCILE_QUEUE_EVENT.STALE_CLAIM_DEFERRED,
+       diagnostic,
+@@ -634,9 +640,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+       currentToken,
+       timestamp: this.now(),
+     };
+-    appendSnapshotValue(this.staleClaims, diagnostic);
+     this._staleFenceRejectionCount++;
+-    this._pushStaleFenceSample(diagnostic);
++    recordStaleFenceDiagnosticSamples(
++      this,
++      diagnostic,
++      STALE_FENCE_SAMPLE_CAPACITY,
++    );
+     this.emit(
+       RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_DRAIN,
+       diagnostic,
+@@ -652,28 +661,6 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+       });
+   }
+ 
+-  /**
+-   * Push a diagnostic sample into the bounded ring buffer.
+-   * When the buffer reaches capacity, the oldest entry is
+-   * overwritten.
+-   *
+-   * @param {Object} sample - Diagnostic event payload.
+-   * @private
+-   */
+-  _pushStaleFenceSample(sample) {
+-    if (this._staleFenceSamples.length < STALE_FENCE_SAMPLE_CAPACITY) {
+-      appendSnapshotValue(this._staleFenceSamples, sample);
+-    } else {
+-      defineSnapshotValue(
+-        this._staleFenceSamples,
+-        this._staleFenceSampleIndex,
+-        sample,
+-      );
+-    }
+-    this._staleFenceSampleIndex =
+-      (this._staleFenceSampleIndex + 1) % STALE_FENCE_SAMPLE_CAPACITY;
+-  }
+-
+   /**
+    * Check whether an owner key currently has an active reconcile
+    * execution.
+@@ -782,6 +769,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
+     setClear(this.inFlight);
+     mapClear(this.inFlightItems);
+     mapClear(this.fenceTokens);
++    this.staleClaims = [];
++    this._staleClaimIndex = 0;
++    this._staleFenceSamples = [];
++    this._staleFenceSampleIndex = 0;
++    this._retryableDrainFailureSamples = [];
++    this._retryableDrainFailureSampleIndex = 0;
+     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {
+       queue: this.name,
+     });
+diff --git a/test/control-plane/readiness-planning-diagnostics-retention.test.js b/test/control-plane/readiness-planning-diagnostics-retention.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..603a8d27303034cb2614b366d9abd2074e6f55c8
+--- /dev/null
++++ b/test/control-plane/readiness-planning-diagnostics-retention.test.js
+@@ -0,0 +1,154 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  ReadinessPlanningSnapshotOwner,
++} from '../../src/control-plane/readiness-planning-snapshot-owner.js';
++import {OwnerKeyReconcileQueue} from
++  '../../src/workflow/owner-key-reconcile-queue.js';
++
++const RETRYABLE_FAILURE_CODE = 'readiness_retention_retryable';
++const RETRY_REASON = 'readiness_retention_retry';
++const EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY = 256;
++const BUILD_COUNT = EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY * 2 + 1;
++
++test('ReadinessPlanningSnapshotOwner retains bounded diagnostics and ' +
++  'releases owner graphs',
++async (t) => {
++  let nowMs = 1_780_000_000_000;
++  const snapshot = Object.freeze({
++    dimensions: Object.freeze({}),
++    nodeEvidence: Object.freeze({}),
++  });
++  const service = {
++    nodeId: 'node-0',
++    buildNodeReadinessSyncCurrent: () => snapshot,
++  };
++  const owner = new ReadinessPlanningSnapshotOwner({
++    service,
++    now: () => nowMs,
++  });
++
++  for (let index = 0; index < BUILD_COUNT; index += 1) {
++    nowMs += 1;
++    owner.readinessSnapshotGeneration = index + 1;
++    owner.reconcile(`node-${index % 7}`, {options: {}});
++  }
++
++  const diagnostics = owner.getDiagnostics();
++  t.equal(diagnostics.buildCount, BUILD_COUNT,
++    'aggregate build count remains exact');
++  t.equal(
++    diagnostics.diagnosticSampleCapacity,
++    EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY,
++    'the retention bound is explicit diagnostics contract data');
++  t.equal(
++    diagnostics.buildOwnerKeys.length,
++    EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY,
++    'owner-key history retains only the bounded recent tail');
++  t.equal(
++    Object.keys(diagnostics.buildsByToken).length,
++    EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY,
++    'token history retains only the bounded recent tail',
++  );
++  t.equal(
++    diagnostics.droppedBuildOwnerKeySampleCount,
++    BUILD_COUNT - EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY,
++    'owner-key truncation remains visible through an aggregate counter',
++  );
++  t.equal(
++    diagnostics.droppedBuildTokenSampleCount,
++    BUILD_COUNT - EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY,
++    'token truncation remains visible through an aggregate counter',
++  );
++  t.equal(
++    diagnostics.buildOwnerKeys[0],
++    `node-${
++      (BUILD_COUNT - EXPECTED_DIAGNOSTIC_SAMPLE_CAPACITY) % 7
++    }`,
++    'owner-key samples begin at the oldest retained build',
++  );
++  t.equal(
++    diagnostics.buildOwnerKeys[diagnostics.buildOwnerKeys.length - 1],
++    `node-${(BUILD_COUNT - 1) % 7}`,
++    'owner-key samples end at the newest retained build',
++  );
++
++  owner.shutdown();
++  const shutdownDiagnostics = owner.getDiagnostics();
++  t.same(shutdownDiagnostics.buildOwnerKeys, [],
++    'shutdown releases retained owner-key samples');
++  t.same(shutdownDiagnostics.buildsByToken, {},
++    'shutdown releases retained token samples');
++  t.same(shutdownDiagnostics.completedOwnerKeys, [],
++    'shutdown releases retained completed snapshot graphs');
++  t.equal(owner.completedSnapshotsByOwnerAndBuildKey.size, 0,
++    'shutdown releases retained completed snapshot variants');
++  t.equal(owner.buildOptionsByOwnerAndBuildKey.size, 0,
++    'shutdown releases retained build-option graphs');
++  t.equal(owner.logicalOwnerKeyByQueueOwnerKey.size, 0,
++    'shutdown releases retained queue-key mappings');
++});
++
++test('OwnerKeyReconcileQueue retains bounded stale-claim diagnostics',
++  async (t) => {
++    const queue = new OwnerKeyReconcileQueue({
++      name: 'readiness-retention-witness',
++      reconcileFn: () => {},
++      scheduleDrainFn: () => {},
++    });
++    queue.logger = {debug: () => {}, error: () => {}, warn: () => {}};
++    queue.enqueue('node-0', 'initial', null, {fenceToken: 100});
++    for (let index = 0; index < 33; index += 1) {
++      queue.enqueue('node-0', `stale-${index}`, null, {fenceToken: index});
++    }
++
++    const diagnostics = queue.getDiagnostics();
++    t.equal(diagnostics.staleFenceRejectionCount, 33,
++      'aggregate stale-fence count remains exact');
++    t.equal(diagnostics.staleClaims.length, 32,
++      'legacy stale-claim projection is bounded with the recent sample ledger');
++    t.equal(diagnostics.recentStaleFenceSamples.length, 32,
++      'canonical stale-fence sample ledger remains bounded');
++
++    queue.shutdown();
++    const shutdownDiagnostics = queue.getDiagnostics();
++    t.same(shutdownDiagnostics.staleClaims, [],
++      'shutdown releases retained legacy stale claims');
++    t.same(shutdownDiagnostics.recentStaleFenceSamples, [],
++      'shutdown releases retained canonical stale-fence samples');
++  });
++
++test('OwnerKeyReconcileQueue releases retry diagnostic graphs on shutdown',
++  async (t) => {
++    const queue = new OwnerKeyReconcileQueue({
++      name: 'readiness-retry-retention-witness',
++      reconcileFn: async () => {
++        const error = new Error(RETRYABLE_FAILURE_CODE);
++        error.code = RETRYABLE_FAILURE_CODE;
++        throw error;
++      },
++      retryPolicy: {
++        isRetryableError: (error) => error?.code === RETRYABLE_FAILURE_CODE,
++        getRetryAfterMs: () => 1,
++      },
++      setTimeoutFn: () => ({}),
++      clearTimeoutFn: () => {},
++    });
++    queue.logger = {debug: () => {}, error: () => {}, warn: () => {}};
++    queue.enqueue('node-retry', RETRY_REASON);
++    await Promise.resolve();
++    await Promise.resolve();
++    await Promise.resolve();
++
++    const diagnostics = queue.getDiagnostics();
++    t.equal(diagnostics.recentRetryableDrainFailureSamples.length, 1,
++      'retry failure retains one bounded diagnostic payload');
++    t.same(diagnostics.retryingKeys, ['node-retry'],
++      'the retry owner remains active before shutdown');
++
++    queue.shutdown();
++    const shutdownDiagnostics = queue.getDiagnostics();
++    t.same(shutdownDiagnostics.recentRetryableDrainFailureSamples, [],
++      'shutdown releases retry failure sample payloads');
++    t.same(shutdownDiagnostics.retryingKeys, [],
++      'shutdown releases retained retry owner graphs');
++  });

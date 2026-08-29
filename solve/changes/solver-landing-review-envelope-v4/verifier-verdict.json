@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "solver-verifier-verdict/1",
+  "reviewId": "review-9fcc0cef7307e5f3e1a53f48",
+  "verifierId": "verify_formation_cure",
+  "verdict": "reject",
+  "completedTemplateItems": [
+    {
+      "category": "admission-gating",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "adversarial-js-intrinsics",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "concurrency-serialization",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "formation-circularity",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "harness-fidelity",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "recovery-replay",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "retry-loops",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "sweep-timer",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    },
+    {
+      "category": "transport-delivery",
+      "evidencePaths": [
+        "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "category": "adversarial-js-intrinsics",
+      "summary": "Store append and replay use live JSON and collection methods, allowing canonical verifier evidence and findings to be rewritten in durable bytes or replay."
+    },
+    {
+      "category": "adversarial-js-intrinsics",
+      "summary": "Candidate and aggregate verification still use live array, Set, regexp, and string operations, allowing the exact candidate and its rejection to disappear."
+    },
+    {
+      "category": "admission-gating",
+      "summary": "Live Array.prototype.push can erase the required aggregate-approval problem consumed by terminal verification and landing audit admission."
+    },
+    {
+      "category": "adversarial-js-intrinsics",
+      "summary": "ProjectState retains a live findings push, allowing the projected ledger to lose the exact verifier rejection while the durable event remains present."
+    },
+    {
+      "category": "harness-fidelity",
+      "summary": "The hostile-tail guard omits failing JSON, filter, and push attacks and restores part of the hostile runtime before full verification-state replay."
+    }
+  ],
+  "externalReceiptRef": "solve/changes/solver-landing-review-envelope-v4/independent-verification.md"
+}

@@ -1,0 +1,95 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "test-subsystem-classification",
+  "detail": {
+    "meaning": "metric is the number of census tests without a sealed subsystem classification; target 0",
+    "censusSize": 2064,
+    "subsystemCount": 22,
+    "digest": "fnv1a32-894af796",
+    "evidenceDigest": "fnv1a32-791b8bde",
+    "counts": {
+      "admin-diagnostics": 105,
+      "architecture-governance": 19,
+      "bootstrap-membership": 240,
+      "cdc-metadata": 54,
+      "cli-tooling": 96,
+      "control-plane": 163,
+      "convergence-topology": 69,
+      "distributed-harness": 165,
+      "examples-e2e": 7,
+      "pgwire-compat": 17,
+      "placement-rebalance": 221,
+      "query-sql": 161,
+      "release-packaging": 10,
+      "runtime-primitives": 22,
+      "services-runtime": 166,
+      "solver-tooling": 88,
+      "storage-partition": 139,
+      "storage-raft": 75,
+      "test-infrastructure": 89,
+      "transactions": 12,
+      "transport-messaging": 89,
+      "wasm-toolchain": 57
+    },
+    "unclassified": 0,
+    "ambiguous": 0,
+    "deadRules": 0,
+    "deadOverrides": 0,
+    "emptySubsystems": 0,
+    "exactOverrides": 7,
+    "allRulesEvaluation": true,
+    "catchAllRule": false,
+    "censusEqualWithPrimaryAndResource": true,
+    "deterministicRegeneration": true,
+    "ciSelectionUnchanged": true,
+    "auditEvidence": {
+      "note": "diagnostics, never classification authority",
+      "importGraphOwnerConcentration": {
+        "medianDominantSubsystemShare": 0.7,
+        "ownersWithAtLeast8DirectTestImporters": 19,
+        "mostConcentrated": {
+          "table_creation_service_owner": 1.0,
+          "admin_control_snapshot_owner": 0.88,
+          "rebalancer_planning_owner": 0.87,
+          "query_executor_owner": 0.85
+        },
+        "leastConcentrated": {
+          "system_table_gateway_owner": 0.32,
+          "cdc_integration_owner": 0.4,
+          "replica_handler_owner": 0.44,
+          "control_plane_readiness_owner": 0.5
+        },
+        "interpretation": "low concentration marks SHARED infrastructure owners, which is what stage-3 impact closure exists to model; it is not a taxonomy defect"
+      },
+      "specialistShardOverlap": {
+        "pgwire": {
+          "pgwire-compat": 13,
+          "services-runtime": 4,
+          "placement-rebalance": 2,
+          "bootstrap-membership": 1,
+          "admin-diagnostics": 1
+        },
+        "safety-pregate": {
+          "architecture-governance": 3,
+          "convergence-topology": 3
+        },
+        "external-toolchain": {
+          "services-runtime": 7,
+          "wasm-toolchain": 4,
+          "cli-tooling": 2,
+          "examples-e2e": 1
+        },
+        "interpretation": "a feature suite legitimately pulls in supporting tests whose semantic home is elsewhere; shards are proof suites, subsystems are semantic homes"
+      }
+    },
+    "failClosedContractsProvenByMutation": [
+      "removed rule -> unclassified, named",
+      "duplicate rule -> ambiguous, both rule ids named",
+      "rule matching nothing -> dead taxonomy, named",
+      "override naming a dead path -> dead override, named"
+    ],
+    "knownGapForStage2": "test/shards/timings.json covers 201/2064 tests (9.7%); all 1812 unit tests untimed, so no subsystem wall-clock cost is knowable yet"
+  }
+}
