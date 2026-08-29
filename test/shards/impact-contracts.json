@@ -166,8 +166,8 @@
         "test/workflow/owner-key-reconcile-queue.test.js"
       ]
     },
-    "active-gate-authoritative-repair": {
-      "description": "Authoritative discovery repair pressure containment and startup ACTIVE convergence form one protected owner-interaction contract: callers cannot bypass failed-repair backoff, and stale deferred evidence cannot become a permanent ACTIVE veto after newer owner evidence exists.",
+    "active-gate-convergence": {
+      "description": "The canonical active-gate system contract: authoritative discovery repair pressure containment and startup ACTIVE convergence stay compatible, callers cannot bypass failed-repair backoff, and stale deferred evidence cannot become a permanent ACTIVE veto after newer owner evidence exists.",
       "owners": [
         "src/admin/admin-service-discovery-repair-cache-methods.js",
         "src/admin/admin-control-snapshot-active-gate-handoff-projection.js",
@@ -317,7 +317,7 @@
           ]
         }
       ],
-      "contract": "active-gate-authoritative-repair",
+      "contract": "active-gate-convergence",
       "witnessTests": [
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
