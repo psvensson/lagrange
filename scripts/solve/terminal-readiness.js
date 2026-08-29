@@ -49,7 +49,6 @@ export function terminalReadiness(root, quest, state) {
       manifest: review.manifest,
       preflight: review.preflight,
       contentIdentity: review.contentIdentity,
-      candidateMeasurements: review.candidateMeasurements,
     } : null,
   };
 }
