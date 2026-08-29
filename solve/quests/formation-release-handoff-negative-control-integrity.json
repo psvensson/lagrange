@@ -1,0 +1,60 @@
+{
+  "id": "formation-release-handoff-negative-control-integrity",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The formation-release GCP A/B runner deploys byte-distinct fixed and single-axis-reverted sources, proves their source fingerprints differ (refusing to run a control whose reverted fingerprint equals the fixed fingerprint), writes reverted controls into a separate negative-control scenario/lane so expected control failures never contaminate the fixed consecutive-run certification population, and keeps organic fixed-source failures inside that population so they still reset the streak. Deterministic runner/probe tests prove the fixed, reverted-red, reverted-unexpected-green, and organic-fixed-failure classifications. This is a harness/tooling (process) contract in service of the parent product quest formation-release-handoff-closure-v3; it is NOT a replacement, successor, or re-scope of that quest, which remains open with done:false on its fixed-lane streak.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "solve/changes/formation-barrier-spread-cure-final-landing/live-ab/round-3/analysis.md",
+    "closesCL": [],
+    "parentQuest": "formation-release-handoff-closure-v3",
+    "planDoc": "docs/steering/roadmap.md",
+    "draftedAtCommit": "cc66e0a04ac5fdd0efcb9d588fd4f5e952dd80cd"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json",
+      "requiredReceipts": [
+        "fixed-reported-in-fixed-lane",
+        "reverted-control-in-separate-lane",
+        "control-refuses-equal-fingerprints",
+        "byte-distinct-single-axis-revert",
+        "expected-control-red-passes-control",
+        "unexpected-control-green-fails-control",
+        "organic-fixed-failure-resets-streak",
+        "analyzer-tests-stay-green"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-release-handoff-negative-control-integrity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json",
+          "requiredReceipts": [
+            "fixed-reported-in-fixed-lane",
+            "reverted-control-in-separate-lane",
+            "control-refuses-equal-fingerprints",
+            "byte-distinct-single-axis-revert",
+            "expected-control-red-passes-control",
+            "unexpected-control-green-fails-control",
+            "organic-fixed-failure-resets-streak",
+            "analyzer-tests-stay-green"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

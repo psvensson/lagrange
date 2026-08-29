@@ -1,0 +1,992 @@
+diff --git a/scripts/checks/run-formation-release-handoff-gcp.js b/scripts/checks/run-formation-release-handoff-gcp.js
+index 4f4f306c6ca69d4cf88f158af93bfbcd0018af4f..def5b3dbd66a24917f7cf2253d22bf09936b626b 100644
+--- a/scripts/checks/run-formation-release-handoff-gcp.js
++++ b/scripts/checks/run-formation-release-handoff-gcp.js
+@@ -2,6 +2,8 @@
+ 
+ import fs from 'node:fs/promises';
+ import path from 'node:path';
++import os from 'node:os';
++import {execFile} from 'node:child_process';
+ import {fileURLToPath} from 'node:url';
+ import {createHash} from 'node:crypto';
+ import {computeSourceFingerprint} from
+@@ -14,6 +16,8 @@ import {
+ 
+ const arraySort = Function.call.bind(Array.prototype.sort);
+ const arrayFind = Function.call.bind(Array.prototype.find);
++const arrayMap = Function.call.bind(Array.prototype.map);
++const arrayJoin = Function.call.bind(Array.prototype.join);
+ const bufferFrom = Buffer.from;
+ const DateConstructor = Date;
+ const dateToISOString = Function.call.bind(Date.prototype.toISOString);
+@@ -23,6 +27,7 @@ const stringConstructor = String;
+ const stringIncludes = Function.call.bind(String.prototype.includes);
+ const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
+ const stringSplit = Function.call.bind(String.prototype.split);
++const stringTrim = Function.call.bind(String.prototype.trim);
+ 
+ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+ const REPORT_ROOT = path.join(
+@@ -37,8 +42,18 @@ const REVERTED_VARIANT = 'reverted';
+ // per-run report.json (kept for log archaeology) is mirrored there with the
+ // sealed scenario name plus a scenario entry carrying the priority count.
+ const PROBE_SCENARIO_NAME = 'formation-release-handoff-closure';
++// Distinct negative-control lane. The certification streak reads ONLY
++// PROBE_SCENARIO_NAME; the reverted control reports under this separate
++// scenario so an expected-failing control can never reset the fixed streak.
++const REVERTED_CONTROL_SCENARIO_NAME =
++  'formation-release-handoff-closure-reverted-control';
+ const PROBE_REPORT_BASENAME =
+   'formation-release-handoff-closure-live-gcp';
++const REVERTED_CONTROL_REPORT_BASENAME =
++  'formation-release-handoff-closure-reverted-control-live-gcp';
++// Per-run (archaeology) report identity + fidelity scalar owners (§4).
++const REPORT_SCENARIO_NAME = 'formation-release-handoff-closure-live-gcp';
++const FIDELITY_LIVE_GCP = 'live-gcp';
+ const PRIORITY_ITEMS_ON_PASS = 0;
+ const PRIORITY_ITEMS_ON_FAIL = 1;
+ const FAILED_ON_PASS = 0;
+@@ -49,11 +64,216 @@ const HASH_ENCODING = 'hex';
+ const LOG_FILE_SUFFIX = '.log';
+ const NEWLINE_SEPARATOR = '\n';
+ const ENCODING_UTF8 = 'utf8';
++// Single deliberate mechanism reverted by the negative control. The reverse
++// patch below removes ONLY the capture-vs-retention semantic fix
++// (isRetainableAuthority's transient-BLOCKED retention branch); every other
++// mechanism (cohort growth, latency, analyzer, instrumentation) is identical.
++const REVERTED_MECHANISM =
++  'capture-vs-retention-semantic:' +
++  'isRetainableAuthority-transient-blocked-retention';
++const CANDIDATE_COMMIT = 'cc66e0a04ac5fdd0efcb9d588fd4f5e952dd80cd';
++const CONTRACT_RELATIVE_PATH =
++  'src/control-plane/formation-release-handoff-contract.js';
++const SOURCE_SUBDIR = 'src';
++const GIT_COMMAND = 'git';
++const WORKTREE_PREFIX = 'formation-release-handoff-reverted-control-';
++// Reverse-patch and git-invocation scalar owners (§4).
++const PATCH_DELETION_PREFIX = '-';
++const PATCH_ADDITION_PREFIX = '+';
++const PATCH_OLD_FILE_PREFIX = '--- a/';
++const PATCH_NEW_FILE_PREFIX = '+++ b/';
++const PATCH_HUNK_HEADER = '@@ retention-capture-vs-retain @@';
++const EMPTY_STRING = '';
++const SINGLE_SPACE = ' ';
++const GIT_SUBCOMMAND_WORKTREE = 'worktree';
++const GIT_SUBCOMMAND_ADD = 'add';
++const GIT_SUBCOMMAND_REMOVE = 'remove';
++const GIT_FLAG_DETACH = '--detach';
++const GIT_FLAG_FORCE = '--force';
++const WORKTREE_TREE_DIRNAME = 'tree';
++const ERROR_REVERT_BLOCK_NOT_FOUND =
++  'revert refused: fixed retention block not found verbatim at candidate';
++const ERROR_REVERT_NO_CHANGE = 'revert produced no change';
++const ERROR_FINGERPRINT_EQUALITY =
++  'negative-control refused: reverted source fingerprint equals fixed ' +
++  'source fingerprint (no source actually reverted)';
++// Fixed retention block (the deliberate fix) restored to its known-bad form by
++// the reverse patch. Derived verbatim from the candidate contract so the patch
++// is guaranteed to apply; the reverted source drops the retention branch so a
++// transient BLOCKED startup-authority instant now REVOKES the generation.
++const FIXED_RETENTION_BLOCK = [
++  '  if (evidence.ready === true) return isAuthorityReadyRetainable(evidence);',
++  '  // Capture is gated on READY+spread; retention must be monotonic wrt',
++  '  // compatible transient recovery (decision-table invariant',
++  '  // non-monotone-spread-safe: "Spread is explicitly non-monotone until the',
++  '  // captured cohort publishes READY"). A transient BLOCKED instant produced by',
++  '  // a compatible recovery while the projection active gate is blocked carries',
++  '  // NO recovery disqualifier (empty recoveryReasonCodes) and the spread gap is',
++  '  // still open — that is the compatible-reopen case, so the captured generation',
++  '  // is retained. A SUBSTANTIVE authority block instead records a concrete',
++  '  // non-allowlisted reason (e.g. control_plane_not_writable) and remains fatal',
++  '  // via pendingAuthorityIsRetainable\'s reason allowlist below.',
++  '  if (',
++  '    evidence.state === STARTUP_AUTHORITY_STATE.BLOCKED &&',
++  '    evidence.prioritySpreadSatisfied === false &&',
++  '    evidence.recoveryReasonCodes.length === 0',
++  '  ) {',
++  '    return true;',
++  '  }',
++  '  return pendingAuthorityIsRetainable(evidence);',
++].join(NEWLINE_SEPARATOR);
++const REVERTED_RETENTION_BLOCK = [
++  '  if (evidence.ready === true) return isAuthorityReadyRetainable(evidence);',
++  '  return pendingAuthorityIsRetainable(evidence);',
++].join(NEWLINE_SEPARATOR);
+ 
+ function sha256(bytes) {
+   return createHash(HASH_ALGORITHM).update(bytes).digest(HASH_ENCODING);
+ }
+ 
++function execGit(args, cwd) {
++  return new Promise((resolvePromise, rejectPromise) => {
++    execFile(GIT_COMMAND, args, {cwd}, (error, stdout, stderr) => {
++      if (error) {
++        rejectPromise(new Error(
++          `git ${arrayJoin(args, SINGLE_SPACE)} failed: ` +
++          stringTrim(stringConstructor(stderr)),
++        ));
++        return;
++      }
++      resolvePromise(stringTrim(stringConstructor(stdout)));
++    });
++  });
++}
++
++// Build the deterministic reverse patch text that restores the known-bad
++// retention semantic. Constructed from the verbatim fixed block (so it always
++// applies at the candidate) — never from a historical commit.
++function buildRevertPatch() {
++  const removedLines = arrayJoin(
++    arrayMap(
++      stringSplit(FIXED_RETENTION_BLOCK, NEWLINE_SEPARATOR),
++      (line) => `${PATCH_DELETION_PREFIX}${line}`,
++    ),
++    NEWLINE_SEPARATOR,
++  );
++  const addedLines = arrayJoin(
++    arrayMap(
++      stringSplit(REVERTED_RETENTION_BLOCK, NEWLINE_SEPARATOR),
++      (line) => `${PATCH_ADDITION_PREFIX}${line}`,
++    ),
++    NEWLINE_SEPARATOR,
++  );
++  return arrayJoin(
++    [
++      `${PATCH_OLD_FILE_PREFIX}${CONTRACT_RELATIVE_PATH}`,
++      `${PATCH_NEW_FILE_PREFIX}${CONTRACT_RELATIVE_PATH}`,
++      PATCH_HUNK_HEADER,
++      removedLines,
++      addedLines,
++      EMPTY_STRING,
++    ],
++    NEWLINE_SEPARATOR,
++  );
++}
++
++// Apply the single-axis revert to an isolated worktree by direct content
++// substitution of the retention block. Refuses unless the fixed block is
++// present verbatim, so the control can never silently revert nothing.
++async function applyRetentionRevert(sourceRoot) {
++  const contractPath = path.join(sourceRoot, CONTRACT_RELATIVE_PATH);
++  const source = await fs.readFile(contractPath, ENCODING_UTF8);
++  if (!stringIncludes(source, FIXED_RETENTION_BLOCK)) {
++    throw new Error(ERROR_REVERT_BLOCK_NOT_FOUND);
++  }
++  const reverted = stringReplaceAll(
++    source,
++    FIXED_RETENTION_BLOCK,
++    REVERTED_RETENTION_BLOCK,
++  );
++  if (reverted === source) {
++    throw new Error(ERROR_REVERT_NO_CHANGE);
++  }
++  await fs.writeFile(contractPath, reverted);
++}
++
++// Produce the reverted arm: an isolated git worktree rooted at the exact
++// candidate commit, with the single deliberate mechanism reversed. The main
++// worktree is NEVER mutated. Returns the fingerprints + patch fingerprint.
++//
++// `work` is an optional deterministic-test seam: when `work.worktreePath`
++// points at an already-populated tree, no git worktree is created and the
++// revert is applied in place there. When omitted, an isolated temp worktree is
++// created at the candidate commit. Either way the fingerprint-equality refusal
++// below runs against the deployed tree.
++async function prepareRevertedSource(fixedSourceFingerprint, work) {
++  const injected = work && typeof work.worktreePath === 'string';
++  const workParent = injected ?
++    path.dirname(work.worktreePath) :
++    await fs.mkdtemp(path.join(os.tmpdir(), WORKTREE_PREFIX));
++  const worktreePath = injected ?
++    work.worktreePath :
++    path.join(workParent, WORKTREE_TREE_DIRNAME);
++  const createdWorktree = !injected;
++  if (createdWorktree) {
++    await execGit(
++      [
++        GIT_SUBCOMMAND_WORKTREE,
++        GIT_SUBCOMMAND_ADD,
++        GIT_FLAG_DETACH,
++        worktreePath,
++        CANDIDATE_COMMIT,
++      ],
++      ROOT,
++    );
++  }
++  try {
++    await applyRetentionRevert(worktreePath);
++  } catch (error) {
++    if (createdWorktree) await cleanupWorktree(worktreePath, workParent);
++    throw error;
++  }
++  const revertedSourceFingerprint = await computeSourceFingerprint(
++    path.join(worktreePath, SOURCE_SUBDIR),
++  );
++  const revertPatch = buildRevertPatch();
++  const revertPatchFingerprint = sha256(bufferFrom(revertPatch));
++  // One assertion that would have caught the false-control bug: the two arms
++  // MUST deploy different source. Refuse to run otherwise.
++  if (fixedSourceFingerprint === revertedSourceFingerprint) {
++    if (createdWorktree) await cleanupWorktree(worktreePath, workParent);
++    throw new Error(ERROR_FINGERPRINT_EQUALITY);
++  }
++  return {
++    worktreePath,
++    workParent,
++    createdWorktree,
++    revertedSourceFingerprint,
++    revertPatchFingerprint,
++  };
++}
++
++async function cleanupWorktree(worktreePath, workParent) {
++  try {
++    await execGit(
++      [
++        GIT_SUBCOMMAND_WORKTREE,
++        GIT_SUBCOMMAND_REMOVE,
++        GIT_FLAG_FORCE,
++        worktreePath,
++      ],
++      ROOT,
++    );
++  } catch {
++    // Best-effort: a partially-created worktree may not be registered.
++  }
++  try {
++    await fs.rm(workParent, {recursive: true, force: true});
++  } catch {
++    // Best-effort cleanup of the temp parent.
++  }
++}
++
+ function parseLogLine(line) {
+   try {
+     const value = jsonParse(line);
+@@ -87,10 +307,16 @@ function resolveVariant(argv = process.argv.slice(2)) {
+     REVERTED_VARIANT : FIXED_VARIANT;
+ }
+ 
+-async function runCluster(outputDir) {
++// The cluster image + source fingerprint are both keyed off a working
++// directory's `src` tree, so deploying the reverted arm is a matter of running
++// the cluster from the isolated worktree root. `sourceRoot` is the deployed
++// tree; the main tree is used only for the fixed arm.
++async function runCluster(outputDir, sourceRoot) {
+   let handle = null;
+   let error = null;
++  const previousCwd = process.cwd();
+   try {
++    if (sourceRoot && sourceRoot !== previousCwd) process.chdir(sourceRoot);
+     handle = await startGcpAffinityCluster({
+       verbose: true,
+       outputDir,
+@@ -98,6 +324,7 @@ async function runCluster(outputDir) {
+   } catch (caught) {
+     error = caught;
+   } finally {
++    if (sourceRoot && sourceRoot !== previousCwd) process.chdir(previousCwd);
+     if (handle) {
+       try {
+         await handle.stop();
+@@ -138,13 +365,31 @@ async function writeReport(report, outputDir) {
+ // Mirror the run into the probe-scannable top-level report surface with the
+ // sealed scenario name and a priority metric the scenario-harness doneWhen can
+ // read (0 outstanding on pass, 1 on fail).
++function probeScenarioForVariant(variant) {
++  return variant === REVERTED_VARIANT ?
++    REVERTED_CONTROL_SCENARIO_NAME :
++    PROBE_SCENARIO_NAME;
++}
++
++function probeBasenameForVariant(variant) {
++  return variant === REVERTED_VARIANT ?
++    REVERTED_CONTROL_REPORT_BASENAME :
++    PROBE_REPORT_BASENAME;
++}
++
+ async function writeProbeReport(report) {
++  const scenario = probeScenarioForVariant(report.variant);
++  const basename = probeBasenameForVariant(report.variant);
+   const probeReport = {
+     schemaVersion: 2,
+-    scenario: PROBE_SCENARIO_NAME,
++    scenario,
+     fidelity: report.fidelity,
+     variant: report.variant,
+     sourceFingerprint: report.sourceFingerprint,
++    fixedSourceFingerprint: report.fixedSourceFingerprint,
++    revertedSourceFingerprint: report.revertedSourceFingerprint,
++    revertPatchFingerprint: report.revertPatchFingerprint,
++    revertedMechanism: report.revertedMechanism,
+     timestamp: report.finishedAt,
+     startedAt: report.startedAt,
+     finishedAt: report.finishedAt,
+@@ -162,18 +407,19 @@ async function writeProbeReport(report) {
+     },
+     scenarios: [
+       {
+-        scenario: PROBE_SCENARIO_NAME,
++        scenario,
+         passed: report.passed,
+         verdict: report.passed ? 'PASS' : 'FAIL',
+       },
+     ],
+     analysis: report.analysis,
++    control: report.control,
+     sourceReport: report.logDir,
+   };
+   const probePath = path.join(
+     ROOT,
+     'test-output/reports',
+-    `${PROBE_REPORT_BASENAME}-${stringReplaceAll(
++    `${basename}-${stringReplaceAll(
+       report.finishedAt,
+       ':',
+       '-',
+@@ -184,34 +430,120 @@ async function writeProbeReport(report) {
+   return probePath;
+ }
+ 
+-async function runFormationReleaseHandoffGcp(options = {}) {
+-  const variant = options.variant || resolveVariant();
+-  const sourceFingerprint = await computeSourceFingerprint(
+-    path.join(ROOT, 'src'),
+-  );
+-  const startedAt = new DateConstructor();
+-  const runId = stringReplaceAll(dateToISOString(startedAt), ':', '-');
+-  const outputDir = path.join(REPORT_ROOT, runId, 'full-logs');
+-  const cluster = await runCluster(outputDir);
+-  const analyzed = await analyzeClusterOutput(outputDir, sourceFingerprint);
+-  const error = cluster.error || analyzed.error;
+-  const analysis = analyzed.analysis;
+-  const fixedPassed = variant !== FIXED_VARIANT ||
+-    analysis?.closurePassed === true;
+-  const report = {
++// The expected negative-control regression: the deliberately reverted source
++// fails to retain the captured generation across the spread reopen, so the
++// underlying product closure fails with a stranded generation, a lost
++// retention-across-reopen, or an invalid revocation.
++function expectedRegressionObserved(analysis) {
++  if (!analysis) return false;
++  return analysis.noStrandedGeneration === false ||
++    analysis.generationRetainedAcrossReopen === false ||
++    (analysis.invalidRevocationCount ?? 0) > 0;
++}
++
++// Derive the report from a completed cluster run + analysis. Pure (no cluster,
++// no filesystem) so the control verdict logic is deterministically testable.
++// For the fixed arm `passed` IS the product closure; for the reverted control
++// `passed` is the control verdict (expected regression reproduced).
++function buildRunReport({
++  variant,
++  fixedSourceFingerprint,
++  revertedSourceFingerprint = null,
++  revertPatchFingerprint = null,
++  deployedSourceFingerprint,
++  startedAt,
++  cluster,
++  analysis,
++  logDir,
++}) {
++  const error = cluster.error || null;
++  const underlyingClosurePassed = analysis?.closurePassed === true;
++  const expectedObserved = expectedRegressionObserved(analysis);
++  const control = variant === REVERTED_VARIANT ?
++    {
++      underlyingClosurePassed,
++      g2Stranded: analysis?.noStrandedGeneration === false,
++      invalidRevocationCount: analysis?.invalidRevocationCount ?? 0,
++      generationRetainedAcrossReopen:
++        analysis?.generationRetainedAcrossReopen === true,
++      expectedRegressionObserved: expectedObserved,
++    } :
++    null;
++  const passed = error === null &&
++    (variant === REVERTED_VARIANT ?
++      expectedObserved :
++      underlyingClosurePassed);
++  return {
+     schemaVersion: 2,
+-    scenario: 'formation-release-handoff-closure-live-gcp',
+-    fidelity: 'live-gcp',
++    scenario: REPORT_SCENARIO_NAME,
++    fidelity: FIDELITY_LIVE_GCP,
+     variant,
+-    sourceFingerprint,
++    sourceFingerprint: deployedSourceFingerprint,
++    fixedSourceFingerprint,
++    revertedSourceFingerprint,
++    revertPatchFingerprint,
++    revertedMechanism: variant === REVERTED_VARIANT ?
++      REVERTED_MECHANISM :
++      null,
+     startedAt: dateToISOString(startedAt),
+     finishedAt: dateToISOString(new DateConstructor()),
+-    passed: error === null && fixedPassed,
++    passed,
+     clusterStartPassed: error === null,
+     error: error ? stringConstructor(error.message || error) : null,
+     analysis,
+-    logDir: path.relative(ROOT, outputDir),
++    control,
++    logDir,
+   };
++}
++
++async function runFormationReleaseHandoffGcp(options = {}) {
++  const variant = options.variant || resolveVariant();
++  const fixedSourceFingerprint = await computeSourceFingerprint(
++    path.join(ROOT, SOURCE_SUBDIR),
++  );
++  // Resolve the deployed tree. The reverted arm deploys the isolated-worktree
++  // source (candidate commit + single reversed mechanism); the fixed arm
++  // deploys the main tree. The fingerprint-refusal lives in
++  // prepareRevertedSource and runs BEFORE any cluster start.
++  let reverted = null;
++  if (variant === REVERTED_VARIANT) {
++    reverted = await prepareRevertedSource(
++      fixedSourceFingerprint,
++      options.revertWork || null,
++    );
++  }
++  const startedAt = new DateConstructor();
++  const runId = stringReplaceAll(dateToISOString(startedAt), ':', '-');
++  const outputDir = path.join(REPORT_ROOT, runId, 'full-logs');
++  let report;
++  try {
++    const sourceRoot = reverted ? reverted.worktreePath : null;
++    const deployedSourceFingerprint = reverted ?
++      reverted.revertedSourceFingerprint :
++      fixedSourceFingerprint;
++    const cluster = options.skipCluster ?
++      {error: null} :
++      await runCluster(outputDir, sourceRoot);
++    const analyzed = await analyzeClusterOutput(
++      outputDir,
++      deployedSourceFingerprint,
++    );
++    report = buildRunReport({
++      variant,
++      fixedSourceFingerprint,
++      revertedSourceFingerprint: reverted?.revertedSourceFingerprint ?? null,
++      revertPatchFingerprint: reverted?.revertPatchFingerprint ?? null,
++      deployedSourceFingerprint,
++      startedAt,
++      cluster: {error: cluster.error || analyzed.error},
++      analysis: analyzed.analysis,
++      logDir: path.relative(ROOT, outputDir),
++    });
++  } finally {
++    if (reverted && reverted.createdWorktree) {
++      await cleanupWorktree(reverted.worktreePath, reverted.workParent);
++    }
++  }
+   await writeReport(report, outputDir);
+   const probePath = await writeProbeReport(report);
+   process.stdout.write(`${jsonStringify({probeReport: path.relative(ROOT, probePath)}, null, 0)}\n`);
+@@ -227,6 +559,14 @@ if (isMain) {
+ 
+ export {
+   analyzeFormationReleaseEvents,
++  buildRevertPatch,
++  buildRunReport,
++  expectedRegressionObserved,
++  prepareRevertedSource,
++  probeScenarioForVariant,
+   readLogEvents,
+   runFormationReleaseHandoffGcp,
++  CANDIDATE_COMMIT,
++  PROBE_SCENARIO_NAME,
++  REVERTED_CONTROL_SCENARIO_NAME,
+ };
+diff --git a/scripts/quest-evidence-formation-release-handoff-negative-control-integrity.js b/scripts/quest-evidence-formation-release-handoff-negative-control-integrity.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..310faa057b28e3fa5d1ffa38cf361819518ec6d7
+--- /dev/null
++++ b/scripts/quest-evidence-formation-release-handoff-negative-control-integrity.js
+@@ -0,0 +1,97 @@
++// Deterministic evidence harness for the
++// formation-release-handoff-negative-control-integrity quest: receipt
++// declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the test-receipt probe artifact
++// (solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json).
++// Each receipt re-executes the focused test file rather than trusting a
++// claim, so a regression that flips a subtest red flips this receipt to
++// fail and the quest's doneWhen cannot close on stale green evidence.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const NEGATIVE_CONTROL_TEST =
++  'test/scripts/run-formation-release-handoff-gcp-negative-control.test.js';
++const ANALYZER_TEST =
++  'test/scripts/run-formation-release-handoff-gcp.test.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'fixed-reported-in-fixed-lane',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'a fixed-variant report maps to the certification scenario ' +
++      'formation-release-handoff-closure and counts toward the fixed ' +
++      'consecutive-run population (lane separation suite)',
++  }),
++  Object.freeze({
++    id: 'reverted-control-in-separate-lane',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'a reverted-variant report maps to the DISTINCT control ' +
++      'scenario formation-release-handoff-closure-reverted-control, so ' +
++      'an expected-failing control can never enter the fixed ' +
++      'certification stream (the scenario-harness probe is scenario-keyed)',
++  }),
++  Object.freeze({
++    id: 'control-refuses-equal-fingerprints',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'the control refuses to run (ERROR_FINGERPRINT_EQUALITY) when ' +
++      'the deployed reverted source fingerprint equals the fixed source ' +
++      'fingerprint — the assertion that would have caught the historical ' +
++      'false control',
++  }),
++  Object.freeze({
++    id: 'byte-distinct-single-axis-revert',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'the isolated-worktree revert deploys DIFFERENT source than ' +
++      'the main tree (fixed and reverted fingerprints differ) and the ' +
++      'main tree is byte-identical before/after; the reverse patch is a ' +
++      'deterministic unified diff against the candidate, not a historical ' +
++      'commit',
++  }),
++  Object.freeze({
++    id: 'expected-control-red-passes-control',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'EXPECTED control red: reverted source reproducing the named ' +
++      'regression (noStrandedGeneration/generationRetainedAcrossReopen/' +
++      'invalidRevocation) makes the negative-control scenario PASS',
++  }),
++  Object.freeze({
++    id: 'unexpected-control-green-fails-control',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'UNEXPECTED control green: reverted source closing ' +
++      'successfully makes the negative-control scenario FAIL ' +
++      '(expectedRegressionObserved false)',
++  }),
++  Object.freeze({
++    id: 'organic-fixed-failure-resets-streak',
++    testFile: NEGATIVE_CONTROL_TEST,
++    detail: 'an ORGANIC fixed-source failure stays in the fixed lane and ' +
++      'still resets the consecutive-run streak (passed IS the product ' +
++      'closure, no control block); it is never hidden by the control ' +
++      'machinery',
++  }),
++  Object.freeze({
++    id: 'analyzer-tests-stay-green',
++    testFile: ANALYZER_TEST,
++    detail: 'the neighboring analyzer/runner tests remain green (42/42): ' +
++      'the negative-control change is additive on the runner boundary and ' +
++      'does not regress the formation-release-handoff-closure analyzer or ' +
++      'its mandated deterministic cases',
++  }),
++]);
++
++const QUEST_ID = 'formation-release-handoff-negative-control-integrity';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'formation-release-handoff-negative-control-integrity.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json b/solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5f10952a34eaa51d0f736363049b4854caef5c9
+--- /dev/null
++++ b/solve/evidence/formation-release-handoff-negative-control-integrity.receipt.json
+@@ -0,0 +1,56 @@
++{
++  "schema": "test-receipt/1",
++  "quest": "formation-release-handoff-negative-control-integrity",
++  "status": "pass",
++  "generatedAt": "2026-08-29T08:04:46.378Z",
++  "receipts": [
++    {
++      "id": "fixed-reported-in-fixed-lane",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "a fixed-variant report maps to the certification scenario formation-release-handoff-closure and counts toward the fixed consecutive-run population (lane separation suite)"
++    },
++    {
++      "id": "reverted-control-in-separate-lane",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "a reverted-variant report maps to the DISTINCT control scenario formation-release-handoff-closure-reverted-control, so an expected-failing control can never enter the fixed certification stream (the scenario-harness probe is scenario-keyed)"
++    },
++    {
++      "id": "control-refuses-equal-fingerprints",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "the control refuses to run (ERROR_FINGERPRINT_EQUALITY) when the deployed reverted source fingerprint equals the fixed source fingerprint — the assertion that would have caught the historical false control"
++    },
++    {
++      "id": "byte-distinct-single-axis-revert",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "the isolated-worktree revert deploys DIFFERENT source than the main tree (fixed and reverted fingerprints differ) and the main tree is byte-identical before/after; the reverse patch is a deterministic unified diff against the candidate, not a historical commit"
++    },
++    {
++      "id": "expected-control-red-passes-control",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "EXPECTED control red: reverted source reproducing the named regression (noStrandedGeneration/generationRetainedAcrossReopen/invalidRevocation) makes the negative-control scenario PASS"
++    },
++    {
++      "id": "unexpected-control-green-fails-control",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "UNEXPECTED control green: reverted source closing successfully makes the negative-control scenario FAIL (expectedRegressionObserved false)"
++    },
++    {
++      "id": "organic-fixed-failure-resets-streak",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
++      "detail": "an ORGANIC fixed-source failure stays in the fixed lane and still resets the consecutive-run streak (passed IS the product closure, no control block); it is never hidden by the control machinery"
++    },
++    {
++      "id": "analyzer-tests-stay-green",
++      "passed": true,
++      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp.test.js",
++      "detail": "the neighboring analyzer/runner tests remain green (42/42): the negative-control change is additive on the runner boundary and does not regress the formation-release-handoff-closure analyzer or its mandated deterministic cases"
++    }
++  ]
++}
+diff --git a/test/scripts/run-formation-release-handoff-gcp-negative-control.test.js b/test/scripts/run-formation-release-handoff-gcp-negative-control.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..32b74489aaacfd19a2cb3d013c84d48943d02468
+--- /dev/null
++++ b/test/scripts/run-formation-release-handoff-gcp-negative-control.test.js
+@@ -0,0 +1,318 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {mkdtempSync, cpSync, rmSync, writeFileSync} from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {
++  buildRunReport,
++  buildRevertPatch,
++  expectedRegressionObserved,
++  prepareRevertedSource,
++  probeScenarioForVariant,
++  PROBE_SCENARIO_NAME,
++  REVERTED_CONTROL_SCENARIO_NAME,
++} from '../../scripts/checks/run-formation-release-handoff-gcp.js';
++import {computeSourceFingerprint} from
++  '../../src/diagnostics/source-fingerprint.js';
++import {scenarioHarnessProbe} from
++  '../../scripts/solve/probes/scenario-harness.js';
++
++const FIXED_VARIANT = 'fixed';
++const REVERTED_VARIANT = 'reverted';
++const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
++const FIXED_FINGERPRINT = 'ffffffffffffffff';
++const REVERTED_FINGERPRINT = 'eeeeeeeeeeeeeeee';
++
++// A completed-run analysis shape for each control outcome. Only the fields the
++// control verdict reads are materialized; the rest are irrelevant here.
++function regressionAnalysis() {
++  return {
++    closurePassed: false,
++    noStrandedGeneration: false,
++    generationRetainedAcrossReopen: false,
++    invalidRevocationCount: 1,
++  };
++}
++function cleanClosureAnalysis() {
++  return {
++    closurePassed: true,
++    noStrandedGeneration: true,
++    generationRetainedAcrossReopen: true,
++    invalidRevocationCount: 0,
++  };
++}
++function reportFor(variant, analysis, overrides = {}) {
++  return buildRunReport({
++    variant,
++    fixedSourceFingerprint: FIXED_FINGERPRINT,
++    revertedSourceFingerprint:
++      variant === REVERTED_VARIANT ? REVERTED_FINGERPRINT : null,
++    revertPatchFingerprint: null,
++    deployedSourceFingerprint:
++      variant === REVERTED_VARIANT ? REVERTED_FINGERPRINT : FIXED_FINGERPRINT,
++    startedAt: new Date(),
++    cluster: {error: null},
++    analysis,
++    logDir: 'x',
++    ...overrides,
++  });
++}
++
++test('negative-control lane separation: fixed and reverted variants map to ' +
++  'distinct scenarios', (t) => {
++  t.equal(
++    probeScenarioForVariant(FIXED_VARIANT),
++    'formation-release-handoff-closure',
++  );
++  t.equal(
++    probeScenarioForVariant(REVERTED_VARIANT),
++    'formation-release-handoff-closure-reverted-control',
++  );
++  t.equal(PROBE_SCENARIO_NAME, 'formation-release-handoff-closure');
++  t.equal(
++    REVERTED_CONTROL_SCENARIO_NAME,
++    'formation-release-handoff-closure-reverted-control',
++  );
++  t.not(
++    probeScenarioForVariant(FIXED_VARIANT),
++    probeScenarioForVariant(REVERTED_VARIANT),
++    'the control lane must be a distinct scenario so it cannot enter the ' +
++      'fixed certification streak',
++  );
++  t.end();
++});
++
++test('negative-control report carries the A/B fingerprints and the named ' +
++  'reverted mechanism', (t) => {
++  const report = reportFor(REVERTED_VARIANT, regressionAnalysis(), {
++    revertPatchFingerprint: 'abc123',
++  });
++  t.equal(report.variant, REVERTED_VARIANT);
++  t.equal(report.fixedSourceFingerprint, FIXED_FINGERPRINT);
++  t.equal(report.revertedSourceFingerprint, REVERTED_FINGERPRINT);
++  t.equal(report.revertPatchFingerprint, 'abc123');
++  t.equal(
++    report.revertedMechanism,
++    'capture-vs-retention-semantic:' +
++      'isRetainableAuthority-transient-blocked-retention',
++  );
++  t.not(
++    report.fixedSourceFingerprint,
++    report.revertedSourceFingerprint,
++    'a true A/B control deploys two different source trees',
++  );
++  t.end();
++});
++
++test('expectedRegressionObserved names each deliberate regression axis', (t) => {
++  t.equal(expectedRegressionObserved(null), false);
++  t.equal(expectedRegressionObserved(cleanClosureAnalysis()), false);
++  t.equal(
++    expectedRegressionObserved({
++      ...cleanClosureAnalysis(),
++      noStrandedGeneration: false,
++    }),
++    true,
++    'a stranded generation is the expected defect',
++  );
++  t.equal(
++    expectedRegressionObserved({
++      ...cleanClosureAnalysis(),
++      generationRetainedAcrossReopen: false,
++    }),
++    true,
++    'a lost retention-across-reopen is the expected defect',
++  );
++  t.equal(
++    expectedRegressionObserved({
++      ...cleanClosureAnalysis(),
++      invalidRevocationCount: 2,
++    }),
++    true,
++    'an invalid revocation is the expected defect',
++  );
++  t.end();
++});
++
++test('EXPECTED control red: reverted source reproducing the named regression ' +
++  'makes the control report PASS while the underlying closure FAILS', (t) => {
++  const report = reportFor(REVERTED_VARIANT, regressionAnalysis());
++  t.equal(report.passed, true,
++    'control passes when the deliberately reverted source exhibits the ' +
++      'expected defect');
++  t.equal(report.control.underlyingClosurePassed, false,
++    'the underlying product closure result is kept separately');
++  t.equal(report.control.expectedRegressionObserved, true);
++  t.equal(report.control.g2Stranded, true);
++  t.end();
++});
++
++test('UNEXPECTED control green: reverted source closing successfully makes ' +
++  'the control report FAIL', (t) => {
++  const report = reportFor(REVERTED_VARIANT, cleanClosureAnalysis());
++  t.equal(report.passed, false,
++    'control fails when the reverted source unexpectedly closes successfully');
++  t.equal(report.control.underlyingClosurePassed, true);
++  t.equal(report.control.expectedRegressionObserved, false);
++  t.end();
++});
++
++test('fixed arm: passed IS the product closure and carries no control block; ' +
++  'an ORGANIC fixed failure stays a fixed failure', (t) => {
++  const passing = reportFor(FIXED_VARIANT, cleanClosureAnalysis());
++  t.equal(passing.passed, true);
++  t.equal(passing.control, null,
++    'the fixed certification lane carries no control verdict');
++  const organicFailure = reportFor(FIXED_VARIANT, regressionAnalysis());
++  t.equal(organicFailure.passed, false,
++    'an organic fixed-source failure remains a fixed certification failure ' +
++      '(so it still resets the fixed streak — not hidden by the control)');
++  t.equal(organicFailure.control, null);
++  t.end();
++});
++
++test('reverse patch is a deterministic unified diff against the candidate ' +
++  'contract path', (t) => {
++  const patch = buildRevertPatch();
++  t.ok(patch.includes('--- a/src/control-plane/formation-release-handoff-contract.js'));
++  t.ok(patch.includes('+++ b/src/control-plane/formation-release-handoff-contract.js'));
++  t.ok(patch.includes('-    return true;'),
++    'the removed retention branch is present as a deletion');
++  t.ok(patch.includes('+  return pendingAuthorityIsRetainable(evidence);'));
++  t.equal(buildRevertPatch(), patch, 'the patch is deterministic');
++  t.end();
++});
++
++test('isolated-worktree revert deploys DIFFERENT source than the main tree ' +
++  'and never mutates the main contract in place', async (t) => {
++  const fixed = await computeSourceFingerprint(path.join(ROOT, 'src'));
++  const prepared = await prepareRevertedSource(fixed, null);
++  try {
++    t.not(prepared.revertedSourceFingerprint, fixed,
++      'the reverted arm fingerprint differs from the fixed arm');
++    t.equal(prepared.createdWorktree, true);
++    t.ok(prepared.revertPatchFingerprint.length > 0);
++  } finally {
++    const {execFileSync} = await import('node:child_process');
++    try {
++      execFileSync(
++        'git',
++        ['worktree', 'remove', '--force', prepared.worktreePath],
++        {cwd: ROOT},
++      );
++    } catch {
++      // best-effort cleanup
++    }
++    rmSync(prepared.workParent, {recursive: true, force: true});
++  }
++  const stillFixed = await computeSourceFingerprint(path.join(ROOT, 'src'));
++  t.equal(stillFixed, fixed,
++    'the main worktree source is byte-identical before and after the revert');
++  t.end();
++});
++
++// Drive the real scenario-harness probe over a synthetic report directory to
++// prove the certification stream and the control stream stay separate. This is
++// the regression the distinct scenario name exists to prevent: an
++// expected-failing control must NEVER reset the fixed consecutive-3 streak.
++test('certification probe reads ONLY the fixed lane; the control lane is a ' +
++  'separate streak', (t) => {
++  const dir = mkdtempSync(path.join(os.tmpdir(), 'probe-lane-'));
++  const writeReport = (name, scenario, passed, timestamp) => {
++    writeFileSync(
++      path.join(dir, name),
++      JSON.stringify({
++        scenario,
++        timestamp,
++        startedAt: timestamp,
++        finishedAt: timestamp,
++        passed,
++        optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
++        summary: {total: 1, passed: passed ? 1 : 0, failed: passed ? 0 : 1},
++        scenarios: [{scenario, passed, verdict: passed ? 'PASS' : 'FAIL'}],
++      }),
++    );
++  };
++  try {
++    // (a) A fixed report enters the fixed scenario and counts toward the streak.
++    writeReport('a.report.json', PROBE_SCENARIO_NAME, true,
++      '2026-08-29T00:00:01.000Z');
++    writeReport('b.report.json', PROBE_SCENARIO_NAME, true,
++      '2026-08-29T00:00:02.000Z');
++    // (b) A reverted-control report enters the distinct control scenario.
++    writeReport('c.report.json', REVERTED_CONTROL_SCENARIO_NAME, true,
++      '2026-08-29T00:00:03.000Z');
++    const fixedBeforeThird = scenarioHarnessProbe.measure({
++      reportDir: dir,
++      scenario: PROBE_SCENARIO_NAME,
++      consecutive: 3,
++    });
++    t.equal(fixedBeforeThird.detail.runs, 2,
++      'the fixed streak sees only the two fixed-lane runs');
++    t.equal(fixedBeforeThird.done, false,
++      'two fixed passes do not yet meet the consecutive-3 bar');
++    const control = scenarioHarnessProbe.measure({
++      reportDir: dir,
++      scenario: REVERTED_CONTROL_SCENARIO_NAME,
++      consecutive: 1,
++    });
++    t.equal(control.detail.runs, 1,
++      'the control lane reads exactly its own report');
++    t.equal(control.done, true,
++      'a passing control completes the (separate) control streak');
++    // A third fixed pass AFTER the control: the interleaved control run must
++    // not have entered the fixed window, so the three fixed passes now close.
++    writeReport('d.report.json', PROBE_SCENARIO_NAME, true,
++      '2026-08-29T00:00:04.000Z');
++    const fixedAfterThird = scenarioHarnessProbe.measure({
++      reportDir: dir,
++      scenario: PROBE_SCENARIO_NAME,
++      consecutive: 3,
++    });
++    t.equal(fixedAfterThird.detail.runs, 3,
++      'the fixed window still contains only fixed-lane runs');
++    t.equal(fixedAfterThird.done, true,
++      'three fixed passes close the certification streak even with an ' +
++        'interleaved control run');
++  } finally {
++    rmSync(dir, {recursive: true, force: true});
++  }
++  t.end();
++});
++
++test('control REFUSES to run when the deployed reverted source fingerprint ' +
++  'equals the fixed source fingerprint', async (t) => {
++  // Inject a pre-populated tree whose post-revert fingerprint we can predict,
++  // then pass that exact fingerprint as the fixed arm so the guard trips.
++  const parent = mkdtempSync(
++    path.join(os.tmpdir(), 'formation-release-handoff-refusal-'),
++  );
++  const tree = path.join(parent, 'tree');
++  try {
++    cpSync(path.join(ROOT, 'src'), path.join(tree, 'src'), {recursive: true});
++    const learned = await prepareRevertedSource('SENTINEL_DIFFERS', {
++      worktreePath: tree,
++    });
++    // Restore the tree to the fixed bytes, then revert again with the fixed
++    // fingerprint set to the learned reverted value -> equality -> refuse.
++    rmSync(tree, {recursive: true, force: true});
++    cpSync(path.join(ROOT, 'src'), path.join(tree, 'src'), {recursive: true});
++    let threw = false;
++    let message = '';
++    try {
++      await prepareRevertedSource(learned.revertedSourceFingerprint, {
++        worktreePath: tree,
++      });
++    } catch (error) {
++      threw = true;
++      message = String(error.message || error);
++    }
++    t.equal(threw, true, 'equal fingerprints must refuse to run');
++    t.ok(
++      message.includes('reverted source fingerprint equals fixed'),
++      'the refusal names the fingerprint-equality defect',
++    );
++  } finally {
++    rmSync(parent, {recursive: true, force: true});
++  }
++  t.end();
++});

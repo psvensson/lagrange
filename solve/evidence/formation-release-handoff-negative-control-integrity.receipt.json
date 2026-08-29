@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-release-handoff-negative-control-integrity",
+  "status": "pass",
+  "generatedAt": "2026-08-29T08:04:46.378Z",
+  "receipts": [
+    {
+      "id": "fixed-reported-in-fixed-lane",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "a fixed-variant report maps to the certification scenario formation-release-handoff-closure and counts toward the fixed consecutive-run population (lane separation suite)"
+    },
+    {
+      "id": "reverted-control-in-separate-lane",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "a reverted-variant report maps to the DISTINCT control scenario formation-release-handoff-closure-reverted-control, so an expected-failing control can never enter the fixed certification stream (the scenario-harness probe is scenario-keyed)"
+    },
+    {
+      "id": "control-refuses-equal-fingerprints",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "the control refuses to run (ERROR_FINGERPRINT_EQUALITY) when the deployed reverted source fingerprint equals the fixed source fingerprint — the assertion that would have caught the historical false control"
+    },
+    {
+      "id": "byte-distinct-single-axis-revert",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "the isolated-worktree revert deploys DIFFERENT source than the main tree (fixed and reverted fingerprints differ) and the main tree is byte-identical before/after; the reverse patch is a deterministic unified diff against the candidate, not a historical commit"
+    },
+    {
+      "id": "expected-control-red-passes-control",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "EXPECTED control red: reverted source reproducing the named regression (noStrandedGeneration/generationRetainedAcrossReopen/invalidRevocation) makes the negative-control scenario PASS"
+    },
+    {
+      "id": "unexpected-control-green-fails-control",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "UNEXPECTED control green: reverted source closing successfully makes the negative-control scenario FAIL (expectedRegressionObserved false)"
+    },
+    {
+      "id": "organic-fixed-failure-resets-streak",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "detail": "an ORGANIC fixed-source failure stays in the fixed lane and still resets the consecutive-run streak (passed IS the product closure, no control block); it is never hidden by the control machinery"
+    },
+    {
+      "id": "analyzer-tests-stay-green",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/run-formation-release-handoff-gcp.test.js",
+      "detail": "the neighboring analyzer/runner tests remain green (42/42): the negative-control change is additive on the runner boundary and does not regress the formation-release-handoff-closure analyzer or its mandated deterministic cases"
+    }
+  ]
+}
