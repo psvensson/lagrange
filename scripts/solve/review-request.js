@@ -11,7 +11,10 @@ import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js'
 import {candidateContentIdentity} from './candidate-content-identity.js';
 import {projectCandidateMeasurements} from './candidate-measurement.js';
 import {withCandidateWorkspace} from './candidate-workspace.js';
-import {landingReviewPreflight} from './landing-preflight.js';
+import {
+  collectLandingReviewPreflight,
+  landingReviewPreflight,
+} from './landing-preflight.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
@@ -107,7 +110,7 @@ function shadowContentIdentity(root, manifest) {
   };
 }
 
-function preparedReview(root, quest, state) {
+function prepareReview(root, quest, state, options = {}) {
   const projection = reviewProjection(quest, state);
   const candidateMeasurements = projectCandidateMeasurements(
     root,
@@ -119,13 +122,20 @@ function preparedReview(root, quest, state) {
       ...projection,
       coupledPairRegistryDigest: coupledPairRegistryDigest(candidateRoot),
     };
+    const preflight = options.collectProblems === true ?
+      collectLandingReviewPreflight(candidateRoot, manifest) :
+      landingReviewPreflight(candidateRoot, manifest);
     return {
       manifest,
-      preflight: landingReviewPreflight(candidateRoot, manifest),
+      preflight,
       shadowContentIdentity: shadowContentIdentity(candidateRoot, manifest),
       candidateMeasurements,
     };
   });
+}
+
+export function reviewReadiness(root, quest, state) {
+  return prepareReview(root, quest, state, {collectProblems: true});
 }
 
 function reviewIdFor(manifest) {
@@ -143,7 +153,7 @@ function reviewFile(root, reviewId) {
 }
 
 export function createReviewRequest(root, quest, state) {
-  const prepared = preparedReview(root, quest, state);
+  const prepared = prepareReview(root, quest, state);
   const {manifest} = prepared;
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
@@ -189,7 +199,7 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   if (request.manifest.questId !== quest.id) {
     throw new Error(`land: review ${reviewId} belongs to another Quest`);
   }
-  const prepared = preparedReview(root, quest, state);
+  const prepared = prepareReview(root, quest, state);
   if (jsonStringify(prepared.manifest) !== jsonStringify(request.manifest)) {
     throw new Error(
       `land: review ${reviewId} no longer matches current candidate bytes ` +
