@@ -31,6 +31,7 @@ import {
 import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
 import {auditQuest} from './audit.js';
 import {ingestDeclaredProbeEvidence} from './declared-probe-evidence.js';
+import {terminalReadiness} from './terminal-readiness.js';
 import {
   assertReviewCurrent,
   createReviewRequest,
@@ -43,6 +44,7 @@ const VERIFIER_REJECTION = 'verifier-rejection';
 const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
 const VERDICT_NEEDS_REVIEW = 'needs-review';
+const VERDICT_BLOCKED = 'blocked';
 const REVIEW_FINGERPRINT_CONFLICT =
   'land: --review supplies the fingerprint; omit --fingerprint';
 const INVALID_VERDICT_PROBLEM = 'land: --verdict must be approve|reject';
@@ -225,10 +227,6 @@ function sameAuditProblem(left, right) {
 
 function assertApprovalCanCompleteAudit(root, quest, state) {
   const audit = auditQuest(root, quest);
-  // An aggregate approval recorded before `land` (the boot.md flow: verify,
-  // record the structured finding, then land) leaves zero audit problems;
-  // that is as landable as the single pending receipt problem `land` itself
-  // discharges by recording the approval.
   const alreadyApproved = state.aggregateProblems.length === 0 &&
     audit.problems.length === 0;
   const expected = state.aggregateProblems.length === 1 ?
@@ -282,8 +280,8 @@ export function landQuestWorkflow(root, args = {}) {
     args.finding || reviewId,
   );
   if (!hasVerdictInput) {
-    assertApprovalCanCompleteAudit(root, quest, state);
     if (state.aggregateApproval) {
+      assertApprovalCanCompleteAudit(root, quest, state);
       const commit = autoCommitQuest(root, id);
       return {
         schemaVersion: 1,
@@ -297,6 +295,20 @@ export function landQuestWorkflow(root, args = {}) {
         next: buildNextProjection(root, id),
       };
     }
+    const readiness = terminalReadiness(root, quest, state);
+    if (!readiness.readyForReview) {
+      return {
+        schemaVersion: 1,
+        questId: id,
+        verdict: VERDICT_BLOCKED,
+        fingerprint: state.aggregate.fingerprint,
+        receiptRef: null,
+        committed: false,
+        readiness,
+        ingestedEvidence,
+        next: buildNextProjection(root, id),
+      };
+    }
     const review = createReviewRequest(root, quest, state);
     return {
       schemaVersion: 1,
@@ -306,6 +318,7 @@ export function landQuestWorkflow(root, args = {}) {
       fingerprint: null,
       receiptRef: null,
       committed: false,
+      readiness,
       ingestedEvidence,
       next: buildNextProjection(root, id),
     };
@@ -343,10 +356,6 @@ export function landQuestWorkflow(root, args = {}) {
   if (verdict === VERDICT_APPROVE) {
     assertApprovalCanCompleteAudit(root, quest, state);
   }
-  // The durable claim must carry the verifier's category-complete finding
-  // list, never only a receipt pointer: the amendment excerpt rule,
-  // `theory option --from-rejection`, and any later post-mortem all read this
-  // event, and a pointer satisfies them mechanically with zero content.
   const rejectionFindings = verdict === VERDICT_REJECT ?
     parseRejectionFindings(args.finding) : [];
   if (verdict === VERDICT_REJECT) {

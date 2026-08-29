@@ -31,6 +31,7 @@ const TEXT_ENCODING = 'utf8';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const PREFLIGHT_PASS = 'pass';
+const PREFLIGHT_FAIL = 'fail';
 const LINE_SEPARATOR = '\n';
 const SILENT_CATCH_CHECKER = 'scripts/check-guideline-silent-catch.js';
 const SILENT_CATCH_LABEL = 'silent-catch audit';
@@ -115,10 +116,6 @@ function silentCatchProblems(root, paths) {
   const checker = path.join(root, SILENT_CATCH_CHECKER);
   if (!fs.existsSync(checker)) return [];
   const args = [checker];
-  // A candidate may legitimately DELETE a file (dead-code removal); the
-  // checker stats every path it is handed, so a deleted path would crash the
-  // preflight on ENOENT instead of being skipped. Filter absent paths exactly
-  // as staticQualityProblems does.
   arrayForEach(paths, (filePath) => {
     if (fs.existsSync(path.join(root, filePath))) arrayPush(args, filePath);
   });
@@ -210,59 +207,89 @@ export function canonicalImportGraphProblem(
   return canonicalReceiptProblem(root, result.stdout);
 }
 
-export function landingReviewPreflight(root, manifest) {
+function importClosureProblem(root, manifest) {
   const importClosure = importClosureGaps(root, manifest.candidate);
-  if (importClosure.importGaps.length > 0) {
-    throw new Error(IMPORT_CLOSURE_PROBLEM_PREFIX +
-      arrayJoin(arrayMap(importClosure.importGaps, (gap) =>
-        `${gap.importer} imports omitted ${gap.imported}`),
-      IMPORT_CLOSURE_SEPARATOR));
-  }
+  if (importClosure.importGaps.length === 0) return null;
+  return IMPORT_CLOSURE_PROBLEM_PREFIX +
+    arrayJoin(arrayMap(importClosure.importGaps, (gap) =>
+      `${gap.importer} imports omitted ${gap.imported}`),
+    IMPORT_CLOSURE_SEPARATOR);
+}
+
+function changedPaths(manifest) {
   const paths = [];
   arrayForEach(manifest.aggregate.sourcePaths || [], (filePath) => {
     if (!arrayIncludes(paths, filePath)) arrayPush(paths, filePath);
   });
   arraySort(paths);
-  const sourceDigest = manifest.aggregate.fingerprint;
-  const key = preflightKey(root, manifest, paths);
-  const file = path.join(root, CACHE_DIRECTORY, `${key}.json`);
-  const importGraphProblem = canonicalImportGraphProblem(root);
-  if (importGraphProblem) throw new Error(importGraphProblem);
-  const proofCone = landingProofCone(root, paths, sourceDigest);
-  if (readPassingCache(file, key)) {
-    return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
-      status: PREFLIGHT_PASS, cached: true, proofCone};
-  }
+  return paths;
+}
+
+function collectStaticProblems(root, paths) {
   const problems = staticQualityProblems(root, paths);
   arrayForEach(silentCatchProblems(root, paths), (problem) =>
     arrayPush(problems, problem));
-  if (problems.length > 0) {
-    throw new Error(
-      `land: changed-path preflight failed: ${arrayJoin(
-        problems, LINE_SEPARATOR)}`);
-  }
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  fs.writeFileSync(file, `${jsonStringify({
-    schemaVersion: CACHE_SCHEMA_VERSION,
-    key,
-    sourceDigest,
-    paths,
-    status: PREFLIGHT_PASS,
-  }, null, 2)}\n`);
-  return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
-    status: PREFLIGHT_PASS, cached: false, proofCone};
+  return problems;
 }
 
-// The proof cone for the exact aggregate changed paths, derived at review
-// minting and re-derived at verdict recording (assertReviewCurrent re-runs
-// this preflight): the receipt records WHY each selected proof was relevant
-// (escalation tier, per-edge-kind counts, selector version, input digests).
-// Full-suite tiers keep the whole census; the receipt is what makes "we ran
-// the cone" auditable. The selector fails closed, so a selection problem
-// widens to the full census instead of ever narrowing silently. The cone is
-// a pure function of the hashed manifest sourcePaths plus digest-pinned
-// selector inputs, so it is attached to the preflight result rather than
-// hashed into the manifest itself.
+export function collectLandingReviewPreflight(root, manifest) {
+  const paths = changedPaths(manifest);
+  const sourceDigest = manifest.aggregate.fingerprint;
+  const key = preflightKey(root, manifest, paths);
+  const file = path.join(root, CACHE_DIRECTORY, `${key}.json`);
+  const problems = [];
+
+  const closureProblem = importClosureProblem(root, manifest);
+  if (closureProblem) arrayPush(problems, closureProblem);
+
+  const importGraphProblem = canonicalImportGraphProblem(root);
+  if (importGraphProblem) arrayPush(problems, importGraphProblem);
+
+  let proofCone = null;
+  if (!importGraphProblem) {
+    try {
+      proofCone = landingProofCone(root, paths, sourceDigest);
+    } catch (error) {
+      arrayPush(problems, error.message);
+    }
+  }
+
+  const cached = readPassingCache(file, key);
+  if (!cached) {
+    arrayForEach(collectStaticProblems(root, paths), (problem) =>
+      arrayPush(problems, `land: changed-path preflight failed: ${problem}`));
+  }
+
+  if (problems.length === 0 && !cached) {
+    fs.mkdirSync(path.dirname(file), {recursive: true});
+    fs.writeFileSync(file, `${jsonStringify({
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      key,
+      sourceDigest,
+      paths,
+      status: PREFLIGHT_PASS,
+    }, null, 2)}\n`);
+  }
+
+  return {
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    sourceDigest,
+    paths,
+    status: problems.length === 0 ? PREFLIGHT_PASS : PREFLIGHT_FAIL,
+    cached: problems.length === 0 && cached,
+    proofCone,
+    problems,
+  };
+}
+
+export function landingReviewPreflight(root, manifest) {
+  const result = collectLandingReviewPreflight(root, manifest);
+  if (result.problems.length > 0) {
+    throw new Error(arrayJoin(result.problems, LINE_SEPARATOR));
+  }
+  return result;
+}
+
 function landingProofCone(root, paths, sourceDigest) {
   const {selection, problems} = selectProofCone(root, paths);
   const graphProblem = arrayFind(problems, (problem) =>
