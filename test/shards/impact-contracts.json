@@ -319,6 +319,7 @@
       ],
       "contract": "active-gate-convergence",
       "witnessTests": [
+        "test/admin/admin-service-discovery.test.js",
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js"
