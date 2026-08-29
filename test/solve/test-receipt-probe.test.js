@@ -39,7 +39,8 @@ function passingPayload(generatedAt = '2026-08-29T10:00:00.000Z') {
 
 tap.test('test-receipt probe is registered under its canonical name', (t) => {
   t.equal(getProbe('test-receipt').name, 'test-receipt');
-  t.equal(getProbe('test-receipt').evidenceClass, 'deterministic');
+  t.equal(getProbe('test-receipt').evidenceClass, 'live',
+    'v1 receipts stay freshness-sensitive until they bind candidate/proof inputs');
   t.end();
 });
 
@@ -128,7 +129,7 @@ tap.test('done requires zero outstanding and a passing status', (t) => {
   t.end();
 });
 
-tap.test('deterministic receipt identity ignores generation time, mtime, and storage path', (t) => {
+tap.test('unbound test-receipt v1 keeps timestamp and storage freshness', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-receipt-identity-'));
   t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
   const file = writeReceipt(dir, passingPayload());
@@ -138,36 +139,52 @@ tap.test('deterministic receipt identity ignores generation time, mtime, and sto
   };
   const first = evaluate(spec, {root: dir});
   t.equal(first.evidenceIdentity.schemaVersion, 2);
-  t.equal(first.evidenceIdentity.evidenceClass, 'deterministic');
+  t.equal(first.evidenceIdentity.evidenceClass, 'live');
 
   writeReceipt(dir, passingPayload('2026-08-29T11:00:00.000Z'));
-  const later = new Date(Date.now() + 10_000);
-  fs.utimesSync(file, later, later);
   const second = evaluate(spec, {root: dir});
-  t.equal(second.evidenceFingerprint, first.evidenceFingerprint,
-    'volatile receipt time and filesystem time do not create new proof meaning');
-  t.not(second.evidenceIdentity.sha256, first.evidenceIdentity.sha256,
-    'raw artifact identity remains available for forensic provenance');
+  t.not(second.evidenceFingerprint, first.evidenceFingerprint,
+    'a new v1 receipt run remains fresh evidence until source/input binding exists');
 
-  const copy = writeReceipt(dir, passingPayload('2026-08-29T12:00:00.000Z'),
+  const copy = writeReceipt(dir, passingPayload('2026-08-29T11:00:00.000Z'),
     'receipt-copy.json');
   const copied = evaluate({
     probe: 'test-receipt',
-    args: {file: copy, requiredReceipts: [...REQUIRED].reverse()},
+    args: {file: copy, requiredReceipts: REQUIRED},
   }, {root: dir});
+  t.not(copied.evidenceFingerprint, second.evidenceFingerprint,
+    'legacy live receipt identity remains storage-path sensitive');
+  t.end();
+});
+
+tap.test('deterministic evidence framework ignores storage time/path when probe owns semantics', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oracle-evidence-identity-'));
+  t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
+  const file = path.join(dir, 'oracle.json');
+  fs.writeFileSync(file, JSON.stringify({metric: 0, target: 0}));
+  const first = evaluate({probe: 'oracle', args: {file}}, {root: dir});
+  t.equal(first.evidenceIdentity.evidenceClass, 'deterministic');
+
+  const later = new Date(Date.now() + 10_000);
+  fs.utimesSync(file, later, later);
+  const touched = evaluate({probe: 'oracle', args: {file}}, {root: dir});
+  t.equal(touched.evidenceFingerprint, first.evidenceFingerprint,
+    'mtime alone does not create new deterministic proof meaning');
+
+  const copy = path.join(dir, 'oracle-copy.json');
+  fs.copyFileSync(file, copy);
+  const copied = evaluate({probe: 'oracle', args: {file: copy}}, {root: dir});
   t.equal(copied.evidenceFingerprint, first.evidenceFingerprint,
-    'the same deterministic proof bytes and semantic args are storage-path independent');
+    'probe-owned deterministic identity is storage-path independent');
   t.equal(evidenceIdentityMatchesEvent(copied.evidenceIdentity, {
     evidenceFingerprint: first.evidenceFingerprint,
     evidenceIdentity: first.evidenceIdentity,
   }, {requireProbeSpec: true}), true,
-  'declared-probe dedupe uses the semantic probe key rather than the storage path');
+  'declared-probe dedupe compares the semantic probe key');
 
-  const changed = passingPayload('2026-08-29T13:00:00.000Z');
-  changed.receipts[1].passed = false;
-  writeReceipt(dir, changed);
-  const third = evaluate(spec, {root: dir});
-  t.not(third.evidenceFingerprint, first.evidenceFingerprint,
-    'a changed proof outcome changes semantic evidence identity');
+  fs.writeFileSync(file, JSON.stringify({metric: 1, target: 0}));
+  const changed = evaluate({probe: 'oracle', args: {file}}, {root: dir});
+  t.not(changed.evidenceFingerprint, first.evidenceFingerprint,
+    'changed deterministic proof content changes identity');
   t.end();
 });
