@@ -1,16 +1,103 @@
-import {TABLES} from '../constants/index.js';
+import {COLUMN, NODE_STATE, TABLES} from '../constants/index.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  MEMBERSHIP_PUBLICATION_STATUS,
+} from '../control-plane/membership-publication-row-contract.js';
+import {
+  buildSplitCutoverHandoffAddress,
+} from './split-cutover-handoff-contract.js';
+import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
+
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const DateConstructor = Date;
+const dateNow = Date.now;
+const dateToISOString = Function.call.bind(Date.prototype.toISOString);
+const numberConstructor = Number;
+const numberIsSafeInteger = Number.isSafeInteger;
+const promiseResolve = Promise.resolve.bind(Promise);
+const stringConstructor = String;
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
+const SPLIT_COHORT_PUBLICATION_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+const UNAVAILABLE_SPLIT_COHORT_PUBLICATION = Object.freeze({
+  state: SPLIT_COHORT_PUBLICATION_STATE.UNAVAILABLE,
+});
 
 function getRuntimeView(runtime) {
   return runtime?.systemCache;
+}
+
+function readSplitCohortPublication(engine) {
+  const readiness = engine?.controlPlaneReadinessService;
+  const observedAt = dateToISOString(new DateConstructor(
+    engine?.nowFn?.() ?? dateNow(),
+  ));
+  return readiness?.getMembershipPublicationDiagnosticsSync?.(
+    engine?.nodeId,
+    observedAt,
+  );
+}
+
+function splitCohortPublicationIsValid(publication, publicationEpoch) {
+  return publication?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+    publication?.publishedActiveNodeIdsPresent === true &&
+    numberIsSafeInteger(publicationEpoch) && publicationEpoch > 0;
+}
+
+function resolvePublishedSplitCohortPublication(engine) {
+  const publication = readSplitCohortPublication(engine);
+  const publicationEpoch = numberConstructor(publication?.publicationEpoch);
+  if (!splitCohortPublicationIsValid(publication, publicationEpoch)) {
+    return UNAVAILABLE_SPLIT_COHORT_PUBLICATION;
+  }
+  const publishedActiveNodeIds = copyDenseOwnDataArray(
+    publication.publishedActiveNodeIds,
+  ) || [];
+  arraySort(publishedActiveNodeIds);
+  return {
+    state: SPLIT_COHORT_PUBLICATION_STATE.AVAILABLE,
+    publicationEpoch,
+    publishedActiveNodeIds,
+  };
+}
+
+function buildSplitCohortNode(nodeRows, nodeId) {
+  const row = arrayFind(nodeRows, (entry) =>
+    stringConstructor(entry?.node_id ?? entry?.nodeId ?? '') === nodeId);
+  return {
+    nodeId,
+    bootIncarnation: numberConstructor(
+      row?.boot_incarnation ?? row?.bootIncarnation,
+    ),
+  };
+}
+
+function hasChangedBootIncarnation(row, requiredNode) {
+  const currentBootIncarnation = numberConstructor(
+    row?.[COLUMN.BOOT_INCARNATION] ?? row?.bootIncarnation,
+  );
+  return numberIsSafeInteger(currentBootIncarnation) &&
+    currentBootIncarnation > 0 &&
+    currentBootIncarnation !== requiredNode?.bootIncarnation;
+}
+
+function hasTerminalNodeStatus(row) {
+  const status = stringConstructor(
+    row?.[COLUMN.STATUS] ?? row?.status ?? '',
+  );
+  return status === NODE_STATE.FAILED ||
+    status === NODE_STATE.SHUTTING_DOWN ||
+    status === NODE_STATE.STOPPED;
 }
 
 class ManagedSplitTopologyAdapter {
@@ -176,6 +263,47 @@ class ManagedSplitTopologyAdapter {
     return this.messageRouter.deliver(
       nodeId + LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX,
       request.message,
+    );
+  }
+
+  captureSplitQueryPlaneCohort() {
+    const publication = resolvePublishedSplitCohortPublication(
+      this.sqlQueryEngine,
+    );
+    if (publication.state !== SPLIT_COHORT_PUBLICATION_STATE.AVAILABLE) {
+      return null;
+    }
+    const nodeRows =
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.NODES) || [];
+    const nodes = [];
+    for (let index = 0;
+      index < publication.publishedActiveNodeIds.length;
+      index++) {
+      nodes[nodes.length] = buildSplitCohortNode(
+        nodeRows,
+        publication.publishedActiveNodeIds[index],
+      );
+    }
+    return {publicationEpoch: publication.publicationEpoch, nodes};
+  }
+
+  isSplitQueryPlaneIncarnationRetired(requiredNode) {
+    const nodeRows =
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.NODES) || [];
+    const row = arrayFind(nodeRows, (entry) =>
+      stringConstructor(entry?.[COLUMN.NODE_ID] ?? entry?.nodeId ?? '') ===
+        requiredNode?.nodeId);
+    if (!row) return false;
+    return hasChangedBootIncarnation(row, requiredNode) ||
+      hasTerminalNodeStatus(row);
+  }
+
+  deliverSplitCutoverHandoff(nodeId, message) {
+    if (!nodeId || !this.messageRouter) return promiseResolve(null);
+    return this.messageRouter.deliver(
+      buildSplitCutoverHandoffAddress(nodeId),
+      message,
+      {targetNodeId: nodeId},
     );
   }
 

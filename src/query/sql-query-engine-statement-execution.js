@@ -367,6 +367,7 @@ class SQLQueryEngineStatementExecution extends
 
     // Parse the SQL (check cache first)
     let ast;
+    let splitHandoffLease = null;
     try {
       const dialect = options.dialect;
       ast = this.parseCache.get(sql, dialect);
@@ -436,6 +437,10 @@ class SQLQueryEngineStatementExecution extends
           errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
         });
       }
+
+      splitHandoffLease =
+        await this.splitCutoverHandoffQueryPlaneOwner
+          ?.acquireStatementLease?.(ast);
 
       // Route based on statement type
       let result;
@@ -536,6 +541,11 @@ class SQLQueryEngineStatementExecution extends
           null,
       });
       return failureResult;
+    } finally {
+      this.splitCutoverHandoffQueryPlaneOwner
+        ?.releaseStatementLease?.(splitHandoffLease);
+      this.splitCutoverHandoffQueryPlaneOwner
+        ?.notifyTransactionStateChanged?.();
     }
   }
 

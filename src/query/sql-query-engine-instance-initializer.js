@@ -9,6 +9,9 @@ import {ServicesOwner} from '../control-plane/owners/services-owner.js';
 import {
   RuntimeReplicaStateProjectionOwner,
 } from './runtime-replica-state-projection-owner.js';
+import {
+  SplitCutoverHandoffQueryPlaneOwner,
+} from './split-cutover-handoff-query-plane-owner.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -34,6 +37,7 @@ const {
   SQL_PARSE_CACHE,
   SqlParseCache,
   TableCreationService,
+  TABLES,
   TimeoutPolicy,
   createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
@@ -305,7 +309,36 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
         sqlQueryEngine: engine,
       }),
     });
-
+  engine.splitCutoverHandoffQueryPlaneOwner =
+    options.splitCutoverHandoffQueryPlaneOwner ||
+    new SplitCutoverHandoffQueryPlaneOwner({
+      nodeId: engine.nodeId,
+      systemCache: engine.systemCache,
+      messageRouter: engine.messageRouter,
+      transactionCoordinator: engine.transactionCoordinator,
+      getTableInfo: (tableNameOrId) => engine.getTableInfo(tableNameOrId),
+      parsePartitionTransition: (tableInfo) =>
+        engine.parsePartitionTransition(tableInfo),
+      resolveActivePartitionVersion: (tableInfo) =>
+        engine.resolveActivePartitionVersion(tableInfo),
+      getRoutablePartitionServiceNodeIds: (partitionId, dimension) =>
+        engine.getRoutablePartitionServiceNodeIds(partitionId, dimension),
+      ensureTransactionRecoveryObserved: () =>
+        engine.recoverDistributedTransactionStateFromCache(),
+      isTransactionRecoveryReady: () => {
+        if (engine.distributedTransactionRecoveryActivated !== true ||
+            engine.transactionRecoveryReplayPromise) return false;
+        const transactionRows =
+          engine.systemCache?.getAll?.(TABLES.SQL_TRANSACTIONS) || [];
+        if (transactionRows.length > 0 &&
+            engine.transactionStateRecovered !== true) return false;
+        return engine.lastTransactionRecoveryReplayResult?.failed === 0;
+      },
+      requestWorkflowReconcile: () =>
+        engine.managedSplitWorkflow
+          ?.requestSplitCutoverHandoffReconcile?.(),
+      logger: engine.logger,
+    });
   const config = ConfigurationManager.getInstance();
   engine.queryTimeoutMs =
     config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||

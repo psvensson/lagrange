@@ -7,7 +7,6 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
-  PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
 } from '../workflow/workflow-constants.js';
 import {
@@ -25,12 +24,14 @@ import {
   assertSplitRegistrationOverlapGuardClear,
   assertSplitTransitionAdmissionClear,
 } from './partition-transition-overlap-guard.js';
-
+import {
+  normalizeSplitSourceParticipantAck,
+} from './split-source-ack-ingress.js';
 const LOCAL_STR_PARTITION_SPLIT_WORKFLOW = 'partition:split:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
-
+const setHas = Function.call.bind(Set.prototype.has);
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
@@ -236,7 +237,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
     phaseMetadata = {},
     expectedPredecessorStates = PRE_CUTOVER_SPLIT_STATES,
   ) {
-    if (!SPLIT_OWNER_MANAGED_PHASES.has(nextPhase)) {
+    if (!setHas(SPLIT_OWNER_MANAGED_PHASES, nextPhase)) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_INVALID_PHASE_TRANSITION,
       );
@@ -277,7 +278,10 @@ class ManagedSplitWorkflowExecutionGateMethods {
    * @private
    */
   buildSplitPhaseAdvanceStepResult(input) {
-    if (!input.expectedPredecessorStates.has(input.currentWorkflow.status)) {
+    if (!setHas(
+      input.expectedPredecessorStates,
+      input.currentWorkflow.status,
+    )) {
       this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
         workflowId: input.workflowId,
         nextPhase: input.nextPhase,
@@ -306,20 +310,10 @@ class ManagedSplitWorkflowExecutionGateMethods {
   }
 
   /**
-   * Accept a typed source-side participant acknowledgement, persist it
-   * through the canonical DurableWorkflowCoordinator path, and react on
-   * the two owner-decided boundaries: cutover (source caught up) and
-   * dissolution (source mirror removed).
-   *
-   * PartitionService calls this at each execution boundary instead of
-   * owning split phase transitions directly.
-   *
-   * @param {string} workflowId - Durable workflow identity.
-   * @param {Object} ack - Acknowledgement payload using
-   *   PARTICIPANT_ACK_FIELD keys (participantKey, status, fenceToken,
-   *   checkpoint, acknowledgedAt).
-   * @return {Promise<Object>} acknowledgeParticipant result extended
-   *   with {splitCutoverApplied: boolean}.
+   * Persist one strict source ack and react at owner-decided boundaries.
+   * @param {string} workflowId
+   * @param {Object} ack
+   * @return {Promise<Object>}
    */
   async acknowledgeSourceParticipant(workflowId, ack) {
     if (!workflowId) {
@@ -337,9 +331,23 @@ class ManagedSplitWorkflowExecutionGateMethods {
       workflow.workflowId,
       workflow.metadata,
     );
+    const normalized = normalizeSplitSourceParticipantAck(ack);
+    if (!normalized) {
+      return this.buildRejectedSplitAckOutcome(workflowId, {
+        result: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
+        currentStatus: this.resolveSplitSourceParticipantStatus(workflow),
+      });
+    }
+    const {ack: normalizedAck, status: ackStatus} = normalized;
+    if (normalized.ownerRecorded) {
+      return this.buildRejectedSplitAckOutcome(workflowId, {
+        result: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
+        currentStatus: this.resolveSplitSourceParticipantStatus(workflow),
+      });
+    }
     const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
       workflowId,
-      ack,
+      normalizedAck,
     );
 
     // A rejected acknowledgement (stale fence, out-of-graph transition,
@@ -350,10 +358,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 
-    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
     let splitCutoverApplied =
       workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
-    if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
+    if (setHas(SPLIT_ACK_FAILURE_STATUSES, ackStatus)) {
       // Deliberately NOT awaited: the abort is FIFO-serialized on the
       // owner lane and may queue behind an in-flight cutover step; the
       // failing source's acknowledgement must not block on that lane.
@@ -424,7 +431,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
         PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
       return true;
     }
-    if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+    if (!setHas(PRE_CUTOVER_SPLIT_STATES, workflow.status)) {
       // Aborted (FAILED) or otherwise non-running workflows must never
       // be promoted by a late or stale CATCHUP_READY acknowledgement.
       this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
@@ -434,7 +441,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
       });
       return false;
     }
-    if (!SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
+    if (!setHas(SPLIT_ACK_CATCHUP_SATISFIED_STATUSES,
       this.resolveSplitSourceParticipantStatus(workflow),
     )) {
       return false;
@@ -482,8 +489,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
         ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
         stepName: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
         execute: async ({workflow: currentWorkflow}) => {
-          if (!PRE_CUTOVER_SPLIT_STATES.has(currentWorkflow.status) ||
-              !SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
+          if (!setHas(PRE_CUTOVER_SPLIT_STATES, currentWorkflow.status) ||
+              !setHas(SPLIT_ACK_CATCHUP_SATISFIED_STATUSES,
                 this.resolveSplitSourceParticipantStatus(currentWorkflow),
               )) {
             this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
@@ -554,7 +561,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
     if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
       return true;
     }
-    if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+    if (!setHas(PRE_CUTOVER_SPLIT_STATES, workflow.status)) {
       this.logger.error(
         MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
         {workflowId, status: workflow.status, ackStatus},
@@ -631,7 +638,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
     if (currentWorkflow.status === PARTITION_TRANSITION_STATE.FAILED) {
       return {result: SPLIT_ABORT_OUTCOME.ALREADY_ABORTED};
     }
-    if (!PRE_CUTOVER_SPLIT_STATES.has(currentWorkflow.status)) {
+    if (!setHas(PRE_CUTOVER_SPLIT_STATES, currentWorkflow.status)) {
       this.logger.error(
         MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
         {workflowId, status: currentWorkflow.status, ackStatus},

@@ -1,0 +1,172 @@
+{
+  "schema": "decision-table-v1",
+  "id": "split-cutover-handoff-closure",
+  "owner": "managed_split_workflow",
+  "boundary": "split_cutover_handoff_closure",
+  "inputs": [
+    {
+      "name": "sourceBoundary",
+      "values": [
+        "cleanup_completed_false",
+        "owner_handoff_closed",
+        "owner_source_dissolved",
+        "malformed_or_other"
+      ]
+    },
+    {
+      "name": "replayClosure",
+      "values": ["drained", "not_drained"]
+    },
+    {
+      "name": "queryClosure",
+      "values": [
+        "all_generation_acks",
+        "blocked",
+        "cohort_changed",
+        "invalid_authority"
+      ]
+    },
+    {
+      "name": "ownerFence",
+      "values": ["current", "stale"]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "reject",
+        "persist_progress_only",
+        "retain_source_and_wait",
+        "rotate_generation",
+        "persist_handoff_closed_then_dissolve",
+        "retry_or_complete_dissolution",
+        "complete_terminal"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "single-interaction-owner",
+      "statement": "Only ManagedSplitWorkflow records handoff_closed and authorizes source dissolution."
+    },
+    {
+      "id": "cleanup-false-is-progress-only",
+      "statement": "CLEANUP_COMPLETED with sourceMirrorRemoved false never authorizes source removal."
+    },
+    {
+      "id": "whole-plane-generation-closure",
+      "statement": "Dissolution requires drained replay and exact generation acknowledgements from every unretired query-serving incarnation."
+    }
+  ],
+  "rules": [
+    {
+      "id": "stale-owner-rejected",
+      "when": {
+        "sourceBoundary": "*",
+        "replayClosure": "*",
+        "queryClosure": "*",
+        "ownerFence": "stale"
+      },
+      "outcome": {"action": "reject"},
+      "reason": "A stale workflow owner cannot install, close, or dissolve a handoff generation.",
+      "invariantRefs": ["single-interaction-owner"]
+    },
+    {
+      "id": "malformed-source-boundary-rejected",
+      "when": {
+        "sourceBoundary": "malformed_or_other",
+        "replayClosure": "*",
+        "queryClosure": "*",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "reject"},
+      "reason": "PartitionService cannot mint an owner-recorded retirement boundary.",
+      "invariantRefs": ["single-interaction-owner"]
+    },
+    {
+      "id": "cleanup-with-open-replay-persists-progress",
+      "when": {
+        "sourceBoundary": "cleanup_completed_false",
+        "replayClosure": "not_drained",
+        "queryClosure": "*",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "persist_progress_only"},
+      "reason": "Replay closure leads query-plane closure; cleanup status alone is not retirement authority.",
+      "invariantRefs": ["cleanup-false-is-progress-only"]
+    },
+    {
+      "id": "drained-replay-query-blocked-retains-source",
+      "when": {
+        "sourceBoundary": "cleanup_completed_false",
+        "replayClosure": "drained",
+        "queryClosure": "blocked",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "retain_source_and_wait"},
+      "reason": "Existing plans or transactions must finish and directly re-arm evaluation.",
+      "invariantRefs": ["whole-plane-generation-closure"]
+    },
+    {
+      "id": "cohort-change-rotates-generation",
+      "when": {
+        "sourceBoundary": "cleanup_completed_false",
+        "replayClosure": "drained",
+        "queryClosure": "cohort_changed",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "rotate_generation"},
+      "reason": "Membership publication changes invalidate acknowledgements; unretired prior incarnations remain required.",
+      "invariantRefs": ["whole-plane-generation-closure"]
+    },
+    {
+      "id": "invalid-query-authority-retains-source",
+      "when": {
+        "sourceBoundary": "cleanup_completed_false",
+        "replayClosure": "drained",
+        "queryClosure": "invalid_authority",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "retain_source_and_wait"},
+      "reason": "Inherited, accessor, stale-incarnation, or mismatched-generation evidence fails closed.",
+      "invariantRefs": ["single-interaction-owner", "whole-plane-generation-closure"]
+    },
+    {
+      "id": "whole-plane-closed-authorizes-dissolution",
+      "when": {
+        "sourceBoundary": "cleanup_completed_false",
+        "replayClosure": "drained",
+        "queryClosure": "all_generation_acks",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "persist_handoff_closed_then_dissolve"},
+      "reason": "The workflow owner atomically records exact query-plane acknowledgements before invoking the existing local removal fence.",
+      "invariantRefs": ["single-interaction-owner", "whole-plane-generation-closure"]
+    },
+    {
+      "id": "owner-handoff-closed-retries-dissolution",
+      "when": {
+        "sourceBoundary": "owner_handoff_closed",
+        "replayClosure": "*",
+        "queryClosure": "*",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "retry_or_complete_dissolution"},
+      "reason": "A recovered owner resumes only the already-authorized, fenced dissolution step.",
+      "invariantRefs": ["single-interaction-owner"]
+    },
+    {
+      "id": "source-dissolved-completes-terminal",
+      "when": {
+        "sourceBoundary": "owner_source_dissolved",
+        "replayClosure": "*",
+        "queryClosure": "*",
+        "ownerFence": "current"
+      },
+      "outcome": {"action": "complete_terminal"},
+      "reason": "The durable affectedRows witness permits terminal transition clear and waiter release.",
+      "invariantRefs": ["single-interaction-owner"]
+    }
+  ]
+}

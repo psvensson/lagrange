@@ -21,7 +21,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // outcome normalizer removed one divergent gateway dependency.
 // 2026-08-23: tightened 1442 -> 1441 per checker hint after the
 // no-use-before-define sweep and admin literal-table extraction.
-const BASELINE_UNUSED_EXPORT_COUNT = 1441;
+// 2026-08-25: tightened 1441 -> 1439 after internal split-metrics helpers
+// stopped advertising a public surface.
+const BASELINE_UNUSED_EXPORT_COUNT = 1439;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

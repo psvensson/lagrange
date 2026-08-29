@@ -28,6 +28,7 @@ const SPLIT_ACK_STATUS = Object.freeze({
   CATCHUP_READY: 'catchup_ready',
   CUTOVER_APPLIED: 'cutover_applied',
   CLEANUP_COMPLETED: 'cleanup_completed',
+  HANDOFF_CLOSED: 'handoff_closed',
 
   // Child provisioning acknowledgements
   CHILD_PROVISIONED: 'child_provisioned',
@@ -44,6 +45,15 @@ const SPLIT_ACK_STATUS = Object.freeze({
   CUTOVER_FAILED: 'cutover_failed',
   CLEANUP_FAILED: 'cleanup_failed',
 });
+const setHas = Function.call.bind(Set.prototype.has);
+const SetConstructor = Set;
+const stringConstructor = String;
+
+const SPLIT_ACK_OWNER_RECORDED_STATUSES = Object.freeze(new Set([
+  SPLIT_ACK_STATUS.HANDOFF_CLOSED,
+  SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
+  SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
+]));
 
 /**
  * Terminal status values for split acknowledgements.
@@ -55,6 +65,7 @@ const SPLIT_ACK_STATUS = Object.freeze({
 const SPLIT_ACK_TERMINAL_STATUSES = Object.freeze(new Set([
   SPLIT_ACK_STATUS.CUTOVER_APPLIED,
   SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.HANDOFF_CLOSED,
   SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
   SPLIT_ACK_STATUS.CHILD_PROVISIONED,
   SPLIT_ACK_STATUS.CHILD_PROVISION_FAILED,
@@ -73,7 +84,7 @@ const SPLIT_ACK_TERMINAL_STATUSES = Object.freeze(new Set([
  * @type {ReadonlySet<string>}
  */
 const SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES = Object.freeze(new Set([
-  SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.HANDOFF_CLOSED,
   SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
   SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
 ]));
@@ -88,6 +99,7 @@ const SPLIT_ACK_CATCHUP_SATISFIED_STATUSES = Object.freeze(new Set([
   SPLIT_ACK_STATUS.CATCHUP_READY,
   SPLIT_ACK_STATUS.CUTOVER_APPLIED,
   SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.HANDOFF_CLOSED,
   SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
 ]));
 
@@ -194,6 +206,9 @@ const SPLIT_SOURCE_ACK_TRANSITION_GRAPH = Object.freeze({
     SPLIT_ACK_STATUS.CLEANUP_FAILED,
   ]),
   [SPLIT_ACK_STATUS.CLEANUP_COMPLETED]: new Set([
+    SPLIT_ACK_STATUS.HANDOFF_CLOSED,
+  ]),
+  [SPLIT_ACK_STATUS.HANDOFF_CLOSED]: new Set([
     SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
     SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
   ]),
@@ -201,6 +216,7 @@ const SPLIT_SOURCE_ACK_TRANSITION_GRAPH = Object.freeze({
     // A failed dissolution is re-attemptable (mirrors the merge graph):
     // the source re-delivers cleanup-completed so the owner retries.
     SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+    SPLIT_ACK_STATUS.HANDOFF_CLOSED,
     SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
   ]),
   [SPLIT_ACK_STATUS.SOURCE_DISSOLVED]: new Set([]),
@@ -225,6 +241,7 @@ const SPLIT_SOURCE_ACK_TRANSITION_GRAPH = Object.freeze({
  */
 const SPLIT_ACK_TERMINAL_FOR_FAILURE_SET = Object.freeze(new Set([
   SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
+  SPLIT_ACK_STATUS.HANDOFF_CLOSED,
   SPLIT_ACK_STATUS.SNAPSHOT_FAILED,
   SPLIT_ACK_STATUS.BACKFILL_FAILED,
   SPLIT_ACK_STATUS.CUTOVER_FAILED,
@@ -233,24 +250,27 @@ const SPLIT_ACK_TERMINAL_FOR_FAILURE_SET = Object.freeze(new Set([
 ]));
 
 function isSplitSourceAckTransitionAllowed(fromStatus, toStatus) {
-  const fromKey = fromStatus ? String(fromStatus) : String(null);
+  const fromKey = fromStatus ?
+    stringConstructor(fromStatus) :
+    stringConstructor(null);
   const allowed = SPLIT_SOURCE_ACK_TRANSITION_GRAPH[fromKey];
-  if (allowed instanceof Set && allowed.has(toStatus)) {
+  if (allowed instanceof SetConstructor && setHas(allowed, toStatus)) {
     return true;
   }
   // A failure acknowledgement is admissible from every non-terminal
   // state (mirrors the merge graph): a source can fail at any point
   // before it dissolves, and the owner must record that failure
   // (driving the fail-safe abort) regardless of the progress edge.
-  if (SPLIT_ACK_FAILURE_STATUSES.has(toStatus)) {
-    return allowed instanceof Set &&
-      !SPLIT_ACK_TERMINAL_FOR_FAILURE_SET.has(fromKey);
+  if (setHas(SPLIT_ACK_FAILURE_STATUSES, toStatus)) {
+    return allowed instanceof SetConstructor &&
+      !setHas(SPLIT_ACK_TERMINAL_FOR_FAILURE_SET, fromKey);
   }
   return false;
 }
 
 export {
   SPLIT_ACK_STATUS,
+  SPLIT_ACK_OWNER_RECORDED_STATUSES,
   SPLIT_ACK_TERMINAL_STATUSES,
   SPLIT_ACK_FAILURE_STATUSES,
   SPLIT_ACK_CATCHUP_SATISFIED_STATUSES,

@@ -117,8 +117,5 @@ function createManagedSplitMetricsProvider(options = {}) {
 }
 
 export {
-  calculateQueriesPerMinuteFromSample,
   createManagedSplitMetricsProvider,
-  findLocalLeaderPartitionService,
-  resolveGeneratedWriteCount,
 };

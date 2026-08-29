@@ -283,6 +283,7 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   CUTOVER_APPLIED_AT: 'cutoverAppliedAt',
   PARTICIPANTS: 'participants',
   SOURCE_CHECKPOINT: 'sourceCheckpoint',
+  HANDOFF_CLOSURE: 'handoffClosure',
   // Durable ownership claim triple (embedded in the transition metadata
   // so the tables row carries the fencing state without a schema
   // change): the workflow fence token (monotonic epoch), the claiming
@@ -587,6 +588,10 @@ const MANAGED_SPLIT_LOG_MSG = Object.freeze({
   SIBLINGS_RESTORED_AFTER_ABORT:
     'Managed split abort restored carried-forward sibling descriptors to ' +
     'the active epoch',
+  HANDOFF_CLOSING: 'Managed split cutover handoff closing',
+  HANDOFF_QUERY_PLANE_READY:
+    'Managed split cutover handoff query plane ready',
+  HANDOFF_CLOSED: 'Managed split cutover handoff closed',
   DISSOLUTION_DISPATCHED: 'Managed split source dissolution dispatched',
   DISSOLUTION_FAILED: 'Managed split source dissolution failed',
   DISSOLUTION_WITNESS_MISSING:

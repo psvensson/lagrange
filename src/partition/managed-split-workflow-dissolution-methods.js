@@ -17,9 +17,16 @@ import {
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
 } from './split-ack-constants.js';
+import {
+  closeSplitCutoverHandoff,
+  requestSplitCutoverHandoffReconcile,
+  runDissolutionSingleFlight,
+} from './split-cutover-handoff-closure-owner.js';
 
 const LOCAL_STR_SPLIT_SOURCE_DISSOLUTION = 'split_source_dissolution';
 const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
+const setHas = Function.call.bind(Set.prototype.has);
+const stringConstructor = String;
 const LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN = 'split_aborted_child_teardown';
 const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
 const LOCAL_STR_REPLICA_ID_SNAKE = 'replica_id';
@@ -55,7 +62,7 @@ const SPLIT_TERMINAL_PREDECESSOR_STATUSES = Object.freeze(new Set([
  */
 function resolveServiceRowField(serviceRow, snakeKey, camelKey) {
   const record = serviceRow || {};
-  return String(record[snakeKey] ?? record[camelKey] ?? '');
+  return stringConstructor(record[snakeKey] ?? record[camelKey] ?? '');
 }
 
 /**
@@ -107,7 +114,7 @@ class ManagedSplitWorkflowDissolutionMethods {
       }))
       .filter((row) =>
         row.partitionId.length > 0 &&
-        !excludedPartitionIds.has(row.partitionId) &&
+        !setHas(excludedPartitionIds, row.partitionId) &&
         row.partitionVersion === activeVersion &&
         row.rowState === LOCAL_STR_NORMAL_PARTITION_STATE)
       .map((row) => row.partitionId);
@@ -188,22 +195,30 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @private
    */
   async finalizeSplitDissolutionIfReady(workflowId) {
-    const workflow = this.resolveWorkflowState(workflowId);
+    let workflow = this.resolveWorkflowState(workflowId);
     if (this.isSplitWorkflowStateUnavailable(workflow)) {
       return false;
     }
-    if (!SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES.has(
+    if (!setHas(SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
       this.resolveSplitSourceParticipantStatus(workflow),
     )) {
-      return false;
+      const handoffClosed = await closeSplitCutoverHandoff(this, workflowId);
+      if (handoffClosed !== true) return false;
+      workflow = this.resolveWorkflowState(workflowId);
     }
-    if (
-      this.resolveSplitSourceParticipantStatus(workflow) !==
-        SPLIT_ACK_STATUS.SOURCE_DISSOLVED
-    ) {
-      await this.dissolveSplitSourcePartition(workflowId);
-    }
-    return this.completeSplitTerminalIfDissolved(workflowId);
+    return runDissolutionSingleFlight(this, workflowId, async () => {
+      if (
+        this.resolveSplitSourceParticipantStatus(workflow) !==
+          SPLIT_ACK_STATUS.SOURCE_DISSOLVED
+      ) {
+        await this.dissolveSplitSourcePartition(workflowId);
+      }
+      return this.completeSplitTerminalIfDissolved(workflowId);
+    });
+  }
+
+  requestSplitCutoverHandoffReconcile() {
+    requestSplitCutoverHandoffReconcile(this);
   }
 
   /**
@@ -460,8 +475,8 @@ class ManagedSplitWorkflowDissolutionMethods {
         reason,
       }),
     });
-    const responseStatus = String(response?.status || '');
-    if (!ACCEPTED_REPLICA_REMOVAL_STATUSES.has(responseStatus)) {
+    const responseStatus = stringConstructor(response?.status || '');
+    if (!setHas(ACCEPTED_REPLICA_REMOVAL_STATUSES, responseStatus)) {
       throw new Error(
         response?.error || MANAGED_SPLIT_LOG_MSG.DISSOLUTION_FAILED,
       );

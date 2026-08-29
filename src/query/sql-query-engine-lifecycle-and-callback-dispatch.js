@@ -9,6 +9,8 @@ import {
   mergePartitionReadFailuresIntoHostResult,
 } from './callback/partition-callback-dispatcher.js';
 
+const promiseResolve = Promise.resolve.bind(Promise);
+const promiseThen = Function.call.bind(Promise.prototype.then);
 const LOCAL_STR_FUNCTION = 'function';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
 const RUNTIME_ACCESS_POLICY_OWNER_UNAVAILABLE =
@@ -43,6 +45,14 @@ const {
   ZERO_SHA256_DIGEST,
   createCallbackDriverRegistry,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function activateCutoverHandoffOwner(engine) {
+  engine.splitCutoverHandoffQueryPlaneOwner?.start?.();
+}
+
+function notifyCutoverHandoffProgress(engine) {
+  engine.splitCutoverHandoffQueryPlaneOwner?.notifyTransactionStateChanged?.();
+}
 
 /**
  * Build the typed engine-level failure result for a partition_callback
@@ -146,6 +156,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    */
   setSystemCache(cache) {
     this.systemCache = cache;
+    this.splitCutoverHandoffQueryPlaneOwner?.setSystemCache?.(cache);
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
@@ -184,12 +195,17 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    */
   activateDistributedTransactionRecovery(options = {}) {
     this.distributedTransactionRecoveryActivated = true;
+    activateCutoverHandoffOwner(this);
     const resetRecoveryState = options.resetRecoveryState !== false;
     if (resetRecoveryState) {
       this.transactionStateRecovered = false;
     }
     this.recoverDistributedTransactionStateFromCache();
     const replayPromise = this.resumeRecoveredDistributedTransactions();
+    void promiseThen(promiseResolve(replayPromise),
+      () => notifyCutoverHandoffProgress(this),
+      () => notifyCutoverHandoffProgress(this),
+    );
     resumeDurableProvisioningWork(this);
     if (typeof this.transactionCoordinator.startRecoverySweep === LOCAL_STR_FUNCTION) {
       this.transactionCoordinator.startRecoverySweep();
@@ -203,6 +219,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    */
   setMessageRouter(router) {
     this.messageRouter = router;
+    this.splitCutoverHandoffQueryPlaneOwner?.setMessageRouter?.(router);
     this.queryExecutor.setMessageRouter(router);
   }
 
@@ -311,6 +328,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    * @return {Promise<void>}
    */
   async shutdown() {
+    this.splitCutoverHandoffQueryPlaneOwner?.shutdown?.();
     // Abort in-flight query retry loops so they stop re-arming backoff timers
     // (otherwise a query retrying a torn-down cluster keeps the loop alive).
     if (

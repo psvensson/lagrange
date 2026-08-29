@@ -56,6 +56,25 @@ async (t) => {
       },
     },
   });
+  workflow.topologyAdapter = {
+    captureSplitQueryPlaneCohort() {
+      return {
+        publicationEpoch: 7,
+        nodes: [{nodeId: 'node-a', bootIncarnation: 3}],
+      };
+    },
+    async deliverSplitCutoverHandoff(_nodeId, message) {
+      return {
+        acknowledged: true,
+        state: 'ready',
+        generation: message.generation,
+        workflowId: message.workflowId,
+        nodeId: 'node-a',
+        bootIncarnation: 3,
+        targetPartitionVersion: message.targetPartitionVersion,
+      };
+    },
+  };
   const workflowId = 'split-terminal-lifecycle';
   const record = {
     workflowId,
@@ -134,12 +153,17 @@ async (t) => {
     'oldCount + 1',
   );
 
-  // Terminal step: the source mirror-removed ack dissolves the source,
-  // clears the tables transition row, and emits SPLIT_COMPLETED.
+  // Terminal step: the real source reports replay-drained progress with
+  // sourceMirrorRemoved:false. The workflow-owned query-plane barrier turns
+  // that progress into the only mirror-removal authority.
   await workflow.acknowledgeSourceParticipant(
     workflowId,
     sourceAck(SPLIT_ACK_STATUS.CLEANUP_COMPLETED, {
-      [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {sourceMirrorRemoved: true},
+      [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
+        sourceMirrorRemoved: false,
+        snapshotBarrierIndex: 40,
+        replayWatermarkIndex: 41,
+      },
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1001,
     }),
   );

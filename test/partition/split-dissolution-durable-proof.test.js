@@ -56,7 +56,11 @@ function buildDissolvingRecord(fenceToken) {
     updatedAt: 1000,
     participants: new Map([
       [SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION, {
-        status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+        status: SPLIT_ACK_STATUS.HANDOFF_CLOSED,
+        checkpoint: {
+          [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: true,
+          handoffGeneration: `${WORKFLOW_ID}:handoff-closed`,
+        },
         acknowledgedAt: 999,
         updatedAt: 999,
       }],
