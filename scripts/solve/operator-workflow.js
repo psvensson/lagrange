@@ -30,6 +30,9 @@ import {
 } from './rejection-findings.js';
 import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
 import {auditQuest} from './audit.js';
+import {assertCommittedContentIdentity} from './committed-content-guard.js';
+import {ingestDeclaredProbeEvidence} from './declared-probe-evidence.js';
+import {terminalReadiness} from './terminal-readiness.js';
 import {
   assertReviewCurrent,
   createReviewRequest,
@@ -42,6 +45,7 @@ const VERIFIER_REJECTION = 'verifier-rejection';
 const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
 const VERDICT_NEEDS_REVIEW = 'needs-review';
+const CONTENT_REVIEW_SCHEMA_VERSION = 3;
 const REVIEW_FINGERPRINT_CONFLICT =
   'land: --review supplies the fingerprint; omit --fingerprint';
 const INVALID_VERDICT_PROBLEM = 'land: --verdict must be approve|reject';
@@ -166,11 +170,13 @@ export function continueQuestWorkflow(root, args = {}) {
   const before = buildNextProjection(root, id);
   assertStructuredAction(before.action, id);
   const execution = executeStructuredContinuation(root, quest, before.action, args);
+  const ingestedEvidence = ingestDeclaredProbeEvidence(root, quest);
   return {
     schemaVersion: 1,
     questId: id,
     before: before.action,
     ...execution,
+    ingestedEvidence,
     next: buildNextProjection(root, id),
   };
 }
@@ -222,10 +228,6 @@ function sameAuditProblem(left, right) {
 
 function assertApprovalCanCompleteAudit(root, quest, state) {
   const audit = auditQuest(root, quest);
-  // An aggregate approval recorded before `land` (the boot.md flow: verify,
-  // record the structured finding, then land) leaves zero audit problems;
-  // that is as landable as the single pending receipt problem `land` itself
-  // discharges by recording the approval.
   const alreadyApproved = state.aggregateProblems.length === 0 &&
     audit.problems.length === 0;
   const expected = state.aggregateProblems.length === 1 ?
@@ -245,9 +247,40 @@ function assertApprovalCanCompleteAudit(root, quest, state) {
   }
 }
 
+function reviewedReceiptForRequest(state, request, verdict) {
+  const contentReceipt = verdict === VERDICT_APPROVE ?
+    request.manifest.aggregate : request.manifest.candidate;
+  if (request.manifest.schemaVersion !== CONTENT_REVIEW_SCHEMA_VERSION) {
+    return {
+      ...receiptForVerdict(state, verdict, contentReceipt.fingerprint),
+      contentFingerprint: null,
+      contentPaths: [],
+      reviewSchemaVersion: request.manifest.schemaVersion,
+    };
+  }
+  const bridgeFingerprint = verdict === VERDICT_APPROVE ?
+    request.verificationBridge.aggregateFingerprint :
+    request.verificationBridge.candidateFingerprint;
+  return {
+    ...receiptForVerdict(state, verdict, bridgeFingerprint),
+    contentFingerprint: contentReceipt.fingerprint,
+    contentPaths: [...contentReceipt.paths],
+    reviewSchemaVersion: request.manifest.schemaVersion,
+  };
+}
+
+function terminalReadinessError(readiness) {
+  return new Error(
+    'land: terminal readiness blocked: ' +
+    readiness.repairs.map((repair) =>
+      `${repair.category}: ${repair.message}`).join('; '),
+  );
+}
+
 export function landQuestWorkflow(root, args = {}) {
   const id = requireId(args, 'land');
   const quest = loadQuest(root, id);
+  const ingestedEvidence = ingestDeclaredProbeEvidence(root, quest);
   const log = readLog(root, id);
   const before = buildNextProjection(root, id);
   if (!['solved', 'exhausted'].includes(before.quest.status)) {
@@ -268,6 +301,7 @@ export function landQuestWorkflow(root, args = {}) {
       receiptRef: null,
       committed: commit.committed,
       commit,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
@@ -277,8 +311,8 @@ export function landQuestWorkflow(root, args = {}) {
     args.finding || reviewId,
   );
   if (!hasVerdictInput) {
-    assertApprovalCanCompleteAudit(root, quest, state);
     if (state.aggregateApproval) {
+      assertApprovalCanCompleteAudit(root, quest, state);
       const commit = autoCommitQuest(root, id);
       return {
         schemaVersion: 1,
@@ -288,18 +322,23 @@ export function landQuestWorkflow(root, args = {}) {
         receiptRef: RECORDED_AGGREGATE_RECEIPT,
         committed: commit.committed,
         commit,
+        ingestedEvidence,
         next: buildNextProjection(root, id),
       };
     }
+    const readiness = terminalReadiness(root, quest, state);
+    if (!readiness.readyForReview) throw terminalReadinessError(readiness);
     const review = createReviewRequest(root, quest, state);
     return {
       schemaVersion: 1,
       questId: id,
       verdict: VERDICT_NEEDS_REVIEW,
       review,
-      fingerprint: null,
+      fingerprint: review.manifest.aggregate.fingerprint,
       receiptRef: null,
       committed: false,
+      readiness,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
@@ -309,21 +348,24 @@ export function landQuestWorkflow(root, args = {}) {
   const evidence = verifierEvidence(args.verifier);
   let scope;
   let receipt;
+  let reviewContentFingerprint = null;
+  let reviewContentPaths = [];
+  let reviewSchemaVersion = null;
   if (reviewId) {
     if (fingerprint) {
       throw new Error(REVIEW_FINGERPRINT_CONFLICT);
     }
     const request = assertReviewCurrent(root, quest, state, reviewId);
-    if (verdict === VERDICT_APPROVE) {
-      scope = VERIFICATION_SCOPE.AGGREGATE;
-      receipt = request.manifest.aggregate;
-    } else if (verdict === VERDICT_REJECT) {
-      scope = VERIFICATION_SCOPE.CANDIDATE;
-      receipt = request.manifest.candidate;
-    } else {
+    if (verdict !== VERDICT_APPROVE && verdict !== VERDICT_REJECT) {
       throw new Error(INVALID_VERDICT_PROBLEM);
     }
+    const reviewed = reviewedReceiptForRequest(state, request, verdict);
+    scope = reviewed.scope;
+    receipt = reviewed.receipt;
     fingerprint = receipt.fingerprint;
+    reviewContentFingerprint = reviewed.contentFingerprint;
+    reviewContentPaths = reviewed.contentPaths;
+    reviewSchemaVersion = reviewed.reviewSchemaVersion;
   } else {
     ({scope, receipt} = receiptForVerdict(state, verdict, fingerprint));
   }
@@ -336,10 +378,6 @@ export function landQuestWorkflow(root, args = {}) {
   if (verdict === VERDICT_APPROVE) {
     assertApprovalCanCompleteAudit(root, quest, state);
   }
-  // The durable claim must carry the verifier's category-complete finding
-  // list, never only a receipt pointer: the amendment excerpt rule,
-  // `theory option --from-rejection`, and any later post-mortem all read this
-  // event, and a pointer satisfies them mechanically with zero content.
   const rejectionFindings = verdict === VERDICT_REJECT ?
     parseRejectionFindings(args.finding) : [];
   if (verdict === VERDICT_REJECT) {
@@ -350,7 +388,7 @@ export function landQuestWorkflow(root, args = {}) {
     const barProblem = rejectionFindingBarProblem(quest, log, rejectionFindings);
     if (barProblem) throw new Error(`land: ${barProblem}`);
   }
-  const verification = buildVerificationFinding({
+  const baseVerification = buildVerificationFinding({
     kind,
     evidence,
     verificationScope: scope,
@@ -359,6 +397,16 @@ export function landQuestWorkflow(root, args = {}) {
     verificationSchemaVersion: VERIFICATION_CONTRACT_VERSION,
     rejectionFindings,
   });
+  const verification = reviewContentFingerprint ? {
+    ...baseVerification,
+    review: {
+      schemaVersion: reviewSchemaVersion,
+      reviewId,
+      identityAuthority: 'scoped-content',
+      contentFingerprint: reviewContentFingerprint,
+      paths: reviewContentPaths,
+    },
+  } : baseVerification;
   appendFinding(root, id, {
     frontier,
     claim: verdict === VERDICT_APPROVE ?
@@ -377,21 +425,32 @@ export function landQuestWorkflow(root, args = {}) {
       schemaVersion: 1,
       questId: id,
       verdict,
-      fingerprint,
+      fingerprint: reviewContentFingerprint || fingerprint,
+      ledgerFingerprint: fingerprint,
       receiptRef,
       committed: false,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
   const commit = autoCommitQuest(root, id);
+  const committedContent = commit.committed && reviewContentFingerprint ?
+    assertCommittedContentIdentity(
+      root,
+      reviewContentPaths,
+      reviewContentFingerprint,
+    ) : null;
   return {
     schemaVersion: 1,
     questId: id,
     verdict,
-    fingerprint,
+    fingerprint: reviewContentFingerprint || fingerprint,
+    ledgerFingerprint: fingerprint,
     receiptRef,
     committed: commit.committed,
     commit,
+    committedContent,
+    ingestedEvidence,
     next: buildNextProjection(root, id),
   };
 }

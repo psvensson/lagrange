@@ -1,16 +1,15 @@
-// test-receipt probe — reads a deterministic evidence receipt file produced by a
+// test-receipt probe — reads a file-backed evidence receipt produced by a
 // focused test-run harness and answers the two independent probe questions:
 //
 //   metric = the number of required receipt ids that are missing or not passing
 //            (lower is better; 0 means every required receipt is green)
 //   done   = metric === 0 and the receipt file records a passing overall status
 //
-// The receipt file is a REAL ARTIFACT: it must be written by an evidence
-// harness that re-runs the recorded proof commands (focused test files) and
-// records per-receipt pass/fail with the command that produced it. A
-// hand-authored receipt with no commands, or one whose recorded commands no
-// longer exist, is a fail-closed non-measuring sample (invalidSample), exactly
-// like a scenario-harness report that never measured its scenario.
+// `test-receipt/1` does not bind its result to an exact candidate/proof-input
+// fingerprint. It therefore remains time/path-sensitive evidence: `generatedAt`
+// and filesystem freshness are still part of its identity. A future receipt
+// schema may opt into deterministic evidence only after it carries a binding the
+// Solver can independently compare to the candidate and declared proof inputs.
 //
 // Receipt file shape:
 // {
@@ -27,6 +26,8 @@
 
 import fs from 'node:fs';
 
+import {EVIDENCE_CLASS} from '../evidence-identity.js';
+
 const RECEIPT_SCHEMA = 'test-receipt/1';
 const PROBE_NAME = 'test-receipt';
 const RECEIPT_STATUS_PASS = 'pass';
@@ -38,9 +39,6 @@ const INVALID_SAMPLE_REASON = Object.freeze({
   NO_REQUIRED_RECEIPTS: 'probe args name no required receipts',
 });
 const SAMPLE_VALID_REASON = 'sample is measurable';
-// Ordered sample-validity rules: the FIRST matching rule decides the
-// classification, so the four structural dishonesty shapes collapse into
-// one canonical outcome table instead of a pile of independent ifs.
 const SAMPLE_VALIDITY_RULES = Object.freeze([
   Object.freeze({
     reason: INVALID_SAMPLE_REASON.MISSING_OR_WRONG_SCHEMA,
@@ -77,10 +75,6 @@ function readReceiptFile(file) {
   }
 }
 
-// A receipt file is non-measuring when it is absent, malformed, names the
-// wrong schema, or carries no receipts — the harness never honestly measured
-// anything, so the Solver must treat the sample as invalid rather than as a
-// dishonest zero.
 function classifySample(data, requiredReceipts) {
   const rule = SAMPLE_VALIDITY_RULES.find((candidate) =>
     candidate.matches(data));
@@ -101,6 +95,7 @@ function measureOutstanding(data, requiredReceipts) {
 
 export const testReceiptProbe = {
   name: PROBE_NAME,
+  evidenceClass: EVIDENCE_CLASS.LIVE,
   measure(args = {}) {
     const file = args.file;
     if (!file || !fs.existsSync(file)) {

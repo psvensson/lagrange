@@ -8,6 +8,10 @@ import {checkpointGate} from '../../scripts/solve/audit.js';
 import {
   candidateContentIdentity,
 } from '../../scripts/solve/candidate-content-identity.js';
+import {
+  PROOF_MUTATED_CANDIDATE,
+  withCandidateWorkspace,
+} from '../../scripts/solve/candidate-workspace.js';
 import {runCheckpointCommand} from '../../scripts/solve/handoff.js';
 import {buildNextLines} from '../../scripts/solve/next.js';
 import {runStep} from '../../scripts/solve/step.js';
@@ -314,5 +318,56 @@ tap.test('commit content identity remains pinned while the worktree moves', (t) 
     'commit identity is independent of later working-tree bytes');
   t.not(live.fingerprint, before.fingerprint,
     'working-tree identity follows the current candidate bytes');
+  t.end();
+});
+
+tap.test('candidate workspace uses current committed policy but only reviewed dirty paths', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 7;\n');
+  fs.mkdirSync(path.join(fx.root, 'policy'), {recursive: true});
+  fs.writeFileSync(path.join(fx.root, 'policy/checker.txt'), 'current-policy\n');
+  git(fx.root, ['add', 'policy/checker.txt']);
+  git(fx.root, ['commit', '-m', 'advance proof policy']);
+  const currentHead = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.mkdirSync(path.join(fx.root, 'test'), {recursive: true});
+  fs.writeFileSync(path.join(fx.root, 'test/foreign.test.js'), 'foreign dirty work\n');
+
+  const observed = withCandidateWorkspace(fx.root, {
+    baseCommit: base,
+    paths: ['src/a.js'],
+  }, (candidateRoot, context) => ({
+    candidateBytes: fs.readFileSync(path.join(candidateRoot, 'src/a.js'), 'utf8'),
+    policyBytes: fs.readFileSync(
+      path.join(candidateRoot, 'policy/checker.txt'), 'utf8'),
+    foreignPresent: fs.existsSync(path.join(candidateRoot, 'test/foreign.test.js')),
+    proofHeadCommit: context.proofHeadCommit,
+  }));
+
+  t.equal(observed.candidateBytes, 'export const a = 7;\n',
+    'reviewed dirty bytes are overlaid exactly');
+  t.equal(observed.policyBytes, 'current-policy\n',
+    'proof consumes current committed safety policy, not the old source base');
+  t.equal(observed.foreignPresent, false,
+    'foreign untracked work is absent from the proof workspace');
+  t.equal(observed.proofHeadCommit, currentHead,
+    'proof context identifies the current committed policy head');
+  t.not(observed.proofHeadCommit, base,
+    'proof policy is not frozen to the historical source epoch');
+  t.end();
+});
+
+tap.test('candidate workspace refuses proof mutation of tracked candidate bytes', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 5;\n');
+  t.throws(() => withCandidateWorkspace(fx.root, {
+    baseCommit: base,
+    paths: ['src/a.js'],
+  }, (candidateRoot) => {
+    fs.writeFileSync(path.join(candidateRoot, 'src/a.js'), 'mutated by proof\n');
+  }), new RegExp(PROOF_MUTATED_CANDIDATE, 'u'));
   t.end();
 });

@@ -8,8 +8,15 @@
 
 import fs from 'node:fs';
 
+import {EVIDENCE_CLASS} from '../evidence-identity.js';
+
 export const oracleProbe = {
   name: 'oracle',
+  evidenceClass: EVIDENCE_CLASS.DETERMINISTIC,
+  identityArgs(args = {}) {
+    const {file: _file, ...semanticArgs} = args;
+    return semanticArgs;
+  },
   measure(args) {
     const file = args.file;
     if (!file || !fs.existsSync(file)) {
