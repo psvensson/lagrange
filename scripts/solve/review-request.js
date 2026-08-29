@@ -8,7 +8,6 @@ import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {candidateContentIdentity} from './candidate-content-identity.js';
-import {projectCandidateMeasurements} from './candidate-measurement.js';
 import {withCandidateWorkspace} from './candidate-workspace.js';
 import {
   collectLandingReviewPreflight,
@@ -69,8 +68,6 @@ function contentReceipt(legacy, identity) {
     baseCommit: legacy.baseCommit,
     paths: sortedCopy(legacy.paths),
     sourcePaths: sortedCopy(legacy.sourcePaths || legacy.paths),
-    firstAttemptIndex: legacy.firstAttemptIndex,
-    lastAttemptIndex: legacy.lastAttemptIndex,
   };
 }
 
@@ -112,6 +109,16 @@ function legacyProjection(quest, state) {
   };
 }
 
+function legacyManifest(root, projection) {
+  return {
+    schemaVersion: LEGACY_SCHEMA_VERSION,
+    questId: projection.questId,
+    coupledPairRegistryDigest: coupledPairRegistryDigest(root),
+    candidate: projection.candidate,
+    aggregate: projection.aggregate,
+  };
+}
+
 function contentIdentitySummary(candidate, aggregate) {
   return {
     schemaVersion: 1,
@@ -123,11 +130,6 @@ function contentIdentitySummary(candidate, aggregate) {
 
 function prepareContentReview(root, quest, state, options = {}) {
   const legacy = legacyProjection(quest, state);
-  const candidateMeasurements = projectCandidateMeasurements(
-    root,
-    quest,
-    state.attempts.filter((attempt) => attempt.candidateContract),
-  );
   return withCandidateWorkspace(root, legacy.aggregate, (candidateRoot) => {
     const candidateIdentity = candidateContentIdentity(
       candidateRoot,
@@ -152,7 +154,6 @@ function prepareContentReview(root, quest, state, options = {}) {
       manifest,
       preflight,
       contentIdentity: contentIdentitySummary(candidateIdentity, aggregateIdentity),
-      candidateMeasurements,
       verificationBridge: {
         candidateFingerprint: legacy.candidate.fingerprint,
         aggregateFingerprint: legacy.aggregate.fingerprint,
@@ -163,23 +164,15 @@ function prepareContentReview(root, quest, state, options = {}) {
 
 function prepareLegacyReview(root, quest, state) {
   const legacy = legacyProjection(quest, state);
-  return withCandidateWorkspace(root, legacy.aggregate, (candidateRoot) => {
-    const manifest = {
-      schemaVersion: LEGACY_SCHEMA_VERSION,
-      questId: quest.id,
-      coupledPairRegistryDigest: coupledPairRegistryDigest(candidateRoot),
-      candidate: legacy.candidate,
-      aggregate: legacy.aggregate,
-    };
-    return {
-      manifest,
-      preflight: landingReviewPreflight(candidateRoot, manifest),
-      verificationBridge: {
-        candidateFingerprint: legacy.candidate.fingerprint,
-        aggregateFingerprint: legacy.aggregate.fingerprint,
-      },
-    };
-  });
+  const manifest = legacyManifest(root, legacy);
+  return {
+    manifest,
+    preflight: landingReviewPreflight(root, manifest),
+    verificationBridge: {
+      candidateFingerprint: legacy.candidate.fingerprint,
+      aggregateFingerprint: legacy.aggregate.fingerprint,
+    },
+  };
 }
 
 export function reviewReadiness(root, quest, state) {
@@ -219,7 +212,6 @@ export function createReviewRequest(root, quest, state) {
     file: path.relative(root, file),
     preflight: prepared.preflight,
     contentIdentity: prepared.contentIdentity,
-    candidateMeasurements: prepared.candidateMeasurements,
   };
 }
 
@@ -261,7 +253,6 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
     ...request,
     preflight: prepared.preflight,
     contentIdentity: prepared.contentIdentity || null,
-    candidateMeasurements: prepared.candidateMeasurements || null,
     verificationBridge: prepared.verificationBridge,
   };
 }

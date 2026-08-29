@@ -166,6 +166,18 @@ function legacyEventMatchesDeterministic(identity, event) {
     (identity.exists || recorded.path === identity.path);
 }
 
+function deterministicProbeIdentityMatches(identity, event) {
+  const recorded = event?.evidenceIdentity;
+  if (identity.schemaVersion !== EVIDENCE_IDENTITY_SCHEMA_VERSION ||
+      identity.evidenceClass !== EVIDENCE_CLASS.DETERMINISTIC ||
+      recorded?.schemaVersion !== EVIDENCE_IDENTITY_SCHEMA_VERSION ||
+      recorded?.evidenceClass !== EVIDENCE_CLASS.DETERMINISTIC) {
+    return null;
+  }
+  if (!identity.semanticProbeKey || !recorded.semanticProbeKey) return false;
+  return identity.semanticProbeKey === recorded.semanticProbeKey;
+}
+
 export function evidenceIdentityMatchesEvent(identity, event, options = {}) {
   if (!identity || !event) return false;
   const eventFingerprint = eventEvidenceFingerprint(event);
@@ -175,6 +187,8 @@ export function evidenceIdentityMatchesEvent(identity, event, options = {}) {
       legacyEventMatchesDeterministic(identity, event));
   if (!fingerprintMatches) return false;
   if (!options.requireProbeSpec) return true;
+  const deterministicMatch = deterministicProbeIdentityMatches(identity, event);
+  if (deterministicMatch !== null) return deterministicMatch;
   const identityKey = stableProbeKey(probeSpecFromIdentity(identity));
   const recordedKey = eventProbeKey(event);
   if (!identityKey || !recordedKey) return options.allowLegacy !== false;
