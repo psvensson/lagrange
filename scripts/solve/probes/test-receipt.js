@@ -27,6 +27,8 @@
 
 import fs from 'node:fs';
 
+import {EVIDENCE_CLASS} from '../evidence-identity.js';
+
 const RECEIPT_SCHEMA = 'test-receipt/1';
 const PROBE_NAME = 'test-receipt';
 const RECEIPT_STATUS_PASS = 'pass';
@@ -77,6 +79,15 @@ function readReceiptFile(file) {
   }
 }
 
+function semanticReceiptContent(data) {
+  return JSON.stringify({
+    schema: data.schema,
+    quest: data.quest || null,
+    status: data.status || null,
+    receipts: data.receipts,
+  });
+}
+
 // A receipt file is non-measuring when it is absent, malformed, names the
 // wrong schema, or carries no receipts — the harness never honestly measured
 // anything, so the Solver must treat the sample as invalid rather than as a
@@ -101,6 +112,12 @@ function measureOutstanding(data, requiredReceipts) {
 
 export const testReceiptProbe = {
   name: PROBE_NAME,
+  evidenceClass: EVIDENCE_CLASS.DETERMINISTIC,
+  identityArgs(args = {}) {
+    const requiredReceipts = Array.isArray(args.requiredReceipts) ?
+      [...args.requiredReceipts].sort() : [];
+    return {requiredReceipts};
+  },
   measure(args = {}) {
     const file = args.file;
     if (!file || !fs.existsSync(file)) {
@@ -123,6 +140,7 @@ export const testReceiptProbe = {
       metric: outstanding.length,
       done: outstanding.length === 0 && data.status === RECEIPT_STATUS_PASS,
       evidence: file,
+      evidenceSemanticContent: semanticReceiptContent(data),
       invalidSample: false,
       satisfiedInvariants: data.receipts
         .filter((r) => r?.passed === true && required.includes(r.id))
