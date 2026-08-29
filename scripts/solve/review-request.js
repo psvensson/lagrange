@@ -8,7 +8,6 @@ import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {candidateContentIdentity} from './candidate-content-identity.js';
-import {projectCandidateMeasurements} from './candidate-measurement.js';
 import {withCandidateWorkspace} from './candidate-workspace.js';
 import {
   collectLandingReviewPreflight,
@@ -69,8 +68,6 @@ function contentReceipt(legacy, identity) {
     baseCommit: legacy.baseCommit,
     paths: sortedCopy(legacy.paths),
     sourcePaths: sortedCopy(legacy.sourcePaths || legacy.paths),
-    firstAttemptIndex: legacy.firstAttemptIndex,
-    lastAttemptIndex: legacy.lastAttemptIndex,
   };
 }
 
@@ -123,11 +120,6 @@ function contentIdentitySummary(candidate, aggregate) {
 
 function prepareContentReview(root, quest, state, options = {}) {
   const legacy = legacyProjection(quest, state);
-  const candidateMeasurements = projectCandidateMeasurements(
-    root,
-    quest,
-    state.attempts.filter((attempt) => attempt.candidateContract),
-  );
   return withCandidateWorkspace(root, legacy.aggregate, (candidateRoot) => {
     const candidateIdentity = candidateContentIdentity(
       candidateRoot,
@@ -152,7 +144,6 @@ function prepareContentReview(root, quest, state, options = {}) {
       manifest,
       preflight,
       contentIdentity: contentIdentitySummary(candidateIdentity, aggregateIdentity),
-      candidateMeasurements,
       verificationBridge: {
         candidateFingerprint: legacy.candidate.fingerprint,
         aggregateFingerprint: legacy.aggregate.fingerprint,
@@ -219,7 +210,6 @@ export function createReviewRequest(root, quest, state) {
     file: path.relative(root, file),
     preflight: prepared.preflight,
     contentIdentity: prepared.contentIdentity,
-    candidateMeasurements: prepared.candidateMeasurements,
   };
 }
 
@@ -261,7 +251,6 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
     ...request,
     preflight: prepared.preflight,
     contentIdentity: prepared.contentIdentity || null,
-    candidateMeasurements: prepared.candidateMeasurements || null,
     verificationBridge: prepared.verificationBridge,
   };
 }
