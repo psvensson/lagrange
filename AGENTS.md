@@ -61,6 +61,17 @@ For roadmap scope or a `roadmapRow`, directly load the
 The domain packs are complete selective surfaces. Optional early-stage planning
 under `solve/epics/` is for bounded decision memos, never a mandatory waypoint.
 
+**Protected core interactions.** `coupledPairs` in
+[`test/shards/impact-contracts.json`](test/shards/impact-contracts.json) are the
+machine-enforced registry of cross-owner interactions whose invariants must stay
+green together. Before changing a path owned by a registered pair, read the
+pair's named contract and witness tests and treat the interaction—not either
+participant alone—as the change boundary. Do not locally bypass, reconstruct,
+or tune around one side of the pair. Cross-owner changes use the
+[`owner-interaction`](docs/steering/verification-templates/owner-interaction.md)
+verification template; the proof-cone and Solver landing guard enforce the
+registered contract edge.
+
 ## Find The Right Surface
 
 | Need | Read / run |
