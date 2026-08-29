@@ -45,6 +45,7 @@ const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
 const VERDICT_NEEDS_REVIEW = 'needs-review';
 const VERDICT_BLOCKED = 'blocked';
+const CONTENT_REVIEW_SCHEMA_VERSION = 3;
 const REVIEW_FINGERPRINT_CONFLICT =
   'land: --review supplies the fingerprint; omit --fingerprint';
 const INVALID_VERDICT_PROBLEM = 'land: --verdict must be approve|reject';
@@ -246,6 +247,26 @@ function assertApprovalCanCompleteAudit(root, quest, state) {
   }
 }
 
+function reviewedReceiptForRequest(state, request, verdict) {
+  const contentReceipt = verdict === VERDICT_APPROVE ?
+    request.manifest.aggregate : request.manifest.candidate;
+  if (request.manifest.schemaVersion !== CONTENT_REVIEW_SCHEMA_VERSION) {
+    return {
+      ...receiptForVerdict(state, verdict, contentReceipt.fingerprint),
+      contentFingerprint: null,
+      reviewSchemaVersion: request.manifest.schemaVersion,
+    };
+  }
+  const bridgeFingerprint = verdict === VERDICT_APPROVE ?
+    request.verificationBridge.aggregateFingerprint :
+    request.verificationBridge.candidateFingerprint;
+  return {
+    ...receiptForVerdict(state, verdict, bridgeFingerprint),
+    contentFingerprint: contentReceipt.fingerprint,
+    reviewSchemaVersion: request.manifest.schemaVersion,
+  };
+}
+
 export function landQuestWorkflow(root, args = {}) {
   const id = requireId(args, 'land');
   const quest = loadQuest(root, id);
@@ -301,7 +322,7 @@ export function landQuestWorkflow(root, args = {}) {
         schemaVersion: 1,
         questId: id,
         verdict: VERDICT_BLOCKED,
-        fingerprint: state.aggregate.fingerprint,
+        fingerprint: readiness.sourceFingerprint,
         receiptRef: null,
         committed: false,
         readiness,
@@ -315,7 +336,7 @@ export function landQuestWorkflow(root, args = {}) {
       questId: id,
       verdict: VERDICT_NEEDS_REVIEW,
       review,
-      fingerprint: null,
+      fingerprint: review.manifest.aggregate.fingerprint,
       receiptRef: null,
       committed: false,
       readiness,
@@ -329,21 +350,22 @@ export function landQuestWorkflow(root, args = {}) {
   const evidence = verifierEvidence(args.verifier);
   let scope;
   let receipt;
+  let reviewContentFingerprint = null;
+  let reviewSchemaVersion = null;
   if (reviewId) {
     if (fingerprint) {
       throw new Error(REVIEW_FINGERPRINT_CONFLICT);
     }
     const request = assertReviewCurrent(root, quest, state, reviewId);
-    if (verdict === VERDICT_APPROVE) {
-      scope = VERIFICATION_SCOPE.AGGREGATE;
-      receipt = request.manifest.aggregate;
-    } else if (verdict === VERDICT_REJECT) {
-      scope = VERIFICATION_SCOPE.CANDIDATE;
-      receipt = request.manifest.candidate;
-    } else {
+    if (verdict !== VERDICT_APPROVE && verdict !== VERDICT_REJECT) {
       throw new Error(INVALID_VERDICT_PROBLEM);
     }
+    const reviewed = reviewedReceiptForRequest(state, request, verdict);
+    scope = reviewed.scope;
+    receipt = reviewed.receipt;
     fingerprint = receipt.fingerprint;
+    reviewContentFingerprint = reviewed.contentFingerprint;
+    reviewSchemaVersion = reviewed.reviewSchemaVersion;
   } else {
     ({scope, receipt} = receiptForVerdict(state, verdict, fingerprint));
   }
@@ -366,7 +388,7 @@ export function landQuestWorkflow(root, args = {}) {
     const barProblem = rejectionFindingBarProblem(quest, log, rejectionFindings);
     if (barProblem) throw new Error(`land: ${barProblem}`);
   }
-  const verification = buildVerificationFinding({
+  const baseVerification = buildVerificationFinding({
     kind,
     evidence,
     verificationScope: scope,
@@ -375,6 +397,15 @@ export function landQuestWorkflow(root, args = {}) {
     verificationSchemaVersion: VERIFICATION_CONTRACT_VERSION,
     rejectionFindings,
   });
+  const verification = reviewContentFingerprint ? {
+    ...baseVerification,
+    review: {
+      schemaVersion: reviewSchemaVersion,
+      reviewId,
+      identityAuthority: 'scoped-content',
+      contentFingerprint: reviewContentFingerprint,
+    },
+  } : baseVerification;
   appendFinding(root, id, {
     frontier,
     claim: verdict === VERDICT_APPROVE ?
@@ -393,7 +424,8 @@ export function landQuestWorkflow(root, args = {}) {
       schemaVersion: 1,
       questId: id,
       verdict,
-      fingerprint,
+      fingerprint: reviewContentFingerprint || fingerprint,
+      ledgerFingerprint: fingerprint,
       receiptRef,
       committed: false,
       ingestedEvidence,
@@ -405,7 +437,8 @@ export function landQuestWorkflow(root, args = {}) {
     schemaVersion: 1,
     questId: id,
     verdict,
-    fingerprint,
+    fingerprint: reviewContentFingerprint || fingerprint,
+    ledgerFingerprint: fingerprint,
     receiptRef,
     committed: commit.committed,
     commit,
