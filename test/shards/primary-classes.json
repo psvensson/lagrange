@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1829,
+    "unit": 1830,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2080,
-  "digest": "fnv1a32-a18f51b1",
+  "censusSize": 2081,
+  "digest": "fnv1a32-0a64383b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -628,6 +628,7 @@
     "test/convergence/dt6-network-pct-search.test.js": "unit",
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "unit",
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": "unit",
+    "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": "unit",
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": "unit",
     "test/convergence/dt6-publication-ack-recovery-gate-network.test.js": "unit",
     "test/convergence/dt6-publication-failback-network.test.js": "unit",

@@ -11,6 +11,8 @@ import {OperationWorkflowRecoveryReconcile} from
 import {createOperationWorkflowOwnerAdapter} from
   './operation-workflow-owner-adapter.js';
 import {createOperationProgressStore} from './operation-progress-store.js';
+import {resolveCoordinatorCreatedDispatchPhase} from
+  './operation-workflow-owner-create-budget-dispatch.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
@@ -599,7 +601,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     );
   }
 
-  async armCoordinatorCreatedOperation(operationInput) {
+  async armCoordinatorCreatedOperation(operationInput, armContext) {
     const operationId = operationInput?.operationId || null;
     if (!operationId || this.isShuttingDown) {
       return false;
@@ -626,6 +628,8 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
               OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE
                 .COORDINATOR_CREATED_OPERATION,
             fallbackOperation: operationInput,
+            coordinatorCreatedDispatchPhase:
+              resolveCoordinatorCreatedDispatchPhase(armContext),
           },
         ),
       );

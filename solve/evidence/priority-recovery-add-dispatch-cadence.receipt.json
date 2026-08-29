@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "priority-recovery-add-dispatch-cadence",
+  "status": "pass",
+  "generatedAt": "2026-08-29T20:49:21.911Z",
+  "receipts": [
+    {
+      "id": "self-move-exclusion-preserved",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^self-move-exclusion-preserved\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "while the operation-ledger self-move is in flight every sibling priority ADD is refused by the real ledger interlock with operation_ledger_self_move_in_flight and none is admitted before the self-move terminal (the exclusion is byte-for-byte preserved)"
+    },
+    {
+      "id": "no-spurious-refusal-after-terminal",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^no-spurious-refusal-after-terminal\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "after the self-move reaches terminal no sibling is refused with operation_ledger_self_move_in_flight against an authoritatively idle ledger (run 19:12:01.353: three siblings were)"
+    },
+    {
+      "id": "priority-adds-acked-within-contract-bound",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^priority-adds-acked-within-contract-bound\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "every sibling priority ADD is dispatched and acknowledged within terminal + one priority retry cadence (CRITICAL_CHECK_DELAY_MS) + one measured single-operation latency, i.e. the ADDs within the budget run concurrently instead of one per lane hold"
+    },
+    {
+      "id": "joiners-ready-within-60s-budget",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^joiners-ready-within-60s-budget\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "the owner-derived startup authority of the joiners reaches READY inside the unchanged 60-second formation certification budget and within terminal + one wake latency + one operation latency + one activation"
+    },
+    {
+      "id": "budget-lane-released-after-claim",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budget-lane-released-after-claim\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "the priority_add concurrent-create budget turn is released after persist and claim: a sibling is admitted by the serialized budget turn while another sibling's dispatch is still awaiting its acknowledgement, at least two ADDs of different partitions are in dispatched state at once, and the ledger rows the budget counts cover both (never exceeding maxConcurrentAdds)"
+    },
+    {
+      "id": "interlock-race-admits-racing-siblings",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^interlock-race-admits-racing-siblings\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "the siblings woken together by the self-move OPERATION_COMPLETED race tryClearHeldOperationLedgerSelfMove; the ones that observe the holder already cleared by a sibling are admitted on that same wake instead of being refused and re-timed"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "maxConcurrentAdds (5) and CRITICAL_CHECK_DELAY_MS (5000) are the HEAD values, the real coordinator runs with that budget, the self-move exclusion lasts exactly as long as the self-move is in flight, and the per-attempt interlock refusal cadence while it is in flight is unchanged"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js",
+      "detail": "two identical virtual-clock drives produce the identical admission/dispatch event sequence and READY instant"
+    }
+  ]
+}

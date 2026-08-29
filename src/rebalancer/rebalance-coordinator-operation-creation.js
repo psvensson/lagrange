@@ -29,6 +29,11 @@ const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
   'Storage reservation creation failed for operation ';
 const RESERVATION_INSERT_REJECTED_FALLBACK = 'reservation insert rejected';
 const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
+const OWNER_PROGRESS_STEP_METHOD = Object.freeze({
+  ARM: 'armCoordinatorCreatedOperation',
+  DISPATCH_AFTER_CREATE_BUDGET_TURN:
+    'dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn',
+});
 const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
   'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
 
@@ -426,32 +431,7 @@ class RebalanceCoordinatorOperationCreation {
       partitionId,
     });
 
-    if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
-      return this.runConcurrentCreateBudgetGate(
-        normalizedMoveType,
-        {
-          partitionId,
-          entityType,
-          entityId,
-        },
-        async () =>
-          this.createOperationRecordInternal({
-            move,
-            normalizedMove,
-            normalizedMoveType,
-            shouldEmitOperationCreated,
-            entityType,
-            entityId,
-            partitionId,
-            dedupeKey,
-            criticalAddLikeIntentKey,
-            sourceNodeId,
-            replaceIntentIdentity: creationContext.replaceIntentIdentity,
-          }),
-      );
-    }
-
-    return this.createOperationRecordInternal({
+    const recordContext = {
       move,
       normalizedMove,
       normalizedMoveType,
@@ -463,7 +443,20 @@ class RebalanceCoordinatorOperationCreation {
       criticalAddLikeIntentKey,
       sourceNodeId,
       replaceIntentIdentity: creationContext.replaceIntentIdentity,
-    });
+    };
+    if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
+      return this.createOperationWithinConcurrentCreateBudgetTurn(
+        normalizedMoveType,
+        {
+          partitionId,
+          entityType,
+          entityId,
+        },
+        recordContext,
+      );
+    }
+
+    return this.createOperationRecordInternal(recordContext);
   }
 
   /**
@@ -888,7 +881,10 @@ class RebalanceCoordinatorOperationCreation {
 
     if (shouldEmitOperationCreated) {
       this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
-      await this.armCoordinatorCreatedOperationProgress(operation);
+      await this.armCoordinatorCreatedOperationProgress(
+        operation,
+        context.createdOperationArmContext,
+      );
     }
 
     return operation;
@@ -898,21 +894,66 @@ class RebalanceCoordinatorOperationCreation {
    * Newly created locally owned operations should not depend solely on cache
    * visibility or external listeners before leaving PENDING. Prime the
    * owner-side transition lane best-effort while keeping dispatch ownership on
-   * the canonical event/read-model paths.
+   * the canonical event/read-model paths. Under a concurrent-create budget
+   * turn the arm context defers the physical dispatch to
+   * dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn.
    *
    * @param {Object|null} operation
-   * @return {void}
+   * @param {Object} [armContext={}] typed owner arm context
+   *   (operation-workflow-owner-create-budget-dispatch.js)
+   * @return {Promise<boolean>}
    * @private
    */
-  async armCoordinatorCreatedOperationProgress(operation) {
+  async armCoordinatorCreatedOperationProgress(operation, armContext = {}) {
+    return this.runCoordinatorCreatedOperationProgressStep(
+      operation,
+      OWNER_PROGRESS_STEP_METHOD.ARM,
+      (workflowOwner) =>
+        workflowOwner.armCoordinatorCreatedOperation(operation, armContext),
+    );
+  }
+
+  /**
+   * Dispatch the DISPATCH_AFTER_CLAIM operation the budget-turn arm retained,
+   * after the create-budget turn is released; best-effort with the same
+   * failure observability as the arm (the owner's retry lanes keep the wake
+   * obligation).
+   *
+   * @param {Object|null} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(operation) {
+    return this.runCoordinatorCreatedOperationProgressStep(
+      operation,
+      OWNER_PROGRESS_STEP_METHOD.DISPATCH_AFTER_CREATE_BUDGET_TURN,
+      (workflowOwner) =>
+        workflowOwner.dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
+          operation.operationId,
+        ),
+    );
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {string} ownerMethodName workflow-owner method the step needs
+   * @param {Function} invokeStep receives the workflow owner
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async runCoordinatorCreatedOperationProgressStep(
+    operation,
+    ownerMethodName,
+    invokeStep,
+  ) {
     if (
       !operation?.operationId ||
-      typeof this.workflowOwner?.armCoordinatorCreatedOperation !== LOCAL_STR_FUNCTION
+      typeof this.workflowOwner?.[ownerMethodName] !== LOCAL_STR_FUNCTION
     ) {
       return false;
     }
     try {
-      return await this.workflowOwner.armCoordinatorCreatedOperation(operation);
+      return await invokeStep(this.workflowOwner);
     } catch (error) {
       this.logger.warn(
         LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER,

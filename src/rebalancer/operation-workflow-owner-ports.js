@@ -718,6 +718,12 @@ async function primeCoordinatorCreatedLocalOwnerOperation(
     );
     return owner.applyCoordinatorCreatedLocalOperationPrimeAction(
       claimedOperation,
+      {
+        coordinatorCreatedDispatchPhase:
+          context.coordinatorCreatedDispatchPhase,
+        sourceOperation: operation,
+        boundary: context.effectCommand,
+      },
     );
   } catch (error) {
     if (

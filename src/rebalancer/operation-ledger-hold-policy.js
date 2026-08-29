@@ -73,6 +73,51 @@ const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION = Object.freeze({
   RELEASE: 'release',
 });
 
+// Compare-and-clear outcome for the held ledger self-move once the
+// authoritative lifecycle read for `readOperationId` has returned:
+//   RELEASE_HOLDER  — the read holder is still the holder and is terminal;
+//                     the caller clears the hold.
+//   KEEP_HOLDER     — the read holder is still the holder and still live.
+//   ALREADY_CLEARED — a racing sibling released this same holder while the
+//                     read was in flight; no self-move is held, so the ledger
+//                     is authoritatively idle for this caller too (GCP run
+//                     2026-08-29T19-08-22.423Z 19:12:01.353: three siblings
+//                     woken by the self-move terminal were refused with
+//                     operation_ledger_self_move_in_flight against an idle
+//                     ledger and fell back to the retry timer).
+//   NEWER_HOLDER    — a different self-move now holds the interlock; the old
+//                     read is evidence only about readOperationId and must
+//                     never clear the newer holder.
+const OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME = Object.freeze({
+  RELEASE_HOLDER: 'release_holder',
+  KEEP_HOLDER: 'keep_holder',
+  ALREADY_CLEARED: 'already_cleared',
+  NEWER_HOLDER: 'newer_holder',
+});
+
+/**
+ * @param {Object} observation
+ * @param {string} observation.readOperationId holder the read was issued for
+ * @param {string|null} observation.heldOperationId holder after the read
+ * @param {string} observation.holdAction OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
+ * @return {string} OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME member
+ */
+function resolveHeldOperationLedgerSelfMoveClearOutcome({
+  readOperationId,
+  heldOperationId,
+  holdAction,
+}) {
+  if (heldOperationId === readOperationId) {
+    return holdAction === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE ?
+      OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER :
+      OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.KEEP_HOLDER;
+  }
+  if (!heldOperationId) {
+    return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED;
+  }
+  return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.NEWER_HOLDER;
+}
+
 // Single declared lifecycle relation for the run-20 serialization hold.
 // Admission consumes this table; it does not reinterpret workflow timestamps,
 // retry timers, or reaper candidacy as permission to release.
@@ -388,6 +433,7 @@ function orderLedgerQuorumCureMovesFirst(moves, concentratedPartitionId) {
 export {
   LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES,
   OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
+  OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME,
   OPERATION_LEDGER_HOLD,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
@@ -402,6 +448,7 @@ export {
   isLedgerQuorumConcentratedPartition,
   orderLedgerQuorumCureMovesFirst,
   resolveEngagedLedgerQuorumSpreadHold,
+  resolveHeldOperationLedgerSelfMoveClearOutcome,
   resolveLedgerQuorumConcentratedPartition,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,

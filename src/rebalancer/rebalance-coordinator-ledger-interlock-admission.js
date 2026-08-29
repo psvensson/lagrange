@@ -5,6 +5,7 @@ import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from './operation-ledger-quorum-concentration.js';
 import {
+  OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME,
   OPERATION_LEDGER_HOLD,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
@@ -12,6 +13,7 @@ import {
   classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   resolveEngagedLedgerQuorumSpreadHold,
+  resolveHeldOperationLedgerSelfMoveClearOutcome,
   resolveLedgerQuorumConcentratedPartition,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,
@@ -26,6 +28,7 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_FUNCTION = 'function';
+const HELD_SELF_MOVE_CLEAR_OUTCOME = OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME;
 
 // Every operation persists its workflow progress into the replica_operations
 // LEDGER, so a REPLACE/REMOVE of a ledger partition (the ledger moving itself)
@@ -760,19 +763,21 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
       operationId,
     );
-    // Compare-and-clear: another waiter may have cleared this holder and
-    // installed a newer self-move while the owner-RPC read was in flight. An
-    // old terminal response is evidence only about operationId; it must never
-    // clear the newer holder (the caller will retry against the current ID).
-    if (state.heldSelfMoveOperationId !== operationId) {
-      return false;
-    }
-    if (action === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
+    // Compare-and-clear against the CURRENT holder (relation owned by
+    // operation-ledger-hold-policy.js): a sibling that already released this
+    // same holder leaves no self-move held (callers re-validate the in-flight
+    // create flag after this await); a NEWER holder keeps refusing.
+    const outcome = resolveHeldOperationLedgerSelfMoveClearOutcome({
+      readOperationId: operationId,
+      heldOperationId: state.heldSelfMoveOperationId,
+      holdAction: action,
+    });
+    if (outcome === HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER) {
       state.heldSelfMoveOperationId = null;
       state.heldSelfMovePartitionId = null;
       return true;
     }
-    return false;
+    return outcome === HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED;
   }
 }
 

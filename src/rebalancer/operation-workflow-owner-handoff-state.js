@@ -1,6 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import * as COORDINATOR_HANDOFF_RETRY
   from './operation-workflow-coordinator-handoff-retry.js';
+import * as CREATE_BUDGET_DISPATCH
+  from './operation-workflow-owner-create-budget-dispatch.js';
 
 const {
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
@@ -484,7 +486,10 @@ function withOwnerHandoffState(Base) {
      *
      * Ordinary coordinator-created events remain the dispatch trigger after this
      * hook claims the durable workflow step. Critical system partitions continue
-     * directly into dispatch so startup recovery is not pinned behind queue lag.
+     * directly into dispatch so startup recovery is not pinned behind queue lag
+     * (inline here; under a coordinator create-budget turn the dispatch is
+     * retained and run after the turn — see
+     * dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn).
      *
      * @param {Object|null} operationInput
      * @return {Promise<boolean>}
@@ -684,12 +689,23 @@ function withOwnerHandoffState(Base) {
     }
 
     /**
+     * DISPATCH_AFTER_CLAIM dispatches inline, except when the arm runs under
+     * the coordinator's concurrent-create budget turn
+     * (primeContext.coordinatorCreatedDispatchPhase AFTER_CREATE_BUDGET_TURN):
+     * the claimed operation is then retained and dispatched by
+     * dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn once the
+     * coordinator releases the turn, so the budget lane is held for
+     * budget check + persist + claim only, never for the transport round trip.
+     *
      * @param {Object|null} claimedOperation
+     * @param {Object} [primeContext={}] `coordinatorCreatedDispatchPhase`,
+     *   the pre-claim `sourceOperation`, and the prime effect `boundary`
      * @return {Promise<boolean>}
      * @private
      */
     async applyCoordinatorCreatedLocalOperationPrimeAction(
       claimedOperation,
+      primeContext = {},
     ) {
       if (!claimedOperation) {
         return false;
@@ -704,6 +720,20 @@ function withOwnerHandoffState(Base) {
       ) {
         return true;
       }
+      if (
+        CREATE_BUDGET_DISPATCH.resolveCoordinatorCreatedDispatchPhase(
+          primeContext,
+        ) ===
+        CREATE_BUDGET_DISPATCH.COORDINATOR_CREATED_DISPATCH_PHASE
+          .AFTER_CREATE_BUDGET_TURN
+      ) {
+        return CREATE_BUDGET_DISPATCH
+          .retainCoordinatorCreatedDispatchAfterCreateBudgetTurn(this, {
+            operation: primeContext.sourceOperation || claimedOperation,
+            claimedOperation,
+            boundary: primeContext.boundary,
+          });
+      }
 
       const dispatchResult =
         await this.dispatchOperationInternal(claimedOperation);
@@ -711,6 +741,25 @@ function withOwnerHandoffState(Base) {
         dispatchResult?.success === true ||
         dispatchResult?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING
       );
+    }
+
+    /**
+     * Dispatch the operation an AFTER_CREATE_BUDGET_TURN arm retained, on this
+     * owner's own lane turn, after the coordinator released the create-budget
+     * turn. Same owner, same claimed operation object, same dispatch call and
+     * failure handling as the inline prime.
+     *
+     * @param {string} operationId
+     * @return {Promise<boolean>}
+     */
+    async dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
+      operationId,
+    ) {
+      return CREATE_BUDGET_DISPATCH
+        .dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
+          this,
+          operationId,
+        );
     }
   };
 }

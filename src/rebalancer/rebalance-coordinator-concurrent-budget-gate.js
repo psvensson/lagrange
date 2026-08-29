@@ -1,4 +1,7 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  buildAfterCreateBudgetTurnArmContext,
+} from './operation-workflow-owner-create-budget-dispatch.js';
 
 const {
   OperationType,
@@ -8,6 +11,43 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 class RebalanceCoordinatorConcurrentBudgetGate {
+  /**
+   * Create one budget-enforced operation in one serialized create-budget
+   * admission turn. The turn (runConcurrentCreateBudgetGate) holds the
+   * scope's lane for the atomic admission section only — budget check,
+   * record persist, and the owner claim — so the budget counts the new
+   * operation and claim ordering is unchanged. The physical dispatch of a
+   * DISPATCH_AFTER_CLAIM operation (priority control-plane / critical
+   * partitions) runs after the turn is released, so sibling priority ADDs of
+   * different partitions dispatch concurrently up to maxConcurrentAdds
+   * instead of one per lane hold (budget size, keys, and scope resolution
+   * are untouched).
+   *
+   * @param {string|null} normalizedMoveType
+   * @param {Object} budgetContext {partitionId, entityType, entityId}
+   * @param {Object} recordContext createOperationRecordInternal context
+   * @return {Promise<Object>} the created (or reused) operation
+   */
+  async createOperationWithinConcurrentCreateBudgetTurn(
+    normalizedMoveType,
+    budgetContext,
+    recordContext,
+  ) {
+    const operation = await this.runConcurrentCreateBudgetGate(
+      normalizedMoveType,
+      budgetContext,
+      async () =>
+        this.createOperationRecordInternal({
+          ...recordContext,
+          createdOperationArmContext: buildAfterCreateBudgetTurnArmContext(),
+        }),
+    );
+    await this.dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
+      operation,
+    );
+    return operation;
+  }
+
   async ensureConcurrentOperationBudgetAllowed(
     normalizedMoveType,
     options = {},
