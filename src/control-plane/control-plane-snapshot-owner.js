@@ -248,6 +248,124 @@ async function ensureControlSnapshotDiscoveryRepair(
   );
 }
 
+function resolveNumericAuthoritativeObservedAtMs(observation = null) {
+  const observedAtMs = Number(
+    observation?.authoritativeObservedAtMs ?? observation?.observedAtMs,
+  );
+  return Number.isFinite(observedAtMs) ? observedAtMs : null;
+}
+
+function resolveNumericEvidenceRevision(value) {
+  const revision = Number(value);
+  return Number.isFinite(revision) && revision > 0 ? Math.floor(revision) :
+    null;
+}
+
+// Evidence-advance (mechanism A/B): the active-gate owner re-evaluates the
+// ACTIVE meaning of a repair-deferred observation against NOW-advanced
+// authoritative evidence, through the repair owner's own probe (the repair
+// owner stays the sole repair-admission owner; the deferral is never
+// bypassed). It never re-derives cluster-ACTIVE from nodes.status or
+// publishedActive — it consumes the repair owner's typed observation and
+// re-reads the now-fresh rebuilt snapshot through the existing evaluation.
+async function probeRepairOwnerEvidenceAdvance(
+  serviceDiscovery = null,
+  repair = null,
+  repairOptions = {},
+) {
+  const probeFn = serviceDiscovery?.probeAuthoritativeDiscoveryEvidenceRevision;
+  if (typeof probeFn !== LOCAL_STR_FUNCTION || repair?.deferred !== true) {
+    return null;
+  }
+  const probe = await probeFn.call(serviceDiscovery, repairOptions);
+  if (!probe || typeof probe !== LOCAL_STR_OBJECT) {
+    return null;
+  }
+  const authoritativeObservedAtMs =
+    resolveNumericAuthoritativeObservedAtMs(probe.authoritativeObservation);
+  const deferredEvidenceRevision = resolveNumericEvidenceRevision(
+    repair.evidenceRevision ??
+      probe.deferredRepairEvidenceRevision ??
+      repair.completedAtMs,
+  );
+  const evidenceAdvanced =
+    authoritativeObservedAtMs !== null &&
+    deferredEvidenceRevision !== null &&
+    authoritativeObservedAtMs > deferredEvidenceRevision;
+  const authoritativeObservation =
+    probe.authoritativeObservation &&
+      typeof probe.authoritativeObservation === LOCAL_STR_OBJECT ?
+      probe.authoritativeObservation :
+      null;
+  return {
+    evidenceAdvanced,
+    authoritativeObservedAtMs,
+    deferredEvidenceRevision,
+    probeTableName:
+      typeof probe.tableName === LOCAL_STR_STRING ? probe.tableName : null,
+    rows: Array.isArray(probe.rows) ? probe.rows : [],
+    authoritativeObservation,
+  };
+}
+
+// Mechanism A (evidence-revision invalidation / level-trigger): when the
+// repair owner's probe reports authoritative evidence materially NEWER than
+// the deferred repair's own evidence revision, the deferred failure
+// observation no longer governs the ACTIVE meaning — the local evidence has
+// advanced past it. The active-gate owner (sole ACTIVE-decision owner) then
+// re-evaluates freshness against the ADVANCED evidence watermark instead of
+// the stale rebuilt snapshot. The repair owner stays the sole repair-admission
+// owner: no repair is re-admitted, the backoff/retryAtMs gate is untouched,
+// and success-reuse/failure-deferral are never bypassed.
+function resolveEvidenceAdvancedWatermark(
+  repairedSnapshot = null,
+  evidenceAdvance = null,
+) {
+  const base = Number.isFinite(Number(repairedSnapshot?.cacheWatermarkMs)) ?
+    Number(repairedSnapshot.cacheWatermarkMs) :
+    0;
+  const advanced = resolveNumericAuthoritativeObservedAtMs(
+    evidenceAdvance?.authoritativeObservation,
+  );
+  return advanced !== null && advanced > base ? advanced : base;
+}
+
+function buildEvidenceAdvancedRepairObservation(
+  controlSnapshot = null,
+  repairedSnapshot = null,
+  reasonCodes = [],
+  options = {},
+) {
+  const evidenceAdvance = repairedSnapshot?.authoritativeEvidenceAdvance;
+  const advancedWatermark = resolveEvidenceAdvancedWatermark(
+    repairedSnapshot,
+    evidenceAdvance,
+  );
+  const evaluation = evaluatePostRepairControlSnapshot(
+    controlSnapshot,
+    {
+      ...repairedSnapshot,
+      cacheWatermarkMs: advancedWatermark,
+    },
+    options,
+  );
+  return evaluation?.shouldRepair === true ?
+    buildStaleSnapshotObservation(
+      repairedSnapshot,
+      normalizeDistinctStringArray(evaluation?.triggerCodes),
+      {
+        refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        expectedMinimumRevision: options.expectedMinimumRevision,
+        expectedResumeToken: options.expectedResumeToken,
+      },
+    ) :
+    buildFreshSnapshotObservation(repairedSnapshot, reasonCodes, {
+      refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
+      expectedMinimumRevision: options.expectedMinimumRevision,
+      expectedResumeToken: options.expectedResumeToken,
+    });
+}
+
 class ControlPlaneSnapshotOwner {
   constructor(deps = {}) {
     this.controlSnapshot = deps.controlSnapshot || null;
@@ -573,12 +691,37 @@ class ControlPlaneSnapshotOwner {
       this.serviceDiscovery,
       repairOptions,
     );
+    const evidenceAdvance = await probeRepairOwnerEvidenceAdvance(
+      this.serviceDiscovery,
+      repair,
+      repairOptions,
+    );
     const repairedSnapshot =
       await this.controlSnapshot.buildLocalControlSnapshot({
         ...options,
         preferAuthoritativePublicationRead: true,
         reconcileAuthoritativeMembershipPublication: true,
       });
+    if (evidenceAdvance?.evidenceAdvanced === true) {
+      repairedSnapshot.authoritativeEvidenceAdvance = evidenceAdvance;
+      this.controlSnapshot?.attachAuthoritativeRepairDiagnostics?.(
+        repairedSnapshot,
+        {
+          repair,
+          repairEvaluation,
+          forceAuthoritativeRepair: true,
+        },
+      );
+      return attachSnapshotObservation(
+        repairedSnapshot,
+        buildEvidenceAdvancedRepairObservation(
+          this.controlSnapshot,
+          repairedSnapshot,
+          reasonCodes,
+          options,
+        ),
+      );
+    }
     this.controlSnapshot?.attachAuthoritativeRepairDiagnostics?.(
       repairedSnapshot,
       {

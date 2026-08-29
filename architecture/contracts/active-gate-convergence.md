@@ -28,7 +28,8 @@
     "snapshot coverage and rebalancer handoff can move as coupled invariants",
     "fixing one owner boundary can leave the representative frontier unchanged because the paired invariant still blocks progress",
     "a reconciled active node can stay unpublished when the membership-publication drain pass no-ops without rescheduling, so missingPublishedCount never reaches zero",
-    "the same undrained publication surfaces as correlated downstream symptoms (publication_missing_active_node, readiness_probe_timeout, and join retryable-resume budget exhaustion) that look like distinct bugs but share one root"
+    "the same undrained publication surfaces as correlated downstream symptoms (publication_missing_active_node, readiness_probe_timeout, and join retryable-resume budget exhaustion) that look like distinct bugs but share one root",
+    "a transient authoritative-repair failure defers with a bounded backoff, the underlying authoritative/cache/discovery evidence subsequently advances, but the active-gate owner keeps re-reading the stale repair-deferred observation because no level-trigger invalidates it against the now-advanced owner evidence"
   ],
   "stateVariables": [
     "activeGateState",
@@ -72,6 +73,10 @@
     {
       "id": "publication-drain-deterministic",
       "statement": "Whenever missingPublishedCount > 0 with reconciled active nodes, a drain or wake action stays enabled until those nodes publish; the active-gate reconcile deferral branch must reschedule (enqueue/drain) rather than return a silent NO_CHANGE or TARGET_BLOCKED that strands the residual."
+    },
+    {
+      "id": "active-gate-evidence-advance-level-trigger",
+      "statement": "While a repair-deferred observation is still binding, when the repair owner's authoritative evidence revision for the same failed table(s) advances materially past the deferred repair's own evidence revision, the active-gate owner re-evaluates the ACTIVE meaning against the advanced evidence (without re-admitting repair and without weakening the backoff) and converges; same unchanged failed evidence keeps the backoff honored."
     }
   ],
   "knownResiduals": [
@@ -125,6 +130,18 @@
       "owner": "startup_active_gate_owner",
       "boundary": "snapshot_coverage",
       "transition": "resolvePublicationActiveGateHandoffMissingPublishedNodeIds derives the missingPublished residual (expected minus published) that the drain must drive to zero"
+    },
+    {
+      "path": "src/control-plane/control-plane-snapshot-owner.js",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "transition": "probeRepairOwnerEvidenceAdvance consumes the repair owner's typed evidence-revision observation and re-evaluates a repair-deferred ACTIVE observation against materially-newer authoritative evidence, converging without re-admitting repair or weakening the e2797b6c8 backoff"
+    },
+    {
+      "path": "src/admin/admin-service-discovery-repair-cache-methods.js",
+      "owner": "authoritative_discovery_repair_owner",
+      "boundary": "authoritative_repair_admission",
+      "transition": "probeAuthoritativeDiscoveryEvidenceRevision answers the current authoritative evidence revision for the deferred repair's own failed table(s) as an observation-only typed read; it admits no repair, records no attempt, and leaves the failure-deferral (keyed by repair tables + failure class + time, no bypassReuse guard) fully binding"
     }
   ],
   "modelBindings": [

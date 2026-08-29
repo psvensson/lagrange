@@ -440,6 +440,7 @@ class AdminServiceDiscovery {
     this.nowFn =
       typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
     this.authoritativeDiscoveryRepairPromise = null;
+    this.authoritativeDiscoveryEvidenceProbePromise = null;
     this.lastAuthoritativeDiscoveryRepairAtMs = 0;
     this.lastAuthoritativeDiscoveryRepairCompletedAtMs = 0;
     this.lastAuthoritativeDiscoveryRepairResult = null;

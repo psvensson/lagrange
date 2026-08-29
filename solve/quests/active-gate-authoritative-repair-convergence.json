@@ -1,0 +1,98 @@
+{
+  "id": "active-gate-authoritative-repair-convergence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The startup active-gate owner (startup_active_gate_owner / snapshot_coverage, per architecture/contracts/active-gate-convergence.md invariant no-ambiguous-active-owner) remains the SOLE owner of the cluster-ACTIVE convergence decision and converges after authoritative lifecycle/publication/discovery evidence advances, even while a previous authoritative-discovery repair is still under its bounded failure backoff. The authoritative-discovery repair owner remains the SOLE owner of repair admission, failure backoff, retry timing, success-evidence reuse, and whether a previous failure is still binding; no caller may bypass failed-repair pressure containment (commit e2797b6c8). One typed owner-to-owner interaction contract (StartupActiveGateOwner -> AuthoritativeDiscoveryRepairOwner) carries a typed disposition (fresh / stale_usable / repair_in_flight / repair_deferred(retryAfterMs) / unavailable) plus source/revision/provenance; the active-gate owner alone decides whether that evidence suffices for the ACTIVE transition. Deterministic tests simultaneously prove BOTH eventual cluster-ACTIVE convergence after evidence advances AND bounded anti-storm behavior under persistent repair failure (no caller bypass, bounded attempt count, no recursive/parallel amplification) on the same owner interaction. This resolves the recurring contradiction publishedActive=5/5 vs active-gate progress=1/5 (repair_deferred/stale_usable + cache_stale_watermark|discovery_node_coverage_gap until timeout) exposed by formation-release-handoff-closure-v3 run 2026-08-29T09-21-25.324Z, WITHOUT weakening the 60s certification budget, without a second ACTIVE authority in the harness/analyzer, and without reducing timeouts as the primary fix.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "architecture/contracts/active-gate-convergence.md",
+    "closesCL": [],
+    "parentQuest": "formation-release-handoff-closure-v3",
+    "planDoc": "docs/steering/roadmap.md",
+    "draftedAtCommit": "c55b5535ba802dcceaa222b908b2e85bdd8dedb4"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/active-gate-authoritative-repair-convergence.receipt.json",
+      "requiredReceipts": [
+        "single-repair-admission-owner",
+        "single-cluster-active-owner",
+        "typed-owner-interaction-contract",
+        "active-definitions-inventory",
+        "convergence-after-evidence-advances",
+        "anti-storm-bounded-under-persistent-failure",
+        "no-force-bypass-of-failure-backoff",
+        "no-second-active-authority",
+        "no-timeout-reduction-as-fix"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "active-gate-authoritative-repair-convergence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/active-gate-authoritative-repair-convergence.receipt.json",
+          "requiredReceipts": [
+            "single-repair-admission-owner",
+            "single-cluster-active-owner",
+            "typed-owner-interaction-contract",
+            "active-definitions-inventory",
+            "convergence-after-evidence-advances",
+            "anti-storm-bounded-under-persistent-failure",
+            "no-force-bypass-of-failure-backoff",
+            "no-second-active-authority",
+            "no-timeout-reduction-as-fix"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-repair-admission-backoff-owner",
+      "statement": "The authoritative-discovery repair owner is the SOLE owner of: whether a repair attempt is admitted; failure backoff; retry timing; whether recent successful evidence can be reused; whether a previous failure is still binding. The harness owns none of these. forceAuthoritativeRepair must NOT semantically mean 'perform a repair now regardless of product policy' (that cannot coexist with the e2797b6c8 anti-storm failure backoff); at most a caller expresses intent such as 'require fresher evidence / bypass successful-result reuse if safe'. The repair owner returns the canonical typed disposition (repaired / reused / deferred / unavailable) with retryAfterMs and provenance. If the word 'force' promises more than that, rename/remove the concept or make its contract explicit; do NOT weaken failure backoff to make the existing name true."
+    },
+    {
+      "id": "single-cluster-active-semantic-owner",
+      "statement": "Keep meanings separate: nodes.status=active is owned by the node lifecycle state machine (node-only); publishedActive=N/M is publication evidence (publication-only); snapshot active=N/M is projection evidence; cluster-ACTIVE / startup convergence is owned SOLELY by the startup active-gate owner. The harness must CONSUME that decision and must NOT independently derive cluster-ACTIVE by counting nodes.status, counting publication rows, inspecting snapshot coverage, or combining these into a fourth definition. Only the active-gate owner decides what those facts mean for cluster convergence, eliminating the publishedActive=5/5 vs active=1/5 contradiction as two competing answers to one question."
+    },
+    {
+      "id": "typed-owner-interaction-contract",
+      "statement": "Define ONE explicit boundary StartupActiveGateOwner -> AuthoritativeDiscoveryRepairOwner. The active-gate owner asks for the evidence strength it needs; the repair owner answers with a typed disposition (fresh / stale_usable / repair_in_flight / repair_deferred(retryAfterMs) / unavailable) plus source/revision/provenance. The active-gate owner (not the harness, not the repair owner) decides whether that evidence suffices for the ACTIVE transition. Neither owner decides the other's semantic question. If the owner interaction changes, update the model/contract."
+    },
+    {
+      "id": "no-bypass-failed-repair-backoff",
+      "statement": "Never add a bypassReuse/force bypass to the failure-deferral branch of resolveRecentAuthoritativeDiscoveryRepairFailure (src/admin/admin-service-discovery-repair-cache-methods.js). That re-opens the pre-e2797b6c8 repair storm. The anti-storm containment is sound and must remain intact."
+    },
+    {
+      "id": "no-second-active-authority-in-harness",
+      "statement": "Do not shortcut cluster-ACTIVE through nodes.status or publishedActive in the harness or analyzer. That would establish a second cluster-ACTIVE authority and hide the invariant the startup active-gate owner protects. Fix the evidence/interaction path to the canonical owner, inside its decision contract, with tests."
+    },
+    {
+      "id": "no-timeout-reduction-as-primary-fix",
+      "statement": "Do not reduce the 60s ACTIVE-wait / certification budget, and do not reduce the failure backoff merely because a smaller value fits inside 60s. Any backoff change requires BOTH anti-storm proof AND convergence proof, and is a last resort after evidence-revision-invalidation and completion-wake mechanisms are falsified."
+    },
+    {
+      "id": "coupled-red-green-both-required",
+      "statement": "Build the deterministic reproduction BEFORE choosing the fix. RED today must reproduce the observed stuck shape (publishedActive=5/5 + active=1/5 + repair_deferred/stale_usable + cache_stale_watermark|discovery_node_coverage_gap until timeout). The anti-ping-pong witness must simultaneously prove the e2797b6c8 repair-storm fix remains intact (bounded attempt count, no caller bypass, no recursive/parallel amplification). The quest completes only when BOTH convergence-after-evidence-advances AND bounded-anti-storm are green on the SAME owner interaction; a fix that turns either red is rejected."
+    },
+    {
+      "id": "prefer-level-trigger-over-timer",
+      "statement": "Investigate mechanisms in preference order: (A) evidence-revision invalidation / level-trigger — check whether the deferred failure state is keyed only by repair-tables+failure-class+time while ignoring a newer authoritative/cache/discovery revision, and whether genuine owner-evidence advancement should invalidate the stale failed-repair observation (same unchanged failed evidence -> honor backoff; materially newer owner evidence -> re-evaluate); (B) repair-completion/evidence-change wake — check whether the active-gate owner is explicitly woken by repair success, authoritative snapshot revision change, discovery coverage change, cache watermark advancement, or node lifecycle/publication advancement, and add the missing level-trigger through the proper owner boundary (keep polling as recovery fallback); (C) caller scheduling using retryAfterMs — only after A/B, and never as the product liveness mechanism; (D) backoff-cap changes — last resort only. The leading theory is that the anti-storm backoff is sound but the ACTIVE convergence owner lacks a reliable level-triggered path that invalidates/re-evaluates the stale repair-deferred observation after the underlying evidence advances."
+    },
+    {
+      "id": "active-definitions-inventory-first",
+      "statement": "Before any source change, inventory and classify every current definition of ACTIVE (meaning computed / current producer / consumer / should-remain-authority): nodes.status=active (node lifecycle), publishedActive membership (publication owner), snapshot active=N/M (snapshot projection), cluster-ACTIVE gate (startup active-gate owner, sole authority). The final design must make it impossible for two of them to answer the same semantic question independently."
+    }
+  ]
+}

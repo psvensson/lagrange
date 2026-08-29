@@ -40,6 +40,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
     ADMIN_CACHE_DUMP,
     ADMIN_SERVICE_DISCOVERY,
     AUTHORITATIVE_DISCOVERY_REPAIR,
+    AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON,
     AUTHORITATIVE_REPAIR_FAILURE_ACTION,
     AUTHORITATIVE_REPAIR_FAILURE_CLASS,
     CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
@@ -226,6 +227,16 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         errorCount: Array.isArray(failureState.errors) ?
           failureState.errors.length :
           0,
+        // Typed owner-to-owner evidence provenance: the active-gate owner
+        // compares this revision against a fresher authoritative observation
+        // to decide whether the deferred observation it holds is still the
+        // governing evidence. It never re-admits repair: repair admission,
+        // the e2797b6c8 backoff, and the retryAtMs gate stay keyed ONLY by
+        // repair tables + failure class + time (no bypassReuse guard by
+        // design), and the probe below leaves the deferral fully binding.
+        evidenceRevision: Number.isFinite(failureState.completedAtMs) ?
+          Math.floor(failureState.completedAtMs) :
+          null,
         errors: Array.isArray(failureState.errors) ?
           [...failureState.errors] :
           ADMIN_CACHE_DUMP.EMPTY,
@@ -249,6 +260,98 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         completedAtMs: failureState.completedAtMs || null,
         reused: true,
       };
+    }
+
+    /**
+     * Probe the current authoritative evidence revision for the repair tables
+     * covered by a still-binding failure deferral WITHOUT admitting any repair
+     * and WITHOUT weakening the e2797b6c8 backoff. The repair owner remains
+     * the sole authority over whether the failed repair observation it issued
+     * is still the governing evidence: the probe reads the authoritative rows
+     * through the owner path (observation only, no cache mutation) and answers
+     * a typed observation the active-gate owner consumes. The deferral itself
+     * stays keyed by repair tables + failure class + time; the probe runs only
+     * while that deferral is still binding (never as a repair bypass), records
+     * no repair attempt, and is bounded by one in-flight promise.
+     * @param {Object} [options={}]
+     * @return {Promise<Object|null>}
+     */
+    async probeAuthoritativeDiscoveryEvidenceRevision(options = {}) {
+      if (this.authoritativeDiscoveryEvidenceProbePromise) {
+        return this.authoritativeDiscoveryEvidenceProbePromise;
+      }
+      this.authoritativeDiscoveryEvidenceProbePromise =
+        this.executeAuthoritativeDiscoveryEvidenceRevisionProbe(options)
+          .finally(() => {
+            this.authoritativeDiscoveryEvidenceProbePromise = null;
+          });
+      return this.authoritativeDiscoveryEvidenceProbePromise;
+    }
+
+    async executeAuthoritativeDiscoveryEvidenceRevisionProbe(options = {}) {
+      if (
+        !this.systemTableCache ||
+        !this.cacheMutationTarget ||
+        typeof this.cacheMutationTarget.applySystemTableChange !==
+          'function' ||
+        !this.canReadAuthoritativeDiscoveryRows()
+      ) {
+        return null;
+      }
+      const failureState = this.lastAuthoritativeDiscoveryRepairFailureState;
+      // Probe a table the deferred repair actually FAILED to read — the
+      // evidence domain of the failure. Reading a table the repair never
+      // attempted (or a freshly resolved caller set) could report a spurious
+      // advance; reading a failed table honestly observes whether the
+      // authoritative evidence for the deferred failure has advanced.
+      const probeTableNames = normalizeAuthoritativeRepairTableNames(
+        Array.isArray(failureState?.failedTables) &&
+          failureState.failedTables.length > 0 ?
+          failureState.failedTables :
+          failureState?.requestedTableNames,
+      );
+      const probe = await this.readAuthoritativeDiscoveryEvidenceObservation(
+        options,
+        probeTableNames,
+      );
+      if (!probe) {
+        return null;
+      }
+      return {
+        deferredRepairEvidenceRevision:
+          Number.isFinite(failureState?.completedAtMs) ?
+            Math.floor(failureState.completedAtMs) :
+            null,
+        ...probe,
+      };
+    }
+
+    async readAuthoritativeDiscoveryEvidenceObservation(
+      options = {},
+      probeTableNames = [],
+    ) {
+      const probeTableName = probeTableNames[0];
+      if (!probeTableName) {
+        return null;
+      }
+      try {
+        const result = await this.readAuthoritativeSystemTableRows(
+          probeTableName,
+          {
+            nowMs: this.nowFn(),
+            reason:
+              options.reason || AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON,
+            queryTimeoutMs: options.queryTimeoutMs,
+          },
+        );
+        return {
+          tableName: result?.tableName || probeTableName,
+          rows: Array.isArray(result?.rows) ? [...result.rows] : [],
+          authoritativeObservation: result?.authoritativeObservation || null,
+        };
+      } catch (_error) {
+        return null;
+      }
     }
 
     /**
