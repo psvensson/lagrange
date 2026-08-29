@@ -132,7 +132,7 @@
       "transition": "resolvePublicationActiveGateHandoffMissingPublishedNodeIds derives the missingPublished residual (expected minus published) that the drain must drive to zero"
     },
     {
-      "path": "src/control-plane/control-plane-snapshot-owner.js",
+      "path": "src/control-plane/control-plane-snapshot-owner-evidence-advance.js",
       "owner": "startup_active_gate_owner",
       "boundary": "snapshot_coverage",
       "transition": "probeRepairOwnerEvidenceAdvance consumes the repair owner's typed evidence-revision observation and re-evaluates a repair-deferred ACTIVE observation against materially-newer authoritative evidence, converging without re-admitting repair or weakening the e2797b6c8 backoff"

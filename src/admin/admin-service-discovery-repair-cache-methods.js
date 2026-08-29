@@ -32,6 +32,12 @@ function assertAuthoritativeCacheReconcileResult(result, receipt, constants) {
   }
 }
 
+function resolveDeferredRepairEvidenceRevision(failureState) {
+  return Number.isFinite(failureState?.completedAtMs) ?
+    Math.floor(failureState.completedAtMs) :
+    null;
+}
+
 function assignAdminServiceDiscoveryRepairCacheMethods(
   AdminServiceDiscovery,
   options = {},
@@ -299,31 +305,37 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         return null;
       }
       const failureState = this.lastAuthoritativeDiscoveryRepairFailureState;
-      // Probe a table the deferred repair actually FAILED to read — the
-      // evidence domain of the failure. Reading a table the repair never
-      // attempted (or a freshly resolved caller set) could report a spurious
-      // advance; reading a failed table honestly observes whether the
-      // authoritative evidence for the deferred failure has advanced.
-      const probeTableNames = normalizeAuthoritativeRepairTableNames(
-        Array.isArray(failureState?.failedTables) &&
-          failureState.failedTables.length > 0 ?
-          failureState.failedTables :
-          failureState?.requestedTableNames,
-      );
       const probe = await this.readAuthoritativeDiscoveryEvidenceObservation(
         options,
-        probeTableNames,
+        this.resolveAuthoritativeDiscoveryEvidenceProbeTables(failureState),
       );
       if (!probe) {
         return null;
       }
       return {
         deferredRepairEvidenceRevision:
-          Number.isFinite(failureState?.completedAtMs) ?
-            Math.floor(failureState.completedAtMs) :
-            null,
+          resolveDeferredRepairEvidenceRevision(failureState),
         ...probe,
       };
+    }
+
+    /**
+     * Resolve the table set one evidence-revision probe reads: a table the
+     * deferred repair actually FAILED to read — the evidence domain of the
+     * failure. Reading a table the repair never attempted (or a freshly
+     * resolved caller set) could report a spurious advance; reading a failed
+     * table honestly observes whether the authoritative evidence for the
+     * deferred failure has advanced.
+     * @param {Object|null} failureState
+     * @return {string[]}
+     */
+    resolveAuthoritativeDiscoveryEvidenceProbeTables(failureState) {
+      return normalizeAuthoritativeRepairTableNames(
+        Array.isArray(failureState?.failedTables) &&
+          failureState.failedTables.length > 0 ?
+          failureState.failedTables :
+          failureState?.requestedTableNames,
+      );
     }
 
     async readAuthoritativeDiscoveryEvidenceObservation(

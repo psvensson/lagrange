@@ -45,6 +45,8 @@ import {
 const DONE_WHEN_PROBE_SCOPE = 'doneWhen';
 import {isFrontierProbeEvent} from './probe-spec.js';
 
+export {invariantHighWater, projectInvariantLedger} from './invariant-ledger.js';
+
 const LOCAL_STR_OWNED_001 = 'exact terminal source attempt was rejected';
 
 const UNKNOWN_METRIC = '?';
@@ -73,19 +75,12 @@ const mapGet = Function.call.bind(Map.prototype.get);
 const mapSet = Function.call.bind(Map.prototype.set);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 const setAdd = Function.call.bind(Set.prototype.add);
-const setForEach = Function.call.bind(Set.prototype.forEach);
 const setHas = Function.call.bind(Set.prototype.has);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const MapConstructor = Map;
 const SetConstructor = Set;
-
-function setValues(set) {
-  const values = [];
-  setForEach(set, (value) => arrayPush(values, value));
-  return values;
-}
 
 function isStructuredVerifierRejection(event) {
   const versionOneAttempt = event.verification?.schemaVersion === 1 &&
@@ -427,6 +422,33 @@ const FRONTIER_HANDLERS = {
   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };
 
+const THEORY_HANDLERS = {
+  [EVENT_THEORY_SYSTEM_DECLARED]: (theories, event) =>
+    addTheory(theories, event, THEORY_SCOPE_SYSTEM),
+  [EVENT_THEORY_OPTION_DECLARED]: (theories, event) =>
+    addTheory(theories, event, THEORY_SCOPE_FRONTIER),
+  [EVENT_THEORY_SELECTED]: applyTheorySelection,
+  [EVENT_THEORY_RESULT]: applyTheoryResult,
+  [EVENT_THEORY_SUPERSEDED]: applyTheorySuperseded,
+};
+
+// Findings carry the bound-rejection flag every other frontier handler lacks,
+// so they dispatch separately from the FRONTIER_HANDLERS table.
+function applyFrontierEvent(frontiers, event, reopensTerminal) {
+  const frontier = event.frontier ? mapGet(frontiers, event.frontier) : null;
+  if (event.type === EVENT_FINDING) {
+    applyFinding(frontier, event, reopensTerminal);
+    return;
+  }
+  const handler = FRONTIER_HANDLERS[event.type];
+  if (handler) handler(frontier, event);
+}
+
+function applyTheoryEvent(theories, event) {
+  const handler = THEORY_HANDLERS[event.type];
+  if (handler) handler(theories, event);
+}
+
 function reopenQuestState(questState, event) {
   questState.status = STATUS_OPEN;
   questState.evidence = event.evidence || null;
@@ -473,28 +495,8 @@ export function projectState(quest, log) {
       event,
       reopensTerminal,
     )) continue;
-    if (event.type === EVENT_FINDING) {
-      applyFinding(
-        event.frontier ? mapGet(frontiers, event.frontier) : null,
-        event,
-        reopensTerminal,
-      );
-    }
-    const handler = FRONTIER_HANDLERS[event.type];
-    if (handler && event.type !== EVENT_FINDING) {
-      handler(event.frontier ? mapGet(frontiers, event.frontier) : null, event);
-    }
-    if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {
-      addTheory(theories, event, THEORY_SCOPE_SYSTEM);
-    } else if (event.type === EVENT_THEORY_OPTION_DECLARED) {
-      addTheory(theories, event, THEORY_SCOPE_FRONTIER);
-    } else if (event.type === EVENT_THEORY_SELECTED) {
-      applyTheorySelection(theories, event);
-    } else if (event.type === EVENT_THEORY_RESULT) {
-      applyTheoryResult(theories, event);
-    } else if (event.type === EVENT_THEORY_SUPERSEDED) {
-      applyTheorySuperseded(theories, event);
-    }
+    applyFrontierEvent(frontiers, event, reopensTerminal);
+    applyTheoryEvent(theories, event);
   }
   const projectedFrontiers = [];
   mapForEach(frontiers, (frontier) => arrayPush(projectedFrontiers, frontier));
@@ -504,100 +506,6 @@ export function projectState(quest, log) {
     questEvidence: questState.evidence,
     frontiers: projectedFrontiers,
     theories,
-  };
-}
-
-// Monotonic high-water mark of satisfied sub-invariants for a frontier: the union of
-// every `satisfiedInvariants` set recorded on a measured attempt or ingested-evidence
-// event. Used to detect silent regression — a later measured attempt that no longer
-// satisfies a label present here has re-broken a previously-green invariant.
-export function invariantHighWater(log, frontierId = null) {
-  const set = new SetConstructor();
-  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
-    const event = log[eventIndex];
-    if (frontierId && event.frontier !== frontierId) continue;
-    const measured =
-      (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
-      (event.type === EVENT_EVIDENCE_INGESTED &&
-        isFrontierProbeEvent(event) &&
-        typeof event.metric === 'number');
-    if (!measured) continue;
-    const labels = arrayIsArray(event.satisfiedInvariants) ?
-      event.satisfiedInvariants : [];
-    for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
-      if (labels[labelIndex]) setAdd(set, labels[labelIndex]);
-    }
-  }
-  return setValues(set);
-}
-
-// Pure per-invariant ledger projection for a frontier, folded from the same measured
-// events the high-water mark reads (a measured attempt, or an ingested-evidence event
-// carrying a numeric metric). For every label that has ever been green it tracks whether
-// the most recent measured run still satisfies it, and contrasts the latest measured run
-// with the one before it so callers can see what just regressed or was just restored.
-// This is the shared substrate for the regression-restore gate (rr-C) and the
-// coupled-oscillation detector (rr-D); it records no policy of its own.
-//
-// Returns:
-//   greenHighWater  - every label ever satisfied (monotonic union)
-//   currentGreen    - labels satisfied by the latest measured run
-//   currentRed      - high-water labels NOT satisfied by the latest measured run
-//   regressedThisRun- labels green in the previous measured run but red in the latest
-//   restoredThisRun - labels red in the previous measured run but green in the latest
-//   history         - [{ts, green:[...], red:[...]}] one entry per measured run
-export function projectInvariantLedger(log, frontierId = null) {
-  const highWater = new SetConstructor();
-  const history = [];
-  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
-    const event = log[eventIndex];
-    if (frontierId && event.frontier !== frontierId) continue;
-    const measured =
-      (event.type === EVENT_ATTEMPT && event.invalidSample !== true) ||
-      (event.type === EVENT_EVIDENCE_INGESTED &&
-        isFrontierProbeEvent(event) &&
-        typeof event.metric === 'number');
-    if (!measured) continue;
-    const labels = arrayFilter(
-      arrayIsArray(event.satisfiedInvariants) ? event.satisfiedInvariants : [],
-      Boolean,
-    );
-    const green = new SetConstructor();
-    for (let labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
-      setAdd(green, labels[labelIndex]);
-      setAdd(highWater, labels[labelIndex]);
-    }
-    const red = arrayFilter(setValues(highWater),
-      (label) => !setHas(green, label));
-    arrayPush(history, {ts: event.ts || null, green: setValues(green), red});
-  }
-  const latest = history.length > 0 ? history[history.length - 1] : null;
-  const previous = history.length > 1 ? history[history.length - 2] : null;
-  const currentGreen = latest ? latest.green : [];
-  const currentRed = latest ? latest.red : [];
-  const prevGreen = new SetConstructor();
-  const previousGreen = previous ? previous.green : [];
-  for (let index = 0; index < previousGreen.length; index += 1) {
-    setAdd(prevGreen, previousGreen[index]);
-  }
-  const latestGreen = new SetConstructor();
-  for (let index = 0; index < currentGreen.length; index += 1) {
-    setAdd(latestGreen, currentGreen[index]);
-  }
-  const regressedThisRun = previous ?
-    arrayFilter(setValues(prevGreen),
-      (label) => !setHas(latestGreen, label)) : [];
-  const restoredThisRun = previous ?
-    arrayFilter(setValues(latestGreen),
-      (label) => !setHas(prevGreen, label)) : [];
-  return {
-    frontier: frontierId,
-    greenHighWater: setValues(highWater),
-    currentGreen,
-    currentRed,
-    regressedThisRun,
-    restoredThisRun,
-    history,
   };
 }
 

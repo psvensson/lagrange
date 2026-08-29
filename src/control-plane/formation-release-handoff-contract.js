@@ -421,11 +421,7 @@ function buildContract({
     releaseAuthorized:
       state === FORMATION_RELEASE_HANDOFF_STATE.ACTIVE &&
       releaseAuthorized === true,
-    generation: generationFields?.id ?? null,
-    authorityNodeId: generationFields?.authorityNodeId ?? null,
-    authorityBootIncarnation: generationFields?.authorityBootIncarnation ?? null,
-    capturedPublicationEpoch: generationFields?.publicationEpoch ?? null,
-    fenceIdentity: generationFields?.fenceIdentity ?? null,
+    ...projectContractGenerationIdentity(generationFields),
     canonicalNodeIds: generationFields.canonicalNodeIds,
     observedPublicationEpoch,
     observedAuthorityReady,
@@ -436,6 +432,23 @@ function buildContract({
     readyNodeIds: objectFreeze(arrayPrototypeSlice(readyNodeIds)),
     pendingNodeIds: objectFreeze(arrayPrototypeSlice(pendingNodeIds)),
   });
+}
+/**
+ * Project the scalar generation identity onto the published contract field
+ * names. `generationFields` is always an object (present or absent shape), so
+ * only the absent shape's missing scalars collapse to the published null.
+ *
+ * @param {Object} generationFields
+ * @return {Object}
+ */
+function projectContractGenerationIdentity(generationFields) {
+  return {
+    generation: generationFields.id ?? null,
+    authorityNodeId: generationFields.authorityNodeId ?? null,
+    authorityBootIncarnation: generationFields.authorityBootIncarnation ?? null,
+    capturedPublicationEpoch: generationFields.publicationEpoch ?? null,
+    fenceIdentity: generationFields.fenceIdentity ?? null,
+  };
 }
 function presentContractGenerationFields(generation) {
   return {
@@ -449,9 +462,10 @@ function presentContractGenerationFields(generation) {
   };
 }
 function absentContractGenerationFields() {
-  // An absent generation is projected through the optional-chain accessors at
-  // the buildContract call site; only the two list projections are materialized
-  // here, so no raw-null scalar outcome property is ever constructed (§4.5).
+  // An absent generation is projected through the nullish-coalescing accessors
+  // in projectContractGenerationIdentity; only the two list projections are
+  // materialized here, so no raw-null scalar outcome property is ever
+  // constructed (§4.5).
   const empty = objectFreeze([]);
   return {
     canonicalNodeIds: empty,

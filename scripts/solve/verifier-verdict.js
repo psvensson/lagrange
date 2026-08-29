@@ -110,27 +110,59 @@ function evidenceIdentity(root, evidencePath) {
   };
 }
 
+function assertTemplateItemShape(item) {
+  if (!ownKeysExactly(item, [CATEGORY_FIELD, EVIDENCE_PATHS_FIELD]) ||
+    !regExpTest(CATEGORY_PATTERN, String(item.category || '')) ||
+    !isDenseDataArray(item.evidencePaths) || item.evidencePaths.length === 0) {
+    throw new Error(TEMPLATE_ITEM_PROBLEM);
+  }
+}
+
+function templateEvidence(root, evidencePaths) {
+  const evidence = [];
+  for (let index = 0; index < evidencePaths.length; index += 1) {
+    arrayPush(evidence, evidenceIdentity(root, evidencePaths[index]));
+  }
+  return evidence;
+}
+
+// Index completed items by category. Shape and duplicate checks run before any
+// evidence file is touched, so a malformed or repeated item is reported as such
+// rather than as an evidence problem.
+function completedTemplatesByCategory(root, value) {
+  const byCategory = Object.create(null);
+  for (let itemIndex = 0; itemIndex < value.length; itemIndex += 1) {
+    const item = value[itemIndex];
+    assertTemplateItemShape(item);
+    if (objectHasOwn(byCategory, item.category)) {
+      throw new Error(`land: duplicate completed template category: ${item.category}`);
+    }
+    byCategory[item.category] = {
+      category: item.category,
+      evidence: templateEvidence(root, item.evidencePaths),
+    };
+  }
+  return byCategory;
+}
+
+function isRequiredTemplateCategory(requiredTemplates, category) {
+  for (let index = 0; index < requiredTemplates.length; index += 1) {
+    if (requiredTemplates[index].category === category) return true;
+  }
+  return false;
+}
+
+function templateMismatchProblem(missing, extra) {
+  return TEMPLATE_MISMATCH_PROBLEM +
+    `${missing.length ? `; missing ${missing.join(CATEGORY_SEPARATOR)}` : ''}` +
+    `${extra.length ? `; unexpected ${extra.join(CATEGORY_SEPARATOR)}` : ''}`;
+}
+
 function validateTemplateItems(root, value, requiredTemplates) {
   if (!isDenseDataArray(value)) {
     throw new Error(TEMPLATE_ARRAY_PROBLEM);
   }
-  const byCategory = Object.create(null);
-  for (let itemIndex = 0; itemIndex < value.length; itemIndex += 1) {
-    const item = value[itemIndex];
-    if (!ownKeysExactly(item, [CATEGORY_FIELD, EVIDENCE_PATHS_FIELD]) ||
-      !regExpTest(CATEGORY_PATTERN, String(item.category || '')) ||
-      !isDenseDataArray(item.evidencePaths) || item.evidencePaths.length === 0) {
-      throw new Error(TEMPLATE_ITEM_PROBLEM);
-    }
-    if (objectHasOwn(byCategory, item.category)) {
-      throw new Error(`land: duplicate completed template category: ${item.category}`);
-    }
-    const evidence = [];
-    for (let index = 0; index < item.evidencePaths.length; index += 1) {
-      arrayPush(evidence, evidenceIdentity(root, item.evidencePaths[index]));
-    }
-    byCategory[item.category] = {category: item.category, evidence};
-  }
+  const byCategory = completedTemplatesByCategory(root, value);
   const missing = [];
   const completed = [];
   for (let index = 0; index < requiredTemplates.length; index += 1) {
@@ -141,20 +173,12 @@ function validateTemplateItems(root, value, requiredTemplates) {
   const extra = [];
   const suppliedCategories = objectKeys(byCategory);
   for (let index = 0; index < suppliedCategories.length; index += 1) {
-    let required = false;
-    for (let requiredIndex = 0;
-      requiredIndex < requiredTemplates.length; requiredIndex += 1) {
-      if (requiredTemplates[requiredIndex].category === suppliedCategories[index]) {
-        required = true;
-        break;
-      }
+    if (!isRequiredTemplateCategory(requiredTemplates, suppliedCategories[index])) {
+      arrayPush(extra, suppliedCategories[index]);
     }
-    if (!required) arrayPush(extra, suppliedCategories[index]);
   }
   if (missing.length > 0 || extra.length > 0) {
-    throw new Error(TEMPLATE_MISMATCH_PROBLEM +
-      `${missing.length ? `; missing ${missing.join(CATEGORY_SEPARATOR)}` : ''}` +
-      `${extra.length ? `; unexpected ${extra.join(CATEGORY_SEPARATOR)}` : ''}`);
+    throw new Error(templateMismatchProblem(missing, extra));
   }
   return completed;
 }

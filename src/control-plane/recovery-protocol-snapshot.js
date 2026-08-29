@@ -19,6 +19,11 @@ import {
   buildMembershipPublicationActiveSnapshot,
 } from './active-node-projection.js';
 import {
+  normalizeNodeIdList,
+  normalizeNonNegativeInteger,
+  normalizeStringList,
+} from './active-node-projection-normalizers.js';
+import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
@@ -50,28 +55,6 @@ function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
-}
-
-function normalizeNodeIdList(values = []) {
-  return [...new Set(
-    (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
-      .filter((value) => value.length > 0),
-  )].sort();
-}
-
-function normalizeStringList(values = []) {
-  return [...new Set(
-    (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
-      .filter((value) => value.length > 0),
-  )];
-}
-
-function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value >= 0 ?
-    Math.floor(value) :
-    0;
 }
 
 function normalizeStringMap(values = {}) {

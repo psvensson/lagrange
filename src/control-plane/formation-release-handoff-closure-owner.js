@@ -433,7 +433,6 @@ class FormationReleaseHandoffClosureOwner {
 }
 
 export {
-  FORMATION_RELEASE_HANDOFF_REASON,
   FORMATION_RELEASE_HANDOFF_STATE,
   FormationReleaseHandoffClosureOwner,
   attachFormationReleaseHandoffToStartupAuthority,

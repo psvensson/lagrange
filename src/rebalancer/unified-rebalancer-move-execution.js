@@ -59,6 +59,48 @@ function buildCoordinatorOperationRequest(move, context, operationType) {
   };
 }
 
+function resolveMoveMembershipPublicationEpoch(rebalancer, move) {
+  return Number.isInteger(move?.membershipPublicationEpoch) ?
+    move.membershipPublicationEpoch :
+    rebalancer.resolvePublishedMembershipPlanningEpoch();
+}
+
+/**
+ * Decorate a coordinator operation request with the move's mutation context:
+ * the membership-publication fencing epoch (when one is known), the explicit
+ * control-plane mutation work class, and the priority-recovery creation
+ * authority marker. Fields absent from the move stay absent on the request.
+ *
+ * @param {Object} rebalancer
+ * @param {Object} operationRequest mutated in place
+ * @param {Object} move
+ * @return {Object} the same operationRequest
+ */
+function applyCoordinatorOperationRequestMutationContext(
+  rebalancer,
+  operationRequest,
+  move,
+) {
+  const membershipPublicationEpoch =
+    resolveMoveMembershipPublicationEpoch(rebalancer, move);
+  if (
+    Number.isInteger(membershipPublicationEpoch) &&
+    membershipPublicationEpoch >= UNIFIED_REBALANCER_LITERAL.ZERO
+  ) {
+    operationRequest.membershipPublicationEpoch = membershipPublicationEpoch;
+  }
+  if (move?.controlPlaneMutationWorkClass) {
+    operationRequest.controlPlaneMutationWorkClass =
+      move.controlPlaneMutationWorkClass;
+  }
+  if (hasPriorityRecoveryOperationCreationAuthority(move)) {
+    operationRequest[
+      CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD
+    ] = true;
+  }
+  return operationRequest;
+}
+
 function buildCoordinatorMoveSafetyRequest(move, context) {
   return {
     type: move?.type,
@@ -237,31 +279,15 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       );
     }
 
-    const operationRequest = buildCoordinatorOperationRequest(
+    const operationRequest = applyCoordinatorOperationRequestMutationContext(
+      this,
+      buildCoordinatorOperationRequest(
+        move,
+        operationContext,
+        this.resolveCoordinatorOperationType(move.type),
+      ),
       move,
-      operationContext,
-      this.resolveCoordinatorOperationType(move.type),
     );
-    const membershipPublicationEpoch = Number.isInteger(
-      move?.membershipPublicationEpoch,
-    ) ?
-      move.membershipPublicationEpoch :
-      this.resolvePublishedMembershipPlanningEpoch();
-    if (
-      Number.isInteger(membershipPublicationEpoch) &&
-      membershipPublicationEpoch >= UNIFIED_REBALANCER_LITERAL.ZERO
-    ) {
-      operationRequest.membershipPublicationEpoch = membershipPublicationEpoch;
-    }
-    if (move?.controlPlaneMutationWorkClass) {
-      operationRequest.controlPlaneMutationWorkClass =
-        move.controlPlaneMutationWorkClass;
-    }
-    if (hasPriorityRecoveryOperationCreationAuthority(move)) {
-      operationRequest[
-        CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD
-      ] = true;
-    }
 
     // Create operation record via coordinator.
     // Periodic planning already gates on local mutation readiness before

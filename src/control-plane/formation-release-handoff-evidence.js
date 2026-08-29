@@ -360,21 +360,14 @@ function isAuthorityReadyRetainable(evidence) {
 
 export {
   EVIDENCE_OUTCOME,
-  authorityScalarEvidenceValid,
   buildAuthorityEvidence,
   buildConnectionEvidenceById,
-  buildFenceIdentity,
-  buildNodeEvidence,
   buildNodeEvidenceById,
-  evidenceAbsent,
-  evidenceInvalid,
-  evidencePresent,
   isAuthorityReadyRetainable,
   isConnectedFormationMember,
   isCurrentReadyMember,
   listCoversCohort,
   listIsSubset,
   listsAreDisjoint,
-  normalizeOwnStringArray,
   normalizeOwnUniqueStringArray,
 };

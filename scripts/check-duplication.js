@@ -53,8 +53,11 @@ const RATCHET_TARGETS = [
     // construction was consolidated behind its owner method.
     // 2026-08-23: tightened 61/1941 -> 59/1889 after the AdminControlSnapshot
     // literal table moved to its single owner in admin-constants.js.
-    baselineCloneGroupCount: 59,
-    baselineDuplicatedLineCount: 1889,
+    // 2026-08-29: tightened 59/1889 -> 58/1867 after the startup-authority
+    // snapshot planning-read clone collapsed into one owner method and
+    // recovery-protocol-snapshot reused the active-node-projection normalizers.
+    baselineCloneGroupCount: 58,
+    baselineDuplicatedLineCount: 1867,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

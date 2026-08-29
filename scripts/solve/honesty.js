@@ -22,6 +22,10 @@ const LOCAL_STR_OWNED_006 =
   'quest.verificationTemplates changed after declaration';
 const LANDING_REQUIREMENTS_CHANGED =
   'quest.landingRequirements changed after declaration';
+const DONE_WHEN_CHANGED = 'quest.doneWhen changed after declaration';
+const FRONTIER_METRICS_CHANGED =
+  'frontier metric definitions changed after declaration';
+const TITLE_CHANGED = 'quest.title changed after declaration';
 
 export const METRIC_DIRECTION_LOWER_IS_BETTER = 'lower-is-better';
 
@@ -173,66 +177,89 @@ export function validateGoalpostsImmutable(quest, declaredEvent, amendments = []
   return goalpostViolationsAgainst(quest, effectiveDeclaration);
 }
 
-function goalpostViolationsAgainst(quest, declaredEvent) {
-  const violations = [];
-  if (JSON.stringify(quest.doneWhen) !== JSON.stringify(declaredEvent.sealed.doneWhen)) {
-    violations.push('quest.doneWhen changed after declaration');
-  }
+// Every goalpost that is only compared for declarations sealed with an
+// authoring contract version. Fields that did not exist when an older quest
+// was sealed (title, verification templates, landing requirements) are exempt
+// while the sealed value is undefined; anything sealed since compares exactly,
+// so the commit subject a title feeds, the rejection bar, and the landing bar
+// cannot be widened by editing the quest file instead of the amendment path.
+const VERSIONED_GOALPOST_CHECKS = Object.freeze([
+  {
+    violation: LOCAL_STR_OWNED_001,
+    changed: (quest, sealed) =>
+      quest.authoringContractVersion !== sealed.authoringContractVersion,
+  },
+  {
+    violation: LOCAL_STR_OWNED_002,
+    changed: (quest, sealed) => !sameJson(quest.statement, sealed.statement),
+  },
+  {
+    violation: LOCAL_STR_OWNED_003,
+    changed: (quest, sealed) => !sameJson(quest.class, sealed.class),
+  },
+  {
+    violation: TITLE_CHANGED,
+    changed: (quest, sealed) => sealed.title !== undefined &&
+      !sameJson(quest.title || null, sealed.title || null),
+  },
+  {
+    violation: LOCAL_STR_OWNED_004,
+    changed: (quest, sealed) =>
+      !sameJson(quest.constraints || [], sealed.constraints || []),
+  },
+  {
+    violation: LOCAL_STR_OWNED_005,
+    changed: (quest, sealed) => !sameJson(
+      quest.frontiers.map((frontier) => frontier.id), sealed.frontierIds || []),
+  },
+  {
+    violation: LOCAL_STR_OWNED_006,
+    changed: (quest, sealed) => sealed.verificationTemplates !== undefined &&
+      !sameJson(
+        quest.verificationTemplates || [], sealed.verificationTemplates || []),
+  },
+  {
+    violation: LANDING_REQUIREMENTS_CHANGED,
+    changed: (quest, sealed) => sealed.landingRequirements !== undefined &&
+      !sameJson(
+        quest.landingRequirements || null, sealed.landingRequirements || null),
+  },
+]);
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+// Every frontier metric must be byte-identical to its sealed definition or a
+// legal gradient refinement of it; a changed frontier count fails outright.
+function frontierMetricsImmutableOrRefined(quest, sealed) {
   const metricsNow = quest.frontiers.map((f) => f.metric);
-  const metricsSealed = declaredEvent.sealed.frontierMetrics || [];
-  const sameLength = metricsNow.length === metricsSealed.length;
-  const allMetricsImmutableOrRefined = sameLength &&
-    metricsNow.every((metric, index) => {
-      const sealed = metricsSealed[index];
-      return JSON.stringify(metric) === JSON.stringify(sealed) ||
-        isGradientRefinement(metric, sealed);
-    });
-  if (!allMetricsImmutableOrRefined) {
-    violations.push('frontier metric definitions changed after declaration');
+  const metricsSealed = sealed.frontierMetrics || [];
+  return metricsNow.length === metricsSealed.length &&
+    metricsNow.every((metric, index) =>
+      sameJson(metric, metricsSealed[index]) ||
+        isGradientRefinement(metric, metricsSealed[index]));
+}
+
+function versionedGoalpostViolations(quest, sealed) {
+  const violations = [];
+  for (const check of VERSIONED_GOALPOST_CHECKS) {
+    if (check.changed(quest, sealed)) violations.push(check.violation);
   }
-  const sealedVersion = declaredEvent.sealed.authoringContractVersion;
-  if (sealedVersion !== undefined) {
-    if (quest.authoringContractVersion !== sealedVersion) {
-      violations.push(LOCAL_STR_OWNED_001);
-    }
-    if (JSON.stringify(quest.statement) !==
-      JSON.stringify(declaredEvent.sealed.statement)) {
-      violations.push(LOCAL_STR_OWNED_002);
-    }
-    if (JSON.stringify(quest.class) !== JSON.stringify(declaredEvent.sealed.class)) {
-      violations.push(LOCAL_STR_OWNED_003);
-    }
-    // Declarations sealed before the title field existed (sealed.title
-    // undefined) are exempt; anything sealed since compares exactly, so the
-    // commit subject a title feeds cannot be edited after declaration.
-    if (declaredEvent.sealed.title !== undefined &&
-      JSON.stringify(quest.title || null) !==
-        JSON.stringify(declaredEvent.sealed.title || null)) {
-      violations.push('quest.title changed after declaration');
-    }
-    if (JSON.stringify(quest.constraints || []) !==
-      JSON.stringify(declaredEvent.sealed.constraints || [])) {
-      violations.push(LOCAL_STR_OWNED_004);
-    }
-    const frontierIds = quest.frontiers.map((frontier) => frontier.id);
-    if (JSON.stringify(frontierIds) !==
-      JSON.stringify(declaredEvent.sealed.frontierIds || [])) {
-      violations.push(LOCAL_STR_OWNED_005);
-    }
-    // Declarations sealed before the verification bar existed (undefined)
-    // are exempt; anything sealed since compares exactly, so the rejection
-    // bar cannot be widened by editing the quest file instead of the
-    // amendment path.
-    if (declaredEvent.sealed.verificationTemplates !== undefined &&
-      JSON.stringify(quest.verificationTemplates || []) !==
-        JSON.stringify(declaredEvent.sealed.verificationTemplates || [])) {
-      violations.push(LOCAL_STR_OWNED_006);
-    }
-    if (declaredEvent.sealed.landingRequirements !== undefined &&
-      JSON.stringify(quest.landingRequirements || null) !==
-        JSON.stringify(declaredEvent.sealed.landingRequirements || null)) {
-      violations.push(LANDING_REQUIREMENTS_CHANGED);
-    }
+  return violations;
+}
+
+function goalpostViolationsAgainst(quest, declaredEvent) {
+  const sealed = declaredEvent.sealed;
+  const violations = [];
+  if (!sameJson(quest.doneWhen, sealed.doneWhen)) {
+    violations.push(DONE_WHEN_CHANGED);
+  }
+  if (!frontierMetricsImmutableOrRefined(quest, sealed)) {
+    violations.push(FRONTIER_METRICS_CHANGED);
+  }
+  if (sealed.authoringContractVersion !== undefined) {
+    violations.push(...versionedGoalpostViolations(quest, sealed));
   }
   return violations;
 }

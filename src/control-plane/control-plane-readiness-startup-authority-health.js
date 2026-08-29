@@ -174,17 +174,27 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     }
   }
 
-  async getFormationReleaseStartupAuthoritySnapshot(
-    nodeId = this.nodeId,
-    observedAt = this.now(),
+  /**
+   * Shared async startup-authority projection: read one planning answer via
+   * the supplied reader, then apply the formation-release handoff (reading the
+   * published handoff from the authority when this node is not observing it).
+   * Any read failure collapses to the PLANNING_READ_FAILED unavailable snapshot.
+   *
+   * @param {function(string, number): Promise<Object>} readPlanningAnswer
+   * @param {string} nodeId
+   * @param {number} observedAt
+   * @return {Promise<Object>}
+   * @private
+   */
+  async resolveStartupAuthoritySnapshotFromPlanningRead(
+    readPlanningAnswer,
+    nodeId,
+    observedAt,
   ) {
     try {
       const startupAuthority =
         this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          await this.getPriorityRecoveryPlanningAnswerForOwnerRead(
-            nodeId,
-            observedAt,
-          ),
+          await readPlanningAnswer(nodeId, observedAt),
         );
       const observeAuthority =
         nodeId === this.formationReleaseAuthorityNodeId &&
@@ -214,44 +224,34 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
     }
   }
 
+  async getFormationReleaseStartupAuthoritySnapshot(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    return this.resolveStartupAuthoritySnapshotFromPlanningRead(
+      (readNodeId, readObservedAt) =>
+        this.getPriorityRecoveryPlanningAnswerForOwnerRead(
+          readNodeId,
+          readObservedAt,
+        ),
+      nodeId,
+      observedAt,
+    );
+  }
+
   async getStartupAuthoritySnapshot(
     nodeId = this.nodeId,
     observedAt = this.now(),
   ) {
-    try {
-      const startupAuthority =
-        this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-          await this.getPriorityRecoveryPlanningSnapshotBestEffort(
-            nodeId,
-            observedAt,
-          ),
-        );
-      const observeAuthority =
-        nodeId === this.formationReleaseAuthorityNodeId &&
-        this.nodeId === this.formationReleaseAuthorityNodeId;
-      const publishedHandoff = observeAuthority ? null :
-        await this.readFormationReleaseHandoffFromAuthority(
-          this.formationReleaseAuthorityNodeId,
-          this.getFormationReleaseAuthorityBootIncarnation(
-            this.formationReleaseAuthorityNodeId,
-          ),
-        );
-      return this.applyFormationReleaseHandoff(
-        startupAuthority,
-        observedAt,
-        this.formationReleaseAuthorityNodeId,
-        {
-          observeAuthority,
-          publishedHandoff,
-          projectionNodeId: nodeId,
-        },
-      );
-    } catch (error) {
-      return this.buildStartupAuthorityUnavailableSnapshot(
-        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
-        error,
-      );
-    }
+    return this.resolveStartupAuthoritySnapshotFromPlanningRead(
+      (readNodeId, readObservedAt) =>
+        this.getPriorityRecoveryPlanningSnapshotBestEffort(
+          readNodeId,
+          readObservedAt,
+        ),
+      nodeId,
+      observedAt,
+    );
   }
 
   buildPriorityControlPlaneRecoveryHealthFromPlanningAnswer(planningSnapshot) {

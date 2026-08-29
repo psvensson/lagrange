@@ -38,6 +38,43 @@ function resolveFormationBarrierDuration(value, fallback, minimum) {
   return Number.isFinite(value) ? Math.max(minimum, value) : fallback;
 }
 
+function resolveFormationBarrierTargetReplicaCount(initialReplicaIds) {
+  return Array.isArray(initialReplicaIds) && initialReplicaIds.length > 0 ?
+    initialReplicaIds.length :
+    null;
+}
+
+function freezeStartupAuthorityRecoveryReasonCodes(startupAuthority) {
+  return Object.freeze(
+    Array.isArray(startupAuthority?.priorityRecoveryReasonCodes) ?
+      [...startupAuthority.priorityRecoveryReasonCodes] :
+      [],
+  );
+}
+
+/**
+ * Project the readiness owner's startup-authority answer into the flat
+ * barrier-snapshot fields bootstrap logs and gates on. An absent authority
+ * answer projects as unavailable/not-ready with empty evidence.
+ *
+ * @param {Object|null} startupAuthority
+ * @return {Object}
+ */
+function buildFormationBarrierStartupAuthorityFields(startupAuthority) {
+  return {
+    startupAuthorityAvailable:
+      startupAuthority?.authorityAvailable === true,
+    startupAuthorityState: startupAuthority?.state || null,
+    startupAuthorityReady: startupAuthority?.ready === true,
+    startupAuthorityRecoveryReasonCodes:
+      freezeStartupAuthorityRecoveryReasonCodes(startupAuthority),
+    startupAuthorityPublicationRecoveryGateState:
+      startupAuthority?.publicationRecoveryGate?.state || null,
+    formationReleaseHandoff:
+      startupAuthority?.formationReleaseHandoff || null,
+  };
+}
+
 function resolveOperationLedgerFormationBarrierState({
   barrierEngaged,
   discoveryDeadline,
@@ -68,12 +105,9 @@ class NodeJoiningOperationLedgerFormationReadiness
       NodeService.getInstance().getSystemTableCache();
     const partitionId =
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
-    const initialReplicaIds =
-      getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
-    const targetReplicaCount =
-      Array.isArray(initialReplicaIds) && initialReplicaIds.length > 0 ?
-        initialReplicaIds.length :
-        null;
+    const targetReplicaCount = resolveFormationBarrierTargetReplicaCount(
+      getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
+    );
     const now = this.now();
     const startupAuthority =
       await this.getPriorityPlacementFormationStartupAuthority(now);
@@ -92,19 +126,7 @@ class NodeJoiningOperationLedgerFormationReadiness
       now,
       partitionId,
       targetReplicaCount,
-      startupAuthorityAvailable:
-        startupAuthority?.authorityAvailable === true,
-      startupAuthorityState: startupAuthority?.state || null,
-      startupAuthorityReady: startupAuthority?.ready === true,
-      startupAuthorityRecoveryReasonCodes: Object.freeze(
-        Array.isArray(startupAuthority?.priorityRecoveryReasonCodes) ?
-          [...startupAuthority.priorityRecoveryReasonCodes] :
-          [],
-      ),
-      startupAuthorityPublicationRecoveryGateState:
-        startupAuthority?.publicationRecoveryGate?.state || null,
-      formationReleaseHandoff:
-        startupAuthority?.formationReleaseHandoff || null,
+      ...buildFormationBarrierStartupAuthorityFields(startupAuthority),
       candidateNodeIds: Object.freeze(candidateNodeIds),
       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
     });

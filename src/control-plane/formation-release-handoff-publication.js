@@ -363,8 +363,6 @@ function readFormationReleaseHandoffPublicationFromCache(
 
 export {
   FORMATION_RELEASE_HANDOFF_NO_CONTRACT,
-  FORMATION_RELEASE_HANDOFF_PUBLICATION_KIND,
-  NO_PUBLICATION_IDENTITY,
   buildFormationReleaseHandoffPublicationRow,
   formationReleaseHandoffPublicationId,
   normalizeFormationReleaseHandoffContract,

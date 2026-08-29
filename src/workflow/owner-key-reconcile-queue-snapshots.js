@@ -122,7 +122,6 @@ function buildReconcileQueueDiagnostics(queue) {
 export {
   appendSnapshotValue,
   buildReconcileQueueDiagnostics,
-  defineSnapshotValue,
   recordStaleFenceDiagnosticSamples,
   snapshotMapEntries,
   snapshotSetValues,
