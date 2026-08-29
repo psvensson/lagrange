@@ -1,7 +1,6 @@
 // Immutable landing-review manifests stored in ignored Solver state.
-// The first `solve land` freezes the exact candidate and aggregate receipts;
-// the verifier returns only the review id plus verdict. A later land rechecks
-// the current projection byte-for-byte before it records that verdict.
+// New schema-v3 reviews bind the verifier to scoped path/mode/content identity.
+// Schema-v2 review files remain readable under their legacy diff-fingerprint rules.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -18,7 +17,8 @@ import {
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
-const SCHEMA_VERSION = 2;
+const LEGACY_SCHEMA_VERSION = 2;
+const CONTENT_SCHEMA_VERSION = 3;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 const TEXT_ENCODING = 'utf8';
 const MISSING_CANDIDATE_FINGERPRINT = 'missing candidate fingerprint';
@@ -49,7 +49,7 @@ function sortedCopy(values) {
   return arraySort(arraySlice(values || []));
 }
 
-function receipt(projection) {
+function legacyReceipt(projection) {
   return {
     fingerprint: projection.fingerprint,
     baseCommit: projection.baseCommit,
@@ -60,13 +60,27 @@ function receipt(projection) {
   };
 }
 
+function contentReceipt(legacy, identity) {
+  if (!identity?.ok || !identity.fingerprint) {
+    throw new Error('land: candidate content identity is unavailable');
+  }
+  return {
+    fingerprint: identity.fingerprint,
+    baseCommit: legacy.baseCommit,
+    paths: sortedCopy(legacy.paths),
+    sourcePaths: sortedCopy(legacy.sourcePaths || legacy.paths),
+    firstAttemptIndex: legacy.firstAttemptIndex,
+    lastAttemptIndex: legacy.lastAttemptIndex,
+  };
+}
+
 function coupledPairRegistryDigest(root) {
   const loaded = loadImpactContractRegistry(root);
   if (loaded.digest) return loaded.digest;
   return REGISTRY_UNAVAILABLE_DIGEST;
 }
 
-function reviewProjection(quest, state) {
+function legacyProjection(quest, state) {
   if (!state.candidate?.ok || !state.candidate.fingerprint) {
     throw new Error(
       CANDIDATE_NOT_REVIEWABLE_PREFIX +
@@ -87,10 +101,9 @@ function reviewProjection(quest, state) {
     throw new Error(SOURCE_ATTEMPT_REQUIRED_PROBLEM);
   }
   return {
-    schemaVersion: SCHEMA_VERSION,
     questId: quest.id,
-    candidate: receipt(state.candidate),
-    aggregate: receipt({
+    candidate: legacyReceipt(state.candidate),
+    aggregate: legacyReceipt({
       ...state.aggregate,
       sourcePaths: state.aggregate.paths,
       firstAttemptIndex: contracted[0].index,
@@ -99,28 +112,38 @@ function reviewProjection(quest, state) {
   };
 }
 
-function shadowContentIdentity(root, manifest) {
-  const candidate = candidateContentIdentity(root, manifest.candidate.paths);
-  const aggregate = candidateContentIdentity(root, manifest.aggregate.paths);
+function contentIdentitySummary(candidate, aggregate) {
   return {
     schemaVersion: 1,
-    authoritative: false,
+    authoritative: true,
     candidate,
     aggregate,
   };
 }
 
-function prepareReview(root, quest, state, options = {}) {
-  const projection = reviewProjection(quest, state);
+function prepareContentReview(root, quest, state, options = {}) {
+  const legacy = legacyProjection(quest, state);
   const candidateMeasurements = projectCandidateMeasurements(
     root,
     quest,
     state.attempts.filter((attempt) => attempt.candidateContract),
   );
-  return withCandidateWorkspace(root, projection.aggregate, (candidateRoot) => {
+  return withCandidateWorkspace(root, legacy.aggregate, (candidateRoot) => {
+    const candidateIdentity = candidateContentIdentity(
+      candidateRoot,
+      legacy.candidate.paths,
+    );
+    const aggregateIdentity = candidateContentIdentity(
+      candidateRoot,
+      legacy.aggregate.paths,
+    );
     const manifest = {
-      ...projection,
+      schemaVersion: CONTENT_SCHEMA_VERSION,
+      identityAuthority: 'scoped-content',
+      questId: quest.id,
       coupledPairRegistryDigest: coupledPairRegistryDigest(candidateRoot),
+      candidate: contentReceipt(legacy.candidate, candidateIdentity),
+      aggregate: contentReceipt(legacy.aggregate, aggregateIdentity),
     };
     const preflight = options.collectProblems === true ?
       collectLandingReviewPreflight(candidateRoot, manifest) :
@@ -128,14 +151,39 @@ function prepareReview(root, quest, state, options = {}) {
     return {
       manifest,
       preflight,
-      shadowContentIdentity: shadowContentIdentity(candidateRoot, manifest),
+      contentIdentity: contentIdentitySummary(candidateIdentity, aggregateIdentity),
       candidateMeasurements,
+      verificationBridge: {
+        candidateFingerprint: legacy.candidate.fingerprint,
+        aggregateFingerprint: legacy.aggregate.fingerprint,
+      },
+    };
+  });
+}
+
+function prepareLegacyReview(root, quest, state) {
+  const legacy = legacyProjection(quest, state);
+  return withCandidateWorkspace(root, legacy.aggregate, (candidateRoot) => {
+    const manifest = {
+      schemaVersion: LEGACY_SCHEMA_VERSION,
+      questId: quest.id,
+      coupledPairRegistryDigest: coupledPairRegistryDigest(candidateRoot),
+      candidate: legacy.candidate,
+      aggregate: legacy.aggregate,
+    };
+    return {
+      manifest,
+      preflight: landingReviewPreflight(candidateRoot, manifest),
+      verificationBridge: {
+        candidateFingerprint: legacy.candidate.fingerprint,
+        aggregateFingerprint: legacy.aggregate.fingerprint,
+      },
     };
   });
 }
 
 export function reviewReadiness(root, quest, state) {
-  return prepareReview(root, quest, state, {collectProblems: true});
+  return prepareContentReview(root, quest, state, {collectProblems: true});
 }
 
 function reviewIdFor(manifest) {
@@ -153,7 +201,7 @@ function reviewFile(root, reviewId) {
 }
 
 export function createReviewRequest(root, quest, state) {
-  const prepared = prepareReview(root, quest, state);
+  const prepared = prepareContentReview(root, quest, state);
   const {manifest} = prepared;
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
@@ -170,7 +218,7 @@ export function createReviewRequest(root, quest, state) {
     manifest,
     file: path.relative(root, file),
     preflight: prepared.preflight,
-    shadowContentIdentity: prepared.shadowContentIdentity,
+    contentIdentity: prepared.contentIdentity,
     candidateMeasurements: prepared.candidateMeasurements,
   };
 }
@@ -199,7 +247,9 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   if (request.manifest.questId !== quest.id) {
     throw new Error(`land: review ${reviewId} belongs to another Quest`);
   }
-  const prepared = prepareReview(root, quest, state);
+  const prepared = request.manifest.schemaVersion === LEGACY_SCHEMA_VERSION ?
+    prepareLegacyReview(root, quest, state) :
+    prepareContentReview(root, quest, state);
   if (jsonStringify(prepared.manifest) !== jsonStringify(request.manifest)) {
     throw new Error(
       `land: review ${reviewId} no longer matches current candidate bytes ` +
@@ -210,7 +260,8 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   return {
     ...request,
     preflight: prepared.preflight,
-    shadowContentIdentity: prepared.shadowContentIdentity,
-    candidateMeasurements: prepared.candidateMeasurements,
+    contentIdentity: prepared.contentIdentity || null,
+    candidateMeasurements: prepared.candidateMeasurements || null,
+    verificationBridge: prepared.verificationBridge,
   };
 }

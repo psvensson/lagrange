@@ -42,11 +42,13 @@ export function terminalReadiness(root, quest, state) {
   return {
     schemaVersion: 1,
     readyForReview: repairs.length === 0,
-    sourceFingerprint: state.aggregate?.fingerprint || null,
+    sourceFingerprint: review?.manifest?.aggregate?.fingerprint ||
+      state.aggregate?.fingerprint || null,
     repairs,
     review: review ? {
+      manifest: review.manifest,
       preflight: review.preflight,
-      shadowContentIdentity: review.shadowContentIdentity,
+      contentIdentity: review.contentIdentity,
       candidateMeasurements: review.candidateMeasurements,
     } : null,
   };
