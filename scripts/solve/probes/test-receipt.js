@@ -27,6 +27,8 @@
 
 import fs from 'node:fs';
 
+import {EVIDENCE_CLASS} from '../evidence-identity.js';
+
 const RECEIPT_SCHEMA = 'test-receipt/1';
 const PROBE_NAME = 'test-receipt';
 const RECEIPT_STATUS_PASS = 'pass';
@@ -101,6 +103,12 @@ function measureOutstanding(data, requiredReceipts) {
 
 export const testReceiptProbe = {
   name: PROBE_NAME,
+  evidenceClass: EVIDENCE_CLASS.DETERMINISTIC,
+  identityArgs(args = {}) {
+    const requiredReceipts = Array.isArray(args.requiredReceipts) ?
+      [...args.requiredReceipts].sort() : [];
+    return {requiredReceipts};
+  },
   measure(args = {}) {
     const file = args.file;
     if (!file || !fs.existsSync(file)) {
