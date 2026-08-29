@@ -5,6 +5,9 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {checkpointGate} from '../../scripts/solve/audit.js';
+import {
+  candidateContentIdentity,
+} from '../../scripts/solve/candidate-content-identity.js';
 import {runCheckpointCommand} from '../../scripts/solve/handoff.js';
 import {buildNextLines} from '../../scripts/solve/next.js';
 import {runStep} from '../../scripts/solve/step.js';
@@ -258,5 +261,58 @@ tap.test('terminal aggregate covers all version 2 paths and remains mandatory', 
   });
   t.same(terminalVerificationProblems(
     fx.root, fx.quest, readLog(fx.root, fx.quest.id)), []);
+  t.end();
+});
+
+tap.test('candidate content identity ignores mtimes but binds bytes, mode, and deletion', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const paths = ['src/b.js', 'src/a.js'];
+  const first = candidateContentIdentity(fx.root, paths);
+  t.equal(first.ok, true);
+  t.same(first.manifest.entries.map((entry) => entry.path),
+    ['src/a.js', 'src/b.js'], 'manifest order is canonical');
+
+  const aPath = path.join(fx.root, 'src/a.js');
+  const now = new Date(Date.now() + 5000);
+  fs.utimesSync(aPath, now, now);
+  const afterTouch = candidateContentIdentity(fx.root, [...paths].reverse());
+  t.equal(afterTouch.fingerprint, first.fingerprint,
+    'filesystem time and caller path order are not semantic identity');
+
+  fs.chmodSync(aPath, 0o755);
+  const afterMode = candidateContentIdentity(fx.root, paths);
+  t.not(afterMode.fingerprint, first.fingerprint,
+    'Git executable mode participates in identity');
+  t.equal(afterMode.manifest.entries[0].mode, '100755');
+
+  fs.chmodSync(aPath, 0o644);
+  fs.writeFileSync(aPath, 'export const a = 9;\n');
+  const afterBytes = candidateContentIdentity(fx.root, paths);
+  t.not(afterBytes.fingerprint, first.fingerprint,
+    'byte drift participates in identity');
+
+  fs.unlinkSync(path.join(fx.root, 'src/b.js'));
+  const afterDelete = candidateContentIdentity(fx.root, paths);
+  t.not(afterDelete.fingerprint, afterBytes.fingerprint);
+  t.same(afterDelete.manifest.entries[1], {
+    path: 'src/b.js',
+    state: 'deleted',
+  });
+  t.end();
+});
+
+tap.test('commit content identity remains pinned while the worktree moves', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  const before = candidateContentIdentity(fx.root, ['src/a.js'], {commit: base});
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 99;\n');
+  const pinned = candidateContentIdentity(fx.root, ['src/a.js'], {commit: base});
+  const live = candidateContentIdentity(fx.root, ['src/a.js']);
+  t.equal(pinned.fingerprint, before.fingerprint,
+    'commit identity is independent of later working-tree bytes');
+  t.not(live.fingerprint, before.fingerprint,
+    'working-tree identity follows the current candidate bytes');
   t.end();
 });
