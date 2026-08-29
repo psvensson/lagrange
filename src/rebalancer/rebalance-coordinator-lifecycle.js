@@ -369,6 +369,12 @@ class RebalanceCoordinatorLifecycle {
           this.allocateCanonicalReplicaId(params),
         getActualReplicaStatus: (...args) =>
           this.getActualReplicaStatus(...args),
+        // The ledger self-move interlock's engagement point on the owner's
+        // dispatch path (rebalance-coordinator-ledger-interlock-hold-state.js).
+        engageOperationLedgerSelfMoveHold: (operation) =>
+          this.engageOperationLedgerSelfMoveHold(operation),
+        disengageOperationLedgerSelfMoveHold: (operation) =>
+          this.disengageOperationLedgerSelfMoveHold(operation),
         setTimeoutFn: options.setTimeoutFn,
         clearTimeoutFn: options.clearTimeoutFn,
         replicaOperationDispatchTimeoutMs:

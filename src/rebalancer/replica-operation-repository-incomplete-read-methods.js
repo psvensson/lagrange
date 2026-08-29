@@ -9,6 +9,7 @@ import {
 } from './replica-operation-owner-lease.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const LOCAL_STR_STRING = 'string';
 
 function assignReplicaOperationRepositoryIncompleteReadMethods(
   ReplicaOperationRepository,
@@ -291,6 +292,45 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    * @param {string} [options.visibilityReadMode]
    * @return {Promise<Array>}
    */
+    /**
+   * Cluster-wide authoritative census of live ledger writers (every
+   * coordinator-owned non-terminal row, any source or target node), read
+   * through the owner-RPC lane. The dispatch-time idle check of a ledger
+   * self-move consumes it (operation-workflow-dispatch-ledger-self-move-gate.js);
+   * a failed read throws so the caller parks fail-closed. No cache fallback,
+   * no owner-visibility filtering: ownership is irrelevant to whether a row
+   * still writes ledger progress.
+   * @return {Promise<Array>}
+   */
+    async queryClusterWideIncompleteOperations() {
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_INCOMPLETE_LEDGER_WRITER_OPERATIONS,
+        [
+          ...PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
+          OperationType.REPLACE,
+          OperationType.REMOVE,
+        ],
+        buildReplicaOperationVisibilityReadOptions(
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+        ),
+      );
+      if (!result?.success || !Array.isArray(result.rows)) {
+        const error = new Error(
+          typeof result?.error === LOCAL_STR_STRING ?
+            result.error :
+            REPLICA_OPERATION_REPOSITORY_LITERAL.IN_FLIGHT_OPERATION_OWNER_QUERY_INDICATES +
+              REPLICA_OPERATION_REPOSITORY_LITERAL.CONTROL_PLANE_PRESSURE,
+        );
+        error.retryAfterMs = this.getRetryableIncompleteOperationReadBackoffMs(
+          result,
+        );
+        throw error;
+      }
+      return result.rows
+        .map((row) => this.rowToOperation(row))
+        .filter((operation) => operation && !this.isOperationTerminal(operation));
+    }
+
     async queryIncompleteOperations(options = {}) {
       const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
       const requireAuthoritativeOutcome =

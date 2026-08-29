@@ -38,7 +38,13 @@ function buildInsertedRow(sql, params) {
 
 function createTimeoutTestCoordinator(options = {}) {
   const {services = []} = options;
-  const trackedOperations = new Map();
+  // options.trackedOperations: share one in-memory replica_operations ledger
+  // between several coordinators (multi-node DT6 witnesses where one node
+  // creates an operation that another node owns and dispatches).
+  const trackedOperations =
+    options.trackedOperations instanceof Map ?
+      options.trackedOperations :
+      new Map();
 
   // Mock CDC service (not used for persistence in the current architecture).
   const cdcService = {

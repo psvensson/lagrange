@@ -8,7 +8,7 @@
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 166,
-    "convergence-topology": 71,
+    "convergence-topology": 72,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2081,
-  "digest": "fnv1a32-125bad8c",
+  "censusSize": 2082,
+  "digest": "fnv1a32-c187a894",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -644,6 +644,7 @@
     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "convergence-topology",
     "test/convergence/dt6-network-pct-search.test.js": "convergence-topology",
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "convergence-topology",
+    "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js": "convergence-topology",
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": "convergence-topology",
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": "convergence-topology",
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": "convergence-topology",

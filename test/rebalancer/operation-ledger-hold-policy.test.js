@@ -162,6 +162,10 @@ test('self-move lifecycle evidence has one fail-closed hold action table', (t) =
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
       ],
       [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_REGISTERED,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.REGISTERED,
+      ],
+      [
         OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
           .AUTHORITATIVE_NON_TERMINAL,
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
@@ -171,12 +175,16 @@ test('self-move lifecycle evidence has one fail-closed hold action table', (t) =
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
       ],
     ],
-    'only authoritative terminal workflow evidence releases serialization',
+    'only authoritative terminal workflow evidence releases serialization; ' +
+      'a registered, not yet dispatch-admissible waiter is REGISTERED',
   );
 
   const terminal = {status: 'removed'};
-  const nonTerminal = {status: 'sending'};
+  const nonTerminal = {status: 'sending', workflowStep: 'SENDING'};
+  const registered = {status: 'pending', workflowStep: 'PENDING'};
   const isTerminal = (operation) => operation.status === 'removed';
+  const targetNotReady = () => false;
+  const targetReady = () => true;
   t.equal(
     classifyOperationLedgerSelfMoveLifecycleEvidence(terminal, isTerminal),
     OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
@@ -186,6 +194,40 @@ test('self-move lifecycle evidence has one fail-closed hold action table', (t) =
     OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
       .AUTHORITATIVE_NON_TERMINAL,
     'durable age is not an input: every authoritative non-terminal row holds',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(
+      registered,
+      isTerminal,
+      targetNotReady,
+    ),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_REGISTERED,
+    'a PENDING self-move whose target is not dispatch-admissible is a ' +
+      'registered waiter (the hold engages at dispatch admissibility)',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(
+      registered,
+      isTerminal,
+      targetReady,
+    ),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL,
+    'a PENDING self-move whose target holds a READY lease is live',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(
+      nonTerminal,
+      isTerminal,
+      targetNotReady,
+    ),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL,
+    'a self-move whose owner claimed dispatch is live regardless of the ' +
+      'target lease',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(registered, isTerminal),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL,
+    'without dispatch-admissibility evidence a PENDING self-move fails closed',
   );
   t.equal(
     classifyOperationLedgerSelfMoveLifecycleEvidence(null, isTerminal),

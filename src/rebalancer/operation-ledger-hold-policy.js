@@ -32,6 +32,7 @@ import {
   normalizeOperationLedgerMoveType,
 } from './replica-status.js';
 import {isOperationLedgerPartition} from '../bootstrap/system-partition-classification.js';
+import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {isPriorityRecoveryEmergencyPartition} from '../control-plane/priority-recovery-admission-constants.js';
 import {
   evaluateOperationLedgerQuorumConcentration,
@@ -56,28 +57,58 @@ const OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME = Object.freeze({
   DEFER: 'defer',
 });
 
-// The lifecycle evidence that may release a locally or remotely observed
-// SELF_MOVE_SERIALIZATION hold. Workflow age is intentionally absent: timeout
-// makes the operation eligible for the workflow recovery owner, but does not
-// prove that target/source work stopped. The recovery owner releases the hold
-// by committing its normal terminal transition, which is then observed here as
-// AUTHORITATIVE_TERMINAL. Missing/deferred reads fail closed.
+// The lifecycle evidence that engages or releases a locally or remotely
+// observed SELF_MOVE_SERIALIZATION hold. Workflow age is intentionally absent:
+// timeout makes the operation eligible for the workflow recovery owner, but
+// does not prove that target/source work stopped. The recovery owner releases
+// the hold by committing its normal terminal transition, which is then
+// observed here as AUTHORITATIVE_TERMINAL. Missing/deferred reads fail closed.
+//
+// AUTHORITATIVE_REGISTERED is the pre-engagement lifecycle: the durable
+// PENDING intent is registered but the self-move is not yet
+// dispatch-admissible (its owner has not claimed dispatch and its target node
+// holds no current READY lease), so the ledger raft group is untouched and
+// the run-20 hazard does not yet exist. The hold engages from the instant the
+// self-move becomes dispatch-admissible (GCP streak on 675d6b512: runs
+// 21-08-21 / 21-22-08 lost 29.9 s / 57.8 s of the 60 s window to a hold
+// taken at createOperation while the self-move waited 13.7 s for its target
+// to be READY; run 21-16-04 passed with the dependents admitted first).
 const OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE = Object.freeze({
   AUTHORITATIVE_TERMINAL: 'authoritative_terminal',
+  AUTHORITATIVE_REGISTERED: 'authoritative_registered',
   AUTHORITATIVE_NON_TERMINAL: 'authoritative_non_terminal',
   UNRESOLVED: 'unresolved',
 });
 
+// HOLD: the self-move is live (dispatch-admissible or dispatched) — dependents
+// defer, a second self-move cannot register. REGISTERED: the self-move is a
+// registered waiter that is not yet dispatch-admissible — dependents admit
+// under the normal budget, a second self-move still cannot register.
+// RELEASE: the self-move is authoritatively terminal.
 const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION = Object.freeze({
   HOLD: 'hold',
+  REGISTERED: 'registered',
   RELEASE: 'release',
 });
+
+// The hold actions under which a registered self-move keeps refusing a SECOND
+// self-move (the fairness waiter is never overtaken by another self-move).
+const OPERATION_LEDGER_SELF_MOVE_REGISTERING_HOLD_ACTIONS = Object.freeze(
+  new Set([
+    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.REGISTERED,
+  ]),
+);
 
 // Compare-and-clear outcome for the held ledger self-move once the
 // authoritative lifecycle read for `readOperationId` has returned:
 //   RELEASE_HOLDER  — the read holder is still the holder and is terminal;
 //                     the caller clears the hold.
-//   KEEP_HOLDER     — the read holder is still the holder and still live.
+//   KEEP_HOLDER     — the read holder is still the holder and still live
+//                     (dispatch-admissible or dispatched): the hold is engaged.
+//   HOLDER_REGISTERED — the read holder is still the holder but not yet
+//                     dispatch-admissible: the holder is retained (a second
+//                     self-move cannot register) while dependents admit.
 //   ALREADY_CLEARED — a racing sibling released this same holder while the
 //                     read was in flight; no self-move is held, so the ledger
 //                     is authoritatively idle for this caller too (GCP run
@@ -91,9 +122,26 @@ const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION = Object.freeze({
 const OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME = Object.freeze({
   RELEASE_HOLDER: 'release_holder',
   KEEP_HOLDER: 'keep_holder',
+  HOLDER_REGISTERED: 'holder_registered',
   ALREADY_CLEARED: 'already_cleared',
   NEWER_HOLDER: 'newer_holder',
 });
+
+// Clear outcomes after which a DEPENDENT admits (no engaged hold remains)
+// and after which a second SELF-MOVE may register (no holder remains).
+const OPERATION_LEDGER_DEPENDENT_ADMITTING_CLEAR_OUTCOMES = Object.freeze(
+  new Set([
+    OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER,
+    OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.HOLDER_REGISTERED,
+    OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED,
+  ]),
+);
+const OPERATION_LEDGER_SELF_MOVE_REGISTERING_CLEAR_OUTCOMES = Object.freeze(
+  new Set([
+    OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER,
+    OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED,
+  ]),
+);
 
 /**
  * @param {Object} observation
@@ -108,9 +156,13 @@ function resolveHeldOperationLedgerSelfMoveClearOutcome({
   holdAction,
 }) {
   if (heldOperationId === readOperationId) {
-    return holdAction === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE ?
-      OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER :
-      OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.KEEP_HOLDER;
+    if (holdAction === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
+      return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER;
+    }
+    if (holdAction === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.REGISTERED) {
+      return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.HOLDER_REGISTERED;
+    }
+    return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.KEEP_HOLDER;
   }
   if (!heldOperationId) {
     return OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED;
@@ -127,6 +179,10 @@ const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE =
       [
         OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_REGISTERED,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.REGISTERED,
       ],
       [
         OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
@@ -245,17 +301,35 @@ function resolveOperationLedgerHoldEngagement(holdKind, moveClass) {
 }
 
 /**
+ * A ledger self-move whose owner has claimed dispatch (the durable row left
+ * PENDING: SENDING and every later step) is dispatch-admissible by
+ * construction — CREATE_REPLICA is about to be, or has been, sent.
+ * @param {Object|null} operation
+ * @return {boolean}
+ */
+function isOperationLedgerSelfMoveDispatchClaimed(operation) {
+  const workflowStep =
+    operation?.workflowStep ?? operation?.workflow_step ?? null;
+  return workflowStep !== null && workflowStep !== WORKFLOW_STEP.PENDING;
+}
+
+/**
  * Classify authoritative workflow-owner evidence for a ledger self-move.
- * Terminality remains owned by the operation repository/workflow owner and is
- * supplied as a predicate; this policy owns only the evidence -> hold action
- * relation. A null operation includes absent, failed, and deferred owner reads.
+ * Terminality remains owned by the operation repository/workflow owner and
+ * dispatch admissibility (target READY lease) by the readiness owner; both
+ * are supplied as predicates and this policy owns only the evidence -> hold
+ * action relation. A null operation includes absent, failed, and deferred
+ * owner reads. Without a dispatch-admissibility predicate a live self-move
+ * classifies as live (fail closed: HOLD).
  * @param {Object|null} authoritativeOperation
  * @param {Function} isOperationTerminal
+ * @param {Function} [isDispatchAdmissible]
  * @return {string} OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
  */
 function classifyOperationLedgerSelfMoveLifecycleEvidence(
   authoritativeOperation,
   isOperationTerminal,
+  isDispatchAdmissible = null,
 ) {
   if (
     !authoritativeOperation ||
@@ -263,9 +337,17 @@ function classifyOperationLedgerSelfMoveLifecycleEvidence(
   ) {
     return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED;
   }
-  return isOperationTerminal(authoritativeOperation) ?
-    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL :
-    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL;
+  if (isOperationTerminal(authoritativeOperation)) {
+    return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL;
+  }
+  if (
+    typeof isDispatchAdmissible === 'function' &&
+    !isOperationLedgerSelfMoveDispatchClaimed(authoritativeOperation) &&
+    isDispatchAdmissible(authoritativeOperation) !== true
+  ) {
+    return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_REGISTERED;
+  }
+  return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL;
 }
 
 /**
@@ -432,6 +514,7 @@ function orderLedgerQuorumCureMovesFirst(moves, concentratedPartitionId) {
 
 export {
   LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES,
+  OPERATION_LEDGER_DEPENDENT_ADMITTING_CLEAR_OUTCOMES,
   OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
   OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME,
   OPERATION_LEDGER_HOLD,
@@ -441,10 +524,13 @@ export {
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE,
   OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE,
+  OPERATION_LEDGER_SELF_MOVE_REGISTERING_CLEAR_OUTCOMES,
+  OPERATION_LEDGER_SELF_MOVE_REGISTERING_HOLD_ACTIONS,
   classifyOperationLedgerHoldMove,
   classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   isEngagedLedgerQuorumSpreadCureMove,
+  isOperationLedgerSelfMoveDispatchClaimed,
   isLedgerQuorumConcentratedPartition,
   orderLedgerQuorumCureMovesFirst,
   resolveEngagedLedgerQuorumSpreadHold,

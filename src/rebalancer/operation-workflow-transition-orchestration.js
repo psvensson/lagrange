@@ -1,4 +1,7 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  isDisruptiveOperationLedgerSelfMove,
+} from './replica-status.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 import {
   clearTerminalTransitionRepair,
@@ -580,8 +583,15 @@ class OperationWorkflowTransitionOrchestration
    * @private
    */
   shouldUsePriorityDispatchDeferredLocalClaim(operation, errorLike) {
+    // A disruptive ledger self-move's SENDING claim is the cluster-visible
+    // engagement of the run-20 hold: it must commit durably before
+    // CREATE_REPLICA is sent, never be skipped locally under pressure.
     return (
       this.shouldUsePriorityDispatchClaimNarrowPath(operation) &&
+      !isDisruptiveOperationLedgerSelfMove(
+        operation?.type,
+        operation?.partitionId,
+      ) &&
       isRetryableControlPlaneError(errorLike)
     );
   }

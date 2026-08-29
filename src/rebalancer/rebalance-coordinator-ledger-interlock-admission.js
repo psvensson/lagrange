@@ -5,19 +5,21 @@ import {
   getAuthoritativeOperationLedgerPlacementObservation,
 } from './operation-ledger-quorum-concentration.js';
 import {
-  OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME,
+  OPERATION_LEDGER_DEPENDENT_ADMITTING_CLEAR_OUTCOMES,
   OPERATION_LEDGER_HOLD,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
+  OPERATION_LEDGER_SELF_MOVE_REGISTERING_CLEAR_OUTCOMES,
+  OPERATION_LEDGER_SELF_MOVE_REGISTERING_HOLD_ACTIONS,
   classifyOperationLedgerHoldMove,
-  classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   resolveEngagedLedgerQuorumSpreadHold,
-  resolveHeldOperationLedgerSelfMoveClearOutcome,
   resolveLedgerQuorumConcentratedPartition,
   resolveOperationLedgerHoldEngagement,
-  resolveOperationLedgerSelfMoveHoldAction,
 } from './operation-ledger-hold-policy.js';
+import {
+  applyRebalanceCoordinatorLedgerInterlockHoldStateMethods,
+} from './rebalance-coordinator-ledger-interlock-hold-state.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -28,18 +30,40 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_FUNCTION = 'function';
-const HELD_SELF_MOVE_CLEAR_OUTCOME = OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME;
+// The hold actions under which an observed ledger self-move row is an ENGAGED
+// hold for dependents (only a live, dispatch-admissible or dispatched
+// self-move; a registered waiter is not).
+const ENGAGED_SELF_MOVE_HOLD_ACTIONS = Object.freeze(
+  new Set([OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD]),
+);
 
 // Every operation persists its workflow progress into the replica_operations
 // LEDGER, so a REPLACE/REMOVE of a ledger partition (the ledger moving itself)
 // disrupts every other in-flight operation's progress writes (run-20 formation
 // interlock; CL-017 mechanism at storm scale). The ledger self-move therefore
 // runs EXCLUSIVELY: it admits only into an idle ledger, and while it is live no
-// other operation admits. The (hold x move class) -> engagement relation is
-// owned by operation-ledger-hold-policy.js; this file owns the MECHANISM
-// (typed rejection construction, observation scans, TOCTOU accounting).
-// Deterministic reproduction:
-// test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js.
+// other operation admits.
+//
+// WHEN the hold engages: from the instant the self-move is DISPATCH-ADMISSIBLE
+// (its owner claimed PENDING -> SENDING, or its target node holds a current
+// READY lease) until it is authoritatively terminal. From createOperation
+// until that instant the self-move is a REGISTERED waiter: the ledger raft
+// group is untouched, dependents admit under the normal budget, a second
+// self-move still cannot register, and the self-move's own IDLE_ONLY dispatch
+// check (operation-workflow-dispatch-ledger-self-move-gate.js) waits for the
+// admitted dependents to drain — exactly as when the dependents are planned
+// first. A hold taken at createOperation covered 29.9 s / 57.8 s of the 60 s
+// formation window in the GCP streak on 675d6b512 while the target-owned
+// self-move waited for its target to be READY.
+//
+// The (hold x move class) -> engagement and the lifecycle -> hold-action
+// relations are owned by operation-ledger-hold-policy.js; the synchronous
+// hold STATE (phase, engagement point, compare-and-clear) by
+// rebalance-coordinator-ledger-interlock-hold-state.js; this file owns the
+// admission MECHANISM (typed rejection construction, observation scans,
+// TOCTOU accounting). Deterministic reproductions:
+// test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js,
+// test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js.
 const OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX = 'Operation-ledger partition ';
 const OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX =
   ' self-move admits only into an idle operation ledger';
@@ -128,9 +152,11 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * planner retries next cycle:
    * - IDLE_ONLY (the disruptive ledger self-move) admits only when no other
    *   live operation exists.
-   * - DEFER waits out an authoritatively non-terminal ledger self-move, then
-   *   the quorum-spread hold. The workflow reaper releases a wedged self-move
-   *   by applying its canonical terminal transition; raw age cannot release it.
+   * - DEFER waits out an authoritatively live (dispatch-admissible or
+   *   dispatched) ledger self-move, then the quorum-spread hold; a registered
+   *   waiter whose target is not yet READY does not defer it. The workflow
+   *   reaper releases a wedged self-move by applying its canonical terminal
+   *   transition; raw age cannot release it.
    * - EXEMPT (emergency quorum-restore ADDs) proceeds without observation.
    *
    * Inputs are actuals only: committed replica_operations rows via the
@@ -192,7 +218,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       // workflow owner until an authoritative read proves the incumbents have
       // drained. A second self-move still cannot register alongside it.
       if (context?.registerDurableSelfMoveIntent === true) {
-        const heldSelfMove = await this.resolveHeldLedgerSelfMove(
+        const heldSelfMove = await this.resolveRegisteredLedgerSelfMove(
           liveOperations,
         );
         if (heldSelfMove) {
@@ -249,10 +275,11 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       return;
     }
 
-    // Every other operation defers while a live ledger self-move exists. This
+    // Every other operation defers while an ENGAGED ledger self-move exists
+    // (a registered, not yet dispatch-admissible waiter does not defer). This
     // direction gates only on OBSERVED rows (absence of actuals never blocks
     // routine admission).
-    const liveLedgerSelfMove = await this.resolveHeldLedgerSelfMove(
+    const liveLedgerSelfMove = await this.resolveEngagedLedgerSelfMove(
       liveOperations,
     );
     if (!liveLedgerSelfMove) {
@@ -335,13 +362,43 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
 
   /**
    * Resolve the first ledger self-move whose authoritative lifecycle evidence
-   * still maps to HOLD. Cache ghosts that are authoritatively terminal are
-   * skipped; unreadable and non-terminal rows fail closed.
+   * maps to an ENGAGED hold (HOLD): the dependents' DEFER blocker. A
+   * registered waiter (REGISTERED) does not block dependents; cache ghosts
+   * that are authoritatively terminal are skipped; unreadable rows fail
+   * closed.
    * @param {Array<Object>} liveOperations
    * @return {Promise<Object|null>}
    * @private
    */
-  async resolveHeldLedgerSelfMove(liveOperations) {
+  async resolveEngagedLedgerSelfMove(liveOperations) {
+    return this.resolveLedgerSelfMoveByHoldAction(
+      liveOperations,
+      ENGAGED_SELF_MOVE_HOLD_ACTIONS,
+    );
+  }
+
+  /**
+   * Resolve the first ledger self-move that is registered or engaged: the
+   * blocker of a SECOND self-move registration (the fairness waiter is never
+   * overtaken by another self-move).
+   * @param {Array<Object>} liveOperations
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveRegisteredLedgerSelfMove(liveOperations) {
+    return this.resolveLedgerSelfMoveByHoldAction(
+      liveOperations,
+      OPERATION_LEDGER_SELF_MOVE_REGISTERING_HOLD_ACTIONS,
+    );
+  }
+
+  /**
+   * @param {Array<Object>} liveOperations
+   * @param {Set<string>} blockingHoldActions
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveLedgerSelfMoveByHoldAction(liveOperations, blockingHoldActions) {
     for (const operation of liveOperations) {
       if (
         !this.isDisruptiveOperationLedgerSelfMove(
@@ -354,7 +411,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
         operation?.operationId,
       );
-      if (action !== OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
+      if (blockingHoldActions.has(action)) {
         return operation;
       }
     }
@@ -381,38 +438,6 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       (await this.resolveAuthoritativeLedgerSelfMoveHoldAction(operationId)) ===
       OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE
     );
-  }
-
-  /**
-   * Query the existing cache-bypassing workflow visibility owner, then consume
-   * the policy module's single evidence -> action relation. This mechanism does
-   * not inspect raw timestamps or invent a second recovery/reaper decision.
-   * @param {string|null} operationId
-   * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
-   * @private
-   */
-  async resolveAuthoritativeLedgerSelfMoveHoldAction(operationId) {
-    const normalizedOperationId = String(operationId || '').trim();
-    if (normalizedOperationId.length === 0) {
-      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
-    }
-    let observation = null;
-    try {
-      observation = await this.queryAuthoritativeOperationVisibilityObservation(
-        normalizedOperationId,
-        {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        },
-      );
-    } catch {
-      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
-    }
-    const lifecycleEvidence = classifyOperationLedgerSelfMoveLifecycleEvidence(
-      observation?.operation || null,
-      (operation) => this.isOperationTerminal(operation),
-    );
-    return resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence);
   }
 
   /**
@@ -618,8 +643,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         partitionId,
       );
       if (state.heldSelfMoveOperationId) {
-        const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
-        if (!cleared) {
+        // A registered OR engaged holder refuses a second self-move.
+        const outcome = await this.tryClearHeldOperationLedgerSelfMove(state);
+        if (!OPERATION_LEDGER_SELF_MOVE_REGISTERING_CLEAR_OUTCOMES.has(outcome)) {
           throw this.createOperationLedgerInterlockError(
             normalizedMoveType,
             OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
@@ -641,8 +667,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       try {
         const operation = await executionFactory();
         if (operation?.operationId) {
-          state.heldSelfMoveOperationId = operation.operationId;
-          state.heldSelfMovePartitionId = operation.partitionId || partitionId;
+          // Registered, not yet held: the hold engages at dispatch
+          // admissibility (rebalance-coordinator-ledger-interlock-hold-state.js).
+          this.registerHeldOperationLedgerSelfMove(state, operation, partitionId);
         }
         return operation;
       } finally {
@@ -664,8 +691,10 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
         );
       }
       if (state.heldSelfMoveOperationId) {
-        const cleared = await this.tryClearHeldOperationLedgerSelfMove(state);
-        if (!cleared) {
+        // Only an ENGAGED holder refuses a dependent; a registered waiter
+        // admits it (the holder is retained).
+        const outcome = await this.tryClearHeldOperationLedgerSelfMove(state);
+        if (!OPERATION_LEDGER_DEPENDENT_ADMITTING_CLEAR_OUTCOMES.has(outcome)) {
           // The held LEDGER partition is the state examined here — embedding
           // the admitted operation's partition mislabeled run-24 forensics.
           throw this.createOperationLedgerInterlockError(
@@ -716,7 +745,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     normalizedMoveType,
     partitionId,
   ) {
-    if (state.selfMoveCreateInFlight || state.otherCreatesInFlight > 0) {
+    if (!this.isOperationLedgerSelfMoveGateOpen(state)) {
       throw this.createOperationLedgerInterlockError(
         normalizedMoveType,
         OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
@@ -727,61 +756,11 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       );
     }
   }
-
-  /**
-   * @return {Object}
-   * @private
-   */
-  getOperationLedgerInterlockAdmissionState() {
-    if (!this.operationLedgerInterlockAdmission) {
-      this.operationLedgerInterlockAdmission = {
-        selfMoveCreateInFlight: false,
-        heldSelfMoveOperationId: null,
-        heldSelfMovePartitionId: null,
-        otherCreatesInFlight: 0,
-        lastQuorumHoldWarnAtMs: null,
-      };
-    }
-    return this.operationLedgerInterlockAdmission;
-  }
-
-  /**
-   * Resolve whether the held (locally created) ledger self-move has finished
-   * via the authoritative workflow-owner evidence relation. Timeout/reaper
-   * candidacy alone keeps the hold engaged; the reaper releases it by applying
-   * a terminal workflow transition. An unreadable ledger also keeps it held —
-   * while the ledger is mid-move its reads failing IS the serialized condition.
-   * @param {Object} state
-   * @return {Promise<boolean>} True when the hold was cleared.
-   * @private
-   */
-  async tryClearHeldOperationLedgerSelfMove(state) {
-    const operationId = state.heldSelfMoveOperationId;
-    if (!operationId) {
-      return true;
-    }
-    const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
-      operationId,
-    );
-    // Compare-and-clear against the CURRENT holder (relation owned by
-    // operation-ledger-hold-policy.js): a sibling that already released this
-    // same holder leaves no self-move held (callers re-validate the in-flight
-    // create flag after this await); a NEWER holder keeps refusing.
-    const outcome = resolveHeldOperationLedgerSelfMoveClearOutcome({
-      readOperationId: operationId,
-      heldOperationId: state.heldSelfMoveOperationId,
-      holdAction: action,
-    });
-    if (outcome === HELD_SELF_MOVE_CLEAR_OUTCOME.RELEASE_HOLDER) {
-      state.heldSelfMoveOperationId = null;
-      state.heldSelfMovePartitionId = null;
-      return true;
-    }
-    return outcome === HELD_SELF_MOVE_CLEAR_OUTCOME.ALREADY_CLEARED;
-  }
 }
 
 function applyRebalanceCoordinatorLedgerInterlockAdmissionMethods(targetClass) {
+  // The hold STATE mechanism is one owner surface with these lanes.
+  applyRebalanceCoordinatorLedgerInterlockHoldStateMethods(targetClass);
   const sourcePrototype =
     RebalanceCoordinatorLedgerInterlockAdmissionMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {

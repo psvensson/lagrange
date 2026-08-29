@@ -31,6 +31,11 @@ class OperationWorkflowOwnerRetryRegistry extends
    *   Replica ID allocation callback.
    * @param {Function} options.getActualReplicaStatus -
    *   Authoritative replica status read callback.
+   * @param {Function} [options.engageOperationLedgerSelfMoveHold] -
+   *   Coordinator port: engage the ledger self-move interlock hold at the
+   *   dispatch path's PENDING -> SENDING claim.
+   * @param {Function} [options.disengageOperationLedgerSelfMoveHold] -
+   *   Coordinator port: release an engagement whose claim did not commit.
    * @param {Function} [options.setTimeoutFn] - Deferred retry timer factory.
    * @param {Function} [options.clearTimeoutFn] - Deferred retry timer cleanup.
    */
@@ -63,6 +68,10 @@ class OperationWorkflowOwnerRetryRegistry extends
     this.reconcileReservations = options.reconcileReservations;
     this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
     this.getActualReplicaStatus = options.getActualReplicaStatus;
+    this.engageOperationLedgerSelfMoveHold =
+      options.engageOperationLedgerSelfMoveHold;
+    this.disengageOperationLedgerSelfMoveHold =
+      options.disengageOperationLedgerSelfMoveHold;
     this.setTimeoutFn =
       typeof options.setTimeoutFn === 'function' ?
         options.setTimeoutFn :

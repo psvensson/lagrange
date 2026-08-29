@@ -164,6 +164,15 @@ const SQL = Object.freeze({
       workflow_step IN (?, ?, ?, ?, ?)
       OR (workflow_step = ? AND type IN (?, ?))
     )`,
+  // The cluster-wide census of live ledger writers consulted by a ledger
+  // self-move's dispatch-time idle check: unscoped by node (the self-move's
+  // owner is its target while its contenders are sourced elsewhere).
+  SELECT_INCOMPLETE_LEDGER_WRITER_OPERATIONS: `SELECT * FROM replica_operations
+    WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
+    AND (
+      workflow_step IN (?, ?, ?, ?, ?)
+      OR (workflow_step = ? AND type IN (?, ?))
+    )`,
   SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
     WHERE entity_type = ? AND entity_id = ?`,
