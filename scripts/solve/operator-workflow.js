@@ -30,6 +30,7 @@ import {
 } from './rejection-findings.js';
 import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
 import {auditQuest} from './audit.js';
+import {assertCommittedContentIdentity} from './committed-content-guard.js';
 import {ingestDeclaredProbeEvidence} from './declared-probe-evidence.js';
 import {terminalReadiness} from './terminal-readiness.js';
 import {
@@ -44,7 +45,6 @@ const VERIFIER_REJECTION = 'verifier-rejection';
 const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
 const VERDICT_NEEDS_REVIEW = 'needs-review';
-const VERDICT_BLOCKED = 'blocked';
 const CONTENT_REVIEW_SCHEMA_VERSION = 3;
 const REVIEW_FINGERPRINT_CONFLICT =
   'land: --review supplies the fingerprint; omit --fingerprint';
@@ -254,6 +254,7 @@ function reviewedReceiptForRequest(state, request, verdict) {
     return {
       ...receiptForVerdict(state, verdict, contentReceipt.fingerprint),
       contentFingerprint: null,
+      contentPaths: [],
       reviewSchemaVersion: request.manifest.schemaVersion,
     };
   }
@@ -263,8 +264,17 @@ function reviewedReceiptForRequest(state, request, verdict) {
   return {
     ...receiptForVerdict(state, verdict, bridgeFingerprint),
     contentFingerprint: contentReceipt.fingerprint,
+    contentPaths: [...contentReceipt.paths],
     reviewSchemaVersion: request.manifest.schemaVersion,
   };
+}
+
+function terminalReadinessError(readiness) {
+  return new Error(
+    'land: terminal readiness blocked: ' +
+    readiness.repairs.map((repair) =>
+      `${repair.category}: ${repair.message}`).join('; '),
+  );
 }
 
 export function landQuestWorkflow(root, args = {}) {
@@ -317,19 +327,7 @@ export function landQuestWorkflow(root, args = {}) {
       };
     }
     const readiness = terminalReadiness(root, quest, state);
-    if (!readiness.readyForReview) {
-      return {
-        schemaVersion: 1,
-        questId: id,
-        verdict: VERDICT_BLOCKED,
-        fingerprint: readiness.sourceFingerprint,
-        receiptRef: null,
-        committed: false,
-        readiness,
-        ingestedEvidence,
-        next: buildNextProjection(root, id),
-      };
-    }
+    if (!readiness.readyForReview) throw terminalReadinessError(readiness);
     const review = createReviewRequest(root, quest, state);
     return {
       schemaVersion: 1,
@@ -351,6 +349,7 @@ export function landQuestWorkflow(root, args = {}) {
   let scope;
   let receipt;
   let reviewContentFingerprint = null;
+  let reviewContentPaths = [];
   let reviewSchemaVersion = null;
   if (reviewId) {
     if (fingerprint) {
@@ -365,6 +364,7 @@ export function landQuestWorkflow(root, args = {}) {
     receipt = reviewed.receipt;
     fingerprint = receipt.fingerprint;
     reviewContentFingerprint = reviewed.contentFingerprint;
+    reviewContentPaths = reviewed.contentPaths;
     reviewSchemaVersion = reviewed.reviewSchemaVersion;
   } else {
     ({scope, receipt} = receiptForVerdict(state, verdict, fingerprint));
@@ -404,6 +404,7 @@ export function landQuestWorkflow(root, args = {}) {
       reviewId,
       identityAuthority: 'scoped-content',
       contentFingerprint: reviewContentFingerprint,
+      paths: reviewContentPaths,
     },
   } : baseVerification;
   appendFinding(root, id, {
@@ -433,6 +434,12 @@ export function landQuestWorkflow(root, args = {}) {
     };
   }
   const commit = autoCommitQuest(root, id);
+  const committedContent = commit.committed && reviewContentFingerprint ?
+    assertCommittedContentIdentity(
+      root,
+      reviewContentPaths,
+      reviewContentFingerprint,
+    ) : null;
   return {
     schemaVersion: 1,
     questId: id,
@@ -442,6 +449,7 @@ export function landQuestWorkflow(root, args = {}) {
     receiptRef,
     committed: commit.committed,
     commit,
+    committedContent,
     ingestedEvidence,
     next: buildNextProjection(root, id),
   };
