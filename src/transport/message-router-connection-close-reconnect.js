@@ -57,6 +57,7 @@ class MessageRouterConnectionCloseReconnect {
         isSelfConnection: connection.isSelfConnection,
       });
       connection.ws = null;
+      connection.bootIncarnation = TRANSPORT_NUM.ZERO;
       this.clearPingInterval(connection);
       const disconnectError = new Error(
         ROUTER_ERROR_MSG.connectionClosed(nodeId),
