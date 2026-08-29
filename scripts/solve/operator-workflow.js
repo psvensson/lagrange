@@ -30,6 +30,7 @@ import {
 } from './rejection-findings.js';
 import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
 import {auditQuest} from './audit.js';
+import {ingestDeclaredProbeEvidence} from './declared-probe-evidence.js';
 import {
   assertReviewCurrent,
   createReviewRequest,
@@ -166,11 +167,13 @@ export function continueQuestWorkflow(root, args = {}) {
   const before = buildNextProjection(root, id);
   assertStructuredAction(before.action, id);
   const execution = executeStructuredContinuation(root, quest, before.action, args);
+  const ingestedEvidence = ingestDeclaredProbeEvidence(root, quest);
   return {
     schemaVersion: 1,
     questId: id,
     before: before.action,
     ...execution,
+    ingestedEvidence,
     next: buildNextProjection(root, id),
   };
 }
@@ -248,6 +251,7 @@ function assertApprovalCanCompleteAudit(root, quest, state) {
 export function landQuestWorkflow(root, args = {}) {
   const id = requireId(args, 'land');
   const quest = loadQuest(root, id);
+  const ingestedEvidence = ingestDeclaredProbeEvidence(root, quest);
   const log = readLog(root, id);
   const before = buildNextProjection(root, id);
   if (!['solved', 'exhausted'].includes(before.quest.status)) {
@@ -268,6 +272,7 @@ export function landQuestWorkflow(root, args = {}) {
       receiptRef: null,
       committed: commit.committed,
       commit,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
@@ -288,6 +293,7 @@ export function landQuestWorkflow(root, args = {}) {
         receiptRef: RECORDED_AGGREGATE_RECEIPT,
         committed: commit.committed,
         commit,
+        ingestedEvidence,
         next: buildNextProjection(root, id),
       };
     }
@@ -300,6 +306,7 @@ export function landQuestWorkflow(root, args = {}) {
       fingerprint: null,
       receiptRef: null,
       committed: false,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
@@ -380,6 +387,7 @@ export function landQuestWorkflow(root, args = {}) {
       fingerprint,
       receiptRef,
       committed: false,
+      ingestedEvidence,
       next: buildNextProjection(root, id),
     };
   }
@@ -392,6 +400,7 @@ export function landQuestWorkflow(root, args = {}) {
     receiptRef,
     committed: commit.committed,
     commit,
+    ingestedEvidence,
     next: buildNextProjection(root, id),
   };
 }
