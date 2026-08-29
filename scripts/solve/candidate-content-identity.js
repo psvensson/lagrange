@@ -42,9 +42,6 @@ function worktreeEntry(root, filePath) {
     return {ok: false, problem: `candidate content path is invalid: ${filePath}`};
   }
   const absolute = path.join(root, relative);
-  if (!fs.existsSync(absolute) && !fs.lstatSync(path.dirname(absolute)).isDirectory()) {
-    return {ok: true, entry: {path: relative, state: STATE_DELETED}};
-  }
   let stat;
   try {
     stat = fs.lstatSync(absolute);
