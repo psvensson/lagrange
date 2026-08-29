@@ -4,6 +4,9 @@ import path from 'node:path';
 
 import tap from 'tap';
 
+import {
+  evidenceIdentityMatchesEvent,
+} from '../../scripts/solve/evidence-identity.js';
 import {testReceiptProbe} from '../../scripts/solve/probes/test-receipt.js';
 import {evaluate, getProbe} from '../../scripts/solve/probe.js';
 
@@ -154,6 +157,11 @@ tap.test('deterministic receipt identity ignores generation time, mtime, and sto
   }, {root: dir});
   t.equal(copied.evidenceFingerprint, first.evidenceFingerprint,
     'the same deterministic proof bytes and semantic args are storage-path independent');
+  t.equal(evidenceIdentityMatchesEvent(copied.evidenceIdentity, {
+    evidenceFingerprint: first.evidenceFingerprint,
+    evidenceIdentity: first.evidenceIdentity,
+  }, {requireProbeSpec: true}), true,
+  'declared-probe dedupe uses the semantic probe key rather than the storage path');
 
   const changed = passingPayload('2026-08-29T13:00:00.000Z');
   changed.receipts[1].passed = false;
