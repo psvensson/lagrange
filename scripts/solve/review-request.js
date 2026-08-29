@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
+import {candidateContentIdentity} from './candidate-content-identity.js';
 import {landingReviewPreflight} from './landing-preflight.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
@@ -94,6 +95,17 @@ function currentReviewManifest(root, quest, state) {
   };
 }
 
+function shadowContentIdentity(root, manifest) {
+  const candidate = candidateContentIdentity(root, manifest.candidate.paths);
+  const aggregate = candidateContentIdentity(root, manifest.aggregate.paths);
+  return {
+    schemaVersion: 1,
+    authoritative: false,
+    candidate,
+    aggregate,
+  };
+}
+
 function reviewIdFor(manifest) {
   const digest = crypto.createHash('sha256')
     .update(jsonStringify(manifest))
@@ -121,7 +133,13 @@ export function createReviewRequest(root, quest, state) {
       manifest,
     }, null, 2)}\n`);
   }
-  return {id, manifest, file: path.relative(root, file), preflight};
+  return {
+    id,
+    manifest,
+    file: path.relative(root, file),
+    preflight,
+    shadowContentIdentity: shadowContentIdentity(root, manifest),
+  };
 }
 
 export function loadReviewRequest(root, reviewId) {
@@ -156,5 +174,9 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
       FRESH_REVIEW_ACTION,
     );
   }
-  return {...request, preflight: landingReviewPreflight(root, current)};
+  return {
+    ...request,
+    preflight: landingReviewPreflight(root, current),
+    shadowContentIdentity: shadowContentIdentity(root, current),
+  };
 }
