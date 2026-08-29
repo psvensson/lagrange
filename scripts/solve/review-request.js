@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {candidateContentIdentity} from './candidate-content-identity.js';
+import {withCandidateWorkspace} from './candidate-workspace.js';
 import {landingReviewPreflight} from './landing-preflight.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
@@ -61,7 +62,7 @@ function coupledPairRegistryDigest(root) {
   return REGISTRY_UNAVAILABLE_DIGEST;
 }
 
-function currentReviewManifest(root, quest, state) {
+function reviewProjection(quest, state) {
   if (!state.candidate?.ok || !state.candidate.fingerprint) {
     throw new Error(
       CANDIDATE_NOT_REVIEWABLE_PREFIX +
@@ -84,7 +85,6 @@ function currentReviewManifest(root, quest, state) {
   return {
     schemaVersion: SCHEMA_VERSION,
     questId: quest.id,
-    coupledPairRegistryDigest: coupledPairRegistryDigest(root),
     candidate: receipt(state.candidate),
     aggregate: receipt({
       ...state.aggregate,
@@ -106,6 +106,21 @@ function shadowContentIdentity(root, manifest) {
   };
 }
 
+function preparedReview(root, quest, state) {
+  const projection = reviewProjection(quest, state);
+  return withCandidateWorkspace(root, projection.aggregate, (candidateRoot) => {
+    const manifest = {
+      ...projection,
+      coupledPairRegistryDigest: coupledPairRegistryDigest(candidateRoot),
+    };
+    return {
+      manifest,
+      preflight: landingReviewPreflight(candidateRoot, manifest),
+      shadowContentIdentity: shadowContentIdentity(candidateRoot, manifest),
+    };
+  });
+}
+
 function reviewIdFor(manifest) {
   const digest = crypto.createHash('sha256')
     .update(jsonStringify(manifest))
@@ -121,8 +136,8 @@ function reviewFile(root, reviewId) {
 }
 
 export function createReviewRequest(root, quest, state) {
-  const manifest = currentReviewManifest(root, quest, state);
-  const preflight = landingReviewPreflight(root, manifest);
+  const prepared = preparedReview(root, quest, state);
+  const {manifest} = prepared;
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
   fs.mkdirSync(path.dirname(file), {recursive: true});
@@ -137,8 +152,8 @@ export function createReviewRequest(root, quest, state) {
     id,
     manifest,
     file: path.relative(root, file),
-    preflight,
-    shadowContentIdentity: shadowContentIdentity(root, manifest),
+    preflight: prepared.preflight,
+    shadowContentIdentity: prepared.shadowContentIdentity,
   };
 }
 
@@ -166,8 +181,8 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   if (request.manifest.questId !== quest.id) {
     throw new Error(`land: review ${reviewId} belongs to another Quest`);
   }
-  const current = currentReviewManifest(root, quest, state);
-  if (jsonStringify(current) !== jsonStringify(request.manifest)) {
+  const prepared = preparedReview(root, quest, state);
+  if (jsonStringify(prepared.manifest) !== jsonStringify(request.manifest)) {
     throw new Error(
       `land: review ${reviewId} no longer matches current candidate bytes ` +
       REVIEW_DRIFT_REGISTRY_SUFFIX +
@@ -176,7 +191,7 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   }
   return {
     ...request,
-    preflight: landingReviewPreflight(root, current),
-    shadowContentIdentity: shadowContentIdentity(root, current),
+    preflight: prepared.preflight,
+    shadowContentIdentity: prepared.shadowContentIdentity,
   };
 }
