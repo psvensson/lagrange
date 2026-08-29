@@ -40,6 +40,14 @@ export function evaluate(spec, ctx = {}) {
   if (!spec || !spec.probe) {
     return {metric: null, done: false, evidence: null};
   }
-  const result = getProbe(spec.probe).measure(spec.args || {}, ctx);
-  return attachEvidenceIdentity(ctx.root || process.cwd(), spec, result);
+  const probe = getProbe(spec.probe);
+  const result = probe.measure(spec.args || {}, ctx);
+  const classified = {
+    ...result,
+    evidenceClass: result?.evidenceClass || probe.evidenceClass,
+    evidenceIdentityArgs: result?.evidenceIdentityArgs ||
+      (typeof probe.identityArgs === 'function' ?
+        probe.identityArgs(spec.args || {}) : undefined),
+  };
+  return attachEvidenceIdentity(ctx.root || process.cwd(), spec, classified);
 }

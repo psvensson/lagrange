@@ -165,6 +165,21 @@
         "test/rebalancer/startup-authority-available-node-contract.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js"
       ]
+    },
+    "active-gate-convergence": {
+      "description": "The canonical active-gate system contract: authoritative discovery repair pressure containment and startup ACTIVE convergence stay compatible, callers cannot bypass failed-repair backoff, and stale deferred evidence cannot become a permanent ACTIVE veto after newer owner evidence exists.",
+      "owners": [
+        "src/admin/admin-service-discovery-repair-cache-methods.js",
+        "src/admin/admin-control-snapshot-active-gate-handoff-projection.js",
+        "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "src/control-plane/publication-active-gate-handoff-contract-evidence.js"
+      ],
+      "tests": [
+        "test/admin/admin-service-discovery.test.js",
+        "test/admin/admin-control-snapshot.test.js",
+        "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
+        "test/admin/admin-control-snapshot-retry-decision.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -283,6 +298,31 @@
         "test/control-plane/publication-readiness-churn-liveness.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js"
+      ]
+    },
+    "active-gate-authoritative-repair-backoff": {
+      "description": "Failed authoritative-repair backoff must remain non-bypassable while newer evidence or retry ownership can still re-drive the single startup ACTIVE decision owner.",
+      "endpoints": [
+        {
+          "id": "repair-admission-backoff",
+          "owners": [
+            "src/admin/admin-service-discovery-repair-cache-methods.js"
+          ]
+        },
+        {
+          "id": "cluster-active-convergence",
+          "owners": [
+            "src/control-plane/membership-publication-active-gate-reconcile.js",
+            "src/control-plane/publication-active-gate-handoff-contract-evidence.js"
+          ]
+        }
+      ],
+      "contract": "active-gate-convergence",
+      "witnessTests": [
+        "test/admin/admin-service-discovery.test.js",
+        "test/admin/admin-control-snapshot.test.js",
+        "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
+        "test/admin/admin-control-snapshot-retry-decision.test.js"
       ]
     }
   }

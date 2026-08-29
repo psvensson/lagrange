@@ -5,6 +5,13 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 import {checkpointGate} from '../../scripts/solve/audit.js';
+import {
+  candidateContentIdentity,
+} from '../../scripts/solve/candidate-content-identity.js';
+import {
+  PROOF_MUTATED_CANDIDATE,
+  withCandidateWorkspace,
+} from '../../scripts/solve/candidate-workspace.js';
 import {runCheckpointCommand} from '../../scripts/solve/handoff.js';
 import {buildNextLines} from '../../scripts/solve/next.js';
 import {runStep} from '../../scripts/solve/step.js';
@@ -258,5 +265,109 @@ tap.test('terminal aggregate covers all version 2 paths and remains mandatory', 
   });
   t.same(terminalVerificationProblems(
     fx.root, fx.quest, readLog(fx.root, fx.quest.id)), []);
+  t.end();
+});
+
+tap.test('candidate content identity ignores mtimes but binds bytes, mode, and deletion', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const paths = ['src/b.js', 'src/a.js'];
+  const first = candidateContentIdentity(fx.root, paths);
+  t.equal(first.ok, true);
+  t.same(first.manifest.entries.map((entry) => entry.path),
+    ['src/a.js', 'src/b.js'], 'manifest order is canonical');
+
+  const aPath = path.join(fx.root, 'src/a.js');
+  const now = new Date(Date.now() + 5000);
+  fs.utimesSync(aPath, now, now);
+  const afterTouch = candidateContentIdentity(fx.root, [...paths].reverse());
+  t.equal(afterTouch.fingerprint, first.fingerprint,
+    'filesystem time and caller path order are not semantic identity');
+
+  fs.chmodSync(aPath, 0o755);
+  const afterMode = candidateContentIdentity(fx.root, paths);
+  t.not(afterMode.fingerprint, first.fingerprint,
+    'Git executable mode participates in identity');
+  t.equal(afterMode.manifest.entries[0].mode, '100755');
+
+  fs.chmodSync(aPath, 0o644);
+  fs.writeFileSync(aPath, 'export const a = 9;\n');
+  const afterBytes = candidateContentIdentity(fx.root, paths);
+  t.not(afterBytes.fingerprint, first.fingerprint,
+    'byte drift participates in identity');
+
+  fs.unlinkSync(path.join(fx.root, 'src/b.js'));
+  const afterDelete = candidateContentIdentity(fx.root, paths);
+  t.not(afterDelete.fingerprint, afterBytes.fingerprint);
+  t.same(afterDelete.manifest.entries[1], {
+    path: 'src/b.js',
+    state: 'deleted',
+  });
+  t.end();
+});
+
+tap.test('commit content identity remains pinned while the worktree moves', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  const before = candidateContentIdentity(fx.root, ['src/a.js'], {commit: base});
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 99;\n');
+  const pinned = candidateContentIdentity(fx.root, ['src/a.js'], {commit: base});
+  const live = candidateContentIdentity(fx.root, ['src/a.js']);
+  t.equal(pinned.fingerprint, before.fingerprint,
+    'commit identity is independent of later working-tree bytes');
+  t.not(live.fingerprint, before.fingerprint,
+    'working-tree identity follows the current candidate bytes');
+  t.end();
+});
+
+tap.test('candidate workspace uses current committed policy but only reviewed dirty paths', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 7;\n');
+  fs.mkdirSync(path.join(fx.root, 'policy'), {recursive: true});
+  fs.writeFileSync(path.join(fx.root, 'policy/checker.txt'), 'current-policy\n');
+  git(fx.root, ['add', 'policy/checker.txt']);
+  git(fx.root, ['commit', '-m', 'advance proof policy']);
+  const currentHead = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.mkdirSync(path.join(fx.root, 'test'), {recursive: true});
+  fs.writeFileSync(path.join(fx.root, 'test/foreign.test.js'), 'foreign dirty work\n');
+
+  const observed = withCandidateWorkspace(fx.root, {
+    baseCommit: base,
+    paths: ['src/a.js'],
+  }, (candidateRoot, context) => ({
+    candidateBytes: fs.readFileSync(path.join(candidateRoot, 'src/a.js'), 'utf8'),
+    policyBytes: fs.readFileSync(
+      path.join(candidateRoot, 'policy/checker.txt'), 'utf8'),
+    foreignPresent: fs.existsSync(path.join(candidateRoot, 'test/foreign.test.js')),
+    proofHeadCommit: context.proofHeadCommit,
+  }));
+
+  t.equal(observed.candidateBytes, 'export const a = 7;\n',
+    'reviewed dirty bytes are overlaid exactly');
+  t.equal(observed.policyBytes, 'current-policy\n',
+    'proof consumes current committed safety policy, not the old source base');
+  t.equal(observed.foreignPresent, false,
+    'foreign untracked work is absent from the proof workspace');
+  t.equal(observed.proofHeadCommit, currentHead,
+    'proof context identifies the current committed policy head');
+  t.not(observed.proofHeadCommit, base,
+    'proof policy is not frozen to the historical source epoch');
+  t.end();
+});
+
+tap.test('candidate workspace refuses proof mutation of tracked candidate bytes', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  const base = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 5;\n');
+  t.throws(() => withCandidateWorkspace(fx.root, {
+    baseCommit: base,
+    paths: ['src/a.js'],
+  }, (candidateRoot) => {
+    fs.writeFileSync(path.join(candidateRoot, 'src/a.js'), 'mutated by proof\n');
+  }), new RegExp(PROOF_MUTATED_CANDIDATE, 'u'));
   t.end();
 });

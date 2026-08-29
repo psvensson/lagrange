@@ -146,6 +146,28 @@ Enterprise
 
 ---
 
+## Phase 0.3 — Queryable Core
+
+*"Ordinary SQL can reach the right data efficiently without physical-partition knowledge."*
+
+### Query Semantics and Access Paths — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Typed partition-key and tuple ordering | 🔲 | One type-aware total order for persisted boundaries and indexed tuples |
+| Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Use the already-persisted declared key rather than hardcoded fallbacks |
+| Local ordered index DDL | 🔲 | `CREATE INDEX` / `DROP INDEX`; ordinary and compound B-tree indexes; unsupported families fail closed |
+| Ordered and compound index planner semantics | 🔲 | Left-prefix, equality-prefix-plus-range, and sealed NULL/type/collation behavior |
+| Non-unique global secondary and compound indexes | 🔲 | Partitioned/replicated index datasets, resumable backfill, lifecycle/failure state, routed reads and `EXPLAIN DISTRIBUTED` |
+| Index state and backfill diagnostics | 🔲 | Ordinary SQL/catalog visibility suitable for 0.5 operator and onboarding UX |
+
+Phase 0.3 indexes are access paths: rejecting or losing an index may make a
+query slower but must not change base-table correctness. Unique global indexes
+are therefore intentionally assigned to the Phase 1.0 production-invariant
+boundary below.
+
+---
+
 ## Phase 0.5 — External Usability
 
 *"Developers can realistically try this."*
@@ -177,6 +199,7 @@ Enterprise
 | CLI wasm deploy | 🔲 |
 | CLI wasm scale | 🔲 |
 | Getting-started tutorial | 🔲 |
+| Indexed-query example and index-state inspection | 🔲 |
 
 ### 3. Debugging Tools — 🟢 Community
 
@@ -289,6 +312,69 @@ Enterprise
 | Topology convergence SLO | 🔲 |
 | Large-scale data-plane certification | 🔲 |
 
+### 7. Production Index and Constraint Guarantees — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Unique global secondary indexes | 🔲 | Require synchronous maintenance capable of transactional uniqueness enforcement |
+| Transactional synchronous index maintenance | 🔲 | Required index partitions participate in the write/2PC correctness boundary |
+| Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure and supported recovery envelope |
+| Index write-amplification and capacity envelope | 🔲 | Publish representative costs for supported compound/global-index profiles |
+| Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the production subset exposed through PG metadata and constraints |
+
+### 8. Customer-Installable Service Product Platform — 🟢 core / 🟡🔴 commercial controls
+
+This is a cross-edition convergence milestone for separately released services such as Lagrange AI. It groups existing core and paid-platform work into one customer acceptance boundary; it does not change the implementation-home rules in `edition-matrix.md`.
+
+#### Managed package and runtime lifecycle — 🟢 Community core
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Signed immutable OCI package/revision identity | 🔧 | Build on the existing verified install catalog rather than a second package path |
+| Real managed OCI service activation | 🔲 | Fetch/start/stop/restart under the unified service lifecycle; no hand-managed daemon path |
+| Kernel/service compatibility preflight | 🔲 | Refuse incompatible kernel/API/dependency combinations before activation |
+| Configuration schema validation | 🔲 | Service-declared schema plus typed validation failures |
+| Health/readiness contribution contract | 🔲 | Service-specific readiness feeds the ordinary service actual/readiness model |
+| Idempotent install/status/remove lifecycle | 🔧 | Existing lifecycle SQL/catalog work becomes the supported customer service path |
+| Health-gated upgrade and rollback | 🔲 | Immutable revisions, rollout fencing and rollback to prior known-good revision |
+| Air-gapped/mirrored package operation | 🔲 | Customer-controlled artifact acquisition without requiring public registry access |
+
+#### Diagnostics and customer support boundary — 🟢 core / 🟡 advanced export
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Stable service diagnostics contribution contract | 🔲 | Installed services contribute typed health, metrics and diagnostic facts without private side channels |
+| Customer-inspectable support bundle | 🔲 | Versioned local bundle with manifest, bounded diagnostics and service-contributed sections |
+| Redaction contract | 🔲 | Secrets and customer payload data are excluded by contract unless explicitly opted in |
+| Customer-controlled telemetry contribution plumbing | 🔲 | Core accepts service metrics/events; Pro exporters may send them to Prometheus/OTel or other destinations |
+| Telemetry/licensing separation | 🔲 | A valid commercial service entitlement must never require operational telemetry to be enabled |
+
+#### Commercial service controls — 🟡 Pro / 🔴 Enterprise
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Offline-capable signed entitlement assertion | 🔲 | Commercial implementation; product/edition/feature claims can be verified without mandatory phone-home |
+| Grace/expiry behavior contract | 🔲 | Licensing failure is typed and must not silently corrupt state or become a cluster-availability hazard |
+| Cluster-resolved secret references | 🔲 | Enterprise implementation home; provider/service credentials never live in public manifests or guest authority |
+
+Acceptance consumer: at least one separately released first-party service must install, become ready, survive restart, expose useful diagnostics, upgrade, roll back and remove through this common lifecycle. Lagrange AI is a natural first consumer.
+
+---
+
+## Phase 1.x — SQL Breadth and Compatibility
+
+*"Broader SQL/index ergonomics after the core access path and production invariants are stable."*
+
+### Advanced Index Compatibility — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Partial indexes | 🔲 | Predicate-scoped membership and planner matching |
+| Expression indexes | 🔲 | Stable expression identity and evaluation semantics |
+| `INCLUDE` / covering syntax and index-only scans | 🔲 | Separate key from payload columns and prove visibility semantics |
+| Richer collation and operator semantics | 🔲 | Expand beyond the deliberately small 0.3 ordered-index contract |
+| Broader PostgreSQL index catalog/DDL compatibility | 🔲 | Include concurrent-build behavior where honestly supportable |
+
 ---
 
 ## Phase 2.0 — Deeper Distributed Execution
@@ -307,7 +393,11 @@ deepens the shipped call surface rather than adding a separate platform."*
 | Plan diagnostics | ✅ |
 | Multi-stage plans | 🔲 |
 | Cost-based optimizer | 🔲 |
+| Statistics and cardinality estimates | 🔲 |
+| Cost-based index selection | 🔲 |
+| Index intersection / union and bitmap-style access plans | 🔲 |
 | Query hints | 🔲 |
+| Index recommendation / advisor tooling | 🔲 |
 
 ### 2. Advanced Runtime Services — 🟢 Community core / future service platform
 
@@ -315,7 +405,15 @@ deepens the shipped call surface rather than adding a separate platform."*
 |------|--------|
 | OCI container runtime | 🔧 |
 | Vector search service | 🔲 |
+| Full-text search service | 🔲 |
+| Spatial search/index service | 🔲 |
 | Embedding service | 🔲 |
+
+These specialized search families remain distinct from the ordinary ordered
+B-tree contract introduced in 0.3; they can use service-specific storage and
+semantics where appropriate.
+
+The foundational managed-OCI lifecycle needed by customer-installable services is now a Phase 1.0 product gate above. Phase 2.0 may deepen container/resource placement and service APIs; it should not create a second activation path.
 
 ### 3. External Kernel Platform API — 🟢 Community core / 🔴 Enterprise extensions
 
@@ -354,6 +452,8 @@ deepens the shipped call surface rather than adding a separate platform."*
 | Secrets and external references API | 🔲 | Cluster-resolved credentials and KMS integration |
 
 ### 4. Installable Service Ecosystem — 🟢 Community core / 🟡🔴 advanced controls
+
+The Phase 1.0 productization milestone defines the minimum customer-service acceptance gate. This section continues the broader ecosystem work: discovery, multiple registries, richer external APIs, and service-platform scale.
 
 #### Artifact and Package Registry — 🟢 Community
 

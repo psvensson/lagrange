@@ -232,6 +232,47 @@ part of the 0.2 release gate.
 
 ---
 
+## Phase 0.3 — Queryable Core
+
+*"Ordinary SQL reaches the right data efficiently without physical-partition knowledge."*
+
+Phase 0.3 owns the query-access-path ladder that was previously parked under
+1.0. The sequencing rationale and implementation boundaries live in
+`solve/epics/query-access-path-ladder.md`; global-index machinery is further
+constrained by `solve/specs/global-secondary-indexes/requirements.md`.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-0.3-qs-typed-key-ordering | Typed partition-key and tuple ordering | 🔲 | One shared type-aware total order (or order-preserving key encoding) replaces the duplicated `localeCompare` helpers and raw JS compare, with a migration/revalidation story for persisted boundaries. This is correctness work as well as planner substrate. |
+| RM-0.3-qs-pk-partition-narrowing | Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Read the already-persisted primary key (`tables.partition_key`) in partition resolution and the remaining `id`-fallback modules, activating the existing composite-key path. Depends on typed key ordering. |
+| RM-0.3-qs-local-index-ddl | Local ordered index DDL | 🔲 | Wire parsed `CREATE INDEX` / `DROP INDEX` through statement dispatch into the existing `IndexService`, instantiate it in runtime composition, and support ordinary and compound local B-tree indexes. Unsupported index families fail closed rather than existing as metadata-only claims. |
+| RM-0.3-qs-compound-index-semantics | Ordered and compound index planner semantics | 🔲 | Seal tuple/NULL/type/collation behavior plus left-prefix and equality-prefix-plus-next-range rules for local and global indexes. Remove the current heuristic that treats any matching non-leading column as sufficient index use. |
+| RM-0.3-qs-global-secondary-indexes | Non-unique global secondary and compound indexes | 🔲 | Index-as-partitioned-dataset storage, index-side routing, write-path maintenance, resumable backfill, lifecycle/failure state, planner integration, and `EXPLAIN DISTRIBUTED`. An unavailable/unreadable index degrades to scatter-gather rather than affecting correctness. Spec: `solve/specs/global-secondary-indexes/`. |
+
+The former planning IDs `RM-1.0-qs-typed-key-ordering`,
+`RM-1.0-qs-pk-partition-narrowing`, `RM-1.0-qs-local-index-ddl`, and
+`RM-1.0-qs-global-secondary-indexes` are retired and must not be reused. Their
+historical references remain valid; new Quests link the 0.3 IDs above.
+
+### Phase 0.3 Exit Criteria
+
+- Persisted partition and indexed tuples have one type-aware ordering contract.
+- Tables with non-`id` and compound primary keys narrow to the correct
+  partitions where their predicates permit it.
+- Ordinary and compound local B-tree indexes can be created, dropped, and used
+  under explicit ordered-index semantics.
+- A non-unique global secondary/compound index survives resumable backfill and
+  restart/failure cases, and can route a representative non-PK query more
+  narrowly than scatter-gather without changing correctness when rejected.
+- `EXPLAIN DISTRIBUTED` identifies the selected index and compound prefix/range
+  shape, or explains why an available index was not usable.
+
+Global uniqueness is explicitly outside the 0.3 contract. If enforcing an
+index changes transaction correctness rather than only query performance, that
+work belongs to the 1.0 production-invariant boundary below.
+
+---
+
 ## Phase 0.5 — External Usability
 
 Focus shifts to developer experience.
@@ -268,6 +309,11 @@ bootstrap flow, and upgrade behavior before more task expansion begins.
 | `RM-0.5-dw-cli-wasm-deploy` | CLI wasm deploy | 🔲 |
 | `RM-0.5-dw-cli-wasm-scale` | CLI wasm scale | 🔲 |
 | `RM-0.5-dw-getting-started` | Getting-started tutorial | 🔲 |
+
+The 0.5 onboarding and operator surface should make the 0.3 access paths easy
+to inspect: index definitions/state and build failures belong in ordinary
+SQL/catalog diagnostics, and examples should demonstrate indexed access without
+requiring callers to understand partition internals.
 
 ### 3. Service Development Inner Loop
 
@@ -368,23 +414,37 @@ also enable future paid system services.
 | — | Topology convergence SLO | 🔲 | Statistical, hardware-relative convergence after add, failure, restart, replacement, and decommission; no single-run or timeout-extension certification. Contract: `solve/epics/topology-convergence-hardening.md` plus `solve/specs/large-scale-data-plane-certification/`. |
 | — | Large-scale data-plane certification | 🔲 | Separate metadata-cardinality and physical-byte ladders, with enforced throughput, latency, heap/RSS, file-descriptor, queue, in-flight-work, and leak gates. Spec: `solve/specs/large-scale-data-plane-certification/`. |
 
-### 4. Query Semantics and Access Paths
+### 4. Production Index and Constraint Guarantees
 
-Removes the query-layer limitations recorded in
-`docs/current-capabilities-and-limitations.md` (partition narrowing tied to an
-`id` column, lexicographic range comparisons, no global secondary indexes —
-and, beyond what that document records, local `CREATE INDEX` currently parses
-but is rejected as an unsupported statement). The rows
-form a dependency ladder — each row builds on the sealed contract of the row
-above it — and the sequencing rationale lives in
-`solve/epics/query-access-path-ladder.md`.
+These rows build on Phase 0.3 rather than re-owning ordinary index storage or
+planner semantics. The distinction is semantic: 0.3 indexes are optional
+access paths; 1.0 may make an index part of a database invariant.
 
-| Id | Item | Roadmap state | Scope notes |
-|----|------|---------------|-------------|
-| RM-1.0-qs-typed-key-ordering | Typed partition-key ordering | 🔲 | One shared type-aware comparator (or order-preserving key encoding) replacing the three duplicated `localeCompare` helpers (routing, key ranges, live queries) and the raw JS `<` compare in split routing — three disagreeing orders in play — plus a migration story for persisted partition boundaries chosen under SQLite collation. Latent correctness exposure, not only a planner gap. May justify a Quest ahead of phase order. |
-| RM-1.0-qs-pk-partition-narrowing | Primary-key partition narrowing beyond `id` | 🔲 | Read the already-persisted primary key (`tables.partition_key`, comma-joined at table creation) in partition resolution and the other `id`-fallback modules, activating the existing composite-key path; no schema migration required. Splits already compute medians over the true key while routing narrows on `id`. Depends on typed key ordering for range narrowing. |
-| RM-1.0-qs-local-index-ddl | Local per-partition index DDL | 🔲 | Wire parsed `CREATE INDEX` through statement dispatch into the existing `IndexService` (per-partition SQLite indexes, CDC-driven index creation on new partitions) and instantiate that subsystem in the runtime composition. Integration of existing code, not new index machinery. |
-| RM-1.0-qs-global-secondary-indexes | Global secondary indexes | 🔲 | Index-as-partitioned-dataset storage, index-side routing, write-path maintenance, and a sealed sync-vs-async consistency decision. Spec: `solve/specs/global-secondary-indexes/`. |
+| Item | Roadmap state | Scope notes |
+|------|---------------|-------------|
+| Unique global secondary indexes | 🔲 | Require synchronous index maintenance capable of participating in transaction correctness; asynchronous uniqueness is not claimable. |
+| Transactional synchronous index maintenance | 🔲 | Enlist required index partitions in the write/2PC correctness boundary with typed failure when the invariant cannot be maintained. |
+| Production index rebuild/backfill guarantees | 🔲 | Restart/failover-safe rebuild with measured pressure, bounded operational impact, durable state, and a supported recovery envelope. |
+| Index write-amplification and capacity envelope | 🔲 | Publish representative write/read/rebuild costs for supported compound/global-index profiles rather than treating index overhead as unbounded. |
+| Supported ordered-key/NULL/type/collation contract | 🔲 | Stabilize the subset exposed through PostgreSQL-facing metadata and constraint behavior; richer compatibility remains 1.x. |
+
+---
+
+## Phase 1.x — SQL Breadth and Compatibility
+
+*"Broaden relational ergonomics without changing the distributed index foundation."*
+
+These features intentionally follow the 0.3 ordered-index contract and 1.0
+production invariants. They improve PostgreSQL/SQL breadth but are not required
+for the first correct and useful secondary-index implementation.
+
+| Item | Roadmap state | Scope notes |
+|------|---------------|-------------|
+| Partial indexes | 🔲 | Predicate-scoped index membership and matching rules. |
+| Expression indexes | 🔲 | Stable expression identity/evaluation semantics before planner use. |
+| `INCLUDE` / covering index syntax and index-only scans | 🔲 | Separate key columns from payload columns and prove visibility semantics for base-row-free reads. |
+| Richer collation and operator semantics | 🔲 | Expand beyond the deliberately small 0.3 ordered-key contract. |
+| PostgreSQL index catalog and DDL compatibility | 🔲 | Broader `pg_catalog` exposure and compatible index options/concurrent-build behavior where honestly supportable. |
 
 ---
 
@@ -403,7 +463,16 @@ above it — and the sequencing rationale lives in
 | Plan diagnostics | ✅ |
 | Multi-stage plans | 🔲 |
 | Cost-based optimizer | 🔲 |
+| Statistics and cardinality estimates | 🔲 |
+| Cost-based index selection | 🔲 |
+| Index intersection / union and bitmap-style access plans | 🔲 |
 | Query hints | 🔲 |
+| Index recommendation / advisor tooling | 🔲 |
+
+The 0.3 planner contract remains deterministic and semantically conservative.
+This phase is where multiple valid access paths may be costed, combined, or
+recommended based on statistics rather than expanding 0.3 into optimizer
+research.
 
 ### 2. Advanced Runtime Services
 
@@ -413,7 +482,9 @@ above it — and the sequencing rationale lives in
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
 | Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `solve/specs/activation-cost-aware-placement/`. |
-| Vector search service | 🔲 | |
+| Vector search service | 🔲 | Specialized search family, intentionally separate from the ordinary 0.3 ordered-index contract. |
+| Full-text search service | 🔲 | Specialized search semantics/storage rather than a required 0.3 B-tree variant. |
+| Spatial search/index service | 🔲 | Specialized geometry/index semantics rather than a required 0.3 B-tree variant. |
 | Embedding service | 🔲 | |
 
 Note: `native_js` is kernel-internal only. User-installable services

@@ -58,6 +58,8 @@ const CATEGORY_KEYWORD_RULES = Object.freeze({
   'formation-circularity':
     /\b(formation|bootstrap|seed|join|quorum|circular)/iu,
   'harness-fidelity': /\b(harness|fixture|stub|fake|mock)/iu,
+  'owner-interaction':
+    /\b(coupled[- ]?pairs?|cross-?owner|owner[- ]interaction|impact-contracts|interaction contract)/iu,
   'adversarial-js-intrinsics':
     /^src\/(?:diagnostics|utils)\/|\b(prototype|hasOwn|Object\.create|Number\.isFinite|intrinsic)/u,
 });

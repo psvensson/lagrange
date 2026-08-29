@@ -36,6 +36,24 @@
       "contractRef": "architecture/contracts/active-gate-convergence.md"
     },
     {
+      "id": "cluster-active-single-decision-owner",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "kind": "safety",
+      "statement": "Only startup_active_gate_owner decides cluster ACTIVE; node lifecycle status, membership publication counts, cache coverage, and admin or harness projections are evidence or presentation and cannot independently authorize convergence.",
+      "formalPredicate": "ClusterActiveDecisionOwners = {startup_active_gate_owner}",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
+      "id": "failed-repair-backoff-non-bypassable",
+      "owner": "authoritative_discovery_repair_owner",
+      "boundary": "repair_admission_backoff",
+      "kind": "safety",
+      "statement": "Caller urgency, force intent, or successful-result reuse bypass cannot override an active failed-repair defer decision owned by authoritative_discovery_repair_owner; retry-after and single-flight pressure containment remain binding until the owner re-admits repair.",
+      "formalPredicate": "repairDisposition = DEFER_REPAIR /\\ ~RetryBoundaryOpen => ~RepairAdmitted",
+      "contractRef": "architecture/contracts/active-gate-convergence.md"
+    },
+    {
       "id": "bounded-owner-reentry",
       "owner": "operation_workflow_owner",
       "boundary": "rebalancer_handoff",

@@ -60,7 +60,7 @@ const FEATURE_PHASE_PATTERN = /^## Phase ([0-9]+\.[0-9]+)\b/gmu;
 const HUMAN_PHASE_PATTERN = /^## .+?[—-] ([0-9]+\.[0-9]+)\b/gmu;
 const EPIC_ROADMAP_ROW_PATTERN = /^roadmapRow:\s*(\S+)\s*$/mu;
 const ROOT_ROADMAP_REFERENCE_PATTERN =
-  /(?:^|[^\w/])(?:\.\/)?roadmap\.md\b/u;
+  /(?:^|[^\w/-])(?:\.\/)?roadmap\.md\b/u;
 const HUMAN_FORBIDDEN_PATTERNS = Object.freeze([
   {pattern: /\bRM-/u, label: 'machine roadmap row identity'},
   {pattern: /\broadmapRow\b/u, label: 'machine roadmap link field'},
