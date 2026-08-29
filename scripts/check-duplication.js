@@ -56,8 +56,10 @@ const RATCHET_TARGETS = [
     // 2026-08-29: tightened 59/1889 -> 58/1867 after the startup-authority
     // snapshot planning-read clone collapsed into one owner method and
     // recovery-protocol-snapshot reused the active-node-projection normalizers.
+    // 2026-08-29: tightened 58/1867 -> 58/1865 while landing the formation-release
+    // handoff candidate (incarnation-fence normalization shared one owner).
     baselineCloneGroupCount: 58,
-    baselineDuplicatedLineCount: 1867,
+    baselineDuplicatedLineCount: 1865,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -116,8 +118,10 @@ const RATCHET_TARGETS = [
     // tests moved fresh-report execution behind one shared test helper.
     // 2026-08-23: tightened 816/31209 -> 810/31075 after the
     // no-use-before-define hoisting sweep broke up duplicated tail blocks.
-    baselineCloneGroupCount: 810,
-    baselineDuplicatedLineCount: 31075,
+    // 2026-08-29: tightened 810/31075 -> 809/31052 after the incarnation-fence
+    // witnesses replaced a duplicated fixture block with one shared helper.
+    baselineCloneGroupCount: 809,
+    baselineDuplicatedLineCount: 31052,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

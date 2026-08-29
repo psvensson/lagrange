@@ -928,6 +928,10 @@ export async function registerMessageRouterTailTests({
       ws.terminate = () => {
         ws.readyState = 3;
       };
+      const sentFrames = [];
+      ws.send = (frame) => {
+        sentFrames.push(JSON.parse(frame));
+      };
 
       const closedEvents = [];
       router.on('connectionClosed', (event) => {
@@ -947,6 +951,12 @@ export async function registerMessageRouterTailTests({
         router.nodeConnections.get('a-remote-node')?.state,
         ConnectionState.CONNECTED,
         'identified incoming connection should be tracked under the remote node ID',
+      );
+      t.equal(
+        sentFrames.filter((frame) => frame.type === RouterMessageType.IDENTIFY)
+          .length,
+        1,
+        'the adopted primary is answered with this side\'s IDENTIFY',
       );
 
       ws.emit('close');

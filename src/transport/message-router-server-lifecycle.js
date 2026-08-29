@@ -7,6 +7,7 @@ const {
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   TRANSPORT_EVENT,
+  TRANSPORT_NUM,
   WebSocketServer,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
@@ -179,6 +180,7 @@ class MessageRouterServerLifecycle {
       ws,
       state: ConnectionState.CONNECTED,
       nodeId: null,
+      bootIncarnation: TRANSPORT_NUM.ZERO,
       isIncoming: true,
       retired: false,
       createdAt: Date.now(),

@@ -338,7 +338,9 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const node = typeof nodeOrId === 'string' ?
       this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeOrId) :
       nodeOrId;
-    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
+    const startupAuthority = this.getStartupAuthoritySnapshot();
+    const startupAuthorityNodeIds =
+      resolveStartupAuthorityNodeIdSet(startupAuthority);
     return classifyFormationCohortSpreadCureNode({
       node,
       startupAuthorityNodeIds,
@@ -348,6 +350,9 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       priorityRecoveryLane: this.isControlPlanePriorityPartition(),
       priorityRecoveryActive:
         this.isGlobalPriorityControlPlaneRecoveryActive(),
+      formationReleaseHandoffActive:
+        startupAuthority?.formationReleaseHandoff?.active === true &&
+        startupAuthority?.formationReleaseHandoff?.releaseAuthorized === true,
     }) === FORMATION_COHORT_SPREAD_CURE_CLASSIFICATION.CURE_TARGET;
   }
 

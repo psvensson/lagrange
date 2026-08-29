@@ -104,6 +104,8 @@ class MessageRouterInboundDispatch {
   handleIdentification(connectionId, ws, message) {
     const nodeId = message?.nodeId;
     const nodeAddress = message?.nodeAddress || message?.address;
+    const bootIncarnation = this.connectionAuthorityOwner
+      .readIncomingBootIncarnation(message);
     if (!nodeId || !nodeAddress) {
       this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
         connectionId,
@@ -168,14 +170,14 @@ class MessageRouterInboundDispatch {
       if (
         this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
           nodeId,
-          message.bootIncarnation,
+          bootIncarnation,
         )
       ) {
         this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
           connectionId,
           remoteNodeId: nodeId,
           localNodeId: this.nodeId,
-          bootIncarnation: message.bootIncarnation,
+          bootIncarnation,
         });
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
@@ -197,15 +199,19 @@ class MessageRouterInboundDispatch {
       connection.configuredAddress = normalizedAddress;
       this.rememberReconnectAddress(connection, ws, normalizedAddress);
       const adoptionDecision =
-        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(nodeId);
+        this.connectionAuthorityOwner.resolveIncomingConnectionAdoption(
+          nodeId,
+          bootIncarnation,
+        );
       const existing = adoptionDecision.existing;
       if (
         adoptionDecision.state ===
         INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION
       ) {
-        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
           nodeId,
-          message.bootIncarnation,
+          existing,
+          bootIncarnation,
         );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
@@ -245,15 +251,25 @@ class MessageRouterInboundDispatch {
           );
         }
         this.nodeConnections.set(nodeId, connection);
-        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+        this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
           nodeId,
-          message.bootIncarnation,
+          connection,
+          bootIncarnation,
         );
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
           newKey: nodeId,
           localNodeId: this.nodeId,
         });
+        // Identity is bidirectional: only the dialer sends IDENTIFY on open,
+        // so answer the adopted primary with this side's own IDENTIFY. That
+        // reply is the only way the dialer's outbound record learns this
+        // boot's incarnation (formation-release cohort capture reads the
+        // current primary regardless of direction). Sent for a primary
+        // adoption only: never for a bulk socket (forked above), never for a
+        // kept self-connection, and never in reply to a reply (the outbound
+        // branch below binds without answering).
+        this.sendIdentification(connection);
         // Arm the keepalive on the adopted inbound connection. The outbound
         // dialer pings this side; without a ping from this side too, a half-open
         // inbound socket to a peer that died without a clean TCP close (e.g. a
@@ -262,10 +278,6 @@ class MessageRouterInboundDispatch {
         // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
         this.startPingInterval(connection);
       } else {
-        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
-          nodeId,
-          message.bootIncarnation,
-        );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
@@ -282,7 +294,44 @@ class MessageRouterInboundDispatch {
             error: error.message,
           });
         }
+        return;
       }
+    } else if (connection && connection.ws === ws) {
+      // The acceptor's IDENTIFY reply on this side's outbound primary. A
+      // stale reply is fenced exactly like a stale inbound IDENTIFY (the
+      // socket is terminated); a live one binds the peer's incarnation to
+      // the outbound record. The reply is never answered and never re-emits
+      // NODE_CONNECTED/NODE_IDENTIFIED: CONNECTION_ESTABLISHED already
+      // announced this dial.
+      if (
+        this.connectionAuthorityOwner
+          .shouldRefuseStaleBootIncarnationIdentification(
+            nodeId,
+            bootIncarnation,
+          )
+      ) {
+        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
+          connectionId,
+          remoteNodeId: nodeId,
+          localNodeId: this.nodeId,
+          bootIncarnation,
+        });
+        try {
+          ws.terminate();
+        } catch (error) {
+          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+            nodeId,
+            error: error.message,
+          });
+        }
+        return;
+      }
+      this.connectionAuthorityOwner.bindCurrentPrimaryBootIncarnation(
+        nodeId,
+        connection,
+        bootIncarnation,
+      );
+      return;
     }
     if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
       // A bulk-channel IDENTIFY that did not match an incoming record above
