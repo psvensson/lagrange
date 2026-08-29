@@ -1,4 +1,8 @@
-# Owner Interaction Verification
+---
+categories: [owner-interaction]
+---
+
+# Verification Template: Owner Interaction
 
 Use this checklist for changes that touch a registered cross-owner interaction,
 especially a `coupledPairs` entry in `test/shards/impact-contracts.json`.
