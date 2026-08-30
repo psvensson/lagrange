@@ -32,6 +32,9 @@ const traceStubs = () => ({
   // mock `this` does not exercise that read; stub it as a best-effort no-op so
   // the gating/lifecycle behaviour under test stays isolated.
   refreshDeferredPublicationsCacheFromAuthority: async () => {},
+  // The sibling steady-state sweep for the other CDC-propagated tables
+  // (joiner-services-cache-late-row-convergence) rides the same defer tick.
+  refreshDeferredPropagatedCachesFromAuthority: async () => {},
 });
 
 t.test('drive: no-op when this node is NOT the publications leader', async (t) => {

@@ -1,0 +1,413 @@
+diff --git a/scripts/quest-evidence-joiner-services-cache-routing-table-convergence.js b/scripts/quest-evidence-joiner-services-cache-routing-table-convergence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..685d7e38cc46c52832a67ca20c9f8e8b4c58fd6b
+--- /dev/null
++++ b/scripts/quest-evidence-joiner-services-cache-routing-table-convergence.js
+@@ -0,0 +1,93 @@
++// Deterministic evidence harness for the
++// joiner-services-cache-routing-table-convergence quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs each
++// recorded proof command and writes the test-receipt probe artifact
++// (solve/evidence/joiner-services-cache-routing-table-convergence.receipt.json).
++//
++// Receipt honesty (the witness file uses the repo tap shim, so
++// --test-name-pattern is inert: every receipt command runs the WHOLE witness
++// file and a green receipt means the whole file passed, which includes the
++// named scenario — the ids name what the file proves, not an independently
++// selected test): on HEAD (before the cure) the steady-state defer tick
++// re-reads only control_plane_publications, so the
++// late-services-row-converges-after-one-shot-hydration,
++// steady-state-hydration-covers-routing-tables and
++// propagated-sweep-never-throws receipts are RED; the two publications-scoped
++// controls (variant-D convergence and its rate limit) are green on HEAD and
++// must stay green — a cure that turns them red is rejected.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/control-plane/membership-publication-deferred-catchup.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++// One verbatim proof command per scenario. node --test --test-name-pattern
++// selects exactly one top-level witness scenario by its anchored name.
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'late-services-row-converges-after-one-shot-hydration',
++    command: scenarioCommand('^late-services-row-converges'),
++    detail: 'a services row inserted after the joiner\'s one-shot CL-014 ' +
++      'hydration whose leader fan-out update was dropped converges on the ' +
++      'steady-state defer tick (the witnessed tbl-d915-p1 leader row)',
++  }),
++  Object.freeze({
++    id: 'steady-state-hydration-covers-routing-tables',
++    command: scenarioCommand('^steady-state-hydration-covers-routing-tables'),
++    detail: 'the sibling sweep asks for the routing-relevant CDC-propagated ' +
++      'tables (services, partitions, nodes, message_groups, tables, ' +
++      'node_endpoints) with one attempt per table and the catch-up default ' +
++      'local-first/owner-fallback read policy (never the publications pin); ' +
++      'unbounded-growth tables are unreachable by construction',
++  }),
++  Object.freeze({
++    id: 'propagated-sweep-never-throws',
++    command: scenarioCommand('^propagated-sweep-never-throws'),
++    detail: 'a rejected authoritative read fails soft: the defer path is ' +
++      'unaffected and the sweep returns null',
++  }),
++  Object.freeze({
++    id: 'publications-catchup-unchanged',
++    command: scenarioCommand('^CL-001 variant D: a deferring non-write-leader'),
++    detail: 'the variant-D publications convergence through the real defer ' +
++      'path, the real CL-014 hydrate and the real cache merge is unchanged',
++  }),
++  Object.freeze({
++    id: 'publications-cooldown-and-pin-unchanged',
++    command: scenarioCommand('^CL-001 variant D: the deferred catch-up is'),
++    detail: 'the publications sweep keeps its 5000 ms cooldown, its exact ' +
++      'single-table scope and its owner-RPC leader-pinned authority token',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST,
++    detail: 'the whole witness file re-runs with the identical outcome (no ' +
++      'clock, ordering or cooldown-boundary dependence)',
++  }),
++]);
++
++const QUEST_ID = 'joiner-services-cache-routing-table-convergence';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'joiner-services-cache-routing-table-convergence.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/control-plane/membership-publication-coordinator-reconcile.js b/src/control-plane/membership-publication-coordinator-reconcile.js
+index 2822ee36f035b199074fad8aea50ce7c3f74d638..3ad8c9dcedda1db5fcddc360a3d2ddc143e940c6 100644
+--- a/src/control-plane/membership-publication-coordinator-reconcile.js
++++ b/src/control-plane/membership-publication-coordinator-reconcile.js
+@@ -3,6 +3,7 @@ import {
+ } from '../constants/index.js';
+ import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+ import {resolveTimeSource} from '../time/time-source.js';
++import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
+ import {
+   CONTROL_PLANE_CONVERGENCE_CLASS,
+ } from './control-plane-error-classification.js';
+@@ -86,6 +87,43 @@ const MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG =
+   'Deferred non-write-leader publications cache catch-up failed';
+ const DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS = 5000;
+ 
++// CL-014 gap witnessed on GCP run 2026-08-30T15-30-04: the one-shot join-time
++// catch-up hydrates every CDC-propagated system table once, and the steady-state
++// refresh above re-reads ONLY control_plane_publications. A `services` row
++// inserted AFTER a joiner's one-shot hydration whose leader fan-out is dropped
++// ('No row found for CDC update', no repairing event) therefore never converged:
++// the joiner's routing snapshot kept canonicalLeaderServiceCount 0 for the whole
++// run and every distributed write it coordinated to that partition timed out.
++// The remaining propagated tables now ride the same deferral tick behind their
++// own, wider cooldown and the catch-up's default local-first/owner-fallback read
++// policy (the publications leader pin above is publications-specific).
++const MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG =
++  'Deferred non-write-leader propagated cache catch-up failed';
++const DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS = 30000;
++// The sweep is awaited inline on the deferral tick and — because a non-seed node
++// holds no system-table replica — every table costs one owner-RPC read against the
++// seed. It is therefore scoped to the ROUTING-relevant propagated tables (the ones a
++// stale row can strand a distributed write on) and never the unbounded-growth
++// tables (replica_operations, sql_transactions, debug_sessions, latency tables...),
++// with a single attempt per table so a slow owner cannot stall the tick behind
++// retry sleeps. control_plane_publications keeps its own tighter, leader-pinned
++// sweep above.
++const DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE = 1;
++const DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES = Object.freeze([
++  TABLES.SERVICES,
++  TABLES.PARTITIONS,
++  TABLES.NODES,
++  TABLES.MESSAGE_GROUPS,
++  TABLES.TABLES,
++  TABLES.NODE_ENDPOINTS,
++]);
++const DEFERRED_PROPAGATED_CATCHUP_TABLES = Object.freeze(
++  DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES.filter(
++    (tableName) => tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS &&
++      CDC_PROPAGATED_TABLES.includes(tableName),
++  ),
++);
++
+ // Per-tick convergence decision trace. Console-only + debug-level BY DESIGN (see
+ // LoggingService.logConsoleOnly): the owner driver fires every
+ // OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS on the very distributed write path a
+@@ -310,6 +348,43 @@ class MembershipPublicationCoordinatorReconcile extends
+     }
+   }
+ 
++  // The sibling sweep for every OTHER CDC-propagated system table (services,
++  // partitions, nodes, ...). Same deferral tick, own cooldown, default catch-up
++  // read policy, best-effort: a row this node missed in the leader's point-in-time
++  // fan-out converges within one cooldown instead of never. Never throws.
++  async refreshDeferredPropagatedCachesFromAuthority() {
++    const service = this.cdcIntegrationService;
++    if (
++      !service ||
++      typeof service.hydrateCdcPropagatedTablesFromAuthority !== 'function' ||
++      DEFERRED_PROPAGATED_CATCHUP_TABLES.length === 0
++    ) {
++      return null;
++    }
++    const nowMs = typeof this.now === 'function' ? this.now() : Date.now();
++    const lastMs = this._lastDeferredPropagatedCatchupAtMs;
++    if (
++      Number.isFinite(lastMs) &&
++      nowMs - lastMs < DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS
++    ) {
++      return null;
++    }
++    this._lastDeferredPropagatedCatchupAtMs = nowMs;
++    try {
++      return await service.hydrateCdcPropagatedTablesFromAuthority({
++        tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
++        maxAttemptsPerTable:
++          DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
++      });
++    } catch (error) {
++      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
++        nodeId: this.nodeId,
++        error: error?.message || String(error),
++      });
++      return null;
++    }
++  }
++
+   async reconcileClusterMembership(options = {}) {
+     const ownerKey = this.buildOwnerKey();
+     if (shouldDeferMembershipReconcileToWriteLeader(this)) {
+@@ -323,6 +398,7 @@ class MembershipPublicationCoordinatorReconcile extends
+         ownerKey,
+       });
+       await this.refreshDeferredPublicationsCacheFromAuthority();
++      await this.refreshDeferredPropagatedCachesFromAuthority();
+       return {
+         deferred: true,
+         reason: NOT_PUBLICATIONS_WRITE_LEADER_REASON,
+@@ -575,6 +651,7 @@ class MembershipPublicationCoordinatorReconcile extends
+       // local-cache-only + rate-limited + best-effort (never throws) → B4 single-writer
+       // gate intact; a non-leader never writes/promotes/trims via this path.
+       await this.refreshDeferredPublicationsCacheFromAuthority();
++      await this.refreshDeferredPropagatedCachesFromAuthority();
+       return false;
+     }
+     this.assertSingleMembershipPartition();
+@@ -649,6 +726,7 @@ class MembershipPublicationCoordinatorReconcile extends
+         // freshened cache (a node that only wrongly believed it led steps back to the
+         // follower path). Cooldown-gated, best-effort (never throws).
+         await this.refreshDeferredPublicationsCacheFromAuthority();
++        await this.refreshDeferredPropagatedCachesFromAuthority();
+         this._emitConvergenceDecisionTrace({
+           decision: CONVERGENCE_DECISION.SKIP,
+           reason: CONVERGENCE_REASON.NO_DEFICIT,
+diff --git a/test/control-plane/membership-publication-deferred-catchup.test.js b/test/control-plane/membership-publication-deferred-catchup.test.js
+index b039d97cdf3b133699e5a2323e1c9673636ed0b8..398bcd8201215ff3c1ceeac03d8ea063cf308408 100644
+--- a/test/control-plane/membership-publication-deferred-catchup.test.js
++++ b/test/control-plane/membership-publication-deferred-catchup.test.js
+@@ -13,6 +13,7 @@ import {applyCDCIntegrationServiceCacheVisibilityWait} from
+ import {AUTHORITATIVE_READ_SOURCE} from
+   '../../src/cdc/cdc-integration-service-shared-constants.js';
+ import {TABLES} from '../../src/constants/index.js';
++import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
+ import {buildControlPlaneReadAuthority} from
+   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+ import {
+@@ -137,9 +138,13 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
+   const coordinator = makeDeferringCoordinator(
+     {cache: new SystemTableCache(), cdcIntegrationService: spyService, now: () => clock});
+ 
++  const publicationsSweeps = () =>
++    seen.filter((opts) => Array.isArray(opts?.tables) &&
++      opts.tables.includes(PUBLICATIONS));
++
+   await coordinator.reconcileClusterMembership();
+-  t.equal(seen.length, 1, 'the first defer triggers a catch-up');
+-  t.same(seen[0], {
++  t.equal(publicationsSweeps().length, 1, 'the first defer triggers a catch-up');
++  t.same(publicationsSweeps()[0], {
+     tables: [PUBLICATIONS],
+     readAuthority: buildControlPlaneReadAuthority({
+       authoritativeReadMode:
+@@ -152,12 +157,121 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
+ 
+   clock += 4000; // still within the 5000ms cooldown
+   await coordinator.reconcileClusterMembership();
+-  t.equal(seen.length, 1,
++  t.equal(publicationsSweeps().length, 1,
+     'a second defer within the cooldown does NOT issue another authoritative read');
+ 
+   clock += 2000; // now past the cooldown since the last read
+   await coordinator.reconcileClusterMembership();
+-  t.equal(seen.length, 2, 'after the cooldown elapses the catch-up runs again');
++  t.equal(publicationsSweeps().length, 2,
++    'after the cooldown elapses the catch-up runs again');
++});
++
++// GCP run 2026-08-30T15-30-04: the one-shot join-time CL-014 catch-up hydrates every
++// CDC-propagated table once; the publications sweep above re-reads publications only.
++// A `services` row inserted 31 s AFTER a joiner's one-shot hydration, whose leader
++// fan-out update was dropped ('No row found for CDC update', no repairing event),
++// therefore never converged: that joiner's routing snapshot held
++// canonicalLeaderServiceCount 0 for ten minutes and every distributed write it
++// coordinated to the partition timed out. These falsifiers drive the REAL defer
++// branch, the REAL sibling sweep and the REAL CL-014 hydrate.
++test('late-services-row-converges-after-one-shot-hydration: a services row that ' +
++  'landed after the one-shot hydration and missed its fan-out converges on the ' +
++  'steady-state defer tick', async (t) => {
++  const cache = new SystemTableCache();
++  const lateServicesRow = {
++    service_id: 'svc-tbl-d915-p1-leader',
++    partition_id: 'tbl-d915-p1',
++    node_id: '20de1da9',
++    status: 'ACTIVE',
++    role: 'leader',
++  };
++  const service = makeAuthorityService(cache, [lateServicesRow]);
++  service.getPrimaryKeyField = () => 'service_id';
++  const coordinator = makeDeferringCoordinator(
++    {cache, cdcIntegrationService: service, now: () => 5000});
++
++  t.equal(cache.getAll(TABLES.SERVICES).length, 0,
++    'the joiner has no services row for the result-table partition (the fan-out ' +
++    'update was dropped after its one-shot hydration)');
++
++  const result = await coordinator.reconcileClusterMembership();
++  t.equal(result.deferred, true, 'a non-write-leader still defers the reconcile');
++
++  const rows = cache.getAll(TABLES.SERVICES);
++  t.equal(rows.length, 1,
++    'the steady-state defer tick hydrated the missed services row (RED before the ' +
++    'fix: the sweep only ever re-read control_plane_publications)');
++  t.equal(rows[0].partition_id, 'tbl-d915-p1',
++    'the converged row is the canonical leader row the coordinator writes through');
++});
++
++test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for ' +
++  'the routing-relevant CDC-propagated tables, on its own cooldown, with the ' +
++  'default catch-up read policy and one attempt per table', async (t) => {
++  let clock = 1000;
++  const seen = [];
++  const spyService = {
++    hydrateCdcPropagatedTablesFromAuthority: (opts) => {
++      seen.push(opts);
++      return Promise.resolve(null);
++    },
++  };
++  const coordinator = makeDeferringCoordinator(
++    {cache: new SystemTableCache(), cdcIntegrationService: spyService,
++      now: () => clock});
++  const propagatedSweeps = () =>
++    seen.filter((opts) => Array.isArray(opts?.tables) &&
++      !opts.tables.includes(PUBLICATIONS));
++
++  await coordinator.reconcileClusterMembership();
++  t.equal(propagatedSweeps().length, 1, 'the first defer runs the sibling sweep');
++  const swept = propagatedSweeps()[0];
++  t.ok(swept.tables.includes(TABLES.SERVICES),
++    'the services table is swept (the witnessed gap)');
++  t.ok(swept.tables.includes(TABLES.PARTITIONS) &&
++    swept.tables.includes(TABLES.NODES),
++  'the other routing tables a stale row can strand a write on are swept');
++  t.equal(swept.tables.includes(PUBLICATIONS), false,
++    'publications keeps its own tighter, leader-pinned sweep');
++  t.equal(swept.readAuthority, undefined,
++    'the sibling sweep uses the catch-up default local-first/owner-fallback policy, ' +
++    'never the publications leader pin');
++  t.ok(swept.tables.every((tableName) =>
++    CDC_PROPAGATED_TABLES.includes(tableName)),
++  'every swept table is a CDC-propagated table');
++  t.equal(swept.maxAttemptsPerTable, 1,
++    'a single attempt per table: a slow owner cannot stall the deferral tick ' +
++    'behind retry sleeps');
++  t.equal(swept.tables.includes('replica_operations'), false,
++    'unbounded-growth tables are never swept (no routing benefit, full scans)');
++
++  clock += 20000; // still within the 30000ms sibling cooldown
++  await coordinator.reconcileClusterMembership();
++  t.equal(propagatedSweeps().length, 1,
++    'a defer within the sibling cooldown issues no second authoritative read');
++
++  clock += 15000; // past the sibling cooldown
++  await coordinator.reconcileClusterMembership();
++  t.equal(propagatedSweeps().length, 2,
++    'after the sibling cooldown elapses the sweep runs again');
++});
++
++test('propagated-sweep-never-throws: a failing authoritative read fails soft and ' +
++  'still defers', async (t) => {
++  const failing = {
++    hydrateCdcPropagatedTablesFromAuthority: (opts) => (
++      Array.isArray(opts?.tables) && opts.tables.includes(PUBLICATIONS) ?
++        Promise.resolve(null) :
++        Promise.reject(new Error('owner unreachable'))),
++  };
++  const coordinator = makeDeferringCoordinator(
++    {cache: new SystemTableCache(), cdcIntegrationService: failing,
++      now: () => 5000});
++  const result = await coordinator.reconcileClusterMembership();
++  t.equal(result.deferred, true,
++    'a rejected sibling sweep never breaks the defer path');
++  t.equal(await coordinator.refreshDeferredPropagatedCachesFromAuthority(), null,
++    'the failure is recorded and returns null');
+ });
+ 
+ test('CL-001 variant D (re-diagnosis 2026-06-18): the PERIODIC owner-driver pulls a ' +
+diff --git a/test/control-plane/owner-membership-driver.test.js b/test/control-plane/owner-membership-driver.test.js
+index 9a9a340bcf16d80a6fd2be13b8fd16a94a684324..dfe772da014a8f20d9992eb7c0bf926c792ef063 100644
+--- a/test/control-plane/owner-membership-driver.test.js
++++ b/test/control-plane/owner-membership-driver.test.js
+@@ -32,6 +32,9 @@ const traceStubs = () => ({
+   // mock `this` does not exercise that read; stub it as a best-effort no-op so
+   // the gating/lifecycle behaviour under test stays isolated.
+   refreshDeferredPublicationsCacheFromAuthority: async () => {},
++  // The sibling steady-state sweep for the other CDC-propagated tables
++  // (joiner-services-cache-late-row-convergence) rides the same defer tick.
++  refreshDeferredPropagatedCachesFromAuthority: async () => {},
+ });
+ 
+ t.test('drive: no-op when this node is NOT the publications leader', async (t) => {
+diff --git a/test/convergence/dt4-full-chain-scenario.test.js b/test/convergence/dt4-full-chain-scenario.test.js
+index 8d31fc9ad36a77203db0336bd518bf0a725cc729..85ce47642b94dc9710a6112daa5d2ff6996294ca 100644
+--- a/test/convergence/dt4-full-chain-scenario.test.js
++++ b/test/convergence/dt4-full-chain-scenario.test.js
+@@ -80,6 +80,9 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
+     // local cache from authority via this real prototype method; stub it as a
+     // best-effort no-op so the leadership-gate behaviour stays isolated.
+     refreshDeferredPublicationsCacheFromAuthority: async () => {},
++    // Sibling steady-state sweep for the other CDC-propagated tables
++    // (joiner-services-cache-late-row-convergence) on the same defer tick.
++    refreshDeferredPropagatedCachesFromAuthority: async () => {},
+     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
+   };
+ 
+@@ -151,6 +154,9 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
+     // local cache from authority via this real prototype method; stub it as a
+     // best-effort no-op so the leadership-gate behaviour stays isolated.
+     refreshDeferredPublicationsCacheFromAuthority: async () => {},
++    // Sibling steady-state sweep for the other CDC-propagated tables
++    // (joiner-services-cache-late-row-convergence) on the same defer tick.
++    refreshDeferredPropagatedCachesFromAuthority: async () => {},
+     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
+   };
+ 

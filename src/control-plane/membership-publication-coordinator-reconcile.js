@@ -3,6 +3,7 @@ import {
 } from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
@@ -85,6 +86,51 @@ const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
 const MEMBERSHIP_DEFERRED_PUBLICATIONS_CATCHUP_FAILED_MSG =
   'Deferred non-write-leader publications cache catch-up failed';
 const DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS = 5000;
+
+// CL-014 gap witnessed on GCP run 2026-08-30T15-30-04: the one-shot join-time
+// catch-up hydrates every CDC-propagated system table once, and the steady-state
+// refresh above re-reads ONLY control_plane_publications. A `services` row
+// inserted AFTER a joiner's one-shot hydration whose leader fan-out is dropped
+// ('No row found for CDC update', no repairing event) therefore never converged:
+// the joiner's routing snapshot kept canonicalLeaderServiceCount 0 for the whole
+// run and every distributed write it coordinated to that partition timed out.
+// The routing-relevant propagated tables now ride the same deferral tick behind
+// their own, wider cooldown and the catch-up's default local-first/owner-fallback
+// read policy (the publications leader pin above is publications-specific).
+const MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG =
+  'Deferred non-write-leader propagated cache catch-up failed';
+const DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS = 30000;
+// The sweep is awaited inline on the deferral tick and — because a non-seed node
+// holds no system-table replica — every table costs one owner-RPC read against the
+// seed. It is therefore scoped to the ROUTING-relevant propagated tables (the ones a
+// stale row can strand a distributed write on) and never the unbounded-growth
+// tables (replica_operations, sql_transactions, debug_sessions, latency tables...),
+// with a single attempt per table so a slow owner cannot stall the tick behind
+// retry sleeps. control_plane_publications keeps its own tighter, leader-pinned
+// sweep above.
+const DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE = 1;
+// Typed skip/failure outcomes: the sweep never encodes its runtime state as a
+// raw null (system guidelines 4.5). A caller sees why nothing was swept.
+const DEFERRED_PROPAGATED_CATCHUP_OUTCOME = Object.freeze({
+  CATCHUP_UNAVAILABLE:
+    Object.freeze({swept: false, reason: 'catchup_unavailable'}),
+  COOLDOWN_ACTIVE: Object.freeze({swept: false, reason: 'cooldown_active'}),
+  READ_FAILED: Object.freeze({swept: false, reason: 'authoritative_read_failed'}),
+});
+const DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES = Object.freeze([
+  TABLES.SERVICES,
+  TABLES.PARTITIONS,
+  TABLES.NODES,
+  TABLES.MESSAGE_GROUPS,
+  TABLES.TABLES,
+  TABLES.NODE_ENDPOINTS,
+]);
+const DEFERRED_PROPAGATED_CATCHUP_TABLES = Object.freeze(
+  DEFERRED_PROPAGATED_CATCHUP_ROUTING_TABLES.filter(
+    (tableName) => tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS &&
+      CDC_PROPAGATED_TABLES.includes(tableName),
+  ),
+);
 
 // Per-tick convergence decision trace. Console-only + debug-level BY DESIGN (see
 // LoggingService.logConsoleOnly): the owner driver fires every
@@ -310,6 +356,44 @@ class MembershipPublicationCoordinatorReconcile extends
     }
   }
 
+  // The sibling sweep for the routing-relevant CDC-propagated system tables (the
+  // six in DEFERRED_PROPAGATED_CATCHUP_TABLES). Same deferral tick, own cooldown,
+  // one attempt per table, default catch-up read policy, best-effort: a row this
+  // node missed in the leader's point-in-time fan-out converges within one cooldown
+  // instead of never. Never throws; returns a typed outcome.
+  async refreshDeferredPropagatedCachesFromAuthority() {
+    const service = this.cdcIntegrationService;
+    if (
+      !service ||
+      typeof service.hydrateCdcPropagatedTablesFromAuthority !== 'function' ||
+      DEFERRED_PROPAGATED_CATCHUP_TABLES.length === 0
+    ) {
+      return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.CATCHUP_UNAVAILABLE;
+    }
+    const nowMs = typeof this.now === 'function' ? this.now() : Date.now();
+    const lastMs = this._lastDeferredPropagatedCatchupAtMs;
+    if (
+      Number.isFinite(lastMs) &&
+      nowMs - lastMs < DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS
+    ) {
+      return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.COOLDOWN_ACTIVE;
+    }
+    this._lastDeferredPropagatedCatchupAtMs = nowMs;
+    try {
+      return await service.hydrateCdcPropagatedTablesFromAuthority({
+        tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
+        maxAttemptsPerTable:
+          DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
+      });
+    } catch (error) {
+      this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
+        nodeId: this.nodeId,
+        error: error?.message || String(error),
+      });
+      return DEFERRED_PROPAGATED_CATCHUP_OUTCOME.READ_FAILED;
+    }
+  }
+
   async reconcileClusterMembership(options = {}) {
     const ownerKey = this.buildOwnerKey();
     if (shouldDeferMembershipReconcileToWriteLeader(this)) {
@@ -323,6 +407,7 @@ class MembershipPublicationCoordinatorReconcile extends
         ownerKey,
       });
       await this.refreshDeferredPublicationsCacheFromAuthority();
+      await this.refreshDeferredPropagatedCachesFromAuthority();
       return {
         deferred: true,
         reason: NOT_PUBLICATIONS_WRITE_LEADER_REASON,
@@ -575,6 +660,7 @@ class MembershipPublicationCoordinatorReconcile extends
       // local-cache-only + rate-limited + best-effort (never throws) → B4 single-writer
       // gate intact; a non-leader never writes/promotes/trims via this path.
       await this.refreshDeferredPublicationsCacheFromAuthority();
+      await this.refreshDeferredPropagatedCachesFromAuthority();
       return false;
     }
     this.assertSingleMembershipPartition();
@@ -649,6 +735,7 @@ class MembershipPublicationCoordinatorReconcile extends
         // freshened cache (a node that only wrongly believed it led steps back to the
         // follower path). Cooldown-gated, best-effort (never throws).
         await this.refreshDeferredPublicationsCacheFromAuthority();
+        await this.refreshDeferredPropagatedCachesFromAuthority();
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,

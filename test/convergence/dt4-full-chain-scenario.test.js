@@ -80,6 +80,9 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
     // local cache from authority via this real prototype method; stub it as a
     // best-effort no-op so the leadership-gate behaviour stays isolated.
     refreshDeferredPublicationsCacheFromAuthority: async () => {},
+    // Sibling steady-state sweep for the other CDC-propagated tables
+    // (joiner-services-cache-late-row-convergence) on the same defer tick.
+    refreshDeferredPropagatedCachesFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
   };
 
@@ -151,6 +154,9 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
     // local cache from authority via this real prototype method; stub it as a
     // best-effort no-op so the leadership-gate behaviour stays isolated.
     refreshDeferredPublicationsCacheFromAuthority: async () => {},
+    // Sibling steady-state sweep for the other CDC-propagated tables
+    // (joiner-services-cache-late-row-convergence) on the same defer tick.
+    refreshDeferredPropagatedCachesFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
   };
 

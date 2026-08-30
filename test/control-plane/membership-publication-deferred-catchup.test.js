@@ -13,6 +13,7 @@ import {applyCDCIntegrationServiceCacheVisibilityWait} from
 import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {
@@ -137,9 +138,13 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
   const coordinator = makeDeferringCoordinator(
     {cache: new SystemTableCache(), cdcIntegrationService: spyService, now: () => clock});
 
+  const publicationsSweeps = () =>
+    seen.filter((opts) => Array.isArray(opts?.tables) &&
+      opts.tables.includes(PUBLICATIONS));
+
   await coordinator.reconcileClusterMembership();
-  t.equal(seen.length, 1, 'the first defer triggers a catch-up');
-  t.same(seen[0], {
+  t.equal(publicationsSweeps().length, 1, 'the first defer triggers a catch-up');
+  t.same(publicationsSweeps()[0], {
     tables: [PUBLICATIONS],
     readAuthority: buildControlPlaneReadAuthority({
       authoritativeReadMode:
@@ -152,12 +157,127 @@ test('CL-001 variant D: the deferred catch-up is rate-limited to one authoritati
 
   clock += 4000; // still within the 5000ms cooldown
   await coordinator.reconcileClusterMembership();
-  t.equal(seen.length, 1,
+  t.equal(publicationsSweeps().length, 1,
     'a second defer within the cooldown does NOT issue another authoritative read');
 
   clock += 2000; // now past the cooldown since the last read
   await coordinator.reconcileClusterMembership();
-  t.equal(seen.length, 2, 'after the cooldown elapses the catch-up runs again');
+  t.equal(publicationsSweeps().length, 2,
+    'after the cooldown elapses the catch-up runs again');
+});
+
+// GCP run 2026-08-30T15-30-04: the one-shot join-time CL-014 catch-up hydrates every
+// CDC-propagated table once; the publications sweep above re-reads publications only.
+// A `services` row inserted 31 s AFTER a joiner's one-shot hydration, whose leader
+// fan-out update was dropped ('No row found for CDC update', no repairing event),
+// therefore never converged: that joiner's routing snapshot held
+// canonicalLeaderServiceCount 0 for ten minutes and every distributed write it
+// coordinated to the partition timed out. These falsifiers drive the REAL defer
+// branch, the REAL sibling sweep and the REAL CL-014 hydrate.
+test('late-services-row-converges-after-one-shot-hydration: a services row that ' +
+  'landed after the one-shot hydration and missed its fan-out converges on the ' +
+  'steady-state defer tick', async (t) => {
+  const cache = new SystemTableCache();
+  const lateServicesRow = {
+    service_id: 'svc-tbl-d915-p1-leader',
+    partition_id: 'tbl-d915-p1',
+    node_id: '20de1da9',
+    status: 'ACTIVE',
+    role: 'leader',
+  };
+  const service = makeAuthorityService(cache, [lateServicesRow]);
+  service.getPrimaryKeyField = () => 'service_id';
+  const coordinator = makeDeferringCoordinator(
+    {cache, cdcIntegrationService: service, now: () => 5000});
+
+  t.equal(cache.getAll(TABLES.SERVICES).length, 0,
+    'the joiner has no services row for the result-table partition (the fan-out ' +
+    'update was dropped after its one-shot hydration)');
+
+  const result = await coordinator.reconcileClusterMembership();
+  t.equal(result.deferred, true, 'a non-write-leader still defers the reconcile');
+
+  const rows = cache.getAll(TABLES.SERVICES);
+  t.equal(rows.length, 1,
+    'the steady-state defer tick hydrated the missed services row (RED before the ' +
+    'fix: the sweep only ever re-read control_plane_publications)');
+  t.equal(rows[0].partition_id, 'tbl-d915-p1',
+    'the converged row is the canonical leader row the coordinator writes through');
+});
+
+test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for ' +
+  'the routing-relevant CDC-propagated tables, on its own cooldown, with the ' +
+  'default catch-up read policy and one attempt per table', async (t) => {
+  let clock = 1000;
+  const seen = [];
+  const spyService = {
+    hydrateCdcPropagatedTablesFromAuthority: (opts) => {
+      seen.push(opts);
+      return Promise.resolve(null);
+    },
+  };
+  const coordinator = makeDeferringCoordinator(
+    {cache: new SystemTableCache(), cdcIntegrationService: spyService,
+      now: () => clock});
+  const propagatedSweeps = () =>
+    seen.filter((opts) => Array.isArray(opts?.tables) &&
+      !opts.tables.includes(PUBLICATIONS));
+
+  await coordinator.reconcileClusterMembership();
+  t.equal(propagatedSweeps().length, 1, 'the first defer runs the sibling sweep');
+  const swept = propagatedSweeps()[0];
+  t.ok(swept.tables.includes(TABLES.SERVICES),
+    'the services table is swept (the witnessed gap)');
+  t.ok(swept.tables.includes(TABLES.PARTITIONS) &&
+    swept.tables.includes(TABLES.NODES),
+  'the other routing tables a stale row can strand a write on are swept');
+  t.equal(swept.tables.includes(PUBLICATIONS), false,
+    'publications keeps its own tighter, leader-pinned sweep');
+  t.equal(swept.readAuthority, undefined,
+    'the sibling sweep uses the catch-up default local-first/owner-fallback policy, ' +
+    'never the publications leader pin');
+  t.ok(swept.tables.every((tableName) =>
+    CDC_PROPAGATED_TABLES.includes(tableName)),
+  'every swept table is a CDC-propagated table');
+  t.equal(swept.maxAttemptsPerTable, 1,
+    'a single attempt per table: a slow owner cannot stall the deferral tick ' +
+    'behind retry sleeps');
+  t.equal(swept.tables.includes('replica_operations'), false,
+    'unbounded-growth tables are never swept (no routing benefit, full scans)');
+
+  clock += 20000; // still within the 30000ms sibling cooldown
+  await coordinator.reconcileClusterMembership();
+  t.equal(propagatedSweeps().length, 1,
+    'a defer within the sibling cooldown issues no second authoritative read');
+
+  clock += 15000; // past the sibling cooldown
+  await coordinator.reconcileClusterMembership();
+  t.equal(propagatedSweeps().length, 2,
+    'after the sibling cooldown elapses the sweep runs again');
+});
+
+test('propagated-sweep-never-throws: a failing authoritative read fails soft and ' +
+  'still defers', async (t) => {
+  const failing = {
+    hydrateCdcPropagatedTablesFromAuthority: (opts) => (
+      Array.isArray(opts?.tables) && opts.tables.includes(PUBLICATIONS) ?
+        Promise.resolve(null) :
+        Promise.reject(new Error('owner unreachable'))),
+  };
+  let clock = 5000;
+  const coordinator = makeDeferringCoordinator(
+    {cache: new SystemTableCache(), cdcIntegrationService: failing,
+      now: () => clock});
+  const result = await coordinator.reconcileClusterMembership();
+  t.equal(result.deferred, true,
+    'a rejected sibling sweep never breaks the defer path');
+  clock += 40000; // past the sibling cooldown, so this call actually sweeps
+  const outcome =
+    await coordinator.refreshDeferredPropagatedCachesFromAuthority();
+  t.equal(outcome.swept, false,
+    'the failure is recorded and reported as a typed not-swept outcome');
+  t.equal(outcome.reason, 'authoritative_read_failed',
+    'the typed reason names the authoritative read failure (never a raw null)');
 });
 
 test('CL-001 variant D (re-diagnosis 2026-06-18): the PERIODIC owner-driver pulls a ' +
