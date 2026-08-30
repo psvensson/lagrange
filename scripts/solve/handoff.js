@@ -38,7 +38,10 @@ import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
 import {expectedChangeDir} from './change-artifact.js';
-import {recordedAttemptScope} from './landing-union-guard.js';
+import {
+  landingUnionGuard,
+  recordedAttemptScope,
+} from './landing-union-guard.js';
 import {SOLVE_DATA_DIR} from './constants.js';
 import {frontierFilePath, runFrontierCommand, writeFrontier} from './frontier.js';
 import {resolveCoauthorTrailer} from './operator-config.js';
@@ -266,6 +269,13 @@ export function buildHandoff(root, quest, options = {}) {
   // any dirty source path outside this union before the commit is reached).
   const artifactScope = recordedAttemptScope(root, quest, log);
   const questArtifacts = questArtifactPaths(root, quest.id);
+  // Registered generated outputs the union guard found byte-identical to a
+  // fresh regeneration from the exact candidate (the seal this landing's
+  // own refresh rewrote) ride the terminal landing commit, exactly like the
+  // refreshed inventories; a checkpoint applies no union guard and takes
+  // none.
+  const coveredGeneratedPaths = checkpoint ?
+    [] : landingUnionGuard(root, quest, log).coveredGeneratedPaths;
   // A spec-ladder row flipped by this landing (autoCommitQuest, before this
   // call) is owned scope the same way the regenerated frontier board is: dirty
   // exactly when this quest's own landing staled it. Scope inclusion mirrors
@@ -280,6 +290,7 @@ export function buildHandoff(root, quest, options = {}) {
     files: [
       ...questArtifacts.files,
       ...artifactScope.contentObjects,
+      ...coveredGeneratedPaths,
       ...(specLadderPath ? [specLadderPath] : []),
     ],
     diffReferenced: artifactScope.diffReferenced,

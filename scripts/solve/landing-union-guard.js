@@ -20,7 +20,15 @@
 //     intent-to-add). Untracked files are not in the index and never enter
 //     a scope-safe commit, so they are not part of the delta;
 //   - any delta path absent from the union is a typed BLOCKED landing
-//     problem naming the paths: no commit, no verdict, no automatic attempt.
+//     problem naming the paths: no commit, no verdict, no automatic attempt;
+//   - one exception, evaluated only when every uncovered path is a
+//     REGISTERED generated output (generated-dependencies.js: the test
+//     classification manifests and the tracked import-graph seal the
+//     landing's own inventory refresh rewrites between this guard and the
+//     commit gate): such a path is covered when, and only when, its ambient
+//     bytes are byte-identical to a fresh regeneration from the exact
+//     candidate; a stale or unregenerable output stays uncovered and blocks
+//     exactly as any other path.
 // A refused attempt record needs no special case: its paths are simply
 // uncovered until an attempt is honestly recorded and independently verified.
 // An evidence-only landing (empty delta) is unaffected.
@@ -29,11 +37,17 @@ import {spawnSync} from 'node:child_process';
 
 import {
   EVENT_ATTEMPT,
+  GENERATED_OUTPUT_COVERAGE,
   LANDING_UNCOVERED_SOURCE_PATHS_CODE,
   LANDING_UNION_STATUS,
   SOLVE_DATA_DIR,
 } from './constants.js';
 import {inspectChangeArtifact} from './change-artifact.js';
+import {
+  generatedOutputCoverage,
+  isRegisteredGeneratedOutput,
+} from './generated-dependencies.js';
+import {verificationState} from './verification.js';
 
 export {LANDING_UNCOVERED_SOURCE_PATHS_CODE, LANDING_UNION_STATUS};
 const GIT_BINARY = 'git';
@@ -67,9 +81,15 @@ const UNCOVERED_PROBLEM_ACTION =
   '; record an attempt covering these paths (or restore them to HEAD) and ' +
   'obtain its independent verification before landing — a green doneWhen ' +
   'receipt never authorizes a source landing';
+const GENERATED_OUTPUT_PROBLEM_PREFIX =
+  '; registered generated output(s) not byte-identical to a fresh ' +
+  'regeneration from the exact candidate: ';
+const GENERATED_OUTPUT_REASON_OPEN = ' (';
+const GENERATED_OUTPUT_REASON_CLOSE = ')';
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const setAdd = Function.call.bind(Set.prototype.add);
@@ -167,33 +187,70 @@ export function recordedAttemptUnion(root, quest, log) {
   return recordedAttemptScope(root, quest, log).diffReferenced;
 }
 
-function uncoveredProblemMessage(uncoveredPaths) {
+function staleGeneratedOutputDetail(generatedOutputs) {
+  const stale = arrayFilter(generatedOutputs, (entry) =>
+    entry.coverage !== GENERATED_OUTPUT_COVERAGE.FRESH);
+  if (stale.length === 0) return '';
+  return GENERATED_OUTPUT_PROBLEM_PREFIX + arrayJoin(arrayMap(stale, (entry) =>
+    entry.path + GENERATED_OUTPUT_REASON_OPEN + entry.coverage +
+    PATH_LIST_SEPARATOR + entry.reason + GENERATED_OUTPUT_REASON_CLOSE),
+  PATH_LIST_SEPARATOR);
+}
+
+function uncoveredProblemMessage(uncoveredPaths, generatedOutputs) {
   return UNCOVERED_PROBLEM_PREFIX + uncoveredPaths.length +
     UNCOVERED_PROBLEM_DETAIL +
     arrayJoin(uncoveredPaths, PATH_LIST_SEPARATOR) +
-    UNCOVERED_PROBLEM_ACTION;
+    UNCOVERED_PROBLEM_ACTION +
+    staleGeneratedOutputDetail(generatedOutputs);
+}
+
+// Coverage of the uncovered registered generated outputs, evaluated only
+// when nothing else is uncovered: any other uncovered path blocks the
+// landing regardless, so the (producer-running) regeneration is not spent
+// and every uncovered path is named exactly as before.
+function generatedOutputEntries(root, quest, log, uncoveredPaths) {
+  const registered = arrayFilter(uncoveredPaths, isRegisteredGeneratedOutput);
+  if (registered.length === 0 || registered.length !== uncoveredPaths.length) {
+    return [];
+  }
+  const aggregate = verificationState(root, quest, log).aggregate;
+  return generatedOutputCoverage(root, aggregate, registered);
+}
+
+function freshGeneratedPaths(generatedOutputs) {
+  return arrayMap(arrayFilter(generatedOutputs, (entry) =>
+    entry.coverage === GENERATED_OUTPUT_COVERAGE.FRESH), (entry) => entry.path);
 }
 
 export function landingUnionGuard(root, quest, log) {
   const union = recordedAttemptUnion(root, quest, log);
   const delta = workingSourceDelta(root);
-  const uncoveredPaths = arrayFilter(delta.paths,
+  const outsideUnion = arrayFilter(delta.paths,
     (filePath) => !arrayIncludes(union, filePath));
+  const generatedOutputs = generatedOutputEntries(root, quest, log, outsideUnion);
+  const coveredGeneratedPaths = freshGeneratedPaths(generatedOutputs);
+  const uncoveredPaths = arrayFilter(outsideUnion,
+    (filePath) => !arrayIncludes(coveredGeneratedPaths, filePath));
   if (uncoveredPaths.length === 0) {
     return {
       status: LANDING_UNION_STATUS.COVERED,
       union,
       delta: delta.paths,
       uncoveredPaths,
+      coveredGeneratedPaths,
+      generatedOutputs,
     };
   }
   return {
     status: LANDING_UNION_STATUS.UNCOVERED,
     code: LANDING_UNCOVERED_SOURCE_PATHS_CODE,
-    message: uncoveredProblemMessage(uncoveredPaths),
+    message: uncoveredProblemMessage(uncoveredPaths, generatedOutputs),
     union,
     delta: delta.paths,
     uncoveredPaths,
+    coveredGeneratedPaths,
+    generatedOutputs,
   };
 }
 
