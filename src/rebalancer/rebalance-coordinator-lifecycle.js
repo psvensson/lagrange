@@ -375,6 +375,8 @@ class RebalanceCoordinatorLifecycle {
           this.engageOperationLedgerSelfMoveHold(operation),
         disengageOperationLedgerSelfMoveHold: (operation) =>
           this.disengageOperationLedgerSelfMoveHold(operation),
+        releaseOperationLedgerSelfMoveHoldOnLocalTerminal: (operation) =>
+          this.releaseOperationLedgerSelfMoveHoldOnLocalTerminal(operation),
         setTimeoutFn: options.setTimeoutFn,
         clearTimeoutFn: options.clearTimeoutFn,
         replicaOperationDispatchTimeoutMs:

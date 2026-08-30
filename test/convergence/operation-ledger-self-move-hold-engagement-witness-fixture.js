@@ -660,6 +660,10 @@ async function runSelfMovePlannedBeforeAddsScenario(
     startupAuthorityReadyAtMs: null,
     startupAuthority: null,
     planningAnswer: null,
+    // A successor ledger self-move a profile registers after the t+0 REPLACE
+    // (holder-release witness): the target transport witnesses its
+    // CREATE_REPLICA with the same run-cited lifecycle.
+    successorSelfMoveId: null,
     // Profile-owned observations (the fairness fixture records its census
     // attempts, reconcile outcome and second self-move attempt here).
     extras: {},
@@ -1221,11 +1225,15 @@ async function runSelfMovePlannedBeforeAddsScenario(
   // Target (n1) transport boundary: the self-move's CREATE_REPLICA is
   // acknowledged after the run's 14 s creation, reaches ACTIVE 9.6 s later
   // and its source removal terminal 1.5 s after that.
+  const isWitnessedLedgerSelfMove = (operationId) =>
+    operationId === state.selfMove?.operationId ||
+    (state.successorSelfMoveId !== null &&
+      operationId === state.successorSelfMoveId);
   target.workflowOwner.messageRouter.deliver = (targetAddress, request) => {
     const operationId = request?.operationId || null;
     if (
       request?.type !== MESSAGE_TYPE.CREATE_REPLICA ||
-      operationId !== state.selfMove?.operationId
+      !isWitnessedLedgerSelfMove(operationId)
     ) {
       return Promise.resolve({
         acknowledged: true,
@@ -1252,7 +1260,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
           timeSource.setTimeout(() => {
             row.workflow_step = WORKFLOW_STEP.STOPPING;
             row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
-            completeOnSeed(state.selfMove).then(() => {
+            completeOnSeed(operationOf(operationId)).then(() => {
               applySelfMoveTerminalPlacement();
               syncSeedCache();
               state.selfMoveTerminalAtMs = elapsed();
@@ -1390,7 +1398,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
       elapsed,
       isDone: () =>
         typeof profile.isDone === LOCAL_STR_FUNCTION ?
-          profile.isDone({state, exempt, dependentsSpread}) :
+          profile.isDone({state, exempt, dependentsSpread, elapsed}) :
           state.startupAuthorityReadyAtMs !== null &&
             state.ledgerRemoveCompletedAtMs !== null &&
             dependentsSpread(),
@@ -1459,6 +1467,7 @@ export {
   LEADER_REPLICA_INDEX,
   LEDGER_PARTITION_ID,
   LEDGER_TABLE_ID,
+  MOVED_REPLICA_INDEX,
   TARGET_READY_AT_MS,
   buildMove,
   buildUniformNodeReadiness,

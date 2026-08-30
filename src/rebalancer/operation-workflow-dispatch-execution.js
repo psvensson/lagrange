@@ -107,8 +107,9 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   /**
    * Claim a PENDING coordinator-owned operation into SENDING. For a
    * disruptive ledger self-move this is the interlock's ENGAGEMENT point: the
-   * coordinator's synchronous hold is engaged before the durable claim
-   * (operation-workflow-dispatch-ledger-self-move-gate.js) and released back
+   * coordinator's hold is engaged before the durable claim (a foreign holder
+   * is resolved through the coordinator's lifecycle read first;
+   * operation-workflow-dispatch-ledger-self-move-gate.js) and released back
    * to a registered waiter when the claim does not commit.
    * @param {Object} operation
    * @param {Object} [options={}]
@@ -123,11 +124,14 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     ) {
       return null;
     }
-    if (
-      LEDGER_SELF_MOVE_GATE.engageOperationLedgerSelfMoveHoldForClaim(
+    const claimEngagement =
+      await LEDGER_SELF_MOVE_GATE.engageOperationLedgerSelfMoveHoldForClaim(
         this,
         operation,
-      ) === LEDGER_SELF_MOVE_GATE.OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT.PARKED
+      );
+    if (
+      claimEngagement ===
+      LEDGER_SELF_MOVE_GATE.OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT.PARKED
     ) {
       return null;
     }

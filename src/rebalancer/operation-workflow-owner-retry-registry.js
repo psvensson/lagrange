@@ -36,6 +36,9 @@ class OperationWorkflowOwnerRetryRegistry extends
    *   dispatch path's PENDING -> SENDING claim.
    * @param {Function} [options.disengageOperationLedgerSelfMoveHold] -
    *   Coordinator port: release an engagement whose claim did not commit.
+   * @param {Function} [options.releaseOperationLedgerSelfMoveHoldOnLocalTerminal] -
+   *   Coordinator port: the holder's own committed terminal transition on
+   *   this node clears its registration.
    * @param {Function} [options.setTimeoutFn] - Deferred retry timer factory.
    * @param {Function} [options.clearTimeoutFn] - Deferred retry timer cleanup.
    */
@@ -72,6 +75,8 @@ class OperationWorkflowOwnerRetryRegistry extends
       options.engageOperationLedgerSelfMoveHold;
     this.disengageOperationLedgerSelfMoveHold =
       options.disengageOperationLedgerSelfMoveHold;
+    this.releaseOperationLedgerSelfMoveHoldOnLocalTerminal =
+      options.releaseOperationLedgerSelfMoveHoldOnLocalTerminal;
     this.setTimeoutFn =
       typeof options.setTimeoutFn === 'function' ?
         options.setTimeoutFn :

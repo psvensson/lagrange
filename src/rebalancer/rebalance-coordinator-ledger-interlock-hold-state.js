@@ -7,6 +7,7 @@ import {
 import {
   OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT,
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {isTerminalStep} from './replica-operation-progress.js';
 import {
   OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
@@ -41,7 +42,15 @@ const LOCAL_STR_FUNCTION = 'function';
 // window between the SENDING claim and its authoritative visibility. The
 // holder is RELEASED only by its own positive authoritative terminal row:
 // null, failed and deferred reads, rows of other operations, reservation
-// reconciliation and workflow age all keep it held.
+// reconciliation and workflow age all keep it held. Two lanes observe that
+// row: the admission lanes' lifecycle read, and — on a node that only
+// dispatches (never plans) — the engagement point itself, which resolves a
+// holder that is not the engaging self-move through the SAME read before it
+// refuses (HELD_BY_OTHER is a read, never a memory: GCP run 04-49-12 parked
+// the re-planned REPLACE 4f30c060 held_by_other 41 times behind the
+// drain-failed 691efb46 whose FAILED row already existed), and the local
+// terminal settlement of the holder itself (its own failOperation /
+// completeOperation on this node) clears its registration at the commit.
 const OPERATION_LEDGER_SELF_MOVE_HOLD_PHASE = Object.freeze({
   NONE: 'none',
   REGISTERED: 'registered',
@@ -88,6 +97,14 @@ function resolveOperationId(operation) {
   return String(operation?.operationId || EMPTY_STRING).trim();
 }
 
+// A registered or engaged holder that is not the engaging self-move.
+function isHeldByOtherOperationLedgerSelfMove(state, operationId) {
+  return (
+    Boolean(state.heldSelfMoveOperationId) &&
+    state.heldSelfMoveOperationId !== operationId
+  );
+}
+
 class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
   /**
    * @return {Object}
@@ -132,26 +149,29 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
   /**
    * The engagement point of the local dispatch path: called by the workflow
    * owner for a disruptive ledger self-move it is about to claim
-   * PENDING -> SENDING. IDLE_ONLY is re-checked on the synchronous lane (no
-   * dependent create between its gate and its persist), then the hold is
-   * engaged before the durable SENDING claim so a dependent racing the claim
-   * is refused locally even before the claim is authoritatively visible.
+   * PENDING -> SENDING. A holder that is not the engaging self-move is first
+   * resolved through the authoritative lifecycle relation
+   * (tryClearHeldOperationLedgerSelfMove — the one read the admission lanes
+   * already perform): its own positive terminal row releases it, a live
+   * holder keeps refusing, an unresolved read holds. Then IDLE_ONLY is
+   * re-checked on the synchronous lane (no dependent create between its gate
+   * and its persist — re-validated after the read, a TOCTOU window), and the
+   * hold is engaged before the durable SENDING claim so a dependent racing
+   * the claim is refused locally even before the claim is authoritatively
+   * visible.
    * @param {Object} operation
-   * @return {string} OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT member
+   * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT member
    */
-  engageOperationLedgerSelfMoveHold(operation) {
+  async engageOperationLedgerSelfMoveHold(operation) {
     const state = this.getOperationLedgerInterlockAdmissionState();
     const operationId = resolveOperationId(operation);
-    if (
-      state.heldSelfMoveOperationId &&
-      state.heldSelfMoveOperationId !== operationId
-    ) {
-      return OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT.HELD_BY_OTHER;
+    if (isHeldByOtherOperationLedgerSelfMove(state, operationId)) {
+      await this.tryClearHeldOperationLedgerSelfMove(state);
+      if (isHeldByOtherOperationLedgerSelfMove(state, operationId)) {
+        return OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT.HELD_BY_OTHER;
+      }
     }
-    if (
-      state.selfMoveCreateInFlight ||
-      state.otherCreatesInFlight > NO_CREATES_IN_FLIGHT
-    ) {
+    if (!this.isOperationLedgerSelfMoveGateOpen(state)) {
       return OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT.NOT_IDLE;
     }
     state.heldSelfMoveOperationId = operationId;
@@ -178,6 +198,32 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
     ) {
       state.heldSelfMovePhase = OPERATION_LEDGER_SELF_MOVE_HOLD_PHASE.REGISTERED;
     }
+  }
+
+  /**
+   * The local terminal settlement of the holder itself: the workflow owner
+   * on this node committed the registered self-move's own terminal row
+   * (failOperation / completeOperation), so its registration is cleared at
+   * the commit — the same positive terminal evidence the lifecycle read would
+   * observe, without waiting for a lane to read it. Another operation's
+   * terminal, a settlement whose committed step is not terminal for its
+   * type, age and reservation reconciliation never reach this clear.
+   * @param {Object} operation The operation whose terminal transition
+   *   committed on this node (its workflowStep already carries the
+   *   committed terminal step).
+   * @return {void}
+   */
+  releaseOperationLedgerSelfMoveHoldOnLocalTerminal(operation) {
+    const state = this.getOperationLedgerInterlockAdmissionState();
+    const operationId = resolveOperationId(operation);
+    if (
+      operationId.length === 0 ||
+      state.heldSelfMoveOperationId !== operationId ||
+      !isTerminalStep(operation?.type, operation?.workflowStep)
+    ) {
+      return;
+    }
+    this.clearHeldOperationLedgerSelfMove(state);
   }
 
   /**

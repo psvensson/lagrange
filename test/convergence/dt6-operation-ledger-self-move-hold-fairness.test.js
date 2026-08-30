@@ -24,6 +24,8 @@ import {
   CENSUS_READ_FAILS_AT_MS,
   CENSUS_RETRY_CADENCE_MULTIPLIER,
   SELF_MOVE_SENDING_BOUND_MS,
+  admittedWithin,
+  refusalsWithin,
   runDependentsStreamAfterRegistrationScenario,
 } from './operation-ledger-self-move-hold-fairness-witness-fixture.js';
 
@@ -70,27 +72,6 @@ function describeDependents(dependents) {
         )}`,
     )
     .join(' | ');
-}
-
-function refusalsWithin(dependents, fromMs, toMs) {
-  return dependents.flatMap((dependent) =>
-    dependent.refusals
-      .filter((refusal) => refusal.atMs >= fromMs && refusal.atMs < toMs)
-      .map((refusal) => ({tableId: dependent.tableId, ...refusal})),
-  );
-}
-
-function admittedWithin(dependents, fromMs, toMs) {
-  return dependents.flatMap((dependent) =>
-    [dependent.firstRound, dependent.secondRound]
-      .filter(
-        (round) =>
-          round.admittedAtMs !== null &&
-          round.admittedAtMs >= fromMs &&
-          round.admittedAtMs < toMs,
-      )
-      .map((round) => ({tableId: dependent.tableId, atMs: round.admittedAtMs})),
-  );
 }
 
 function assertSelfMoveLifecycleObserved(m) {

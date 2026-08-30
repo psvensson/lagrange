@@ -12,6 +12,9 @@ import {
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
+import {
+  releaseOperationLedgerSelfMoveHoldAfterTerminal,
+} from './operation-workflow-dispatch-ledger-self-move-gate.js';
 
 const {
   ControlPlaneReadinessService,
@@ -402,6 +405,9 @@ class OperationWorkflowTransitionPersistence
     operation.updatedAt = now;
     operation.completedAt = now;
     operation.stepsHistory.push(stepEntry);
+    // The holder's own committed terminal row releases the ledger self-move
+    // hold it registered on this node (a no-op for every other operation).
+    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
 
     await this.releaseReservationForOperation(operation);
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -553,6 +559,9 @@ class OperationWorkflowTransitionPersistence
     operation.completedAt = now;
     operation.errorMessage = normalizedError;
     operation.stepsHistory.push(failedStepEntry);
+    // The holder's own committed terminal row releases the ledger self-move
+    // hold it registered on this node (a no-op for every other operation).
+    releaseOperationLedgerSelfMoveHoldAfterTerminal(this, operation);
 
     await this.releaseReservationForOperation(operation);
     this.clearDeferredSafetyBlockState(operation.operationId);

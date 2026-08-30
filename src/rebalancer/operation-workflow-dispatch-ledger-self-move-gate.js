@@ -53,9 +53,13 @@ const LOCAL_STR_FUNCTION = 'function';
 //   NOT_IDLE      — a dependent create is between the interlock gate and its
 //                   persist on this node (IDLE_ONLY at dispatch admissibility,
 //                   synchronous lane): the claim parks and retries.
-//   HELD_BY_OTHER — a different self-move holds the local interlock: the
-//                   claim parks (fail closed; the authoritative census above
-//                   normally parks such a candidate first).
+//   HELD_BY_OTHER — a different self-move holds the local interlock AFTER
+//                   the coordinator resolved that holder through the
+//                   authoritative lifecycle read (a live holder; an
+//                   unresolved read holds): the claim parks (fail closed; the
+//                   authoritative census above normally parks such a
+//                   candidate first). A holder whose own terminal row exists
+//                   is released by that read and never parks the claim.
 const OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT = Object.freeze({
   ENGAGED: 'engaged',
   NOT_IDLE: 'not_idle',
@@ -217,22 +221,23 @@ async function ensureOperationLedgerSelfMoveDispatchIdleOrSkip(
 
 /**
  * The engagement point: for a PENDING disruptive ledger self-move about to be
- * claimed PENDING -> SENDING, engage the coordinator's synchronous hold
- * through the owner port. NOT_IDLE (a dependent create between its gate and
- * its persist on this node) and HELD_BY_OTHER park the claim through the
- * dispatch retry lane; an owner without the port (no coordinator) proceeds.
+ * claimed PENDING -> SENDING, engage the coordinator's hold through the owner
+ * port (a foreign holder is resolved through the coordinator's lifecycle read
+ * first). NOT_IDLE (a dependent create between its gate and its persist on
+ * this node) and HELD_BY_OTHER park the claim through the dispatch retry
+ * lane; an owner without the port (no coordinator) proceeds.
  * @param {Object} owner
  * @param {Object} operation
- * @return {string} OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT member
+ * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT member
  */
-function engageOperationLedgerSelfMoveHoldForClaim(owner, operation) {
+async function engageOperationLedgerSelfMoveHoldForClaim(owner, operation) {
   if (
     !isPendingOperationLedgerSelfMove(operation) ||
     typeof owner.engageOperationLedgerSelfMoveHold !== LOCAL_STR_FUNCTION
   ) {
     return OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT.PROCEED;
   }
-  const engagement = owner.engageOperationLedgerSelfMoveHold(operation);
+  const engagement = await owner.engageOperationLedgerSelfMoveHold(operation);
   if (engagement === OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT.ENGAGED) {
     return OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT.PROCEED;
   }
@@ -271,12 +276,38 @@ function disengageOperationLedgerSelfMoveHoldAfterClaim(
   owner.disengageOperationLedgerSelfMoveHold(operation);
 }
 
+/**
+ * The owner's committed terminal transition (failOperation /
+ * completeOperation) of a disruptive ledger self-move is the holder's own
+ * positive terminal row: hand it to the coordinator so the registration of
+ * that same self-move clears at the commit instead of waiting for a lifecycle
+ * read (the dispatch-owning node may never run one). Other operations never
+ * reach the port.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {void}
+ */
+function releaseOperationLedgerSelfMoveHoldAfterTerminal(owner, operation) {
+  if (
+    !isDisruptiveOperationLedgerSelfMove(
+      operation?.type,
+      operation?.partitionId,
+    ) ||
+    typeof owner.releaseOperationLedgerSelfMoveHoldOnLocalTerminal !==
+      LOCAL_STR_FUNCTION
+  ) {
+    return;
+  }
+  owner.releaseOperationLedgerSelfMoveHoldOnLocalTerminal(operation);
+}
+
 export {
   OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT,
   buildOperationLedgerSelfMoveRetryError,
   disengageOperationLedgerSelfMoveHoldAfterClaim,
   engageOperationLedgerSelfMoveHoldForClaim,
+  releaseOperationLedgerSelfMoveHoldAfterTerminal,
   ensureOperationLedgerSelfMoveDispatchIdleOrSkip,
   findOperationLedgerSelfMoveConflict,
   isPendingOperationLedgerSelfMove,

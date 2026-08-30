@@ -3,8 +3,10 @@ import {
   isDisruptiveOperationLedgerSelfMove,
 } from '../../src/rebalancer/replica-status.js';
 import {isTerminalStep} from '../../src/rebalancer/replica-operation-progress.js';
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {RESERVATION_STATUS} from '../../src/rebalancer/storage-capacity-constants.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -13,12 +15,14 @@ import {
 import {
   DEFAULT_SCENARIO_PROFILE,
   EXEMPT_TABLE_ID,
+  FORMATION_READINESS_BUDGET_MS,
   JOINER_1_NODE_ID,
   JOINER_3_NODE_ID,
   JOINER_4_NODE_ID,
   LEADER_REPLICA_INDEX,
   LEDGER_PARTITION_ID,
   LEDGER_TABLE_ID,
+  MOVED_REPLICA_INDEX,
   TARGET_READY_AT_MS,
   buildMove,
   buildUniformNodeReadiness,
@@ -119,6 +123,7 @@ const RESERVATION_ESTIMATED_BYTES = 1;
 const UNBOUNDED_RETRY_HINT_MS = Number.MAX_SAFE_INTEGER;
 const SINGLE_ROW = 1;
 const NO_SELF_MOVES = 0;
+const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ID_PREFIX = 'res-';
 const CENSUS_PRESSURE_MESSAGE =
   'In-flight operation owner query indicates control-plane pressure';
@@ -135,13 +140,17 @@ const RESERVATION_EXPIRY_MARKER = 'expires_at';
 // prunes the seed's recent-intent memory of the self-move), and a positive
 // terminal row of a DIFFERENT operation for the interlock's own lifecycle
 // reads (the misattributed ledger read that released the hold).
+// FAILED_READ serves the holder-release witness below: a point read that
+// fails outright (the interlock's unresolved read).
 const POINT_READ_ANSWER = Object.freeze({
   LEDGER: 'ledger',
   EMPTY: 'empty',
+  FAILED_READ: 'failed_read',
   FOREIGN_TERMINAL_ROW: 'foreign_terminal_row',
 });
 const NO_INTERLOCK_READS = 0;
 const SINGLE_INTERLOCK_READ = 1;
+const WITNESS_READ_REFUSED_MESSAGE = 'ledger point read refused by the witness';
 
 const CENSUS_OUTCOME = Object.freeze({
   READ: 'read',
@@ -246,17 +255,19 @@ function observeTargetCensus({target, elapsed, record, extras}) {
   };
 }
 
-// Boundary injection: the seed ledger's answers during the +41 s sequence —
-// the held self-move's point read (empty, then a positive terminal row of a
-// DIFFERENT operation) and the reservation rows the reconcile sweeps.
-function injectSeedLedgerAnswers({
-  seed,
+// Boundary injection: one coordinator's ledger answers — the held
+// self-move's point read (empty, failed, empty off the owner-local lane, or a
+// positive terminal row of a DIFFERENT operation) and the reservation rows
+// the reconcile sweeps. The fairness drive applies it to the seed for the
+// +26 s sequence; the holder-release drive applies it to the target.
+function injectLedgerAnswers({
+  coordinator,
   timeSource,
   elapsed,
   selfMoveId,
   foreignRow,
 }) {
-  const gateway = seed.controlPlaneSystemTableGateway;
+  const gateway = coordinator.controlPlaneSystemTableGateway;
   const control = {
     pointReadAnswer: POINT_READ_ANSWER.LEDGER,
     reservationRowsVisible: false,
@@ -265,16 +276,23 @@ function injectSeedLedgerAnswers({
     // Every answered point read of the held self-move (evidence that the
     // injected answers reached their readers).
     pointReads: [],
+    // Every lifecycle read the coordinator's interlock issued (operation id
+    // and the hold action it resolved to).
+    interlockReads: [],
   };
   // The interlock's lifecycle read (rebalance-coordinator-ledger-interlock-
   // hold-state.js resolveAuthoritativeLedgerSelfMoveHoldAction) is the reader
   // whose answer is the foreign terminal row.
   const originalHoldAction =
-    seed.resolveAuthoritativeLedgerSelfMoveHoldAction.bind(seed);
-  seed.resolveAuthoritativeLedgerSelfMoveHoldAction = async (operationId) => {
+    coordinator.resolveAuthoritativeLedgerSelfMoveHoldAction.bind(coordinator);
+  coordinator.resolveAuthoritativeLedgerSelfMoveHoldAction = async (
+    operationId,
+  ) => {
     control.interlockReadDepth += SINGLE_INTERLOCK_READ;
     try {
-      return await originalHoldAction(operationId);
+      const action = await originalHoldAction(operationId);
+      control.interlockReads.push({atMs: elapsed(), operationId, action});
+      return action;
     } finally {
       control.interlockReadDepth -= SINGLE_INTERLOCK_READ;
     }
@@ -318,6 +336,13 @@ function injectSeedLedgerAnswers({
         if (control.pointReadAnswer === POINT_READ_ANSWER.EMPTY) {
           control.pointReads.push({atMs: elapsed(), answer: POINT_READ_ANSWER.EMPTY});
           return {success: true, rows: []};
+        }
+        if (control.pointReadAnswer === POINT_READ_ANSWER.FAILED_READ) {
+          control.pointReads.push({
+            atMs: elapsed(),
+            answer: POINT_READ_ANSWER.FAILED_READ,
+          });
+          return {success: false, error: WITNESS_READ_REFUSED_MESSAGE};
         }
       }
       if (
@@ -374,8 +399,8 @@ function scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection}) {
       });
   }, TARGET_READY_AT_MS);
   const selfMoveId = () => state.selfMove?.operationId || null;
-  const ledgerAnswers = injectSeedLedgerAnswers({
-    seed,
+  const ledgerAnswers = injectLedgerAnswers({
+    coordinator: seed,
     timeSource,
     elapsed,
     selfMoveId,
@@ -517,10 +542,566 @@ async function runDependentsStreamAfterRegistrationScenario({
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Holder-release witness (quest operation-ledger-self-move-holder-release-on-
+// engagement; GCP run 2026-08-30T04-49-12, forensics barrier-not-released.md).
+// On the DISPATCHING node the interlock's HELD_BY_OTHER was a memory, never a
+// read: the drain-failed REPLACE 691efb46 (fail_priority_recovery_drain_stale
+// 04:52:48.6, authoritative row FAILED) had its stale claim attempt engage the
+// target's hold at 04:52:55.8 (claim refused, holder id retained by the
+// disengage), and the re-planned successor 4f30c060 parked
+// `hold not engaged: held_by_other` 41 times 04:52:57.4-04:53:45.7 until
+// teardown while the cluster-wide census correctly ignored the terminal 691.
+// The dispatch-only target never runs the planner's admission lane, the one
+// lane that read the holder's row.
+//
+// Scenario `failed-holder-does-not-starve-successor` (forensics section 4;
+// offsets from the predecessor's creation, virtual clock):
+//   t+0      seed creates REPLACE A replica_operations-p1 seed -> n1 (r2;
+//            the run's r3 sits on joiner-3 in this placement).
+//   t+3.5 s  the priority ADDs plan (control_plane_publications + the four
+//            dependents); the cpp incumbent acknowledges after 24.0 s and
+//            activates 6 s later (+33.5 s: the run's two back-to-back cpp
+//            ADDs kept the target's census busy until 04:52:53.9 = +38.9 s;
+//            section 4 places A's claim attempt at t+34 s).
+//   t+14 s   n1 READY; n1's real owner parks A at the census behind the
+//            incumbents (`waiting for incumbent operation`).
+//   t+31 s   the target's priority-recovery drain settles A
+//            fail_priority_recovery_drain_stale (age >= PENDING_TIMEOUT_MS
+//            30 s; run: 33.6 s): the real owner failOperation with the
+//            drain's message, exactly recovery-drain.js's settle.
+//   t+34 s   A's retained PENDING dispatch snapshot is re-driven (the run's
+//            claim attempt 7.2 s after the FAILED row): the census is idle,
+//            the hold ENGAGES for A, the compare-and-set is refused against
+//            the FAILED row (`control_plane_pressure_degraded while claiming
+//            priority dispatch transition`, the run's message) -> the claim
+//            does not commit -> the disengage keeps A as the holder
+//            (REGISTERED).
+//   t+36 s   seed re-plans the same REPLACE: the intent identity collides
+//            with A's terminal row and derives successor B (same partition,
+//            same target); n1 drives B's dispatch.
+// RED on HEAD: B parks held_by_other on every attempt (DISPATCH_RETRY_DELAY_MS
+// cadence) until the 60 s window ends; no lifecycle read of A on the target.
+// GREEN: B's first engagement resolves A through exactly one lifecycle read
+// (RELEASE_HOLDER), engages, claims SENDING at +36 s, ACTIVE at +59.6 s, the
+// spread is satisfied inside the 60 s window.
+//
+// Scenario `claim-refused-then-local-settlement` (same drive; the claim
+// refusal and the settlement are ordered as the run's message reads them):
+// from +33.5 s A's claim compare-and-set is refused under pressure (the
+// UPDATE lands zero rows against an unchanged PENDING row: A stays the
+// retained holder, PENDING and live); at +35 s the target's engagement point
+// is probed with a candidate self-move against a live PENDING holder, an
+// empty read, a failed read, a foreign terminal row, the holder's age
+// (>= PENDING_TIMEOUT_MS) and an orphan reservation reconcile — every probe
+// must refuse (HELD_BY_OTHER) and keep A; at +35.5 s the target's drain
+// settles A locally (the real failOperation): RED keeps A registered, GREEN
+// clears the registration at the commit; B is planned at +36 s and claims on
+// its first attempt without any lifecycle read.
+//
+// Scenario `live-sending-holder-refuses` (the fairness drive without the
+// +26 s duplicate injection): at +40 s A is SENDING on the target (claimed
+// +30.x, acknowledged +44.x) and the engagement point is probed with a
+// candidate self-move -> HELD_BY_OTHER, A retained (green before and after).
+//
+// HONEST SCOPE: as the fairness drive (real seed + target coordinators,
+// owners, interlock, startup authority); MODELED: the drain's settle instant
+// (its real terminal transition is executed), the stale dispatch snapshot
+// re-drive, the claim pressure of the second scenario (a zero-row
+// compare-and-set), the probe candidate and the target ledger's injected
+// point-read answers.
+
+const HOLDER_RELEASE_CPP_DISPATCH_ACK_LATENCY_MS = 24_000;
+const DRAIN_SETTLES_HOLDER_AT_MS = 31_000;
+const STALE_CLAIM_REDRIVE_AT_MS = 34_000;
+const SUCCESSOR_PLANNED_AT_MS = 36_000;
+const HOLDER_PROBES_AT_MS = 35_000;
+const LOCAL_SETTLEMENT_AT_MS = 35_500;
+const LIVE_SENDING_PROBE_AT_MS = 40_000;
+const PROBE_CANDIDATE_OPERATION_ID = 'holder-release-probe-self-move';
+// operation-workflow-dispatch-ledger-self-move-gate.js park message prefix
+// of an engagement that did not engage (module-local there).
+const HOLD_NOT_ENGAGED_MESSAGE_PREFIX =
+  'operation-ledger self-move hold not engaged: ';
+const UPDATE_STATEMENT_MARKER = 'UPDATE replica_operations';
+const EXPECTED_STEP_PREDICATE_MARKER = 'AND workflow_step = ?';
+const UPDATE_OPERATION_ID_PARAM_INDEX = 7;
+const ZERO_ROWS_CHANGED = 0;
+
+const {FAILURE_LOG_LEVEL, OPERATION_WORKFLOW_OWNER_LITERAL} =
+  OPERATION_WORKFLOW_OWNER_SHARED;
+
+// How the predecessor's terminal row comes to exist relative to its claim.
+const HOLDER_SETTLEMENT = Object.freeze({
+  DRAIN_ROW_BEFORE_CLAIM: 'drain_row_before_claim',
+  LOCAL_SETTLEMENT_AFTER_CLAIM_REFUSED: 'local_settlement_after_claim_refused',
+});
+
+const HOLDER_PROBE = Object.freeze({
+  LIVE_PENDING_HOLDER: 'live_pending_holder',
+  LIVE_SENDING_HOLDER: 'live_sending_holder',
+  EMPTY_READ: 'empty_read',
+  FAILED_READ: 'failed_read',
+  FOREIGN_TERMINAL_ROW: 'foreign_terminal_row',
+  RESERVATION_RECONCILE: 'reservation_reconcile',
+});
+
+const HOLDER_RELEASE_EVENT = Object.freeze({
+  PREDECESSOR_DRAIN_SETTLED: 'predecessor_drain_settled',
+  PREDECESSOR_STALE_CLAIM: 'predecessor_stale_claim',
+  PREDECESSOR_LOCAL_SETTLEMENT: 'predecessor_local_settlement',
+  SUCCESSOR_PLANNED: 'successor_planned',
+  SUCCESSOR_REFUSED: 'successor_refused',
+  SUCCESSOR_DISPATCH_PARKED: 'successor_dispatch_parked',
+  HOLD_ENGAGEMENT: 'hold_engagement',
+  HOLDER_PROBE: 'holder_probe',
+});
+
+function snapshotHolder(coordinator) {
+  const state = coordinator.getOperationLedgerInterlockAdmissionState();
+  return {
+    operationId: state.heldSelfMoveOperationId,
+    phase: state.heldSelfMovePhase,
+  };
+}
+
+// Real-owner observation: every engagement of the target's interlock hold
+// (the owner port the dispatch claim calls), sync or async as the owner
+// under test returns it — the wrapper never changes its shape.
+function observeTargetEngagements({target, elapsed, record, ledgerAnswers, extras}) {
+  const original = target.engageOperationLedgerSelfMoveHold.bind(target);
+  target.engageOperationLedgerSelfMoveHold = (operation) => {
+    const attempt = {
+      atMs: elapsed(),
+      operationId: operation?.operationId || null,
+      holderBefore: snapshotHolder(target),
+      interlockReadsBefore: ledgerAnswers.interlockReads.length,
+    };
+    const settle = (engagement) => {
+      attempt.engagement = engagement;
+      attempt.holderAfter = snapshotHolder(target);
+      attempt.interlockReads = ledgerAnswers.interlockReads.slice(
+        attempt.interlockReadsBefore,
+      );
+      extras.engagements.push(attempt);
+      record(HOLDER_RELEASE_EVENT.HOLD_ENGAGEMENT, {
+        operationId: attempt.operationId,
+        engagement,
+        holderAfter: attempt.holderAfter,
+      });
+      return engagement;
+    };
+    const outcome = original(operation);
+    return typeof outcome?.then === LOCAL_STR_FUNCTION ?
+      outcome.then(settle) :
+      settle(outcome);
+  };
+}
+
+// Boundary injection: while armed, the predecessor's PENDING -> SENDING
+// compare-and-set lands zero rows against an unchanged PENDING row (the
+// pressure ambiguity the claim re-arms through the dispatch retry lane).
+function injectClaimWriteRefusal({target, selfMoveId, extras}) {
+  const gateway = target.controlPlaneSystemTableGateway;
+  const original = gateway.executeQuery.bind(gateway);
+  const control = {armed: false};
+  gateway.executeQuery = async (sql, params, ...rest) => {
+    if (
+      control.armed &&
+      String(sql).includes(UPDATE_STATEMENT_MARKER) &&
+      String(sql).includes(EXPECTED_STEP_PREDICATE_MARKER) &&
+      params?.[UPDATE_OPERATION_ID_PARAM_INDEX] === selfMoveId()
+    ) {
+      extras.refusedClaimWrites += SINGLE_ROW;
+      return {success: true, changes: ZERO_ROWS_CHANGED};
+    }
+    return original(sql, params, ...rest);
+  };
+  return control;
+}
+
+function buildProbeCandidate() {
+  return {
+    operationId: PROBE_CANDIDATE_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: LEDGER_PARTITION_ID,
+    targetNodeId: JOINER_1_NODE_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+  };
+}
+
+function scheduleHolderReleaseExtras(context, {settlement}) {
+  const {timeSource, elapsed, record, seed, target, state, trackedOperations,
+    publicationRow} = context;
+  const extras = state.extras;
+  extras.census = {attempts: []};
+  extras.settlement = settlement;
+  extras.engagements = [];
+  extras.probes = [];
+  extras.refusedClaimWrites = NO_INTERLOCK_READS;
+  extras.drainSettlement = null;
+  extras.staleClaim = null;
+  extras.localSettlement = null;
+  extras.successor = {
+    plannedAtMs: null,
+    createdAtMs: null,
+    operationId: null,
+    refusals: [],
+    parks: [],
+  };
+  extras.pendingTimeoutMs = target.config.pendingTimeoutMs;
+  observeTargetCensus({target, elapsed, record, extras});
+  const selfMoveId = () => state.selfMove?.operationId || null;
+  const rowOf = (operationId) => trackedOperations.get(operationId) || null;
+  const ledgerAnswers = injectLedgerAnswers({
+    coordinator: target,
+    timeSource,
+    elapsed,
+    selfMoveId,
+    foreignRow: () =>
+      [...trackedOperations.values()].find(
+        (row) =>
+          row.partition_id !== LEDGER_PARTITION_ID &&
+          isTerminalStep(row.type, row.workflow_step),
+      ),
+  });
+  extras.interlockReads = ledgerAnswers.interlockReads;
+  extras.pointReads = ledgerAnswers.pointReads;
+  observeTargetEngagements({target, elapsed, record, ledgerAnswers, extras});
+  const claimWriteRefusal = injectClaimWriteRefusal({target, selfMoveId, extras});
+  const originalPark = target.workflowOwner.parkOperationLedgerSelfMoveDispatch
+    .bind(target.workflowOwner);
+  target.workflowOwner.parkOperationLedgerSelfMoveDispatch = (
+    operation,
+    reason,
+    errorMessage,
+    ...rest
+  ) => {
+    if (operation?.operationId === extras.successor.operationId) {
+      extras.successor.parks.push({atMs: elapsed(), reason, errorMessage});
+      record(HOLDER_RELEASE_EVENT.SUCCESSOR_DISPATCH_PARKED, {
+        reason,
+        errorMessage,
+      });
+    }
+    return originalPark(operation, reason, errorMessage, ...rest);
+  };
+
+  // The drain's settle of the predecessor: the real owner terminal
+  // transition on the target with the drain's message
+  // (operation-workflow-recovery-drain.js, FAIL_PRIORITY_RECOVERY_DRAIN_STALE).
+  const settlePredecessorAsDrainStale = async () =>
+    target.failOperation(
+      target.repository.rowToOperation(rowOf(selfMoveId())),
+      OPERATION_WORKFLOW_OWNER_LITERAL
+        .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
+      {logLevel: FAILURE_LOG_LEVEL.WARN},
+    );
+  const describeRow = (operationId) => {
+    const row = rowOf(operationId);
+    return row ? {step: row.workflow_step, status: row.status} : null;
+  };
+
+  const runDrainRowBeforeClaim = () => {
+    let staleSnapshot = null;
+    timeSource.setTimeout(() => {
+      staleSnapshot = target.repository.rowToOperation({...rowOf(selfMoveId())});
+      settlePredecessorAsDrainStale().then((outcome) => {
+        extras.drainSettlement = {
+          atMs: elapsed(),
+          ageMs: elapsed(),
+          committed: outcome?.committed === true,
+          disposition: outcome?.disposition || null,
+          row: describeRow(selfMoveId()),
+          targetHolder: snapshotHolder(target),
+        };
+        record(HOLDER_RELEASE_EVENT.PREDECESSOR_DRAIN_SETTLED, extras.drainSettlement);
+      });
+    }, DRAIN_SETTLES_HOLDER_AT_MS);
+    timeSource.setTimeout(() => {
+      const holderBefore = snapshotHolder(target);
+      target.dispatchOperation(staleSnapshot).then((result) => {
+        extras.staleClaim = {
+          atMs: elapsed(),
+          holderBefore,
+          holderAfter: snapshotHolder(target),
+          skipReason: result?.skipReason || result?.reason || null,
+          error: result?.error || null,
+          row: describeRow(selfMoveId()),
+        };
+        record(HOLDER_RELEASE_EVENT.PREDECESSOR_STALE_CLAIM, extras.staleClaim);
+      });
+    }, STALE_CLAIM_REDRIVE_AT_MS);
+  };
+
+  const probeEngagement = async (probe, configure) => {
+    const holderBefore = snapshotHolder(target);
+    const readsBefore = ledgerAnswers.interlockReads.length;
+    configure();
+    let engagement = null;
+    let reconcile = null;
+    try {
+      if (probe === HOLDER_PROBE.RESERVATION_RECONCILE) {
+        reconcile = await target.reconcileReservations();
+      } else {
+        engagement = await target.engageOperationLedgerSelfMoveHold(
+          buildProbeCandidate(),
+        );
+      }
+    } finally {
+      ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.LEDGER;
+      ledgerAnswers.interlockForeignRow = false;
+      ledgerAnswers.reservationRowsVisible = false;
+    }
+    const observation = {
+      probe,
+      atMs: elapsed(),
+      engagement,
+      orphansReleased: reconcile?.orphansReleased ?? null,
+      holderBefore,
+      holderAfter: snapshotHolder(target),
+      holderRow: describeRow(holderBefore.operationId),
+      holderAgeMs: elapsed(),
+      interlockReads: ledgerAnswers.interlockReads.slice(readsBefore),
+    };
+    extras.probes.push(observation);
+    record(HOLDER_RELEASE_EVENT.HOLDER_PROBE, {
+      probe,
+      engagement,
+      holderAfter: observation.holderAfter,
+    });
+  };
+  const runHolderProbes = async () => {
+    await probeEngagement(HOLDER_PROBE.LIVE_PENDING_HOLDER, () => {});
+    await probeEngagement(HOLDER_PROBE.EMPTY_READ, () => {
+      ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.EMPTY;
+    });
+    await probeEngagement(HOLDER_PROBE.FAILED_READ, () => {
+      ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.FAILED_READ;
+    });
+    await probeEngagement(HOLDER_PROBE.FOREIGN_TERMINAL_ROW, () => {
+      ledgerAnswers.interlockForeignRow = true;
+    });
+    await probeEngagement(HOLDER_PROBE.RESERVATION_RECONCILE, () => {
+      ledgerAnswers.pointReadAnswer = POINT_READ_ANSWER.EMPTY;
+      ledgerAnswers.reservationRowsVisible = true;
+    });
+  };
+  const runLocalSettlementAfterClaimRefused = () => {
+    claimWriteRefusal.armed = true;
+    timeSource.setTimeout(() => {
+      runHolderProbes().catch((error) => {
+        record(HOLDER_RELEASE_EVENT.HOLDER_PROBE, {error: error.message});
+      });
+    }, HOLDER_PROBES_AT_MS);
+    timeSource.setTimeout(() => {
+      claimWriteRefusal.armed = false;
+      const holderBefore = snapshotHolder(target);
+      settlePredecessorAsDrainStale().then((outcome) => {
+        extras.localSettlement = {
+          atMs: elapsed(),
+          ageMs: elapsed(),
+          committed: outcome?.committed === true,
+          disposition: outcome?.disposition || null,
+          row: describeRow(selfMoveId()),
+          holderBefore,
+          holderAfter: snapshotHolder(target),
+        };
+        record(
+          HOLDER_RELEASE_EVENT.PREDECESSOR_LOCAL_SETTLEMENT,
+          extras.localSettlement,
+        );
+      });
+    }, LOCAL_SETTLEMENT_AT_MS);
+  };
+
+  // The seed's re-plan of the same REPLACE intent: A's terminal row collides
+  // with the identity and the successor B is derived; n1 drives B's dispatch
+  // (the readiness capture admits the row to the owner).
+  const planSuccessor = async () => {
+    extras.successor.plannedAtMs = elapsed();
+    try {
+      const operation = await seed.createOperation(
+        buildMove({
+          publicationEpoch: publicationRow().publication_epoch,
+          type: OperationType.REPLACE,
+          tableId: LEDGER_TABLE_ID,
+          targetNodeId: JOINER_1_NODE_ID,
+          replicaIndex: MOVED_REPLICA_INDEX,
+        }),
+      );
+      extras.successor.createdAtMs = elapsed();
+      extras.successor.operationId = operation.operationId;
+      state.successorSelfMoveId = operation.operationId;
+      record(HOLDER_RELEASE_EVENT.SUCCESSOR_PLANNED, {
+        distinctFromPredecessor: operation.operationId !== selfMoveId(),
+      });
+      target
+        .dispatchOperation(target.repository.rowToOperation(rowOf(operation.operationId)))
+        .catch((error) => {
+          record(HOLDER_RELEASE_EVENT.SUCCESSOR_DISPATCH_PARKED, {error: error.message});
+        });
+    } catch (error) {
+      if (!isTypedRetryableSkip(error)) {
+        throw error;
+      }
+      extras.successor.refusals.push({atMs: elapsed(), reason: skipReasonOf(error)});
+      record(HOLDER_RELEASE_EVENT.SUCCESSOR_REFUSED, {reason: skipReasonOf(error)});
+    }
+  };
+
+  if (settlement === HOLDER_SETTLEMENT.DRAIN_ROW_BEFORE_CLAIM) {
+    runDrainRowBeforeClaim();
+  } else {
+    runLocalSettlementAfterClaimRefused();
+  }
+  timeSource.setTimeout(() => {
+    planSuccessor().catch((error) => {
+      record(HOLDER_RELEASE_EVENT.SUCCESSOR_REFUSED, {error: error.message});
+    });
+  }, SUCCESSOR_PLANNED_AT_MS);
+}
+
+// Done when the successor reached terminal and the dependents' second spread
+// round it released has been created (no create mid-flight at shutdown), or
+// the 60 s certification window closed without the successor ever being sent
+// (RED on HEAD).
+function isHolderReleaseScenarioDone({state, dependentsSpread, elapsed}) {
+  const successorId = state.extras.successor?.operationId || null;
+  if (
+    successorId !== null &&
+    state.selfMoveTerminalAtMs !== null &&
+    dependentsSpread()
+  ) {
+    return true;
+  }
+  return (
+    elapsed() >= FORMATION_READINESS_BUDGET_MS &&
+    state.selfMoveSentAtMs === null
+  );
+}
+
+function buildHolderReleaseScenarioProfile({settlement}) {
+  return Object.freeze({
+    ...DEFAULT_SCENARIO_PROFILE,
+    ledgerThirdReplicaNodeId: JOINER_3_NODE_ID,
+    dispatchAckLatencyMsByTableId: Object.freeze({
+      [EXEMPT_TABLE_ID]: HOLDER_RELEASE_CPP_DISPATCH_ACK_LATENCY_MS,
+    }),
+    buildNodeReadiness: buildRecoveryPendingNodeReadiness,
+    exemptSecondRound: null,
+    placementFollowsSelfMoveActive: true,
+    ledgerSpreadAddOnTerminal: false,
+    scheduleExtras: (context) =>
+      scheduleHolderReleaseExtras(context, {settlement}),
+    isDone: isHolderReleaseScenarioDone,
+  });
+}
+
+async function runFailedHolderDoesNotStarveSuccessorScenario() {
+  return runSelfMovePlannedBeforeAddsScenario(
+    buildHolderReleaseScenarioProfile({
+      settlement: HOLDER_SETTLEMENT.DRAIN_ROW_BEFORE_CLAIM,
+    }),
+  );
+}
+
+async function runClaimRefusedThenLocalSettlementScenario() {
+  return runSelfMovePlannedBeforeAddsScenario(
+    buildHolderReleaseScenarioProfile({
+      settlement: HOLDER_SETTLEMENT.LOCAL_SETTLEMENT_AFTER_CLAIM_REFUSED,
+    }),
+  );
+}
+
+// The fairness drive (no duplicate injection) with one probe of the target's
+// engagement point while its holder A is SENDING.
+function scheduleLiveSendingProbeExtras(context) {
+  scheduleFairnessExtras(context, {withDuplicateSelfMoveInjection: false});
+  const {timeSource, elapsed, record, target, state, trackedOperations} = context;
+  const extras = state.extras;
+  extras.probes = [];
+  const ledgerAnswers = injectLedgerAnswers({
+    coordinator: target,
+    timeSource,
+    elapsed,
+    selfMoveId: () => state.selfMove?.operationId || null,
+    foreignRow: () => null,
+  });
+  timeSource.setTimeout(() => {
+    const holderBefore = snapshotHolder(target);
+    const readsBefore = ledgerAnswers.interlockReads.length;
+    Promise.resolve(
+      target.engageOperationLedgerSelfMoveHold(buildProbeCandidate()),
+    ).then((engagement) => {
+      const row = trackedOperations.get(holderBefore.operationId) || null;
+      extras.probes.push({
+        probe: HOLDER_PROBE.LIVE_SENDING_HOLDER,
+        atMs: elapsed(),
+        engagement,
+        holderBefore,
+        holderAfter: snapshotHolder(target),
+        holderRow: row ? {step: row.workflow_step, status: row.status} : null,
+        interlockReads: ledgerAnswers.interlockReads.slice(readsBefore),
+      });
+      record(HOLDER_RELEASE_EVENT.HOLDER_PROBE, {
+        probe: HOLDER_PROBE.LIVE_SENDING_HOLDER,
+        engagement,
+      });
+    });
+  }, LIVE_SENDING_PROBE_AT_MS);
+}
+
+async function runLiveSendingHolderProbeScenario() {
+  return runSelfMovePlannedBeforeAddsScenario(
+    Object.freeze({
+      ...buildFairnessScenarioProfile({withDuplicateSelfMoveInjection: false}),
+      scheduleExtras: scheduleLiveSendingProbeExtras,
+    }),
+  );
+}
+
+// Assertion helpers shared by the fairness and holder-release witnesses:
+// the dependents' refusals / admissions inside one window of the drive.
+function refusalsWithin(dependents, fromMs, toMs) {
+  return dependents.flatMap((dependent) =>
+    dependent.refusals
+      .filter((refusal) => refusal.atMs >= fromMs && refusal.atMs < toMs)
+      .map((refusal) => ({tableId: dependent.tableId, ...refusal})),
+  );
+}
+
+function admittedWithin(dependents, fromMs, toMs) {
+  return dependents.flatMap((dependent) =>
+    [dependent.firstRound, dependent.secondRound]
+      .filter(
+        (round) =>
+          round.admittedAtMs !== null &&
+          round.admittedAtMs >= fromMs &&
+          round.admittedAtMs < toMs,
+      )
+      .map((round) => ({tableId: dependent.tableId, atMs: round.admittedAtMs})),
+  );
+}
+
 export {
   CENSUS_OUTCOME,
   CENSUS_READ_FAILS_AT_MS,
   CENSUS_RETRY_CADENCE_MULTIPLIER,
+  DRAIN_SETTLES_HOLDER_AT_MS,
+  HOLDER_PROBE,
+  HOLDER_SETTLEMENT,
+  HOLD_NOT_ENGAGED_MESSAGE_PREFIX,
+  LOCAL_SETTLEMENT_AT_MS,
+  POINT_READ_ANSWER,
   SELF_MOVE_SENDING_BOUND_MS,
+  STALE_CLAIM_REDRIVE_AT_MS,
+  SUCCESSOR_PLANNED_AT_MS,
+  admittedWithin,
+  refusalsWithin,
+  runClaimRefusedThenLocalSettlementScenario,
   runDependentsStreamAfterRegistrationScenario,
+  runFailedHolderDoesNotStarveSuccessorScenario,
+  runLiveSendingHolderProbeScenario,
 };

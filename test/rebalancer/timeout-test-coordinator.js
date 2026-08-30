@@ -57,6 +57,11 @@ function createTimeoutTestCoordinator(options = {}) {
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
         const row = buildInsertedRow(sql, params);
+        // The canonical insert is OR-IGNORE idempotent: an existing row is
+        // never overwritten and the insert lands zero changes.
+        if (trackedOperations.has(row.operation_id)) {
+          return {success: true, changes: 0};
+        }
         trackedOperations.set(row.operation_id, row);
         return {success: true};
       }
@@ -64,10 +69,24 @@ function createTimeoutTestCoordinator(options = {}) {
       if (sql.includes('UPDATE replica_operations')) {
         const [
           status, workflowStep, updatedAt, completedAt, errorMessage,
-          stepsHistory, replicaId, operationId,
+          stepsHistory, replicaId, operationId, expectedWorkflowStep,
         ] = params;
 
         const existing = trackedOperations.get(operationId);
+        // The durable row's own guards (replica-operation-repository.js
+        // UPDATE_OPERATION_EXPECTING_STEP / UPDATE_OPERATION_TERMINAL): an
+        // expected-step compare-and-set and the first-terminal-wins guard
+        // change zero rows instead of clobbering, exactly as the SQL does.
+        if (
+          existing &&
+          ((sql.includes('AND workflow_step = ?') &&
+            existing.workflow_step !== expectedWorkflowStep) ||
+            (sql.includes('AND completed_at IS NULL') &&
+              existing.completed_at !== null &&
+              existing.completed_at !== undefined))
+        ) {
+          return {success: true, changes: 0};
+        }
         if (existing) {
           trackedOperations.set(operationId, {
             ...existing,
