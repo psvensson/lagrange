@@ -31,7 +31,12 @@ function main() {
     process.exit(1);
   }
 
-  console.log(LOCAL_STR_HOOKS_INSTALLED_REPO_HOOKS_AT_GITHOOKS);
+  // stderr, not stdout: this runs as the npm `prepare` lifecycle, so anything
+  // written to stdout lands inside `npm pack --json` output and breaks its
+  // parse — which is exactly how the 0.2 package-npm release receipt failed
+  // ("npm pack did not return one JSON artifact: Unexpected token 'h',
+  // \"[hooks] Ins\"..."). The two failure paths above already use stderr.
+  console.error(LOCAL_STR_HOOKS_INSTALLED_REPO_HOOKS_AT_GITHOOKS);
 }
 
 main();
