@@ -8,6 +8,7 @@ import {runPostgresBaseline} from './run-postgres-baseline.js';
 import {
   writeAffinityDemoLiveReport,
 } from './affinity-demo-live-report.js';
+import {buildAffinityDemoReportError} from './affinity-demo-report-error.js';
 
 const REPORT_DIR = resolve('test-output/reports');
 const REPORT_SCENARIO = 'movielens-three-way-affinity-demo-live';
@@ -52,10 +53,13 @@ function buildComparison(postgres, lagrange) {
   };
 }
 
-async function writeComparisonReport(comparison, error = null) {
-  const timestamp = new Date().toISOString();
+function buildComparisonReport({
+  timestamp = new Date().toISOString(),
+  comparison = null,
+  error = null,
+} = {}) {
   const passed = comparison?.resultsIdentical === true && !error;
-  const report = {
+  return {
     timestamp,
     scenario: REPORT_SCENARIO,
     producer: 'movielens-three-way-comparison',
@@ -67,10 +71,15 @@ async function writeComparisonReport(comparison, error = null) {
         scenario: REPORT_SCENARIO,
         passed,
         current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
-        detail: {comparison, error: error?.message || null},
+        detail: {comparison, ...buildAffinityDemoReportError(error)},
       }],
     },
   };
+}
+
+async function writeComparisonReport(comparison, error = null) {
+  const report = buildComparisonReport({comparison, error});
+  const {timestamp} = report;
   await mkdir(REPORT_DIR, {recursive: true});
   const stamp = timestamp.replace(/[:.]/g, '-');
   const path = resolve(
@@ -129,4 +138,9 @@ if (isMainModule) {
     });
 }
 
-export {buildComparison, rankingsEqual, runComparison};
+export {
+  buildComparison,
+  buildComparisonReport,
+  rankingsEqual,
+  runComparison,
+};

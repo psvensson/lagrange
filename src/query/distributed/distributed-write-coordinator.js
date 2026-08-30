@@ -26,6 +26,27 @@ const UNARY_PLUS = '+';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
 
+// One log line per failed fan-out: the operation identity plus the
+// partition/service ids and error codes of every failed participant, so the
+// server log names what the client envelope names.
+function buildParticipantFailureLogContext(plan, participantFailures) {
+  return {
+    operation: plan.statementType,
+    operationId: plan.operationId,
+    idempotencyKey: plan.idempotencyKey,
+    failedParticipantCount: participantFailures.length,
+    failedPartitions: participantFailures.map((entry) => entry.partitionId),
+    participantFailures: participantFailures.map((entry) => ({
+      partitionId: entry.partitionId,
+      participantNodeId: entry.participantNodeId,
+      participantAddress: entry.participantAddress,
+      errorCode: entry.errorCode,
+      error: entry.error,
+      failedTable: entry.failedTable,
+    })),
+  };
+}
+
 /**
  * Canonical owner for distributed INSERT/UPDATE/DELETE execution.
  */
@@ -266,6 +287,10 @@ class DistributedWriteCoordinator {
           participantFailures.length > 0 ?
             participantFailures[0] :
             null;
+      this.logger.warn(
+        QUERY_LOG_MSG.DISTRIBUTED_WRITE_PARTICIPANT_FAILURES,
+        buildParticipantFailureLogContext(plan, participantFailures),
+      );
       const retryAfterMs = participantFailures.reduce(
         (maxRetryAfterMs, result) => {
           if (!Number.isFinite(result?.retryAfterMs) ||

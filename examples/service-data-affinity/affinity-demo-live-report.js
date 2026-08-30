@@ -1,5 +1,6 @@
 import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {buildAffinityDemoReportError} from './affinity-demo-report-error.js';
 
 const REPORT_DIR = 'test-output/reports';
 const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
@@ -28,7 +29,7 @@ function buildReportDetail(result, error, phaseEvidence, hostScheduling) {
       NOT_OBSERVED_ADMISSION,
     ),
     hostScheduling,
-    error: error?.message || null,
+    ...buildAffinityDemoReportError(error),
   };
 }
 

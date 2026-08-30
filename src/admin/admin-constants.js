@@ -290,6 +290,10 @@ const ADMIN_CACHE_DUMP = Object.freeze({
 
 const ADMIN_QUERY_RESULT = Object.freeze({
   AFFECTED_ROWS_DEFAULT: 0,
+  // Bound on the per-participant failure entries an error envelope carries;
+  // the envelope records how many entries the bound dropped.
+  PARTICIPANT_FAILURES_LIMIT: 8,
+  PARTICIPANT_FAILURES_OMITTED_COUNT_DEFAULT: 0,
 });
 
 const CONSISTENCY_MISMATCH_KIND = Object.freeze({
