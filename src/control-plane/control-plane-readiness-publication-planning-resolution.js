@@ -438,9 +438,12 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
   ) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.membershipPublicationPlanningSnapshotMemoByNodeId;
-    // Same floored-generation key as the projection memo: the raw per-write
-    // revision rotated between consecutive reads under formation churn and
-    // made this memo miss per call, minting fresh merge identities.
+    // Same version key as the projection memo: the floored planning
+    // generation with the live publication (epoch, status) folded in. The raw
+    // per-write revision rotated between consecutive reads under formation
+    // churn and made this memo miss per call, minting fresh merge identities;
+    // the publication component keeps the freshness the removed live veto
+    // enforced, without a probe-forced miss on the hit path.
     const sourceGeneration =
       this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
@@ -448,20 +451,17 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       if (
         cached &&
         cached.fn === this.resolveMembershipPublicationPlanningSnapshot &&
-        cached.sourceGeneration === sourceGeneration &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
+        ) &&
+        this.membershipPublicationPlanningMemoVersionKeyMatches(
+          cached.versionKey,
+          memoKey,
+          sourceGeneration,
         )
       ) {
-        if (
-          !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
-            memoKey,
-            cached.publicationProbe,
-          )
-        ) {
-          return cached.projection;
-        }
+        return cached.projection;
       }
     }
     const capturedAtMs = this.now();
@@ -475,9 +475,10 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
-        sourceGeneration,
-        publicationProbe:
-          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
+        versionKey: this.readMembershipPublicationPlanningMemoVersionKey(
+          memoKey,
+          observedAt,
+        ),
         fn: this.resolveMembershipPublicationPlanningSnapshot,
       });
     }

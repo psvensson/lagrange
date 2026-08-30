@@ -45,9 +45,15 @@ function memoCtx({nodeId = 'seed'} = {}) {
     readLatestMembershipPublicationEpochStatusProbe:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
-    isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+    buildMembershipPublicationPlanningMemoKeyComponent:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
-        .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+        .buildMembershipPublicationPlanningMemoKeyComponent,
+    readMembershipPublicationPlanningMemoVersionKey:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readMembershipPublicationPlanningMemoVersionKey,
+    membershipPublicationPlanningMemoVersionKeyMatches:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .membershipPublicationPlanningMemoVersionKeyMatches,
     // The deep cluster read — counted, returns a per-node sentinel payload.
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     // The parse/clone-heavy projection — counted; returns a fresh frozen object

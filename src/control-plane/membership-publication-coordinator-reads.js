@@ -294,8 +294,8 @@ class MembershipPublicationCoordinatorReads {
   }
 
   // Saturation-relief (rolling-restart drain residual): the readiness planning
-  // memo's per-tick epoch-staleness recheck
-  // (isMemoizedMembershipPublicationPlanningProjectionEpochStale) needs only the
+  // memo's per-tick version key
+  // (readMembershipPublicationPlanningMemoVersionKey) needs only the
   // (epoch, status) of the highest-epoch membership publication that includes the
   // node — yet getLatestPublicationForNodeSync re-normalizes EVERY publications
   // cache row (JSON.parse of the array/object columns) on every routing call. The
