@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-release-handoff-consumer-parity",
+  "status": "pass",
+  "generatedAt": "2026-08-30T04:35:38.936Z",
+  "receipts": [
+    {
+      "id": "joiner-projects-active-handoff-from-seed-contract",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^joiner-projects-active-handoff-from-seed-contract\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "a distinct joiner process (join-branch admission cluster-incarnation-fence states, router evidence from the acceptor IDENTIFY reply only) projects the seed-owned durable generation as formationReleaseHandoff.state active with releaseAuthorized true and startupAuthorityReady true while its local owner stays idle and never publishes"
+    },
+    {
+      "id": "joiner-fence-identity-is-authority-published",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^joiner-fence-identity-is-authority-published\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "the consumed contract carries the authority-published fence identity (provably different from the joiner admission-fence hash, and consumed with no local fence at all) while a different authority incarnation, a regressed epoch, an incompatible topology, a restarted joiner incarnation, a disallowed local fence, a substantive block, and a revoked generation each still fail closed"
+    },
+    {
+      "id": "joiner-release-authorized-across-spread-reopen",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^joiner-release-authorized-across-spread-reopen\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "the joiner holds the same authorized generation before the priority-spread reopen, during it (its own view recovery_pending with priority_partitions_not_spread), and after the spread recovers"
+    },
+    {
+      "id": "barrier-resolves-ledger-spread-satisfied-from-authority",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^barrier-resolves-ledger-spread-satisfied-from-authority\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "the real awaitOperationLedgerFormationBarrier loop resolves ledger_spread_satisfied from the whole-plane authority answer (startupAuthorityReady true, handoff active) while the raw spread predicate is still pending; without the seed-owned durable contract the same barrier stays waiting_for_startup_authority and times out"
+    },
+    {
+      "id": "seed-capture-retention-revocation-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^seed-capture-retention-revocation-unchanged\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "the seed closure suite (test/control-plane/formation-release-handoff-closure.test.js) still passes 136/136 and the seed owner still captures non-authorizing, authorizes on durable acknowledgement, retains across the reopen, and revokes captured_cohort_member_ineligible on a member disconnect"
+    },
+    {
+      "id": "analyzer-teardown-revocation-not-stranded",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^analyzer-teardown-revocation-not-stranded\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "with the run's real event shapes, a captured generation revoked captured_cohort_member_ineligible after the authority's \"Bootstrap readiness marked draining\" event is classified teardown_truncated (not stranded, retained across the reopen), the same revocation before draining stays stranded, and a startup_authority_incompatible revocation stays invalid"
+    },
+    {
+      "id": "budgets-and-single-owner-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-single-owner-unchanged\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "the 60 s certification window and the 120 s internal barrier timeout are the HEAD values, the joiner binds the seed as the sole formation-release authority, and exactly one durable write (on the seed) mints the generation"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "two identical drives produce the identical seed transition sequence and joiner projection"
+    }
+  ]
+}
