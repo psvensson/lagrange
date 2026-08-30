@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2072,
+    "ordinary": 2073,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2089,
-  "digest": "fnv1a32-1835e8b5",
+  "censusSize": 2090,
+  "digest": "fnv1a32-0bd515da",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -180,6 +180,7 @@
     "test/bootstrap/node-joining-cdc-readiness-gate.test.js": "ordinary",
     "test/bootstrap/node-joining-cdc-subscription.test.js": "ordinary",
     "test/bootstrap/node-joining-control-plane-heartbeat.test.js": "ordinary",
+    "test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js": "ordinary",
     "test/bootstrap/node-joining-http-post-timeout.test.js": "ordinary",
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": "ordinary",
     "test/bootstrap/node-joining-lease-registration.test.js": "ordinary",

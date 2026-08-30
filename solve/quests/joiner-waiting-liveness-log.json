@@ -1,0 +1,78 @@
+{
+  "id": "joiner-waiting-liveness-log",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A joiner that is honestly waiting inside the operation-ledger formation barrier tells the operator so on the live log: the joining owner (NodeJoiningOperationLedgerFormationReadiness) emits a typed still-waiting line (JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER_STILL_WAITING) on every EXISTING liveness-refresh tick while the barrier is engaged, naming the owner's own barrier state and startup-authority answer plus elapsed ms since the wait began, and a typed evidence-advance line at debug level rate-limited to one per liveness-refresh window when the gate's evidence changed but the gate is still unsatisfied. The lines are a projection of the owner's existing barrier snapshot: no new timer, sleep, or polling acceleration, no second readiness authority, nothing re-derived from nodes.status, publication counts, or coverage, JOINING_DEFAULT cadences and the 60-second GCP certification window byte-identical, and the READY instant proven identical with and without the lines. Proven deterministically through the real awaitOperationLedgerFormationBarrier on a virtual clock (30-second honest wait): red on HEAD (no line during the wait), green after.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/operational-ground-truth.md",
+    "closesCL": [],
+    "parentQuest": "formation-release-handoff-closure-v4",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "0c4322518"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/joiner-waiting-liveness-log.receipt.json",
+      "requiredReceipts": [
+        "still-waiting-line-on-liveness-cadence",
+        "no-line-once-gate-satisfied",
+        "evidence-advance-debug-rate-limited",
+        "no-evidence-advance-without-change",
+        "ready-instant-unchanged",
+        "budgets-and-cadence-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "joiner-waiting-liveness-log-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/joiner-waiting-liveness-log.receipt.json",
+          "requiredReceipts": [
+            "still-waiting-line-on-liveness-cadence",
+            "no-line-once-gate-satisfied",
+            "evidence-advance-debug-rate-limited",
+            "no-evidence-advance-without-change",
+            "ready-instant-unchanged",
+            "budgets-and-cadence-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-joining-owner",
+      "statement": "The joining owner (NodeJoiningOperationLedgerFormationReadiness) remains the single emitter; the lines are a projection of its existing barrier snapshot and introduce no second readiness authority."
+    },
+    {
+      "id": "no-re-derivation",
+      "statement": "The wait reason is the owner's own barrier state and the readiness owner's startup-authority answer it already holds; nothing is re-derived from nodes.status, publication counts, or coverage."
+    },
+    {
+      "id": "existing-cadence-only",
+      "statement": "The still-waiting line rides only the existing liveness-refresh tick and the evidence-advance line only the existing poll; no timer, sleep, or polling acceleration is added."
+    },
+    {
+      "id": "unchanged-budgets",
+      "statement": "JOINING_DEFAULT discovery/poll/timeout/heartbeat and the 60-second GCP certification window are byte-identical, and the READY instant is identical with and without the lines."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a virtual-clock witness through the real owner, red on HEAD (2/7 receipts red) and green after (7/7), with green controls that must stay green; no GCP run is part of the proof."
+    }
+  ]
+}

@@ -172,6 +172,7 @@ function buildFormationBarrierOwner({
   owner.now = now;
   owner.sleep = sleep;
   owner.logger = {
+    debug: () => {},
     info: () => {},
     warn: () => {},
     error: () => {},
