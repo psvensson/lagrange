@@ -254,6 +254,10 @@ const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM =
   'distributed_harness_cluster_active_gate';
 const ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE = 'no_progress_terminal';
 const ACTIVE_WAIT_NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
+// Typed terminal progress classification for a timed-out ACTIVE wait: the
+// stalled label is only honest when the active count did NOT rise on the
+// final attempt; a rise on the final attempt is progress observed.
+const ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE = 'progress_observed';
 const ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE =
   'priority_recovery_invariant_breach';
 const ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX = 'error:';
@@ -1169,6 +1173,7 @@ export const CLUSTER_BASE_LAYER = {
   ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM,
   ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+  ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE,
   ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
   ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX,
   ACTIVE_WAIT_INACTIVE_SUMMARY_STATE_PREFIX,

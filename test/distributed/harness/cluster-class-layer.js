@@ -51,6 +51,7 @@ const {
 
 import {
   buildActiveWaitReadinessFailure,
+  classifyActiveWaitTerminalProgress,
   isBetterActiveWaitSnapshotCoverageProgressSnapshot,
   selectActiveWaitReadinessDelay,
   selectStartupActiveGateSnapshotRepairContinuation,
@@ -111,6 +112,8 @@ class Cluster extends ClusterControlSnapshotRecovery {
     let lastObservedProgressSnapshot = null;
     let lastObservedAttempt = ZERO;
     let lastObservedElapsedMs = ZERO;
+    let lastObservedActiveNodeCount = ZERO;
+    let lastActiveCountRiseAttempt = ZERO;
     let startupOwnerProgressContinuationUsed = false;
     let startupSnapshotRepairContinuationUsed = false;
 
@@ -289,6 +292,14 @@ class Cluster extends ClusterControlSnapshotRecovery {
       lastObservedProgressSnapshot = progressSnapshot;
       lastObservedAttempt = attempts;
       lastObservedElapsedMs = elapsedMs;
+      const observedActiveNodeCount = Math.max(
+        ZERO,
+        Number(progressSnapshot?.activeNodeCount) || ZERO,
+      );
+      if (observedActiveNodeCount > lastObservedActiveNodeCount) {
+        lastActiveCountRiseAttempt = attempts;
+      }
+      lastObservedActiveNodeCount = observedActiveNodeCount;
 
       const attemptsSinceProgress = Math.max(
         ZERO,
@@ -788,10 +799,15 @@ class Cluster extends ClusterControlSnapshotRecovery {
       false,
       observedFinalProgressSnapshot,
     );
+    const terminalProgress = classifyActiveWaitTerminalProgress({
+      finalAttempt: pollResult.attempts,
+      lastActiveCountRiseAttempt,
+    });
     const finalNoProgressWithReasonCode = finalNoProgress ?
       {
         ...finalNoProgress,
-        reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+        reasonCode: terminalProgress.reasonCode,
+        terminalProgress,
       } :
       null;
     const finalNoProgressOwnerOutcome = finalNoProgressWithReasonCode ?
@@ -818,7 +834,7 @@ class Cluster extends ClusterControlSnapshotRecovery {
       progressSnapshot: terminalProgressSnapshot,
       noProgress: finalNoProgressOwnerOutcome,
       readinessFailure: finalReadinessFailure,
-      reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+      reasonCode: terminalProgress.reasonCode,
       stalledReason:
         ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
         String(finalAttemptsSinceProgress),
@@ -864,6 +880,8 @@ class Cluster extends ClusterControlSnapshotRecovery {
       invariantBreaches: priorityRecoveryInvariantBreaches,
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
+      terminalProgress,
+      attemptJoin: pollResult.lastResult?.attemptJoin || null,
     });
     const timeoutOracleBlind = oracleBlindnessTracker.isBlindAtDecision();
     const timeoutOracleBlindSummary = oracleBlindnessTracker.summarize();
@@ -960,6 +978,8 @@ class Cluster extends ClusterControlSnapshotRecovery {
       invariantBreaches: priorityRecoveryInvariantBreaches,
       priorityRecoveryInvariants:
         pollResult.lastResult?.priorityRecoveryInvariants || null,
+      terminalProgress,
+      attemptJoin: pollResult.lastResult?.attemptJoin || null,
     };
     if (timeoutOracleBlind) {
       markOracleBlindError(timeoutError, timeoutOracleBlindSummary);

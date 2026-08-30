@@ -10,6 +10,7 @@ import {
 const {
   ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+  ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE,
   ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_READINESS_MODE_STARTUP,
@@ -1296,6 +1297,67 @@ function buildTerminalActiveWaitProgressEvidence({
   };
 }
 
+const ACTIVE_WAIT_TERMINAL_PROGRESS_CLASSIFICATION = Object.freeze({
+  PROGRESS_OBSERVED: 'progress_observed',
+  STALLED: 'stalled',
+});
+const ACTIVE_WAIT_TERMINAL_PROGRESS_STALLED_OUTCOME = Object.freeze({
+  state: ACTIVE_WAIT_TERMINAL_PROGRESS_CLASSIFICATION.STALLED,
+  reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+});
+const ACTIVE_WAIT_TERMINAL_PROGRESS_CLASSIFICATION_TABLE = Object.freeze([
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.finalAttempt > ZERO &&
+      evidence.lastActiveCountRiseAttempt === evidence.finalAttempt,
+    outcome: Object.freeze({
+      state: ACTIVE_WAIT_TERMINAL_PROGRESS_CLASSIFICATION.PROGRESS_OBSERVED,
+      reasonCode: ACTIVE_WAIT_PROGRESS_OBSERVED_REASON_CODE,
+    }),
+  }),
+  Object.freeze({
+    matches: () => true,
+    outcome: ACTIVE_WAIT_TERMINAL_PROGRESS_STALLED_OUTCOME,
+  }),
+]);
+
+/**
+ * Typed terminal progress classification for a timed-out ACTIVE wait. The
+ * stalled_no_progress label is produced only when the active node count did
+ * not rise on the final attempt; a rise on the final attempt (the 14:05:20
+ * 3/5 -> 4/5 shape) is progress_observed. Counts come from the node
+ * diagnostics (each node's own answer), never from snapshot counts.
+ * @param {Object} evidence
+ * @param {number} evidence.finalAttempt
+ * @param {number} evidence.lastActiveCountRiseAttempt attempt on which the
+ *   active node count last rose (ZERO when it never rose)
+ * @return {{state: string, reasonCode: string, lastActiveCountRiseAttempt:
+ *   number, finalAttempt: number}}
+ */
+function classifyActiveWaitTerminalProgress({
+  finalAttempt = ZERO,
+  lastActiveCountRiseAttempt = ZERO,
+} = {}) {
+  const evidence = Object.freeze({
+    finalAttempt: Number.isInteger(finalAttempt) ? finalAttempt : ZERO,
+    lastActiveCountRiseAttempt: Number.isInteger(lastActiveCountRiseAttempt) ?
+      lastActiveCountRiseAttempt :
+      ZERO,
+  });
+  for (const entry of ACTIVE_WAIT_TERMINAL_PROGRESS_CLASSIFICATION_TABLE) {
+    if (entry.matches(evidence)) {
+      return {
+        ...entry.outcome,
+        ...evidence,
+      };
+    }
+  }
+  return {
+    ...ACTIVE_WAIT_TERMINAL_PROGRESS_STALLED_OUTCOME,
+    ...evidence,
+  };
+}
+
 function selectTerminalActiveWaitProgressSnapshot({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
@@ -1332,6 +1394,7 @@ export {
   LOAD_READINESS_STABLE_WINDOW_STATE_PENDING,
   buildActiveWaitReadinessFailure,
   buildLoadReadinessStableWindowFailure,
+  classifyActiveWaitTerminalProgress,
   decideLoadReadinessStableWindow,
   isBetterActiveWaitSnapshotCoverageProgressSnapshot,
   normalizeLoadReadinessPhase,
