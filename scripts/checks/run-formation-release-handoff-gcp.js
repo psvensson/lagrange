@@ -430,15 +430,37 @@ async function writeProbeReport(report) {
   return probePath;
 }
 
-// The expected negative-control regression: the deliberately reverted source
-// fails to retain the captured generation across the spread reopen, so the
-// underlying product closure fails with a stranded generation, a lost
-// retention-across-reopen, or an invalid revocation.
+// The expected negative-control regression, observed from the analyzer's own
+// `invariants` (the single classification owner; the runner never re-derives
+// a generation class): the deliberately reverted source fails to retain the
+// captured generation across the spread reopen, so the underlying product
+// closure fails with a stranded generation, a generation retained but never
+// completed when its authority tore down, a lost retention-across-reopen, or
+// an invalid revocation. One observation feeds both the control block and the
+// control verdict; a missing analysis observes nothing.
+function observeControlRegression(analysis) {
+  const invariants = analysis?.invariants ?? null;
+  const retainedAcrossReopen = invariants?.generationRetainedAcrossReopen;
+  const strandedGeneration = invariants?.noStrandedGeneration === false;
+  const retainedUncompletedAtTeardown =
+    invariants?.noRetainedUncompletedAtTeardown === false;
+  const retentionLostAcrossReopen = retainedAcrossReopen === false;
+  const invalidRevocation = invariants?.noInvalidRevocation === false;
+  return {
+    strandedGeneration,
+    retainedUncompletedAtTeardown,
+    generationRetainedAcrossReopen: retainedAcrossReopen === true,
+    invalidRevocationCount: analysis?.invalidRevocationCount ?? 0,
+    expectedRegressionObserved:
+      strandedGeneration ||
+      retainedUncompletedAtTeardown ||
+      retentionLostAcrossReopen ||
+      invalidRevocation,
+  };
+}
+
 function expectedRegressionObserved(analysis) {
-  if (!analysis) return false;
-  return analysis.noStrandedGeneration === false ||
-    analysis.generationRetainedAcrossReopen === false ||
-    (analysis.invalidRevocationCount ?? 0) > 0;
+  return observeControlRegression(analysis).expectedRegressionObserved;
 }
 
 // Derive the report from a completed cluster run + analysis. Pure (no cluster,
@@ -458,20 +480,13 @@ function buildRunReport({
 }) {
   const error = cluster.error || null;
   const underlyingClosurePassed = analysis?.closurePassed === true;
-  const expectedObserved = expectedRegressionObserved(analysis);
+  const observed = observeControlRegression(analysis);
   const control = variant === REVERTED_VARIANT ?
-    {
-      underlyingClosurePassed,
-      g2Stranded: analysis?.noStrandedGeneration === false,
-      invalidRevocationCount: analysis?.invalidRevocationCount ?? 0,
-      generationRetainedAcrossReopen:
-        analysis?.generationRetainedAcrossReopen === true,
-      expectedRegressionObserved: expectedObserved,
-    } :
+    {underlyingClosurePassed, ...observed} :
     null;
   const passed = error === null &&
     (variant === REVERTED_VARIANT ?
-      expectedObserved :
+      observed.expectedRegressionObserved :
       underlyingClosurePassed);
   return {
     schemaVersion: 2,

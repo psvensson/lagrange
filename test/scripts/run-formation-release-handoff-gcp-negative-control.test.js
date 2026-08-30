@@ -11,10 +11,21 @@ import {
   PROBE_SCENARIO_NAME,
   REVERTED_CONTROL_SCENARIO_NAME,
 } from '../../scripts/checks/run-formation-release-handoff-gcp.js';
+import {analyzeFormationReleaseEvents} from
+  '../../scripts/checks/formation-release-handoff-gcp-analysis.js';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {scenarioHarnessProbe} from
   '../../scripts/solve/probes/scenario-harness.js';
+import {
+  STRANDED_TEARDOWN_RUN,
+  buildBothCompletedRunEvents,
+  buildInvalidRevocationRunEvents,
+  buildNoReopenRunEvents,
+  buildRetainedWithoutDrainEvents,
+  buildStrandedTeardownRunEvents,
+  buildTeardownTruncatedRunEvents,
+} from './formation-release-handoff-gcp-run-fixture.js';
 
 const FIXED_VARIANT = 'fixed';
 const REVERTED_VARIANT = 'reverted';
@@ -22,23 +33,24 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.
 const FIXED_FINGERPRINT = 'ffffffffffffffff';
 const REVERTED_FINGERPRINT = 'eeeeeeeeeeeeeeee';
 
-// A completed-run analysis shape for each control outcome. Only the fields the
-// control verdict reads are materialized; the rest are irrelevant here.
+// Every control-verdict scenario reads REAL analyzer output over the shared
+// immutable run excerpt (never a hand-written analysis shape): the control
+// predicate must track the analyzer's actual `invariants` surface, and a
+// synthetic top-level shape the analyzer never emits proves nothing about it.
+function analyze(events) {
+  return analyzeFormationReleaseEvents(
+    events,
+    STRANDED_TEARDOWN_RUN.sourceFingerprint,
+  );
+}
+// The recorded reverted-control regression shape (GCP run
+// 2026-08-28T20-24-59.265Z): the second generation is retained but never
+// completed when the seed tears down.
 function regressionAnalysis() {
-  return {
-    closurePassed: false,
-    noStrandedGeneration: false,
-    generationRetainedAcrossReopen: false,
-    invalidRevocationCount: 1,
-  };
+  return analyze(buildStrandedTeardownRunEvents());
 }
 function cleanClosureAnalysis() {
-  return {
-    closurePassed: true,
-    noStrandedGeneration: true,
-    generationRetainedAcrossReopen: true,
-    invalidRevocationCount: 0,
-  };
+  return analyze(buildBothCompletedRunEvents());
 }
 function reportFor(variant, analysis, overrides = {}) {
   return buildRunReport({
@@ -103,33 +115,35 @@ test('negative-control report carries the A/B fingerprints and the named ' +
   t.end();
 });
 
-test('expectedRegressionObserved names each deliberate regression axis', (t) => {
+test('expectedRegressionObserved names each deliberate regression axis from ' +
+  'the analyzer\'s real invariants', (t) => {
   t.equal(expectedRegressionObserved(null), false);
-  t.equal(expectedRegressionObserved(cleanClosureAnalysis()), false);
-  t.equal(
-    expectedRegressionObserved({
-      ...cleanClosureAnalysis(),
-      noStrandedGeneration: false,
-    }),
-    true,
-    'a stranded generation is the expected defect',
-  );
-  t.equal(
-    expectedRegressionObserved({
-      ...cleanClosureAnalysis(),
-      generationRetainedAcrossReopen: false,
-    }),
-    true,
-    'a lost retention-across-reopen is the expected defect',
-  );
-  t.equal(
-    expectedRegressionObserved({
-      ...cleanClosureAnalysis(),
-      invalidRevocationCount: 2,
-    }),
-    true,
-    'an invalid revocation is the expected defect',
-  );
+  const clean = cleanClosureAnalysis();
+  t.equal(clean.closurePassed, true);
+  t.equal(expectedRegressionObserved(clean), false);
+  const stranded = analyze(buildRetainedWithoutDrainEvents());
+  t.equal(stranded.invariants.noStrandedGeneration, false);
+  t.equal(expectedRegressionObserved(stranded), true,
+    'a stranded generation is the expected defect');
+  const retained = regressionAnalysis();
+  t.equal(retained.invariants.noStrandedGeneration, true);
+  t.equal(retained.invariants.generationRetainedAcrossReopen, true);
+  t.equal(retained.invariants.noRetainedUncompletedAtTeardown, false);
+  t.equal(expectedRegressionObserved(retained), true,
+    'a generation retained but never completed at teardown is the ' +
+      'expected defect even though no other axis fires');
+  const noReopen = analyze(buildNoReopenRunEvents());
+  t.equal(noReopen.invariants.generationRetainedAcrossReopen, false);
+  t.equal(expectedRegressionObserved(noReopen), true,
+    'a retention-across-reopen never proven is the expected defect');
+  const invalidRevocation = analyze(buildInvalidRevocationRunEvents());
+  t.equal(invalidRevocation.invariants.noInvalidRevocation, false);
+  t.equal(expectedRegressionObserved(invalidRevocation), true,
+    'an invalid revocation is the expected defect');
+  const truncated = analyze(buildTeardownTruncatedRunEvents());
+  t.equal(truncated.closurePassed, true);
+  t.equal(expectedRegressionObserved(truncated), false,
+    'a teardown-truncated generation keeps its sealed non-defect meaning');
   t.end();
 });
 
@@ -142,7 +156,11 @@ test('EXPECTED control red: reverted source reproducing the named regression ' +
   t.equal(report.control.underlyingClosurePassed, false,
     'the underlying product closure result is kept separately');
   t.equal(report.control.expectedRegressionObserved, true);
-  t.equal(report.control.g2Stranded, true);
+  t.equal(report.control.strandedGeneration, false);
+  t.equal(report.control.retainedUncompletedAtTeardown, true,
+    'the control block names the observed axis from the analyzer invariants');
+  t.equal(report.control.generationRetainedAcrossReopen, true);
+  t.equal(report.control.invalidRevocationCount, 0);
   t.end();
 });
 

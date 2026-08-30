@@ -75,11 +75,19 @@ const AUTHORITY_DRAINING_MESSAGE = 'Bootstrap readiness marked draining';
 // completed (last transition `complete`), teardown_truncated (a valid
 // disconnect/ineligible revocation at or after its authority marked draining —
 // the retained release was withdrawn only because the authority itself
-// stopped), or stranded (any other non-complete terminal).
+// stopped), retained_uncompleted_at_teardown (the last recorded transition is
+// still `active` when its authority marked draining: the generation was
+// retained, never revoked, and its cohort never published READY — GCP run
+// 2026-08-30T07-13-07.175Z generation e1:4a36), or stranded (any other
+// non-complete terminal). The retained-uncompleted class is DISTINCT from
+// teardown truncation and carries its own failing invariant
+// (noRetainedUncompletedAtTeardown): folding it into teardown_truncated would
+// certify a run whose joiners never reached READY.
 const GENERATION_CLASSIFICATION = Object.freeze({
   COMPLETED: 'completed',
   STRANDED: 'stranded',
   TEARDOWN_TRUNCATED: 'teardown_truncated',
+  RETAINED_UNCOMPLETED_AT_TEARDOWN: 'retained_uncompleted_at_teardown',
 });
 const TEARDOWN_REVOCATION_REASONS = Object.freeze([
   REVOKE_REASON_COHORT_MEMBER_MISSING,
@@ -530,24 +538,68 @@ function authorityDrainingTimes(events) {
 // teardown, not stranded by the owner. The same revocation BEFORE draining,
 // or any other revocation reason (startup_authority_incompatible stays an
 // invalid revocation), remains stranded.
-function classifyGeneration(terminalTransition, drainingByNodeId) {
-  if (terminalTransition.state === STATE_COMPLETE) {
-    return GENERATION_CLASSIFICATION.COMPLETED;
-  }
+function classifyRevokedGeneration(terminalTransition, drainingAt) {
   if (
-    terminalTransition.state !== STATE_REVOKED ||
     arrayPrototypeIndexOf(
       TEARDOWN_REVOCATION_REASONS,
       terminalTransition.reason,
-    ) === -1
+    ) === -1 ||
+    drainingAt === undefined ||
+    terminalTransition.time < drainingAt
   ) {
     return GENERATION_CLASSIFICATION.STRANDED;
   }
-  const drainingAt = drainingByNodeId.get(terminalTransition.authorityNodeId);
-  if (drainingAt === undefined || terminalTransition.time < drainingAt) {
+  return GENERATION_CLASSIFICATION.TEARDOWN_TRUNCATED;
+}
+
+// A generation whose LAST transition is still `active` (retained, never
+// revoked, never complete) at or before its authority marked draining was
+// retained until teardown without its cohort ever publishing READY. With no
+// draining marker for that authority (or an active transition recorded after
+// the drain), the retention cannot be attributed to teardown: stranded.
+function classifyActiveGeneration(terminalTransition, drainingAt) {
+  if (drainingAt === undefined || terminalTransition.time > drainingAt) {
     return GENERATION_CLASSIFICATION.STRANDED;
   }
-  return GENERATION_CLASSIFICATION.TEARDOWN_TRUNCATED;
+  return GENERATION_CLASSIFICATION.RETAINED_UNCOMPLETED_AT_TEARDOWN;
+}
+
+// Single terminal-classification decision table keyed on the generation's
+// last recorded transition state (the owner's evidence only; never nodes
+// status, publication counts, or coverage).
+function classifyGeneration(terminalTransition, drainingByNodeId) {
+  const drainingAt = drainingByNodeId.get(terminalTransition.authorityNodeId);
+  if (terminalTransition.state === STATE_COMPLETE) {
+    return GENERATION_CLASSIFICATION.COMPLETED;
+  }
+  if (terminalTransition.state === STATE_ACTIVE) {
+    return classifyActiveGeneration(terminalTransition, drainingAt);
+  }
+  if (terminalTransition.state === STATE_REVOKED) {
+    return classifyRevokedGeneration(terminalTransition, drainingAt);
+  }
+  return GENERATION_CLASSIFICATION.STRANDED;
+}
+
+function countClassification(summary, classification, terminalTransition) {
+  if (classification === GENERATION_CLASSIFICATION.COMPLETED) {
+    summary.completedGenerationCount += 1;
+    if (
+      summary.lastCompletedTime === null ||
+      terminalTransition.time > summary.lastCompletedTime
+    ) {
+      summary.lastCompletedTime = terminalTransition.time;
+    }
+  } else if (classification === GENERATION_CLASSIFICATION.TEARDOWN_TRUNCATED) {
+    summary.teardownTruncatedCount += 1;
+  } else if (
+    classification ===
+    GENERATION_CLASSIFICATION.RETAINED_UNCOMPLETED_AT_TEARDOWN
+  ) {
+    summary.retainedUncompletedAtTeardownCount += 1;
+  } else {
+    summary.strandedCount += 1;
+  }
 }
 
 function classifyTerminalGenerations(terminal, drainingByNodeId) {
@@ -555,6 +607,7 @@ function classifyTerminalGenerations(terminal, drainingByNodeId) {
     completedGenerationCount: 0,
     strandedCount: 0,
     teardownTruncatedCount: 0,
+    retainedUncompletedAtTeardownCount: 0,
     lastCompletedTime: null,
     generationClassifications: {},
   };
@@ -565,23 +618,30 @@ function classifyTerminalGenerations(terminal, drainingByNodeId) {
       drainingByNodeId,
     );
     summary.generationClassifications[generation] = classification;
-    if (classification === GENERATION_CLASSIFICATION.COMPLETED) {
-      summary.completedGenerationCount += 1;
-      if (
-        summary.lastCompletedTime === null ||
-        terminalTransition.time > summary.lastCompletedTime
-      ) {
-        summary.lastCompletedTime = terminalTransition.time;
-      }
-    } else if (
-      classification === GENERATION_CLASSIFICATION.TEARDOWN_TRUNCATED
-    ) {
-      summary.teardownTruncatedCount += 1;
-    } else {
-      summary.strandedCount += 1;
-    }
+    countClassification(summary, classification, terminalTransition);
   }
   return summary;
+}
+
+// Capture-to-completion span covering EVERY captured generation: the first
+// capture of the run to the last completion, measurable only when no captured
+// generation is still uncompleted (stranded or retained-uncompleted at
+// teardown). A generation that never completed has no completion instant, so
+// the span is fail-closed null and the certification budget cannot be met
+// on the completed generations alone (run 07-13-07: generation 1 completed
+// in 12.3 s while generation 2 never did).
+function completionSpanMs(firstCaptureTime, classified) {
+  const everyGenerationTerminated =
+    classified.strandedCount === 0 &&
+    classified.retainedUncompletedAtTeardownCount === 0;
+  if (
+    !everyGenerationTerminated ||
+    firstCaptureTime === null ||
+    classified.lastCompletedTime === null
+  ) {
+    return null;
+  }
+  return classified.lastCompletedTime - firstCaptureTime;
 }
 
 function analyzeFormationInvariants(events) {
@@ -593,13 +653,17 @@ function analyzeFormationInvariants(events) {
   const timeoutCount = countFormationTimeouts(events);
 
   const generationCount = byGeneration.size;
+  const classified = classifyTerminalGenerations(
+    terminal,
+    authorityDrainingTimes(events),
+  );
   const {
     completedGenerationCount,
     strandedCount,
     teardownTruncatedCount,
-    lastCompletedTime,
+    retainedUncompletedAtTeardownCount,
     generationClassifications,
-  } = classifyTerminalGenerations(terminal, authorityDrainingTimes(events));
+  } = classified;
   let firstCaptureTime = null;
   for (let index = 0; index < transitions.length; index += 1) {
     if (transitions[index].state === STATE_ACTIVE) {
@@ -607,10 +671,7 @@ function analyzeFormationInvariants(events) {
       break;
     }
   }
-  const completionMs =
-    firstCaptureTime !== null && lastCompletedTime !== null ?
-      lastCompletedTime - firstCaptureTime :
-      null;
+  const completionMs = completionSpanMs(firstCaptureTime, classified);
 
   const invalidRevocationCount = countInvalidRevocations(transitions);
   const spreadReopenObserved =
@@ -630,6 +691,7 @@ function analyzeFormationInvariants(events) {
     capturedGenerationPresent,
     noInvalidRevocation: invalidRevocationCount === 0,
     noStrandedGeneration: strandedCount === 0,
+    noRetainedUncompletedAtTeardown: retainedUncompletedAtTeardownCount === 0,
     atLeastOneCompletion: completedGenerationCount >= 1,
     noMalformedTransition: !malformedPresent,
     spreadReopenObserved,
@@ -659,6 +721,8 @@ function analyzeFormationInvariants(events) {
     generationCount,
     completedGenerationCount,
     teardownTruncatedGenerationCount: teardownTruncatedCount,
+    retainedUncompletedAtTeardownGenerationCount:
+      retainedUncompletedAtTeardownCount,
     generationClassifications,
     invalidRevocationCount,
     spreadReopenObserved,
@@ -698,6 +762,8 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
     completedGenerationCount: invariantAnalysis.completedGenerationCount,
     teardownTruncatedGenerationCount:
       invariantAnalysis.teardownTruncatedGenerationCount,
+    retainedUncompletedAtTeardownGenerationCount:
+      invariantAnalysis.retainedUncompletedAtTeardownGenerationCount,
     generationClassifications: invariantAnalysis.generationClassifications,
     invalidRevocationCount: invariantAnalysis.invalidRevocationCount,
     spreadReopenObserved: invariantAnalysis.spreadReopenObserved,
@@ -717,6 +783,7 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
 }
 
 export {
+  GENERATION_CLASSIFICATION,
   analyzeFormationInvariants,
   analyzeFormationReleaseEvents,
   normalizeGenerationTransition,

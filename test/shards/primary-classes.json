@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1838,
+    "unit": 1840,
     "integration": 73,
     "bootstrap": 172,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2090,
-  "digest": "fnv1a32-cc7debfc",
+  "censusSize": 2092,
+  "digest": "fnv1a32-745036b2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1747,6 +1747,7 @@
     "test/scripts/entrypoint-defaults.test.js": "unit",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "unit",
     "test/scripts/examples-build-upload-run.test.js": "unit",
+    "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
     "test/scripts/generate-steering-llm-pack.test.js": "unit",
     "test/scripts/impact-contract-registry.test.js": "unit",
@@ -1775,6 +1776,7 @@
     "test/scripts/run-classified-test-files.test.js": "unit",
     "test/scripts/run-distributed-validation-ladder.test.js": "unit",
     "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js": "unit",
+    "test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js": "unit",
     "test/scripts/run-formation-release-handoff-gcp.test.js": "unit",
     "test/scripts/run-live-repetitions.test.js": "unit",
     "test/scripts/run-test-ci.test.js": "unit",
