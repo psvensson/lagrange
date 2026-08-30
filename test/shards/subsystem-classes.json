@@ -7,7 +7,7 @@
     "bootstrap-membership": 241,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 168,
+    "control-plane": 169,
     "convergence-topology": 76,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2098,
-  "digest": "fnv1a32-c0bcfe6b",
+  "censusSize": 2099,
+  "digest": "fnv1a32-d7e6227c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -496,6 +496,7 @@
     "test/control-plane/formation-release-handoff-closure.test.js": "control-plane",
     "test/control-plane/formation-release-handoff-consumer-parity.test.js": "control-plane",
     "test/control-plane/formation-release-handoff-interaction-registry.test.js": "control-plane",
+    "test/control-plane/formation-release-handoff-post-reopen-capture.test.js": "control-plane",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend.test.js": "control-plane",
