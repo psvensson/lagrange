@@ -1,0 +1,44 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "managed-split-resume-under-write-load",
+  "status": "pass",
+  "generatedAt": "2026-08-30T13:42:38.677Z",
+  "receipts": [
+    {
+      "id": "deferred-routing-timeout-resumes-persisted-plan",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^deferred-routing-timeout-resumes-persisted-plan\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "a split DEFERRED by the right child's routable-wait timeout (run 1 12:04:29.6) that is then admission-BLOCKED once (12:04:35.7) resumes the persisted split key and child ids on the next retry (12:04:46.4 re-planned on HEAD): buildManagedSplitPlan runs exactly once, exactly two v2 rows exist, and resolvePartitionForKey routes every probe key to exactly one v2 row"
+    },
+    {
+      "id": "persisted-plan-survives-admission-block",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^persisted-plan-survives-admission-block\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "the blocked transition row written by the intermediate admission denial still carries SPLIT_KEY and TARGET_PARTITION_IDS (HEAD persisted the denial from the plan-less pending metadata and dropped them) while the retry accounting is unchanged"
+    },
+    {
+      "id": "cutover-refused-while-child-leader-denied",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^cutover-refused-while-child-leader-denied\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "with the right child's canonical leader readiness-denied on the serve dimension (run 2 12:20:13-12:20:24, planning_snapshot_refresh_pending) the CATCHUP_READY ack is a typed refusal (child_leader_not_routable) after the unchanged 30 s provisioning budget, the workflow stays split_backfilling, no cutover row, descriptor delete or replica removal happens, and the cutover applies on the first 50 ms poll after the leader becomes routable"
+    },
+    {
+      "id": "healthy-split-sequence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^healthy-split-sequence-unchanged\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "the normal split path (plan, child rows, provisioning, catch-up, cutover, dissolution, terminal clear) produces the HEAD event sequence byte-for-byte and promotes the active epoch to 2"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "retry backoff (5000/60000 ms), TABLE_CREATE_PROVISION_TIMEOUT_MS (30000), TABLE_CREATE_PROVISION_POLL_INTERVAL_MS (50) and SPLIT_OPERATION_BUDGET_MS (300000) are the HEAD values and the first deferral schedules the unchanged base backoff"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/partition/managed-split-resume-under-write-load.test.js",
+      "detail": "two identical virtual-clock drives of the retry sequence and of the readiness-gated cutover produce the identical event sequence, partition rows and cutover instant"
+    }
+  ]
+}
