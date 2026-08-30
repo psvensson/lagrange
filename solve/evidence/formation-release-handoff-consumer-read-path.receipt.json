@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "formation-release-handoff-consumer-read-path",
   "status": "pass",
-  "generatedAt": "2026-08-30T08:17:20.714Z",
+  "generatedAt": "2026-08-30T08:29:42.999Z",
   "receipts": [
     {
       "id": "non-hosting-joiner-reads-authority-publication-during-recovery",
