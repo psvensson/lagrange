@@ -195,7 +195,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## release
 
 - `release:digest` — `node scripts/release-content-digest.js`
+- `release:gate:receipt` — Run one local release gate (-- <command...>) and record its real exit code, HEAD sha, porcelain-clean tree, source fingerprint and version as test-output/reports/release-gate-receipts/<name>.json; the only honest writer of local gate receipts.
+- `release:gate:remote-receipt` — Query GitHub (gh api .../actions/runs?head_sha=<sha> and each run's jobs) for the gate job of one exact sha, attributed to its workflow file (ci.yml vs full-gate.yml), and record its conclusion as a receipt; records a fact, never a verdict.
 - `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
+- `release:verify:scenarios` — Derive the release-0-2-verification-v3 memory-soak, local-artifacts and remote-exact-sha scenario reports (plus the aggregate) fail-closed from the newest memory-soak report, the recorded gate receipts and the GitHub ci / gate receipt, provenance-bound to HEAD, the src fingerprint and the 0.2.0 version.
 
 ## solve
 
@@ -308,4 +311,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-206 scripts indexed; 33 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+209 scripts indexed; 36 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.

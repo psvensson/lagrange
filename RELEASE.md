@@ -75,6 +75,64 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
 
+## 0.2 verification receipts
+
+The `release-0-2-verification-v3` Quest closes on scenario reports that
+`npm run release:verify:scenarios` derives from recorded facts, never from
+self-report. The honest sequence, run on the frozen candidate HEAD with a clean
+worktree (every receipt is bound to that HEAD sha, the `src/` fingerprint, and
+the `0.2.0` version in `package.json`, `CLI_VERSION`, `ENTRYPOINT_VERSION`, and
+the chart):
+
+1. **Memory soak.** Produce the enforcing soak report on the candidate (epic
+   G4); the producer reads the newest
+   `test-output/reports/release-0-2-memory-soak*.report.json` (or
+   `--soak-report <path>`) and passes only if the scenario passed, every node
+   reports `analyzed: true` with at least 30 samples, no `insufficient-*`
+   reason and no leak, and the report's `metadata.srcFingerprint` equals the
+   current fingerprint (`fingerprint_missing` / `fingerprint_mismatch`
+   otherwise). "Newest" is by the report's own `timestamp` field (mtime
+   fallback), never by filename.
+2. **Local gates.** Record each required gate through the only honest writer,
+   which runs the command and stores its real exit code:
+   ```sh
+   npm run release:gate:receipt -- test-gate -- npm run test:gate
+   npm run release:gate:receipt -- test-ci -- npm run test:ci
+   npm run release:gate:receipt -- release-workflow-contracts -- \
+     npm run test:file -- test/release/project-hardening-contracts.test.js \
+       test/scripts/release-notes.test.js
+   npm run release:gate:receipt -- package-npm -- npm run package:npm
+   npm run release:gate:receipt -- build-all -- npm run build:all
+   npm run release:gate:receipt -- docker-smoke -- sh -c \
+     'docker build -t lagrange:rc . && \
+      test "$(docker run --rm lagrange:rc src/index.js --version)" = "lagrange v0.2.0"'
+   npm run release:gate:receipt -- helm-package -- \
+     helm package charts/lagrange-node --destination dist/
+   ```
+   Receipts land in `test-output/reports/release-gate-receipts/<name>.json`.
+   The recorded integer `exitCode` is the only success fact (no `passed`
+   field exists or is honoured); a missing receipt, a missing or non-zero
+   exit code, a receipt recorded on another HEAD, fingerprint, or version,
+   or on a dirty tree (`treeClean` / `treeCleanAtFinish` from
+   `git status --porcelain` excluding `solve/`) fails
+   `release-0-2-verification-v3-local-artifacts` with the typed reason naming
+   the receipt.
+3. **Remote exact-SHA gate.** After `npm run publish`, record the GitHub
+   `ci / gate` conclusion for the exact sha:
+   ```sh
+   npm run release:gate:remote-receipt -- --sha "$(git rev-parse HEAD)"
+   ```
+   The helper lists the workflow runs for the sha and their jobs, records
+   every job named `gate` under its own workflow file, and selects the newest
+   completed one; the scenario requires that job to belong to
+   `.github/workflows/ci.yml` (`remote_workflow_mismatch` if `full-gate.yml`
+   was what last ran) with conclusion `success` for the exact HEAD. An absent
+   receipt is `remote_receipt_missing` (FAIL, never skipped).
+4. **Derive the scenarios.** `npm run release:verify:scenarios` writes the
+   three frontier reports and the aggregate under `test-output/reports/`,
+   each carrying the provenance (HEAD, fingerprint, version sources, soak
+   report sha256, receipt paths); the aggregate passes iff all three pass.
+
 ## Convergence: what the release does and does not promise
 
 This is the one property a distributed release must be candid about.
