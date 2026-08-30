@@ -1,4 +1,3 @@
-import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {NODE_STATE, STATE} from '../constants/index.js';
 import {
   CONTRACT_VALIDATION_ROLE,
@@ -16,6 +15,7 @@ import {
   buildAuthorityEvidence,
   buildConnectionEvidenceById,
   buildNodeEvidenceById,
+  isAuthorityReadyRetainable,
   isConnectedFormationMember,
   isCurrentReadyMember,
 } from './formation-release-handoff-evidence.js';
@@ -28,6 +28,20 @@ const mapPrototypeGet = Function.call.bind(Map.prototype.get);
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
 const FROZEN_EMPTY_NODE_IDS = objectFreeze([]);
+// Explicit typed-outcome vocabulary (system-guidelines §4.5): the successor
+// capture admission a completed generation leaves behind is a typed variant,
+// never a raw null. CLOSED: capture is gated on a READY + spread-satisfied
+// authority (idle, revoked, restored). COMPLETED_GENERATION: the generation
+// that just completed admits the capture of its successor while the authority
+// stays retainable against it (decision-table formation-release-handoff-closure:
+// completion-under-compatible-reopen-captures-successor).
+const SUCCESSOR_CAPTURE_ADMISSION = objectFreeze({
+  CLOSED: 'closed',
+  COMPLETED_GENERATION: 'completed_generation',
+});
+const SUCCESSOR_CAPTURE_CLOSED = objectFreeze({
+  state: SUCCESSOR_CAPTURE_ADMISSION.CLOSED,
+});
 
 function captureCohortMember(
   nodeId,
@@ -121,6 +135,7 @@ class FormationReleaseHandoffClosureOwner {
     this.publishedGeneration = null;
     this.lastCompatibleAuthority = null;
     this.terminalGeneration = null;
+    this.successorCapture = SUCCESSOR_CAPTURE_CLOSED;
     this.lastContract = buildContract({
       state: FORMATION_RELEASE_HANDOFF_STATE.IDLE,
       reason: FORMATION_RELEASE_HANDOFF_REASON.NO_SATISFIED_COHORT,
@@ -175,6 +190,34 @@ class FormationReleaseHandoffClosureOwner {
     );
   }
 
+  // Capture admission is one decision over two witnesses: a READY +
+  // spread-satisfied authority admits a capture outright; otherwise only the
+  // generation that just completed admits its successor, and only while the
+  // authority is still retainable against that completed generation (same
+  // fence, non-regressed epoch, cohort still canonical, and exactly the
+  // priority-not-spread reopen) — the retention predicate that kept the
+  // completed generation alive through the reopen, fenced by
+  // fenceSuccessorCapture on every observation. GCP run
+  // 2026-08-30T10-05-10: gen-1 completed at 10:08:06.455 with the reopen
+  // already observed, no successor was minted until the raw three-way spread
+  // cure released at 10:09:22, and the late joiners waited 54 s on the raw
+  // spread predicate with no contract to consume.
+  captureAdmitted(authority) {
+    if (authority.ready === true) return isAuthorityReadyRetainable(authority);
+    return this.successorCapture.state ===
+      SUCCESSOR_CAPTURE_ADMISSION.COMPLETED_GENERATION;
+  }
+
+  fenceSuccessorCapture(authority) {
+    const admission = this.successorCapture;
+    if (
+      admission.state === SUCCESSOR_CAPTURE_ADMISSION.COMPLETED_GENERATION &&
+      !isRetainableAuthority(authority, admission.generation)
+    ) {
+      this.successorCapture = SUCCESSOR_CAPTURE_CLOSED;
+    }
+  }
+
   captureGeneration(
     authority,
     rowsById,
@@ -182,9 +225,7 @@ class FormationReleaseHandoffClosureOwner {
     authorityNodeId,
     observedAt,
   ) {
-    if (authority.ready !== true) return null;
-    if (authority.state !== STARTUP_AUTHORITY_STATE.READY) return null;
-    if (authority.prioritySpreadSatisfied !== true) return null;
+    if (!this.captureAdmitted(authority)) return null;
     const authorityConnection = mapPrototypeGet(
       connectionsById,
       authorityNodeId,
@@ -228,6 +269,7 @@ class FormationReleaseHandoffClosureOwner {
     this.publishedGeneration = null;
     this.lastCompatibleAuthority = null;
     this.terminalGeneration = generation || this.terminalGeneration;
+    this.successorCapture = SUCCESSOR_CAPTURE_CLOSED;
     this.lastContract = buildContract({
       state: FORMATION_RELEASE_HANDOFF_STATE.REVOKED,
       reason,
@@ -276,6 +318,10 @@ class FormationReleaseHandoffClosureOwner {
       this.publishedGeneration = null;
       this.lastCompatibleAuthority = null;
       this.terminalGeneration = generation;
+      this.successorCapture = objectFreeze({
+        state: SUCCESSOR_CAPTURE_ADMISSION.COMPLETED_GENERATION,
+        generation,
+      });
       this.lastContract = buildContract({
         state: FORMATION_RELEASE_HANDOFF_STATE.COMPLETE,
         reason: FORMATION_RELEASE_HANDOFF_REASON.CAPTURED_COHORT_READY,
@@ -322,11 +368,13 @@ class FormationReleaseHandoffClosureOwner {
           FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE,
         );
       }
+      this.successorCapture = SUCCESSOR_CAPTURE_CLOSED;
       return this.lastContract;
     }
     const {authority, rowsById, connectionsById} = observation;
 
     if (!this.generation) {
+      this.fenceSuccessorCapture(authority);
       const generation = this.captureGeneration(
         authority,
         rowsById,
@@ -339,6 +387,7 @@ class FormationReleaseHandoffClosureOwner {
       }
       this.generation = generation;
       this.publishedGeneration = null;
+      this.successorCapture = SUCCESSOR_CAPTURE_CLOSED;
     }
 
     const authorityConnection = mapPrototypeGet(

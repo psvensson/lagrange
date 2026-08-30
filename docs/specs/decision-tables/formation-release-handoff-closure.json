@@ -17,6 +17,7 @@
         "compatible_reopen_joiners_pending",
         "compatible_reopen_partially_ready",
         "all_captured_incarnations_ready",
+        "completed_generation_under_compatible_reopen_with_pre_ready_candidates",
         "captured_member_missing_or_disconnected",
         "captured_incarnation_changed",
         "substantive_authority_block",
@@ -80,6 +81,10 @@
     {
       "id": "incarnation-and-safety-fenced",
       "statement": "Missing membership, disconnect, boot-incarnation change, incompatible publication identity, substantive safety denial, or malformed authority revokes release fail closed."
+    },
+    {
+      "id": "completed-generation-admits-successor",
+      "statement": "A generation that completes admits the capture of its successor for the pre-ready JOINING members of the canonical set while the authority stays retainable against the completed generation (same fence, non-regressed epoch, cohort still canonical, exactly the priority-not-spread reopen); the admission is one typed variant closed by the successor capture, by any revocation, and by the first incompatible or absent authority observation, so a late joiner never falls to the raw spread predicate merely because the prior generation completed after the reopen was observed (GCP run 2026-08-30T10-05-10)."
     }
   ],
   "rules": [
@@ -192,6 +197,16 @@
       "outcome": {"action": "complete_and_close_release"},
       "reason": "Every exact captured incarnation has crossed the existing stable window and owns a fresh READY lease.",
       "invariantRefs": ["single-interaction-owner", "incarnation-and-safety-fenced"]
+    },
+    {
+      "id": "completion-under-compatible-reopen-captures-successor",
+      "when": {
+        "closureEvidence": "completed_generation_under_compatible_reopen_with_pre_ready_candidates",
+        "generation": "compatible"
+      },
+      "outcome": {"action": "persist_without_release"},
+      "reason": "The completed generation's authority evidence (READY + spread satisfied when it was minted, still fenced by the retention predicate through the compatible reopen) is the minting evidence for its successor: the next evaluation captures the pre-ready JOINING cohort as a non-authorizing desired generation exactly as the READY path does, so the contract exists before late joiners reach the barrier; a substantive block, an incompatible identity, or a revocation closes the admission and capture returns to the READY gate.",
+      "invariantRefs": ["single-interaction-owner", "completed-generation-admits-successor", "durable-ack-before-release", "non-monotone-spread-safe", "incarnation-and-safety-fenced"]
     },
     {
       "id": "missing-or-disconnected-revokes",
