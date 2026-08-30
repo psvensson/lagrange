@@ -3,6 +3,7 @@
   "test-output:prune": "Delete old test-harness artifacts (reports, playbacks, run dirs); keeps pinned names, today's items, and the most recent few per category.",
   "test-output:prune:dry": "Preview what test-output:prune would delete without removing anything.",
   "summarize:harness": "Summarize distributed harness runs across reports.",
+  "analyze:formation-release-phases": "Print per-node formation-release phases (W -> handoff observed -> barrier release -> READY with deltas) and the analyzer-classified outcome for one five-node GCP run directory.",
   "distributed:all": "Run all distributed scenarios with verbose output.",
   "distributed:rerun-failed": "Re-run only the distributed scenarios that failed in the last run.",
   "distributed:stop-containers": "Stop local Docker containers and Node processes created by the distributed harness.",

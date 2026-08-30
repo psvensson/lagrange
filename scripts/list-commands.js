@@ -211,6 +211,10 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
         description: 'Extract priority-recovery residual witnesses grouped by owner and boundary.',
       }),
       Object.freeze({
+        command: 'npm run analyze:formation-release-phases -- <report-dir> [--json]',
+        description: 'Print per-node formation-release phases (W -> handoff observed -> barrier release -> READY with deltas) and the analyzer-classified outcome for one five-node GCP run directory.',
+      }),
+      Object.freeze({
         command: 'npm run summarize:harness -- --report-dir test-output/reports',
         description: 'List latest harness reports by scenario and status.',
       }),

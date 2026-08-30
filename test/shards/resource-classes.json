@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2074,
+    "ordinary": 2075,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2091,
-  "digest": "fnv1a32-a88be288",
+  "censusSize": 2092,
+  "digest": "fnv1a32-e0df5e14",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1696,6 +1696,7 @@
     "test/scripts/acceptance-proof-manifest-runner.test.js": "ordinary",
     "test/scripts/analyze-cl039-link-rate.test.js": "ordinary",
     "test/scripts/analyze-fix-engagement.test.js": "ordinary",
+    "test/scripts/analyze-formation-release-phases.test.js": "ordinary",
     "test/scripts/analyze-latent-blockers.test.js": "ordinary",
     "test/scripts/analyze-monotone-drain.test.js": "ordinary",
     "test/scripts/analyze-precondition-recurrence.test.js": "ordinary",

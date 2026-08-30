@@ -30,7 +30,13 @@ Start here before opening large `cluster-segment-*` files.
    package metadata or ad hoc extraction commands.
 5. Use `npm run analyze:owner-files -- <owner> [boundary]` to find likely owner
    files before broad source searches.
-6. Read focused owner/helper files named by those summaries before opening large
+6. For a five-node GCP formation-release run, run
+   `npm run analyze:formation-release-phases -- <report-dir>` (one
+   `test-output/reports/formation-release-handoff-closure/<timestamp>/`
+   directory) to see, per joiner, W -> handoff observed -> barrier release ->
+   READY with deltas and the analyzer-classified outcome, instead of
+   reconstructing the phases from probe reports by hand.
+7. Read focused owner/helper files named by those summaries before opening large
    harness segment files.
 
 Do not infer owner boundaries from raw logs when compact report, topology, or
