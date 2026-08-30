@@ -1,0 +1,68 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-planning-publication-version-key",
+  "status": "pass",
+  "generatedAt": "2026-08-30T19:29:55.902Z",
+  "receipts": [
+    {
+      "id": "version-key-equals-removed-veto-matrix",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^version-key-equals-removed-veto-matrix\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "over all 25 ordered pairs of publication states (epoch 2/3 x PUBLISHED/ACKNOWLEDGING plus no-membership-row), key inequality agrees with the removed live epoch/status veto on every pair, and is never weaker: the veto predicate is restored verbatim in the witness as the equivalence oracle"
+    },
+    {
+      "id": "version-key-carries-generation-and-publication",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^version-key-carries-generation-and-publication\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "the memo version key is a frozen {sourceGeneration, publicationComponent} record carrying both the floored planning generation and the live publication (epoch, status); a rotated generation fails the key even while the publication holds, and the probe-unavailable service state renders one named component instead of a raw null"
+    },
+    {
+      "id": "stable-epoch-burst-builds-once",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^stable-epoch-burst-builds-once\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "40 consecutive routing calls under a stable publication and a stable planning generation perform exactly ONE heavy projection build and return that same frozen projection identity every time"
+    },
+    {
+      "id": "epoch-advance-rebuilds-once",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^epoch-advance-rebuilds-once\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "a publication epoch advance rebuilds exactly once, the rebuilt projection carries the advanced epoch, and the post-advance entry is then served with no further rebuild; the sibling scenario status-transition-rebuilds-once pins the same bound for a status transition inside one epoch"
+    },
+    {
+      "id": "multi-node-interleave-no-cross-caller-thrash",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^multi-node-interleave-no-cross-caller-thrash\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "five publisher nodes interleaved over 40 calls build once each and never invalidate one another: the memo slot is keyed per publisher and every publisher derives the same cluster-winner publication component (requireNodeInclusion false), so the shared component cannot become a cross-caller thrash dimension"
+    },
+    {
+      "id": "moved-publication-never-served-from-memo",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^moved-publication-never-served-from-memo\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "the correctness negative: for all 20 ordered pairs of DISTINCT publication states, a projection derived under the stored state is NEVER served after the live (epoch, status) moves — each pair forces a rebuild through the real memo"
+    },
+    {
+      "id": "merge-memo-shares-one-version-key",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^merge-memo-shares-one-version-key\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "the CL-034 merge memo (resolveMemoizedMembershipPublicationPlanningSnapshotSync) is governed by the same version key with byte-identical reuse and invalidation semantics: stable publication serves, an epoch advance re-merges once, and a planning-source generation change re-merges independently of the publication component"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "CONTROL on the cured tree (red at base with a missing-method TypeError, so NOT a both-sides control): the floored planning generation still invalidates both memos, the 15s wall-time stale grace bound is unchanged for the projection memo and the merge memo, and the grace is still read from the owner-configured budget — no budget, cadence or scheduler value moves"
+    },
+    {
+      "id": "formation-shaped-build-rate-at-pre-change-bound",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^formation-shaped-build-rate-at-pre-change-bound\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "CONTROL (green on HEAD, must stay green): a 1000-call formation-shaped churn on a virtual clock through the real ControlPlaneReadinessService owner build measures 1724 heavy planning builds (344.8/s) and 824 publications winner reads, the pre-change values — the key fold is rate-neutral by construction and must never raise either count"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/control-plane/readiness-planning-publication-version-key.test.js",
+      "detail": "two identical drives of the formation-shaped sequence produce identical heavy build and publication read counts, and two identical memo drives produce the identical build sequence"
+    }
+  ]
+}
