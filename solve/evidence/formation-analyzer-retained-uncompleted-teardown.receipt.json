@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-analyzer-retained-uncompleted-teardown",
+  "status": "pass",
+  "generatedAt": "2026-08-30T09:27:52.257Z",
+  "receipts": [
+    {
+      "id": "retained-uncompleted-at-teardown-classified",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^retained-uncompleted-at-teardown-classified\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "a generation whose last recorded transition is active when its authority marked draining (run 07-13-07 generation e1:4) is classified retained_uncompleted_at_teardown, excluded from the stranded count, and fails closure on the dedicated noRetainedUncompletedAtTeardown invariant"
+    },
+    {
+      "id": "retained-uncompleted-typed-outcome-class",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^retained-uncompleted-typed-outcome-class\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "the analyzer owns retained_uncompleted_at_teardown as a frozen typed GENERATION_CLASSIFICATION member distinct from teardown_truncated; the retained generation is never folded into teardown truncation"
+    },
+    {
+      "id": "completion-span-covers-every-generation",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^completion-span-covers-every-generation\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "completionMs is fail-closed null while any captured generation never completed, so withinCertificationBudget cannot pass on the first generation alone (HEAD reported 12.3 s for run 07-13-07)"
+    },
+    {
+      "id": "completion-span-unchanged-for-completed-generations",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^completion-span-unchanged-for-completed-generations\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "with every captured generation completed the span still runs from the first capture to the last completion and closure passes"
+    },
+    {
+      "id": "teardown-truncated-class-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^teardown-truncated-class-unchanged\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "a valid member-missing revocation after the authority marked draining is still classified teardown_truncated, excluded from stranding, with retention across the reopen intact"
+    },
+    {
+      "id": "active-without-drain-marker-stays-stranded",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^active-without-drain-marker-stays-stranded\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "a generation still active when the log ends with no draining marker for its authority remains stranded (fail-closed)"
+    },
+    {
+      "id": "no-second-active-ready-authority",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^no-second-active-ready-authority\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "nodes-status, publication-count and coverage events never change the classification derived from the owner's recorded transitions"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "detail": "two analyses of the identical recorded run produce the identical classification, invariants and span"
+    },
+    {
+      "id": "reverted-control-observes-retained-uncompleted",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^reverted-control-observes-retained-uncompleted\" test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js",
+      "detail": "the runner's reverted-arm control verdict, minted from the analyzer's real invariants, reports a generation retained but never completed at teardown as the observed regression (control PASS, as on recorded control run 2026-08-28T20-24-59.265Z) and a cleanly completing reverted run as not observed (control FAIL)"
+    }
+  ]
+}
