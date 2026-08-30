@@ -180,6 +180,22 @@
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js"
       ]
+    },
+    "operation-ledger-self-move-interlock": {
+      "description": "The operation-ledger self-move interlock: hold registration at createOperation, engagement at the dispatching owner's PENDING -> SENDING claim (a foreign holder resolved through the authoritative lifecycle read), and release only by the holder's own terminal row stay one owner contract across the hold policy, the hold state, the admission lanes and the dispatch gate.",
+      "owners": [
+        "src/rebalancer/operation-ledger-hold-policy.js",
+        "src/rebalancer/rebalance-coordinator-ledger-interlock-hold-state.js",
+        "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+        "src/rebalancer/operation-workflow-dispatch-ledger-self-move-gate.js",
+        "src/rebalancer/operation-workflow-dispatch-execution.js"
+      ],
+      "tests": [
+        "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -323,6 +339,32 @@
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js"
+      ]
+    },
+    "operation-ledger-self-move-hold-dispatch": {
+      "description": "The coordinator's hold registration/admission lanes and the workflow owner's self-move dispatch claim must keep agreeing on who holds the ledger self-move interlock: an engagement that refuses on a remembered holder without reading its row starves every re-planned self-move behind a terminal predecessor.",
+      "endpoints": [
+        {
+          "id": "hold-registration-admission",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-ledger-interlock-hold-state.js",
+            "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js"
+          ]
+        },
+        {
+          "id": "self-move-dispatch-claim",
+          "owners": [
+            "src/rebalancer/operation-workflow-dispatch-ledger-self-move-gate.js",
+            "src/rebalancer/operation-workflow-dispatch-execution.js"
+          ]
+        }
+      ],
+      "contract": "operation-ledger-self-move-interlock",
+      "witnessTests": [
+        "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+        "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js"
       ]
     }
   }

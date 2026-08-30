@@ -51,6 +51,7 @@ import {
   continuationIsAllowed,
 } from './continuation.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
+import {landingUnionGuardProblems} from './landing-union-guard.js';
 import {
   checkpointVerificationProblems,
   terminalVerificationProblems,
@@ -478,6 +479,10 @@ export function auditQuest(root, quest) {
     ...auditEvidenceIdentity(log, startIndex),
     ...auditTheoryUse(log, startIndex),
     ...verificationProblems,
+    // Terminal only: a landing may commit only source paths a recorded
+    // attempt covers; the typed problem carries code + requiredPaths so the
+    // commit gate, terminal readiness, and `next` all name the same block.
+    ...(terminal ? landingUnionGuardProblems(root, quest, log) : []),
     ...auditCoupledPairGuards(root, quest, log, startIndex, terminal),
     ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),

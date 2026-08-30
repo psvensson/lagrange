@@ -20,6 +20,9 @@ import {
 } from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
 import {
+  LANDING_UNCOVERED_SOURCE_PATHS_CODE,
+} from './landing-union-guard.js';
+import {
   EVENT_GATE_DECISION,
   OUTCOME_CONTINUE,
   RUNG_INDEX_MODEL,
@@ -156,7 +159,36 @@ function pendingVerifierAction(questId, state, pendingVerification, preflight) {
   );
 }
 
+// A dirty source path outside the recorded attempt union blocks the landing
+// before any verification could matter (the verifier would review a
+// candidate that omits it), so it outranks the aggregate-approval request.
+function uncoveredSourcePathsAction(questId, audit) {
+  const uncovered = audit.problems.find((problem) =>
+    problem.code === LANDING_UNCOVERED_SOURCE_PATHS_CODE);
+  if (!uncovered) return null;
+  return typedNextAction(
+    landCommand(questId),
+    {
+      code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+      payload: {
+        questId,
+        problemCode: uncovered.code,
+        problem: uncovered.message,
+        requiredPaths: uncovered.requiredPaths || [],
+      },
+    },
+  );
+}
+
+function typedActionProblemLine(action) {
+  const payload = action?.payload;
+  if (!payload?.problemCode || !payload?.problem) return null;
+  return `problem [${payload.problemCode}]: ${payload.problem}`;
+}
+
 function terminalQuestAction(questId, verification, audit) {
+  const uncoveredAction = uncoveredSourcePathsAction(questId, audit);
+  if (uncoveredAction) return uncoveredAction;
   if (verification.attempts.some((attempt) => attempt.contracted) &&
     !verification.aggregateApproval) {
     // An uncomputable aggregate has no fingerprint a verifier could ever
@@ -347,6 +379,8 @@ export function buildNextLines(root, questId) {
     lines.push(`last stop: ${lastStop.code} ` +
       `(${lastStop.disposition})${lastStop.problem ? ` — ${lastStop.problem}` : ''}`);
   }
+  const typedProblemLine = typedActionProblemLine(action);
+  if (typedProblemLine) lines.push(typedProblemLine);
   // A terminal quest has no current blocker by definition; printing the stale
   // (often "unknown") blocker card next to "quest is SOLVED" is contradictory.
   if (blocker) {
@@ -373,7 +407,10 @@ export function buildNextSummaryLines(root, questId) {
     `quest: ${projection.quest.id} (${projection.quest.status})`,
   ];
   const preflightProblem = verification.checkpointPreflight.problems?.[0];
-  if (lastStop) {
+  const typedProblemLine = typedActionProblemLine(action);
+  if (typedProblemLine) {
+    lines.push(typedProblemLine);
+  } else if (lastStop) {
     lines.push(`problem [${lastStop.code}]: ${lastStop.problem || lastStop.disposition}`);
   } else if (preflightProblem) {
     lines.push(`problem [verification-preflight]: ${preflightProblem.message}`);

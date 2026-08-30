@@ -308,6 +308,16 @@ export const OUTCOME_BLOCKED = 'blocked';
 // disposition once a quorum of advisories has accrued. Never a terminal; callers treat it
 // as "continue".
 export const OUTCOME_CONTINUE = 'continue';
+// Landing union guard (landing-union-guard.js): a terminal landing may commit
+// only paths outside solve/ that a RECORDED attempt covers. Any staged,
+// modified, or intent-to-add path outside solve/ absent from that union is
+// this typed BLOCKED landing problem — never a verdict not-required landing.
+export const LANDING_UNCOVERED_SOURCE_PATHS_CODE =
+  'blocked-uncovered-source-paths';
+export const LANDING_UNION_STATUS = Object.freeze({
+  COVERED: 'covered',
+  UNCOVERED: 'uncovered',
+});
 
 // Supervisor (keep-alive) outcomes. runSupervised re-invokes runLoop only after a
 // progress-bearing MAX_CYCLES result. These outcomes are NON-terminal — they never

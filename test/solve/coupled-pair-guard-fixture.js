@@ -67,6 +67,13 @@ const SOURCE_BEFORE = 'export const state = \'before\';\n';
 const OTHER_WITNESS_SOURCE = 'export const otherWitness = true;\n';
 const GIT_ADD_ARGS = Object.freeze(['add', '-A']);
 const GIT_COMMIT_ARGS = Object.freeze(['commit', '-m', 'base']);
+const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain', '--']);
+const GIT_GRAPH_CONTEXT_COMMIT_ARGS = Object.freeze([
+  'commit', '--only', '--quiet', '-m', 'canonical graph context', '--',
+]);
+const GIT_REGISTRY_CONTEXT_COMMIT_ARGS = Object.freeze([
+  'commit', '--only', '--quiet', '-m', 'registry context', '--',
+]);
 
 function git(root, args) {
   return execFileSync(GIT_COMMAND, args, {
@@ -208,7 +215,19 @@ export function createCoupledPairFixture({
       writeFile(root, sourcePath, `export const state = '${value}';\n`);
     }
     fs.writeFileSync(oracle, JSON.stringify({metric: metricValue, target: 0}));
+    // The refreshed canonical graph is tracked fixture context outside the
+    // recorded candidate: a dirty graph/seal outside the recorded attempt
+    // union would block the landing, so it lands in a context commit. The
+    // candidate base stays the step-pinned base (the context commit touches
+    // no candidate path), and the review snapshot copies the ambient triple,
+    // which now matches the live tree the snapshot reproduces.
     refreshCanonicalGraph(root);
+    const graphDelta = git(root, [...GIT_STATUS_ARGS,
+      IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH]);
+    if (String(graphDelta).trim()) {
+      git(root, [...GIT_GRAPH_CONTEXT_COMMIT_ARGS,
+        IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH]);
+    }
     const content = git(root, [
       'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--',
       ...SOURCE_PATHS, REGISTRY_PATH,
@@ -240,6 +259,12 @@ export function createCoupledPairFixture({
     },
     deleteRegistry() {
       fs.rmSync(path.join(root, REGISTRY_PATH));
+    },
+    // Registry drift that another landing already committed: the rewritten
+    // registry is tracked context outside the recorded candidate, and a
+    // dirty uncovered path would block the landing before any review check.
+    commitRegistryContext() {
+      git(root, [...GIT_REGISTRY_CONTEXT_COMMIT_ARGS, REGISTRY_PATH]);
     },
   };
 }

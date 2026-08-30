@@ -12,8 +12,10 @@
 //   - Refuse to hand off a Quest whose audit does not pass. A scope-clean commit
 //     of dishonest evidence is still dishonest.
 //   - Derive the in-scope set purely from sealed artifacts (the Quest's solve/
-//     paths plus the paths named inside its own diffs). Never infer scope from
-//     the shape of the dirty tree.
+//     paths plus the paths named inside the change artifacts of its RECORDED
+//     attempts — see landing-union-guard.js). Never infer scope from the
+//     shape of the dirty tree, and never from a change artifact on disk that
+//     no attempt event references.
 //   - Default to a dry run. Print the exact git commands and explicitly list the
 //     out-of-scope dirty files so they are visibly excluded, never silently.
 
@@ -35,10 +37,8 @@ import {STATUS_SOLVED} from './constants.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
-import {
-  expectedChangeDir,
-  inspectChangeArtifact,
-} from './change-artifact.js';
+import {expectedChangeDir} from './change-artifact.js';
+import {recordedAttemptScope} from './landing-union-guard.js';
 import {SOLVE_DATA_DIR} from './constants.js';
 import {frontierFilePath, runFrontierCommand, writeFrontier} from './frontier.js';
 import {resolveCoauthorTrailer} from './operator-config.js';
@@ -61,7 +61,6 @@ import {
   OWNER_DEBT_SOURCE_DIRECTORIES,
 } from '../global-owner-debt-inventory/constants.js';
 
-const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
 const DERIVED_INVENTORY_PATHS = Object.freeze([
   'solve/changes/global-owner-debt-inventory/inventory.json',
@@ -185,32 +184,6 @@ function questArtifactPaths(root, questId) {
   };
 }
 
-// Source/test files named inside this Quest's own change artifacts. These are the
-// only non-solve/ paths a Quest legitimately touches.
-function questChangeArtifactScope(root, quest) {
-  const dir = expectedChangeDir(root, quest.id);
-  if (!fs.existsSync(dir)) return {diffReferenced: [], contentObjects: []};
-  const referenced = new Set();
-  const contentObjects = new Set();
-  for (const name of fs.readdirSync(dir)) {
-    if (!name.endsWith('.diff') &&
-      !name.endsWith(CONTENT_DESCRIPTOR_EXTENSION)) continue;
-    const artifactPath = toRootRelative(root, path.join(dir, name));
-    const inspection = inspectChangeArtifact(root, quest, `diff:${artifactPath}`);
-    if (!inspection.valid) continue;
-    if (inspection.contentObjectPath) {
-      contentObjects.add(inspection.contentObjectPath);
-    }
-    for (const filePath of inspection.changedPaths) {
-      referenced.add(filePath);
-    }
-  }
-  return {
-    diffReferenced: [...referenced].sort(),
-    contentObjects: [...contentObjects].sort(),
-  };
-}
-
 // Pure scope decision: a dirty path is in-scope when it is one of the Quest's
 // fixed solve/ artifacts, lives under its change directory, or is named by one of
 // its diffs. Everything else dirty is explicitly out-of-scope.
@@ -288,7 +261,10 @@ export function buildHandoff(root, quest, options = {}) {
     ready: baseGate.ready && scopeProblem.length === 0,
     problems: [...baseGate.problems, ...scopeProblem],
   };
-  const artifactScope = questChangeArtifactScope(root, quest);
+  // Source/test files named by this Quest's RECORDED attempts: the only
+  // non-solve/ paths a landing may commit (the landing union guard refuses
+  // any dirty source path outside this union before the commit is reached).
+  const artifactScope = recordedAttemptScope(root, quest, log);
   const questArtifacts = questArtifactPaths(root, quest.id);
   // A spec-ladder row flipped by this landing (autoCommitQuest, before this
   // call) is owned scope the same way the regenerated frontier board is: dirty

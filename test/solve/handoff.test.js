@@ -655,8 +655,22 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       });
       t.notOk(r.commit.committed, 'attempt recording does not commit');
       t.equal(r.commit.skipped, 'explicit-checkpoint-required');
+      // A staged source path outside the recorded attempt union is a typed
+      // landing block naming the path, never a silent exclusion: nothing is
+      // committed until it is recorded or taken out of the index.
+      const blocked = autoCommitQuest(root, quest.id);
+      t.equal(blocked.committed, false,
+        'an uncovered staged source path blocks the terminal handoff');
+      t.equal(blocked.skipped, 'commit-gate');
+      t.ok(blocked.gate.problems.some((problem) =>
+        problem.code === 'blocked-uncovered-source-paths' &&
+        problem.requiredPaths.includes('src/unrelated.js')),
+      'the block names the uncovered path');
+      execFileSync('git', ['reset', '-q', '--', 'src/unrelated.js'],
+        {cwd: root, stdio: 'ignore'});
       const committed = autoCommitQuest(root, quest.id);
-      t.ok(committed.committed, 'explicit terminal handoff commits');
+      t.ok(committed.committed,
+        'explicit terminal handoff commits once no uncovered source is staged');
       t.equal(committed.pushed, false, 'terminal handoff never pushes');
       const files = committedFiles(root);
       t.ok(files.includes('solve/quests/demo.json'), 'commits the quest file');
@@ -915,6 +929,15 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
         summary: 'delete tracked proof',
       });
       t.equal(result.commit.committed, false);
+      // The staged unrelated source is outside the recorded attempt union:
+      // the landing blocks (typed, naming it) instead of excluding it silently.
+      const blocked = autoCommitQuest(root, quest.id);
+      t.equal(blocked.committed, false,
+        'unrelated staged source blocks the landing until it leaves the index');
+      t.ok(blocked.gate.problems.some((problem) =>
+        problem.code === 'blocked-uncovered-source-paths' &&
+        problem.requiredPaths.includes('src/unrelated.js')));
+      execFileSync('git', ['reset', '-q', '--', 'src/unrelated.js'], {cwd: root});
       t.equal(autoCommitQuest(root, quest.id).committed, true);
       t.equal(fs.existsSync(path.join(root, 'docs', 'deleted.md')), false);
       t.notOk(committedFiles(root).includes('src/unrelated.js'));
