@@ -690,3 +690,88 @@ test('formation GCP analyzer fails a real reopen that revokes the captured ' +
   t.equal(analysis.closurePassed, false);
   t.end();
 });
+
+// The captured generation is revoked by a VALID disconnect/ineligible reason
+// instead of completing, and the authority logs its teardown marker in the
+// run's real shape (node-0.log of 2026-08-30T02-15-53.462Z: "Bootstrap
+// readiness marked draining" with NODE_DRAINING) either before or after it.
+function buildTeardownRevocationEvents({drainingAt, revokeAt, reason}) {
+  const events = buildOwnerObservedReopenEvents();
+  const completionIndex = events.findIndex(
+    (event) => event.state === 'complete',
+  );
+  // The owner reports the reopen on a RETAINED active transition (the run's
+  // 02:18:54.105 event), then the generation is revoked instead of completing.
+  events.splice(completionIndex, 1, {
+    ...events[completionIndex],
+    time: '2026-08-25T00:00:20.000Z',
+    state: 'active',
+    reason: 'retained_until_captured_cohort_ready',
+    releaseAuthorized: true,
+    readyNodeIds: [],
+    pendingNodeIds: ['joiner-a', 'joiner-b'],
+  }, {
+    time: revokeAt,
+    nodeId: 'seed',
+    state: 'revoked',
+    reason,
+    generation: GENERATION,
+    authorityNodeId: 'seed',
+    authorityBootIncarnation: 1,
+    capturedPublicationEpoch: 41,
+    releaseAuthorized: false,
+    observedAuthorityReady: null,
+    observedRecoveryReasonCodes: [],
+    requiredCohort: buildCohort(),
+    readyNodeIds: [],
+    pendingNodeIds: [],
+    msg: 'Formation release handoff authority transition',
+  });
+  events.push({
+    time: drainingAt,
+    nodeId: 'seed',
+    phase: 'DEGRADED',
+    reasons: ['NODE_DRAINING', 'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+    drainDeadlineMs: 1788056427610,
+    msg: 'Bootstrap readiness marked draining',
+  });
+  return events;
+}
+
+test('formation GCP analyzer classifies a valid disconnect revocation after ' +
+  'the authority marked draining as teardown truncation, not stranded', (t) => {
+  const analysis = analyzeFormationReleaseEvents(
+    buildTeardownRevocationEvents({
+      drainingAt: '2026-08-25T00:00:39.000Z',
+      revokeAt: '2026-08-25T00:00:40.000Z',
+      reason: 'captured_cohort_member_ineligible',
+    }),
+    FINGERPRINT,
+  );
+  t.equal(analysis.teardownTruncatedGenerationCount, 1);
+  t.equal(analysis.generationClassifications[GENERATION], 'teardown_truncated');
+  t.equal(analysis.invariants.noStrandedGeneration, true,
+    'a generation retained until its authority stopped is not stranded');
+  t.equal(analysis.generationRetainedAcrossReopen, true);
+  t.equal(analysis.invalidRevocationCount, 0);
+  t.end();
+});
+
+test('formation GCP analyzer keeps a disconnect revocation before the ' +
+  'authority marked draining stranded', (t) => {
+  const analysis = analyzeFormationReleaseEvents(
+    buildTeardownRevocationEvents({
+      drainingAt: '2026-08-25T00:00:41.000Z',
+      revokeAt: '2026-08-25T00:00:40.000Z',
+      reason: 'captured_cohort_member_missing',
+    }),
+    FINGERPRINT,
+  );
+  t.equal(analysis.teardownTruncatedGenerationCount, 0);
+  t.equal(analysis.generationClassifications[GENERATION], 'stranded');
+  t.equal(analysis.invariants.noStrandedGeneration, false,
+    'a revocation while the authority is still serving strands the cohort');
+  t.equal(analysis.generationRetainedAcrossReopen, false);
+  t.equal(analysis.closurePassed, false);
+  t.end();
+});
