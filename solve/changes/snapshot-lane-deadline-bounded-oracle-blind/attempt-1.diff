@@ -1,0 +1,166 @@
+diff --git a/scripts/quest-evidence-snapshot-lane-deadline-bounded-oracle-blind.js b/scripts/quest-evidence-snapshot-lane-deadline-bounded-oracle-blind.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..97383ce0332869c9a9c82ae06b39d5a6f1c505ca
+--- /dev/null
++++ b/scripts/quest-evidence-snapshot-lane-deadline-bounded-oracle-blind.js
+@@ -0,0 +1,72 @@
++// Deterministic evidence harness for the
++// snapshot-lane-deadline-bounded-oracle-blind quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs each
++// recorded proof command and writes the test-receipt probe artifact.
++//
++// Receipt honesty (the witness file uses the repo tap shim, so
++// --test-name-pattern is inert: every command runs the WHOLE file and a green
++// receipt means the whole file passed, which includes the named scenario):
++// on HEAD the deadline-bounded-snapshot-lane-is-oracle-blind scenario is RED
++// (an empty probe-witness list is read as sight, so the verdict claims an
++// inactive cluster); the surrounding blindness scenarios are green on HEAD and
++// must stay green.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/distributed/harness/__tests__/oracle-blindness-classification.test.js';
++const JOIN_TEST =
++  'test/distributed/harness/__tests__/' +
++  'cluster-active-probe-resample-after-snapshot-lane.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const SPACE = ' ';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'deadline-bounded-snapshot-lane-is-oracle-blind',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST,
++    detail: 'a snapshot lane still in flight at the deadline is classified ' +
++      'blind and carries its typed lane reason, instead of being read as a ' +
++      'sighted oracle reporting an inactive cluster',
++  }),
++  Object.freeze({
++    id: 'empty-witness-list-from-other-producers-unchanged',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST,
++    detail: 'an empty probe-witness list that carries no deadline-bounded ' +
++      'lane marker keeps its prior not-blind meaning, and a completed lane ' +
++      'with a sighted witness stays sighted',
++  }),
++  Object.freeze({
++    id: 'blindness-classification-unchanged',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST,
++    detail: 'the tracker, the failure message, the diagnostics stamp and the ' +
++      'node-level inactivity precedence rule are unchanged',
++  }),
++  Object.freeze({
++    id: 'attempt-join-contract-unchanged',
++    command: NODE_TEST_COMMAND_PREFIX + JOIN_TEST,
++    detail: 'the deadline-bounded record its producer emits, the re-sample ' +
++      'admission and the progress classification are unchanged',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST + SPACE + JOIN_TEST,
++    detail: 'both witness files re-run together with the identical outcome',
++  }),
++]);
++
++const QUEST_ID = 'snapshot-lane-deadline-bounded-oracle-blind';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'snapshot-lane-deadline-bounded-oracle-blind.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/test/distributed/harness/__tests__/oracle-blindness-classification.test.js b/test/distributed/harness/__tests__/oracle-blindness-classification.test.js
+index 3f293feade4edd9dda608fab2e4e056084ea7f01..8380396150df81a44f1bd1e42ef7cf2284235c2d 100644
+--- a/test/distributed/harness/__tests__/oracle-blindness-classification.test.js
++++ b/test/distributed/harness/__tests__/oracle-blindness-classification.test.js
+@@ -119,6 +119,36 @@ test('resolveSnapshotCoverageBlindness: blind only when every probe ' +
+   t.equal(allFailed.transportError, TRANSPORT_ERROR);
+ });
+ 
++// GCP run 2026-08-30T17-32-03: every node reported active and the gate still
++// failed, because the seed answered control_snapshot at t+62.9s against a 61s
++// verdict. The lane was still in flight, so the coverage record carried the
++// typed deadline-bounded outcome and NO probe witnesses — and the empty list
++// was read as sight, printing "Not all nodes reached ACTIVE" instead of
++// oracle_blind. Five consecutive forensics hunted a cluster stall because of
++// that label.
++test('deadline-bounded-snapshot-lane-is-oracle-blind: a lane still in flight ' +
++  'at the deadline is blindness, not evidence of an inactive cluster',
++async (t) => {
++  const deadlineBounded = resolveSnapshotCoverageBlindness({
++    completeCoverage: false,
++    bestCoverageNodeCount: 0,
++    probeWitnesses: [],
++    laneOutcome: 'deadline_bounded',
++    laneReason: 'snapshot_lane_running_at_deadline',
++  });
++  t.equal(deadlineBounded.blind, true,
++    'the oracle asked and never got an answer: that is blind');
++  t.equal(deadlineBounded.transportError, 'snapshot_lane_running_at_deadline',
++    'the typed lane reason is carried as the transport error');
++  t.same(resolveSnapshotCoverageBlindness({probeWitnesses: []}),
++    {blind: false, transportError: null},
++    'an empty witness list from any OTHER producer keeps its prior meaning');
++  t.equal(resolveSnapshotCoverageBlindness({
++    probeWitnesses: [{nodeId: 'a', snapshotQuerySucceeded: true, error: null}],
++    laneOutcome: 'completed',
++  }).blind, false, 'a completed lane with a sighted witness stays sighted');
++});
++
+ test('resolveActiveWaitOracleBlindness: readable node-level inactivity ' +
+   'evidence outranks snapshot blindness', async (t) => {
+   const blindCoverage = {
+diff --git a/test/distributed/harness/oracle-blindness.js b/test/distributed/harness/oracle-blindness.js
+index f04325deea1c294621cf7623f43709869d58ba4b..56c2f251469aea8dbf0b0c37756a348cfd3663dc 100644
+--- a/test/distributed/harness/oracle-blindness.js
++++ b/test/distributed/harness/oracle-blindness.js
+@@ -139,15 +139,41 @@ function markOracleBlindError(error, summary) {
+   return error;
+ }
+ 
++// A snapshot lane still in flight at the deadline yields a typed
++// deadline-bounded coverage record with NO probe witnesses: the oracle asked
++// and never got an answer, which is blindness, not evidence of an inactive
++// cluster. Inferring sight from an empty witness list made the seed's late
++// snapshot (measured t+62.9s against a 61s verdict on GCP run
++// 2026-08-30T17-32-03) print "Not all nodes reached ACTIVE" while every node
++// reported active, which is why five consecutive forensics hunted a cluster
++// stall. The marker is typed so an empty list from any other producer keeps
++// its previous meaning.
++const SNAPSHOT_LANE_DEADLINE_BOUNDED_OUTCOME = 'deadline_bounded';
++
++function isDeadlineBoundedSnapshotCoverage(snapshotCoverage) {
++  return snapshotCoverage?.laneOutcome ===
++    SNAPSHOT_LANE_DEADLINE_BOUNDED_OUTCOME;
++}
++
+ /**
+  * Per-poll blindness signal for the active waits: the snapshot-coverage
+  * probe is blind when it attempted at least one node and NO node returned a
+- * readable snapshot payload (every probe witness carries a transport error).
++ * readable snapshot payload (every probe witness carries a transport error),
++ * or when the lane was still in flight at the deadline (typed
++ * deadline-bounded record, no witnesses).
+  */
+ function resolveSnapshotCoverageBlindness(snapshotCoverage) {
+   const probeWitnesses = Array.isArray(snapshotCoverage?.probeWitnesses) ?
+     snapshotCoverage.probeWitnesses :
+     [];
++  if (isDeadlineBoundedSnapshotCoverage(snapshotCoverage)) {
++    return {
++      blind: true,
++      transportError:
++        snapshotCoverage?.laneReason ||
++        SNAPSHOT_LANE_DEADLINE_BOUNDED_OUTCOME,
++    };
++  }
+   if (probeWitnesses.length === ZERO) {
+     return {blind: false, transportError: null};
+   }

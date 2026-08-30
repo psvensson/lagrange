@@ -25,6 +25,10 @@
 // the same per-node probe, and snapshot counts never derive ACTIVE here.
 
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
+import {
+  ACTIVE_PROBE_SNAPSHOT_LANE_DEADLINE_BOUNDED_REASON,
+  ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME,
+} from './active-probe-snapshot-lane-constants.js';
 
 const {
   ACTIVE_PROBE_REASON_ADMIN_NOT_READY,
@@ -43,13 +47,7 @@ const ACTIVE_PROBE_RESAMPLE_ADMISSION = Object.freeze({
   NOT_ADMITTED_AFTER_DEADLINE: 'not_admitted_after_deadline',
 });
 
-const ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME = Object.freeze({
-  COMPLETED: 'completed',
-  DEADLINE_BOUNDED: 'deadline_bounded',
-});
 
-const ACTIVE_PROBE_SNAPSHOT_LANE_DEADLINE_BOUNDED_REASON =
-  'snapshot_lane_running_at_deadline';
 const ACTIVE_PROBE_SNAPSHOT_LANE_SETTLEMENT = Object.freeze({
   PENDING: 'pending',
   RESOLVED: 'resolved',

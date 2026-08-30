@@ -16,6 +16,10 @@ import {
   resolveActiveWaitOracleBlindness,
   resolveSnapshotCoverageBlindness,
 } from '../oracle-blindness.js';
+import {
+  ACTIVE_PROBE_SNAPSHOT_LANE_DEADLINE_BOUNDED_REASON,
+  ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME,
+} from '../active-probe-snapshot-lane-constants.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from '../assertions-convergence-wait.js';
 
 const {waitForConvergence} = ASSERTIONS_CONVERGENCE_WAIT;
@@ -117,6 +121,70 @@ test('resolveSnapshotCoverageBlindness: blind only when every probe ' +
   });
   t.equal(allFailed.blind, true);
   t.equal(allFailed.transportError, TRANSPORT_ERROR);
+});
+
+// GCP run 2026-08-30T17-32-03: every node reported active and the gate still
+// failed, because the seed answered control_snapshot at t+62.9s against a 61s
+// verdict. The lane was still in flight, so the coverage record carried the
+// typed deadline-bounded outcome and NO probe witnesses — and the empty list
+// was read as sight, printing "Not all nodes reached ACTIVE" instead of
+// oracle_blind. Five consecutive forensics hunted a cluster stall because of
+// that label.
+test('deadline-bounded-snapshot-lane-is-oracle-blind: a lane still in flight ' +
+  'at the deadline is blindness, not evidence of an inactive cluster',
+async (t) => {
+  const deadlineBounded = resolveSnapshotCoverageBlindness({
+    completeCoverage: false,
+    bestCoverageNodeCount: 0,
+    probeWitnesses: [],
+    laneOutcome: 'deadline_bounded',
+    laneReason: 'snapshot_lane_running_at_deadline',
+  });
+  t.equal(deadlineBounded.blind, true,
+    'the oracle asked and never got an answer: that is blind');
+  t.equal(deadlineBounded.transportError, 'snapshot_lane_running_at_deadline',
+    'the typed lane reason is carried as the transport error');
+  t.same(resolveSnapshotCoverageBlindness({probeWitnesses: []}),
+    {blind: false, transportError: null},
+    'an empty witness list from any OTHER producer keeps its prior meaning');
+  t.equal(resolveSnapshotCoverageBlindness({
+    probeWitnesses: [{nodeId: 'a', snapshotQuerySucceeded: true, error: null}],
+    laneOutcome: ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME.COMPLETED,
+  }).blind, false, 'a completed lane with a sighted witness stays sighted');
+  // The producer and the consumer must share ONE owner of this vocabulary:
+  // an independent literal on either side would silently restore the mislabel.
+  t.equal(ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME.DEADLINE_BOUNDED,
+    'deadline_bounded',
+    'the lane outcome the producer emits is the one the resolver keys on');
+});
+
+// A deadline-bounded lane must never cost an honest inactive-node diagnosis:
+// readable node-level inactivity evidence still outranks snapshot blindness.
+test('deadline-bounded-lane-never-hides-an-inactive-node: readable node ' +
+  'inactivity outranks the blind lane', async (t) => {
+  const deadlineBoundedCoverage = {
+    completeCoverage: false,
+    bestCoverageNodeCount: 0,
+    probeWitnesses: [],
+    laneOutcome: ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME.DEADLINE_BOUNDED,
+    laneReason: ACTIVE_PROBE_SNAPSHOT_LANE_DEADLINE_BOUNDED_REASON,
+  };
+  t.equal(resolveActiveWaitOracleBlindness({
+    snapshotCoverage: deadlineBoundedCoverage,
+    nodeDiagnostics: [
+      {nodeId: 'a', active: true},
+      {nodeId: 'b', active: false},
+    ],
+  }).blind, false,
+  'a genuinely inactive node keeps its honest diagnosis');
+  t.equal(resolveActiveWaitOracleBlindness({
+    snapshotCoverage: deadlineBoundedCoverage,
+    nodeDiagnostics: [
+      {nodeId: 'a', active: true},
+      {nodeId: 'b', active: true},
+    ],
+  }).blind, true,
+  'only an all-active cluster with an unreadable lane is oracle_blind');
 });
 
 test('resolveActiveWaitOracleBlindness: readable node-level inactivity ' +

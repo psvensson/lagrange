@@ -17,6 +17,9 @@
  * the blindness stats ride along in diagnostics instead.
  */
 
+import {ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME} from
+  './active-probe-snapshot-lane-constants.js';
+
 const ORACLE_BLIND_CLASSIFICATION = 'oracle_blind';
 const ORACLE_BLIND_MIN_TRAILING_BLIND_POLLS = 2;
 const ORACLE_BLIND_ERROR_UNKNOWN = 'unknown snapshot transport error';
@@ -139,15 +142,40 @@ function markOracleBlindError(error, summary) {
   return error;
 }
 
+// A snapshot lane still in flight at the deadline yields a typed
+// deadline-bounded coverage record with NO probe witnesses: the oracle asked
+// and never got an answer, which is blindness, not evidence of an inactive
+// cluster. Inferring sight from an empty witness list made the seed's late
+// snapshot (measured t+62.9s against a 61s verdict on GCP run
+// 2026-08-30T17-32-03) print "Not all nodes reached ACTIVE" while every node
+// reported active, which is why five consecutive forensics hunted a cluster
+// stall. The marker is typed so an empty list from any other producer keeps
+// its previous meaning.
+
+function isDeadlineBoundedSnapshotCoverage(snapshotCoverage) {
+  return snapshotCoverage?.laneOutcome ===
+    ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME.DEADLINE_BOUNDED;
+}
+
 /**
  * Per-poll blindness signal for the active waits: the snapshot-coverage
  * probe is blind when it attempted at least one node and NO node returned a
- * readable snapshot payload (every probe witness carries a transport error).
+ * readable snapshot payload (every probe witness carries a transport error),
+ * or when the lane was still in flight at the deadline (typed
+ * deadline-bounded record, no witnesses).
  */
 function resolveSnapshotCoverageBlindness(snapshotCoverage) {
   const probeWitnesses = Array.isArray(snapshotCoverage?.probeWitnesses) ?
     snapshotCoverage.probeWitnesses :
     [];
+  if (isDeadlineBoundedSnapshotCoverage(snapshotCoverage)) {
+    return {
+      blind: true,
+      transportError:
+        snapshotCoverage?.laneReason ||
+        ACTIVE_PROBE_SNAPSHOT_LANE_OUTCOME.DEADLINE_BOUNDED,
+    };
+  }
   if (probeWitnesses.length === ZERO) {
     return {blind: false, transportError: null};
   }
