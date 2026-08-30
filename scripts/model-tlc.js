@@ -19,6 +19,8 @@ import {spawnSync} from 'node:child_process';
 import https from 'node:https';
 import {pathToFileURL} from 'node:url';
 import {CONFIGS} from './model-tlc-configs.js';
+import {TLC_NO_ERROR_VERDICT} from './model-tlc-constants.js';
+import {deterministicTlcOutputTail} from './model-tlc-output-tail.js';
 
 const JAR_PATH = process.env.TLA_TOOLS_JAR ||
   path.resolve('tools', 'tla2tools.jar');
@@ -137,7 +139,7 @@ function cleanTraceArtifacts(modulePath) {
 }
 
 function interpret(config, run) {
-  const noError = /No error has been found/.test(run.output);
+  const noError = run.output.includes(TLC_NO_ERROR_VERDICT);
   const temporalViolated =
     /Temporal propert(?:y|ies)\b[\s\S]*violated/iu.test(run.output);
   const expectedFailureObserved = !config.expectConverged &&
@@ -158,7 +160,6 @@ function interpret(config, run) {
 }
 
 function buildTlcReport(config, run, verdict) {
-  const tail = run.output.trim().split('\n').slice(-12).join('\n');
   return {
     schemaVersion: 'active-gate-model-report-v1',
     modelReport: true,
@@ -179,8 +180,17 @@ function buildTlcReport(config, run, verdict) {
     expectationMet: verdict.expectationMet,
     temporalViolated: verdict.temporalViolated,
     exitCode: run.exitCode,
-    outputTail: tail,
+    outputTail: deterministicTlcOutputTail(run.output, verdict.converged),
   };
+}
+
+// The single report-rendering surface: one TLC run in, the complete report
+// object out. Two runs with the same model outcome render byte-identical
+// JSON (the tail owner strips every run-dependent line), which is what keeps
+// the versioned evidence copies stable across re-runs.
+export function renderTlcReport(config, run) {
+  const verdict = interpret(config, run);
+  return {verdict, report: buildTlcReport(config, run, verdict)};
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -192,8 +202,7 @@ async function main(argv = process.argv.slice(2)) {
   for (const config of selectedConfigs) {
     const run = runTlc(config);
     cleanTraceArtifacts(config.module);
-    const verdict = interpret(config, run);
-    const report = buildTlcReport(config, run, verdict);
+    const {verdict, report} = renderTlcReport(config, run);
     const target = path.join(REPORTS_DIR, config.report);
     fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
     // Contract records cite versioned evidence copies (system-contract
