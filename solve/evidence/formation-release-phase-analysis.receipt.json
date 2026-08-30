@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "formation-release-phase-analysis",
   "status": "pass",
-  "generatedAt": "2026-08-30T09:00:21.652Z",
+  "generatedAt": "2026-08-30T09:02:50.064Z",
   "receipts": [
     {
       "id": "phase-timeline-per-node",

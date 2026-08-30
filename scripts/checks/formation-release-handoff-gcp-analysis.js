@@ -94,19 +94,13 @@ const TEARDOWN_REVOCATION_REASONS = Object.freeze([
   REVOKE_REASON_COHORT_MEMBER_INELIGIBLE,
 ]);
 const MINIMUM_COHORT_COMPLETE = 0;
-// The recorded-evidence vocabulary shared with the per-phase projection
-// (scripts/checks/analyze-formation-release-phases.js): the projection reads
-// the same owner transitions and barrier events this analyzer classifies and
-// never re-derives a verdict from any other signal.
+// Recorded-evidence vocabulary shared with the per-phase projection
+// (analyze-formation-release-phases.js), which never re-derives a verdict.
 const FORMATION_LOG_EVIDENCE = Object.freeze({
   TRANSITION_MESSAGE: FORMATION_TRANSITION_MESSAGE,
   BARRIER_MESSAGE: FORMATION_BARRIER_MESSAGE,
   BARRIER_RELEASED_STATE: BARRIER_LEDGER_SPREAD_SATISFIED,
-  FIELD_TIME,
-  FIELD_MSG,
-  FIELD_NODE_ID,
-  FIELD_STATE,
-  STATE_ACTIVE,
+  FIELD_TIME, FIELD_MSG, FIELD_NODE_ID, FIELD_STATE,
 });
 // Frozen empty prototype for diagnostic accumulators: an empty diagnostic list
 // is data derived from an explicit outcome, never a raw empty-state literal
