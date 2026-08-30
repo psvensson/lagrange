@@ -174,11 +174,15 @@ const ALLOWLIST = {
         'atom-routed LIVE term at ~:69. Preserved unchanged per R2.3.',
     },
     {
-      pattern: /connectionState\s*!==\s*STATE\.(?:CONNECTED|READY)/,
+      pattern: /connectionState\s*===\s*STATE\.(?:CONNECTED|READY)/,
       rationale:
-        'The cached-agreement conjunct comparison (~:57-62); a distinct ' +
-        'cached gate co-existing with the atom-routed LIVE term at ~:69 ' +
-        '(R2.3).',
+        'The cached-agreement conjunct comparison, now the positive form ' +
+        'inside isStartupAuthorityPlacementConnected (~:91-97) after the ' +
+        'formation-release-handoff-closure-v3 extraction; the same distinct ' +
+        'cached gate (connection_state in {connected,ready}) co-existing ' +
+        'with the atom-routed LIVE term at ~:116 (R2.3). The pattern is bound ' +
+        'to the local `connectionState` read of node.connection_state, so a ' +
+        'new getConnectionState(...) === CONNECTED copy is not covered.',
     },
   ],
   // Lease-sweep: fully atom-routed (isNodeTransportConnected -> atom). No
@@ -379,9 +383,13 @@ test('DISCRIMINATION: the same cached conjunct IS allowed once an atom-routed ' 
   'live term co-exists in the file', async (t) => {
   const synthetic =
     'import {hasLiveTransportEvidence} from "./live-transport-evidence.js";\n' +
-    'function gate(node, nodeId, router) {\n' +
+    'function isConnected(node) {\n' +
     '  const connectionState = String(node.connection_state || "");\n' +
-    '  if (connectionState !== STATE.CONNECTED) { return false; }\n' +
+    '  return connectionState === STATE.CONNECTED ||\n' +
+    '    connectionState === STATE.READY;\n' +
+    '}\n' +
+    'function gate(node, nodeId, router) {\n' +
+    '  if (!isConnected(node)) { return false; }\n' +
     '  return hasLiveTransportEvidence(nodeId, {messageRouter: router});\n' +
     '}\n';
   const violations = findInlineTransportGateViolations(
