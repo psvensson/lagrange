@@ -1,6 +1,7 @@
 import {TABLES} from '../../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READ_RECOVERY_ROUTING,
 } from '../control-plane-readiness-constants.js';
 import {
   buildControlPlaneWorkloadProfile,
@@ -11,6 +12,19 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 const CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY = 'critical';
 const CONTROL_PLANE_PUBLICATIONS_OWNER_NAME =
   'control-plane-publications-owner';
+
+// Publication reads route on the recovery-eligible dimension. A read opts
+// into the priority-recovery bootstrap lane only by declaring the typed lane
+// value (never a boolean); every other read stays eligible-only.
+function resolvePublicationReadRecoveryRouting(recoveryRouting) {
+  if (
+    recoveryRouting ===
+      CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP
+  ) {
+    return CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP;
+  }
+  return CONTROL_PLANE_READ_RECOVERY_ROUTING.ELIGIBLE_ONLY;
+}
 
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = CONTROL_PLANE_PUBLICATIONS_OWNER_NAME;
@@ -35,6 +49,9 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
       ...options,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      recoveryRouting: resolvePublicationReadRecoveryRouting(
+        options.recoveryRouting,
+      ),
     };
   }
 

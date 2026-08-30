@@ -19,6 +19,7 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_PURPOSE,
+  CONTROL_PLANE_READ_RECOVERY_ROUTING,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -214,6 +215,10 @@ async (t) => {
     {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED},
     {leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED},
     {purpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
+    {
+      recoveryRouting:
+        CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP,
+    },
     {
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,

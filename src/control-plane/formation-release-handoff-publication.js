@@ -1,5 +1,8 @@
 import {TABLES} from '../constants/index.js';
 import {
+  CONTROL_PLANE_READ_RECOVERY_ROUTING,
+} from './control-plane-readiness-constants.js';
+import {
   AUTHORIZATION_INTENT_OUTCOME,
   FORMATION_RELEASE_HANDOFF_STATE,
   authorizeFormationReleaseHandoffPublicationIntent,
@@ -29,11 +32,34 @@ const PUBLICATION_ID_PREFIX = 'formation-release-handoff:';
 // cannot be derived from its inputs is a typed absent/none token, never a raw
 // null that encodes runtime state.
 const NO_PUBLICATION_IDENTITY = 'none';
+// The no-contract token is a truthy typed token, not a row: every boundary
+// that chooses a contract source must test it through
+// selectFormationReleaseHandoffContractSource, never through truthiness.
 const FORMATION_RELEASE_HANDOFF_NO_CONTRACT = 'none';
+// Typed outcome of the consumer's contract-source selection: DURABLE when the
+// authority publication read holds a contract, CACHE when only the cached
+// authority-published row holds one, NONE when neither does. Every source is
+// still validated in the CONSUMER role before it can authorize a release.
+const FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE = objectFreeze({
+  DURABLE: 'durable',
+  CACHE: 'cache',
+  NONE: 'none',
+});
 // The durable readback that acknowledges a formation-release write is bound to
 // the authoritative store (Raft/SQL), never the local cache; the cache is only
 // a hint elsewhere, never the acknowledgement truth (system-guidelines §3).
 const DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({skipCacheWait: true});
+// The consumer's durable read of the authority publication is the one read
+// exempt from the controlPlaneRecoveryEligible routing gate, exactly as the
+// authority's publication write already is: while every replica host is
+// recovery-pending a joiner hosting no replica would otherwise have no
+// routable candidate (all_services_filtered_by_readiness) for the contract
+// written for it.
+const CONSUMER_DURABLE_PUBLICATION_READ_OPTIONS = objectFreeze({
+  skipCacheWait: true,
+  recoveryRouting:
+    CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP,
+});
 const FIELD_STATE = 'state';
 const FIELD_REASON_CODE = 'reasonCode';
 const FIELD_AT = 'at';
@@ -314,10 +340,11 @@ function readFormationReleaseHandoffPublicationRow(
   return contract;
 }
 
-async function readDurableFormationReleaseHandoffPublicationRow(
+async function readPublicationRowWithOptions(
   storageOwner,
   authorityNodeId,
   authorityBootIncarnation,
+  readOptions,
 ) {
   if (typeof storageOwner?.getPublication !== 'function') {
     return FORMATION_RELEASE_HANDOFF_NO_CONTRACT;
@@ -330,13 +357,69 @@ async function readDurableFormationReleaseHandoffPublicationRow(
     return FORMATION_RELEASE_HANDOFF_NO_CONTRACT;
   }
   return readFormationReleaseHandoffPublicationRow(
-    await storageOwner.getPublication(
-      publicationId,
-      DURABLE_PUBLICATION_READ_OPTIONS,
-    ),
+    await storageOwner.getPublication(publicationId, readOptions),
     authorityNodeId,
     authorityBootIncarnation,
   );
+}
+
+// Authority-side acknowledgement readback (recovery-eligible routing).
+async function readDurableFormationReleaseHandoffPublicationRow(
+  storageOwner,
+  authorityNodeId,
+  authorityBootIncarnation,
+) {
+  return readPublicationRowWithOptions(
+    storageOwner,
+    authorityNodeId,
+    authorityBootIncarnation,
+    DURABLE_PUBLICATION_READ_OPTIONS,
+  );
+}
+
+// Consumer-side durable read of the authority publication (bootstrap lane).
+async function readConsumerFormationReleaseHandoffPublicationRow(
+  storageOwner,
+  authorityNodeId,
+  authorityBootIncarnation,
+) {
+  return readPublicationRowWithOptions(
+    storageOwner,
+    authorityNodeId,
+    authorityBootIncarnation,
+    CONSUMER_DURABLE_PUBLICATION_READ_OPTIONS,
+  );
+}
+
+function isFormationReleaseHandoffContract(value) {
+  return value !== FORMATION_RELEASE_HANDOFF_NO_CONTRACT &&
+    typeof value === 'object' &&
+    value !== null;
+}
+
+// The consumer's contract-source decision: the durable read wins when it
+// holds a contract; the cached authority-published row is the fallback; the
+// no-contract token of either source is absent, never a row.
+function selectFormationReleaseHandoffContractSource(
+  durableContract,
+  cachedContract,
+) {
+  if (isFormationReleaseHandoffContract(durableContract)) {
+    return {
+      source: FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE.DURABLE,
+      contract: durableContract,
+    };
+  }
+  if (isFormationReleaseHandoffContract(cachedContract)) {
+    return {
+      source: FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE.CACHE,
+      contract: cachedContract,
+    };
+  }
+  return {
+    source: FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE.NONE,
+    contract: FORMATION_RELEASE_HANDOFF_NO_CONTRACT,
+  };
 }
 
 function readFormationReleaseHandoffPublicationFromCache(
@@ -362,11 +445,14 @@ function readFormationReleaseHandoffPublicationFromCache(
 }
 
 export {
+  FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE,
   FORMATION_RELEASE_HANDOFF_NO_CONTRACT,
   buildFormationReleaseHandoffPublicationRow,
   formationReleaseHandoffPublicationId,
   normalizeFormationReleaseHandoffContract,
+  readConsumerFormationReleaseHandoffPublicationRow,
   readDurableFormationReleaseHandoffPublicationRow,
   readFormationReleaseHandoffPublicationFromCache,
   readFormationReleaseHandoffPublicationRow,
+  selectFormationReleaseHandoffContractSource,
 };

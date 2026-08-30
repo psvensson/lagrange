@@ -43,6 +43,15 @@ const CONTROL_PLANE_READ_PURPOSE = Object.freeze({
   ORDINARY: 'ordinary',
   READINESS_INTERNAL: 'readiness_internal',
 });
+// Typed recovery-routing lane of a control-plane read (system-guidelines
+// §4.5): ELIGIBLE_ONLY routes only to controlPlaneRecoveryEligible replica
+// hosts; PRIORITY_RECOVERY_BOOTSTRAP grants one declared read the same
+// priority-recovery bootstrap routing grace a priority control-plane write
+// already receives while every replica host is recovery-pending.
+const CONTROL_PLANE_READ_RECOVERY_ROUTING = Object.freeze({
+  ELIGIBLE_ONLY: 'eligible_only',
+  PRIORITY_RECOVERY_BOOTSTRAP: 'priority_recovery_bootstrap',
+});
 
 const CONTROL_PLANE_READINESS_REASON = Object.freeze({
   NODE_ROW_MISSING: 'node_row_missing',
@@ -185,6 +194,7 @@ export {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READ_PURPOSE,
+  CONTROL_PLANE_READ_RECOVERY_ROUTING,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
   PRIORITY_RECOVERY_PLANNING_PROJECTION,

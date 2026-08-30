@@ -54,16 +54,14 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 12
+## Open quests — 10
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | formation-release-handoff-closure-v4 | product | 3 | 0 | 2026-08-30 | — |
-| formation-release-handoff-consumer-read-path | product | 0 | 0 | 2026-08-30 | — |
 | managed-split-cutover-handoff-closure | product | 0 | 0 | 2026-08-30 | — |
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-08-30 | — |
 | oci-container-driver-live-activation | product | 12 | 0 | 2026-08-30 | — |
-| operation-ledger-self-move-holder-release-on-engagement | product | 0 | 0 | 2026-08-30 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-30 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-30 | — |
 | release-0-2-verification-v2 | product | 0 | 0 | 2026-08-25 | — |

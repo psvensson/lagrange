@@ -21,9 +21,20 @@
 // IDENTIFY reply: the outbound primary bound with the seed's incarnation plus
 // the local boot-incarnation identity; no binding to the other joiner.
 //
+// Consumer read path (formation-release-handoff-consumer-read-path quest,
+// GCP streak 9d5deb4f1): a joiner that hosts no control_plane_publications
+// replica reads the authority publication through query routing while every
+// replica host is recovery-pending. Its storage owner here runs the REAL
+// owner read-option builder, the REAL frozen read-authority token and the
+// REAL priority-recovery bootstrap routing grace against the replica host
+// exactly as the readiness owner reports it; a refused read unwraps to no row
+// (all_services_filtered_by_readiness controlPlaneRecoveryEligible). The
+// joiner's system-table cache holds the row its catch-up hydration copied.
+//
 // The file uses raw node:test so each scenario is independently selectable
-// with --test-name-pattern by the quest evidence harness
-// (scripts/quest-evidence-formation-release-handoff-consumer-parity.js).
+// with --test-name-pattern by the quest evidence harnesses
+// (scripts/quest-evidence-formation-release-handoff-consumer-parity.js and
+// scripts/quest-evidence-formation-release-handoff-consumer-read-path.js).
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,12 +43,27 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+import {TABLES} from '../../src/constants/index.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  buildControlPlaneReadAuthority,
+} from '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {
   FORMATION_RELEASE_HANDOFF_STATE,
 } from '../../src/control-plane/formation-release-handoff-closure-owner.js';
+// Namespace import: the read-path typed outcomes are absent on HEAD, so the
+// module still loads and only the read-path scenarios fail (honest RED).
+import * as formationReleasePublication from
+  '../../src/control-plane/formation-release-handoff-publication.js';
+import {
+  ControlPlanePublicationsOwner,
+} from '../../src/control-plane/owners/control-plane-publications-owner.js';
+import {
+  shouldAllowPriorityRecoveryBootstrapRoutingGrace,
+} from '../../src/query/query-executor-priority-recovery-bootstrap-routing.js';
+import {QUERY_EXECUTOR_SHARED} from '../../src/query/query-executor-shared.js';
 import {
   FORMATION_RELEASE_HANDOFF_REASON,
 } from '../../src/control-plane/formation-release-handoff-contract.js';
@@ -70,6 +96,16 @@ import {
 } from '../../scripts/checks/formation-release-handoff-gcp-analysis.js';
 
 const {JOINING_DEFAULT, STARTUP_JOIN_MODE} = NODE_JOINING_SERVICE_SHARED;
+const {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON: RECOVERY_REASON,
+  CONTROL_PLANE_READINESS_DIMENSION: DIMENSION,
+  CONTROL_PLANE_READINESS_REASON: READINESS_REASON,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD: ROUTING_OPTION,
+} = QUERY_EXECUTOR_SHARED;
+const {
+  FORMATION_RELEASE_HANDOFF_NO_CONTRACT,
+  formationReleaseHandoffPublicationId,
+} = formationReleasePublication;
 
 // ── hoisted constants ──────────────────────────────────────────────────────
 const NOW = 10_000;
@@ -149,6 +185,24 @@ const REASON_INELIGIBLE =
 const REASON_INCOMPATIBLE =
   FORMATION_RELEASE_HANDOFF_REASON.AUTHORITY_INCOMPATIBLE;
 const GENERATION_CLASSIFICATION_TEARDOWN_TRUNCATED = 'teardown_truncated';
+// Consumer read path: the priority control-plane partition every joiner reads
+// the contract from, the typed recovery-routing lanes of the read-authority
+// token, and the typed contract-source outcomes of the publication module.
+const CPP_PARTITION_ID = 'control_plane_publications-p1';
+const RECOVERY_ROUTING_FIELD = 'recoveryRouting';
+const RECOVERY_ROUTING_ELIGIBLE_ONLY = 'eligible_only';
+const RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP =
+  'priority_recovery_bootstrap';
+const RECOVERY_ROUTING_ABSENT = 'absent';
+const CONTRACT_SOURCE_DURABLE = 'durable';
+const CONTRACT_SOURCE_CACHE = 'cache';
+const CONTRACT_SOURCE_NONE = 'none';
+const STRING_TYPE = 'string';
+const FUNCTION_TYPE = 'function';
+const BOOTSTRAP_GRACE_REASON_CODES = Object.freeze([
+  READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+]);
 
 // The two real startup-branch fences (src/bootstrap/cluster-incarnation-fence.js
 // as driven by src/lagrange-runtime-startup.js): the seed boots over a fresh
@@ -284,22 +338,133 @@ function buildRouter({
   };
 }
 
+// The durable store keyed by publication id; it records the read options of
+// every durable read so the exemption's scope is observable.
 function buildStorageOwner() {
   let durableRow = null;
   const publishers = [];
+  const readOptions = [];
   return {
     async upsertPublication(row) {
       durableRow = row;
       publishers.push(row.publisher_node_id);
       return row;
     },
-    async getPublication() {
-      return durableRow;
+    async getPublication(publicationId, options) {
+      readOptions.push(options);
+      return this.durableRow(publicationId);
+    },
+    durableRow(publicationId) {
+      return durableRow && durableRow.publication_id === publicationId ?
+        durableRow :
+        null;
     },
     publisherNodeIds() {
       return [...publishers];
     },
+    readOptions() {
+      return [...readOptions];
+    },
   };
+}
+
+// The replica host exactly as the readiness owner reports it to query routing
+// during the priority-spread reopen: every liveness dimension holds and only
+// recovery eligibility fails, for the two bootstrap-grace reasons. Extra
+// failed dimensions/reasons model a host that is genuinely unhealthy.
+function buildRecoveryPendingHostReport({
+  reasonCodes = BOOTSTRAP_GRACE_REASON_CODES,
+  failedDimensions = [DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+} = {}) {
+  const dimensions = {
+    [DIMENSION.PROCESS_ALIVE]: true,
+    [DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+    [DIMENSION.LOAD_READY]: true,
+    [DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+    [DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
+    [DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+  };
+  for (const dimension of failedDimensions) dimensions[dimension] = false;
+  return Object.freeze({
+    readiness: Object.freeze({
+      dimensions: Object.freeze(dimensions),
+      reasons: Object.freeze(reasonCodes.map((code) => Object.freeze({code}))),
+    }),
+    decision: Object.freeze({
+      eligible: false,
+      failedDimensions: Object.freeze([...failedDimensions]),
+      reasonCodes: Object.freeze([...reasonCodes]),
+    }),
+  });
+}
+
+const RECOVERY_PENDING_HOST_REPORT = buildRecoveryPendingHostReport();
+const UNHEALTHY_HOST_REPORT = buildRecoveryPendingHostReport({
+  reasonCodes: [
+    ...BOOTSTRAP_GRACE_REASON_CODES,
+    READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
+  ],
+  failedDimensions: [
+    DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    DIMENSION.CLUSTER_MEMBER_HEALTHY,
+  ],
+});
+
+// A joiner hosting no control_plane_publications replica: its durable reads
+// route through the real owner read options -> the real frozen read-authority
+// token -> the real priority-recovery bootstrap routing grace against the
+// reported replica host. A refused read unwraps to no row, as the owner
+// reports all_services_filtered_by_readiness controlPlaneRecoveryEligible.
+function buildNonHostingStorageOwner(storageOwner, hostReport) {
+  const readOptionsOwner = Object.create(ControlPlanePublicationsOwner.prototype);
+  const reads = [];
+  return {
+    reads,
+    async upsertPublication(row, options) {
+      return storageOwner.upsertPublication(row, options);
+    },
+    async getPublication(publicationId, options) {
+      const readAuthority = buildControlPlaneReadAuthority(
+        readOptionsOwner.buildPublicationReadOptions(options),
+      );
+      const routable = shouldAllowPriorityRecoveryBootstrapRoutingGrace({
+        partitionId: CPP_PARTITION_ID,
+        partitionRow: null,
+        routingReadinessDimension: readAuthority.routingReadinessDimension,
+        routingOptions: {
+          [ROUTING_OPTION.FOR_READ]: true,
+          [ROUTING_OPTION.ALLOW_PRIORITY_RECOVERY_BOOTSTRAP]: false,
+          [ROUTING_OPTION.READ_AUTHORITY]: readAuthority,
+        },
+        readiness: hostReport.readiness,
+        decision: hostReport.decision,
+      });
+      reads.push({
+        recoveryRouting: readAuthority[RECOVERY_ROUTING_FIELD] ??
+          RECOVERY_ROUTING_ABSENT,
+        routable,
+      });
+      return routable ?
+        storageOwner.getPublication(publicationId, options) :
+        null;
+    },
+    publisherNodeIds() {
+      return storageOwner.publisherNodeIds();
+    },
+  };
+}
+
+// The joiner's system-table cache after its catch-up hydration copied the
+// authority publication row (keyed by publication id, live with the store).
+function buildHydratedCache(rows, storageOwner, forgeRow = (row) => row) {
+  const cache = buildCache(rows);
+  cache.get = (tableName, key) => {
+    const row = tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ?
+      storageOwner.durableRow(key) :
+      null;
+    return row ? forgeRow(row) : null;
+  };
+  return cache;
 }
 
 function buildService({nodeId, cache, router, storageOwner, authority}) {
@@ -344,6 +509,7 @@ function buildSeed({rows, storageOwner, transitions = []}) {
 function buildJoiner({
   rows,
   storageOwner,
+  cache = buildCache(rows),
   fence = JOINER_FENCE,
   authority = buildAuthority({ready: false, fence}),
   localIncarnation = BOOT_INCARNATION,
@@ -352,7 +518,7 @@ function buildJoiner({
   const joinerView = {authority};
   const joiner = buildService({
     nodeId: JOINER_A,
-    cache: buildCache(rows),
+    cache,
     router: buildRouter({
       localNodeId: JOINER_A,
       boundNodeIds: [SEED],
@@ -362,7 +528,28 @@ function buildJoiner({
     storageOwner,
     authority: () => joinerView.authority,
   });
-  return {joiner, joinerView};
+  return {joiner, joinerView, cache};
+}
+
+// A non-hosting joiner over the shared durable store: `hostReport` is the
+// replica host as reported to routing, `hydrated` whether its cache holds the
+// authority row, `forgeRow` tampers the cached row (negative controls).
+function buildNonHostingJoiner({
+  rows,
+  storageOwner,
+  hostReport = RECOVERY_PENDING_HOST_REPORT,
+  hydrated = true,
+  forgeRow = undefined,
+  ...options
+}) {
+  const routedOwner = buildNonHostingStorageOwner(storageOwner, hostReport);
+  const cache = hydrated ?
+    buildHydratedCache(rows, storageOwner, forgeRow) :
+    buildCache(rows);
+  return {
+    ...buildJoiner({rows, storageOwner: routedOwner, cache, ...options}),
+    routedOwner,
+  };
 }
 
 // Capture at t0 (non-authorizing), durable acknowledgement, then the
@@ -814,6 +1001,8 @@ async () => {
     AUTHORITY_BINDING_PATTERN,
     'joiner control-plane construction binds the seed as the sole authority');
   const fixture = await buildRetainedFixture();
+  assertNoRecoveryRoutingLane(fixture.storageOwner.readOptions(),
+    'seed acknowledgement');
   await projectOnJoiner(fixture.joiner);
   assert.equal(fixture.joiner.formationReleaseHandoffClosureOwner.lastContract.state,
     FORMATION_RELEASE_HANDOFF_STATE.IDLE);
@@ -826,22 +1015,312 @@ async () => {
     'every durable write (capture, retained reopen) is published by the seed');
 });
 
+// ── consumer read path (non-hosting joiner) ───────────────────────────────
+const AUTHORITY_PUBLICATION_ID =
+  formationReleaseHandoffPublicationId(SEED, BOOT_INCARNATION);
+
+function assertNoRecoveryRoutingLane(readOptions, label) {
+  for (const options of readOptions) {
+    assert.equal(options[RECOVERY_ROUTING_FIELD], undefined,
+      `${label}: the durable readback carries no recovery-routing lane`);
+  }
+}
+
+test('non-hosting-joiner-reads-authority-publication-during-recovery: a ' +
+  'joiner hosting no control_plane_publications replica reads the authority ' +
+  'publication through the priority-recovery bootstrap lane while every ' +
+  'replica host is recovery-pending, and only that read is exempt', async () => {
+  const fixture = await buildRetainedFixture();
+  const {rows, storageOwner, retained} = fixture;
+  const seedReadbacks = storageOwner.readOptions();
+  assert.ok(seedReadbacks.length > 0, 'the seed acknowledged durably');
+  assertNoRecoveryRoutingLane(seedReadbacks, 'seed acknowledgement');
+
+  // No cached row: the durable read itself must reach the authority row.
+  const nonHosting = buildNonHostingJoiner({rows, storageOwner, hydrated: false});
+  const snapshot = await projectOnJoiner(nonHosting.joiner);
+  assertConsumedActive(snapshot, retained.generation);
+  assert.deepEqual(nonHosting.routedOwner.reads, [{
+    recoveryRouting: RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
+    routable: true,
+  }], 'the consumer durable read declares the bootstrap lane and routes');
+
+  // The gate itself is unchanged: an ordinary publication read of the same
+  // row on the same host is still refused (no routable candidate).
+  const ordinary = buildNonHostingStorageOwner(
+    storageOwner, RECOVERY_PENDING_HOST_REPORT,
+  );
+  assert.equal(
+    await ordinary.getPublication(AUTHORITY_PUBLICATION_ID, {skipCacheWait: true}),
+    null,
+  );
+  assert.deepEqual(ordinary.reads, [{
+    recoveryRouting: RECOVERY_ROUTING_ELIGIBLE_ONLY,
+    routable: false,
+  }]);
+  const readOptionsOwner =
+    Object.create(ControlPlanePublicationsOwner.prototype);
+  assert.equal(
+    readOptionsOwner.buildPublicationReadOptions({})[RECOVERY_ROUTING_FIELD],
+    RECOVERY_ROUTING_ELIGIBLE_ONLY,
+    'the publications owner defaults every read to the eligible-only lane',
+  );
+  assert.equal(
+    readOptionsOwner.buildPublicationReadOptions({
+      [RECOVERY_ROUTING_FIELD]: true,
+    })[RECOVERY_ROUTING_FIELD],
+    RECOVERY_ROUTING_ELIGIBLE_ONLY,
+    'a boolean is not a lane: only the typed lane value opts a read in',
+  );
+});
+
+test('no-contract-sentinel-is-typed-absent: the durable read reports no ' +
+  'contract as a typed token the projection never treats as a row, so the ' +
+  'cached authority-published row becomes the source', async () => {
+  const fixture = await buildRetainedFixture();
+  const {rows, storageOwner, retained} = fixture;
+  const denied = buildNonHostingJoiner({
+    rows, storageOwner, hostReport: UNHEALTHY_HOST_REPORT,
+  });
+  const published = await denied.joiner.readFormationReleaseHandoffFromAuthority(
+    SEED, BOOT_INCARNATION,
+  );
+  assert.equal(published, FORMATION_RELEASE_HANDOFF_NO_CONTRACT);
+  assert.equal(typeof published, STRING_TYPE,
+    'the no-contract token is a truthy typed token, not a row');
+  assert.deepEqual(denied.routedOwner.reads, [{
+    recoveryRouting: RECOVERY_ROUTING_PRIORITY_RECOVERY_BOOTSTRAP,
+    routable: false,
+  }], 'a genuinely unhealthy host is refused even on the bootstrap lane');
+
+  const select =
+    formationReleasePublication.selectFormationReleaseHandoffContractSource;
+  const SOURCE = formationReleasePublication.FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE;
+  assert.equal(typeof select, FUNCTION_TYPE,
+    'the publication module owns the typed contract-source selection');
+  assert.deepEqual(SOURCE, {
+    DURABLE: CONTRACT_SOURCE_DURABLE,
+    CACHE: CONTRACT_SOURCE_CACHE,
+    NONE: CONTRACT_SOURCE_NONE,
+  });
+  const cached = denied.joiner.readFormationReleaseHandoffFromCache(
+    SEED, BOOT_INCARNATION,
+  );
+  assert.equal(cached.generation, retained.generation);
+  assert.deepEqual(select(published, cached),
+    {source: SOURCE.CACHE, contract: cached});
+  assert.deepEqual(select(null, cached),
+    {source: SOURCE.CACHE, contract: cached});
+  assert.deepEqual(select(published, published),
+    {source: SOURCE.NONE, contract: FORMATION_RELEASE_HANDOFF_NO_CONTRACT});
+  assert.deepEqual(select(null, null),
+    {source: SOURCE.NONE, contract: FORMATION_RELEASE_HANDOFF_NO_CONTRACT});
+  assert.deepEqual(select(cached, published),
+    {source: SOURCE.DURABLE, contract: cached});
+  assert.deepEqual(select(cached, cached),
+    {source: SOURCE.DURABLE, contract: cached});
+
+  const snapshot = await projectOnJoiner(denied.joiner);
+  assertConsumedActive(snapshot, retained.generation);
+});
+
+test('cached-authority-row-fallback-validated: the cached row is consumed ' +
+  'only through the CONSUMER validation, so a different authority ' +
+  'incarnation, a regressed epoch, a tampered cached row and a revoked ' +
+  'generation stay null', async () => {
+  const fixture = await buildRetainedFixture();
+  const {rows, storageOwner, retained} = fixture;
+  const denied = {hostReport: UNHEALTHY_HOST_REPORT};
+  const consumed = await projectOnJoiner(
+    buildNonHostingJoiner({rows, storageOwner, ...denied}).joiner,
+  );
+  assertConsumedActive(consumed, retained.generation);
+  assert.equal(consumed.formationReleaseHandoff.fenceIdentity,
+    retained.fenceIdentity,
+    'the cached contract carries the authority-published fence identity');
+
+  const staleSeed = buildNonHostingJoiner({
+    rows, storageOwner, ...denied, seedIncarnation: RESTARTED_BOOT_INCARNATION,
+  });
+  assertFailedClosed(await projectOnJoiner(staleSeed.joiner),
+    'cached row of a different authority incarnation');
+
+  const regressed = buildNonHostingJoiner({
+    rows, storageOwner, ...denied,
+    authority: buildAuthority({ready: false, publicationEpoch: REGRESSED_EPOCH}),
+  });
+  assertFailedClosed(await projectOnJoiner(regressed.joiner),
+    'cached row against a regressed publication epoch');
+
+  const tampered = buildNonHostingJoiner({
+    rows, storageOwner, ...denied,
+    forgeRow: (row) => ({...row, publisher_node_id: JOINER_B}),
+  });
+  assertFailedClosed(await projectOnJoiner(tampered.joiner),
+    'cached row whose projection disagrees with the embedded contract');
+
+  fixture.seed.messageRouter.bound.delete(JOINER_B);
+  const revoked = fixture.seed.getStartupAuthoritySnapshotSync(SEED, REOPEN_AT + 1);
+  assert.equal(revoked.formationReleaseHandoff.state,
+    FORMATION_RELEASE_HANDOFF_STATE.REVOKED);
+  await fixture.seed.formationReleaseHandoffPublicationCoordinator.whenIdle();
+  assertFailedClosed(
+    await projectOnJoiner(
+      buildNonHostingJoiner({rows, storageOwner, ...denied}).joiner,
+      REOPEN_AT + 1,
+    ),
+    'cached row of a revoked generation',
+  );
+});
+
+test('consumer-validation-predicates-unchanged: every existing consumer ' +
+  'negative still fails closed on the non-hosting joiner through both the ' +
+  'bootstrap-lane durable read and the cached fallback', async () => {
+  const fixture = await buildRetainedFixture();
+  const {rows, storageOwner, retained} = fixture;
+  const routes = [
+    {hostReport: RECOVERY_PENDING_HOST_REPORT, hydrated: false},
+    {hostReport: UNHEALTHY_HOST_REPORT, hydrated: true},
+  ];
+  const negatives = [
+    ['different authority incarnation',
+      {seedIncarnation: RESTARTED_BOOT_INCARNATION}],
+    ['regressed publication epoch',
+      {authority: buildAuthority({ready: false, publicationEpoch: REGRESSED_EPOCH})}],
+    ['incompatible topology (captured member outside the canonical set)',
+      {authority: buildAuthority({ready: false, canonicalNodeIds: [JOINER_A, SEED]})}],
+    ['restarted joiner process (captured incarnation changed)',
+      {localIncarnation: RESTARTED_BOOT_INCARNATION}],
+    ['joiner whose own admission fence is not allowed',
+      {fence: BLOCKED_JOINER_FENCE}],
+    ['substantive authority block',
+      {authority: buildAuthority({
+        ready: false, state: STATE_BLOCKED, reasonCodes: [REASON_NOT_WRITABLE],
+      })}],
+  ];
+  for (const route of routes) {
+    assertConsumedActive(
+      await projectOnJoiner(
+        buildNonHostingJoiner({rows, storageOwner, ...route}).joiner,
+      ),
+      retained.generation,
+    );
+    assertConsumedActive(
+      await projectOnJoiner(
+        buildNonHostingJoiner({rows, storageOwner, ...route, fence: FENCE_ABSENT})
+          .joiner,
+      ),
+      retained.generation,
+    );
+    for (const [label, options] of negatives) {
+      assertFailedClosed(
+        await projectOnJoiner(
+          buildNonHostingJoiner({rows, storageOwner, ...route, ...options}).joiner,
+        ),
+        `${label} (${route.hydrated ? CONTRACT_SOURCE_CACHE : CONTRACT_SOURCE_DURABLE})`,
+      );
+    }
+  }
+  fixture.seed.messageRouter.bound.delete(JOINER_B);
+  fixture.seed.getStartupAuthoritySnapshotSync(SEED, REOPEN_AT + 1);
+  await fixture.seed.formationReleaseHandoffPublicationCoordinator.whenIdle();
+  for (const route of routes) {
+    assertFailedClosed(
+      await projectOnJoiner(
+        buildNonHostingJoiner({rows, storageOwner, ...route}).joiner,
+        REOPEN_AT + 1,
+      ),
+      'revoked generation',
+    );
+  }
+});
+
+test('barrier-releases-within-retained-generation: the real operation-ledger ' +
+  'formation barrier of a non-hosting joiner resolves ledger_spread_satisfied ' +
+  'from the retained generation through either source, and stays gated ' +
+  'without any source', async () => {
+  initializeEnvironment();
+  try {
+    const fixture = await buildRetainedFixture();
+    const {rows, storageOwner, retained} = fixture;
+    const sources = [
+      {hostReport: RECOVERY_PENDING_HOST_REPORT, hydrated: false},
+      {hostReport: UNHEALTHY_HOST_REPORT, hydrated: true},
+    ];
+    for (const source of sources) {
+      const nonHosting = buildNonHostingJoiner({rows, storageOwner, ...source});
+      const states = [];
+      const owner = buildBarrierOwner({
+        joiner: nonHosting.joiner,
+        cache: nonHosting.cache,
+        clock: {now: REOPEN_AT},
+        states,
+      });
+      await owner.awaitOperationLedgerFormationBarrier();
+      const released = states[states.length - 1];
+      assert.equal(released.state, BARRIER_STATE_SATISFIED);
+      assert.equal(released.formationReleaseHandoffState,
+        FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
+      assert.equal(released.formationReleaseHandoffGeneration,
+        retained.generation);
+      assert.equal(released.formationReleaseHandoffReleaseAuthorized, true);
+      assert.deepEqual([...released.startupAuthorityRecoveryReasonCodes],
+        [REASON_NOT_SPREAD], 'the raw spread predicate is still pending');
+    }
+
+    // Negative control: refused durable read and no cached row.
+    const gated = [];
+    const unreadable = buildNonHostingJoiner({
+      rows, storageOwner, hostReport: UNHEALTHY_HOST_REPORT, hydrated: false,
+    });
+    const gatedOwner = buildBarrierOwner({
+      joiner: unreadable.joiner,
+      cache: unreadable.cache,
+      clock: {now: REOPEN_AT},
+      states: gated,
+    });
+    const failure = await gatedOwner.awaitOperationLedgerFormationBarrier()
+      .then(() => null, (error) => error);
+    assert.equal(failure?.code, BARRIER_TIMEOUT_CODE);
+    assert.equal(gated[gated.length - 1].state, BARRIER_STATE_WAITING_AUTHORITY);
+    assert.equal(gated[gated.length - 1].formationReleaseHandoffState, null);
+  } finally {
+    resetEnvironment();
+  }
+});
+
 async function traceDrive() {
   const fixture = await buildRetainedFixture();
+  const {rows, storageOwner} = fixture;
   const snapshot = await projectOnJoiner(fixture.joiner);
+  const routed = buildNonHostingJoiner({rows, storageOwner, hydrated: false});
+  const routedSnapshot = await projectOnJoiner(routed.joiner);
+  const fallback = buildNonHostingJoiner({
+    rows, storageOwner, hostReport: UNHEALTHY_HOST_REPORT,
+  });
+  const fallbackSnapshot = await projectOnJoiner(fallback.joiner);
   return {
     transitions: fixture.transitions.map((entry) => entry.details),
     handoff: snapshot.formationReleaseHandoff,
     ready: snapshot.ready,
     state: snapshot.state,
+    nonHostingHandoff: routedSnapshot.formationReleaseHandoff,
+    nonHostingReads: routed.routedOwner.reads,
+    cachedHandoff: fallbackSnapshot.formationReleaseHandoff,
+    cachedReads: fallback.routedOwner.reads,
   };
 }
 
 test('witness-deterministic: two identical drives produce the identical ' +
-  'transition sequence and joiner projection', async () => {
+  'transition sequence and joiner projections (hosting, non-hosting routed, ' +
+  'non-hosting cached)', async () => {
   const first = await traceDrive();
   const second = await traceDrive();
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(first.handoff?.state, FORMATION_RELEASE_HANDOFF_STATE.ACTIVE,
     'the deterministic drive ends in the consumed active projection');
+  assert.equal(first.nonHostingHandoff?.state,
+    FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
+  assert.equal(first.cachedHandoff?.state,
+    FORMATION_RELEASE_HANDOFF_STATE.ACTIVE);
 });

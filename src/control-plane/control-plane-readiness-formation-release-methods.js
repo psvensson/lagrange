@@ -5,10 +5,11 @@ import {
   validateFormationReleaseHandoffConsumerContract,
 } from './formation-release-handoff-contract.js';
 import {
+  FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE,
   FORMATION_RELEASE_HANDOFF_NO_CONTRACT,
-  formationReleaseHandoffPublicationId,
+  readConsumerFormationReleaseHandoffPublicationRow,
   readFormationReleaseHandoffPublicationFromCache,
-  readFormationReleaseHandoffPublicationRow,
+  selectFormationReleaseHandoffContractSource,
 } from './formation-release-handoff-publication.js';
 
 const arrayIsArray = Array.isArray;
@@ -154,23 +155,16 @@ const formationReleaseMethods = {
     );
   },
 
+  // The consumer's durable read of the authority publication: the one
+  // publication read on the priority-recovery bootstrap lane (the read
+  // options live in the publication module, next to the authority's
+  // acknowledgement readback they mirror).
   async readFormationReleaseHandoffFromAuthority(
     authorityNodeId,
     authorityBootIncarnation,
   ) {
-    const storageOwner = this.getFormationReleasePublicationStorageOwner();
-    if (typeof storageOwner?.getPublication !== 'function') {
-      return FORMATION_RELEASE_HANDOFF_NO_CONTRACT;
-    }
-    const row = await storageOwner.getPublication(
-      formationReleaseHandoffPublicationId(
-        authorityNodeId,
-        authorityBootIncarnation,
-      ),
-      {skipCacheWait: true},
-    );
-    return readFormationReleaseHandoffPublicationRow(
-      row,
+    return readConsumerFormationReleaseHandoffPublicationRow(
+      this.getFormationReleasePublicationStorageOwner(),
       authorityNodeId,
       authorityBootIncarnation,
     );
@@ -234,18 +228,23 @@ const formationReleaseMethods = {
     // primary connection to the authority) plus its own process identity —
     // never this node's own admission fence or its view of other members'
     // connections (decision-table formation-release-handoff-closure:
-    // joiner-consumes-durable-generation).
+    // joiner-consumes-durable-generation). The source is a typed decision:
+    // the durable read, else the cached authority-published row; the
+    // no-contract token of the durable read is absent, never a row.
     const authorityBootIncarnation =
       this.getFormationReleaseAuthorityBootIncarnation(authorityNodeId);
-    const cachedHandoff = this.readFormationReleaseHandoffFromCache(
-      authorityNodeId,
-      authorityBootIncarnation,
+    const selected = selectFormationReleaseHandoffContractSource(
+      publishedHandoff,
+      this.readFormationReleaseHandoffFromCache(
+        authorityNodeId,
+        authorityBootIncarnation,
+      ),
     );
+    if (selected.source === FORMATION_RELEASE_HANDOFF_CONTRACT_SOURCE.NONE) {
+      return null;
+    }
     return validateFormationReleaseHandoffConsumerContract(
-      publishedHandoff ||
-        (cachedHandoff === FORMATION_RELEASE_HANDOFF_NO_CONTRACT ?
-          null :
-          cachedHandoff),
+      selected.contract,
       startupAuthority,
       this.getNodeRows(),
       observedAt,

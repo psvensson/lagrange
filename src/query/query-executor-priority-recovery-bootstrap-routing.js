@@ -7,6 +7,7 @@ const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
+  CONTROL_PLANE_READ_RECOVERY_ROUTING,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
 } = QUERY_EXECUTOR_SHARED;
@@ -31,11 +32,10 @@ const PRIORITY_RECOVERY_BOOTSTRAP_ALLOWED_FAILED_DIMENSIONS = new Set([
   CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
 ]);
 
-function isPriorityRecoveryWriteRouting({
+function isPriorityRecoveryRouting({
   partitionId,
   partitionRow,
   routingReadinessDimension,
-  routingOptions,
 }) {
   return (
     classifySystemPartition({
@@ -43,11 +43,48 @@ function isPriorityRecoveryWriteRouting({
       partitionRow,
     }).priorityControlPlane &&
     routingReadinessDimension ===
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+  );
+}
+
+function isPriorityRecoveryWriteRouting({
+  partitionId,
+  partitionRow,
+  routingReadinessDimension,
+  routingOptions,
+}) {
+  return (
+    isPriorityRecoveryRouting({
+      partitionId,
+      partitionRow,
+      routingReadinessDimension,
+    }) &&
     routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === false &&
     routingOptions?.[
       QUERY_EXECUTOR_ROUTING_OPTION_FIELD.ALLOW_PRIORITY_RECOVERY_BOOTSTRAP
     ] === true
+  );
+}
+
+// The read counterpart of the write grace: a read opts in only through the
+// typed recovery-routing lane of its frozen read-authority token (declared at
+// the owner that issues the read), never through the write-side boolean.
+function isPriorityRecoveryBootstrapReadRouting({
+  partitionId,
+  partitionRow,
+  routingReadinessDimension,
+  routingOptions,
+}) {
+  return (
+    isPriorityRecoveryRouting({
+      partitionId,
+      partitionRow,
+      routingReadinessDimension,
+    }) &&
+    routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === true &&
+    routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]
+      ?.recoveryRouting ===
+      CONTROL_PLANE_READ_RECOVERY_ROUTING.PRIORITY_RECOVERY_BOOTSTRAP
   );
 }
 
@@ -161,13 +198,17 @@ function shouldAllowPriorityRecoveryBootstrapRoutingGrace({
   readiness,
   decision,
 }) {
+  const bootstrapRouting = {
+    partitionId,
+    partitionRow,
+    routingReadinessDimension,
+    routingOptions,
+  };
   if (
-    !isPriorityRecoveryWriteRouting({
-      partitionId,
-      partitionRow,
-      routingReadinessDimension,
-      routingOptions,
-    }) ||
+    (
+      !isPriorityRecoveryWriteRouting(bootstrapRouting) &&
+      !isPriorityRecoveryBootstrapReadRouting(bootstrapRouting)
+    ) ||
     !hasPriorityRecoveryBootstrapDimensions(readiness) ||
     !hasOnlyPriorityRecoveryBootstrapFailedDimensions(readiness, decision)
   ) {
