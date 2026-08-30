@@ -10,12 +10,16 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-Work toward the 0.2 _Stable Core_ release (`RM-0.2-*` rows in
+## [0.2.0] — 2026-08-30
+
+The 0.2 _Stable Core_ release (`RM-0.2-*` rows in
 `docs/steering/agpl-feature-map.md`). Everything below is landed on the
-release branch with Solver-verified evidence; the 0.2 exit criteria (three
-consecutive clean five-node runs, topology-safety terminal evidence,
-compacted-follower snapshot catch-up verification, an enforcing memory-soak
-run) are tracked by the `release-0-2-*` Quests and are not yet all met.
+release branch with Solver-verified evidence. The 0.2 exit criteria are
+tracked by the `release-0-2-*` Quests: three consecutive five-node GCP
+formation certification runs passed on 2026-08-30 (bounded `--runs 3`
+streak, completion 42.8 s / 38.1 s / 35.9 s); topology-safety evidence,
+compacted-follower snapshot catch-up and the enforcing memory soak are
+replayed on the frozen release digest before the tag.
 
 ### Added
 - Five-node cold formation: an operation-ledger formation barrier with a
@@ -40,6 +44,46 @@ run) are tracked by the `release-0-2-*` Quests and are not yet all met.
   retention bounds and exact drop accounting; GCP affinity teardown
   materializes every captured full-node log; harness failure bundles collect
   each node's logs through that node's own provider.
+- Five-node formation-time priority recovery no longer straddles the 60-second
+  certification window: priority control-plane ADDs dispatch concurrently
+  under the existing `maxConcurrentAdds` budget (the create-budget turn now
+  ends after persist and claim), the operation-ledger self-move hold engages
+  only once the self-move is dispatch-admissible and cannot be overtaken
+  indefinitely by later ADDs, the held self-move is released only by its own
+  terminal row (no second ledger self-move can be admitted), a failed
+  cluster-wide idle census retries on the dispatch cadence, and a locally
+  owned self-move parked behind live incumbents carries typed park evidence so
+  the priority-recovery drain no longer stale-fails it.
+- Learner promotion proofs are event-driven: a learner re-requests its proof
+  when its own services row becomes visible or the published membership epoch
+  changes, refusals carry a typed cause (`learner_address_unresolvable`,
+  `request_shape`, `response_binding_mismatch`, `leader_unreachable`,
+  `delivery_failed`) logged at info, and an unresolvable-address refusal
+  re-asserts the learner's durable services row; proof deliveries carry the
+  router-configured message timeout explicitly.
+- Joiners consume the seed-owned formation-release handoff contract (a typed
+  AUTHORITY/CONSUMER validation role) so a captured JOINING cohort is released
+  from the whole-plane authority answer across a priority-spread reopen; a
+  non-hosting joiner's consumer read of the authority publication rides a
+  typed priority-recovery bootstrap read lane exactly as the seed's write
+  does, the validated cached authority row is a typed fallback, and the seed
+  mints a successor generation when a captured generation completes after the
+  reopen was observed so late joiners no longer wait for the raw three-way
+  spread cure. The transport boot-incarnation fence binds both connection
+  directions (the acceptor answers an adopted primary IDENTIFY once) and an
+  unknown existing incarnation never yields in a cross-connect.
+- A joiner honestly waiting inside the formation barrier logs a typed
+  still-waiting line on the existing liveness-refresh cadence (wait reason and
+  elapsed time) and a rate-limited debug line when the gate's evidence
+  advances.
+- Five-node certification tooling: the GCP formation runner has a bounded
+  `--runs N` certification mode (N pinned to the sealed consecutive count,
+  refuses dirty sources or fingerprint drift, halts at the first failed run,
+  writes a projection-only streak report), the analyzer classifies a
+  generation retained uncompleted at teardown as its own failing invariant and
+  reports completion across every generation, and
+  `npm run analyze:formation-release-phases -- <report-dir>` prints the
+  per-node W → handoff → release → READY timeline.
 
 ### Changed
 - Topology-operation safety: removing a FAILED or SYNCING replica succeeds
@@ -58,6 +102,17 @@ run) are tracked by the `release-0-2-*` Quests and are not yet all met.
 - Solver tooling (internal): landing review has one owner per subsystem with
   an immutable review envelope, and landing tolerates candidate diffs larger
   than the default child-process buffer.
+- Solver tooling (internal): landing never commits source bytes outside the
+  recorded attempt union, the pending step's pin is the single attempt base,
+  another Quest's regenerated evidence is excluded from a capture, registered
+  generated outputs are covered at landing when byte-identical to a fresh
+  regeneration, and the evidence harness runtime accepts `--output`.
+
+### Fixed
+- The formation-release GCP analyzer classifies a generation revoked by a
+  valid disconnect after the authority began draining as teardown-truncated
+  rather than stranded, and the reverted-control verdict reads the analyzer's
+  real invariants.
 
 ## [0.1.1] — 2026-08-22
 
@@ -163,6 +218,7 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0
