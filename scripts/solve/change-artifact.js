@@ -142,6 +142,10 @@ const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
   'report',
   'state',
 ]);
+const SOLVE_EVIDENCE_SUBTREE = 'evidence';
+const SOLVE_EVIDENCE_PREFIX = `${SOLVE_DATA_DIR}/${SOLVE_EVIDENCE_SUBTREE}/`;
+const EVIDENCE_RECEIPT_SUFFIX = '.receipt.json';
+const PATH_SEPARATOR = '/';
 const DERIVED_SOLVER_BOOKKEEPING_PATHS = new Set([
   'solve/changes/global-owner-debt-inventory/inventory.json',
   'solve/changes/priority-recovery-owner-inventory/inventory.json',
@@ -382,6 +386,38 @@ function isDerivedSolverBookkeeping(filePath) {
 export function isVerificationBookkeeping(filePath, questId) {
   return isOwnQuestSolveBookkeeping(filePath, questId) ||
     isDerivedSolverBookkeeping(filePath);
+}
+
+// The quest that owns an evidence artifact under solve/evidence/: the
+// evidence harness runtime writes solve/evidence/<quest>.receipt.json, and a
+// quest may keep a subtree solve/evidence/<quest>/. Null when the path is
+// not evidence or its owner cannot be read from the name — an unknown owner
+// is never treated as foreign, so an artifact of uncertain ownership stays
+// inside the sealed attempt where a verifier can see it.
+function evidenceOwnerQuestId(filePath) {
+  const normalized = normalizeSlash(filePath);
+  if (!normalized.startsWith(SOLVE_EVIDENCE_PREFIX)) return null;
+  const rest = normalized.slice(SOLVE_EVIDENCE_PREFIX.length);
+  const separator = rest.indexOf(PATH_SEPARATOR);
+  if (separator !== -1) {
+    const directory = rest.slice(0, separator);
+    return directory.length > 0 ? directory : null;
+  }
+  if (rest.endsWith(EVIDENCE_RECEIPT_SUFFIX)) {
+    const owner = rest.slice(0, rest.length - EVIDENCE_RECEIPT_SUFFIX.length);
+    return owner.length > 0 ? owner : null;
+  }
+  return null;
+}
+
+// Another quest's regenerated receipt is that quest's bookkeeping, never this
+// quest's change: sweeping it into an auto-captured attempt classifies the
+// attempt as a workflow change (solve/ prefix) and refuses a product quest,
+// or pollutes the recorded union of a workflow quest.
+export function isForeignQuestEvidence(filePath, questId) {
+  if (typeof questId !== 'string' || questId.length === 0) return false;
+  const owner = evidenceOwnerQuestId(filePath);
+  return owner !== null && owner !== String(questId);
 }
 
 export function classifyPath(filePath) {

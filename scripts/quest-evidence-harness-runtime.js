@@ -23,6 +23,33 @@ const EXIT_FAILED = 1;
 const SHELL_EXECUTABLE = '/bin/sh';
 const SHELL_COMMAND_FLAG = '-c';
 const DEFAULT_SHELL_TIMEOUT_MS = 600_000;
+const OUTPUT_FLAG = '--output';
+const OUTPUT_FLAG_ASSIGNMENT_PREFIX = `${OUTPUT_FLAG}=`;
+const ARGV_COMMAND_OFFSET = 2;
+const OUTPUT_FLAG_VALUE_REQUIRED_ERROR =
+  `${OUTPUT_FLAG} requires a receipt file path`;
+
+// `--output <path>` (or `--output=<path>`) redirects the receipt to a scratch
+// path so a verifier can regenerate a receipt without dirtying the tracked
+// solve/evidence/ artifact; without it the harness writes its declared file.
+function resolveReceiptOutputFile(declaredOutputFile, argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === OUTPUT_FLAG) {
+      const value = argv[index + 1];
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error(OUTPUT_FLAG_VALUE_REQUIRED_ERROR);
+      }
+      return value;
+    }
+    if (argument.startsWith(OUTPUT_FLAG_ASSIGNMENT_PREFIX)) {
+      const value = argument.slice(OUTPUT_FLAG_ASSIGNMENT_PREFIX.length);
+      if (value.length === 0) throw new Error(OUTPUT_FLAG_VALUE_REQUIRED_ERROR);
+      return value;
+    }
+  }
+  return declaredOutputFile;
+}
 
 function runReceipt(receipt) {
   const command = `${NPM_EXECUTABLE} ${TEST_RUNNER.join(' ')} ` +
@@ -78,6 +105,7 @@ function runShellReceipt(receipt) {
  * @param {Object} options harness declaration
  * @param {string} options.questId the quest the receipt file belongs to
  * @param {string} options.outputFile solve/evidence/<quest>.receipt.json
+ *   (overridden by a `--output <path>` process argument)
  * @param {Array<Object>} options.receipts frozen receipt declarations
  *   ({id, testFile, detail}); a receipt with a verbatim `command`
  *   string instead of `testFile` re-runs that shell command (with a
@@ -85,6 +113,10 @@ function runShellReceipt(receipt) {
  * @return {void} exits non-zero when any receipt command fails
  */
 function runQuestEvidenceHarness(options) {
+  const outputFile = resolveReceiptOutputFile(
+    options.outputFile,
+    process.argv.slice(ARGV_COMMAND_OFFSET),
+  );
   const receipts = options.receipts.map((receipt) =>
     typeof receipt.command === 'string' ?
       runShellReceipt(receipt) :
@@ -99,15 +131,15 @@ function runQuestEvidenceHarness(options) {
     generatedAt: new Date().toISOString(),
     receipts,
   };
-  fs.mkdirSync(path.dirname(options.outputFile), {recursive: true});
-  fs.writeFileSync(options.outputFile, `${JSON.stringify(payload, null, 2)}\n`);
+  fs.mkdirSync(path.dirname(outputFile), {recursive: true});
+  fs.writeFileSync(outputFile, `${JSON.stringify(payload, null, 2)}\n`);
   const failed = receipts.filter((r) => !r.passed);
   for (const receipt of failed) {
     process.stderr.write(
       `FAIL ${receipt.id} (${receipt.command})\n${receipt.failure}\n`);
   }
   process.stdout.write(
-    `${options.outputFile}: ${status} (${receipts.length - failed.length}/` +
+    `${outputFile}: ${status} (${receipts.length - failed.length}/` +
     `${receipts.length} receipts passing)\n`);
   process.exit(failed.length === 0 ? EXIT_OK : EXIT_FAILED);
 }
