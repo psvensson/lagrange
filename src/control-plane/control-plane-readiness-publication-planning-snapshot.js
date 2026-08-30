@@ -19,6 +19,18 @@ const PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE = Object.freeze({
   probeUnavailable: true,
 });
 
+// Field separator inside the publication component of the readiness-planning
+// memo version key. Neither an epoch nor a status renders this sequence, so
+// (epoch, status) pairs map one-to-one onto component text.
+const PLANNING_MEMO_VERSION_KEY_SEPARATOR = '#planning-memo#';
+// Named key components for the two publication states that are not a live
+// (epoch, status) pair. They are key TEXT, not runtime state: a service with
+// no probe surface keys every entry identically (freshness is governed by the
+// floored generation alone, exactly as the removed live veto did), and an
+// absent epoch or status keys distinctly from any real value.
+const PLANNING_MEMO_VERSION_KEY_PROBE_UNAVAILABLE = 'publication-probe-unavailable';
+const PLANNING_MEMO_VERSION_KEY_ABSENT = 'absent';
+
 class ControlPlaneReadinessPublicationPlanningSnapshot extends
   ControlPlaneReadinessPriorityRecoveryPlanning {
   hasMembershipPublicationRecoveryGateEvidence(planningSnapshot = null) {
@@ -270,34 +282,52 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     });
   }
 
-  // Row-vs-ROW freshness recheck shared by the readiness planning memos:
-  // reject a cached entry when the live publication row's (epoch, status)
-  // moved since the entry was stored. The prior form compared the live row
-  // against the cached CANDIDATE projection — but the derived candidate
-  // proposes the NEXT epoch by construction, so during any formation or
-  // ack-in-progress phase the guard declared stale on every read and
-  // silently disabled the CL-033/CL-034 memos and, transitively, every
-  // downstream identity memo (live evidence: 42762 gate builds across 33
-  // seed gaps in the archived run 18-53-48-768Z-natural-manual).
-  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+  // The publication component of the readiness-planning memo version key.
+  // Byte-for-byte the same (epoch, status) pair the removed live veto
+  // compared, rendered as comparable key TEXT: a service with no probe
+  // surface renders one fixed marker (freshness then rests entirely on the
+  // floored generation, exactly as the veto's probe-unavailable branch did),
+  // and an absent epoch or status renders a named marker rather than a raw
+  // null.
+  buildMembershipPublicationPlanningMemoKeyComponent(nodeId) {
+    const probe = this.readLatestMembershipPublicationEpochStatusProbe(nodeId);
+    if (probe === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE) {
+      return PLANNING_MEMO_VERSION_KEY_PROBE_UNAVAILABLE;
+    }
+    return (probe.epoch ?? PLANNING_MEMO_VERSION_KEY_ABSENT) +
+      PLANNING_MEMO_VERSION_KEY_SEPARATOR +
+      (probe.status ?? PLANNING_MEMO_VERSION_KEY_ABSENT);
+  }
+
+  // ONE version key for the readiness planning memos, replacing the previous
+  // (floored generation key) + (live epoch/status staleness VETO) pair. The
+  // veto was probe-derived: a live read no cached entry could carry, checked
+  // as a side condition after the key comparison had already passed. Folding
+  // the same (epoch, status) into the key makes planning freshness
+  // key-derived — declarative, storable and comparable — with exactly the
+  // veto's strength: a moved (epoch, status) yields a different key and is
+  // never served from the memo, and an unmoved one yields an equal key.
+  readMembershipPublicationPlanningMemoVersionKey(nodeId, observedAt) {
+    return Object.freeze({
+      sourceGeneration: this.readPlanningProjectionSourceGeneration(observedAt),
+      publicationComponent:
+        this.buildMembershipPublicationPlanningMemoKeyComponent(nodeId),
+    });
+  }
+
+  // Key equality, cheap component first. The generation component is a string
+  // compare; the publication component costs one publications-table winner
+  // read, so it is derived only once the generation already matches — the
+  // same short-circuit order (and therefore the same number of publication
+  // reads per call) the generation-check + live-veto pair had.
+  membershipPublicationPlanningMemoVersionKeyMatches(
+    cachedVersionKey,
     nodeId,
-    storedPublicationProbe,
+    sourceGeneration,
   ) {
-    const latest = this.readLatestMembershipPublicationEpochStatusProbe(
-      nodeId,
-    );
-    if (latest === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE) {
-      // No probe surface: the floored generation alone governs freshness.
-      return false;
-    }
-    if (
-      !storedPublicationProbe ||
-      storedPublicationProbe === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE
-    ) {
-      return false;
-    }
-    return latest.epoch !== storedPublicationProbe.epoch ||
-      latest.status !== storedPublicationProbe.status;
+    return cachedVersionKey.sourceGeneration === sourceGeneration &&
+      cachedVersionKey.publicationComponent ===
+        this.buildMembershipPublicationPlanningMemoKeyComponent(nodeId);
   }
 
   // Keyed on the shared floored planning generation (the same key the
@@ -310,9 +340,9 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   // 17-51-37-407Z-natural-manual). Inclusion-list changes now invalidate
   // via the floored generation (same tables, latched up to 250ms — well
   // inside the CL-033 grace its consumers accept); direct publication
-  // epoch/status changes still invalidate immediately via the epoch probe
-  // below. Caches that cannot version their tables keep the exact
-  // revision-counter key.
+  // epoch/status changes still invalidate immediately via the publication
+  // component of the memo version key above. Caches that cannot version their
+  // tables keep the exact revision-counter key.
   readPlanningProjectionSourceGeneration(observedAt) {
     const flooredGeneration =
       typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
@@ -332,28 +362,26 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       if (
         cached &&
         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
-        cached.sourceGeneration === sourceGeneration &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
+        ) &&
+        this.membershipPublicationPlanningMemoVersionKeyMatches(
+          cached.versionKey,
+          memoKey,
+          sourceGeneration,
         )
       ) {
-        if (
-          !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
-            memoKey,
-            cached.publicationProbe,
-          )
-        ) {
-          return cached.projection;
-        }
+        return cached.projection;
       }
     }
     const capturedAtMs = this.now();
     // Miss path builds UNCONDITIONALLY (bypassing the input-identity
-    // projection memo): this memo's publication-row probe is the
-    // belt-and-suspenders invalidation for row changes that arrive without
-    // a table write, and a probe-forced miss must produce a genuinely fresh
-    // projection even when the derived input identity is unchanged.
+    // projection memo): the publication component of the version key moves on
+    // row changes that arrive without a table write, and a key-forced miss
+    // must produce a genuinely fresh projection identity even when the derived
+    // input identity is unchanged — the observable
+    // projection-planning-identity-memoization pins.
     const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
     );
@@ -361,9 +389,10 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
-        sourceGeneration,
-        publicationProbe:
-          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
+        versionKey: this.readMembershipPublicationPlanningMemoVersionKey(
+          memoKey,
+          observedAt,
+        ),
         fn: this.getMembershipPublicationPlanningSnapshotSync,
       });
     }

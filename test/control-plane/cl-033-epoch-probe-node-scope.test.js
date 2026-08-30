@@ -69,9 +69,15 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
     readLatestMembershipPublicationEpochStatusProbe:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
-    isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+    buildMembershipPublicationPlanningMemoKeyComponent:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
-        .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+        .buildMembershipPublicationPlanningMemoKeyComponent,
+    readMembershipPublicationPlanningMemoVersionKey:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readMembershipPublicationPlanningMemoVersionKey,
+    membershipPublicationPlanningMemoVersionKeyMatches:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .membershipPublicationPlanningMemoVersionKeyMatches,
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);

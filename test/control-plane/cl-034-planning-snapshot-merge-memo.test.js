@@ -48,9 +48,15 @@ function memoCtx({
     readLatestMembershipPublicationEpochStatusProbe:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
         .readLatestMembershipPublicationEpochStatusProbe,
-    isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+    buildMembershipPublicationPlanningMemoKeyComponent:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
-        .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+        .buildMembershipPublicationPlanningMemoKeyComponent,
+    readMembershipPublicationPlanningMemoVersionKey:
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
+        .readMembershipPublicationPlanningMemoVersionKey,
+    membershipPublicationPlanningMemoVersionKeyMatches:
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
+        .membershipPublicationPlanningMemoVersionKeyMatches,
     membershipPublicationService: {
       getLatestMembershipPublicationEpochStatusForNodeSync: () => pub,
     },
