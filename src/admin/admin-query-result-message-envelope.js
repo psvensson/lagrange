@@ -93,6 +93,34 @@ function applyAdminErrorQueryResultMessagePayload(message, result) {
       Math.floor(result.retryAfterMs),
     );
   }
+  applyAdminErrorParticipantFailuresPayload(message, result);
+}
+
+// The distributed write owner attaches one entry per failed participant
+// (partition, node, address, error code). The envelope forwards them under
+// their typed field names, bounded by PARTICIPANT_FAILURES_LIMIT, and records
+// the omitted count so an operator can tell a truncated list from a full one.
+function applyAdminErrorParticipantFailuresPayload(message, result) {
+  if (
+    !Array.isArray(result.participantFailures) ||
+    result.participantFailures.length === 0
+  ) {
+    return;
+  }
+  const participantFailures = result.participantFailures.filter(
+    (entry) => entry && typeof entry === 'object',
+  );
+  const limit = ADMIN_QUERY_RESULT.PARTICIPANT_FAILURES_LIMIT;
+  message.participantFailures = participantFailures.slice(0, limit);
+  message.participantFailuresOmittedCount = Math.max(
+    ADMIN_QUERY_RESULT.PARTICIPANT_FAILURES_OMITTED_COUNT_DEFAULT,
+    participantFailures.length - limit,
+  );
+  message.firstFailedParticipant =
+    result.firstFailedParticipant &&
+    typeof result.firstFailedParticipant === 'object' ?
+      result.firstFailedParticipant :
+      message.participantFailures[0];
 }
 
 function applyAdminHostCallbackQueryResultMessagePayload(message, result) {

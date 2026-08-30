@@ -211,6 +211,8 @@ const QUERY_LOG_MSG = Object.freeze({
   QUERY_ADMISSION_DEFERRED: 'Query admission deferred',
   QUERY_ADMISSION_REJECTED: 'Query admission rejected',
   QUERY_EXECUTION_FAILED: 'Query execution failed',
+  DISTRIBUTED_WRITE_PARTICIPANT_FAILURES:
+    'Distributed write failed due to participant failures',
   RESOLVED_PARTITIONS_SELECT: 'Resolved partitions for SELECT',
   ROUTING_INSERT: 'Routing INSERT to partitions',
   ROUTING_UPDATE: 'Routing UPDATE to partitions',

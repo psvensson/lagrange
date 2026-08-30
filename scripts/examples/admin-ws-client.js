@@ -16,6 +16,26 @@ const ADMIN_EXAMPLES_ERROR_CODE = Object.freeze({
   CONNECT_TIMEOUT: 'ADMIN_CONNECT_TIMEOUT',
   RESPONSE_TIMEOUT: 'ADMIN_RESPONSE_TIMEOUT',
 });
+// Typed error-envelope fields the admin API forwards on a failed query
+// result; each one present on the frame rides on the rejected Error so a
+// caller can report which participants failed and why, not only the message.
+const ADMIN_QUERY_RESULT_ERROR_FIELDS = Object.freeze([
+  'errorCode',
+  'details',
+  'participantFailures',
+  'firstFailedParticipant',
+  'participantFailuresOmittedCount',
+]);
+
+function buildAdminQueryResultError(message) {
+  const error = new Error(message.error);
+  for (const field of ADMIN_QUERY_RESULT_ERROR_FIELDS) {
+    if (message[field] !== undefined) {
+      error[field] = message[field];
+    }
+  }
+  return error;
+}
 
 function buildAdminConnectTimeoutError(target, timeoutMs) {
   const error = new Error(
@@ -255,7 +275,7 @@ class AdminWsClient {
     clearTimeout(pending.timeout);
 
     if (message.error) {
-      pending.reject(new Error(message.error));
+      pending.reject(buildAdminQueryResultError(message));
       return;
     }
 
