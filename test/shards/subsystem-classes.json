@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 105,
     "architecture-governance": 19,
-    "bootstrap-membership": 240,
+    "bootstrap-membership": 241,
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 168,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2089,
-  "digest": "fnv1a32-5e416442",
+  "censusSize": 2090,
+  "digest": "fnv1a32-fec0aea4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -198,6 +198,7 @@
     "test/bootstrap/node-joining-cdc-readiness-gate.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-cdc-subscription.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-control-plane-heartbeat.test.js": "bootstrap-membership",
+    "test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-http-post-timeout.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-lease-registration.test.js": "bootstrap-membership",

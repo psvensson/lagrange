@@ -153,6 +153,11 @@ const JOINING_LOG_MSG = Object.freeze({
   READY_SIGNAL_FAILED: 'Failed to signal readiness to seed node',
   PRIORITY_PLACEMENT_FORMATION_BARRIER:
     'Join priority-placement formation barrier',
+  PRIORITY_PLACEMENT_FORMATION_BARRIER_STILL_WAITING:
+    'Join priority-placement formation barrier still waiting',
+  PRIORITY_PLACEMENT_FORMATION_BARRIER_EVIDENCE_ADVANCED:
+    'Join priority-placement formation barrier evidence advanced while ' +
+    'still waiting',
   CANONICAL_READINESS_BLOCKED: 'Join canonical readiness still blocked',
   CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE:
     'Control plane background writers activated for joining node',

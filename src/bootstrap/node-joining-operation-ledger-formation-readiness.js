@@ -75,6 +75,117 @@ function buildFormationBarrierStartupAuthorityFields(startupAuthority) {
   };
 }
 
+/**
+ * Project one barrier snapshot into the evidence fields every barrier log
+ * line carries. The fields are a view of the owner's own snapshot (the
+ * readiness owner's startup-authority answer plus the cohort counts bootstrap
+ * already gates on); nothing is re-derived from node rows or publications.
+ *
+ * @param {Object} snapshot
+ * @return {Object}
+ */
+function buildOperationLedgerFormationBarrierLogFields(snapshot) {
+  return {
+    partitionId: snapshot.partitionId,
+    candidateNodeCount: snapshot.candidateNodeIds.length,
+    preReadyCandidateNodeCount: snapshot.preReadyCandidateNodeIds.length,
+    targetReplicaCount: snapshot.targetReplicaCount,
+    startupAuthorityAvailable: snapshot.startupAuthorityAvailable,
+    startupAuthorityState: snapshot.startupAuthorityState,
+    startupAuthorityReady: snapshot.startupAuthorityReady,
+    startupAuthorityRecoveryReasonCodes:
+      snapshot.startupAuthorityRecoveryReasonCodes,
+    startupAuthorityPublicationRecoveryGateState:
+      snapshot.startupAuthorityPublicationRecoveryGateState,
+    formationReleaseHandoffState:
+      snapshot.formationReleaseHandoff?.state || null,
+    formationReleaseHandoffGeneration:
+      snapshot.formationReleaseHandoff?.generation || null,
+    formationReleaseHandoffReleaseAuthorized:
+      snapshot.formationReleaseHandoff?.releaseAuthorized === true,
+    formationReleaseHandoffRequiredCohort:
+      snapshot.formationReleaseHandoff?.requiredCohort || [],
+    formationReleaseHandoffPendingNodeIds:
+      snapshot.formationReleaseHandoff?.pendingNodeIds || [],
+  };
+}
+
+/**
+ * Liveness log for one barrier wait. It is a projection of the wait the
+ * owner is already performing: the still-waiting line rides the existing
+ * liveness-refresh tick and the evidence-advance line rides the existing
+ * poll, rate-limited to one per liveness-refresh window. It owns no timer,
+ * no budget, and no readiness decision.
+ *
+ * @param {Object} options
+ * @param {Object} options.logger
+ * @param {string} options.nodeId
+ * @param {number} options.startedAt
+ * @param {number} options.timeoutDeadline
+ * @param {number} options.livenessRefreshMs
+ * @return {Object}
+ */
+function createOperationLedgerFormationBarrierWaitLog({
+  logger,
+  nodeId,
+  startedAt,
+  timeoutDeadline,
+  livenessRefreshMs,
+}) {
+  let lastLoggedEvidenceKey =
+    OPERATION_LEDGER_FORMATION_BARRIER_STATE.UNOBSERVED;
+  let lastEvidenceAdvanceLoggedAt = startedAt;
+
+  function project(snapshot, state) {
+    const fields = buildOperationLedgerFormationBarrierLogFields(snapshot);
+    return {
+      evidenceKey: JSON.stringify(fields),
+      details: {
+        nodeId,
+        state,
+        elapsedMs: snapshot.now - startedAt,
+        ...fields,
+      },
+    };
+  }
+
+  return Object.freeze({
+    logState(snapshot, state) {
+      const {evidenceKey, details} = project(snapshot, state);
+      lastLoggedEvidenceKey = evidenceKey;
+      logger.info(JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER, details);
+    },
+    logStillWaiting(snapshot, state) {
+      const {evidenceKey, details} = project(snapshot, state);
+      lastLoggedEvidenceKey = evidenceKey;
+      logger.info(
+        JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER_STILL_WAITING,
+        {
+          ...details,
+          waitingSinceMs: startedAt,
+          timeoutRemainingMs: Math.max(0, timeoutDeadline - snapshot.now),
+          livenessRefreshMs,
+        },
+      );
+    },
+    observeEvidence(snapshot, state) {
+      const {evidenceKey, details} = project(snapshot, state);
+      if (
+        evidenceKey === lastLoggedEvidenceKey ||
+        snapshot.now - lastEvidenceAdvanceLoggedAt < livenessRefreshMs
+      ) {
+        return;
+      }
+      lastLoggedEvidenceKey = evidenceKey;
+      lastEvidenceAdvanceLoggedAt = snapshot.now;
+      logger.debug(
+        JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER_EVIDENCE_ADVANCED,
+        details,
+      );
+    },
+  });
+}
+
 function resolveOperationLedgerFormationBarrierState({
   barrierEngaged,
   discoveryDeadline,
@@ -201,33 +312,6 @@ class NodeJoiningOperationLedgerFormationReadiness
       snapshot.candidateNodeIds.length >= formationReplicaCount &&
       snapshot.preReadyCandidateNodeIds.length >= formationWaveNodeCount;
   }
-  logOperationLedgerFormationBarrierState(state, snapshot) {
-    this.logger.info(JOINING_LOG_MSG.PRIORITY_PLACEMENT_FORMATION_BARRIER, {
-      nodeId: this.nodeId,
-      state,
-      partitionId: snapshot.partitionId,
-      candidateNodeCount: snapshot.candidateNodeIds.length,
-      preReadyCandidateNodeCount: snapshot.preReadyCandidateNodeIds.length,
-      targetReplicaCount: snapshot.targetReplicaCount,
-      startupAuthorityAvailable: snapshot.startupAuthorityAvailable,
-      startupAuthorityState: snapshot.startupAuthorityState,
-      startupAuthorityReady: snapshot.startupAuthorityReady,
-      startupAuthorityRecoveryReasonCodes:
-        snapshot.startupAuthorityRecoveryReasonCodes,
-      startupAuthorityPublicationRecoveryGateState:
-        snapshot.startupAuthorityPublicationRecoveryGateState,
-      formationReleaseHandoffState:
-        snapshot.formationReleaseHandoff?.state || null,
-      formationReleaseHandoffGeneration:
-        snapshot.formationReleaseHandoff?.generation || null,
-      formationReleaseHandoffReleaseAuthorized:
-        snapshot.formationReleaseHandoff?.releaseAuthorized === true,
-      formationReleaseHandoffRequiredCohort:
-        snapshot.formationReleaseHandoff?.requiredCohort || [],
-      formationReleaseHandoffPendingNodeIds:
-        snapshot.formationReleaseHandoff?.pendingNodeIds || [],
-    });
-  }
   buildOperationLedgerFormationBarrierTimeout(snapshot) {
     const error = new Error(
       JOINING_ERROR_MSG.OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT,
@@ -281,6 +365,13 @@ class NodeJoiningOperationLedgerFormationReadiness
     let barrierEngaged = false;
     let lastState =
       OPERATION_LEDGER_FORMATION_BARRIER_STATE.UNOBSERVED;
+    const waitLog = createOperationLedgerFormationBarrierWaitLog({
+      logger: this.logger,
+      nodeId: this.nodeId,
+      startedAt,
+      timeoutDeadline,
+      livenessRefreshMs,
+    });
 
     while (true) {
       const snapshot =
@@ -294,7 +385,7 @@ class NodeJoiningOperationLedgerFormationReadiness
       });
 
       if (state !== lastState) {
-        this.logOperationLedgerFormationBarrierState(state, snapshot);
+        waitLog.logState(snapshot, state);
         lastState = state;
       }
 
@@ -309,8 +400,10 @@ class NodeJoiningOperationLedgerFormationReadiness
         snapshot.now >= nextLivenessRefreshAt
       ) {
         nextLivenessRefreshAt = snapshot.now + livenessRefreshMs;
+        waitLog.logStillWaiting(snapshot, state);
         await this.publishOperationLedgerFormationLiveness(snapshot.now);
       }
+      waitLog.observeEvidence(snapshot, state);
       await this.sleep(pollMs);
     }
   }
