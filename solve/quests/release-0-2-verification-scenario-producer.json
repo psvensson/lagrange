@@ -1,0 +1,84 @@
+{
+  "id": "release-0-2-verification-scenario-producer",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The 0.2 release verification frontiers have an honest producer: scripts/checks/run-release-0-2-verification-scenarios.js (npm run release:verify:scenarios) derives the release-0-2-verification-v3-memory-soak, -local-artifacts and -remote-exact-sha probe reports and the aggregate release-0-2-verification-v3 report from recorded facts only — the newest memory-soak report (every node analyzed with at least 30 samples, no insufficient-analysis reason, no detected leak, and a matching src fingerprint), local gate receipts written by scripts/checks/record-release-gate-receipt.js (which spawns the real command and records its real exit code, HEAD sha, src fingerprint at start and finish, and version) for test-gate, test-ci, release-workflow-contracts, package-npm, build-all, docker-smoke and helm-package, and a GitHub check receipt written by scripts/checks/record-github-gate-receipt.js for the exact HEAD sha's ci / gate conclusion — with one verdict owner (release-0-2-verification-derivation.js), typed fail-closed reasons for every missing or mismatched input, and provenance bound to the frozen identity (HEAD sha, src fingerprint, 0.2.0 in package.json, CLI_VERSION, ENTRYPOINT_VERSION and the Helm chart); the distributed harness stamps metadata.srcFingerprint into every report it writes so a real soak can satisfy the oracle; the commands are registered (package.json, list-commands, tool-descriptions, RELEASE.md). Nothing publishes, pushes or tags. Proven deterministically on temp directories with an injected GitHub query: red on HEAD (producer absent), green after; existing scenario runners unchanged.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.2-release-verification",
+    "specRef": "scripts/checks/run-release-0-2-five-node-convergence-scenarios.js",
+    "closesCL": [],
+    "parentQuest": "release-0-2-verification-v2",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "403a92853"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/release-0-2-verification-scenario-producer.receipt.json",
+      "requiredReceipts": [
+        "soak-oracle-fail-closed",
+        "local-receipts-fail-closed",
+        "remote-receipt-fail-closed",
+        "aggregate-requires-all-children",
+        "gate-receipt-helper-records-real-exit-code",
+        "github-receipt-records-conclusion-without-network",
+        "producer-cli-writes-discoverable-reports",
+        "soak-report-carries-src-fingerprint",
+        "witness-deterministic",
+        "existing-scenario-runners-unchanged"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "release-0-2-verification-scenario-producer-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/release-0-2-verification-scenario-producer.receipt.json",
+          "requiredReceipts": [
+            "soak-oracle-fail-closed",
+            "local-receipts-fail-closed",
+            "remote-receipt-fail-closed",
+            "aggregate-requires-all-children",
+            "gate-receipt-helper-records-real-exit-code",
+            "github-receipt-records-conclusion-without-network",
+            "producer-cli-writes-discoverable-reports",
+            "soak-report-carries-src-fingerprint",
+            "witness-deterministic",
+            "existing-scenario-runners-unchanged"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-verdict-owner",
+      "statement": "Verdicts are derived only in release-0-2-verification-derivation.js; the two receipt helpers record facts (real exit code, queried conclusion) and never emit passed or verdict; the distributed harness stamps metadata.srcFingerprint and changes no verdict."
+    },
+    {
+      "id": "fail-closed-typed",
+      "statement": "Every scenario is fail-closed: an absent soak report, gate receipt, or GitHub receipt is FAIL with a typed reason, never skipped or non-measuring; every report is provenance-bound to one frozen identity (HEAD sha, src fingerprint, 0.2.0 in all five version sources) and any inconsistency fails all four scenarios."
+    },
+    {
+      "id": "no-network-no-publish",
+      "statement": "The witness never touches the network or the tracked test-output; the GitHub query is injected; nothing in this Quest publishes, pushes, or tags."
+    },
+    {
+      "id": "runtime-unchanged",
+      "statement": "No src/ file changes; ratchet baselines, guideline checkers, and the existing release scenario runners are unchanged (control receipt green before and after)."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness on temp directories, red on HEAD (producer absent) and green after, with existing-scenario-runners-unchanged as the control that must stay green."
+    }
+  ]
+}
