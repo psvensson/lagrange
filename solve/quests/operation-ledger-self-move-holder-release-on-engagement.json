@@ -1,0 +1,80 @@
+{
+  "id": "operation-ledger-self-move-holder-release-on-engagement",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "On the operation_workflow_owner's dispatching node, HELD_BY_OTHER at the operation-ledger self-move engagement point is an authoritative read, never a memory: when the locally registered holder id differs from the engaging self-move, engagement resolves the holder through the existing lifecycle relation (tryClearHeldOperationLedgerSelfMove: a positive authoritative terminal row of the holder releases it, a live holder keeps refusing, unresolved reads hold), and a local failOperation/terminal settlement of the holder clears its own registration, so a re-planned ledger self-move after a failed-stale predecessor claims SENDING on its first engagement attempt once the predecessor's terminal row exists instead of parking held_by_other until teardown. IDLE_ONLY, exclusion once engaged, terminal-only release (no release on age, reservation reconciliation, null or failed reads), quorum_concentrated deferral, PENDING_TIMEOUT_MS, the drain's stale rules, budgets and cadences, the 60-second certification window and the single cluster-ACTIVE authority are unchanged. Proven by the real-owner witness failed-holder-does-not-starve-successor on the hold-fairness fixture: red on HEAD (successor parks held_by_other on every attempt, ledger spread never satisfies inside 60 s), green after (successor SENDING on the first attempt after the predecessor's terminal row; hold-engagement and hold-fairness witnesses stay green). Root cause from GCP run 2026-08-30T04-49-12 (replace-op-691efb46 drain-failed stale on n1 at 04:52:48.6; successor replace-op-4f30c060 parked held_by_other 41 times 04:52:57.4-04:53:45.7; barrierReleased false).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md",
+    "closesCL": [],
+    "parentQuest": "operation-ledger-self-move-hold-fairness",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "7085090e22384c455e3a77ef8fd5dd49a5c141ac"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/operation-ledger-self-move-holder-release-on-engagement.receipt.json",
+      "requiredReceipts": [
+        "engagement-resolves-stale-holder-through-lifecycle-read",
+        "local-terminal-settlement-clears-own-registration",
+        "successor-claims-first-attempt-after-predecessor-terminal",
+        "live-holder-still-refuses-and-unresolved-reads-hold",
+        "terminal-only-release-preserved",
+        "idle-only-and-exclusion-preserved",
+        "budgets-and-cadence-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-ledger-self-move-holder-release-on-engagement-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/operation-ledger-self-move-holder-release-on-engagement.receipt.json",
+          "requiredReceipts": [
+            "engagement-resolves-stale-holder-through-lifecycle-read",
+            "local-terminal-settlement-clears-own-registration",
+            "successor-claims-first-attempt-after-predecessor-terminal",
+            "live-holder-still-refuses-and-unresolved-reads-hold",
+            "terminal-only-release-preserved",
+            "idle-only-and-exclusion-preserved",
+            "budgets-and-cadence-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-operation-workflow-owner",
+      "statement": "The operation_workflow_owner (rebalance-coordinator-ledger-interlock-hold-state.js, operation-ledger-hold-policy.js, operation-workflow-dispatch-ledger-self-move-gate.js, the interlock admission lanes) stays the sole owner of hold registration, engagement, and release; the drain, reservation reconciliation, planners and the harness never release a hold."
+    },
+    {
+      "id": "terminal-only-release-unchanged",
+      "statement": "A hold is released only by a positive authoritative terminal row of the holder itself (or the local terminal settlement of that same holder); null, failed, deferred reads, age, and reservation reconciliation never release it; two ledger self-moves are never non-terminal at once."
+    },
+    {
+      "id": "unchanged-budgets-and-cadence",
+      "statement": "IDLE_ONLY, exclusion once engaged, quorum_concentrated, PENDING_TIMEOUT_MS and the drain stale rules, DISPATCH_RETRY_DELAY_MS, the 60-second GCP certification window and the failed-repair backoff are unchanged. No sleeps or timeout widening."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Prove through the hold-fairness real-owner witness fixture (virtual clock, run-cited latencies) red on HEAD and green after, before any GCP run; the GCP streak is certification, never an iteration loop."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    }
+  ]
+}
