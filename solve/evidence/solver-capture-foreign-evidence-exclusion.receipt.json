@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solver-capture-foreign-evidence-exclusion",
+  "status": "pass",
+  "generatedAt": "2026-08-30T10:06:04.157Z",
+  "receipts": [
+    {
+      "id": "foreign-receipt-excluded-from-auto-capture",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^foreign-receipt-excluded-from-auto-capture\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "another quest's regenerated solve/evidence/<other>.receipt.json is not swept into this quest's auto-captured attempt: the recorded artifact names only this quest's own change and the foreign receipt stays dirty and untouched in the worktree"
+    },
+    {
+      "id": "product-quest-not-refused-by-foreign-receipt",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^product-quest-not-refused-by-foreign-receipt\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "a product quest capturing beside a foreign receipt records its attempt instead of being refused with \"workflow changes must be recorded in a workflow/Quest tooling Quest\""
+    },
+    {
+      "id": "foreign-receipt-only-change-captures-nothing",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^foreign-receipt-only-change-captures-nothing\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "when the only dirty path is another quest's receipt the capture is empty and refused as nothing changed; no attempt is recorded for a foreign receipt"
+    },
+    {
+      "id": "own-receipt-still-captured-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^own-receipt-still-captured-unchanged\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "this quest's own regenerated receipt rides with the captured change exactly as before while the foreign one does not"
+    },
+    {
+      "id": "harness-output-option-writes-to-scratch",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^harness-output-option-writes-to-scratch\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "the evidence harness runtime honours `--output <path>`: the receipt is written to the scratch path, the declared solve/evidence artifact is left untouched, and the summary names the scratch path"
+    },
+    {
+      "id": "harness-default-output-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^harness-default-output-unchanged\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "without `--output` the runtime writes its declared solve/evidence receipt with its generatedAt identity intact"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/solve/solver-capture-foreign-evidence-exclusion.test.js",
+      "detail": "two identical capture fixtures record the identical changed-path set"
+    }
+  ]
+}
