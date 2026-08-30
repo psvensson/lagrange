@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "snapshot-lane-deadline-bounded-oracle-blind",
+  "status": "pass",
+  "generatedAt": "2026-08-30T18:45:04.174Z",
+  "receipts": [
+    {
+      "id": "deadline-bounded-snapshot-lane-is-oracle-blind",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/oracle-blindness-classification.test.js",
+      "detail": "a snapshot lane still in flight at the deadline is classified blind and carries its typed lane reason, instead of being read as a sighted oracle reporting an inactive cluster"
+    },
+    {
+      "id": "empty-witness-list-from-other-producers-unchanged",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/oracle-blindness-classification.test.js",
+      "detail": "an empty probe-witness list that carries no deadline-bounded lane marker keeps its prior not-blind meaning, and a completed lane with a sighted witness stays sighted"
+    },
+    {
+      "id": "blindness-classification-unchanged",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/oracle-blindness-classification.test.js",
+      "detail": "the tracker, the failure message, the diagnostics stamp and the node-level inactivity precedence rule are unchanged"
+    },
+    {
+      "id": "attempt-join-contract-unchanged",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "the deadline-bounded record its producer emits, the re-sample admission and the progress classification are unchanged"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/oracle-blindness-classification.test.js test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "both witness files re-run together with the identical outcome"
+    }
+  ]
+}
