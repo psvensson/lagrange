@@ -351,14 +351,35 @@ tap.test('projection replays authorization and resists polluted intrinsics', (t)
       {...event, type: 'rejection-removed-for-attack'} :
       event);
   noRejectionLog.push(correction);
+  // Without the rejection the rejected attempt is still a sibling accepted
+  // source attempt recorded at the target base, so the widened
+  // (pending-pin drift) authorization admits the correction.
   let projection = projectAttemptBaseCorrections(
     state.attempts,
     noRejectionLog,
     {validateProof: () => null},
   );
+  t.same(projection.problems, []);
+  t.equal(
+    projection.attempts.find(
+      (candidate) => candidate.index === attemptIndex,
+    ).event.workspaceBaseCommit,
+    rejectedBase,
+    'a sibling recorded base authorizes the projected correction',
+  );
+  // With neither a standing rejection nor a sibling at the target base an
+  // exact-shaped event is refused and never changes the projected base.
+  const loneAttempts = state.attempts.filter(
+    (candidate) => candidate.index === attemptIndex,
+  );
+  projection = projectAttemptBaseCorrections(
+    loneAttempts,
+    noRejectionLog,
+    {validateProof: () => null},
+  );
   t.match(
     projection.problems.join('\n'),
-    /no exact standing candidate rejection/u,
+    /no exact standing candidate rejection and no sibling/u,
   );
   t.equal(
     projection.attempts.find(
@@ -480,11 +501,17 @@ tap.test('command refuses artifact drift and malformed rejection authority', (t)
   const malformedLog = readLog(fx.root, fx.quest.id);
   const malformedAttemptIndex =
     malformedLog.findLastIndex((event) => event.type === 'attempt');
+  // A malformed rejection carries no authority; a reachable commit that no
+  // sibling accepted source attempt was recorded at is refused outright.
+  fs.writeFileSync(path.join(fx.root, 'notes.md'), 'notes\n');
+  git(fx.root, ['add', 'notes.md']);
+  git(fx.root, ['commit', '-m', 'orphan base']);
+  const orphanBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
   t.throws(
     () => runAttemptBaseCorrectionCommand(fx.root, {
       'id': fx.quest.id,
       'attempt-index': String(malformedAttemptIndex),
-      'to-base': rejectedBase,
+      'to-base': orphanBase,
       'reason': 'malformed authority attack',
     }),
     /standing earlier candidate-rejection base/u,

@@ -8,7 +8,7 @@ import {saveQuest, appendEvent, projectState, readLog}
   from '../../scripts/solve/store.js';
 import {parkFrontier, assessPark, PARK_PROVENANCE_OPERATOR}
   from '../../scripts/solve/park.js';
-import {pendingFilePath} from '../../scripts/solve/step.js';
+import {pendingFilePath} from '../../scripts/solve/pending-step.js';
 import {auditQuest} from '../../scripts/solve/audit.js';
 import {buildNextProjection} from '../../scripts/solve/next.js';
 

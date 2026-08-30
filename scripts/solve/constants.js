@@ -318,6 +318,21 @@ export const LANDING_UNION_STATUS = Object.freeze({
   COVERED: 'covered',
   UNCOVERED: 'uncovered',
 });
+// The base an attempt is recorded against (pending-step.js): a pending
+// step's pin is the single source for every attempt of that step; the
+// active source epoch base, then live HEAD, only otherwise.
+export const ATTEMPT_BASE_SOURCE = Object.freeze({
+  PENDING_STEP: 'pending-step',
+  SOURCE_EPOCH: 'source-epoch',
+  HEAD: 'head',
+});
+// Typed authorization a `correct-attempt-base` correction rests on
+// (attempt-base-correction.js): the standing candidate-rejection base, or
+// the recorded base of a sibling accepted source attempt (pending-pin drift).
+export const CORRECTION_AUTHORIZATION = Object.freeze({
+  CANDIDATE_REJECTION: 'candidate-rejection',
+  SIBLING_RECORDED_BASE: 'sibling-recorded-base',
+});
 
 // Supervisor (keep-alive) outcomes. runSupervised re-invokes runLoop only after a
 // progress-bearing MAX_CYCLES result. These outcomes are NON-terminal — they never

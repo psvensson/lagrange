@@ -17,7 +17,9 @@ import {
   attemptHasLaterVerifierReview,
   EVENT_ATTEMPT_BASE_CORRECTED,
   exactStandingCandidateRejection,
+  recordedSiblingBase,
 } from './attempt-base-correction-projection.js';
+import {CORRECTION_AUTHORIZATION} from './constants.js';
 
 const arraySlice = Array.prototype.slice;
 const arraySort = Array.prototype.sort;
@@ -28,6 +30,14 @@ const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 const PROBLEM_COMMIT_REF_PINNED_RANGE =
   'correct-attempt-base: commit: changeRefs have a pinned range and cannot ' +
   'be base-corrected';
+const PROBLEM_UNAUTHORIZED_TARGET_BASE =
+  'correct-attempt-base: target must equal the standing earlier ' +
+  'candidate-rejection base on the same frontier or the recorded base of a ' +
+  'sibling accepted source attempt';
+const PROBLEM_DELTA_UNAVAILABLE_PREFIX =
+  'correct-attempt-base: ';
+const PROBLEM_DELTA_UNAVAILABLE_INFIX = ' delta is unavailable: ';
+const PROBLEM_DELTA_MISMATCH_INFIX = ' delta does not reproduce ';
 
 function regexpMatches(pattern, value) {
   return typeof value === 'string' &&
@@ -56,12 +66,17 @@ function exactArrayEqual(left, right) {
   return true;
 }
 
+// Fail closed unless the recorded delta is byte-identical at `base`: the
+// fingerprint is the sha256 of the canonical Git delta, so an identical
+// fingerprint at both bases proves the inter-base range touched no attempt
+// path.
 function requireMatchingDelta(root, base, attempt, label) {
   const paths = sortedCopy(attempt.inspection.changedPaths);
   const delta = canonicalSourceDelta(root, base, paths);
   if (!delta.ok) {
     throw new Error(
-      `correct-attempt-base: ${label} delta is unavailable: ${delta.problem}`,
+      PROBLEM_DELTA_UNAVAILABLE_PREFIX + label +
+        PROBLEM_DELTA_UNAVAILABLE_INFIX + delta.problem,
     );
   }
   if (
@@ -69,8 +84,8 @@ function requireMatchingDelta(root, base, attempt, label) {
     !exactArrayEqual(delta.paths, paths)
   ) {
     throw new Error(
-      `correct-attempt-base: ${label} delta does not reproduce ` +
-        `${attempt.fingerprint}`,
+      PROBLEM_DELTA_UNAVAILABLE_PREFIX + label +
+        PROBLEM_DELTA_MISMATCH_INFIX + attempt.fingerprint,
     );
   }
   return delta.fingerprint;
@@ -133,23 +148,22 @@ function requireNoReview(log, attempt) {
   }
 }
 
-function requireRejectionBase(log, attempts, attempt, targetBase) {
+// One canonical authorization outcome: the standing candidate rejection's
+// base (the replacement must stay bound to it), else the recorded base of a
+// sibling accepted source attempt (pending-pin drift repair), else refuse.
+function requireCorrectionAuthorization(log, attempts, attempt, targetBase) {
   const correction = {
     fingerprint: attempt.fingerprint,
     paths: sortedCopy(attempt.inspection.changedPaths),
     toBase: targetBase,
   };
-  if (!exactStandingCandidateRejection(
-    log,
-    attempt,
-    correction,
-    attempts,
-  )) {
-    throw new Error(
-      'correct-attempt-base: target must equal the standing earlier ' +
-        'candidate-rejection base on the same frontier',
-    );
+  if (exactStandingCandidateRejection(log, attempt, correction, attempts)) {
+    return CORRECTION_AUTHORIZATION.CANDIDATE_REJECTION;
   }
+  if (recordedSiblingBase(attempts, attempt, targetBase)) {
+    return CORRECTION_AUTHORIZATION.SIBLING_RECORDED_BASE;
+  }
+  throw new Error(PROBLEM_UNAUTHORIZED_TARGET_BASE);
 }
 
 function requireRecordedBase(root, attempt, targetBase) {
@@ -191,7 +205,8 @@ export function runAttemptBaseCorrectionCommand(root, args = {}) {
     attemptIndex,
   );
   requireNoReview(log, attempt);
-  requireRejectionBase(log, attempts, attempt, targetBase);
+  const authorization =
+    requireCorrectionAuthorization(log, attempts, attempt, targetBase);
   const recordedBase = requireRecordedBase(root, attempt, targetBase);
   const recordedBaseFingerprint = requireMatchingDelta(
     root,
@@ -222,5 +237,5 @@ export function runAttemptBaseCorrectionCommand(root, args = {}) {
     },
   });
   return `corrected attempt ${attemptIndex} base ${recordedBase} -> ` +
-    `${targetBase} at ${stamped.ts}`;
+    `${targetBase} (${authorization}) at ${stamped.ts}`;
 }

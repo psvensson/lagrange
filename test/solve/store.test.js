@@ -11,7 +11,7 @@ import {
   saveQuest,
 } from '../../scripts/solve/store.js';
 import {reportFilePath} from '../../scripts/solve/report.js';
-import {pendingFilePath} from '../../scripts/solve/step.js';
+import {pendingFilePath} from '../../scripts/solve/pending-step.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'safeid-'));

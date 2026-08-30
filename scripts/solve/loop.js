@@ -78,9 +78,9 @@ import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
 import {
   LEGACY_VERIFICATION_CONTRACT_VERSION,
-  resolveWorkspaceBaseCommit,
   sourceVerificationFingerprint,
 } from './verification.js';
+import {resolveAttemptBaseCommit} from './pending-step.js';
 import {assertQuestReadyToSeal} from './quest-lint.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
@@ -361,7 +361,8 @@ function applyAttempt(root, quest, ctx, pick, before) {
     .map((e) => e.evidence)
     .filter(Boolean);
   if (before.evidence) evidencePaths.push(before.evidence);
-  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
+  const workspaceBaseCommit =
+    resolveAttemptBaseCommit(root, quest, log).baseCommit;
   const result = ctx.executor.run({
     quest,
     frontierDef: pick.def,

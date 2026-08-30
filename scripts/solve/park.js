@@ -35,7 +35,7 @@ import {
 } from './constants.js';
 import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './store.js';
 import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
-import {pendingFilePath} from './step.js';
+import {pendingFilePath} from './pending-step.js';
 import {buildEvidenceIdentity} from './evidence-identity.js';
 
 export {PARK_PROVENANCE_OPERATOR};

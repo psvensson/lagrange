@@ -17,7 +17,7 @@
     "release-packaging": 10,
     "runtime-primitives": 22,
     "services-runtime": 166,
-    "solver-tooling": 90,
+    "solver-tooling": 91,
     "storage-partition": 140,
     "storage-raft": 75,
     "test-infrastructure": 102,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2093,
-  "digest": "fnv1a32-59d256fe",
+  "censusSize": 2094,
+  "digest": "fnv1a32-e2557012",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1923,6 +1923,7 @@
     "test/solve/scope-pressure.test.js": "solver-tooling",
     "test/solve/seal-freshness.test.js": "solver-tooling",
     "test/solve/session-registry.test.js": "solver-tooling",
+    "test/solve/solver-attempt-base-pending-step-pin.test.js": "solver-tooling",
     "test/solve/solver-land-recorded-attempt-union-guard.test.js": "solver-tooling",
     "test/solve/solver-terminal-integrity-cutover.test.js": "solver-tooling",
     "test/solve/solver-terminal-integrity-red-test-bootstrap.test.js": "solver-tooling",

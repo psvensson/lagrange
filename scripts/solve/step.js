@@ -17,7 +17,6 @@ import {
   recordQuestSolvedIfDone,
 } from './loop.js';
 import {
-  assertSafeQuestId,
   boundVerifierRejectionEvents,
   introducedScopePaths,
   projectState,
@@ -33,8 +32,6 @@ import {ingestEvidence} from './evidence.js';
 import {
   REJECTION_ESCALATION_GUIDANCE,
   REJECTION_ESCALATION_LIMIT,
-  SOLVE_DATA_DIR,
-  STATE_SUBDIR,
   STATUS_SOLVED,
 } from './constants.js';
 import {
@@ -67,14 +64,19 @@ import {
   unrecordedEvidenceContinuation,
 } from './continuation.js';
 import {
-  baseRecordedButUnreachable,
   activeSourceEpoch,
   resolveWorkspaceBaseCommit,
   sourceEpochDriftProblem,
   sourceEpochCommittedDriftPaths,
-  verificationState,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
+import {
+  clearPending,
+  loadPending,
+  pendingStepBaseCommit,
+  resolveStepBaseCommit,
+  savePending,
+} from './pending-step.js';
 
 const STATIC_PROBLEM_SEPARATOR = '\n';
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
@@ -126,36 +128,6 @@ const AUTO_DIFF_UNTRACKED_GUARD_PATHSPECS = Object.freeze([
   'test',
 ]);
 
-// The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
-// snapshot exactly what changed during the attempt (null outside a git work tree).
-function resolveHeadPin(root) {
-  return resolveWorkspaceBaseCommit(root);
-}
-
-export function resolveStepBaseCommit(root, quest, log, frontierId) {
-  const verification = verificationState(root, quest, log);
-  const unresolvedRejection = verification
-    .unresolvedRejectedAttempts
-    .find(({attempt}) => attempt.event.frontier === frontierId);
-  const candidateRejection = verification.unresolvedCandidateRejection;
-  const rejectedBase = (
-    candidateRejection?.event?.frontier === frontierId ?
-      candidateRejection.receipt?.baseCommit :
-      null
-  ) || unresolvedRejection?.attempt.event.workspaceBaseCommit;
-  // A replacement is pinned to the rejected attempt's base so the rejection
-  // stays binding — but pinning to a base that no longer resolves would refuse
-  // the replacement before it could be recorded. The live-base coverage rule in
-  // findApprovedRejectionReplacement accepts a reachable-base replacement for
-  // exactly this case, so the pin falls back to HEAD only when the recorded
-  // base is a well-formed commit id that cannot resolve.
-  if (rejectedBase && baseRecordedButUnreachable(root, rejectedBase)) {
-    return resolveHeadPin(root);
-  }
-  const epoch = activeSourceEpoch(root, quest, log);
-  return rejectedBase || epoch?.baseCommit || resolveHeadPin(root);
-}
-
 function assertSourceEpochIntact(root, quest, log, extraPaths = []) {
   const epoch = activeSourceEpoch(root, quest, log);
   const drift = sourceEpochCommittedDriftPaths(root, epoch, extraPaths);
@@ -181,7 +153,7 @@ function nextAutoDiffArtifactPath(root, questId) {
 // resulting artifact goes through the same inspectChangeArtifact honesty gate as an
 // operator-provided diff. An empty diff is an operator error, not a silent no-op.
 function createAutoDiffChangeRef(root, quest, pending) {
-  const pin = pending.sourceBaseCommit || pending.headCommit || 'HEAD';
+  const pin = pendingStepBaseCommit(pending) || 'HEAD';
   const untracked = spawnSync('git', [
     'ls-files', '--others', '--exclude-standard', '--',
     ...AUTO_DIFF_UNTRACKED_GUARD_PATHSPECS,
@@ -273,15 +245,6 @@ function createAutoDiffChangeRef(root, quest, pending) {
   );
 }
 
-export function pendingFilePath(root, questId) {
-  return path.join(
-    root,
-    SOLVE_DATA_DIR,
-    STATE_SUBDIR,
-    `${assertSafeQuestId(questId)}.pending.json`,
-  );
-}
-
 function configureContext(root, quest, options = {}) {
   const ctx = makeRunContext(options);
   ctx.probeCtx = {...ctx.probeCtx, root};
@@ -292,24 +255,6 @@ function configureContext(root, quest, options = {}) {
     ctx.honestyCtx.inspectChangeRef ||
     ((ref) => inspectChangeArtifact(root, quest, ref));
   return ctx;
-}
-
-function loadPending(root, questId) {
-  const file = pendingFilePath(root, questId);
-  if (!fs.existsSync(file)) return null;
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
-}
-
-function savePending(root, questId, pending) {
-  const file = pendingFilePath(root, questId);
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  fs.writeFileSync(file, `${JSON.stringify(pending, null, 2)}\n`);
-  return file;
-}
-
-function clearPending(root, questId) {
-  const file = pendingFilePath(root, questId);
-  if (fs.existsSync(file)) fs.rmSync(file);
 }
 
 function theoryGateResult(root, quest, log, problems, pick) {
@@ -450,7 +395,7 @@ function stepBegin(root, quest, options = {}) {
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   assertSourceEpochIntact(root, quest, log);
-  const headCommit = resolveHeadPin(root);
+  const headCommit = resolveWorkspaceBaseCommit(root);
   const pending = {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
@@ -602,7 +547,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     changeInspection.changedPaths.filter(requiresSourceVerification),
   );
 
-  const sourceBaseCommit = pending.sourceBaseCommit || pending.headCommit;
+  const sourceBaseCommit = pendingStepBaseCommit(pending);
 
   const canonicalProblem = canonicalSourceArtifactProblem(
     root,
