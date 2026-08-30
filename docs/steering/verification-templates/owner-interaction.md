@@ -84,6 +84,9 @@ test, model, or immutable run artifact).
       witness tests.
     - Contract/model/decision-table changes and the witness change together when
       semantics change; a source-only semantic change is a rejection.
+    - The registry entry rides in the same product Quest as the owner change
+      (`test/shards/impact-contracts.json` classifies as `test`); it needs no
+      separate Quest.
 
 ## Verdict bar
 

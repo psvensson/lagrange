@@ -184,6 +184,33 @@ The finding has no commit side effect. The checkpoint records the durability
 reason, refuses any candidate drift, commits only Quest scope, and never pushes.
 Routine work skips this section entirely and goes straight to terminal review.
 
+## Foreign Dirty Files And Commits Under A Lease
+
+The attempt capture sweeps the working tree, so files another Quest dirtied
+must never be left in place when an attempt is recorded: restore another
+Quest's regenerated receipt or the frontier board with
+`git checkout -- <path>` before `continue --summary`. Never set aside a Quest's
+own `solve/log/` file by checking it out — the log is append-only and the
+events are lost. Record the attempt before committing anything else while a
+step is pending; a commit between begin-step and record-attempt moves the
+attempt base away from the step pin and the candidate becomes unlandable.
+
+While this worktree holds a Quest lease the pre-commit hook refuses any
+source-changing commit that the Quest has not authorized
+(`scripts/solve/commit-authorization.js`). There is no bypass lane. For a
+source change that genuinely belongs outside the Quest, release the lease,
+commit, and let the next Solver verb re-claim it:
+
+```sh
+node scripts/solve/session-registry.js release --quest <id>
+git commit -m "<message>"
+node scripts/solve.js next --id <id>
+```
+
+Or make the change in a second worktree. `LAGRANGE_SKIP_PRECOMMIT=1` is for
+WIP branches only and never for a commit that lands source on the release
+branch. Documentation and `solve/` records are not source and commit normally.
+
 ## Terminal Verification And Handoff
 
 Normally pass the independent verdict to `land`; the component form is:
