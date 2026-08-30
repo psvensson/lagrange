@@ -1,0 +1,74 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-planning-snapshot-identity-owner",
+  "status": "pass",
+  "generatedAt": "2026-08-30T19:44:04.568Z",
+  "receipts": [
+    {
+      "id": "renormalisation-is-a-byte-identical-fixed-point",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^renormalisation-is-a-byte-identical-fixed-point\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the LICENCE for the cure: over every publication state a winner row can take (epoch 2/3 x PUBLISHED/ACKNOWLEDGING plus no-membership-row), a FORCED rebuild of an already-canonical planning snapshot is byte-identical to that snapshot — so serving the same object can never present content a rebuild would not have produced"
+    },
+    {
+      "id": "renormalisation-fixed-point-holds-across-the-whole-rig",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^renormalisation-fixed-point-holds-across-the-whole-rig\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the same claim measured on the production-composition path rather than a directed matrix: every re-normalisation the formation-shaped owner-build sequence performs is byte-identical to its input, with the identity owner forced off so the rebuild runs"
+    },
+    {
+      "id": "stable-inputs-burst-returns-one-canonical-identity",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^stable-inputs-burst-returns-one-canonical-identity\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "40 consecutive re-normalisations of one canonical planning snapshot through the REAL owner return that same frozen object and rebuild nothing at all; on HEAD each call mints a fresh byte-equal identity that defeats every downstream identity memo"
+    },
+    {
+      "id": "version-key-change-mints-one-fresh-identity",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^version-key-change-mints-one-fresh-identity\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the freshness negative: a publications winner that advances WITHOUT a system-table write — the case the floored generation cannot see — still mints a FRESH planning-answer identity through getPriorityRecoveryPlanningAnswerSync and rebuilds exactly once, then holds; the identity owner never absorbs a version-key-forced miss"
+    },
+    {
+      "id": "source-generation-change-mints-a-fresh-identity",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^source-generation-change-mints-a-fresh-identity\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "a source-table write observed in the next floored generation re-projects the same canonical snapshot to a fresh identity exactly once, and that new identity is itself the fixed point of the new window: identity rotation tracks the generation, not the call count"
+    },
+    {
+      "id": "identity-observable-preserved",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^identity-observable-preserved\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "CONTROL (green on HEAD, must stay green): the sealed projection-planning identity observable, driven against the production-composition owner — a stable publication row keeps the memoized answer despite a candidate proposing the NEXT epoch, and a genuine publication-row advance still rebuilds immediately"
+    },
+    {
+      "id": "identical-counter-cache-swap-drops-the-canonical-identity",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^identical-counter-cache-swap-drops-the-canonical-identity\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the staleness negative: a replacement system-table cache presenting IDENTICAL table mutation counters is not separable by the floored generation, so a snapshot retained across the swap must re-derive — it does, exactly once, and the retained object is still frozen and unmutated"
+    },
+    {
+      "id": "canonical-identity-retains-no-back-reference",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^canonical-identity-retains-no-back-reference\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the retention bound: identity entries live in a WeakMap and the SELF entry holds no reference back to its own key, so an entry can never pin the snapshot it describes and retention is bounded by the lifetime of the snapshots themselves"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "CONTROL (green on HEAD, must stay green): the readiness planning drain queue still carries maxConcurrency 1, maxItemsPerDrain 1 and its macrotask-class scheduler; the shipped 250ms generation refresh floor — not a new cadence — bounds identity reuse; and the identity owner and the planning memos read ONE generation component. No budget, cadence or scheduler value moves"
+    },
+    {
+      "id": "formation-shaped-build-rate-after-identity-owner",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^formation-shaped-build-rate-after-identity-owner\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "the MEASURED rate claim: the identical 1000-call formation-shaped churn on a virtual clock through the real ControlPlaneReadinessService owner build falls from 1724 heavy planning builds (344.8/s, within 3% of the 355/s measured on the failing five-node GCP seed) to 812 (162.4/s), a 52.9% cut, while publications winner reads stay at 824 — the identity owner adds no read"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/control-plane/readiness-planning-snapshot-identity-owner.test.js",
+      "detail": "CONTROL: two identical drives of the formation-shaped sequence produce identical heavy build and publications winner read counts, and two identical fixed-point audits produce the identical result"
+    }
+  ]
+}

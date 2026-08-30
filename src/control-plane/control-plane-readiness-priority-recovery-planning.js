@@ -572,49 +572,165 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     return Object.freeze(retainedReasonCodes);
   }
 
-  // One projection per (input-snapshot identity, floored generation) at the
-  // single entry every caller shares — the answer paths, the merge-decision
-  // helpers that re-project the same snapshot several times per merge, and
-  // the brand-gated predicates. Rebuilding per call minted a fresh identity
-  // per read that defeated every downstream identity memo (live evidence:
-  // 42762 gate builds across 33 seed gaps, archived run
-  // 18-53-48-768Z-natural-manual). The projection derives from the snapshot
-  // plus cache-backed evidence, both covered by the floored generation;
-  // non-object inputs and unversioned caches keep per-call builds.
+  // ONE identity owner for the canonical planning snapshot.
+  //
+  // Every planning-snapshot producer reaches this normalizer (as
+  // normalizeMembershipPublicationPlanningSnapshot, as the merge tail, and as
+  // the answer paths), so it is the only mint of a canonical planning
+  // snapshot — and therefore owns that snapshot's IDENTITY. It previously
+  // owned only the (input identity, floored generation) pair: every producer
+  // that re-normalised an ALREADY canonical snapshot got a fresh, byte-equal
+  // object back, so the input identity had no owner and every downstream
+  // identity memo missed. Live evidence: 42762 gate builds across 33 seed
+  // gaps (archived run 18-53-48-768Z-natural-manual); production-composition
+  // rig evidence: 1430 of 2242 projection calls per 1000 owner builds were
+  // re-normalisations of an already canonical snapshot, all byte-identical.
+  //
+  // FIXED POINT. The projection is a pure derivation of its input snapshot
+  // (the recovery gate is read off the snapshot itself, and every override is
+  // idempotent) plus exactly ONE live input: the local cluster-incarnation
+  // fence, consulted only for this node's own snapshot. So re-normalising a
+  // canonical snapshot is the identity function on content. Recording the
+  // output as its own canonical answer — a SELF entry carrying no projection
+  // reference, so the WeakMap never holds a back-reference to its own key and
+  // the entry dies with the snapshot it describes — makes it the identity
+  // function on identity too.
+  //
+  // FRESHNESS PARITY. Reuse is gated on the floored source generation — the
+  // generation component of the readiness-planning memo version key, which
+  // already covers every planning source table INCLUDING
+  // CONTROL_PLANE_PUBLICATIONS — plus the reference identity of that one live
+  // input and of the two owners the derivation reads (the planning source
+  // cache and the membership publication owner), so an entry can never
+  // outlive its inputs. Both entries carry the identical gate, so a served
+  // identity is never fresher-looking than a rebuild: by the fixed point
+  // above, the object returned on a hit is byte-identical to the object a
+  // rebuild would mint.
+  // The version key's LIVE publication component stays where it is
+  // load-bearing and where it is paid for once per read rather than once per
+  // projection call: the node-scoped planning memos
+  // (resolveMemoizedPriorityRecoveryPlanningProjectionSync and the merge memo),
+  // whose miss paths build UNCONDITIONALLY and so still mint a fresh identity
+  // the instant a publication row moves without a table write — which is what
+  // the sealed projection-planning identity observable pins.
+  // Non-object inputs and unversioned caches keep per-call builds.
   buildPriorityRecoveryPlanningProjection(planningSnapshot = null, observedAt) {
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return this.buildTrackedPriorityRecoveryPlanningProjection(
         planningSnapshot,
       );
     }
+    const generation = this.readPlanningProjectionGenerationForCall(observedAt);
+    if (generation === null) {
+      return this.buildTrackedPriorityRecoveryPlanningProjection(
+        planningSnapshot,
+      );
+    }
+    const admissionEvidenceSource = this.getLocalClusterIncarnationFence();
+    const canonical = this.readCanonicalPlanningProjection(
+      planningSnapshot,
+      generation,
+      admissionEvidenceSource,
+    );
+    if (canonical) {
+      return canonical;
+    }
+    return this.adoptCanonicalPlanningProjection(
+      this.buildTrackedPriorityRecoveryPlanningProjection(planningSnapshot),
+      generation,
+      admissionEvidenceSource,
+      planningSnapshot,
+    );
+  }
+
+  // Clock: prefer the caller's observedAt, else the service's injectable
+  // clock — mixing Date.now into the shared floor latch alongside logical
+  // caller clocks corrupts the latch ordering. Null when the composed owner
+  // exposes no generation surface or the cache cannot version its tables:
+  // identity reuse then disables and every call rebuilds, as it did before.
+  readPlanningProjectionGenerationForCall(observedAt) {
+    if (typeof this.readPlanningProjectionSourceGeneration !== 'function') {
+      return null;
+    }
+    return this.readPlanningProjectionSourceGeneration(
+      observedAt ??
+        (typeof this.now === 'function' ? this.now() : undefined),
+    );
+  }
+
+  // The canonical answer this snapshot's identity entry serves, or null when
+  // there is none current. A SELF entry (projection === null) means the
+  // snapshot IS the canonical projection for this generation.
+  //
+  // The entry names EVERY owner it was derived from, so it can never outlive
+  // its inputs: a replacement system-table cache can present IDENTICAL table
+  // mutation counters, and a replacement membership owner reads different
+  // publications, so neither is separable by the floored generation alone. A
+  // snapshot retained across either swap therefore misses and re-derives.
+  readCanonicalPlanningProjection(
+    planningSnapshot,
+    generation,
+    admissionEvidenceSource,
+  ) {
+    const cached = this.planningProjectionByInputSnapshot?.get(
+      planningSnapshot,
+    );
+    if (
+      !cached ||
+      cached.generation !== generation ||
+      cached.admissionEvidenceSource !== admissionEvidenceSource ||
+      cached.planningSourceCache !== this.systemTableCache ||
+      cached.membershipPublicationOwner !== this.membershipPublicationService
+    ) {
+      return null;
+    }
+    return cached.projection || planningSnapshot;
+  }
+
+  // Declare a freshly built projection CANONICAL for this generation: the SELF
+  // entry. `projection: null` keeps the entry free of any reference to its own
+  // WeakMap key, so it dies with the snapshot it describes and retains nothing
+  // of its own.
+  //
+  // The version-key-forced miss paths build unconditionally, bypassing the
+  // identity lookup above precisely so a moved publication mints a genuinely
+  // fresh identity. That fresh projection is still canonical, and the ~6
+  // sub-builders that re-normalise it within the same readiness build must
+  // reuse it rather than mint byte-equal copies — so they adopt it here too,
+  // passing no input snapshot of their own.
+  adoptCanonicalPlanningProjection(
+    projection,
+    sourceGeneration,
+    admissionEvidenceSource,
+    inputSnapshot = null,
+  ) {
+    if (
+      !projection ||
+      typeof projection !== 'object' ||
+      sourceGeneration === null ||
+      sourceGeneration === undefined
+    ) {
+      return projection;
+    }
     if (!this.planningProjectionByInputSnapshot) {
       this.planningProjectionByInputSnapshot = new WeakMap();
     }
-    // Clock: prefer the caller's observedAt, else the service's injectable
-    // clock — mixing Date.now into the shared floor latch alongside logical
-    // caller clocks corrupts the latch ordering.
-    const generation =
-      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
-        this.readPlanningProjectionSourceGeneration(
-          observedAt ??
-            (typeof this.now === 'function' ? this.now() : undefined),
-        ) :
-        null;
-    const cached = this.planningProjectionByInputSnapshot.get(
-      planningSnapshot,
-    );
-    if (cached && generation !== null && cached.generation === generation) {
-      return cached.projection;
-    }
-    const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
-      planningSnapshot,
-    );
-    if (generation !== null) {
-      this.planningProjectionByInputSnapshot.set(planningSnapshot, {
-        generation,
+    const entry = {
+      generation: sourceGeneration,
+      admissionEvidenceSource: admissionEvidenceSource === undefined ?
+        this.getLocalClusterIncarnationFence() :
+        admissionEvidenceSource,
+      planningSourceCache: this.systemTableCache,
+      membershipPublicationOwner: this.membershipPublicationService,
+      projection: null,
+    };
+    if (inputSnapshot && inputSnapshot !== projection) {
+      this.planningProjectionByInputSnapshot.set(inputSnapshot, {
+        ...entry,
         projection,
       });
     }
+    this.planningProjectionByInputSnapshot.set(projection, entry);
     return projection;
   }
 
