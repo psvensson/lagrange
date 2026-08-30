@@ -51,6 +51,9 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
       },
     };
     setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
+    // Fixed clock: the delivery timeout is derived from a deadline minus now(),
+    // so a real 1 ms tick between the two reads would report 29999.
+    service.now = () => 100;
 
     await service.sendControlPlaneNodeStateUpdate({
       state: STATE.READY,
