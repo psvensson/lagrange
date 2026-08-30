@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "admin-query-participant-failures-surfaced",
+  "status": "pass",
+  "generatedAt": "2026-08-30T13:27:57.746Z",
+  "receipts": [
+    {
+      "id": "envelope-carries-participant-failures-typed-fields-and-cap",
+      "passed": true,
+      "command": "npm run test:file -- test/admin/admin-query-result-envelope-participant-failures.test.js",
+      "detail": "the admin error result envelope forwards participantFailures and firstFailedParticipant under their typed names, caps the list at ADMIN_QUERY_RESULT.PARTICIPANT_FAILURES_LIMIT and records participantFailuresOmittedCount"
+    },
+    {
+      "id": "client-error-carries-participant-failures",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/movielens-failure-report-participant-failures.test.js",
+      "detail": "AdminWsClient rejects a failed query with an Error carrying errorCode, details, participantFailures, firstFailedParticipant and participantFailuresOmittedCount from the frame, fabricating none"
+    },
+    {
+      "id": "demo-failure-report-serialises-participant-failures",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/movielens-failure-report-participant-failures.test.js",
+      "detail": "the MovieLens comparison and live failure reports keep the error string and write errorDetail with the participant failures beside it through one report-error owner"
+    },
+    {
+      "id": "write-fanout-participant-failures-logged-once",
+      "passed": true,
+      "command": "npm run test:file -- test/query/distributed-write-coordinator-participant-failure-log.test.js",
+      "detail": "DistributedWriteCoordinator emits exactly one warn line per failed fan-out naming the operation, operationId, failed partitions and per-participant node/address/error codes; none on success"
+    },
+    {
+      "id": "successful-result-envelope-unchanged",
+      "passed": true,
+      "command": "npm run test:file -- test/admin/admin-query-result-envelope-participant-failures.test.js",
+      "detail": "control: a successful write envelope carries no participant failure fields"
+    },
+    {
+      "id": "error-without-participants-unchanged",
+      "passed": true,
+      "command": "npm run test:file -- test/admin/admin-query-result-envelope-participant-failures.test.js",
+      "detail": "control: an error envelope without failed participants keeps error/errorCode/hint/details and carries no participant fields"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "npm run test:file -- test/admin/admin-query-result-envelope-participant-failures.test.js",
+      "detail": "control: the same owner result projects identical participant fields on repeated envelope builds"
+    }
+  ]
+}
