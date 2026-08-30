@@ -67,16 +67,29 @@ const OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME = Object.freeze({
 // AUTHORITATIVE_REGISTERED is the pre-engagement lifecycle: the durable
 // PENDING intent is registered but the self-move is not yet
 // dispatch-admissible (its owner has not claimed dispatch and its target node
-// holds no current READY lease), so the ledger raft group is untouched and
-// the run-20 hazard does not yet exist. The hold engages from the instant the
-// self-move becomes dispatch-admissible (GCP streak on 675d6b512: runs
-// 21-08-21 / 21-22-08 lost 29.9 s / 57.8 s of the 60 s window to a hold
-// taken at createOperation while the self-move waited 13.7 s for its target
-// to be READY; run 21-16-04 passed with the dependents admitted first).
+// holds no current READY lease on the dimension the dispatch path evaluates
+// — the same readiness verdict, including the priority-recovery dispatch
+// bootstrap exemption, that admits the row to its owner's dispatch), so the
+// ledger raft group is untouched and the run-20 hazard does not yet exist.
+// The hold engages from the instant the self-move becomes dispatch-admissible
+// (GCP streak on 675d6b512: runs 21-08-21 / 21-22-08 lost 29.9 s / 57.8 s of
+// the 60 s window to a hold taken at createOperation while the self-move
+// waited 13.7 s for its target to be READY; run 21-16-04 passed with the
+// dependents admitted first). A formation target is by definition
+// PRIORITY_CONTROL_PLANE_RECOVERY_PENDING, so requiring
+// controlPlaneRecoveryEligible itself kept the holder REGISTERED for the
+// whole spread (GCP streak on 4bc6c1d25: runs 23-51-32 / 23-58-17).
+//
+// AUTHORITATIVE_FOREIGN_ROW: the read answered with a row that is not the
+// held self-move's own row (a lagging or misattributed ledger read). Only the
+// holder's own positive terminal row releases; foreign evidence holds (run
+// 23-51-32: the holder was released while b0b98821 was durably PENDING and a
+// second ledger self-move was admitted alongside it).
 const OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE = Object.freeze({
   AUTHORITATIVE_TERMINAL: 'authoritative_terminal',
   AUTHORITATIVE_REGISTERED: 'authoritative_registered',
   AUTHORITATIVE_NON_TERMINAL: 'authoritative_non_terminal',
+  AUTHORITATIVE_FOREIGN_ROW: 'authoritative_foreign_row',
   UNRESOLVED: 'unresolved',
 });
 
@@ -187,6 +200,10 @@ const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE =
       [
         OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
           .AUTHORITATIVE_NON_TERMINAL,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_FOREIGN_ROW,
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
       ],
       [
@@ -314,28 +331,58 @@ function isOperationLedgerSelfMoveDispatchClaimed(operation) {
 }
 
 /**
+ * A read answered with a row of another operation is foreign evidence for
+ * the held self-move (no expected id: the row is taken as the holder's).
+ * @param {Object} authoritativeOperation
+ * @param {string|null} expectedOperationId
+ * @return {boolean}
+ */
+function isForeignOperationLedgerSelfMoveRow(
+  authoritativeOperation,
+  expectedOperationId,
+) {
+  return (
+    typeof expectedOperationId === 'string' &&
+    expectedOperationId.length > 0 &&
+    String(authoritativeOperation.operationId || '') !== expectedOperationId
+  );
+}
+
+/**
  * Classify authoritative workflow-owner evidence for a ledger self-move.
  * Terminality remains owned by the operation repository/workflow owner and
- * dispatch admissibility (target READY lease) by the readiness owner; both
- * are supplied as predicates and this policy owns only the evidence -> hold
- * action relation. A null operation includes absent, failed, and deferred
- * owner reads. Without a dispatch-admissibility predicate a live self-move
- * classifies as live (fail closed: HOLD).
+ * dispatch admissibility (target READY lease on the dispatch dimension) by
+ * the readiness owner; both are supplied as predicates and this policy owns
+ * only the evidence -> hold action relation. A null operation includes
+ * absent, failed, and deferred owner reads. Without a dispatch-admissibility
+ * predicate a live self-move classifies as live (fail closed: HOLD). With an
+ * expected operation id, a row carrying a different id is foreign evidence
+ * (fail closed: HOLD) — only the holder's own terminal row releases.
  * @param {Object|null} authoritativeOperation
  * @param {Function} isOperationTerminal
  * @param {Function} [isDispatchAdmissible]
+ * @param {string|null} [expectedOperationId]
  * @return {string} OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
  */
 function classifyOperationLedgerSelfMoveLifecycleEvidence(
   authoritativeOperation,
   isOperationTerminal,
   isDispatchAdmissible = null,
+  expectedOperationId = null,
 ) {
   if (
     !authoritativeOperation ||
     typeof isOperationTerminal !== 'function'
   ) {
     return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED;
+  }
+  if (
+    isForeignOperationLedgerSelfMoveRow(
+      authoritativeOperation,
+      expectedOperationId,
+    )
+  ) {
+    return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_FOREIGN_ROW;
   }
   if (isOperationTerminal(authoritativeOperation)) {
     return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL;

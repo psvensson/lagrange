@@ -2,6 +2,9 @@ import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
+  shouldAllowPriorityRecoveryDispatchBootstrap,
+} from '../control-plane/replica-dispatch-priority-recovery-bootstrap.js';
+import {
   OPERATION_LEDGER_SELF_MOVE_HOLD_ENGAGEMENT,
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
 import {
@@ -24,15 +27,21 @@ const LOCAL_STR_FUNCTION = 'function';
 //                the hold is NOT engaged: dependents admit under the normal
 //                budget, a second self-move cannot register.
 //   ENGAGED    — the self-move is dispatch-admissible (its target holds a
-//                current READY lease, or the dispatching owner is about to
-//                claim PENDING -> SENDING and send CREATE_REPLICA): dependents
-//                are refused as operation_ledger_self_move_in_flight until
-//                the holder is authoritatively terminal.
+//                current READY lease on the dimension the dispatch path
+//                evaluates — the same verdict, bootstrap exemption included,
+//                that admits the row to its owner's dispatch — or the
+//                dispatching owner is about to claim PENDING -> SENDING and
+//                send CREATE_REPLICA): dependents are refused as
+//                operation_ledger_self_move_in_flight until the holder is
+//                authoritatively terminal.
 // The phase is learned from the authoritative lifecycle read on every
 // dependent/self-move admission (tryClearHeldOperationLedgerSelfMove) and set
 // synchronously by the local dispatch path's engagement point
 // (engageOperationLedgerSelfMoveHold), which is what closes the local TOCTOU
-// window between the SENDING claim and its authoritative visibility.
+// window between the SENDING claim and its authoritative visibility. The
+// holder is RELEASED only by its own positive authoritative terminal row:
+// null, failed and deferred reads, rows of other operations, reservation
+// reconciliation and workflow age all keep it held.
 const OPERATION_LEDGER_SELF_MOVE_HOLD_PHASE = Object.freeze({
   NONE: 'none',
   REGISTERED: 'registered',
@@ -190,9 +199,13 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
    * Dispatch admissibility of a registered ledger self-move, as the
    * interlock observes it: the owner claimed dispatch (the durable row left
    * PENDING) or the target node holds a current READY lease per the
-   * readiness owner (the same sync surface the dispatch readiness capture
-   * consults). Absent readiness evidence or target counts as admissible
-   * (fail closed: the hold engages).
+   * readiness owner on the dimension the dispatch path evaluates (the same
+   * sync surface and the same verdict as the dispatch readiness capture,
+   * replica-dispatch-readiness-capture.js resolveDispatchReadinessReady:
+   * the decision dimension itself or the priority-recovery dispatch
+   * bootstrap exemption a formation target dispatches under while it is
+   * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING). Absent readiness evidence or
+   * target counts as admissible (fail closed: the hold engages).
    * @param {Object} operation
    * @return {boolean}
    * @private
@@ -212,8 +225,9 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
 
   /**
    * The target node's readiness verdict on the operation's decision dimension
-   * (readiness owner sync surface), or null when no target / no readiness
-   * evidence is available.
+   * (readiness owner sync surface), evaluated exactly as the dispatch path
+   * evaluates it for this self-move (the dispatching node is the self-move's
+   * owner), or null when no target / no readiness evidence is available.
    * @param {Object} operation
    * @return {{satisfied: boolean}|null}
    * @private
@@ -236,14 +250,23 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
       decisionDimension,
     });
     return {
-      satisfied: readiness?.dimensions?.[decisionDimension] === true,
+      satisfied:
+        readiness?.dimensions?.[decisionDimension] === true ||
+        shouldAllowPriorityRecoveryDispatchBootstrap({
+          operation,
+          readiness,
+          decisionDimension,
+          selfNodeId: this.resolveOperationOwnerNodeId(operation),
+        }),
     };
   }
 
   /**
    * Query the existing cache-bypassing workflow visibility owner, then consume
    * the policy module's single evidence -> action relation. This mechanism does
-   * not inspect raw timestamps or invent a second recovery/reaper decision.
+   * not inspect raw timestamps or invent a second recovery/reaper decision;
+   * the evidence is classified against the queried operation id, so a row of
+   * another operation never stands in for the holder's own terminal row.
    * @param {string|null} operationId
    * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
    * @private
@@ -269,6 +292,7 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
       observation?.operation || null,
       (operation) => this.isOperationTerminal(operation),
       (operation) => this.isOperationLedgerSelfMoveDispatchAdmissible(operation),
+      normalizedOperationId,
     );
     return resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence);
   }
@@ -282,8 +306,10 @@ class RebalanceCoordinatorLedgerInterlockHoldStateMethods {
    * hold; a sibling that already released this same holder leaves no
    * self-move held (callers re-validate the in-flight create flag after this
    * await); a NEWER holder keeps refusing. Timeout/reaper candidacy alone
-   * keeps the hold engaged; an unreadable ledger also keeps it held — while
-   * the ledger is mid-move its reads failing IS the serialized condition.
+   * keeps the hold engaged; an unreadable ledger (null, failed or deferred
+   * read) or a row of another operation also keeps it held — while the
+   * ledger is mid-move its reads failing IS the serialized condition, and
+   * only the holder's own positive terminal row proves the move is over.
    * @param {Object} state
    * @return {Promise<string>} OPERATION_LEDGER_HELD_SELF_MOVE_CLEAR_OUTCOME
    * @private

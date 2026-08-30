@@ -92,7 +92,13 @@ import {
 // test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js
 // (raw node:test so each scenario is selectable with --test-name-pattern;
 // scripts/quest-evidence-operation-ledger-self-move-hold-engagement.js runs
-// one scenario per receipt).
+// one scenario per receipt). The drive accepts a scenario PROFILE (ledger
+// placement shape, per-table dispatch latencies, the readiness owner's
+// per-node snapshot, extra timed boundary injections and the completion
+// condition) so the sibling fairness witness
+// (operation-ledger-self-move-hold-fairness-witness-fixture.js) runs the
+// same real owners with the GCP-streak shape of 4bc6c1d25 (runs 23-51-32 /
+// 23-58-17) instead of duplicating the drive.
 
 const START_MS = 9_000_000;
 const CLOCK_STEP_MS = 100;
@@ -100,6 +106,7 @@ const MICROTASK_FLUSH_ROUNDS = 40;
 const MAX_SIMULATED_MS = 240_000;
 const SNAPSHOT_VERSION_INCREMENT = 1;
 const SINGLE_OPERATION = 1;
+const LOCAL_STR_FUNCTION = 'function';
 
 const SEED_NODE_ID = 'seed-node';
 const JOINER_1_NODE_ID = 'joiner-1';
@@ -222,6 +229,11 @@ const EVENT = Object.freeze({
   EXEMPT_DISPATCH_SENT: 'exempt_dispatch_sent',
   EXEMPT_DISPATCH_ACKED: 'exempt_dispatch_acked',
   EXEMPT_COMPLETED: 'exempt_completed',
+  EXEMPT_SECOND_ROUND_ADMITTED: 'exempt_second_round_admitted',
+  EXEMPT_SECOND_ROUND_REFUSED: 'exempt_second_round_refused',
+  EXEMPT_SECOND_ROUND_SENT: 'exempt_second_round_sent',
+  EXEMPT_SECOND_ROUND_ACKED: 'exempt_second_round_acked',
+  EXEMPT_SECOND_ROUND_COMPLETED: 'exempt_second_round_completed',
   NODE_READY: 'node_ready',
   SELF_MOVE_DISPATCH_PARKED: 'self_move_dispatch_parked',
   SELF_MOVE_SENT: 'self_move_sent',
@@ -269,7 +281,7 @@ function buildServiceRow({tableId, index, nodeId, raftRole}) {
 // three voters are ALL on the seed (fully concentrated: the count-neutral
 // REPLACE is the only admissible cure), and control_plane_publications, whose
 // earlier spread ADD already reached joiner-3.
-function buildFormationServiceRows() {
+function buildFormationServiceRows(ledgerThirdReplicaNodeId = SEED_NODE_ID) {
   return PRIORITY_TABLE_IDS.flatMap((tableId) => {
     const isLedger = tableId === LEDGER_TABLE_ID;
     return [
@@ -289,7 +301,7 @@ function buildFormationServiceRows() {
       buildServiceRow({
         tableId,
         index: THIRD_REPLICA_INDEX,
-        nodeId: isLedger ? SEED_NODE_ID : JOINER_1_NODE_ID,
+        nodeId: isLedger ? ledgerThirdReplicaNodeId : JOINER_1_NODE_ID,
         raftRole: RAFT_ROLE_FOLLOWER,
       }),
     ];
@@ -469,17 +481,34 @@ function injectAuthoritativeServiceRows({coordinator, getServiceRows}) {
 // Boundary injection: the readiness owner's per-node READY lease, read by the
 // real owners through controlPlaneReadinessService.getNodeReadinessSync (the
 // same surface the dispatch readiness capture and the interlock consult).
-function injectNodeReadiness({coordinator, isNodeReady}) {
-  const readinessService = coordinator.controlPlaneReadinessService;
-  readinessService.getNodeReadinessSync = (nodeId) => {
-    const ready = isNodeReady(nodeId);
-    const dimensions = {};
-    for (const dimensionName of Object.values(CONTROL_PLANE_READINESS_DIMENSION)) {
-      dimensions[dimensionName] = ready;
-    }
-    return {nodeId, dimensions};
-  };
+function buildUniformNodeReadiness(nodeId, ready) {
+  const dimensions = {};
+  for (const dimensionName of Object.values(CONTROL_PLANE_READINESS_DIMENSION)) {
+    dimensions[dimensionName] = ready;
+  }
+  return {nodeId, dimensions};
 }
+
+function injectNodeReadiness({coordinator, isNodeReady, buildNodeReadiness}) {
+  const readinessService = coordinator.controlPlaneReadinessService;
+  readinessService.getNodeReadinessSync = (nodeId) =>
+    buildNodeReadiness(nodeId, isNodeReady(nodeId));
+}
+
+// The default scenario profile: run 21-22-08's shape (ledger fully
+// concentrated on the seed, uniform run-cited dispatch latency, a READY node
+// satisfies every readiness dimension, placement follows the self-move's
+// terminal, no extra injections).
+const DEFAULT_SCENARIO_PROFILE = Object.freeze({
+  ledgerThirdReplicaNodeId: SEED_NODE_ID,
+  dispatchAckLatencyMsByTableId: Object.freeze({}),
+  buildNodeReadiness: buildUniformNodeReadiness,
+  exemptSecondRound: null,
+  placementFollowsSelfMoveActive: false,
+  ledgerSpreadAddOnTerminal: true,
+  scheduleExtras: null,
+  isDone: null,
+});
 
 // The owner's deferred-retry lanes (dispatch park re-drives, remote handoff
 // follow-ups) must ride the virtual clock like every other latency here.
@@ -551,7 +580,9 @@ function buildCoordinator({timeSource, nodeId, trackedOperations}) {
   });
 }
 
-async function runSelfMovePlannedBeforeAddsScenario() {
+async function runSelfMovePlannedBeforeAddsScenario(
+  profile = DEFAULT_SCENARIO_PROFILE,
+) {
   initializeEnvironment();
   const timeSource = new VirtualTimeSource({startMs: START_MS});
   const trackedOperations = new Map();
@@ -578,7 +609,9 @@ async function runSelfMovePlannedBeforeAddsScenario() {
   // system table cache mirrors the ledger placement + node rows so the real
   // quorum-concentration hold evaluates actuals.
   const readyNodeIds = new Set([SEED_NODE_ID]);
-  const serviceRows = buildFormationServiceRows();
+  const serviceRows = buildFormationServiceRows(
+    profile.ledgerThirdReplicaNodeId,
+  );
   let publicationRow = buildInitialPublicationRow();
   const nodeRows = () =>
     [SEED_NODE_ID, ...JOINING_NODE_IDS].map((nodeId) =>
@@ -627,6 +660,9 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     startupAuthorityReadyAtMs: null,
     startupAuthority: null,
     planningAnswer: null,
+    // Profile-owned observations (the fairness fixture records its census
+    // attempts, reconcile outcome and second self-move attempt here).
+    extras: {},
   };
 
   const dependents = new Map(
@@ -658,6 +694,11 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     ackedAtMs: null,
     completedAtMs: null,
     refusals: [],
+    // The first exempt ADD row handed to the transport (its createOperation
+    // resolves only after the retained dispatch acknowledges, so the row id
+    // is learned at send time).
+    dispatchedOperationId: null,
+    secondRound: null,
   };
   const dependentByPartitionId = new Map(
     [...dependents.values()].map((dependent) => [dependent.partitionId, dependent]),
@@ -671,6 +712,17 @@ async function runSelfMovePlannedBeforeAddsScenario() {
   // The transport boundary observes the persisted ledger row (the created
   // operation object is handed back only after the arm/dispatch ran).
   const rowOf = (operationId) => trackedOperations.get(operationId) || null;
+  // The seed's synchronous hold phase (rebalance-coordinator-ledger-
+  // interlock-hold-state.js), observed on every admission probe.
+  const holderPhase = () =>
+    seed.getOperationLedgerInterlockAdmissionState().heldSelfMovePhase;
+  const tableIdOf = (operationId) =>
+    PRIORITY_TABLE_IDS.find(
+      (tableId) => partitionIdOf(tableId) === rowOf(operationId)?.partition_id,
+    ) || null;
+  const ackLatencyMsOf = (operationId) =>
+    profile.dispatchAckLatencyMsByTableId[tableIdOf(operationId)] ??
+    DISPATCH_ACK_LATENCY_MS;
   const operationOf = (operationId) =>
     seed.repository.rowToOperation(rowOf(operationId));
   const roundOfOperation = (operationId) => {
@@ -687,6 +739,10 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     return row?.partition_id === exempt.partitionId &&
       row?.type === OperationType.ADD;
   };
+  const isExemptSecondRoundRow = (operationId) =>
+    isExemptAddRow(operationId) &&
+    exempt.dispatchedOperationId !== null &&
+    exempt.dispatchedOperationId !== operationId;
   const isLedgerAddRow = (operationId) => {
     const row = rowOf(operationId);
     return row?.partition_id === LEDGER_PARTITION_ID &&
@@ -733,7 +789,14 @@ async function runSelfMovePlannedBeforeAddsScenario() {
   };
 
   for (const coordinator of [seed, target]) {
-    injectNodeReadiness({coordinator, isNodeReady: (nodeId) => readyNodeIds.has(nodeId)});
+    injectNodeReadiness({
+      coordinator,
+      isNodeReady: (nodeId) => readyNodeIds.has(nodeId),
+      buildNodeReadiness: (nodeId, ready) =>
+        profile.buildNodeReadiness(nodeId, ready, {
+          spreadSatisfied: state.startupAuthorityReadyAtMs !== null,
+        }),
+    });
     bindOwnerTimersToClock({coordinator, timeSource});
     bindStartupAuthority({
       coordinator,
@@ -819,6 +882,7 @@ async function runSelfMovePlannedBeforeAddsScenario() {
         tableId: dependent.tableId,
         round: dependent.round,
         attemptedAtMs,
+        holderPhase: holderPhase(),
       });
     } catch (error) {
       if (!isTypedRetryableSkip(error)) {
@@ -830,11 +894,13 @@ async function runSelfMovePlannedBeforeAddsScenario() {
         resolvedAtMs: elapsed(),
         reason,
         round: dependent.round,
+        holderPhase: holderPhase(),
       });
       record(EVENT.DEPENDENT_REFUSED, {
         tableId: dependent.tableId,
         round: dependent.round,
         reason,
+        holderPhase: holderPhase(),
       });
       dependent.retryTimer = timeSource.setTimeout(() => {
         dependent.retryTimer = null;
@@ -870,6 +936,53 @@ async function runSelfMovePlannedBeforeAddsScenario() {
       }
       exempt.refusals.push({atMs: elapsed(), reason: skipReasonOf(error)});
     }
+  };
+  // The exempt partition's follow-up spread ADD (fairness profile: run
+  // 23-58-17's control_plane_publications re-plan 0.5-1.1 s after each
+  // completion, 00:01:39.16 -> n1), admitted under the EXEMPT row of the
+  // hold relation whatever the hold phase.
+  const attemptExemptSecondRound = async () => {
+    const secondRound = exempt.secondRound;
+    secondRound.attemptedAtMs = elapsed();
+    try {
+      secondRound.operation = await seed.createOperation(
+        buildMove({
+          publicationEpoch: publicationRow.publication_epoch,
+          type: OperationType.ADD,
+          tableId: exempt.tableId,
+          targetNodeId: profile.exemptSecondRound.targetNodeId,
+        }),
+      );
+      secondRound.admittedAtMs = elapsed();
+      record(EVENT.EXEMPT_SECOND_ROUND_ADMITTED, {holderPhase: holderPhase()});
+    } catch (error) {
+      if (!isTypedRetryableSkip(error)) {
+        throw error;
+      }
+      secondRound.refusals.push({atMs: elapsed(), reason: skipReasonOf(error)});
+      record(EVENT.EXEMPT_SECOND_ROUND_REFUSED, {
+        reason: skipReasonOf(error),
+        holderPhase: holderPhase(),
+      });
+    }
+  };
+  const scheduleExemptSecondRound = () => {
+    if (!profile.exemptSecondRound) {
+      return;
+    }
+    exempt.secondRound = {
+      attemptedAtMs: null,
+      admittedAtMs: null,
+      operation: null,
+      ackedAtMs: null,
+      completedAtMs: null,
+      refusals: [],
+    };
+    timeSource.setTimeout(() => {
+      attemptExemptSecondRound().catch((error) => {
+        record(EVENT.EXEMPT_SECOND_ROUND_REFUSED, {reason: error.message});
+      });
+    }, profile.exemptSecondRound.plannedAfterCompletionMs);
   };
   const wakeDependents = () => {
     for (const dependent of dependents.values()) {
@@ -948,7 +1061,10 @@ async function runSelfMovePlannedBeforeAddsScenario() {
           tableId: dependentRound.dependent.tableId,
           round: dependentRound.round,
         });
+      } else if (isExemptSecondRoundRow(operationId)) {
+        record(EVENT.EXEMPT_SECOND_ROUND_SENT);
       } else if (isExemptAddRow(operationId)) {
+        exempt.dispatchedOperationId = operationId;
         exempt.sentAtMs = elapsed();
         record(EVENT.EXEMPT_DISPATCH_SENT);
       }
@@ -983,6 +1099,18 @@ async function runSelfMovePlannedBeforeAddsScenario() {
                 }
               },
             });
+          } else if (isExemptSecondRoundRow(operationId)) {
+            exempt.secondRound.ackedAtMs = elapsed();
+            record(EVENT.EXEMPT_SECOND_ROUND_ACKED);
+            activateAdd({
+              operation: operationOf(operationId),
+              tableId: exempt.tableId,
+              replicaIndex: SECOND_SPREAD_REPLICA_INDEX,
+              onCompleted: () => {
+                exempt.secondRound.completedAtMs = elapsed();
+                record(EVENT.EXEMPT_SECOND_ROUND_COMPLETED);
+              },
+            });
           } else if (isExemptAddRow(operationId)) {
             exempt.ackedAtMs = elapsed();
             record(EVENT.EXEMPT_DISPATCH_ACKED);
@@ -993,6 +1121,7 @@ async function runSelfMovePlannedBeforeAddsScenario() {
               onCompleted: () => {
                 exempt.completedAtMs = elapsed();
                 record(EVENT.EXEMPT_COMPLETED);
+                scheduleExemptSecondRound();
               },
             });
           } else if (isLedgerAddRow(operationId)) {
@@ -1014,7 +1143,7 @@ async function runSelfMovePlannedBeforeAddsScenario() {
             acknowledged: true,
             status: ReplicaOperationResponseStatus.INITIATED,
           });
-        }, DISPATCH_ACK_LATENCY_MS),
+        }, ackLatencyMsOf(operationId)),
       );
     }
     if (
@@ -1050,6 +1179,45 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     });
   };
 
+  // Placement actuals of the REPLACE. Default profile: the moved replica row
+  // changes node at the terminal (run 21-22-08's source removal). A profile
+  // with placementFollowsSelfMoveActive observes the replacement replica on
+  // n1 from the REPLACE's ACTIVE step (a fourth row until the source retires
+  // at the terminal — run 23-58-17: the spread was satisfied at the REPLACE's
+  // ACTIVE 02:01.79, the source REMOVE followed).
+  const movedReplicaRow = () =>
+    serviceRows.find(
+      (serviceRow) =>
+        serviceRow.replica_id ===
+        replicaIdOf(LEDGER_PARTITION_ID, MOVED_REPLICA_INDEX),
+    );
+  const applySelfMoveActivePlacement = (row) => {
+    if (!profile.placementFollowsSelfMoveActive) {
+      return;
+    }
+    serviceRows.push({
+      ...buildServiceRow({
+        tableId: LEDGER_TABLE_ID,
+        index: MOVED_REPLICA_INDEX,
+        nodeId: JOINER_1_NODE_ID,
+        raftRole: RAFT_ROLE_FOLLOWER,
+      }),
+      service_id: row.replica_id,
+      replica_id: row.replica_id,
+    });
+    syncSeedCache();
+    refreshStartupAuthority();
+  };
+  const applySelfMoveTerminalPlacement = () => {
+    const movedReplica = movedReplicaRow();
+    if (profile.placementFollowsSelfMoveActive) {
+      serviceRows.splice(serviceRows.indexOf(movedReplica), SINGLE_OPERATION);
+      return;
+    }
+    movedReplica.node_id = JOINER_1_NODE_ID;
+    movedReplica.address = addressOf(JOINER_1_NODE_ID);
+  };
+
   // Target (n1) transport boundary: the self-move's CREATE_REPLICA is
   // acknowledged after the run's 14 s creation, reaches ACTIVE 9.6 s later
   // and its source removal terminal 1.5 s after that.
@@ -1080,17 +1248,12 @@ async function runSelfMovePlannedBeforeAddsScenario() {
           row.workflow_step = WORKFLOW_STEP.ACTIVE;
           row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.ACTIVE];
           record(EVENT.SELF_MOVE_ACTIVE);
+          applySelfMoveActivePlacement(row);
           timeSource.setTimeout(() => {
             row.workflow_step = WORKFLOW_STEP.STOPPING;
             row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
             completeOnSeed(state.selfMove).then(() => {
-              const movedReplica = serviceRows.find(
-                (serviceRow) =>
-                  serviceRow.replica_id ===
-                  replicaIdOf(LEDGER_PARTITION_ID, MOVED_REPLICA_INDEX),
-              );
-              movedReplica.node_id = JOINER_1_NODE_ID;
-              movedReplica.address = addressOf(JOINER_1_NODE_ID);
+              applySelfMoveTerminalPlacement();
               syncSeedCache();
               state.selfMoveTerminalAtMs = elapsed();
               record(EVENT.SELF_MOVE_TERMINAL);
@@ -1145,7 +1308,10 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     }
   });
   seed.on(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, ({operation}) => {
-    if (operation?.operationId === state.selfMove?.operationId) {
+    if (
+      operation?.operationId === state.selfMove?.operationId &&
+      profile.ledgerSpreadAddOnTerminal
+    ) {
       attemptLedgerAdd().catch((error) => {
         record(EVENT.LEDGER_ADD_CREATED, {error: error.message});
       });
@@ -1199,17 +1365,35 @@ async function runSelfMovePlannedBeforeAddsScenario() {
     timeSource.setTimeout(() => {
       markNodeReady(JOINER_2_NODE_ID);
     }, JOINER_2_READY_AT_MS);
+    if (typeof profile.scheduleExtras === LOCAL_STR_FUNCTION) {
+      profile.scheduleExtras({
+        timeSource,
+        elapsed,
+        record,
+        seed,
+        target,
+        state,
+        exempt,
+        trackedOperations,
+        publicationRow: () => publicationRow,
+        holderPhase,
+      });
+    }
 
+    const dependentsSpread = () =>
+      [...dependents.values()].every(
+        (dependent) =>
+          dependent.rounds[ROUND.SECOND_SPREAD].operation !== null,
+      );
     await driveClockUntil({
       timeSource,
       elapsed,
       isDone: () =>
-        state.startupAuthorityReadyAtMs !== null &&
-        state.ledgerRemoveCompletedAtMs !== null &&
-        [...dependents.values()].every(
-          (dependent) =>
-            dependent.rounds[ROUND.SECOND_SPREAD].operation !== null,
-        ),
+        typeof profile.isDone === LOCAL_STR_FUNCTION ?
+          profile.isDone({state, exempt, dependentsSpread}) :
+          state.startupAuthorityReadyAtMs !== null &&
+            state.ledgerRemoveCompletedAtMs !== null &&
+            dependentsSpread(),
     });
   } finally {
     for (const dependent of dependents.values()) {
@@ -1239,7 +1423,9 @@ async function runSelfMovePlannedBeforeAddsScenario() {
       ackedAtMs: exempt.ackedAtMs,
       completedAtMs: exempt.completedAtMs,
       refusals: exempt.refusals,
+      secondRound: exempt.secondRound,
     },
+    extras: state.extras,
     selfMove: {
       dispatchAdmissibleAtMs: state.selfMoveDispatchAdmissibleAtMs,
       firstDispatchAttemptAtMs: state.selfMoveFirstDispatchAttemptAtMs,
@@ -1263,8 +1449,21 @@ async function runSelfMovePlannedBeforeAddsScenario() {
 }
 
 export {
+  DEFAULT_SCENARIO_PROFILE,
   DEPENDENTS_PLANNED_AT_MS,
+  EXEMPT_TABLE_ID,
   FORMATION_READINESS_BUDGET_MS,
+  JOINER_1_NODE_ID,
+  JOINER_3_NODE_ID,
+  JOINER_4_NODE_ID,
+  LEADER_REPLICA_INDEX,
+  LEDGER_PARTITION_ID,
+  LEDGER_TABLE_ID,
+  TARGET_READY_AT_MS,
+  buildMove,
+  buildUniformNodeReadiness,
+  isTypedRetryableSkip,
+  skipReasonOf,
   HEAD_CRITICAL_CHECK_DELAY_MS,
   HEAD_MAX_CONCURRENT_ADDS,
   PRIORITY_ADD_BUDGET_LIMIT,

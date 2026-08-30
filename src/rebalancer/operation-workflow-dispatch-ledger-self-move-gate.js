@@ -27,6 +27,12 @@ const {
 // cannot see them (GCP run 21-16-04: the target dispatched the self-move at
 // 21:19:23.69 while the seed's control_plane_publications ADD was still
 // CREATING). Every live ledger writer anywhere in the cluster is a contender.
+// A census that cannot be read parks and RE-READS on the dispatch-retry
+// cadence (DISPATCH_RETRY_DELAY_MS), never on the repository's
+// incomplete-read backoff hint: the idle gap between one incumbent draining
+// and the next exempt emergency ADD is short, and a 5 s backoff missed it
+// (GCP run 23-58-17: census failure 00:01:42.59, re-read 00:01:54.91, the
+// re-planned control_plane_publications learner filled the gap, +14.4 s).
 const OPERATION_LEDGER_SELF_MOVE_IDLE_VISIBILITY_DEFER_REASON =
   'operation_ledger_self_move_idle_visibility_deferred';
 const OPERATION_LEDGER_SELF_MOVE_WAITING_DEFER_REASON =
@@ -72,9 +78,9 @@ function isPendingOperationLedgerSelfMove(operation) {
   );
 }
 
-function buildOperationLedgerSelfMoveRetryError(message, retryAfterMs = null) {
+function buildOperationLedgerSelfMoveRetryError(message) {
   const error = new Error(message);
-  error.retryAfterMs = retryAfterMs || DISPATCH_RETRY_DELAY_MS;
+  error.retryAfterMs = DISPATCH_RETRY_DELAY_MS;
   error.deferRetry = true;
   return error;
 }
@@ -107,7 +113,9 @@ function parkOperationLedgerSelfMoveDispatch(
 }
 
 /**
- * The cluster-wide authoritative census of live ledger writers.
+ * The cluster-wide authoritative census of live ledger writers. A failed
+ * read parks fail-closed and re-reads on the dispatch-retry cadence (the
+ * read's own backoff hint is deliberately not carried into the park).
  * @param {Object} owner
  * @param {Object} operation
  * @return {Promise<{incompleteOperations: Array<Object>, skip: Object|null}>}
@@ -122,7 +130,6 @@ async function readOperationLedgerSelfMoveDispatchIdleCensus(owner, operation) {
   } catch (error) {
     const retryError = buildOperationLedgerSelfMoveRetryError(
       error?.message || OPERATION_LEDGER_SELF_MOVE_VISIBILITY_UNAVAILABLE_MESSAGE,
-      error?.retryAfterMs,
     );
     return {
       incompleteOperations: [],

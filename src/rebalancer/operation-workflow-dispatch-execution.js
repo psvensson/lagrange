@@ -53,10 +53,9 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     return LEDGER_SELF_MOVE_GATE.isPendingOperationLedgerSelfMove(operation);
   }
 
-  buildOperationLedgerSelfMoveRetryError(message, retryAfterMs = null) {
+  buildOperationLedgerSelfMoveRetryError(message) {
     return LEDGER_SELF_MOVE_GATE.buildOperationLedgerSelfMoveRetryError(
       message,
-      retryAfterMs,
     );
   }
 

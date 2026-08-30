@@ -46,15 +46,20 @@ const ENGAGED_SELF_MOVE_HOLD_ACTIONS = Object.freeze(
 //
 // WHEN the hold engages: from the instant the self-move is DISPATCH-ADMISSIBLE
 // (its owner claimed PENDING -> SENDING, or its target node holds a current
-// READY lease) until it is authoritatively terminal. From createOperation
-// until that instant the self-move is a REGISTERED waiter: the ledger raft
-// group is untouched, dependents admit under the normal budget, a second
-// self-move still cannot register, and the self-move's own IDLE_ONLY dispatch
-// check (operation-workflow-dispatch-ledger-self-move-gate.js) waits for the
+// READY lease on the dimension the dispatch path evaluates — bootstrap
+// exemption included, so a PRIORITY_CONTROL_PLANE_RECOVERY_PENDING formation
+// target engages it) until its OWN authoritative terminal row is read.
+// From createOperation until that instant the self-move is a REGISTERED
+// waiter: the ledger raft group is untouched, dependents admit under the
+// normal budget, a second self-move still cannot register, and the
+// self-move's own IDLE_ONLY dispatch check
+// (operation-workflow-dispatch-ledger-self-move-gate.js) waits for the
 // admitted dependents to drain — exactly as when the dependents are planned
 // first. A hold taken at createOperation covered 29.9 s / 57.8 s of the 60 s
-// formation window in the GCP streak on 675d6b512 while the target-owned
-// self-move waited for its target to be READY.
+// formation window in the GCP streak on 675d6b512; a holder left REGISTERED
+// on controlPlaneRecoveryEligible let later ADDs overtake it for 66 s / 83 s
+// on 4bc6c1d25. Release is terminal-only: null, failed or deferred reads,
+// rows of other operations, reservation reconciliation and timeouts hold.
 //
 // The (hold x move class) -> engagement and the lifecycle -> hold-action
 // relations are owned by operation-ledger-hold-policy.js; the synchronous

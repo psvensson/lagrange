@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2065,
+    "ordinary": 2066,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2082,
-  "digest": "fnv1a32-349871c8",
+  "censusSize": 2083,
+  "digest": "fnv1a32-7adc40b5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -627,6 +627,7 @@
     "test/convergence/dt6-network-pct-search.test.js": "ordinary",
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "ordinary",
     "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js": "ordinary",
+    "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js": "ordinary",
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": "ordinary",
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": "ordinary",
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": "ordinary",

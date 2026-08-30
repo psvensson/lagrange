@@ -171,12 +171,17 @@ test('self-move lifecycle evidence has one fail-closed hold action table', (t) =
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
       ],
       [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_FOREIGN_ROW,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+      [
         OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
         OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
       ],
     ],
-    'only authoritative terminal workflow evidence releases serialization; ' +
-      'a registered, not yet dispatch-admissible waiter is REGISTERED',
+    'only the holder\'s own authoritative terminal workflow evidence ' +
+      'releases serialization; a registered, not yet dispatch-admissible ' +
+      'waiter is REGISTERED; a foreign row and an unresolved read hold',
   );
 
   const terminal = {status: 'removed'};
@@ -232,6 +237,28 @@ test('self-move lifecycle evidence has one fail-closed hold action table', (t) =
   t.equal(
     classifyOperationLedgerSelfMoveLifecycleEvidence(null, isTerminal),
     OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
+  );
+  const heldOperationId = 'replace-op-held';
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(
+      {...terminal, operationId: 'add-op-other'},
+      isTerminal,
+      targetReady,
+      heldOperationId,
+    ),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_FOREIGN_ROW,
+    'a terminal row of another operation is foreign evidence: it never ' +
+      'releases the held self-move (GCP run 23-51-32 duplicate self-move)',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(
+      {...terminal, operationId: heldOperationId},
+      isTerminal,
+      targetReady,
+      heldOperationId,
+    ),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
+    'the holder\'s own terminal row releases',
   );
   t.equal(
     resolveOperationLedgerSelfMoveHoldAction('unknown_evidence'),

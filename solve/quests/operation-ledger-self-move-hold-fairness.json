@@ -1,0 +1,84 @@
+{
+  "id": "operation-ledger-self-move-hold-fairness",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The operation_workflow_owner's registered operation-ledger self-move cannot be overtaken indefinitely by newer dependent priority ADDs and can never coexist with a second ledger self-move: (1) once the registered self-move's target holds a current READY lease on the dimension the dispatch path itself evaluates (independent of the target's controlPlaneRecoveryEligible/PRIORITY_CONTROL_PLANE_RECOVERY_PENDING state), the hold is ENGAGED for admission — dependents planned after that point are refused operation_ledger_self_move_in_flight while already-admitted incumbents drain, and the self-move claims as soon as the ledger is idle; (2) the held self-move is released only on a positive authoritative terminal row — never from an orphan-reservation release, a null point read, or a failed read — so exactly one ledger self-move is non-terminal at any time; (3) a failed cluster-wide IDLE census re-reads on the dispatch-retry cadence instead of the incomplete-read backoff. IDLE_ONLY, the exclusion once live, quorum_concentrated deferral, maxConcurrentAdds, CRITICAL_CHECK_DELAY_MS, DISPATCH_RETRY_DELAY_MS, the 60-second GCP certification window and the single cluster-ACTIVE authority are unchanged. Proven by the real-owner witness dependents-stream-after-registration (REPLACE registered at t+0; five ADDs at t+3.5 with cpp learner acked at +30; target READY lease at +14 while still recovery-pending; cpp re-planned at +30.5 and +61; one census read throws at +42; orphan-reservation release plus null point read at +41): red on HEAD (self-move claims at or after +61, a second REPLACE admitted, READY beyond 60s), green after (self-move SENDING by +32, later dependents refused, exactly one non-terminal ledger self-move, READY inside 60s). Root cause from the 4bc6c1d25 streak (runs 23-51-32 and 23-58-17: spread 66s/83s; run 23-51-32 admitted a duplicate self-move 8ae2b559 while b0b98821 was durably PENDING).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md",
+    "closesCL": [],
+    "parentQuest": "operation-ledger-self-move-hold-engagement",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "4bc6c1d25ae4673542a71ef7a165e30020498d24"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/operation-ledger-self-move-hold-fairness.receipt.json",
+      "requiredReceipts": [
+        "registered-self-move-engages-on-target-ready-lease",
+        "newer-dependents-refused-after-engagement",
+        "incumbents-drain-then-self-move-claims",
+        "single-non-terminal-ledger-self-move",
+        "failed-census-retries-on-dispatch-cadence",
+        "exclusion-and-idle-only-preserved",
+        "budgets-and-cadence-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-ledger-self-move-hold-fairness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/operation-ledger-self-move-hold-fairness.receipt.json",
+          "requiredReceipts": [
+            "registered-self-move-engages-on-target-ready-lease",
+            "newer-dependents-refused-after-engagement",
+            "incumbents-drain-then-self-move-claims",
+            "single-non-terminal-ledger-self-move",
+            "failed-census-retries-on-dispatch-cadence",
+            "exclusion-and-idle-only-preserved",
+            "budgets-and-cadence-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-operation-workflow-owner",
+      "statement": "The operation_workflow_owner (RebalanceCoordinator + OperationWorkflowOwner; operation-ledger-hold-policy.js, rebalance-coordinator-ledger-interlock-hold-state.js, rebalance-coordinator-ledger-interlock-admission.js, operation-workflow-dispatch-ledger-self-move-gate.js) stays the sole owner of hold registration/engagement/release, IDLE_ONLY, claim and dispatch; planners, reservation reconciliation, readiness owners and the harness observe and never re-derive or release the hold."
+    },
+    {
+      "id": "terminal-only-release",
+      "statement": "The held ledger self-move is released only by a positive authoritative terminal row; orphan-reservation reconciliation, null point reads, failed reads, and timeouts never release it and never admit a second ledger self-move. Two ledger self-moves must never be non-terminal at once."
+    },
+    {
+      "id": "exclusion-and-idle-only-unchanged",
+      "statement": "IDLE_ONLY (self-move admits only into an idle ledger), exclusion of dependents once the hold is engaged until the terminal, and the quorum_concentrated deferral are byte-for-byte preserved; dt6-rebalancer-formation-self-move-interlock, dt6-formation-ledger-* and the hold-engagement/cadence witnesses stay green."
+    },
+    {
+      "id": "unchanged-budgets-and-cadence",
+      "statement": "maxConcurrentAdds, CRITICAL_CHECK_DELAY_MS, DISPATCH_RETRY_DELAY_MS, the incomplete-read backoff bounds, the 60-second GCP certification window and its owner-progress extension, and the failed-repair backoff are unchanged. No sleeps, timeout widening, retry widening, or readiness weakening."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Prove through the real-owner witness (real coordinators/owner/interlock/startup authority, virtual clock, run-cited latencies) red on HEAD and green after, before any GCP run; the GCP streak is certification, never an iteration loop."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    }
+  ]
+}

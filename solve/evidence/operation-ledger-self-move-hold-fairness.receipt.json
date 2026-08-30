@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "operation-ledger-self-move-hold-fairness",
+  "status": "pass",
+  "generatedAt": "2026-08-30T01:50:13.629Z",
+  "receipts": [
+    {
+      "id": "registered-self-move-engages-on-target-ready-lease",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^registered-self-move-engages-on-target-ready-lease\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "the registered ledger self-move is ENGAGED for admission at the first probe after its target holds a current READY lease on the dimension the dispatch path evaluates (controlPlaneRecoveryEligible via the priority-recovery dispatch bootstrap exemption) while the target is still PRIORITY_CONTROL_PLANE_RECOVERY_PENDING; dependents planned before that lease admit under the registered holder"
+    },
+    {
+      "id": "newer-dependents-refused-after-engagement",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^newer-dependents-refused-after-engagement\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "every dependent planned after engagement is refused operation_ledger_self_move_in_flight by the engaged holder until the self-move terminal and none is admitted; the exempt emergency control_plane_publications re-plan admits per the EXEMPT row"
+    },
+    {
+      "id": "incumbents-drain-then-self-move-claims",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^incumbents-drain-then-self-move-claims\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "the self-move is sent only after the incumbents admitted before engagement drain, with no dependent row non-terminal, SENDING by +32 s, and the joiners' startup authority is READY inside the unchanged 60 s budget"
+    },
+    {
+      "id": "single-non-terminal-ledger-self-move",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^single-non-terminal-ledger-self-move\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "the real reservation reconciliation releases the held self-move's reservation as an orphan on a null point read, and the seed's next lifecycle reads answered with a positive terminal row that is not the holder's neither release the hold nor admit the second ledger REPLACE (refused operation_ledger_self_move_waiting_for_idle_ledger); at most one ledger self-move is non-terminal at any sampled instant"
+    },
+    {
+      "id": "failed-census-retries-on-dispatch-cadence",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^failed-census-retries-on-dispatch-cadence\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "the one failed cluster-wide idle census (carrying the repository's 5 s incomplete-read backoff hint) is re-read within 2 x DISPATCH_RETRY_DELAY_MS (250 ms) of the failure"
+    },
+    {
+      "id": "exclusion-and-idle-only-preserved",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^exclusion-and-idle-only-preserved\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "while the self-move is live every dependent refusal is operation_ledger_self_move_in_flight and none admits; with incumbents in flight the owner parks the self-move as operation_ledger_self_move_waiting_for_idle_ledger and sends only into an idle ledger; the quorum-spread hold still defers dependents as operation_ledger_quorum_concentrated (sibling engagement scenario)"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "maxConcurrentAdds (5), CRITICAL_CHECK_DELAY_MS (5000), DISPATCH_RETRY_DELAY_MS (250), the incomplete-read backoff floor/ceiling (250/5000) are the HEAD values, the real coordinator runs with that budget, the self-move lifecycle from send to terminal is exactly the run's latency, and every re-attempt follows its refusal within one unchanged priority retry cadence"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
+      "detail": "two identical virtual-clock drives produce the identical admission/dispatch event sequence and READY instant"
+    }
+  ]
+}
