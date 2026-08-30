@@ -184,10 +184,23 @@ Once the bounded call path and its operating contract are stable, deeper
 execution can add:
 
 - multi-stage plans with streaming exchange and backpressure;
+- topology-aware ephemeral stream relays for exact-authorized partition-backed
+  live streams, reusing the existing latency groups/tree so later subscribers
+  can fan out from an already-active cross-group stream without durable cache,
+  authority-transfer, or permanent-gateway semantics;
 - deeper call composition;
 - concurrent invocations on one Cell instance;
 - query-planner-initiated pushdown; and
 - typed language SDKs and generated operation handles.
+
+The relay item is specified in
+[topology-aware ephemeral stream relay requirements](solve/specs/topology-aware-ephemeral-stream-relays/requirements.md),
+with the [implementation design](solve/specs/topology-aware-ephemeral-stream-relays/design.md)
+and [fresh adversarial review](solve/specs/topology-aware-ephemeral-stream-relays/adversarial-review.md).
+V1 is deliberately exact-match, source-authorized, one-hop, non-retaining and
+correctness-optional; a failed relay falls back to the normal authoritative
+stream path, and simultaneous cold-start subscriptions are not promised
+single-flight coalescing.
 
 The query planner can also become substantially more sophisticated here rather
 than pulling optimizer research into 0.3. Phase 2.0 is the natural home for
