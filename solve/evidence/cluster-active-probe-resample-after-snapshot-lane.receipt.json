@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cluster-active-probe-resample-after-snapshot-lane",
+  "status": "pass",
+  "generatedAt": "2026-08-30T15:22:28.318Z",
+  "receipts": [
+    {
+      "id": "resample-certifies-late-listener-within-deadline",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^resample-certifies-late-listener-within-deadline\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "RED on HEAD: the 14:05:20 replay (node-2 listener at W+52.4, attempt 6 at W+49.2 with a 10.8 s snapshot lane) certifies 5/5 inside the 60 s window because the node sampled unreachable at attempt start is re-sampled once, at or before the deadline, with the same per-node admin/readiness probe (no snapshot-count ACTIVE)"
+    },
+    {
+      "id": "resample-not-admitted-after-deadline",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^resample-not-admitted-after-deadline\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "RED on HEAD: a re-sample whose issue instant is past the deadline is refused (typed not_admitted_after_deadline), the node is sampled exactly once and the attempt-start sample stands, so the verdict never reflects a state later than the deadline"
+    },
+    {
+      "id": "late-listener-after-deadline-fails-with-progress-observed",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^late-listener-after-deadline-fails-with-progress-observed\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "RED on HEAD: a node-2 listener opening at W+60.5 still fails 4/5 (the verdict evidence is the pre-deadline re-sample), and the timed-out label is the typed progress_observed classification because the active count rose 3->4 on the final attempt"
+    },
+    {
+      "id": "listener-never-opens-stalled-no-progress",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^listener-never-opens-stalled-no-progress\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "control, green on HEAD and after: when node-2 never opens and the active count did not rise on the final attempt the verdict is FAIL 4/5 with stalled_no_progress"
+    },
+    {
+      "id": "snapshot-lane-running-at-deadline-is-bounded",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^snapshot-lane-running-at-deadline-is-bounded\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "RED on HEAD: a 12 s snapshot lane on the final attempt no longer delays the deadline decision; the attempt returns at the deadline with a typed deadline_bounded lane outcome (snapshot_lane_running_at_deadline), the re-sampled reachability decides 5/5 node evidence, and the overrunning lane is counted when it settles later"
+    },
+    {
+      "id": "all-active-at-attempt-start-path-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^all-active-at-attempt-start-path-unchanged\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "control, green on HEAD and after: every node ACTIVE at attempt start is probed exactly once, no diagnostic carries a re-sample origin, and the gate is READY at lane completion"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "control, green on HEAD and after: the 60 s window, the 1 s poll interval, the 10 s forced-repair threshold and both one-shot extension rules are untouched — six attempts, no seventh, no attempt issued after the deadline, both extensions decline"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js",
+      "detail": "control, green on HEAD and after: two virtual-clock replays of the run produce identical probe traces, lane schedules and verdict timing"
+    }
+  ]
+}
