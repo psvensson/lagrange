@@ -37,11 +37,11 @@ import {
 } from './constants.js';
 import {
   activeSourceEpoch,
-  resolveWorkspaceBaseCommit,
   sourceEpochDriftProblem,
   sourceEpochCommittedDriftPaths,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
+import {resolveAttemptBaseCommit} from './pending-step.js';
 
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
@@ -170,8 +170,10 @@ export function runAttemptCommand(root, args) {
   if (epochDrift.length > 0) {
     throw new Error(sourceEpochDriftProblem(epochDrift));
   }
-  const workspaceBaseCommit = epoch?.baseCommit ||
-    resolveWorkspaceBaseCommit(root);
+  // A pending step's pin is the single base source for every attempt of that
+  // step (pending-step.js); the epoch base, then live HEAD, only otherwise.
+  const workspaceBaseCommit =
+    resolveAttemptBaseCommit(root, quest, log, {epoch}).baseCommit;
   const canonicalProblem = canonicalSourceArtifactProblem(
     root,
     workspaceBaseCommit,

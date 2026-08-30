@@ -32,7 +32,7 @@ import {
   probeBaseReproducibility,
   verificationState,
 } from '../../scripts/solve/verification.js';
-import {resolveStepBaseCommit} from '../../scripts/solve/step.js';
+import {resolveStepBaseCommit} from '../../scripts/solve/pending-step.js';
 import {
   checkpointVerificationPreflight,
   checkpointVerificationPreflightLines,

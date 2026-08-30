@@ -42,6 +42,9 @@ const PROOF_KEYS = Object.freeze([
   'recordedBaseFingerprint',
   'targetBaseFingerprint',
 ]);
+const PROBLEM_NO_AUTHORIZING_BASE =
+  'attempt base correction has no exact standing candidate rejection and ' +
+  'no sibling accepted source attempt at the target base';
 
 function regexpMatches(pattern, value) {
   return typeof value === 'string' &&
@@ -292,6 +295,29 @@ export function attemptHasLaterVerifierReview(
   return hasPriorReview(log, attempt, endIndex);
 }
 
+// The second authorization for a base correction: the target base is the
+// recorded base of a SIBLING accepted version-2 source attempt in the same
+// log. An attempt whose base drifted from the pending-step pin (a one-shot
+// `solve attempt` pinned at live HEAD while the step held an older pin) is
+// realigned to the base its siblings share; the live proof (delta byte-
+// identical at both bases) is validated separately, so the inter-base range
+// can touch no attempt path.
+export function recordedSiblingBase(attempts, attempt, targetBase) {
+  if (!regexpMatches(COMMIT_PATTERN, targetBase)) return null;
+  for (let index = 0; index < attempts.length; index += 1) {
+    const sibling = attempts[index];
+    if (sibling.index === attempt.index) continue;
+    if (allTrue([
+      sibling.candidateContract === true,
+      sibling.event.integrityAccepted === true,
+      sibling.event.workspaceBaseCommit === targetBase,
+    ])) {
+      return sibling;
+    }
+  }
+  return null;
+}
+
 function correctionAuthorizationProblem(
   correction,
   attempt,
@@ -304,8 +330,8 @@ function correctionAuthorizationProblem(
     attempt,
     correction,
     attempts,
-  )) {
-    return 'attempt base correction has no exact standing candidate rejection';
+  ) && !recordedSiblingBase(attempts, attempt, correction.toBase)) {
+    return PROBLEM_NO_AUTHORIZING_BASE;
   }
   if (hasPriorReview(log, attempt, eventIndex)) {
     return 'attempt base correction follows an exact verifier review';

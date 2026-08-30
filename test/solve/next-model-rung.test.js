@@ -6,7 +6,7 @@ import tap from 'tap';
 
 import {RUNG_INDEX_MODEL} from '../../scripts/solve/constants.js';
 import {buildNextLines, buildNextProjection} from '../../scripts/solve/next.js';
-import {pendingFilePath} from '../../scripts/solve/step.js';
+import {pendingFilePath} from '../../scripts/solve/pending-step.js';
 import {saveQuest} from '../../scripts/solve/store.js';
 
 const QUEST_ID = 'next-model-rung-quest';
