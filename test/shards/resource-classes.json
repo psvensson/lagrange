@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2079,
+    "ordinary": 2080,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2096,
-  "digest": "fnv1a32-421ef751",
+  "censusSize": 2097,
+  "digest": "fnv1a32-e466a98e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1777,6 +1777,7 @@
     "test/scripts/run-distributed-validation-ladder.test.js": "ordinary",
     "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js": "ordinary",
     "test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js": "ordinary",
+    "test/scripts/run-formation-release-handoff-gcp-streak.test.js": "ordinary",
     "test/scripts/run-formation-release-handoff-gcp.test.js": "ordinary",
     "test/scripts/run-live-repetitions.test.js": "ordinary",
     "test/scripts/run-test-ci.test.js": "ordinary",

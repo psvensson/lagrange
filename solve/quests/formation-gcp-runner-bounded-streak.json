@@ -1,0 +1,80 @@
+{
+  "id": "formation-gcp-runner-bounded-streak",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The five-node GCP formation certification runner (scripts/checks/run-formation-release-handoff-gcp.js) gains a bounded --runs N mode owned by scripts/checks/run-formation-release-handoff-gcp-streak.js: N must equal the sealed consecutive count of the closure Quest (solve/quests/formation-release-handoff-closure-v4.json doneWhen) and the mode refuses N mismatch, the reverted variant, a dirty src/ before every run, and candidate source-fingerprint drift from run 1, each with a typed STREAK_REFUSAL reason; it stops at the first failed run and never retries; it writes an aggregate streak report that is a projection of the per-run reports (never a probe-scanned *.report.json, no verdict field of its own) so the closure analyzer remains the single owner of per-run verdicts; the reverted-control lane stays single-run and byte-for-byte unchanged; the live run is an injected dependency so deterministic tests never reach the cloud. Proven deterministically with a fake run function: red on HEAD (mode absent), green after.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/operational-ground-truth.md",
+    "closesCL": [],
+    "parentQuest": "formation-release-handoff-closure-v4",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "2d0c6f6e9"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-gcp-runner-bounded-streak.receipt.json",
+      "requiredReceipts": [
+        "streak-run-count-must-equal-sealed-consecutive",
+        "streak-refuses-dirty-source-before-each-run",
+        "streak-refuses-candidate-fingerprint-drift",
+        "streak-report-is-projection-of-run-reports",
+        "streak-stops-at-first-failed-run-no-retry",
+        "streak-refuses-reverted-variant",
+        "reverted-control-lane-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-gcp-runner-bounded-streak-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-gcp-runner-bounded-streak.receipt.json",
+          "requiredReceipts": [
+            "streak-run-count-must-equal-sealed-consecutive",
+            "streak-refuses-dirty-source-before-each-run",
+            "streak-refuses-candidate-fingerprint-drift",
+            "streak-report-is-projection-of-run-reports",
+            "streak-stops-at-first-failed-run-no-retry",
+            "streak-refuses-reverted-variant",
+            "reverted-control-lane-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-verdict-owner",
+      "statement": "The closure analyzer remains the single owner of per-run verdicts; the streak report is a projection that copies run reports and mints no pass/fail of its own and is never a probe-scanned *.report.json."
+    },
+    {
+      "id": "certification-not-iteration",
+      "statement": "N is pinned to the sealed consecutive count of the closure Quest; the streak refuses N mismatch, the reverted variant, dirty src/, and candidate fingerprint drift with typed reasons, stops at the first failed run, and never retries."
+    },
+    {
+      "id": "reverted-control-untouched",
+      "statement": "The reverted-control lane stays single-run and byte-for-byte unchanged; no budget, cadence, or the 60-second certification window changes."
+    },
+    {
+      "id": "no-cloud-in-tests",
+      "statement": "The live run is an injected dependency; deterministic tests never reach the cloud."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness with a fake run function, red on HEAD (1/8) and green after (8/8), with the reverted-control receipt as the control that must stay green."
+    }
+  ]
+}

@@ -13,6 +13,11 @@ import {analyzeFormationReleaseEvents} from
 import {
   startGcpAffinityCluster,
 } from '../../examples/service-data-affinity/gcp-cluster-provider.js';
+import {
+  STREAK_OUTCOME,
+  resolveStreakRunCount,
+  runBoundedStreak,
+} from './run-formation-release-handoff-gcp-streak.js';
 
 const arraySort = Function.call.bind(Array.prototype.sort);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -360,6 +365,7 @@ async function writeReport(report, outputDir) {
     report: path.relative(ROOT, reportPath),
     reportSha256: sha256(reportBytes),
   }, null, 2)}\n`);
+  return reportPath;
 }
 
 // Mirror the run into the probe-scannable top-level report surface with the
@@ -559,17 +565,59 @@ async function runFormationReleaseHandoffGcp(options = {}) {
       await cleanupWorktree(reverted.worktreePath, reverted.workParent);
     }
   }
-  await writeReport(report, outputDir);
+  const reportPath = await writeReport(report, outputDir);
   const probePath = await writeProbeReport(report);
   process.stdout.write(`${jsonStringify({probeReport: path.relative(ROOT, probePath)}, null, 0)}\n`);
   if (!report.passed) process.exitCode = 1;
-  return report;
+  return {
+    report,
+    reportPath: path.relative(ROOT, reportPath),
+    probeReportPath: path.relative(ROOT, probePath),
+  };
+}
+
+// `--runs N` bounded certification streak over the fixed lane: N must equal
+// the sealed `consecutive` count, every run is admitted only on clean src/
+// with the run-1 candidate fingerprint, the first failed run ends the streak,
+// and the aggregate report projects the per-run reports (the only verdicts).
+// The live single-run execution is the injected `runOnce` so deterministic
+// tests never reach the cloud; the reverted control lane is refused here and
+// keeps its single-run path.
+async function runFormationReleaseHandoffGcpStreak(options, dependencies) {
+  return runBoundedStreak(
+    {
+      runs: options.runs,
+      variant: options.variant || resolveVariant(),
+      scenario: PROBE_SCENARIO_NAME,
+      reportRoot: options.reportRoot || REPORT_ROOT,
+    },
+    {
+      runOnce: dependencies.runOnce,
+      readDirtyPaths: dependencies.readDirtyPaths,
+      computeFingerprint: dependencies.computeFingerprint,
+    },
+  );
 }
 
 const isMain = process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  await runFormationReleaseHandoffGcp();
+  const streakRuns = resolveStreakRunCount();
+  if (streakRuns === null) {
+    await runFormationReleaseHandoffGcp();
+  } else {
+    const {streak, streakPath} = await runFormationReleaseHandoffGcpStreak(
+      {runs: streakRuns},
+      {runOnce: () => runFormationReleaseHandoffGcp({variant: FIXED_VARIANT})},
+    );
+    process.stdout.write(`${jsonStringify({
+      streakReport: path.relative(ROOT, streakPath),
+      outcome: streak.outcome,
+      executedRunCount: streak.executedRunCount,
+      passedRunCount: streak.passedRunCount,
+    }, null, 0)}\n`);
+    if (streak.outcome !== STREAK_OUTCOME.COMPLETED) process.exitCode = 1;
+  }
 }
 
 export {
@@ -581,6 +629,7 @@ export {
   probeScenarioForVariant,
   readLogEvents,
   runFormationReleaseHandoffGcp,
+  runFormationReleaseHandoffGcpStreak,
   CANDIDATE_COMMIT,
   PROBE_SCENARIO_NAME,
   REVERTED_CONTROL_SCENARIO_NAME,
