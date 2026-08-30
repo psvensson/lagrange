@@ -195,6 +195,15 @@ function buildWorkflow(options = {}) {
       options.listPartitionServiceRows || (() => []),
     deliverReplicaRemoval:
       options.deliverReplicaRemoval || (async () => null),
+    // Cutover readiness evidence: by default every child's canonical
+    // leader is serve-routable, so the healthy cutover path is unchanged.
+    resolveSplitChildLeaderRoutingEvidence:
+      options.resolveSplitChildLeaderRoutingEvidence ||
+      (() => ({leaderNodeId: 'node-a', routableNodeIds: ['node-a', 'node-b']})),
+    resolveRoutingWaitPollIntervalMs:
+      options.resolveRoutingWaitPollIntervalMs || null,
+    delay: options.delay || null,
+    createExecutionTimeoutBudget: options.createExecutionTimeoutBudget || null,
     splitCompletionListener: options.splitCompletionListener || null,
     logger: options.logger || {info() {}, error() {}, warn() {}},
     now: options.now || (() => 1000),

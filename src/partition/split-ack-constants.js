@@ -65,6 +65,29 @@ const SPLIT_ACK_TERMINAL_STATUSES = Object.freeze(new Set([
 ]));
 
 /**
+ * Owner decision on whether the split cutover may promote the target
+ * epoch: every child partition's canonical leader service must be
+ * serve-routable, or the source keeps serving (run 2026-08-30T12:20:17Z:
+ * the cutover applied while the right child's leader was readiness-denied
+ * and the right key range had no routable write participant).
+ * @enum {string}
+ */
+const SPLIT_CUTOVER_READINESS_DECISION = Object.freeze({
+  ROUTABLE: 'routable',
+  REFUSED: 'refused',
+});
+
+/**
+ * Typed refusal reasons for the cutover readiness decision.
+ * @enum {string}
+ */
+const SPLIT_CUTOVER_REFUSAL_REASON = Object.freeze({
+  TARGET_PARTITIONS_MISSING: 'target_partitions_missing',
+  CHILD_LEADER_UNKNOWN: 'child_leader_unknown',
+  CHILD_LEADER_NOT_ROUTABLE: 'child_leader_not_routable',
+});
+
+/**
  * Source-participant statuses that satisfy the "mirror removed"
  * dissolution gate (mirrors MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES:
  * DISSOLUTION_FAILED qualifies so a re-delivered CLEANUP_COMPLETED ack
@@ -250,6 +273,8 @@ function isSplitSourceAckTransitionAllowed(fromStatus, toStatus) {
 }
 
 export {
+  SPLIT_CUTOVER_READINESS_DECISION,
+  SPLIT_CUTOVER_REFUSAL_REASON,
   SPLIT_ACK_STATUS,
   SPLIT_ACK_TERMINAL_STATUSES,
   SPLIT_ACK_FAILURE_STATUSES,
