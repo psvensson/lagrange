@@ -1,0 +1,154 @@
+diff --git a/scripts/quest-evidence-distributed-harness-report-src-fingerprint.js b/scripts/quest-evidence-distributed-harness-report-src-fingerprint.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3395640dbb4712e48bda633ce0e37fca2bef1dc4
+--- /dev/null
++++ b/scripts/quest-evidence-distributed-harness-report-src-fingerprint.js
+@@ -0,0 +1,77 @@
++// Deterministic evidence harness for the
++// distributed-harness-report-src-fingerprint quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs each
++// recorded proof command and writes the test-receipt probe artifact
++// (solve/evidence/distributed-harness-report-src-fingerprint.receipt.json).
++//
++// Receipt honesty: on HEAD (before the cure) buildReportMetadata in
++// test/distributed/run.js writes no srcFingerprint, so the
++// soak-report-carries-src-fingerprint receipt is RED; the
++// report-metadata-otherwise-unchanged and report-writer-unchanged controls
++// are green on HEAD and must stay green — a cure that turns them red is
++// rejected. witness-deterministic re-runs the cured scenario a second time
++// and is red on HEAD for the same reason as the first receipt.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST = 'test/distributed/harness/__tests__/run.test.js';
++const REPORT_WRITER_TESTS = [
++  'test/distributed/harness/__tests__/report-writer.test.js',
++  'test/distributed/harness/__tests__/report-writer.property.test.js',
++  'test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js',
++];
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++const STAMP_SCENARIO_PATTERN = 'soak-report-carries-src-fingerprint';
++
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'soak-report-carries-src-fingerprint',
++    command: scenarioCommand(STAMP_SCENARIO_PATTERN),
++    detail: 'buildReportMetadata stamps metadata.srcFingerprint and ' +
++      'srcFingerprintAlgo from the run\'s fingerprinted docker config, and ' +
++      'the typed absent sentinel when no fingerprinted config exists',
++  }),
++  Object.freeze({
++    id: 'report-metadata-otherwise-unchanged',
++    command: NODE_TEST_COMMAND_PREFIX + WITNESS_TEST,
++    detail: 'every other run.js report-metadata and runner scenario keeps ' +
++      'passing (the stamp is additive and changes no verdict)',
++  }),
++  Object.freeze({
++    id: 'report-writer-unchanged',
++    command: NODE_TEST_COMMAND_PREFIX + REPORT_WRITER_TESTS.join(SPACE),
++    detail: 'the report writer, its property suite and the serialization ' +
++      'degrade suite are unchanged by the metadata stamp',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand(STAMP_SCENARIO_PATTERN),
++    detail: 'a second run of the stamp scenario produces the identical ' +
++      'result (no clock or ordering dependence)',
++  }),
++]);
++
++const QUEST_ID = 'distributed-harness-report-src-fingerprint';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'distributed-harness-report-src-fingerprint.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/test/distributed/harness/__tests__/run.test.js b/test/distributed/harness/__tests__/run.test.js
+index 1eb618ea77cc2f3d9978799118f181ddbc50017a..cf15c708598dc18c803df850d9363d06e4ded8d3 100644
+--- a/test/distributed/harness/__tests__/run.test.js
++++ b/test/distributed/harness/__tests__/run.test.js
+@@ -144,6 +144,37 @@ describe('parseArgs', () => {
+   });
+ });
+ 
++describe('report metadata source fingerprint', () => {
++  // Release verification binds a memory-soak report to the exact booted
++  // source bytes through metadata.srcFingerprint; the report-metadata owner
++  // stamps the run config's computed fingerprint on every written report.
++  it('soak-report-carries-src-fingerprint: metadata stamps the run config ' +
++    'srcFingerprint and algorithm, empty when no fingerprinted config exists',
++  () => {
++    const fingerprint = 'abcdef0123456789';
++    const stamped = runModule.buildReportMetadata(
++      {config: 'local.json', scenario: null},
++      {
++        raftProvider: 'liferaft',
++        docker: {
++          srcFingerprint: fingerprint,
++          srcFingerprintAlgo: SOURCE_FINGERPRINT_ALGORITHM,
++        },
++      },
++      {enabled: false},
++    );
++    assert.equal(stamped.srcFingerprint, fingerprint);
++    assert.equal(stamped.srcFingerprintAlgo, SOURCE_FINGERPRINT_ALGORITHM);
++    const unstamped = runModule.buildReportMetadata(
++      {config: 'local.json', scenario: null},
++      {raftProvider: 'liferaft'},
++      {enabled: false},
++    );
++    assert.equal(unstamped.srcFingerprint, '');
++    assert.equal(unstamped.srcFingerprintAlgo, '');
++  });
++});
++
+ describe('deterministic debug mode helpers', () => {
+   it('pins seed and sampling intervals and records settings in report metadata',
+     () => {
+diff --git a/test/distributed/run.js b/test/distributed/run.js
+index 70bb7c3a20ad26aa09813df4c7ff9017cee02bdd..b51bcce672ecfa38dffabd077d3e8f8680530bd8 100644
+--- a/test/distributed/run.js
++++ b/test/distributed/run.js
+@@ -163,6 +163,11 @@ const SCENARIO_ASSERTION_POLICY = Object.freeze({
+   }),
+ });
+ const SCENARIO_FILTER_ALL = 'all';
++// Stamped on every written report so a release verification (the
++// release-0-2-verification-v3 memory-soak oracle) can bind the report to the
++// exact source bytes the run booted; empty when no fingerprinted launch
++// config reached the report (the oracle reads that as fingerprint_missing).
++const REPORT_SOURCE_FINGERPRINT_ABSENT = '';
+ const BENCHMARK_GATE_STATUS = Object.freeze({
+   PASSED: 'passed',
+   FAILED: 'failed',
+@@ -628,6 +633,12 @@ function buildReportMetadata(args, runConfig, deterministicDebug) {
+     raftProvider: resolveRunRaftProvider(runConfig),
+     configPath: String(args?.config || CLI.DEFAULT_CONFIG),
+     scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
++    srcFingerprint: String(
++      runConfig?.docker?.srcFingerprint || REPORT_SOURCE_FINGERPRINT_ABSENT,
++    ),
++    srcFingerprintAlgo: String(
++      runConfig?.docker?.srcFingerprintAlgo || REPORT_SOURCE_FINGERPRINT_ABSENT,
++    ),
+   };
+   if (deterministicDebug?.enabled === true) {
+     metadata.deterministicDebug = {
