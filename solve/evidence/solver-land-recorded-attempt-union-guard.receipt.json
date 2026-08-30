@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solver-land-recorded-attempt-union-guard",
+  "status": "pass",
+  "generatedAt": "2026-08-30T07:01:06.522Z",
+  "receipts": [
+    {
+      "id": "land-blocks-uncovered-source-paths",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^land-blocks-uncovered-source-paths\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "with the doneWhen receipt already green, the quest SOLVED on zero attempts, a source edit staged in the index and an unrecorded diff artifact on disk naming it, `land` refuses with the typed blocked-uncovered-source-paths problem naming the path: HEAD is unchanged, no verdict is recorded, no attempt is auto-recorded, and `next` projects repair-audit with the same code and required paths"
+    },
+    {
+      "id": "refused-attempt-record-leaves-candidate-unlandable",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^refused-attempt-record-leaves-candidate-unlandable\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "the one-shot `solve attempt` of an over-bound source change is refused by the real scope-pressure precommit guard (gate-decision blocked-scope, no attempt event); the subsequent `land` blocks naming every staged path and records nothing, so the candidate stays un-landable until an attempt is honestly recorded and verified"
+    },
+    {
+      "id": "green-receipt-never-authorizes-source-landing",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^green-receipt-never-authorizes-source-landing\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "a green doneWhen receipt with staged source and no recorded attempt never yields a verdict not-required landing: land throws the typed block, commits nothing and records no verdict"
+    },
+    {
+      "id": "scope-safe-commit-equals-recorded-union",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^scope-safe-commit-equals-recorded-union\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "the landing pathspec of a recorded and approved union is exactly that union plus the quest's own solve/ artifacts; a stray unrecorded artifact on disk naming an untracked extra source file cannot widen it"
+    },
+    {
+      "id": "recorded-and-verified-union-lands-exactly",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^recorded-and-verified-union-lands-exactly\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "a recorded source attempt with a content-bound aggregate verifier approval lands: the commit contains exactly the recorded union outside solve/, the extra file named only by the stray artifact is not swept, and nothing is pushed"
+    },
+    {
+      "id": "evidence-only-landing-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^evidence-only-landing-unchanged\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "a quest with no delta outside solve/ keeps its verdict not-required landing: it commits only its solve/ artifacts and invents no verifier finding"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/solve/solver-land-recorded-attempt-union-guard.test.js",
+      "detail": "two identical incident fixtures produce the identical landing outcome (same typed code, sorted path list and message)"
+    }
+  ]
+}
