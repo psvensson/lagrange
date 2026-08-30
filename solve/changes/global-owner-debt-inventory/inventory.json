@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430364,
-        "sha256": "23fec946287bffb085fdddb193b63350370534d2e1dee974990ae88d30fec6dc"
+        "bytes": 430171,
+        "sha256": "359af6e5d0b7f6e35a81a1f07778f1d9eaf0b83ee6c52925f7495358172c69ee"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2502464,
-        "sha256": "7064c4ed5c293220bed83bf22b7376bca1e3dcbc447d31388a9c0619868839fe"
+        "sha256": "259d6832fefcc9c8c5f52078c694b177626d2a0ffca7e095bc7c720c2d208224"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "73dbd368e16107dcf88432113db6c7f96c053963b3e9c7150490dd0b7b33b73a"
+    "inputDigest": "641bea2a00de90e46ff6f09958cc7efc07a5f8022ab2950e796575445e28f3c0"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430364,
-        "sha256": "23fec946287bffb085fdddb193b63350370534d2e1dee974990ae88d30fec6dc"
+        "bytes": 430171,
+        "sha256": "359af6e5d0b7f6e35a81a1f07778f1d9eaf0b83ee6c52925f7495358172c69ee"
       },
-      "declaredCount": 1824,
-      "observedCount": 1824,
-      "assignedCount": 1824
+      "declaredCount": 1823,
+      "observedCount": 1823,
+      "assignedCount": 1823
     },
     "cognitive": {
       "identity": {
@@ -167,28 +167,28 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2502464,
-        "sha256": "7064c4ed5c293220bed83bf22b7376bca1e3dcbc447d31388a9c0619868839fe"
+        "sha256": "259d6832fefcc9c8c5f52078c694b177626d2a0ffca7e095bc7c720c2d208224"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "4abeb5bf348c4b9120bf7f43c56cd896ee217a40bab8e68e45a39598302e6a25",
+      "sourceDigest": "7e30b9882c88649d9fa1f1ac1f6bfba5003cbe3e7c26b1d852c575edd2986e5b",
       "moduleCount": 5049,
       "edgeCount": 22524,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2671,
-    "assignedSignalCount": 2671,
-    "uniqueAssignmentCount": 2671,
-    "digest": "61a509a22c169cc09398f88c0909548d9e903b1432ee3b1f481e16a9906989e3"
+    "sourceSignalCount": 2670,
+    "assignedSignalCount": 2670,
+    "uniqueAssignmentCount": 2670,
+    "digest": "8716371b1458ca60878f01078f221ed6388bdb9cbd413e1ad5be2d2f0595fc07"
   },
   "signalCounts": {
     "cognitive": 179,
-    "complexity": 1824,
+    "complexity": 1823,
     "duplication": 580,
     "fileSize": 49,
     "lintExclusion": 39
@@ -2227,30 +2227,6 @@
       ]
     },
     {
-      "key": "area:test/distributed/run.js",
-      "owner": null,
-      "boundary": "test/distributed/run.js",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/distributed/run.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 4,
-      "complexity": 4,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 3,
-      "importOut": 20,
-      "score": 16,
-      "topPaths": [
-        "test/distributed/run.js"
-      ]
-    },
-    {
       "key": "semantic:table_creation_service_owner/table_creation_workflow",
       "owner": "table_creation_service_owner",
       "boundary": "table_creation_workflow",
@@ -2321,6 +2297,30 @@
       "score": 12,
       "topPaths": [
         "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    {
+      "key": "area:test/distributed/run.js",
+      "owner": null,
+      "boundary": "test/distributed/run.js",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/distributed/run.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 3,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 3,
+      "importOut": 20,
+      "score": 12,
+      "topPaths": [
+        "test/distributed/run.js"
       ]
     },
     {

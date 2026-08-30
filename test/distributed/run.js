@@ -628,17 +628,27 @@ function installDeterministicRandom(seed) {
   Math.random = createSeededRandom(seed);
 }
 
+// The source-fingerprint stamp: the fingerprint the run computed for its
+// docker config (the value the nodes boot with as SRC_FINGERPRINT), or the
+// typed absent sentinel when no fingerprinted config exists.
+function buildReportSourceFingerprintMetadata(runConfig) {
+  const docker = runConfig?.docker;
+  return {
+    srcFingerprint: String(
+      docker?.srcFingerprint || REPORT_SOURCE_FINGERPRINT_ABSENT,
+    ),
+    srcFingerprintAlgo: String(
+      docker?.srcFingerprintAlgo || REPORT_SOURCE_FINGERPRINT_ABSENT,
+    ),
+  };
+}
+
 function buildReportMetadata(args, runConfig, deterministicDebug) {
   const metadata = {
     raftProvider: resolveRunRaftProvider(runConfig),
     configPath: String(args?.config || CLI.DEFAULT_CONFIG),
     scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
-    srcFingerprint: String(
-      runConfig?.docker?.srcFingerprint || REPORT_SOURCE_FINGERPRINT_ABSENT,
-    ),
-    srcFingerprintAlgo: String(
-      runConfig?.docker?.srcFingerprintAlgo || REPORT_SOURCE_FINGERPRINT_ABSENT,
-    ),
+    ...buildReportSourceFingerprintMetadata(runConfig),
   };
   if (deterministicDebug?.enabled === true) {
     metadata.deterministicDebug = {
