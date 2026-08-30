@@ -34,7 +34,9 @@ The first subscriber follows the normal authoritative path. While that stream is
 
 Nothing is retained because of this feature. B2 owns neither the partition nor the data. If B2 or the redirect fails, B3 returns to the normal authoritative route.
 
-V1 is intentionally one-hop: only the source stream owner can issue a redirect, and a relay cannot redirect onward.
+V1 is intentionally one-hop: only the source stream owner can issue a redirect, and a relay cannot redirect onward. A failed relay attempt also consumes the redirect budget for that recovery attempt, so authoritative fallback cannot be trapped in a source -> stale relay -> source loop.
+
+V1 deliberately does **not** add source-side single-flight coordination. If several cold subscriptions race before the first eligible active stream has been established and observed as a candidate, more than one direct cross-group stream may briefly exist. The promised optimization begins once an eligible active candidate exists.
 
 ## Why this belongs in the existing topology/stream machinery
 
@@ -61,8 +63,10 @@ The implementation is valid only while all of these remain true:
 6. **Authorization is not weakened by sharing.** Exact query identity is insufficient without compatible security scope.
 7. **Cursor compatibility is proved, not assumed.** A relay must already be able to serve the requested point.
 8. **V1 has one redirect hop.** Relays do not redirect to relays.
-9. **Backpressure is bounded per downstream.** A slow subscriber cannot turn a shared live stream into an unbounded buffer or global stall.
-10. **Existing delivery semantics win.** Ordering, retry, duplicate, epoch, and resume behavior stay owned by the underlying stream protocol.
+9. **A failed redirect cannot loop.** Recovery consumes the relay attempt or otherwise forces direct authoritative service for that retry.
+10. **Requester locality is trusted topology data.** An arbitrary client cannot self-declare a latency group and thereby select relay routing.
+11. **Backpressure is bounded per downstream.** A slow subscriber cannot turn a shared live stream into an unbounded buffer or global stall.
+12. **Existing delivery semantics win.** Ordering, retry, duplicate, epoch, and resume behavior stay owned by the underlying stream protocol.
 
 ## Ownership
 
@@ -83,7 +87,7 @@ This keeps relay eligibility adjacent to the component that already knows what t
 
 `LatencyGroupManager` answers group identity. `LatencyTreeService` / the existing latency graph may rank otherwise-valid relay candidates or determine that a cross-group redirect is worth considering.
 
-They do not learn stream identity, authorization, cursors, or relay lifetime.
+They do not learn stream identity, authorization, cursors, or relay lifetime. Requester group/locality must come from the existing authenticated peer/ingress/transport topology context; external subscriber input is not authoritative topology evidence.
 
 ### Relay peer
 
@@ -98,7 +102,7 @@ The peer currently receiving the source stream owns only transient downstream fa
 
 ### Subscriber
 
-The subscriber follows the normal source route first. If it receives a redirect it may attempt one relay attach. Any failure returns to the normal source route. The subscriber does not search the cluster for relays itself.
+The subscriber follows the normal source route first. If it receives a redirect it may attempt one relay attach. Any failure returns to the normal source route with the redirect budget consumed (or an equivalent direct-only recovery marker), so that recovery attempt cannot simply receive the same redirect again. The subscriber does not search the cluster for relays itself.
 
 ## V1 stream identity
 
@@ -119,7 +123,7 @@ StreamIdentity {
 
 Cursor/start is not part of equality because two subscribers may ask for different positions in the same logical stream. It is a separate satisfiability check against the relay's currently available live/buffered window.
 
-The security fingerprint must be supplied/owned by the authorization layer; this feature must not hash ad-hoc credential material or attempt to reconstruct policy equivalence.
+The security fingerprint must be supplied/owned by the authorization layer; this feature must not hash ad-hoc credential material or attempt to reconstruct policy equivalence. If policy version/revocation semantics affect the observable stream scope, that is part of the authorization layer's effective scope contract rather than something this feature infers from principal IDs.
 
 Future designs may prove that one stream can safely satisfy another by query containment or relay-side filtering. V1 explicitly does not.
 
@@ -146,7 +150,7 @@ A candidate exists only when all of these hold:
 - the peer is a reachable/authenticated Lagrange relay-capable endpoint;
 - the peer is currently receiving that exact source stream instance;
 - source and relay are in different latency groups (or equivalent existing topology evidence says the cross-group optimization is useful);
-- the relay is in the requester's latency group for the new subscription;
+- the relay is in the requester's latency group for the new subscription, with that requester group derived from trusted existing topology context rather than client assertion;
 - the candidate is healthy and below bounded fan-out/resource limits.
 
 If multiple candidates are valid, the existing latency tree/graph and local health/load evidence may choose among them. The optimization does not need a permanent representative.
@@ -158,17 +162,29 @@ For an eligible subscription request:
 1. Route the request to the normal authoritative/source stream owner.
 2. Perform the existing authorization and subscription validation first.
 3. Derive canonical `StreamIdentity` from the authorized request.
-4. Resolve the requester's latency group with existing topology machinery.
-5. Look for an active candidate keyed by exact stream identity and that downstream group.
-6. Reject candidates whose source stream instance/epoch is stale, whose relay is unhealthy/capacity-limited, or whose currently available cursor window cannot satisfy the requested start/resume point.
-7. If no candidate remains, establish the normal direct stream.
-8. If a candidate remains and topology evidence says the redirect is useful, return an ephemeral relay redirect.
-9. The subscriber attempts exactly one attach to the named relay.
-10. The relay authenticates the attach, matches the active stream instance/epoch/security scope, and rechecks cursor satisfiability/capacity.
-11. On success, attach a bounded downstream to the already-active stream.
-12. On any stale/unavailable/incompatible/error result, retry through the normal authoritative path.
+4. Resolve the requester's latency group from trusted existing peer/ingress/transport topology context. If it cannot be established, use the direct path.
+5. If this request is already a recovery from a failed relay attach and its one-hop redirect budget is consumed (or it carries the equivalent direct-only marker), establish the normal direct stream.
+6. Otherwise look for an active candidate keyed by exact stream identity and that downstream group.
+7. Reject candidates whose source stream instance/epoch is stale, whose relay is unhealthy/capacity-limited, or whose currently available cursor window cannot satisfy the requested start/resume point.
+8. If no candidate remains, establish the normal direct stream.
+9. If a candidate remains and topology evidence says the redirect is useful, return an ephemeral relay redirect.
+10. The subscriber attempts exactly one attach to the named relay.
+11. The relay authenticates the attach, matches the active stream instance/epoch/security scope, and rechecks cursor satisfiability/capacity.
+12. On success, attach a bounded downstream to the already-active stream.
+13. On any stale/unavailable/incompatible/error result, retry through the normal authoritative path with the relay attempt consumed/direct-only for that recovery attempt.
 
-The optimization should be safe even when steps 4–8 race with stream teardown. The relay's attach-time validation is authoritative for whether the ephemeral opportunity still exists.
+The optimization should be safe even when candidate lookup races with stream teardown. The relay's attach-time validation is authoritative for whether the ephemeral opportunity still exists.
+
+### Cold-start concurrency boundary
+
+Candidate discovery begins from a stream that already exists. Therefore simultaneous first subscriptions can race:
+
+```text
+B1 -> source   no candidate yet -> direct stream 1
+B2 -> source   no candidate yet -> direct stream 2
+```
+
+V1 accepts this. It does not add an in-flight stream coalescer or distributed/single-flight lock just to guarantee one initial crossing. Once one eligible active stream has been registered, later compatible subscriptions may collapse onto it. If measurements later show the cold-start race matters materially, source-side in-flight coalescing should be specified separately because it has different concurrency and cancellation semantics.
 
 ## Redirect contract
 
@@ -190,6 +206,7 @@ Important properties:
 
 - It says **"this active stream can currently be attached here"**, never "this peer owns this data".
 - It must be safe for the relay to reject after issuance.
+- Failure of that attach must lead to a source retry that cannot simply be redirected again on the same recovery attempt.
 - It must not require writing metadata when created, accepted, expired, or rejected.
 - It must not expose raw credentials or sensitive query text just to identify the stream.
 - A typed stale/unavailable response is normal control flow, not an exceptional cluster-repair event.
@@ -222,7 +239,7 @@ For a stream type that cannot safely attach a downstream after start, that strea
 
 ### Redirect races
 
-A redirect can be stale before the subscriber reaches the relay. The relay returns a typed stale/unavailable result; the subscriber returns to authoritative routing. There is no election or invalidation protocol.
+A redirect can be stale before the subscriber reaches the relay. The relay returns a typed stale/unavailable result; the subscriber returns to authoritative routing with the redirect attempt consumed/direct-only for that recovery attempt. There is no election or invalidation protocol, and the source cannot repeatedly bounce that recovery request back to the same stale opportunity.
 
 ### Relay failure after attach
 
@@ -276,11 +293,12 @@ Before code changes, identify the concrete owner(s) for the first target stream 
 
 - request/subscription handshake and routing owner;
 - normalized query/plan representation;
-- authorization decision point and stable security-scope representation;
+- authorization decision point and stable security-scope representation, including policy-change/revocation behavior relevant to an active stream;
 - source stream instance/epoch semantics;
 - cursor, acknowledgement, resume, retry, and duplicate guarantees;
 - current buffering/backpressure and cancellation owner;
-- endpoint identity/reachability rules for Lagrange peers.
+- endpoint identity/reachability rules for Lagrange peers;
+- trusted source of requester latency-group identity.
 
 Gate: do not introduce a relay registry or redirect wire shape until these are explicit. If bounded per-downstream fan-out is absent, make that a prerequisite slice rather than hiding new buffering inside the relay.
 
@@ -309,7 +327,9 @@ Proofs:
 - candidate appears only while the active stream exists;
 - teardown/restart removes it without cleanup;
 - arbitrary external clients never become candidates;
-- topology unavailable/unknown produces no unsafe candidate choice.
+- requester group is derived from trusted existing topology context;
+- topology unavailable/unknown produces no unsafe candidate choice;
+- concurrent cold-start requests are allowed to create more than one direct stream before a candidate is observable.
 
 ### S3 — Optional one-hop redirect response
 
@@ -322,7 +342,8 @@ Proofs:
 - feature disabled/no candidate => byte/behavior-equivalent normal direct path as far as the public contract requires;
 - relay redirects carry a one-hop budget and bind to one active stream instance/epoch;
 - relays cannot issue a second redirect in v1;
-- stale redirect can be rejected without repair.
+- a failed relay attach consumes that recovery attempt's redirect budget or sets an equivalent direct-only marker;
+- stale redirect can be rejected without repair and cannot create a redirect/fallback loop.
 
 ### S4 — Relay attach and authoritative fallback
 
@@ -333,6 +354,7 @@ Proofs:
 - exact active stream + authorized scope + satisfiable cursor attaches;
 - wrong stream instance/epoch/security scope/cursor returns typed incompatible/stale/unavailable;
 - attach race with teardown falls back cleanly;
+- failed attach retries source without being immediately re-redirected on the same recovery attempt;
 - midstream relay loss resumes through the normal source route with documented cursor/duplicate semantics.
 
 ### S5 — Topology-aware candidate selection
@@ -341,7 +363,8 @@ Use existing latency-group identity to require the relay to be on the useful sid
 
 Proofs:
 
-- two-group case chooses a same-downstream-group active peer and removes the duplicate cross-group stream;
+- two-group case chooses a same-downstream-group active peer and removes a later duplicate cross-group stream once an eligible candidate exists;
+- requester locality cannot be selected by arbitrary client input;
 - missing/stale topology falls back direct;
 - topology movement changes optimization decisions, not correctness/authority;
 - no permanent group gateway/coordinator role is created.
@@ -376,18 +399,22 @@ Build a deterministic integration/demo harness using the existing latency-group/
 
 Required scenarios are those in `requirements.md`, including:
 
-- one cross-group upstream for N exact-compatible subscribers;
+- first subscriber uses the normal direct cross-group path;
+- later exact-compatible subscribers collapse onto one already-active cross-group stream;
+- concurrent cold-start subscribers before candidate registration are allowed to produce multiple initial direct streams, without deadlock or false diagnostics;
 - query mismatch;
 - authorization-scope mismatch;
+- forged/self-declared requester group ignored/rejected;
 - unsatisfied cursor;
 - stale source epoch;
+- failed relay attach followed by direct-only authoritative retry;
 - relay failure and resume;
 - topology uncertainty;
 - slow subscriber;
 - teardown/restart with zero durable relay state;
 - feature-off A/B baseline.
 
-A useful final assertion is not just request count but the actual cross-group stream count/bytes: with N compatible simultaneous subscribers in group B, the active source-to-B crossing remains one for that shared stream instance.
+A useful final assertion is not just request count but the actual cross-group stream count/bytes: after an eligible candidate is active, N later compatible subscribers in group B do not create additional equivalent source-to-B crossings for that active stream instance.
 
 ## Rollout and rollback
 
@@ -399,13 +426,14 @@ Rollback is simple by design: stop returning relay redirects. Existing authorita
 
 Only after the one-hop design is proven should later work consider:
 
+- source-side single-flight/in-flight coalescing for the cold-start race;
 - recursive relay trees across several latency-group boundaries;
 - broader stream-type eligibility;
 - semantic/query-subsumption sharing;
 - planner-initiated pre-arranged fan-out;
 - bandwidth/congestion metrics beyond the existing latency graph.
 
-Each of those changes expands either the correctness surface or the topology policy surface. None is required to prove the original narrow-gap property.
+Each of those changes expands either the correctness surface or the topology/concurrency policy surface. None is required to prove the original narrow-gap property.
 
 ## Success criterion
 
