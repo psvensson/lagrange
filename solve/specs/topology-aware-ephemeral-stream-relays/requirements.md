@@ -55,6 +55,7 @@ The first implementation must not introduce:
 - arbitrary client-to-client forwarding;
 - query subsumption (for example, treating a broad stream as satisfying a narrower filter);
 - recursive relay trees or redirects from relays to other relays;
+- source-side cold-start single-flight/coalescing before an eligible active stream exists;
 - topology changes as a correctness dependency.
 
 Grouped CDC propagation is prior art for topology-aware fan-out, but its group coordinator is not the generic stream-relay owner and must not become one implicitly.
@@ -87,7 +88,9 @@ The implementation MUST use the existing latency-group identity and existing lat
 
 Topology determines whether a redirect is useful and helps choose among otherwise-valid candidates. It MUST NOT confer authority over data or streams.
 
-Unknown, stale, or insufficient topology evidence MUST result in direct streaming rather than a guessed redirect.
+The requester's latency group MUST be derived from trusted existing cluster/transport topology context. An arbitrary external client assertion such as `latencyGroup=B` MUST NOT be accepted as routing evidence for relay selection.
+
+Unknown, stale, unauthenticated, or insufficient topology evidence MUST result in direct streaming rather than a guessed redirect.
 
 ### TSR-003 — Source-owned redirect decision
 
@@ -95,7 +98,7 @@ In v1, only the normal source stream owner MAY issue an ephemeral relay redirect
 
 A relay MUST NOT redirect that subscriber onward to another relay. Redirect hop budget/depth is therefore exactly one in v1.
 
-This rule prevents redirect loops and keeps recovery anchored at the authoritative subscription path.
+This rule prevents relay-to-relay loops and keeps recovery anchored at the authoritative subscription path. TSR-009 additionally requires a failed relay attempt to consume/suppress redirect on the recovery attempt so a stale relay cannot be re-offered forever.
 
 ### TSR-004 — Exact stream identity in v1
 
@@ -118,7 +121,9 @@ A subscriber MUST receive no data through a relay that it could not receive from
 
 The source MUST perform the normal authorization decision before redirecting, and relay attachment MUST use authenticated cluster/client context sufficient to bind the attach to that authorized subscription scope.
 
-Stream identity MUST include a stable security-scope or authorization fingerprint (or an equivalent mechanism owned by the existing authorization layer). Raw credentials MUST NOT be used as the identity key or propagated as relay metadata.
+Stream identity MUST consume a stable **authorization-owned effective stream scope/fingerprint** (or an equivalent capability). A principal or tenant ID alone is insufficient when row policy, delegated scope, policy version, or another authorization input can change stream contents. Raw credentials MUST NOT be used as the identity key or propagated as relay metadata.
+
+Policy-change/revocation behavior remains owned by the existing authorization/stream contract; the relay MUST NOT invent a weaker interpretation for an already-active shared stream.
 
 A relay MUST NOT infer that two subscriptions are shareable merely because they address the same partition/query.
 
@@ -128,7 +133,7 @@ A redirect MAY be issued only when the active relay can satisfy the subscriber's
 
 The feature MUST NOT add a retained history or cache to increase redirect hit rate.
 
-If the requested cursor is older than the relay can satisfy, or if compatibility cannot be proven, the source MUST establish the normal direct/resume path.
+If the requested cursor is older than the relay can satisfy, if a new live query requires an initial snapshot that has already passed, or if compatibility cannot be proven, the source MUST establish the normal direct/resume path.
 
 ### TSR-007 — Strictly ephemeral lifetime
 
@@ -142,23 +147,25 @@ No durable system table, object, cache entry, or replication responsibility is c
 
 ### TSR-008 — Redirect is capability-scoped and stale-safe
 
-The redirect/attach contract MUST identify the intended relay and active source-stream instance strongly enough to reject a stale or unrelated attach. At minimum the protocol needs the equivalents of:
+The redirect/attach contract MUST identify the intended relay and active source-stream instance strongly enough to reject a stale, replayed, stolen, or unrelated attach. At minimum the protocol needs the equivalents of:
 
 - relay peer/endpoint identity;
 - active stream instance identity;
 - source epoch/generation when the existing stream protocol has such a concept;
-- the subscriber's authorized attach scope;
+- the subscriber's authorized attach scope **and authenticated subscriber/session binding where required to prevent capability reuse**;
 - requested/compatible cursor information;
 - v1 redirect hop budget of one;
 - bounded validity or another existing liveness mechanism sufficient to reject obsolete redirects.
 
-The exact field names are implementation details and are not frozen by this requirements document.
+The exact field names are implementation details and are not frozen by this requirements document. Existing cluster/session capability primitives SHOULD be reused rather than introducing a parallel token family.
 
-### TSR-009 — Failure returns to authoritative routing
+### TSR-009 — Failure returns to authoritative routing without redirect loops
 
 If a redirect is stale, rejected, unreachable, incompatible, or fails during relay attachment, the subscriber MUST retry through the normal authoritative subscription route.
 
-If an established relay fails mid-stream, the subscriber MUST resume through the existing authoritative path using the stream type's normal last-acknowledged cursor/sequence mechanism.
+That recovery attempt MUST consume the v1 redirect budget or carry an equivalent source-understood `direct-only` / failed-relay exclusion so the source cannot simply return the same failed redirect indefinitely. This is ephemeral request/session control state, not durable metadata.
+
+If an established relay fails mid-stream, the subscriber MUST resume through the existing authoritative path using the stream type's normal last-acknowledged cursor/sequence mechanism. The recovery attempt is subject to the same anti-loop rule; later independent subscriptions may again use healthy relay opportunities.
 
 No redirect failure MAY require topology metadata repair, relay election, or cache invalidation.
 
@@ -207,21 +214,30 @@ The implementation MUST expose enough diagnostics to answer, at minimum:
 
 Observability MUST NOT log credentials or sensitive query/auth material merely to expose stream identity.
 
+### TSR-016 — No hidden cold-start coalescer in v1
+
+V1's optimization begins only after an eligible cross-group stream is active and observable as a relay candidate. If multiple subscriptions race before that point, they MAY establish more than one direct stream.
+
+Guaranteeing one crossing during that cold-start race would require a separate source-side in-flight/single-flight contract. That behavior MUST NOT be added implicitly under the relay feature. It may be specified later if measurements show the additional coordination is worthwhile.
+
 ## Acceptance proof
 
 Before the feature is considered complete, an integration harness MUST exercise at least two latency groups with a deliberately expensive/narrow inter-group path and prove all of the following:
 
 1. The first eligible subscriber establishes the normal cross-group stream.
-2. Additional exact-equivalent subscribers in the same downstream latency group attach through one active relay, leaving only one equivalent upstream crossing for that active stream.
-3. A subscriber with a different query/plan identity is not redirected to the existing stream.
-4. A subscriber with a different authorization/security scope is not allowed to consume another scope's relay stream.
-5. A subscriber requesting a cursor the relay cannot satisfy uses the direct/resume path without creating retained history.
-6. A stale redirect caused by source/stream epoch churn is rejected and falls back correctly.
-7. Relay failure after attachment resumes through normal authoritative routing with the underlying stream's documented duplicate/order semantics.
-8. Missing/uncertain topology evidence produces the direct path.
-9. A deliberately slow downstream subscriber cannot stall healthy downstream subscribers or cause unbounded buffering.
-10. Relay state disappears after stream teardown/restart without durable cleanup or cache invalidation.
-11. V1 cannot form a redirect loop or relay chain longer than one hop.
+2. Additional exact-equivalent subscribers arriving after the candidate is active in the same downstream latency group attach through one active relay, leaving only one equivalent upstream crossing for that active stream.
+3. Concurrent cold-start subscribers before a candidate exists are allowed to establish direct streams; the implementation does not falsely claim cold-start single-flight.
+4. A subscriber with a different query/plan identity is not redirected to the existing stream.
+5. A subscriber with a different authorization/security scope is not allowed to consume another scope's relay stream.
+6. Forged/self-declared latency-group identity cannot influence relay selection; trusted cluster/transport topology is used.
+7. A subscriber requesting a cursor the relay cannot satisfy uses the direct/resume path without creating retained history.
+8. A stale redirect caused by source/stream epoch churn is rejected and falls back correctly.
+9. A failed relay attach cannot be re-offered indefinitely on the authoritative recovery retry.
+10. Relay failure after attachment resumes through normal authoritative routing with the underlying stream's documented duplicate/order semantics.
+11. Missing/uncertain topology evidence produces the direct path.
+12. A deliberately slow downstream subscriber cannot stall healthy downstream subscribers or cause unbounded buffering.
+13. Relay state disappears after stream teardown/restart without durable cleanup or cache invalidation.
+14. V1 cannot form a redirect loop or relay chain longer than one hop.
 
 The proof SHOULD include an A/B run with relay optimization disabled so the existing direct path remains a falsifiable baseline.
 
@@ -231,9 +247,10 @@ Before production code is changed, the implementation owner MUST map the concret
 
 - its subscription handshake;
 - canonical query/stream-plan representation;
-- authorization point and security-scope representation;
+- authorization point, effective security-scope representation, and policy-change/revocation behavior;
 - cursor/resume and source-epoch semantics;
 - buffering/backpressure ownership;
-- cancellation and reconnect behavior.
+- cancellation and reconnect behavior;
+- trusted requester/peer topology identity and endpoint reachability semantics.
 
 The implementation plan in `design.md` treats this mapping as slice S0. If any of those semantics are missing or ambiguous, they are a prerequisite to the relay optimization rather than something the relay layer may invent locally.
