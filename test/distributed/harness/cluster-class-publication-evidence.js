@@ -3,6 +3,9 @@ import {buildCanonicalPublicationEvidenceFromControlPlane} from
   './publication-evidence-contract.js';
 import {ClusterQuiescence} from './cluster-class-quiescence.js';
 import {
+  joinActiveProbeAttemptAtDeadline,
+} from './cluster-class-active-probe-attempt-join.js';
+import {
   buildLoadPublicationGateProjectionContext,
   buildStartupSnapshotProjectionContext,
   projectLoadPublicationGateDiagnostic,
@@ -69,6 +72,7 @@ const numberIsSafeInteger = Number.isSafeInteger;
 const objectCreate = Object.create;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const NUMBER_MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const QUEUE_DIAGNOSTIC_KEY_LIMIT = 4096;
 const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
@@ -304,236 +308,237 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
         CLUSTER_READINESS_MODE_STARTUP;
     const nodes = [...this._nodes.values()];
     const expectedNodeIds = nodes.map((node) => node.id);
-    const nodeDiagnosticsPromise = Promise.all(
-      nodes.map(async (node) => {
-        let attemptedReadinessProbe = false;
-        let attemptedReadinessProbeSource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
-        const buildStatusProbeResult = async (
-          statusReason = null,
-          activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY,
-        ) => {
-          const statusProbeTimeoutMs =
-            resolveActiveProbeOperationTimeoutMs(deadline);
-          const status = await withTimeout(
-            node.getStatus({
-              timeoutMs: statusProbeTimeoutMs,
-              lane: ADMIN_SOCKET_LANE_PROBE,
-            }),
-            statusProbeTimeoutMs,
-            'Node status probe timed out for ' + node.id,
-          );
-          const active = this._isNodeActive(status);
-          const state = active ?
-            ACTIVE_STATE.toLowerCase() :
-            this._extractNodeState(status) || INACTIVE_STATE;
-          return {
-            nodeId: node.id,
-            active,
-            state,
-            phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
-            reasons: statusReason ?
-              [statusReason] :
-              ACTIVE_PROBE_REASONS_UNAVAILABLE,
-            activitySource,
-            admissionState:
-              status.active === true ?
-                STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
-                STARTUP_ADMISSION_STATE_BLOCKED,
-            error: null,
-          };
+    const probeNodeDiagnostic = async (node) => {
+      let attemptedReadinessProbe = false;
+      let attemptedReadinessProbeSource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
+      const buildStatusProbeResult = async (
+        statusReason = null,
+        activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY,
+      ) => {
+        const statusProbeTimeoutMs =
+          resolveActiveProbeOperationTimeoutMs(deadline);
+        const status = await withTimeout(
+          node.getStatus({
+            timeoutMs: statusProbeTimeoutMs,
+            lane: ADMIN_SOCKET_LANE_PROBE,
+          }),
+          statusProbeTimeoutMs,
+          'Node status probe timed out for ' + node.id,
+        );
+        const active = this._isNodeActive(status);
+        const state = active ?
+          ACTIVE_STATE.toLowerCase() :
+          this._extractNodeState(status) || INACTIVE_STATE;
+        return {
+          nodeId: node.id,
+          active,
+          state,
+          phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
+          reasons: statusReason ?
+            [statusReason] :
+            ACTIVE_PROBE_REASONS_UNAVAILABLE,
+          activitySource,
+          admissionState:
+            status.active === true ?
+              STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
+              STARTUP_ADMISSION_STATE_BLOCKED,
+          error: null,
         };
-        try {
-          let active = false;
-          let state = INACTIVE_STATE;
-          let phase = ACTIVE_PROBE_PHASE_UNAVAILABLE;
-          let reasons = ACTIVE_PROBE_REASONS_UNAVAILABLE;
-          let activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
-          let admissionState = STARTUP_ADMISSION_STATE_BLOCKED;
-          let admissionReason = ACTIVE_PROBE_ADMISSION_REASON_UNAVAILABLE;
+      };
+      try {
+        let active = false;
+        let state = INACTIVE_STATE;
+        let phase = ACTIVE_PROBE_PHASE_UNAVAILABLE;
+        let reasons = ACTIVE_PROBE_REASONS_UNAVAILABLE;
+        let activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
+        let admissionState = STARTUP_ADMISSION_STATE_BLOCKED;
+        let admissionReason = ACTIVE_PROBE_ADMISSION_REASON_UNAVAILABLE;
 
-          const readinessProbeOrder =
-            readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+        const readinessProbeOrder =
+          readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+            [
               [
-                [
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
-                  'probeTrafficReadiness',
-                ],
-                [
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
-                  'probeBootstrapReadiness',
-                ],
-              ] :
+                ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
+                'probeTrafficReadiness',
+              ],
               [
-                [
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
-                  'probeBootstrapReadiness',
-                ],
-                [
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
-                  'probeTrafficReadiness',
-                ],
-              ];
-          let readiness = null;
-          for (const [probeSource, probeMethod] of readinessProbeOrder) {
-            if (typeof node?.[probeMethod] !== 'function') {
-              continue;
-            }
-            attemptedReadinessProbe = true;
-            attemptedReadinessProbeSource = probeSource;
-            const readinessProbeTimeoutMs =
-              resolveActiveProbeOperationTimeoutMs(deadline);
-            readiness = await withTimeout(
-              node[probeMethod]({
-                timeoutMs: readinessProbeTimeoutMs,
-              }),
-              readinessProbeTimeoutMs,
-              'Node readiness probe timed out for ' + node.id,
-            );
-            active =
-              readiness.status >= HTTP_OK_LOWER &&
-              readiness.status <= HTTP_OK_UPPER;
-            admissionState =
-              active === true ?
-                STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
-                STARTUP_ADMISSION_STATE_BLOCKED;
-            admissionReason =
-              active === true ?
-                ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY :
-                ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK;
-            phase =
-              typeof readiness.phase === 'string' ? readiness.phase : null;
-            reasons = Array.isArray(readiness.reasons) ? readiness.reasons : [];
-            if (active) {
-              state = ACTIVE_STATE.toLowerCase();
-            } else if (
-              typeof readiness.state === 'string' &&
-              readiness.state.length > 0
-            ) {
-              state = readiness.state.toLowerCase();
-            } else if (phase && phase.length > 0) {
-              state = phase.toLowerCase();
-            }
-            activitySource = probeSource;
-            break;
+                ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
+                'probeBootstrapReadiness',
+              ],
+            ] :
+            [
+              [
+                ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
+                'probeBootstrapReadiness',
+              ],
+              [
+                ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
+                'probeTrafficReadiness',
+              ],
+            ];
+        let readiness = null;
+        for (const [probeSource, probeMethod] of readinessProbeOrder) {
+          if (typeof node?.[probeMethod] !== 'function') {
+            continue;
           }
-          if (readiness) {
-            if (typeof node.getReachabilityDiagnostics === 'function') {
-              try {
-                const adminProbeTimeoutMs =
-                  resolveActiveProbeOperationTimeoutMs(deadline);
-                const adminDiagnostics = await withTimeout(
-                  node.getReachabilityDiagnostics({
-                    timeoutMs: adminProbeTimeoutMs,
-                  }),
-                  adminProbeTimeoutMs,
-                  'Node admin readiness probe timed out for ' + node.id,
-                );
-                if (
-                  readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
-                  canProjectStartupActiveFromTransientAdmin(
-                    readiness,
-                    adminDiagnostics,
-                  )
-                ) {
-                  admissionState = STARTUP_ADMISSION_STATE_DEGRADED;
-                  admissionReason =
-                    ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION;
-                  activitySource =
-                    ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION;
-                  reasons = [...reasons];
-                } else if (adminDiagnostics?.adminReady !== true) {
-                  active = false;
-                  state = INACTIVE_STATE;
-                  admissionState = STARTUP_ADMISSION_STATE_BLOCKED;
-                  const adminLastError =
-                    typeof adminDiagnostics?.lastError === 'string' &&
-                    adminDiagnostics.lastError.length > 0 ?
-                      adminDiagnostics.lastError :
-                      ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
-                  admissionReason =
-                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY + '=' + adminLastError;
-                  reasons = [
-                    ...reasons,
-                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY + '=' + adminLastError,
-                  ];
-                }
-              } catch (adminProbeError) {
+          attemptedReadinessProbe = true;
+          attemptedReadinessProbeSource = probeSource;
+          const readinessProbeTimeoutMs =
+            resolveActiveProbeOperationTimeoutMs(deadline);
+          readiness = await withTimeout(
+            node[probeMethod]({
+              timeoutMs: readinessProbeTimeoutMs,
+            }),
+            readinessProbeTimeoutMs,
+            'Node readiness probe timed out for ' + node.id,
+          );
+          active =
+            readiness.status >= HTTP_OK_LOWER &&
+            readiness.status <= HTTP_OK_UPPER;
+          admissionState =
+            active === true ?
+              STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
+              STARTUP_ADMISSION_STATE_BLOCKED;
+          admissionReason =
+            active === true ?
+              ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY :
+              ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK;
+          phase =
+            typeof readiness.phase === 'string' ? readiness.phase : null;
+          reasons = Array.isArray(readiness.reasons) ? readiness.reasons : [];
+          if (active) {
+            state = stringToLowerCase(ACTIVE_STATE);
+          } else if (
+            typeof readiness.state === 'string' &&
+            readiness.state.length > 0
+          ) {
+            state = stringToLowerCase(readiness.state);
+          } else if (phase && phase.length > 0) {
+            state = stringToLowerCase(phase);
+          }
+          activitySource = probeSource;
+          break;
+        }
+        if (readiness) {
+          if (typeof node.getReachabilityDiagnostics === 'function') {
+            try {
+              const adminProbeTimeoutMs =
+                resolveActiveProbeOperationTimeoutMs(deadline);
+              const adminDiagnostics = await withTimeout(
+                node.getReachabilityDiagnostics({
+                  timeoutMs: adminProbeTimeoutMs,
+                }),
+                adminProbeTimeoutMs,
+                'Node admin readiness probe timed out for ' + node.id,
+              );
+              if (
+                readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+                canProjectStartupActiveFromTransientAdmin(
+                  readiness,
+                  adminDiagnostics,
+                )
+              ) {
+                admissionState = STARTUP_ADMISSION_STATE_DEGRADED;
+                admissionReason =
+                  ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION;
+                activitySource =
+                  ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION;
+                reasons = [...reasons];
+              } else if (adminDiagnostics?.adminReady !== true) {
                 active = false;
                 state = INACTIVE_STATE;
+                admissionState = STARTUP_ADMISSION_STATE_BLOCKED;
+                const adminLastError =
+                  typeof adminDiagnostics?.lastError === 'string' &&
+                  adminDiagnostics.lastError.length > 0 ?
+                    adminDiagnostics.lastError :
+                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
+                admissionReason =
+                  ACTIVE_PROBE_REASON_ADMIN_NOT_READY + '=' + adminLastError;
                 reasons = [
                   ...reasons,
-                  ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
-                    normalizeProbeError(adminProbeError),
+                  ACTIVE_PROBE_REASON_ADMIN_NOT_READY + '=' + adminLastError,
                 ];
               }
+            } catch (adminProbeError) {
+              active = false;
+              state = INACTIVE_STATE;
+              reasons = [
+                ...reasons,
+                ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
+                  normalizeProbeError(adminProbeError),
+              ];
             }
-          } else {
-            const statusResult = await buildStatusProbeResult();
-            active = statusResult.active;
-            state = statusResult.state;
-            phase = statusResult.phase;
-            reasons = statusResult.reasons;
-            activitySource = statusResult.activitySource;
-            admissionState =
-              statusResult.active === true ?
-                STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
-                STARTUP_ADMISSION_STATE_BLOCKED;
-            admissionReason =
-              statusResult.active === true ?
-                ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY :
-                ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
           }
+        } else {
+          const statusResult = await buildStatusProbeResult();
+          active = statusResult.active;
+          state = statusResult.state;
+          phase = statusResult.phase;
+          reasons = statusResult.reasons;
+          activitySource = statusResult.activitySource;
+          admissionState =
+            statusResult.active === true ?
+              STARTUP_ADMISSION_STATE_STRONG_ACTIVE :
+              STARTUP_ADMISSION_STATE_BLOCKED;
+          admissionReason =
+            statusResult.active === true ?
+              ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY :
+              ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
+        }
 
-          return {
-            nodeId: node.id,
-            active,
-            state,
-            phase,
-            reasons,
-            activitySource,
-            admissionState,
-            admissionReason,
-            error: null,
-          };
-        } catch (error) {
-          const timeoutEvidence = normalizeReadinessTimeoutEvidence({
-            attemptedReadinessProbe,
-            error,
-            readinessMode,
-          });
-          if (
-            timeoutEvidence.attemptedReadinessProbe === true &&
-            timeoutEvidence.timeoutShaped === true
-          ) {
-            const timeoutReason =
-              buildReadinessTimeoutReason(error, readinessMode);
-            return {
-              nodeId: node.id,
-              active: false,
-              state: INACTIVE_STATE,
-              phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
-              reasons: [timeoutReason],
-              activitySource: attemptedReadinessProbeSource,
-              admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
-              admissionReason: timeoutReason,
-              error: normalizeProbeError(error),
-            };
-          }
+        return {
+          nodeId: node.id,
+          active,
+          state,
+          phase,
+          reasons,
+          activitySource,
+          admissionState,
+          admissionReason,
+          error: null,
+        };
+      } catch (error) {
+        const timeoutEvidence = normalizeReadinessTimeoutEvidence({
+          attemptedReadinessProbe,
+          error,
+          readinessMode,
+        });
+        if (
+          timeoutEvidence.attemptedReadinessProbe === true &&
+          timeoutEvidence.timeoutShaped === true
+        ) {
+          const timeoutReason =
+            buildReadinessTimeoutReason(error, readinessMode);
           return {
             nodeId: node.id,
             active: false,
             state: INACTIVE_STATE,
             phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
-            reasons: ACTIVE_PROBE_REASONS_UNAVAILABLE,
-            activitySource: ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS,
+            reasons: [timeoutReason],
+            activitySource: attemptedReadinessProbeSource,
             admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
-            admissionReason:
-              ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
-              String(normalizeProbeError(error)),
+            admissionReason: timeoutReason,
             error: normalizeProbeError(error),
           };
         }
-      }),
+        return {
+          nodeId: node.id,
+          active: false,
+          state: INACTIVE_STATE,
+          phase: ACTIVE_PROBE_PHASE_UNAVAILABLE,
+          reasons: ACTIVE_PROBE_REASONS_UNAVAILABLE,
+          activitySource: ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS,
+          admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
+          admissionReason:
+            ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
+            String(normalizeProbeError(error)),
+          error: normalizeProbeError(error),
+        };
+      }
+    };
+    const nodeDiagnosticsPromise = Promise.all(
+      nodes.map(probeNodeDiagnostic),
     );
     const snapshotCoverageDeadline =
       readinessMode === CLUSTER_READINESS_MODE_LOAD ?
@@ -550,10 +555,21 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
         readinessMode,
       },
     );
-    const [nodeDiagnostics, snapshotCoverage] = await Promise.all([
-      nodeDiagnosticsPromise,
-      snapshotCoveragePromise,
-    ]);
+    const nodeById = new Map();
+    for (const node of nodes) {
+      nodeById.set(node.id, node);
+    }
+    const {nodeDiagnostics, snapshotCoverage, attemptJoin} =
+      await joinActiveProbeAttemptAtDeadline({
+        deadline,
+        nodeDiagnosticsPromise,
+        snapshotCoveragePromise,
+        resampleNodeDiagnostic: (diagnostic) =>
+          probeNodeDiagnostic(nodeById.get(diagnostic.nodeId)),
+        resampleLeadMs: REACHABILITY_PROBE_TIMEOUT_FLOOR_MS,
+        expectedNodeIds,
+        forceRepair: options.forceRepair === true,
+      });
     const publicationConvergenceGate =
       readinessMode === CLUSTER_READINESS_MODE_LOAD ?
         evaluateLoadPublishedConvergence(
@@ -620,6 +636,7 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
       snapshotCoverage,
       publicationConvergenceGate,
       priorityRecoveryInvariants,
+      attemptJoin,
     };
   }
 

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2088,
+    "ordinary": 2089,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2105,
-  "digest": "fnv1a32-86a08fe2",
+  "censusSize": 2106,
+  "digest": "fnv1a32-a0949420",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -720,6 +720,7 @@
     "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js": "ordinary",
+    "test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-active-wait-bounded-diagnostics-retention.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-active-wait-readiness-failure.test.js": "ordinary",
     "test/distributed/harness/__tests__/cluster-active-wait-snapshot-retention.test.js": "ordinary",
