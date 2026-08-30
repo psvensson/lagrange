@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "distributed-harness-report-src-fingerprint",
+  "status": "pass",
+  "generatedAt": "2026-08-30T13:17:52.619Z",
+  "receipts": [
+    {
+      "id": "soak-report-carries-src-fingerprint",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"soak-report-carries-src-fingerprint\" test/distributed/harness/__tests__/run.test.js",
+      "detail": "buildReportMetadata stamps metadata.srcFingerprint and srcFingerprintAlgo from the run's fingerprinted docker config, and the typed absent sentinel when no fingerprinted config exists"
+    },
+    {
+      "id": "report-metadata-otherwise-unchanged",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/run.test.js",
+      "detail": "every other run.js report-metadata and runner scenario keeps passing (the stamp is additive and changes no verdict)"
+    },
+    {
+      "id": "report-writer-unchanged",
+      "passed": true,
+      "command": "node --test test/distributed/harness/__tests__/report-writer.test.js test/distributed/harness/__tests__/report-writer.property.test.js test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js",
+      "detail": "the report writer, its property suite and the serialization degrade suite are unchanged by the metadata stamp"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"soak-report-carries-src-fingerprint\" test/distributed/harness/__tests__/run.test.js",
+      "detail": "a second run of the stamp scenario produces the identical result (no clock or ordering dependence)"
+    }
+  ]
+}
