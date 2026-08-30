@@ -2,6 +2,7 @@ import {createPartitionServiceRebalancerMethods} from './partition-service-rebal
 import {createPartitionServiceMetadataDeliveryMethods} from './partition-service-metadata-delivery-methods.js';
 import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
 import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
+import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
 import {createPartitionServiceMergeReplicationMethods} from './partition-service-merge-replication-methods.js';
@@ -17,6 +18,7 @@ Object.assign(
   createPartitionServiceMetadataDeliveryMethods(),
   createPartitionServiceLearnerPromotionMethods(),
   createPartitionServiceLearnerPromotionProofMethods(),
+  createPartitionServiceLearnerPromotionWakeMethods(),
   createPartitionServiceDurabilityFitnessMethods(),
   createPartitionServiceLifecycleMethods(),
   createPartitionServiceMergeReplicationMethods(),

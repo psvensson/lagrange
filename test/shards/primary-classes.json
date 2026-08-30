@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1832,
+    "unit": 1834,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2083,
-  "digest": "fnv1a32-972a4cab",
+  "censusSize": 2085,
+  "digest": "fnv1a32-4ffa3635",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -624,6 +624,7 @@
     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "unit",
     "test/convergence/dt6-leadership-migration-network.test.js": "unit",
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "unit",
+    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "unit",
     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "unit",
     "test/convergence/dt6-network-pct-search.test.js": "unit",
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "unit",
@@ -1095,6 +1096,7 @@
     "test/partition/partition-replication-handler.test.js": "unit",
     "test/partition/partition-service-cdc-log-suppression.test.js": "unit",
     "test/partition/partition-service-hlc-monotonicity.test.js": "unit",
+    "test/partition/partition-service-learner-promotion-wake.test.js": "unit",
     "test/partition/partition-service-learner-promotion.test.js": "unit",
     "test/partition/partition-service-qualified-table-name.test.js": "unit",
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "unit",

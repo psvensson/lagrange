@@ -1,0 +1,2863 @@
+diff --git a/scripts/quest-evidence-learner-promotion-proof-channel-wake.js b/scripts/quest-evidence-learner-promotion-proof-channel-wake.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..21171ed0cf778fd11d228085904ab40c9c50e551
+--- /dev/null
++++ b/scripts/quest-evidence-learner-promotion-proof-channel-wake.js
+@@ -0,0 +1,130 @@
++// Deterministic evidence harness for the
++// learner-promotion-proof-channel-wake quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs
++// each recorded proof command and writes the test-receipt probe artifact
++// (solve/evidence/learner-promotion-proof-channel-wake.receipt.json).
++// Each receipt re-executes one focused witness scenario rather than trusting
++// a claim, so a regression that flips a witness red flips this receipt to
++// fail and the quest's doneWhen cannot close on stale green evidence.
++//
++// Receipt honesty: the witness file uses raw node:test so each scenario is
++// independently selectable with --test-name-pattern by its anchored name.
++// On HEAD (dce28c986, before the cure) the
++// proof-wakes-on-services-row-visibility,
++// proof-wakes-on-published-epoch-change,
++// typed-refusal-cause-address-unresolvable,
++// learner-reasserts-row-on-unresolvable,
++// proof-delivery-timeout-bounded-and-logged and
++// cpp-learner-active-within-bound receipts are RED (the learner became a
++// voter at +26 s of scenario time, the 4bc6c1d25 GCP figure, after six
++// untyped request_invalid refusals on the 1 s timer) and
++// witness-deterministic is RED only because the drive lands outside the
++// bound; proof-semantics-and-voter-cap-unchanged is green on HEAD and must
++// stay green — a cure that turns it red is rejected.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/convergence/dt6-learner-promotion-proof-channel-wake.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++// One verbatim proof command per scenario. node --test --test-name-pattern
++// selects exactly one top-level witness scenario by its anchored name, so a
++// green receipt is honest (its scenario exits 0) and a red receipt is honest
++// (its scenario exits non-zero).
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'proof-wakes-on-services-row-visibility',
++    command: scenarioCommand('^proof-wakes-on-services-row-visibility'),
++    detail: 'with its services row withheld from the leader cache, the ' +
++      'learner\'s first proof is refused request_invalid and the next ' +
++      'proof request follows the row\'s landing in its own cache within ' +
++      'half a retry interval (typed services_row_visible wake on the ' +
++      'existing single-flight schedule), not on the 1 s timer + RTT',
++  }),
++  Object.freeze({
++    id: 'proof-wakes-on-published-epoch-change',
++    command: scenarioCommand('^proof-wakes-on-published-epoch-change'),
++    detail: 'a change of the latest PUBLISHED publication epoch re-requests ' +
++      'the proof within half a retry interval, the re-request binds the ' +
++      'new epoch (typed published_epoch_changed wake), and the grant after ' +
++      'healing is bound to that epoch',
++  }),
++  Object.freeze({
++    id: 'typed-refusal-cause-address-unresolvable',
++    command: scenarioCommand('^typed-refusal-cause-address-unresolvable'),
++    detail: 'the leader\'s request_invalid carries cause ' +
++      'learner_address_unresolvable when buildPeerAddress throws and ' +
++      'request_shape for a malformed request, the learner mints ' +
++      'response_binding_mismatch for a response bound to another learner, ' +
++      'and all three are logged at info with learnerReplicaId/partitionId',
++  }),
++  Object.freeze({
++    id: 'learner-reasserts-row-on-unresolvable',
++    command: scenarioCommand('^learner-reasserts-row-on-unresolvable'),
++    detail: 'on learner_address_unresolvable the learner kicks the replica ' +
++      'state machine\'s CL-021 deferred services-row retry ' +
++      '(reconcileLocalOnlyServiceRowsNow) immediately after the refusal, at ' +
++      'most once per refusal, and the re-asserted row wakes the next proof',
++  }),
++  Object.freeze({
++    id: 'proof-delivery-timeout-bounded-and-logged',
++    command: scenarioCommand('^proof-delivery-timeout-bounded-and-logged'),
++    detail: 'every proof delivery carries timeoutMs = min(MESSAGE_TIMEOUT_MS, ' +
++      '2 x LEARNER_CATCH_UP_CHECK_INTERVAL_MS), a stalled delivery fails at ' +
++      'that bound, proof_transport_failed is logged at info, and the next ' +
++      'request never stacks beyond bound + interval',
++  }),
++  Object.freeze({
++    id: 'proof-semantics-and-voter-cap-unchanged',
++    command: scenarioCommand('^proof-semantics-and-voter-cap-unchanged'),
++    detail: 'learnerMatchIndex < safePromotionIndex refuses progress_behind, ' +
++      'a publication-epoch mismatch refuses epoch_mismatch, a lagging ' +
++      'learner is never promoted by elapsed retry ticks, above target+1 ' +
++      'active voters the quorum-shape gate refuses ' +
++      'would_exceed_target_replica_count even when the proof would grant, ' +
++      'and LEARNER_CATCH_UP_CHECK_INTERVAL_MS (1000) / MESSAGE_TIMEOUT_MS ' +
++      '(5000) are the HEAD values (green on HEAD and after)',
++  }),
++  Object.freeze({
++    id: 'cpp-learner-active-within-bound',
++    command: scenarioCommand('^cpp-learner-active-within-bound'),
++    detail: 'with the learner\'s services row withheld from the leader cache ' +
++      'for 22 s and the leader stalling 5 s in every 7 s, the learner is a ' +
++      'voter by +12 s of scenario time (HEAD: +26 s) after a typed ' +
++      'learner_address_unresolvable refusal, a services-row re-assert and a ' +
++      'wake under half an interval, on a proof with learnerMatchIndex === ' +
++      'safePromotionIndex and equal published epochs on both sides',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'two identical cpp drives produce the identical refusal/wake ' +
++      'event sequence and both land inside the bound',
++  }),
++]);
++
++const QUEST_ID = 'learner-promotion-proof-channel-wake';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'learner-promotion-proof-channel-wake.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/node/replica-state-machine.js b/src/node/replica-state-machine.js
+index 02978e6f7b9bf0ca2aff3d7adadf17a071e3d470..5e1e18888ca59a1e23061060f93039fcbf4a1264 100644
+--- a/src/node/replica-state-machine.js
++++ b/src/node/replica-state-machine.js
+@@ -399,6 +399,20 @@ class ReplicaStateMachine extends EventEmitter {
+     return this._checkTimeouts();
+   }
+ 
++  /**
++   * CL-021 deferred durable services-row retry, on demand: the same
++   * reconcile pass the timeout-checker tick runs, for an owner that has
++   * evidence the row is still missing remotely (a partition learner whose
++   * promotion proof was refused learner_address_unresolvable). The pass's
++   * own bounds apply unchanged — per-row backoff, the in-flight guard and
++   * the transition-persist race guard — so a kick can never write more
++   * often than the tick would.
++   * @return {Promise<number>} Rows durably converged this pass.
++   */
++  reconcileLocalOnlyServiceRowsNow() {
++    return this._reconcileLocalOnlyServiceRows();
++  }
++
+   /**
+    * CL-016: mark a service row as seeded locally (durable write deferred);
+    * lifecycle persistence will UPSERT instead of UPDATE for it until a
+diff --git a/src/partition/partition-service-assembly.js b/src/partition/partition-service-assembly.js
+index 0212fcda03fa185c461a9555250266e539d93190..fdd9f4641c4b8be642510bc47fb8a85e9d143c21 100644
+--- a/src/partition/partition-service-assembly.js
++++ b/src/partition/partition-service-assembly.js
+@@ -2,6 +2,7 @@ import {createPartitionServiceRebalancerMethods} from './partition-service-rebal
+ import {createPartitionServiceMetadataDeliveryMethods} from './partition-service-metadata-delivery-methods.js';
+ import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
+ import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
++import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
+ import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
+ import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
+ import {createPartitionServiceMergeReplicationMethods} from './partition-service-merge-replication-methods.js';
+@@ -17,6 +18,7 @@ Object.assign(
+   createPartitionServiceMetadataDeliveryMethods(),
+   createPartitionServiceLearnerPromotionMethods(),
+   createPartitionServiceLearnerPromotionProofMethods(),
++  createPartitionServiceLearnerPromotionWakeMethods(),
+   createPartitionServiceDurabilityFitnessMethods(),
+   createPartitionServiceLifecycleMethods(),
+   createPartitionServiceMergeReplicationMethods(),
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index c25fc40e133e06480c3ff7c7f61fd0fe271fbca6..e94db11d1fef790076c21585d9fffe7e03b8ebe0 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -31,6 +31,12 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
+   // learner-promotion-progress-proof); elapsed time is ONLY the retry
+   // cadence below for re-requesting the proof, never a promotion condition.
+   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
++  // An event wake (own services row visible, published epoch changed)
++  // re-arms the single-flight check now; the cadence above stays the floor.
++  LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
++  // Proof delivery bound: min(MESSAGE_TIMEOUT_MS, this multiple of the retry
++  // cadence) so one timed-out round trip never stacks beyond the cadence.
++  LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE: NUM.TWO,
+   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
+   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
+   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+@@ -39,8 +45,19 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
+ const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
+   INITIAL_DELAY: 'initial_delay',
+   DEFERRED_RECHECK: 'deferred_recheck',
++  SERVICES_ROW_VISIBLE: 'services_row_visible',
++  PUBLISHED_EPOCH_CHANGED: 'published_epoch_changed',
+ });
+ 
++// Schedule reasons that re-arm the proof check immediately (event wakes).
++const PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS = Object.freeze(
++  new Set([
++    PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.SERVICES_ROW_VISIBLE,
++    PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++      .PUBLISHED_EPOCH_CHANGED,
++  ]),
++);
++
+ const PARTITION_SERVICE_SQL = Object.freeze({
+   CREATE_RAFT_STATE_TABLE: `
+       CREATE TABLE IF NOT EXISTS _raft_state (
+@@ -295,6 +312,14 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+     'Learner promotion proof granted by leader',
+   LEARNER_PROMOTION_PROGRESS_PROBE_FAILED:
+     'Learner promotion progress probe failed',
++  LEARNER_PROMOTION_PROOF_REQUEST_REFUSED:
++    'Learner promotion proof request refused by leader',
++  LEARNER_PROMOTION_PROOF_RESPONSE_REFUSED:
++    'Learner promotion proof response refused by learner',
++  LEARNER_PROMOTION_WAKE_COALESCED:
++    'Learner promotion wake coalesced into the in-flight check',
++  LEARNER_PROMOTION_ROW_REASSERTED:
++    'Learner promotion re-asserted the durable services row',
+   LEADER_DURABILITY_UNFIT:
+     'Replica local durability is unfit for leadership: writes are not ' +
+     'reaching durable storage (stuck transaction or commit/durable ' +
+@@ -629,6 +654,7 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
+ 
+ export {
+   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
+   PARTITION_SERVICE_CDC,
+   PARTITION_SERVICE_ADDRESS,
+   PARTITION_SERVICE_COLUMN,
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 7cf74ceaa0b7b80fd01bb5ec9ea98abd4888e7e5..5af3a610ad9bc72d2140eb9e2f981ded7dc7fb2f 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -1,4 +1,5 @@
+ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
+ import {trackLeaderActivation} from '../diagnostics/raft-churn-sync-sections.js';
+ import {
+   createLeaderNodeMutationHelper,
+@@ -267,6 +268,7 @@ class PartitionServiceCoreBase extends EventEmitter {
+       options.learnerCatchUpCheckIntervalMs ||
+       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
+     this.learnerPromotionTimer = null;
++    this.learnerPromotionWake = createLearnerPromotionWakeState();
+     this.splitReplication = null;
+     this.splitReplicationRun = null;
+     this.mergeReplication = null;
+@@ -504,14 +506,12 @@ class PartitionServiceCoreBase extends EventEmitter {
+         null;
+     this.driveRebalancerLeadershipSink();
+   }
+-
+   /** @private */
+   driveRebalancerLeadershipSink() {
+     if (this.rebalancerLeadershipSink) {
+       this.rebalancerLeadershipSink.setLeader(this.resolveRebalancerLeadership());
+     }
+   }
+-
+   updateRebalancerLeadership() {
+     if (!this.rebalancer) {
+       this.maybeInitializeRebalancer();
+@@ -765,6 +765,7 @@ class PartitionServiceCoreBase extends EventEmitter {
+    * @private
+    */
+   handleSystemTableCacheChange(tableName, operation, record) {
++    this.observeLearnerPromotionWakeSource(tableName, operation, record);
+     if (tableName === TABLES.PARTITIONS && record) {
+       this.handleCanonicalLeaderRowCacheChange(record);
+       return;
+diff --git a/src/partition/partition-service-learner-promotion-methods.js b/src/partition/partition-service-learner-promotion-methods.js
+index 1ae2332991bde597364d7bb4a949350fb977ea1c..499304917010fdbd672531fe40d04876082dbe55 100644
+--- a/src/partition/partition-service-learner-promotion-methods.js
++++ b/src/partition/partition-service-learner-promotion-methods.js
+@@ -17,6 +17,7 @@ const {
+   PARTITION_REPLICA_COUNT_FIELD,
+   PARTITION_SERVICE_DEFAULT,
+   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
+   PARTITION_SERVICE_LITERAL,
+   PARTITION_SERVICE_LOG_MSG,
+   PARTITION_SERVICE_TYPE,
+@@ -40,7 +41,10 @@ class PartitionServiceLearnerPromotionMethods {
+    * Schedule the next learner promotion check. The check is progress-proven
+    * by the current leader; this cadence is ONLY the retry/backoff input —
+    * elapsed time never satisfies promotion (quest
+-   * learner-promotion-progress-proof).
++   * learner-promotion-progress-proof). A wake reason (own services row
++   * visible, published epoch changed) arms the same single timer now; the
++   * cadence stays the floor and the fallback (quest
++   * learner-promotion-proof-channel-wake).
+    * @private
+    */
+   scheduleLearnerPromotion(
+@@ -59,7 +63,10 @@ class PartitionServiceLearnerPromotionMethods {
+       );
+       return;
+     }
+-    const delayMs = this.learnerCatchUpCheckIntervalMs;
++    const delayMs =
++      PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS.has(scheduleReason) ?
++        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS :
++        this.learnerCatchUpCheckIntervalMs;
+     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
+       replicaId: this.replicaId,
+       partitionId: this.partitionId,
+@@ -441,6 +448,21 @@ class PartitionServiceLearnerPromotionMethods {
+    */
+   async checkLearnerPromotion() {
+     this.learnerPromotionTimer = null;
++    this.learnerPromotionWake.checkInFlight = true;
++    try {
++      await this.runLearnerPromotionCheck();
++    } finally {
++      // Single-flight: wakes that arrived during this check drain into at
++      // most one immediate re-check now that it has completed.
++      this.drainLearnerPromotionWake();
++    }
++  }
++  /**
++   * The check body (gates in order); every deferral reschedules.
++   * @return {Promise<void>}
++   * @private
++   */
++  async runLearnerPromotionCheck() {
+     if (!isCatchupLearnerRaftRole(this.role)) {
+       return;
+     }
+@@ -565,6 +587,8 @@ class PartitionServiceLearnerPromotionMethods {
+     const requestedLeaderId = this.leaderId;
+     const requestedMembershipEpoch =
+       this.resolveLearnerPromotionMembershipEpoch();
++    this.learnerPromotionWake.requestedMembershipEpoch =
++      requestedMembershipEpoch;
+     const proof = await this.requestLearnerPromotionProofFromLeader({
+       leaderReplicaId: requestedLeaderId,
+       membershipEpoch: requestedMembershipEpoch,
+@@ -585,6 +609,7 @@ class PartitionServiceLearnerPromotionMethods {
+         partitionId: this.partitionId,
+         reason: proofValidation.reason,
+         proofReason: proofValidation.proofReason,
++        proofCause: proofValidation.proofCause,
+         leaderReplicaId: requestedLeaderId,
+         membershipEpoch: requestedMembershipEpoch,
+       });
+diff --git a/src/partition/partition-service-learner-promotion-proof-methods.js b/src/partition/partition-service-learner-promotion-proof-methods.js
+index ed754155d00758f4717c5bf8e45e8aa38b856be5..d79cbc7ae9de5bdc05ae58c37d1ed1031f07df8f 100644
+--- a/src/partition/partition-service-learner-promotion-proof-methods.js
++++ b/src/partition/partition-service-learner-promotion-proof-methods.js
+@@ -2,15 +2,18 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+ import {readFollowerMatchIndex} from '../raft/liferaft.js';
+ import {
+   LEARNER_PROMOTION_PROOF_REASON,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+   evaluateLearnerPromotionProof,
+   refuseLearnerPromotionProof,
+ } from '../raft/learner-promotion-progress.js';
+ import {
+   buildSnapshotCatchupIdentityFromCache,
+ } from '../raft/snapshot-catchup.js';
++import {TRANSPORT_DEFAULT} from '../constants/transport.js';
+ 
+ const {
+   LifeRaft,
++  PARTITION_SERVICE_DEFAULT,
+   PARTITION_SERVICE_LITERAL,
+   PARTITION_SERVICE_LOG_MSG,
+   PARTITION_SERVICE_MESSAGE_TYPE,
+@@ -53,7 +56,9 @@ class PartitionServiceLearnerPromotionProofMethods {
+    * the facts (live leadership, current term, committed index as the safe
+    * promotion index, leader-observed learner match index, both membership
+    * epochs) and answers with the raft layer's typed proof outcome. Every
+-   * refusal is typed; a malformed request refuses REQUEST_INVALID.
++   * refusal is typed; a malformed request refuses REQUEST_INVALID with
++   * cause request_shape, an unresolvable learner address (its services row
++   * not yet in this cache) with cause learner_address_unresolvable.
+    * @param {Object} payload request
+    *   ({partitionId, replicaId, membershipEpoch})
+    * @return {Object} {acknowledged, partitionId, learnerReplicaId, proof}
+@@ -72,23 +77,21 @@ class PartitionServiceLearnerPromotionProofMethods {
+       payload?.partitionId !== this.partitionId ||
+       learnerReplicaId.length === 0
+     ) {
+-      return {
+-        ...requestShape,
+-        proof: refuseLearnerPromotionProof(
+-          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+-        ),
+-      };
++      return this.refuseLearnerPromotionProofRequest(
++        requestShape,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
++        {requestedPartitionId: payload?.partitionId},
++      );
+     }
+     let learnerAddress = null;
+     try {
+       learnerAddress = this.buildPeerAddress(learnerReplicaId);
+-    } catch (_addressError) {
+-      return {
+-        ...requestShape,
+-        proof: refuseLearnerPromotionProof(
+-          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+-        ),
+-      };
++    } catch (addressError) {
++      return this.refuseLearnerPromotionProofRequest(
++        requestShape,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
++        {error: addressError.message},
++      );
+     }
+     const matchObservation = readFollowerMatchIndex(
+       this.raft,
+@@ -115,6 +118,35 @@ class PartitionServiceLearnerPromotionProofMethods {
+     }
+     return {...requestShape, proof};
+   }
++  /**
++   * Leader-side typed REQUEST_INVALID refusal, logged at info so the two
++   * mints of one reason are distinguishable in a node log.
++   * @param {Object} requestShape response envelope without the proof
++   * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
++   * @param {Object} detail extra log fields
++   * @return {Object} response envelope with the refused proof
++   * @private
++   */
++  refuseLearnerPromotionProofRequest(requestShape, cause, detail) {
++    this.logger.info(
++      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_REQUEST_REFUSED,
++      {
++        partitionId: this.partitionId,
++        replicaId: this.replicaId,
++        learnerReplicaId: requestShape.learnerReplicaId,
++        reason: LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        cause,
++        ...detail,
++      },
++    );
++    return {
++      ...requestShape,
++      proof: refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        cause,
++      ),
++    };
++  }
+   /**
+    * Send the leader's last log entry to one learner so progress evidence
+    * (an APPEND_ACK, or an append-fail engaging catch-up) materializes.
+@@ -156,8 +188,12 @@ class PartitionServiceLearnerPromotionProofMethods {
+   }
+   /**
+    * Learner-side proof request to the discovered leader. Any transport or
+-   * response-shape failure returns a typed refused proof — fail-closed; the
+-   * caller reschedules on its retry cadence.
++   * response-shape failure returns a typed refused proof with a typed
++   * cause — fail-closed; the caller reschedules on its retry cadence. The
++   * delivery carries a bounded timeout so one stalled round trip never
++   * stacks beyond the cadence. A leader refusal whose cause is
++   * learner_address_unresolvable re-asserts this learner's durable
++   * services row (quest learner-promotion-proof-channel-wake).
+    * @param {Object} promotionObservation
+    * @param {string} promotionObservation.leaderReplicaId discovered leader
+    * @param {number} promotionObservation.membershipEpoch epoch observed at
+@@ -168,40 +204,93 @@ class PartitionServiceLearnerPromotionProofMethods {
+   async requestLearnerPromotionProofFromLeader(promotionObservation) {
+     const leaderAddress = this.resolveLeaderAddressForPromotionProof();
+     if (!leaderAddress || !this.transport) {
+-      return refuseLearnerPromotionProof(
++      return this.refuseLearnerPromotionProofResponse(
+         LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEADER_UNREACHABLE,
++        promotionObservation,
++        {},
+       );
+     }
+     let response = null;
+     try {
+-      response = await this.transport.deliver(leaderAddress, {
+-        type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
+-        partitionId: this.partitionId,
+-        replicaId: this.replicaId,
+-        membershipEpoch: promotionObservation.membershipEpoch,
+-      });
+-    } catch (deliverError) {
+-      this.logger.debug(
+-        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED,
++      response = await this.transport.deliver(
++        leaderAddress,
+         {
++          type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
+           partitionId: this.partitionId,
+           replicaId: this.replicaId,
+-          leaderReplicaId: promotionObservation.leaderReplicaId,
+-          reason: LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
+-          error: deliverError.message,
++          membershipEpoch: promotionObservation.membershipEpoch,
+         },
++        {timeoutMs: this.resolveLearnerPromotionProofDeliveryTimeoutMs()},
+       );
+-      return refuseLearnerPromotionProof(
++    } catch (deliverError) {
++      return this.refuseLearnerPromotionProofResponse(
+         LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
++        promotionObservation,
++        {error: deliverError.message},
+       );
+     }
+     if (!this.learnerPromotionProofResponseBindsThisLearner(response)) {
+-      return refuseLearnerPromotionProof(
++      return this.refuseLearnerPromotionProofResponse(
+         LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
++        promotionObservation,
++        {
++          responsePartitionId: response?.partitionId,
++          responseLearnerReplicaId: response?.learnerReplicaId,
++        },
+       );
+     }
++    this.reactToLearnerPromotionRefusalCause(response.proof);
+     return response.proof;
+   }
++  /**
++   * Learner-side typed channel refusal (no leader address, delivery
++   * failure or timeout, response bound to another learner), logged at info.
++   * @param {string} reason LEARNER_PROMOTION_PROOF_REASON member
++   * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
++   * @param {Object} promotionObservation request-time observation
++   * @param {Object} detail extra log fields
++   * @return {Object} frozen refused proof
++   * @private
++   */
++  refuseLearnerPromotionProofResponse(
++    reason,
++    cause,
++    promotionObservation,
++    detail,
++  ) {
++    this.logger.info(
++      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_RESPONSE_REFUSED,
++      {
++        partitionId: this.partitionId,
++        replicaId: this.replicaId,
++        learnerReplicaId: this.replicaId,
++        leaderReplicaId: promotionObservation.leaderReplicaId,
++        membershipEpoch: promotionObservation.membershipEpoch,
++        reason,
++        cause,
++        ...detail,
++      },
++    );
++    return refuseLearnerPromotionProof(reason, cause);
++  }
++  /**
++   * Proof delivery bound: never larger than the transport's
++   * MESSAGE_TIMEOUT_MS, and at most twice the retry cadence so a timed-out
++   * round trip plus the cadence stays within three intervals instead of
++   * stacking the 5 s router default on the 1 s timer.
++   * @return {number} milliseconds
++   * @private
++   */
++  resolveLearnerPromotionProofDeliveryTimeoutMs() {
++    return Math.min(
++      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
++      this.learnerCatchUpCheckIntervalMs *
++        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE,
++    );
++  }
+   /**
+    * Resolve the discovered leader's unified address, or null when it cannot
+    * be resolved yet (fail-closed to a typed transport refusal upstream).
+diff --git a/src/partition/partition-service-learner-promotion-wake-methods.js b/src/partition/partition-service-learner-promotion-wake-methods.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f8a4478a8eaf85b515f8e8cad3080332ad9c50b
+--- /dev/null
++++ b/src/partition/partition-service-learner-promotion-wake-methods.js
+@@ -0,0 +1,189 @@
++import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
++import {
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
++} from '../raft/learner-promotion-progress.js';
++
++const {
++  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++  PARTITION_SERVICE_LOG_MSG,
++  PARTITION_SERVICE_TYPE,
++  SERVICE_TYPE,
++  TABLES,
++} = PARTITION_SERVICE_SHARED;
++
++// The membership epoch before any proof was requested: the contract's
++// bootstrap epoch (0), so the first published epoch the cache hydrates is
++// itself a change worth one immediate re-request.
++const LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH = 0;
++const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
++
++/**
++ * Per-service learner-promotion wake bookkeeping, created by the service
++ * constructor. A wake that arrives while a check is in flight is coalesced
++ * (pendingReasons) and drained into one immediate re-check when the
++ * in-flight check completes — the proof channel stays single-flight.
++ * @return {Object} mutable wake state
++ */
++function createLearnerPromotionWakeState() {
++  return {
++    checkInFlight: false,
++    pendingReasons: new Set(),
++    requestedMembershipEpoch: LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH,
++  };
++}
++
++/**
++ * Event wakes for the learner-promotion proof channel (quest
++ * learner-promotion-proof-channel-wake). The promotion owner stays the sole
++ * owner of when a proof is requested: these methods only re-arm the
++ * existing single-flight schedule immediately when an event makes a new
++ * answer likely — the learner's own services row becoming visible in its
++ * system-table cache (the leader can now resolve its address) or the
++ * latest PUBLISHED membership epoch changing (the proof binds to it). The
++ * retry cadence remains the floor and the fallback; no promotion decision
++ * lives here.
++ */
++class PartitionServiceLearnerPromotionWakeMethods {
++  /**
++   * Cache-change hook (every table, every change): route the two wake
++   * sources; cheap early exits for everything else.
++   * @param {string} tableName
++   * @param {string} operation
++   * @param {Object} record
++   * @private
++   */
++  observeLearnerPromotionWakeSource(tableName, operation, record) {
++    if (!isCatchupLearnerRaftRole(this.role) || !record) {
++      return;
++    }
++    if (tableName === TABLES.SERVICES) {
++      if (
++        record.service_id === this.replicaId &&
++        record.partition_id === this.partitionId &&
++        record.service_type === SERVICE_TYPE.PARTITION
++      ) {
++        this.wakeLearnerPromotion(
++          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++            .SERVICES_ROW_VISIBLE,
++        );
++      }
++      return;
++    }
++    if (tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS) {
++      return;
++    }
++    const membershipEpoch = this.resolveLearnerPromotionMembershipEpoch();
++    if (
++      membershipEpoch === this.learnerPromotionWake.requestedMembershipEpoch
++    ) {
++      return;
++    }
++    this.wakeLearnerPromotion(
++      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++        .PUBLISHED_EPOCH_CHANGED,
++    );
++  }
++  /**
++   * Re-arm the proof check now. While a check is in flight the wake is
++   * coalesced and drained by drainLearnerPromotionWake once it completes.
++   * @param {string} wakeReason PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++   *   wake member
++   * @private
++   */
++  wakeLearnerPromotion(wakeReason) {
++    const wake = this.learnerPromotionWake;
++    if (wake.checkInFlight) {
++      wake.pendingReasons.add(wakeReason);
++      this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_WAKE_COALESCED, {
++        replicaId: this.replicaId,
++        partitionId: this.partitionId,
++        wakeReason,
++      });
++      return;
++    }
++    if (this.learnerPromotionTimer) {
++      clearTimeout(this.learnerPromotionTimer);
++      this.learnerPromotionTimer = null;
++    }
++    this.scheduleLearnerPromotion(wakeReason);
++  }
++  /**
++   * After a check completes: one immediate re-check for the wakes that
++   * arrived during it (single-flight), none when nothing arrived or the
++   * replica is no longer a learner.
++   * @private
++   */
++  drainLearnerPromotionWake() {
++    const wake = this.learnerPromotionWake;
++    wake.checkInFlight = false;
++    const [pendingReason] = wake.pendingReasons;
++    wake.pendingReasons.clear();
++    if (pendingReason && isCatchupLearnerRaftRole(this.role)) {
++      this.wakeLearnerPromotion(pendingReason);
++    }
++  }
++  /**
++   * React to the typed cause of a channel-level refusal: when the leader
++   * could not resolve this learner's address, its services row has not
++   * landed durably yet — kick the replica state machine's CL-021
++   * deferred-row retry now instead of waiting for its tick. The retry's
++   * own bounds (per-row backoff, in-flight guard) apply inside; nothing is
++   * bypassed. Absent a state machine (bootstrap cohorts, tests) there is
++   * no deferred row to re-assert.
++   * @param {Object} proof refused proof
++   * @private
++   */
++  reactToLearnerPromotionRefusalCause(proof) {
++    if (
++      proof?.cause !==
++      LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE
++    ) {
++      return;
++    }
++    const stateMachine = this.replicaStateMachine;
++    if (
++      typeof stateMachine?.reconcileLocalOnlyServiceRowsNow !==
++      PARTITION_SERVICE_TYPE.FUNCTION
++    ) {
++      return;
++    }
++    this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ROW_REASSERTED, {
++      replicaId: this.replicaId,
++      partitionId: this.partitionId,
++      learnerReplicaId: this.replicaId,
++      cause: proof.cause,
++    });
++    Promise.resolve(stateMachine.reconcileLocalOnlyServiceRowsNow()).catch(
++      (reassertError) => {
++        this.logger.debug(
++          PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ROW_REASSERTED,
++          {
++            replicaId: this.replicaId,
++            partitionId: this.partitionId,
++            error: reassertError.message,
++          },
++        );
++      },
++    );
++  }
++}
++
++function createPartitionServiceLearnerPromotionWakeMethods() {
++  const methods = {};
++  const prototypeNames = Object.getOwnPropertyNames(
++    PartitionServiceLearnerPromotionWakeMethods.prototype,
++  );
++  for (const name of prototypeNames) {
++    if (name !== PROTOTYPE_CONSTRUCTOR_NAME) {
++      methods[name] =
++        PartitionServiceLearnerPromotionWakeMethods.prototype[name];
++    }
++  }
++  return methods;
++}
++
++export {
++  createLearnerPromotionWakeState,
++  createPartitionServiceLearnerPromotionWakeMethods,
++};
+diff --git a/src/partition/partition-service-shared.js b/src/partition/partition-service-shared.js
+index 6b17fedfec5deb869ccd76ec747ce96c10e42271..3986154178d0f6ea30e36c0987f1c016fd23d44d 100644
+--- a/src/partition/partition-service-shared.js
++++ b/src/partition/partition-service-shared.js
+@@ -134,6 +134,7 @@ import {
+   PARTITION_SERVICE_EVENT,
+   PARTITION_SERVICE_INIT_STAGE,
+   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
+   PARTITION_SERVICE_LIFERAFT_TIMER,
+   PARTITION_SERVICE_MIGRATION_OPERATION,
+   PARTITION_SERVICE_LOG_MSG,
+@@ -291,6 +292,7 @@ export const PARTITION_SERVICE_SHARED = {
+   PARTITION_SERVICE_EVENT,
+   PARTITION_SERVICE_INIT_STAGE,
+   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
+   PARTITION_SERVICE_LIFERAFT_TIMER,
+   PARTITION_SERVICE_LITERAL,
+   PARTITION_SERVICE_LOG_MSG,
+diff --git a/src/raft/learner-promotion-progress.js b/src/raft/learner-promotion-progress.js
+index aace1092ab75989f4e4d22c84c57ad9e38ff3356..9c4f1a1020330f34cc0b818a838cf7fd501ad194 100644
+--- a/src/raft/learner-promotion-progress.js
++++ b/src/raft/learner-promotion-progress.js
+@@ -59,6 +59,20 @@ const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
+   PROOF_ACCEPTED: 'proof_accepted',
+ });
+ 
++// Typed cause carried by every channel-level refusal (quest
++// learner-promotion-proof-channel-wake): the leader's and the learner's
++// mints of one reason are distinguishable, so the learner can react to
++// the cause (re-assert its services row) instead of blind re-polling.
++const LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE = Object.freeze({
++  // REQUEST_INVALID
++  LEARNER_ADDRESS_UNRESOLVABLE: 'learner_address_unresolvable',
++  REQUEST_SHAPE: 'request_shape',
++  RESPONSE_BINDING_MISMATCH: 'response_binding_mismatch',
++  // TRANSPORT_FAILED
++  LEADER_UNREACHABLE: 'leader_unreachable',
++  DELIVERY_FAILED: 'delivery_failed',
++});
++
+ function isNonNegativeInteger(value) {
+   return Number.isInteger(value) && value >= PROGRESS_PROOF_NUMERIC_ZERO;
+ }
+@@ -82,13 +96,15 @@ function refusedProof(reason, facts = {}) {
+ 
+ /**
+  * Mint a typed refused proof outside the fact-evaluation table (malformed
+- * request, transport failure). Same frozen shape as an evaluated refusal so
+- * every consumer sees one proof grammar.
++ * request, transport failure). Same frozen shape as an evaluated refusal
++ * plus the typed channel cause, so every consumer sees one proof grammar
++ * and can tell WHICH side refused and why.
+  * @param {string} reason LEARNER_PROMOTION_PROOF_REASON member
++ * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
+  * @return {Object} frozen refused proof
+  */
+-function refuseLearnerPromotionProof(reason) {
+-  return refusedProof(reason);
++function refuseLearnerPromotionProof(reason, cause) {
++  return Object.freeze({...refusedProof(reason), cause});
+ }
+ 
+ /**
+@@ -159,6 +175,9 @@ function validationOutcome(accepted, reason, proof) {
+     proofReason: proof && typeof proof.reason === 'string' ?
+       proof.reason :
+       null,
++    proofCause: proof && typeof proof.cause === 'string' ?
++      proof.cause :
++      null,
+   });
+ }
+ 
+@@ -225,7 +244,7 @@ const PROOF_RESPONSE_VALIDATION_RULES = Object.freeze([
+  *   receipt
+  * @param {number} observation.localTerm learner's current raft term (0 when
+  *   unavailable)
+- * @return {Object} frozen {accepted, reason, proofReason}
++ * @return {Object} frozen {accepted, reason, proofReason, proofCause}
+  */
+ function validateLearnerPromotionProofResponse(observation = {}) {
+   const violatedRule = PROOF_RESPONSE_VALIDATION_RULES.find((rule) =>
+@@ -243,6 +262,7 @@ function validateLearnerPromotionProofResponse(observation = {}) {
+ export {
+   LEARNER_PROMOTION_PROOF_DECISION,
+   LEARNER_PROMOTION_PROOF_REASON,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+   evaluateLearnerPromotionProof,
+   refuseLearnerPromotionProof,
+   validateLearnerPromotionProofResponse,
+diff --git a/test/convergence/dt6-learner-promotion-fixture.js b/test/convergence/dt6-learner-promotion-fixture.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ac084b9d6df4275741cd01cc461a7bd18b58e49a
+--- /dev/null
++++ b/test/convergence/dt6-learner-promotion-fixture.js
+@@ -0,0 +1,344 @@
++/**
++ * Shared five-node learner-promotion fixture for the dt6 learner-promotion
++ * witnesses (quests learner-promotion-progress-proof and
++ * learner-promotion-proof-channel-wake): the REAL owners — live
++ * PartitionService leader + learner on a loopback transport with real
++ * liferaft replication, the real proof RPC over the application-message
++ * channel, and the real promotion gate chain.
++ *
++ * FIDELITY: in-process deterministic guard (loopback transport, single
++ * process). The three passive voters are authoritative service rows (the
++ * quorum-shape gates read the cache, not live sockets); the leader and the
++ * learner are fully live. Replication lag is injected by dropping
++ * leader->learner deliveries — a one-way partition of the replication path.
++ * Split caches model the seed and the target hydrating the control plane
++ * independently (the learner's own services row can be withheld from the
++ * leader cache to model the target's deferred status write).
++ */
++
++import {
++  createLoopbackTransport,
++} from '../partition/partition-service-test-support.js';
++import {
++  PartitionService,
++  RaftRole,
++  CDCOperation,
++} from '../../src/partition/partition-service.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {
++  SERVICE_TYPE,
++  SERVICE_STATUS,
++  TABLES,
++} from '../../src/constants/index.js';
++
++export const PARTITION_ID = 'progress-proof-p1';
++const TABLE_NAME = 'progress_proof_table';
++export const LEADER_REPLICA = 'replica-1';
++const LEADER_NODE = 'node-1';
++const LEADER_ADDRESS = `${LEADER_NODE}/partition/${LEADER_REPLICA}`;
++export const LEARNER_REPLICA = 'replica-5';
++export const LEARNER_NODE = 'node-5';
++export const LEARNER_ADDRESS = `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`;
++const PASSIVE_VOTERS = [
++  ['replica-2', 'node-2'],
++  ['replica-3', 'node-3'],
++  ['replica-4', 'node-4'],
++];
++const TARGET_REPLICA_COUNT = 5;
++export const COMMITTED_ENTRY_COUNT = 3;
++const RETRY_INTERVAL_MS = 25;
++const POLL_MS = 10;
++const NOOP_COMMAND_TYPE = 'progress-proof-noop';
++const PUBLISHED_STATUS = 'PUBLISHED';
++const LOG_LEVELS = ['info', 'warn', 'error', 'debug', 'trace', 'fatal'];
++const RAFT_HEARTBEAT_INTERVAL_MS = 20;
++const RAFT_ELECTION_TIMEOUT_MIN_MS = 150;
++const RAFT_ELECTION_TIMEOUT_MAX_MS = 300;
++const FIXTURE_LOG_LEVEL = 'error';
++
++export function configureFixtureRuntime() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  config.initialize({
++    node: {id: 'test-node'},
++    raft: {
++      heartbeatIntervalMs: RAFT_HEARTBEAT_INTERVAL_MS,
++      electionTimeoutMinMs: RAFT_ELECTION_TIMEOUT_MIN_MS,
++      electionTimeoutMaxMs: RAFT_ELECTION_TIMEOUT_MAX_MS,
++    },
++  });
++  const logger = LoggingService.getInstance();
++  logger.initialize({level: FIXTURE_LOG_LEVEL});
++}
++
++export function resetFixtureRuntime() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++}
++
++export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
++  return new Promise((resolve) => {
++    const startedAt = Date.now();
++    const poll = () => {
++      if (predicate()) {
++        resolve(true);
++        return;
++      }
++      if (Date.now() - startedAt >= timeoutMs) {
++        resolve(false);
++        return;
++      }
++      setTimeout(poll, pollMs);
++    };
++    poll();
++  });
++}
++
++function buildServiceRow(replicaId, nodeId, raftRole) {
++  return {
++    service_id: replicaId,
++    replica_id: replicaId,
++    partition_id: PARTITION_ID,
++    service_type: SERVICE_TYPE.PARTITION,
++    node_id: nodeId,
++    status: SERVICE_STATUS.ACTIVE,
++    raft_role: raftRole,
++  };
++}
++
++export function insertServiceRow(cache, replicaId, nodeId, raftRole) {
++  cache.applySystemTableChange(
++    TABLES.SERVICES,
++    CDCOperation.INSERT,
++    buildServiceRow(replicaId, nodeId, raftRole),
++  );
++}
++
++// The durable landing of a row the cache already holds locally (the
++// target's local-only seed row converging durably): an UPDATE merge, which
++// the cache notifies to its listeners like any other change.
++export function updateServiceRow(cache, replicaId, nodeId, raftRole) {
++  cache.applySystemTableChange(
++    TABLES.SERVICES,
++    CDCOperation.UPDATE,
++    buildServiceRow(replicaId, nodeId, raftRole),
++  );
++}
++
++// Seeded in two stages: the leader must initialize (and mint its committed
++// prefix) while its raft view is genuinely single-replica; joining the
++// passive voter rows earlier would make its own peer reconcile block the
++// single-replica commit quorum (the same order the proven stable-join
++// fixtures use).
++function seedBootstrapTopology(cache) {
++  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
++    partition_id: PARTITION_ID,
++    replica_count: TARGET_REPLICA_COUNT,
++  });
++  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
++}
++
++function seedRecoveryTopology(cache, options = {}) {
++  for (const [replicaId, nodeId] of PASSIVE_VOTERS) {
++    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
++  }
++  if (options.learnerRow !== false) {
++    insertServiceRow(cache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
++  }
++}
++
++export function insertPublishedEpochRow(cache, epoch) {
++  cache.applySystemTableChange(
++    TABLES.CONTROL_PLANE_PUBLICATIONS,
++    CDCOperation.INSERT,
++    {
++      publication_id: `publication-epoch-${epoch}`,
++      status: PUBLISHED_STATUS,
++      publication_epoch: epoch,
++    },
++  );
++}
++
++// One-way replication partition: while engaged, every leader->learner
++// delivery is dropped (append fan-out, catch-up batches, probes). The
++// learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
++function createPartitionableTransport(inner) {
++  const state = {dropToLearner: false};
++  return {
++    state,
++    register: (address, handler) => inner.register(address, handler),
++    unregister: (address) => inner.unregister(address),
++    deliver: async (address, payload, options) => {
++      if (state.dropToLearner && address === LEARNER_ADDRESS) {
++        throw new Error('injected replication partition');
++      }
++      return inner.deliver(address, payload, options);
++    },
++  };
++}
++
++async function createLeader(transport, cache) {
++  const leader = new PartitionService({
++    partitionId: PARTITION_ID,
++    tableId: TABLE_NAME,
++    tableName: TABLE_NAME,
++    replicaId: LEADER_REPLICA,
++    replicaIds: [LEADER_REPLICA],
++    nodeId: LEADER_NODE,
++    transport,
++    systemTableCache: cache,
++    dbPath: ':memory:',
++  });
++  await leader.initialize();
++  for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
++    await leader.raftProvider.propose(leader.raft, {
++      type: NOOP_COMMAND_TYPE,
++      seq,
++    });
++  }
++  // Base liferaft only commits on follower acks; a single-replica leader is
++  // its own quorum, so commit the appended prefix explicitly (how the
++  // prefix became committed is a precondition here, not the mechanism under
++  // test — the proof consumes committedIndex however it advanced).
++  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
++    COMMITTED_ENTRY_COUNT,
++    leader.raft.term,
++  );
++  await leader.raft.commitEntries(uncommittedEntries);
++  return leader;
++}
++
++async function createLearner(transport, cache, options = {}) {
++  const learner = new PartitionService({
++    partitionId: PARTITION_ID,
++    tableId: TABLE_NAME,
++    tableName: TABLE_NAME,
++    replicaId: LEARNER_REPLICA,
++    replicaIds: [LEADER_REPLICA, LEARNER_REPLICA],
++    peerAddresses: [LEADER_ADDRESS, LEARNER_ADDRESS],
++    nodeId: LEARNER_NODE,
++    transport,
++    systemTableCache: cache,
++    dbPath: ':memory:',
++    isJoiningExistingGroup: true,
++    leaderAddress: LEADER_ADDRESS,
++    learnerCatchUpCheckIntervalMs:
++      options.retryIntervalMs || RETRY_INTERVAL_MS,
++    replicaStateMachine: options.replicaStateMachine,
++  });
++  await learner.initialize();
++  return learner;
++}
++
++// Every log line the service emits, at every level, in emission order —
++// the witnesses assert on typed reasons/causes and on the level they are
++// logged at. Delegates to the real logger so nothing is silenced.
++export function recordServiceLog(service) {
++  const entries = [];
++  const baseLogger = service.logger;
++  const recorder = {};
++  for (const level of LOG_LEVELS) {
++    recorder[level] = (message, payload) => {
++      entries.push({level, message, payload, atMs: Date.now()});
++      baseLogger[level](message, payload);
++    };
++  }
++  service.logger = recorder;
++  return entries;
++}
++
++function recordPromotionDeferrals(learner) {
++  const deferrals = [];
++  const baseLogger = learner.logger;
++  learner.logger = {
++    info: (message, payload) => {
++      if (payload && payload.replicaId === LEARNER_REPLICA &&
++          typeof payload.reason === 'string') {
++        deferrals.push({
++          reason: payload.reason,
++          proofReason: payload.proofReason,
++          proofCause: payload.proofCause,
++        });
++      }
++      baseLogger.info(message, payload);
++    },
++    warn: (...args) => baseLogger.warn(...args),
++    error: (...args) => baseLogger.error(...args),
++    debug: (...args) => baseLogger.debug(...args),
++    trace: (...args) => baseLogger.trace(...args),
++    fatal: (...args) => baseLogger.fatal(...args),
++  };
++  return deferrals;
++}
++
++/**
++ * @param {Object} options
++ * @param {boolean} [options.splitCaches] leader and learner hydrate
++ *   separate caches
++ * @param {boolean} [options.startPartitioned] leader->learner replication
++ *   dropped from the start
++ * @param {boolean} [options.learnerRow] seed the learner's services row
++ *   (default true)
++ * @param {boolean} [options.leaderLearnerRow] seed the learner's row in the
++ *   LEADER cache (default = learnerRow; false models the target's deferred
++ *   status write — requires splitCaches)
++ * @param {number} [options.publishedEpoch] seed one PUBLISHED publication
++ *   row at this epoch in every cache before the learner starts
++ * @param {number} [options.retryIntervalMs] learner proof retry cadence
++ * @param {Function} [options.wrapLearnerTransport] transport decorator for
++ *   the learner side (proof RPC observation / injected stalls)
++ * @param {Object} [options.replicaStateMachine] learner-side replica state
++ *   machine (durable services-row owner)
++ * @return {Promise<Object>} fixture
++ */
++export async function createFiveNodeFixture(options = {}) {
++  const loopback = createLoopbackTransport();
++  const leaderTransport = createPartitionableTransport(loopback);
++  const leaderCache = new SystemTableCache();
++  const learnerCache = options.splitCaches ?
++    new SystemTableCache() :
++    leaderCache;
++  seedBootstrapTopology(leaderCache);
++  if (options.splitCaches) {
++    seedBootstrapTopology(learnerCache);
++  }
++  if (Number.isInteger(options.publishedEpoch)) {
++    insertPublishedEpochRow(leaderCache, options.publishedEpoch);
++    if (options.splitCaches) {
++      insertPublishedEpochRow(learnerCache, options.publishedEpoch);
++    }
++  }
++  leaderTransport.state.dropToLearner = options.startPartitioned === true;
++  const leader = await createLeader(leaderTransport, leaderCache);
++  seedRecoveryTopology(leaderCache, {
++    learnerRow: options.leaderLearnerRow ?? options.learnerRow,
++  });
++  if (options.splitCaches) {
++    seedRecoveryTopology(learnerCache, options);
++  }
++  const learnerTransport =
++    typeof options.wrapLearnerTransport === 'function' ?
++      options.wrapLearnerTransport(loopback) :
++      loopback;
++  const learner = await createLearner(learnerTransport, learnerCache, {
++    retryIntervalMs: options.retryIntervalMs,
++    replicaStateMachine: options.replicaStateMachine,
++  });
++  const deferrals = recordPromotionDeferrals(learner);
++  return {
++    leader,
++    learner,
++    leaderCache,
++    learnerCache,
++    leaderTransport,
++    learnerTransport,
++    deferrals,
++    async shutdown() {
++      await learner.shutdown();
++      await leader.shutdown();
++    },
++  };
++}
+diff --git a/test/convergence/dt6-learner-promotion-progress-proof.test.js b/test/convergence/dt6-learner-promotion-progress-proof.test.js
+index b4aedcc8a123feb8aa658ff629c3176ace3d3510..c3d8917240cc6665d0d54b4c13b07254c9f056b8 100644
+--- a/test/convergence/dt6-learner-promotion-progress-proof.test.js
++++ b/test/convergence/dt6-learner-promotion-progress-proof.test.js
+@@ -30,22 +30,7 @@
+  */
+ 
+ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+-import {
+-  createLoopbackTransport,
+-} from '../partition/partition-service-test-support.js';
+-import {
+-  PartitionService,
+-  RaftRole,
+-  CDCOperation,
+-} from '../../src/partition/partition-service.js';
+-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+-import {LoggingService} from '../../src/logging/logging-service.js';
+-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+-import {
+-  SERVICE_TYPE,
+-  SERVICE_STATUS,
+-  TABLES,
+-} from '../../src/constants/index.js';
++import {RaftRole} from '../../src/partition/partition-service.js';
+ import {
+   LEARNER_PROMOTION_PROOF_DECISION,
+   LEARNER_PROMOTION_PROOF_REASON,
+@@ -54,239 +39,29 @@ import {
+   FOLLOWER_MATCH_INDEX_STATE,
+   readFollowerMatchIndex,
+ } from '../../src/raft/liferaft.js';
++import {
++  COMMITTED_ENTRY_COUNT,
++  LEARNER_ADDRESS,
++  configureFixtureRuntime,
++  createFiveNodeFixture,
++  insertPublishedEpochRow,
++  insertServiceRow,
++  resetFixtureRuntime,
++  waitFor,
++} from './dt6-learner-promotion-fixture.js';
+ 
+-const PARTITION_ID = 'progress-proof-p1';
+-const TABLE_NAME = 'progress_proof_table';
+-const LEADER_REPLICA = 'replica-1';
+-const LEADER_NODE = 'node-1';
+-const LEADER_ADDRESS = `${LEADER_NODE}/partition/${LEADER_REPLICA}`;
+-const LEARNER_REPLICA = 'replica-5';
+-const LEARNER_NODE = 'node-5';
+-const LEARNER_ADDRESS = `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`;
+-const PASSIVE_VOTERS = [
+-  ['replica-2', 'node-2'],
+-  ['replica-3', 'node-3'],
+-  ['replica-4', 'node-4'],
+-];
+-const TARGET_REPLICA_COUNT = 5;
+-const COMMITTED_ENTRY_COUNT = 3;
+-const RETRY_INTERVAL_MS = 25;
+ const LAG_OBSERVATION_MS = 300;
+ const PROMOTION_BUDGET_MS = 5000;
+-const POLL_MS = 10;
+-const NOOP_COMMAND_TYPE = 'progress-proof-noop';
+ const PUBLICATION_EPOCH_ONE = 1;
+ 
+ beforeEach(() => {
+-  ConfigurationManager.resetInstance();
+-  LoggingService.resetInstance();
+-  const config = ConfigurationManager.getInstance();
+-  config.initialize({
+-    node: {id: 'test-node'},
+-    raft: {
+-      heartbeatIntervalMs: 20,
+-      electionTimeoutMinMs: 150,
+-      electionTimeoutMaxMs: 300,
+-    },
+-  });
+-  const logger = LoggingService.getInstance();
+-  logger.initialize({level: 'error'});
++  configureFixtureRuntime();
+ });
+ 
+ afterEach(() => {
+-  ConfigurationManager.resetInstance();
+-  LoggingService.resetInstance();
++  resetFixtureRuntime();
+ });
+ 
+-function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
+-  return new Promise((resolve) => {
+-    const startedAt = Date.now();
+-    const poll = () => {
+-      if (predicate()) {
+-        resolve(true);
+-        return;
+-      }
+-      if (Date.now() - startedAt >= timeoutMs) {
+-        resolve(false);
+-        return;
+-      }
+-      setTimeout(poll, pollMs);
+-    };
+-    poll();
+-  });
+-}
+-
+-function insertServiceRow(cache, replicaId, nodeId, raftRole) {
+-  cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+-    service_id: replicaId,
+-    replica_id: replicaId,
+-    partition_id: PARTITION_ID,
+-    service_type: SERVICE_TYPE.PARTITION,
+-    node_id: nodeId,
+-    status: SERVICE_STATUS.ACTIVE,
+-    raft_role: raftRole,
+-  });
+-}
+-
+-// Seeded in two stages: the leader must initialize (and mint its committed
+-// prefix) while its raft view is genuinely single-replica; joining the
+-// passive voter rows earlier would make its own peer reconcile block the
+-// single-replica commit quorum (the same order the proven stable-join
+-// fixtures use).
+-function seedBootstrapTopology(cache) {
+-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+-    partition_id: PARTITION_ID,
+-    replica_count: TARGET_REPLICA_COUNT,
+-  });
+-  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
+-}
+-
+-function seedRecoveryTopology(cache, options = {}) {
+-  for (const [replicaId, nodeId] of PASSIVE_VOTERS) {
+-    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
+-  }
+-  if (options.learnerRow !== false) {
+-    insertServiceRow(cache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
+-  }
+-}
+-
+-function insertPublishedEpochRow(cache, epoch) {
+-  cache.applySystemTableChange(
+-    TABLES.CONTROL_PLANE_PUBLICATIONS,
+-    CDCOperation.INSERT,
+-    {
+-      publication_id: `publication-epoch-${epoch}`,
+-      status: 'PUBLISHED',
+-      publication_epoch: epoch,
+-    },
+-  );
+-}
+-
+-// One-way replication partition: while engaged, every leader->learner
+-// delivery is dropped (append fan-out, catch-up batches, probes). The
+-// learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
+-function createPartitionableTransport(inner) {
+-  const state = {dropToLearner: false};
+-  return {
+-    state,
+-    register: (address, handler) => inner.register(address, handler),
+-    unregister: (address) => inner.unregister(address),
+-    deliver: async (address, payload, options) => {
+-      if (state.dropToLearner && address === LEARNER_ADDRESS) {
+-        throw new Error('injected replication partition');
+-      }
+-      return inner.deliver(address, payload, options);
+-    },
+-  };
+-}
+-
+-async function createLeader(transport, cache) {
+-  const leader = new PartitionService({
+-    partitionId: PARTITION_ID,
+-    tableId: TABLE_NAME,
+-    tableName: TABLE_NAME,
+-    replicaId: LEADER_REPLICA,
+-    replicaIds: [LEADER_REPLICA],
+-    nodeId: LEADER_NODE,
+-    transport,
+-    systemTableCache: cache,
+-    dbPath: ':memory:',
+-  });
+-  await leader.initialize();
+-  for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
+-    await leader.raftProvider.propose(leader.raft, {
+-      type: NOOP_COMMAND_TYPE,
+-      seq,
+-    });
+-  }
+-  // Base liferaft only commits on follower acks; a single-replica leader is
+-  // its own quorum, so commit the appended prefix explicitly (how the
+-  // prefix became committed is a precondition here, not the mechanism under
+-  // test — the proof consumes committedIndex however it advanced).
+-  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
+-    COMMITTED_ENTRY_COUNT,
+-    leader.raft.term,
+-  );
+-  await leader.raft.commitEntries(uncommittedEntries);
+-  return leader;
+-}
+-
+-async function createLearner(transport, cache) {
+-  const learner = new PartitionService({
+-    partitionId: PARTITION_ID,
+-    tableId: TABLE_NAME,
+-    tableName: TABLE_NAME,
+-    replicaId: LEARNER_REPLICA,
+-    replicaIds: [LEADER_REPLICA, LEARNER_REPLICA],
+-    peerAddresses: [LEADER_ADDRESS, LEARNER_ADDRESS],
+-    nodeId: LEARNER_NODE,
+-    transport,
+-    systemTableCache: cache,
+-    dbPath: ':memory:',
+-    isJoiningExistingGroup: true,
+-    leaderAddress: LEADER_ADDRESS,
+-    learnerCatchUpCheckIntervalMs: RETRY_INTERVAL_MS,
+-  });
+-  await learner.initialize();
+-  return learner;
+-}
+-
+-function recordPromotionDeferrals(learner) {
+-  const deferrals = [];
+-  const baseLogger = learner.logger;
+-  learner.logger = {
+-    info: (message, payload) => {
+-      if (payload && payload.replicaId === LEARNER_REPLICA &&
+-          typeof payload.reason === 'string') {
+-        deferrals.push({
+-          reason: payload.reason,
+-          proofReason: payload.proofReason,
+-        });
+-      }
+-      baseLogger.info(message, payload);
+-    },
+-    warn: (...args) => baseLogger.warn(...args),
+-    error: (...args) => baseLogger.error(...args),
+-    debug: (...args) => baseLogger.debug(...args),
+-    trace: (...args) => baseLogger.trace(...args),
+-    fatal: (...args) => baseLogger.fatal(...args),
+-  };
+-  return deferrals;
+-}
+-
+-async function createFiveNodeFixture(options = {}) {
+-  const loopback = createLoopbackTransport();
+-  const leaderTransport = createPartitionableTransport(loopback);
+-  const leaderCache = new SystemTableCache();
+-  const learnerCache = options.splitCaches ?
+-    new SystemTableCache() :
+-    leaderCache;
+-  seedBootstrapTopology(leaderCache);
+-  if (options.splitCaches) {
+-    seedBootstrapTopology(learnerCache);
+-  }
+-  leaderTransport.state.dropToLearner = options.startPartitioned === true;
+-  const leader = await createLeader(leaderTransport, leaderCache);
+-  seedRecoveryTopology(leaderCache, options);
+-  if (options.splitCaches) {
+-    seedRecoveryTopology(learnerCache, options);
+-  }
+-  const learner = await createLearner(loopback, learnerCache);
+-  const deferrals = recordPromotionDeferrals(learner);
+-  return {
+-    leader,
+-    learner,
+-    leaderCache,
+-    learnerCache,
+-    leaderTransport,
+-    deferrals,
+-    async shutdown() {
+-      await learner.shutdown();
+-      await leader.shutdown();
+-    },
+-  };
+-}
+-
+ test('lagging learner is never promoted by elapsed time; healing the ' +
+   'replication path promotes via the leader-observed applied index',
+ async (t) => {
+diff --git a/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js b/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6d1434111e8a0b6bcdbf50d18053d688daff168
+--- /dev/null
++++ b/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js
+@@ -0,0 +1,803 @@
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {setTimeout as sleep} from 'node:timers/promises';
++import {RaftRole} from '../../src/partition/partition-service.js';
++import {
++  PARTITION_SERVICE_DEFAULT,
++  PARTITION_SERVICE_LOG_MSG,
++  PARTITION_SERVICE_MESSAGE_TYPE,
++} from '../../src/partition/partition-service-constants.js';
++import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
++import {TIME_MS} from '../../src/constants/time.js';
++import {
++  LEARNER_PROMOTION_PROOF_DECISION,
++  LEARNER_PROMOTION_PROOF_REASON,
++  evaluateLearnerPromotionProof,
++} from '../../src/raft/learner-promotion-progress.js';
++import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
++import {
++  COMMITTED_ENTRY_COUNT,
++  LEADER_REPLICA,
++  LEARNER_NODE,
++  LEARNER_REPLICA,
++  PARTITION_ID,
++  configureFixtureRuntime,
++  createFiveNodeFixture,
++  insertPublishedEpochRow,
++  insertServiceRow,
++  recordServiceLog,
++  resetFixtureRuntime,
++  updateServiceRow,
++  waitFor,
++} from './dt6-learner-promotion-fixture.js';
++
++// Deterministic witness for the learner-promotion proof channel (quest
++// learner-promotion-proof-channel-wake), scoped from the 4bc6c1d25 GCP
++// runs: control_plane_publications learner creation cost 25-32 s in every
++// run — request_invalid at epoch 1 while the target's status write was
++// deferred (the leader could not resolve the learner's address from its
++// services cache), then progress_behind cycles behind 2-5 s seed
++// event-loop stalls and 5 s transport timeouts, each proof retry a 1 s
++// timer + the round trip.
++//
++// REAL owners: a live PartitionService leader and learner on the loopback
++// transport with split system-table caches (the seed and the target hydrate
++// independently). Injected environment, all on the scenario clock:
++//   - the learner's SERVICES row is WITHHELD from the leader cache (the
++//     target's deferred status write) and lands on its own only at
++//     ROW_WITHHOLD_S — or earlier when the learner re-asserts it through
++//     the replica state machine's CL-021 deferred-row retry;
++//   - the leader STALLS in periodic windows (LEADER_STALL_S stalled,
++//     LEADER_AWAKE_S awake): a proof delivery sent during a stall completes
++//     when the stall ends, or fails with a timeout when its bound expires
++//     first — the router semantics of transport.deliver({timeoutMs}), with
++//     the router default MESSAGE_TIMEOUT_MS when no bound is given.
++//
++// SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
++// the drive runs on a scaled real clock: one scenario second is the
++// learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
++// Every injected delay and every bound is a multiple of that interval;
++// timings are reported in scenario seconds. The wake bound is half an
++// interval: an event-driven re-request lands within a few milliseconds,
++// a timer-only re-request no earlier than a full interval.
++//
++// Each test below is one quest receipt
++// (scripts/quest-evidence-learner-promotion-proof-channel-wake.js).
++
++const VIRTUAL_SECOND_MS = 200;
++const RETRY_INTERVAL_MS = VIRTUAL_SECOND_MS;
++const ROW_WITHHOLD_S = 22;
++const LEADER_STALL_S = 5;
++const LEADER_AWAKE_S = 2;
++const ROUTER_DEFAULT_TIMEOUT_S =
++  TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS / TIME_MS.SECOND;
++const GREEN_ACTIVE_BOUND_S = 12;
++const HEAD_ACTIVE_FLOOR_S = 26;
++const DRIVE_BUDGET_S = 40;
++const WAKE_BOUND_MS = VIRTUAL_SECOND_MS / 2;
++const TIMEOUT_INTERVAL_MULTIPLE = 2;
++const EXPECTED_PROOF_TIMEOUT_MS = Math.min(
++  TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
++  RETRY_INTERVAL_MS * TIMEOUT_INTERVAL_MULTIPLE,
++);
++const HEAD_MESSAGE_TIMEOUT_MS = 5000;
++const HEAD_RETRY_INTERVAL_MS = 1000;
++const PUBLISHED_EPOCH_ONE = 1;
++const BOOTSTRAP_EPOCH = 0;
++const LAGGING_MATCH_INDEX = COMMITTED_ENTRY_COUNT - 1;
++const SURPLUS_VOTERS = [['replica-6', 'node-6'], ['replica-7', 'node-7']];
++const FOREIGN_LEARNER_REPLICA = 'replica-foreign';
++const FOREIGN_PARTITION_ID = 'progress-proof-other';
++const OBSERVATION_INTERVALS = 5;
++const MIN_TIMEOUT_REQUESTS = 3;
++const SCHEDULING_SLACK_MS = VIRTUAL_SECOND_MS / 2;
++const REQUEST_INVALID = LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID;
++const PROGRESS_BEHIND = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
++const TRANSPORT_FAILED = LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED;
++const EPOCH_MISMATCH = LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH;
++const WOULD_EXCEED_TARGET = 'would_exceed_target_replica_count';
++// Typed refusal causes and wake reasons under witness (string-pinned so
++// the file links on HEAD, where the typed contract does not yet exist).
++const CAUSE_ADDRESS_UNRESOLVABLE = 'learner_address_unresolvable';
++const CAUSE_REQUEST_SHAPE = 'request_shape';
++const CAUSE_RESPONSE_BINDING_MISMATCH = 'response_binding_mismatch';
++const WAKE_SERVICES_ROW_VISIBLE = 'services_row_visible';
++const WAKE_PUBLISHED_EPOCH_CHANGED = 'published_epoch_changed';
++const LOG_LEVEL_INFO = 'info';
++const OUTCOME_TIMEOUT = 'timeout';
++
++function seconds(clock, atMs) {
++  return Number(((atMs - clock.originMs) / VIRTUAL_SECOND_MS).toFixed(2));
++}
++
++function createScenarioClock() {
++  const clock = {originMs: Date.now()};
++  clock.now = () => Date.now();
++  clock.start = () => {
++    clock.originMs = Date.now();
++  };
++  return clock;
++}
++
++// Leader event-loop stalls as periodic windows on the scenario clock:
++// [k*period, k*period + stall) stalled, then awake. A delivery sent while
++// stalled is answered at the window end.
++function createLeaderStallPlan(clock, options) {
++  const plan = {enabled: options.enabled === true};
++  const stallMs = options.stallS * VIRTUAL_SECOND_MS;
++  const periodMs = stallMs + options.awakeS * VIRTUAL_SECOND_MS;
++  plan.remainingStallMs = (nowMs) => {
++    if (!plan.enabled) {
++      return 0;
++    }
++    if (options.awakeS === 0) {
++      return Number.POSITIVE_INFINITY;
++    }
++    const elapsedMs = Math.max(0, nowMs - clock.originMs);
++    const phaseMs = elapsedMs % periodMs;
++    return phaseMs < stallMs ? stallMs - phaseMs : 0;
++  };
++  return plan;
++}
++
++function recordProofRequest(requests, clock, payload, options) {
++  const request = {
++    sentAtMs: clock.now(),
++    membershipEpoch: payload.membershipEpoch,
++    timeoutMs: options?.timeoutMs,
++    outcome: null,
++    proof: null,
++    completedAtMs: null,
++  };
++  requests.push(request);
++  return request;
++}
++
++// The router's bound: options.timeoutMs when given, else its default.
++function resolveDeliveryBoundMs(options, routerDefaultTimeoutMs) {
++  return Number.isFinite(options?.timeoutMs) ?
++    options.timeoutMs :
++    routerDefaultTimeoutMs;
++}
++
++async function failProofDeliveryAtBound(request, clock, boundMs) {
++  await sleep(boundMs);
++  request.outcome = OUTCOME_TIMEOUT;
++  request.completedAtMs = clock.now();
++  throw new Error(`proof delivery timed out after ${boundMs}ms`);
++}
++
++function completeProofRequest(request, clock, response, listeners) {
++  request.outcome = response?.proof?.reason ?? null;
++  request.proof = response?.proof ?? null;
++  request.completedAtMs = clock.now();
++  if (typeof listeners.onResponse === 'function') {
++    listeners.onResponse(request);
++  }
++}
++
++// Learner-side transport: observes every proof request (send instant,
++// carried epoch, delivery bound) and applies the leader stall with the
++// router's timeout semantics.
++function createProofChannelTransport(inner, clock, stallPlan) {
++  const requests = [];
++  const listeners = {onResponse: null};
++  const routerDefaultTimeoutMs = ROUTER_DEFAULT_TIMEOUT_S * VIRTUAL_SECOND_MS;
++  return {
++    requests,
++    listeners,
++    register: (address, handler) => inner.register(address, handler),
++    unregister: (address) => inner.unregister(address),
++    deliver: async (address, payload, options) => {
++      if (payload?.type !== PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {
++        return inner.deliver(address, payload, options);
++      }
++      const request = recordProofRequest(requests, clock, payload, options);
++      const boundMs = resolveDeliveryBoundMs(options, routerDefaultTimeoutMs);
++      const stallMs = stallPlan.remainingStallMs(request.sentAtMs);
++      if (stallMs > boundMs) {
++        return failProofDeliveryAtBound(request, clock, boundMs);
++      }
++      if (stallMs > 0) {
++        await sleep(stallMs);
++      }
++      const response = await inner.deliver(address, payload, options);
++      completeProofRequest(request, clock, response, listeners);
++      return response;
++    },
++  };
++}
++
++// The durable landing of the learner's services row: the leader cache gains
++// it (INSERT, CDC fan-out) and the target's own cache sees its local-only
++// seed row converge (UPDATE). Idempotent.
++function createRowLanding(clock) {
++  const landing = {landedAtMs: null, requestCountAtLanding: null, fixture: null};
++  landing.land = () => {
++    if (landing.landedAtMs !== null || !landing.fixture) {
++      return;
++    }
++    landing.landedAtMs = clock.now();
++    landing.requestCountAtLanding =
++      landing.fixture.learnerTransport.requests.length;
++    insertServiceRow(
++      landing.fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE,
++      RaftRole.LEARNER,
++    );
++    updateServiceRow(
++      landing.fixture.learnerCache, LEARNER_REPLICA, LEARNER_NODE,
++      RaftRole.LEARNER,
++    );
++  };
++  return landing;
++}
++
++// The target's replica state machine as the durable services-row owner:
++// its CL-021 deferred-row retry is the only path that lands the row early.
++function createDeferredRowStateMachine(clock, landing) {
++  const kicks = [];
++  return {
++    kicks,
++    reconcileLocalOnlyServiceRowsNow() {
++      kicks.push(clock.now());
++      landing.land();
++      return Promise.resolve(kicks.length);
++    },
++  };
++}
++
++// The first proof request sent after an event, by request index (a
++// same-millisecond response and event never alias by timestamp).
++function requestAfterEvent(requests, requestCountAtEvent) {
++  return Number.isInteger(requestCountAtEvent) ?
++    requests[requestCountAtEvent] || null :
++    null;
++}
++
++function wakeReasons(learnerLog) {
++  return learnerLog
++    .filter((entry) =>
++      entry.message === PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED)
++    .map((entry) => entry.payload?.scheduleReason);
++}
++
++function learnerDeferrals(learnerLog) {
++  return learnerLog
++    .filter((entry) =>
++      entry.level === LOG_LEVEL_INFO &&
++      entry.message === PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED &&
++      entry.payload?.replicaId === LEARNER_REPLICA)
++    .map((entry) => ({
++      reason: entry.payload.reason,
++      proofReason: entry.payload.proofReason ?? entry.payload.reason,
++      cause: entry.payload.proofCause ?? entry.payload.cause ?? null,
++      atMs: entry.atMs,
++    }));
++}
++
++async function createChannelFixture(options = {}) {
++  const clock = createScenarioClock();
++  const stallPlan = createLeaderStallPlan(clock, {
++    enabled: options.stall === true,
++    stallS: options.stallS ?? LEADER_STALL_S,
++    awakeS: options.awakeS ?? LEADER_AWAKE_S,
++  });
++  const landing = createRowLanding(clock);
++  let transport = null;
++  const fixture = await createFiveNodeFixture({
++    splitCaches: true,
++    startPartitioned: options.startPartitioned === true,
++    learnerRow: true,
++    leaderLearnerRow: options.withholdRow !== true,
++    publishedEpoch: options.publishedEpoch,
++    retryIntervalMs: RETRY_INTERVAL_MS,
++    replicaStateMachine: options.stateMachine === true ?
++      createDeferredRowStateMachine(clock, landing) :
++      undefined,
++    wrapLearnerTransport: (inner) => {
++      transport = createProofChannelTransport(inner, clock, stallPlan);
++      return transport;
++    },
++  });
++  clock.start();
++  landing.fixture = fixture;
++  const leaderLog = recordServiceLog(fixture.leader);
++  const learnerLog = recordServiceLog(fixture.learner);
++  let withholdTimer = null;
++  if (options.withholdRow === true) {
++    withholdTimer = setTimeout(
++      landing.land,
++      ROW_WITHHOLD_S * VIRTUAL_SECOND_MS,
++    );
++  }
++  return {
++    ...fixture,
++    clock,
++    stallPlan,
++    landing,
++    transport,
++    leaderLog,
++    learnerLog,
++    stateMachine: fixture.learner.replicaStateMachine,
++    async shutdown() {
++      clearTimeout(withholdTimer);
++      await fixture.shutdown();
++    },
++  };
++}
++
++function waitForPromotion(fixture, budgetS = DRIVE_BUDGET_S) {
++  return waitFor(
++    () => fixture.learner.role === RaftRole.FOLLOWER,
++    budgetS * VIRTUAL_SECOND_MS,
++  );
++}
++
++function waitForRequests(fixture, count, budgetS = DRIVE_BUDGET_S) {
++  return waitFor(
++    () => fixture.transport.requests.filter(
++      (request) => request.completedAtMs !== null,
++    ).length >= count,
++    budgetS * VIRTUAL_SECOND_MS,
++  );
++}
++
++function grantedProof(fixture) {
++  return fixture.transport.requests
++    .map((request) => request.proof)
++    .find((proof) =>
++      proof?.decision === LEARNER_PROMOTION_PROOF_DECISION.GRANTED) || null;
++}
++
++// The full cpp drive: row withheld, leader stalls, state machine present.
++async function runCppDrive() {
++  configureFixtureRuntime();
++  const fixture = await createChannelFixture({
++    withholdRow: true,
++    stall: true,
++    stateMachine: true,
++    publishedEpoch: PUBLISHED_EPOCH_ONE,
++  });
++  try {
++    const promoted = await waitForPromotion(fixture);
++    const activeAtMs = fixture.clock.now();
++    const deferrals = learnerDeferrals(fixture.learnerLog);
++    const wakeRequest = requestAfterEvent(
++      fixture.transport.requests, fixture.landing.requestCountAtLanding,
++    );
++    return {
++      promoted,
++      activeAtS: promoted ?
++        seconds(fixture.clock, activeAtMs) :
++        Number.POSITIVE_INFINITY,
++      rowLandedAtS: fixture.landing.landedAtMs === null ?
++        null :
++        seconds(fixture.clock, fixture.landing.landedAtMs),
++      wakeDelayMs: wakeRequest ?
++        wakeRequest.sentAtMs - fixture.landing.landedAtMs :
++        null,
++      kicks: fixture.stateMachine.kicks.length,
++      deferrals: deferrals.map((d) => [d.proofReason, d.cause]),
++      wakes: wakeReasons(fixture.learnerLog).filter((reason) =>
++        reason === WAKE_SERVICES_ROW_VISIBLE ||
++        reason === WAKE_PUBLISHED_EPOCH_CHANGED),
++      proof: grantedProof(fixture),
++      leaderEpoch: fixture.leader.resolveLearnerPromotionMembershipEpoch(),
++      learnerEpoch: fixture.learner.resolveLearnerPromotionMembershipEpoch(),
++      requests: fixture.transport.requests.map((request) => [
++        seconds(fixture.clock, request.sentAtMs),
++        request.outcome,
++      ]),
++    };
++  } finally {
++    await fixture.shutdown();
++    resetFixtureRuntime();
++  }
++}
++
++function describeDrive(drive) {
++  return JSON.stringify({
++    deferrals: drive.deferrals,
++    wakes: drive.wakes,
++    activeWithinBound: drive.activeAtS <= GREEN_ACTIVE_BOUND_S,
++    granted: drive.proof !== null,
++  });
++}
++
++test(
++  'proof-wakes-on-services-row-visibility: the learner re-requests its ' +
++  'proof immediately when its own services row becomes visible',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({withholdRow: true});
++    try {
++      // Land the row the instant the first (unresolvable) refusal returns —
++      // phase zero of the retry timer, so a timer-only owner re-requests a
++      // full interval later while an event-driven owner re-requests now.
++      fixture.transport.listeners.onResponse = () => {
++        fixture.transport.listeners.onResponse = null;
++        fixture.landing.land();
++      };
++      const promoted = await waitForPromotion(fixture);
++      assert.equal(promoted, true, 'the learner promotes once resolvable');
++      const {requests} = fixture.transport;
++      assert.equal(requests[0].outcome, REQUEST_INVALID,
++        'the first proof is refused while the row is withheld');
++      const wakeRequest = requestAfterEvent(
++        requests, fixture.landing.requestCountAtLanding,
++      );
++      assert.ok(wakeRequest, 'a proof request follows the row landing');
++      const wakeDelayMs = wakeRequest.sentAtMs - fixture.landing.landedAtMs;
++      t.diagnostic(`row visible -> next proof request after ${wakeDelayMs} ms ` +
++        `(retry interval ${RETRY_INTERVAL_MS} ms)`);
++      assert.ok(wakeDelayMs < WAKE_BOUND_MS,
++        `the proof re-request follows the row landing within ${WAKE_BOUND_MS} ` +
++        `ms, not on the ${RETRY_INTERVAL_MS} ms timer (observed ${wakeDelayMs} ms)`);
++      assert.ok(wakeReasons(fixture.learnerLog).includes(WAKE_SERVICES_ROW_VISIBLE),
++        'the wake is typed services_row_visible on the existing schedule');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'proof-wakes-on-published-epoch-change: the learner re-requests its ' +
++  'proof immediately when the latest PUBLISHED epoch changes',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({startPartitioned: true});
++    try {
++      let epochPublishedAtMs = null;
++      let requestCountAtPublish = null;
++      fixture.transport.listeners.onResponse = () => {
++        fixture.transport.listeners.onResponse = null;
++        insertPublishedEpochRow(fixture.leaderCache, PUBLISHED_EPOCH_ONE);
++        insertPublishedEpochRow(fixture.learnerCache, PUBLISHED_EPOCH_ONE);
++        epochPublishedAtMs = fixture.clock.now();
++        requestCountAtPublish = fixture.transport.requests.length;
++      };
++      const epochRequestSeen = await waitFor(
++        () => requestAfterEvent(
++          fixture.transport.requests, requestCountAtPublish,
++        ) !== null,
++        DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
++      );
++      assert.equal(epochRequestSeen, true,
++        'a proof request follows the publication');
++      const {requests} = fixture.transport;
++      assert.equal(requests[0].membershipEpoch, BOOTSTRAP_EPOCH,
++        'the first request carried the bootstrap epoch');
++      assert.notEqual(requests[0].proof?.decision,
++        LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++        'the lagging learner is refused, never promoted');
++      const wakeRequest = requestAfterEvent(requests, requestCountAtPublish);
++      const wakeDelayMs = wakeRequest.sentAtMs - epochPublishedAtMs;
++      t.diagnostic('epoch published -> next proof request after ' +
++        `${wakeDelayMs} ms`);
++      assert.equal(wakeRequest.membershipEpoch, PUBLISHED_EPOCH_ONE,
++        'the re-request binds the new published epoch');
++      assert.ok(wakeDelayMs < WAKE_BOUND_MS,
++        `the re-request follows the epoch change within ${WAKE_BOUND_MS} ms ` +
++        `(observed ${wakeDelayMs} ms)`);
++      assert.ok(
++        wakeReasons(fixture.learnerLog).includes(WAKE_PUBLISHED_EPOCH_CHANGED),
++        'the wake is typed published_epoch_changed');
++      fixture.leaderTransport.state.dropToLearner = false;
++      const promoted = await waitForPromotion(fixture);
++      assert.equal(promoted, true, 'healing replication still promotes');
++      assert.equal(grantedProof(fixture).membershipEpoch, PUBLISHED_EPOCH_ONE,
++        'the grant is bound to the published epoch');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'typed-refusal-cause-address-unresolvable: request_invalid carries a ' +
++  'typed cause on both sides and is logged at info',
++  async () => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({withholdRow: true});
++    try {
++      const refused = await waitForRequests(fixture, 1);
++      assert.equal(refused, true, 'the first proof round trip completed');
++      const {leader, learner} = fixture;
++      const leaderRefusal = fixture.leaderLog.find((entry) =>
++        entry.level === LOG_LEVEL_INFO &&
++        entry.message ===
++          PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_REQUEST_REFUSED);
++      assert.ok(leaderRefusal,
++        'the leader logs the refusal at info');
++      assert.equal(leaderRefusal.payload.learnerReplicaId, LEARNER_REPLICA);
++      assert.equal(leaderRefusal.payload.partitionId, PARTITION_ID);
++      assert.equal(leaderRefusal.payload.cause, CAUSE_ADDRESS_UNRESOLVABLE,
++        'the leader-side cause is learner_address_unresolvable');
++      const learnerDeferral = learnerDeferrals(fixture.learnerLog)[0];
++      assert.ok(learnerDeferral, 'the learner logs the deferral at info');
++      assert.equal(learnerDeferral.proofReason, REQUEST_INVALID);
++      assert.equal(learnerDeferral.cause, CAUSE_ADDRESS_UNRESOLVABLE,
++        'the learner sees the typed cause');
++      assert.equal(fixture.transport.requests[0].proof.cause,
++        CAUSE_ADDRESS_UNRESOLVABLE, 'the refusal itself carries the cause');
++
++      const shapeResponse = leader.handleLearnerPromotionProofRequest({
++        partitionId: FOREIGN_PARTITION_ID,
++        replicaId: LEARNER_REPLICA,
++      });
++      assert.equal(shapeResponse.proof.reason, REQUEST_INVALID);
++      assert.equal(shapeResponse.proof.cause, CAUSE_REQUEST_SHAPE,
++        'a malformed request is typed request_shape');
++      assert.ok(fixture.leaderLog.some((entry) =>
++        entry.level === LOG_LEVEL_INFO &&
++        entry.payload?.cause === CAUSE_REQUEST_SHAPE &&
++        entry.payload?.learnerReplicaId === LEARNER_REPLICA),
++      'request_shape is logged at info with the learner id');
++
++      const realTransport = learner.transport;
++      learner.transport = {
++        deliver: async () => ({
++          acknowledged: true,
++          partitionId: PARTITION_ID,
++          learnerReplicaId: FOREIGN_LEARNER_REPLICA,
++          proof: evaluateLearnerPromotionProof({
++            raftIsLeader: true,
++            currentTerm: leader.raft.term,
++            committedIndex: COMMITTED_ENTRY_COUNT,
++            learnerMatchIndex: COMMITTED_ENTRY_COUNT,
++            leaderMembershipEpoch: BOOTSTRAP_EPOCH,
++            learnerMembershipEpoch: BOOTSTRAP_EPOCH,
++          }),
++        }),
++      };
++      let bindingProof = null;
++      try {
++        bindingProof = await learner.requestLearnerPromotionProofFromLeader({
++          leaderReplicaId: LEADER_REPLICA,
++          membershipEpoch: BOOTSTRAP_EPOCH,
++        });
++      } finally {
++        learner.transport = realTransport;
++      }
++      assert.equal(bindingProof.decision,
++        LEARNER_PROMOTION_PROOF_DECISION.REFUSED,
++        'a grant bound to another learner never promotes this one');
++      assert.equal(bindingProof.reason, REQUEST_INVALID);
++      assert.equal(bindingProof.cause, CAUSE_RESPONSE_BINDING_MISMATCH,
++        'the learner mints response_binding_mismatch');
++      assert.ok(fixture.learnerLog.some((entry) =>
++        entry.level === LOG_LEVEL_INFO &&
++        entry.payload?.cause === CAUSE_RESPONSE_BINDING_MISMATCH &&
++        entry.payload?.learnerReplicaId === LEARNER_REPLICA &&
++        entry.payload?.partitionId === PARTITION_ID),
++      'response_binding_mismatch is logged at info with learner/partition');
++      assert.equal(learner.role, RaftRole.LEARNER,
++        'no refusal shape ever promotes');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'learner-reasserts-row-on-unresolvable: an unresolvable refusal kicks ' +
++  'the CL-021 deferred services-row retry now, not on its tick',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({
++      withholdRow: true,
++      stateMachine: true,
++    });
++    try {
++      assert.equal(
++        typeof ReplicaStateMachine.prototype.reconcileLocalOnlyServiceRowsNow,
++        'function',
++        'the replica state machine owns the deferred-row retry entry point ' +
++          'the learner kicks (its per-row backoff bounds apply inside)');
++      const promoted = await waitForPromotion(fixture);
++      assert.equal(promoted, true, 'the re-asserted row lets the proof grant');
++      const {requests} = fixture.transport;
++      const {kicks} = fixture.stateMachine;
++      assert.equal(requests[0].outcome, REQUEST_INVALID,
++        'the first proof is refused while the row is withheld');
++      assert.ok(kicks.length >= 1, 'the learner kicked the deferred-row retry');
++      const kickDelayMs = kicks[0] - requests[0].completedAtMs;
++      t.diagnostic(`unresolvable refusal -> CL-021 kick after ${kickDelayMs} ` +
++        `ms; kicks ${kicks.length}; row landed at ` +
++        `${seconds(fixture.clock, fixture.landing.landedAtMs)} s`);
++      assert.ok(kicks[0] >= requests[0].completedAtMs,
++        'the kick follows the unresolvable refusal, never precedes it');
++      assert.ok(kickDelayMs < WAKE_BOUND_MS,
++        'the kick is immediate, not deferred to the retry timer');
++      const unresolvableRefusals = requests.filter((request) =>
++        request.outcome === REQUEST_INVALID).length;
++      assert.ok(kicks.length <= unresolvableRefusals,
++        'at most one kick per unresolvable refusal (bounded by the cadence)');
++      const wakeRequest = requestAfterEvent(
++        requests, fixture.landing.requestCountAtLanding,
++      );
++      assert.ok(wakeRequest, 'a proof request follows the re-asserted row');
++      assert.ok(
++        wakeRequest.sentAtMs - fixture.landing.landedAtMs < WAKE_BOUND_MS,
++        'the re-asserted row wakes the proof request');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'proof-delivery-timeout-bounded-and-logged: each proof delivery carries ' +
++  'a bounded timeoutMs and a timeout is logged at info without stacking',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({
++      startPartitioned: true,
++      stall: true,
++      awakeS: 0,
++    });
++    try {
++      const observed = await waitForRequests(fixture, MIN_TIMEOUT_REQUESTS);
++      assert.equal(observed, true, 'several proof deliveries were attempted');
++      const {requests} = fixture.transport;
++      t.diagnostic(`proof deliveries: ${JSON.stringify(requests.map((r) => [
++        seconds(fixture.clock, r.sentAtMs), r.timeoutMs, r.outcome,
++      ]))}`);
++      assert.equal(requests[0].timeoutMs, EXPECTED_PROOF_TIMEOUT_MS,
++        'the delivery bound is min(MESSAGE_TIMEOUT_MS, ' +
++        `${TIMEOUT_INTERVAL_MULTIPLE} x retry interval) = ` +
++        `${EXPECTED_PROOF_TIMEOUT_MS} ms`);
++      assert.ok(requests[0].timeoutMs <= TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
++        'never larger than MESSAGE_TIMEOUT_MS');
++      assert.equal(requests[0].outcome, OUTCOME_TIMEOUT,
++        'the stalled delivery timed out at its bound');
++      const transportFailures = fixture.learnerLog.filter((entry) =>
++        entry.level === LOG_LEVEL_INFO &&
++        entry.payload?.replicaId === LEARNER_REPLICA &&
++        (entry.payload?.reason === TRANSPORT_FAILED ||
++          entry.payload?.proofReason === TRANSPORT_FAILED));
++      assert.ok(transportFailures.length >= 1,
++        'proof_transport_failed is logged at info');
++      for (let index = 1; index < requests.length; index++) {
++        const spacingMs = requests[index].sentAtMs - requests[index - 1].sentAtMs;
++        assert.ok(
++          spacingMs <= EXPECTED_PROOF_TIMEOUT_MS + RETRY_INTERVAL_MS +
++            SCHEDULING_SLACK_MS,
++          'a timeout never stacks beyond bound + interval (spacing ' +
++            `${spacingMs} ms)`);
++      }
++      assert.equal(fixture.learner.role, RaftRole.LEARNER,
++        'transport failures never promote');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'proof-semantics-and-voter-cap-unchanged: leader-proven progress, epoch ' +
++  'binding, the target+1 voter cap and the budgets are the HEAD contract',
++  async () => {
++    const lagging = evaluateLearnerPromotionProof({
++      raftIsLeader: true,
++      currentTerm: 1,
++      committedIndex: COMMITTED_ENTRY_COUNT,
++      learnerMatchIndex: LAGGING_MATCH_INDEX,
++      leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
++      learnerMembershipEpoch: PUBLISHED_EPOCH_ONE,
++    });
++    assert.equal(lagging.reason, PROGRESS_BEHIND,
++      'learnerMatchIndex < safePromotionIndex refuses progress_behind');
++    const mismatched = evaluateLearnerPromotionProof({
++      raftIsLeader: true,
++      currentTerm: 1,
++      committedIndex: COMMITTED_ENTRY_COUNT,
++      learnerMatchIndex: COMMITTED_ENTRY_COUNT,
++      leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
++      learnerMembershipEpoch: BOOTSTRAP_EPOCH,
++    });
++    assert.equal(mismatched.reason, EPOCH_MISMATCH,
++      'a publication-epoch mismatch is fenced epoch_mismatch');
++    const granted = evaluateLearnerPromotionProof({
++      raftIsLeader: true,
++      currentTerm: 1,
++      committedIndex: COMMITTED_ENTRY_COUNT,
++      learnerMatchIndex: COMMITTED_ENTRY_COUNT,
++      leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
++      learnerMembershipEpoch: PUBLISHED_EPOCH_ONE,
++    });
++    assert.equal(granted.decision, LEARNER_PROMOTION_PROOF_DECISION.GRANTED);
++    assert.equal(granted.safePromotionIndex, COMMITTED_ENTRY_COUNT,
++      'the safe promotion index is the leader committed index');
++    assert.equal(PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS,
++      HEAD_RETRY_INTERVAL_MS, 'LEARNER_CATCH_UP_CHECK_INTERVAL_MS unchanged');
++    assert.equal(TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS, HEAD_MESSAGE_TIMEOUT_MS,
++      'MESSAGE_TIMEOUT_MS unchanged');
++
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({startPartitioned: true});
++    try {
++      await sleep(OBSERVATION_INTERVALS * RETRY_INTERVAL_MS);
++      assert.equal(fixture.learner.role, RaftRole.LEARNER,
++        'a lagging learner is never promoted by elapsed retry ticks');
++      const deferrals = learnerDeferrals(fixture.learnerLog);
++      assert.ok(deferrals.length > 0, 'the retries were refused');
++      assert.ok(deferrals.every((d) => d.proofReason === PROGRESS_BEHIND),
++        'every refusal while lagging is typed progress_behind');
++      // Surplus ACTIVE voters (target 5, 6 active) in both caches — the
++      // quorum-shape gates read the learner's own cache — then heal
++      // replication so the progress proof WOULD grant.
++      for (const [replicaId, nodeId] of SURPLUS_VOTERS) {
++        insertServiceRow(fixture.leaderCache, replicaId, nodeId,
++          RaftRole.FOLLOWER);
++        insertServiceRow(fixture.learnerCache, replicaId, nodeId,
++          RaftRole.FOLLOWER);
++      }
++      fixture.leaderTransport.state.dropToLearner = false;
++      const capSeen = await waitFor(
++        () => learnerDeferrals(fixture.learnerLog).some(
++          (d) => d.reason === WOULD_EXCEED_TARGET),
++        DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
++      );
++      assert.equal(capSeen, true,
++        'above target+1 active voters the quorum-shape gate refuses');
++      assert.equal(fixture.learner.role, RaftRole.LEARNER,
++        'the voter cap is never weakened by a grantable proof');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'cpp-learner-active-within-bound: with the row withheld and the leader ' +
++  'stalling, the learner is a voter within the bound on a proven proof',
++  async (t) => {
++    const drive = await runCppDrive();
++    t.diagnostic(`learner voter at +${drive.activeAtS} s (HEAD floor ` +
++      `${HEAD_ACTIVE_FLOOR_S} s, bound ${GREEN_ACTIVE_BOUND_S} s); row landed ` +
++      `at +${drive.rowLandedAtS} s; kicks ${drive.kicks}; wake delay ` +
++      `${drive.wakeDelayMs} ms; requests ${JSON.stringify(drive.requests)}; ` +
++      `deferrals ${JSON.stringify(drive.deferrals)}`);
++    assert.equal(drive.promoted, true, 'the learner became a voter');
++    assert.ok(drive.activeAtS <= GREEN_ACTIVE_BOUND_S,
++      `voter by +${GREEN_ACTIVE_BOUND_S} s (observed +${drive.activeAtS} s)`);
++    assert.ok(drive.deferrals.some(([reason, cause]) =>
++      reason === REQUEST_INVALID && cause === CAUSE_ADDRESS_UNRESOLVABLE),
++    'the first refusal is typed learner_address_unresolvable');
++    assert.ok(drive.kicks >= 1, 'the learner re-asserted its services row');
++    assert.ok(drive.wakeDelayMs !== null && drive.wakeDelayMs < WAKE_BOUND_MS,
++      `the proof re-request follows the row landing within ${WAKE_BOUND_MS} ms`);
++    assert.ok(drive.proof, 'promotion was granted on a proof');
++    assert.equal(drive.proof.learnerMatchIndex, drive.proof.safePromotionIndex,
++      'the granted proof has learnerMatchIndex === safePromotionIndex');
++    assert.equal(drive.proof.safePromotionIndex, COMMITTED_ENTRY_COUNT,
++      'the safe promotion index is the leader committed prefix');
++    assert.equal(drive.proof.membershipEpoch, PUBLISHED_EPOCH_ONE);
++    assert.equal(drive.leaderEpoch, drive.learnerEpoch,
++      'leader and learner observe the same published epoch');
++    assert.equal(drive.learnerEpoch, PUBLISHED_EPOCH_ONE);
++  },
++);
++
++test(
++  'witness-deterministic: two identical cpp drives produce the identical ' +
++  'refusal/wake event sequence and outcome',
++  async (t) => {
++    const first = await runCppDrive();
++    const second = await runCppDrive();
++    t.diagnostic(`drive 1: +${first.activeAtS} s ${describeDrive(first)}`);
++    t.diagnostic(`drive 2: +${second.activeAtS} s ${describeDrive(second)}`);
++    assert.equal(describeDrive(second), describeDrive(first),
++      'identical drives produce the identical event sequence');
++    assert.ok(first.activeAtS <= GREEN_ACTIVE_BOUND_S,
++      'both drives land inside the bound');
++  },
++);
+diff --git a/test/node/replica-local-only-row-convergence.test.js b/test/node/replica-local-only-row-convergence.test.js
+index db38d13571feb6019865276775390a3bdc884ef7..a1e7c9659975c22c943825f7472149634f66eeab 100644
+--- a/test/node/replica-local-only-row-convergence.test.js
++++ b/test/node/replica-local-only-row-convergence.test.js
+@@ -449,3 +449,40 @@ test('CL-021: deferred durable services rows converge', async (t) => {
+     },
+   );
+ });
++
++test('CL-021: the on-demand retry kick runs the same bounded pass', async (t) => {
++  // quest learner-promotion-proof-channel-wake: a partition learner whose
++  // promotion proof was refused learner_address_unresolvable kicks the
++  // deferred-row retry now instead of waiting for the tick — through the
++  // same pass, so the per-row backoff still bounds the write rate.
++  const nowRef = {value: 1_760_000_000_000};
++  const {gateway, calls} = createGateway();
++  const stateMachine = createStateMachine({gateway, nowRef});
++  await seedLocalOnlyReplica(stateMachine);
++
++  const kicked = await stateMachine.reconcileLocalOnlyServiceRowsNow();
++  t.equal(kicked, 0, 'control plane still failing: nothing converged');
++  t.equal(calls.mutations.length, 1, 'the kick made one durable attempt');
++  t.equal(
++    stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++    true,
++    'the marker stays until a durable commit',
++  );
++
++  await stateMachine.reconcileLocalOnlyServiceRowsNow();
++  t.equal(
++    calls.mutations.length,
++    1,
++    'an immediate second kick is bounded by the per-row backoff',
++  );
++
++  gateway.failNext = false;
++  nowRef.value += 60_000;
++  const persisted = await stateMachine.reconcileLocalOnlyServiceRowsNow();
++  t.equal(persisted, 1, 'after the backoff the kick converges the row');
++  t.equal(
++    stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++    false,
++    'marker cleared on durable commit',
++  );
++});
+diff --git a/test/partition/partition-service-learner-promotion-wake.test.js b/test/partition/partition-service-learner-promotion-wake.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b40895c64d892970a6dbf82ea98236d921d0984b
+--- /dev/null
++++ b/test/partition/partition-service-learner-promotion-wake.test.js
+@@ -0,0 +1,269 @@
++/**
++ * Learner-promotion proof-channel wake (quest
++ * learner-promotion-proof-channel-wake): unit seams of the promotion owner
++ * around the existing single-flight schedule — an event wake re-arms the
++ * one timer now (the cadence stays the floor), wakes during an in-flight
++ * check coalesce into one immediate re-check, the cache-change hook routes
++ * only the learner's own services row and published-epoch changes, the
++ * learner_address_unresolvable cause re-asserts the durable row through
++ * the replica state machine, and the proof delivery bound derives from
++ * the cadence and MESSAGE_TIMEOUT_MS. Promotion itself is untouched: the
++ * dt6 witnesses prove the proof semantics end to end.
++ */
++
++import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
++import {
++  PartitionService,
++  RaftRole,
++  CDCOperation,
++} from '../../src/partition/partition-service.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  PARTITION_SERVICE_DEFAULT,
++  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
++} from '../../src/partition/partition-service-constants.js';
++import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
++import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
++import {
++  LEARNER_PROMOTION_PROOF_REASON,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
++  evaluateLearnerPromotionProof,
++  refuseLearnerPromotionProof,
++} from '../../src/raft/learner-promotion-progress.js';
++
++const PARTITION_ID = 'wake-partition';
++const LEARNER_REPLICA_ID = 'replica-learner';
++const OTHER_REPLICA_ID = 'replica-other';
++const NODE_ID = 'node-learner';
++const RETRY_INTERVAL_MS = 1000;
++const WIDE_RETRY_INTERVAL_MS = 10_000;
++const EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS = 2000;
++const BOOTSTRAP_EPOCH = 0;
++const PUBLISHED_EPOCH = 1;
++const SCHEDULE_REASON = PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON;
++
++beforeEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  config.initialize({node: {id: 'test-node'}});
++  const logger = LoggingService.getInstance();
++  logger.initialize({level: 'error'});
++});
++
++afterEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++});
++
++function createLearner(options = {}) {
++  const partition = new PartitionService({
++    partitionId: PARTITION_ID,
++    tableId: 'wake-table',
++    replicaId: LEARNER_REPLICA_ID,
++    replicaIds: [LEARNER_REPLICA_ID],
++    nodeId: NODE_ID,
++    dbPath: ':memory:',
++    isJoiningExistingGroup: true,
++    learnerCatchUpCheckIntervalMs:
++      options.retryIntervalMs || RETRY_INTERVAL_MS,
++    replicaStateMachine: options.replicaStateMachine,
++  });
++  partition.role = RaftRole.LEARNER;
++  return partition;
++}
++
++// Timer seam: capture arm/clear without running any check.
++function stubTimers(t) {
++  const armed = [];
++  const cleared = [];
++  const originalSetTimeout = global.setTimeout;
++  const originalClearTimeout = global.clearTimeout;
++  global.setTimeout = (callback, delayMs) => {
++    const handle = {callback, delayMs};
++    armed.push(handle);
++    return handle;
++  };
++  global.clearTimeout = (handle) => {
++    cleared.push(handle);
++  };
++  t.teardown(() => {
++    global.setTimeout = originalSetTimeout;
++    global.clearTimeout = originalClearTimeout;
++  });
++  return {armed, cleared};
++}
++
++test('an event wake re-arms the single timer immediately; the cadence ' +
++  'stays the delay of a plain reschedule', async (t) => {
++  const timers = stubTimers(t);
++  const partition = createLearner();
++  partition.scheduleLearnerPromotion(SCHEDULE_REASON.DEFERRED_RECHECK);
++  t.equal(timers.armed.length, 1, 'one timer armed');
++  t.equal(timers.armed[0].delayMs, RETRY_INTERVAL_MS,
++    'a plain reschedule waits the retry cadence');
++  const cadenceTimer = partition.learnerPromotionTimer;
++
++  partition.wakeLearnerPromotion(SCHEDULE_REASON.SERVICES_ROW_VISIBLE);
++  t.equal(timers.cleared[0], cadenceTimer,
++    'the wake clears the armed cadence timer (still one timer)');
++  t.equal(timers.armed.length, 2, 'the wake re-arms the same single timer');
++  t.equal(timers.armed[1].delayMs,
++    PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS,
++    'the wake arms the check now');
++  t.equal(partition.learnerPromotionTimer, timers.armed[1],
++    'the wake timer is the owner timer');
++
++  partition.scheduleLearnerPromotion(SCHEDULE_REASON.DEFERRED_RECHECK);
++  t.equal(timers.armed.length, 2,
++    'a plain reschedule never pre-empts an armed timer');
++  partition.learnerPromotionTimer = null;
++});
++
++test('wakes during an in-flight check coalesce into one immediate ' +
++  're-check once the check completes', async (t) => {
++  const timers = stubTimers(t);
++  const partition = createLearner();
++  partition.learnerPromotionWake.checkInFlight = true;
++  partition.wakeLearnerPromotion(SCHEDULE_REASON.SERVICES_ROW_VISIBLE);
++  partition.wakeLearnerPromotion(SCHEDULE_REASON.PUBLISHED_EPOCH_CHANGED);
++  t.equal(timers.armed.length, 0,
++    'no timer is armed while the check is in flight (single-flight)');
++  t.equal(partition.learnerPromotionWake.pendingReasons.size, 2,
++    'both wake reasons are pending');
++
++  partition.drainLearnerPromotionWake();
++  t.equal(partition.learnerPromotionWake.checkInFlight, false,
++    'the drain marks the check complete');
++  t.equal(partition.learnerPromotionWake.pendingReasons.size, 0,
++    'the drain consumes the pending wakes');
++  t.equal(timers.armed.length, 1, 'exactly one immediate re-check');
++  t.equal(timers.armed[0].delayMs,
++    PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS,
++    'the drained re-check runs now');
++  partition.learnerPromotionTimer = null;
++
++  partition.learnerPromotionWake.checkInFlight = true;
++  partition.wakeLearnerPromotion(SCHEDULE_REASON.SERVICES_ROW_VISIBLE);
++  partition.role = RaftRole.FOLLOWER;
++  partition.drainLearnerPromotionWake();
++  t.equal(timers.armed.length, 1,
++    'a promoted replica drains without re-arming');
++});
++
++test('the cache-change hook wakes only on the learner\'s own services row ' +
++  'and on a published-epoch change', async (t) => {
++  const partition = createLearner();
++  const wakes = [];
++  partition.wakeLearnerPromotion = (reason) => wakes.push(reason);
++  let membershipEpoch = BOOTSTRAP_EPOCH;
++  partition.resolveLearnerPromotionMembershipEpoch = () => membershipEpoch;
++  const ownRow = {
++    service_id: LEARNER_REPLICA_ID,
++    partition_id: PARTITION_ID,
++    service_type: SERVICE_TYPE.PARTITION,
++    node_id: NODE_ID,
++  };
++
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.SERVICES, CDCOperation.INSERT, {...ownRow, service_id: OTHER_REPLICA_ID},
++  );
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.SERVICES, CDCOperation.INSERT, {...ownRow, partition_id: 'other'},
++  );
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.PARTITIONS, CDCOperation.UPDATE, {partition_id: PARTITION_ID},
++  );
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.SERVICES, CDCOperation.INSERT, null,
++  );
++  t.same(wakes, [], 'peer rows, other partitions and other tables never wake');
++
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
++  );
++  t.same(wakes, [SCHEDULE_REASON.SERVICES_ROW_VISIBLE],
++    'the learner\'s own services row wakes services_row_visible');
++
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
++    {publication_id: 'p-0'},
++  );
++  t.equal(wakes.length, 1,
++    'a publication change that leaves the requested epoch unchanged is silent');
++  membershipEpoch = PUBLISHED_EPOCH;
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
++    {publication_id: 'p-1'},
++  );
++  t.same(wakes, [
++    SCHEDULE_REASON.SERVICES_ROW_VISIBLE,
++    SCHEDULE_REASON.PUBLISHED_EPOCH_CHANGED,
++  ], 'a newer published epoch wakes published_epoch_changed');
++
++  partition.role = RaftRole.FOLLOWER;
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
++  );
++  t.equal(wakes.length, 2, 'a voter never wakes the promotion check');
++});
++
++test('learner_address_unresolvable re-asserts the durable services row ' +
++  'through the replica state machine; no other cause does', async (t) => {
++  const kicks = [];
++  const partition = createLearner({
++    replicaStateMachine: {
++      reconcileLocalOnlyServiceRowsNow() {
++        kicks.push(Date.now());
++        return Promise.resolve(0);
++      },
++    },
++  });
++  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
++    LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
++  ));
++  t.equal(kicks.length, 1, 'the unresolvable cause kicks the CL-021 retry');
++  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
++    LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
++  ));
++  partition.reactToLearnerPromotionRefusalCause(refuseLearnerPromotionProof(
++    LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
++  ));
++  partition.reactToLearnerPromotionRefusalCause(evaluateLearnerPromotionProof({
++    raftIsLeader: true,
++    currentTerm: 1,
++    committedIndex: 1,
++    learnerMatchIndex: 0,
++    leaderMembershipEpoch: BOOTSTRAP_EPOCH,
++    learnerMembershipEpoch: BOOTSTRAP_EPOCH,
++  }));
++  t.equal(kicks.length, 1,
++    'request_shape, transport failures and evaluated refusals never kick');
++
++  const bootstrapLearner = createLearner();
++  t.doesNotThrow(
++    () => bootstrapLearner.reactToLearnerPromotionRefusalCause(
++      refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
++      ),
++    ),
++    'without a replica state machine there is no deferred row to re-assert',
++  );
++});
++
++test('the proof delivery bound is min(MESSAGE_TIMEOUT_MS, 2 x cadence)',
++  async (t) => {
++    const partition = createLearner();
++    t.equal(partition.resolveLearnerPromotionProofDeliveryTimeoutMs(),
++      EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS,
++      'at the 1 s cadence the bound is 2 s (a timeout + cadence < 5 s + 1 s)');
++    const wide = createLearner({retryIntervalMs: WIDE_RETRY_INTERVAL_MS});
++    t.equal(wide.resolveLearnerPromotionProofDeliveryTimeoutMs(),
++      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
++      'never larger than MESSAGE_TIMEOUT_MS');
++  });
+diff --git a/test/raft/learner-promotion-progress-proof-contract.test.js b/test/raft/learner-promotion-progress-proof-contract.test.js
+index e105d9a9957b6740a7e1634db7151e7033956cbf..016f313f882927266a1f6b5355eab7a13db737cf 100644
+--- a/test/raft/learner-promotion-progress-proof-contract.test.js
++++ b/test/raft/learner-promotion-progress-proof-contract.test.js
+@@ -3,13 +3,17 @@
+  * learner-promotion-progress-proof): decision-table tests for the two pure
+  * halves of the proof — the leader-side evaluator and the learner-side
+  * response validator. Every refusal is typed; the proof is bound to
+- * (leader, term, membership epoch) and any drift fails closed.
++ * (leader, term, membership epoch) and any drift fails closed. Channel-level
++ * refusals additionally carry a typed cause (quest
++ * learner-promotion-proof-channel-wake); the evaluated proof shape is
++ * frozen and unchanged.
+  */
+ 
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   LEARNER_PROMOTION_PROOF_DECISION,
+   LEARNER_PROMOTION_PROOF_REASON,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+   evaluateLearnerPromotionProof,
+   refuseLearnerPromotionProof,
+   validateLearnerPromotionProofResponse,
+@@ -22,6 +26,22 @@ const CAUGHT_UP_MATCH = 10;
+ const LAGGING_MATCH = 9;
+ const LEADER_ID = 'replica-1';
+ const OTHER_LEADER_ID = 'replica-9';
++// The frozen evaluated-proof shape (no cause key) and the channel-refusal
++// shape (the same keys plus the typed cause).
++const EVALUATED_PROOF_KEYS = [
++  'decision', 'reason', 'term', 'membershipEpoch', 'safePromotionIndex',
++  'learnerMatchIndex',
++];
++const CHANNEL_REFUSAL_KEYS = [...EVALUATED_PROOF_KEYS, 'cause'];
++const REQUEST_INVALID_CAUSES = [
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
++];
++const TRANSPORT_FAILED_CAUSES = [
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEADER_UNREACHABLE,
++  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
++];
+ 
+ function leaderFacts(overrides = {}) {
+   return {
+@@ -87,7 +107,44 @@ test('leader refusals are typed and fail-closed', async (t) => {
+     const proof = grantedProof(overrides);
+     t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED, message);
+     t.equal(proof.reason, reason, `${message} (typed reason)`);
++    t.same(Object.keys(proof), EVALUATED_PROOF_KEYS,
++      `${message} (frozen evaluated shape, no channel cause)`);
+   }
++  t.same(Object.keys(grantedProof()), EVALUATED_PROOF_KEYS,
++    'a granted proof keeps the frozen evaluated shape');
++});
++
++test('channel-level refusals carry a typed cause in the frozen shape', async (t) => {
++  for (const cause of REQUEST_INVALID_CAUSES) {
++    const proof = refuseLearnerPromotionProof(
++      LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID, cause);
++    t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED,
++      `request_invalid/${cause} is a refusal`);
++    t.equal(proof.cause, cause, `request_invalid carries cause ${cause}`);
++    t.same(Object.keys(proof), CHANNEL_REFUSAL_KEYS,
++      `request_invalid/${cause} has the channel-refusal shape`);
++    t.ok(Object.isFrozen(proof), 'the channel refusal is frozen');
++  }
++  for (const cause of TRANSPORT_FAILED_CAUSES) {
++    const proof = refuseLearnerPromotionProof(
++      LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED, cause);
++    t.equal(proof.reason, LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++      `proof_transport_failed/${cause} keeps its reason`);
++    t.equal(proof.cause, cause, `proof_transport_failed carries cause ${cause}`);
++  }
++  const validation = validateLearnerPromotionProofResponse(
++    learnerObservation({
++      proof: refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE),
++    }),
++  );
++  t.equal(validation.accepted, false, 'a channel refusal never promotes');
++  t.equal(validation.proofCause,
++    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
++    'the learner-side validation surfaces the typed cause');
++  t.equal(validateLearnerPromotionProofResponse(learnerObservation()).proofCause,
++    null, 'an evaluated proof has no channel cause to surface');
+ });
+ 
+ test('empty committed prefix grants trivially without ack evidence', async (t) => {
+@@ -122,10 +179,14 @@ test('learner-side validation refusals are typed and fail-closed', async (t) =>
+     [{isPromotableLearner: false},
+       LEARNER_PROMOTION_PROOF_REASON.ROLE_NOT_LEARNER,
+       'a replica that is no longer a learner (or shut down) never promotes'],
++    [{proof: grantedProof({learnerMatchIndex: LAGGING_MATCH})},
++      LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
++      'a refused proof never promotes'],
+     [{proof: refuseLearnerPromotionProof(
+-      LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND)},
++      LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++      LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED)},
+     LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
+-    'a refused proof never promotes'],
++    'a channel refusal never promotes'],
+     [{proof: null}, LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
+       'a missing response never promotes'],
+     [{currentLeaderId: OTHER_LEADER_ID},
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index bb5bf3c349099ad40a8e368bb30e8b06607f5a26..11b196519275fd9b15492e859d23b0ac3ac56a6a 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1832,
++    "unit": 1834,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2083,
+-  "digest": "fnv1a32-972a4cab",
++  "censusSize": 2085,
++  "digest": "fnv1a32-4ffa3635",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -624,6 +624,7 @@
+     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "unit",
+     "test/convergence/dt6-leadership-migration-network.test.js": "unit",
+     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "unit",
++    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "unit",
+     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "unit",
+     "test/convergence/dt6-network-pct-search.test.js": "unit",
+     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "unit",
+@@ -1095,6 +1096,7 @@
+     "test/partition/partition-replication-handler.test.js": "unit",
+     "test/partition/partition-service-cdc-log-suppression.test.js": "unit",
+     "test/partition/partition-service-hlc-monotonicity.test.js": "unit",
++    "test/partition/partition-service-learner-promotion-wake.test.js": "unit",
+     "test/partition/partition-service-learner-promotion.test.js": "unit",
+     "test/partition/partition-service-qualified-table-name.test.js": "unit",
+     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 74bff728cb250abe3112483e99e21a218fc26091..82c3266ec4c6bef8f32469c5dfc74b97de2612a4 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2066,
++    "ordinary": 2068,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2083,
+-  "digest": "fnv1a32-7adc40b5",
++  "censusSize": 2085,
++  "digest": "fnv1a32-9de39109",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -623,6 +623,7 @@
+     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "ordinary",
+     "test/convergence/dt6-leadership-migration-network.test.js": "ordinary",
+     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "ordinary",
++    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "ordinary",
+     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "ordinary",
+     "test/convergence/dt6-network-pct-search.test.js": "ordinary",
+     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "ordinary",
+@@ -1094,6 +1095,7 @@
+     "test/partition/partition-replication-handler.test.js": "ordinary",
+     "test/partition/partition-service-cdc-log-suppression.test.js": "ordinary",
+     "test/partition/partition-service-hlc-monotonicity.test.js": "ordinary",
++    "test/partition/partition-service-learner-promotion-wake.test.js": "ordinary",
+     "test/partition/partition-service-learner-promotion.test.js": "ordinary",
+     "test/partition/partition-service-qualified-table-name.test.js": "ordinary",
+     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 65fc126268835034e1c09e6768c03b03acf696c9..faeafd48dd71b0c3720f3aa1d20a9531d3f1b547 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -8,7 +8,7 @@
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 166,
+-    "convergence-topology": 73,
++    "convergence-topology": 74,
+     "distributed-harness": 165,
+     "examples-e2e": 7,
+     "pgwire-compat": 17,
+@@ -18,15 +18,15 @@
+     "runtime-primitives": 22,
+     "services-runtime": 166,
+     "solver-tooling": 89,
+-    "storage-partition": 139,
++    "storage-partition": 140,
+     "storage-raft": 75,
+     "test-infrastructure": 100,
+     "transactions": 12,
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2083,
+-  "digest": "fnv1a32-8458c892",
++  "censusSize": 2085,
++  "digest": "fnv1a32-18603091",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -641,6 +641,7 @@
+     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "convergence-topology",
+     "test/convergence/dt6-leadership-migration-network.test.js": "convergence-topology",
+     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "convergence-topology",
++    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "convergence-topology",
+     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "convergence-topology",
+     "test/convergence/dt6-network-pct-search.test.js": "convergence-topology",
+     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "convergence-topology",
+@@ -1112,6 +1113,7 @@
+     "test/partition/partition-replication-handler.test.js": "storage-partition",
+     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
+     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
++    "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
+     "test/partition/partition-service-learner-promotion.test.js": "storage-partition",
+     "test/partition/partition-service-qualified-table-name.test.js": "storage-partition",
+     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "storage-partition",

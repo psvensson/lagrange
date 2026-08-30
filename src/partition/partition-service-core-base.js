@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
 import {trackLeaderActivation} from '../diagnostics/raft-churn-sync-sections.js';
 import {
   createLeaderNodeMutationHelper,
@@ -267,6 +268,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
     this.learnerPromotionTimer = null;
+    this.learnerPromotionWake = createLearnerPromotionWakeState();
     this.splitReplication = null;
     this.splitReplicationRun = null;
     this.mergeReplication = null;
@@ -504,14 +506,12 @@ class PartitionServiceCoreBase extends EventEmitter {
         null;
     this.driveRebalancerLeadershipSink();
   }
-
   /** @private */
   driveRebalancerLeadershipSink() {
     if (this.rebalancerLeadershipSink) {
       this.rebalancerLeadershipSink.setLeader(this.resolveRebalancerLeadership());
     }
   }
-
   updateRebalancerLeadership() {
     if (!this.rebalancer) {
       this.maybeInitializeRebalancer();
@@ -765,6 +765,7 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @private
    */
   handleSystemTableCacheChange(tableName, operation, record) {
+    this.observeLearnerPromotionWakeSource(tableName, operation, record);
     if (tableName === TABLES.PARTITIONS && record) {
       this.handleCanonicalLeaderRowCacheChange(record);
       return;

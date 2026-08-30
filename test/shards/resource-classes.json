@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2066,
+    "ordinary": 2068,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2083,
-  "digest": "fnv1a32-7adc40b5",
+  "censusSize": 2085,
+  "digest": "fnv1a32-9de39109",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -623,6 +623,7 @@
     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "ordinary",
     "test/convergence/dt6-leadership-migration-network.test.js": "ordinary",
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "ordinary",
+    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "ordinary",
     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "ordinary",
     "test/convergence/dt6-network-pct-search.test.js": "ordinary",
     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "ordinary",
@@ -1094,6 +1095,7 @@
     "test/partition/partition-replication-handler.test.js": "ordinary",
     "test/partition/partition-service-cdc-log-suppression.test.js": "ordinary",
     "test/partition/partition-service-hlc-monotonicity.test.js": "ordinary",
+    "test/partition/partition-service-learner-promotion-wake.test.js": "ordinary",
     "test/partition/partition-service-learner-promotion.test.js": "ordinary",
     "test/partition/partition-service-qualified-table-name.test.js": "ordinary",
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": "ordinary",

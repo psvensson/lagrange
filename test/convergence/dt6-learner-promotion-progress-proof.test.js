@@ -30,22 +30,7 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  createLoopbackTransport,
-} from '../partition/partition-service-test-support.js';
-import {
-  PartitionService,
-  RaftRole,
-  CDCOperation,
-} from '../../src/partition/partition-service.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {
-  SERVICE_TYPE,
-  SERVICE_STATUS,
-  TABLES,
-} from '../../src/constants/index.js';
+import {RaftRole} from '../../src/partition/partition-service.js';
 import {
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
@@ -54,238 +39,28 @@ import {
   FOLLOWER_MATCH_INDEX_STATE,
   readFollowerMatchIndex,
 } from '../../src/raft/liferaft.js';
+import {
+  COMMITTED_ENTRY_COUNT,
+  LEARNER_ADDRESS,
+  configureFixtureRuntime,
+  createFiveNodeFixture,
+  insertPublishedEpochRow,
+  insertServiceRow,
+  resetFixtureRuntime,
+  waitFor,
+} from './dt6-learner-promotion-fixture.js';
 
-const PARTITION_ID = 'progress-proof-p1';
-const TABLE_NAME = 'progress_proof_table';
-const LEADER_REPLICA = 'replica-1';
-const LEADER_NODE = 'node-1';
-const LEADER_ADDRESS = `${LEADER_NODE}/partition/${LEADER_REPLICA}`;
-const LEARNER_REPLICA = 'replica-5';
-const LEARNER_NODE = 'node-5';
-const LEARNER_ADDRESS = `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`;
-const PASSIVE_VOTERS = [
-  ['replica-2', 'node-2'],
-  ['replica-3', 'node-3'],
-  ['replica-4', 'node-4'],
-];
-const TARGET_REPLICA_COUNT = 5;
-const COMMITTED_ENTRY_COUNT = 3;
-const RETRY_INTERVAL_MS = 25;
 const LAG_OBSERVATION_MS = 300;
 const PROMOTION_BUDGET_MS = 5000;
-const POLL_MS = 10;
-const NOOP_COMMAND_TYPE = 'progress-proof-noop';
 const PUBLICATION_EPOCH_ONE = 1;
 
 beforeEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'test-node'},
-    raft: {
-      heartbeatIntervalMs: 20,
-      electionTimeoutMinMs: 150,
-      electionTimeoutMaxMs: 300,
-    },
-  });
-  const logger = LoggingService.getInstance();
-  logger.initialize({level: 'error'});
+  configureFixtureRuntime();
 });
 
 afterEach(() => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
+  resetFixtureRuntime();
 });
-
-function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
-  return new Promise((resolve) => {
-    const startedAt = Date.now();
-    const poll = () => {
-      if (predicate()) {
-        resolve(true);
-        return;
-      }
-      if (Date.now() - startedAt >= timeoutMs) {
-        resolve(false);
-        return;
-      }
-      setTimeout(poll, pollMs);
-    };
-    poll();
-  });
-}
-
-function insertServiceRow(cache, replicaId, nodeId, raftRole) {
-  cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: PARTITION_ID,
-    service_type: SERVICE_TYPE.PARTITION,
-    node_id: nodeId,
-    status: SERVICE_STATUS.ACTIVE,
-    raft_role: raftRole,
-  });
-}
-
-// Seeded in two stages: the leader must initialize (and mint its committed
-// prefix) while its raft view is genuinely single-replica; joining the
-// passive voter rows earlier would make its own peer reconcile block the
-// single-replica commit quorum (the same order the proven stable-join
-// fixtures use).
-function seedBootstrapTopology(cache) {
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    partition_id: PARTITION_ID,
-    replica_count: TARGET_REPLICA_COUNT,
-  });
-  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
-}
-
-function seedRecoveryTopology(cache, options = {}) {
-  for (const [replicaId, nodeId] of PASSIVE_VOTERS) {
-    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
-  }
-  if (options.learnerRow !== false) {
-    insertServiceRow(cache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
-  }
-}
-
-function insertPublishedEpochRow(cache, epoch) {
-  cache.applySystemTableChange(
-    TABLES.CONTROL_PLANE_PUBLICATIONS,
-    CDCOperation.INSERT,
-    {
-      publication_id: `publication-epoch-${epoch}`,
-      status: 'PUBLISHED',
-      publication_epoch: epoch,
-    },
-  );
-}
-
-// One-way replication partition: while engaged, every leader->learner
-// delivery is dropped (append fan-out, catch-up batches, probes). The
-// learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
-function createPartitionableTransport(inner) {
-  const state = {dropToLearner: false};
-  return {
-    state,
-    register: (address, handler) => inner.register(address, handler),
-    unregister: (address) => inner.unregister(address),
-    deliver: async (address, payload, options) => {
-      if (state.dropToLearner && address === LEARNER_ADDRESS) {
-        throw new Error('injected replication partition');
-      }
-      return inner.deliver(address, payload, options);
-    },
-  };
-}
-
-async function createLeader(transport, cache) {
-  const leader = new PartitionService({
-    partitionId: PARTITION_ID,
-    tableId: TABLE_NAME,
-    tableName: TABLE_NAME,
-    replicaId: LEADER_REPLICA,
-    replicaIds: [LEADER_REPLICA],
-    nodeId: LEADER_NODE,
-    transport,
-    systemTableCache: cache,
-    dbPath: ':memory:',
-  });
-  await leader.initialize();
-  for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
-    await leader.raftProvider.propose(leader.raft, {
-      type: NOOP_COMMAND_TYPE,
-      seq,
-    });
-  }
-  // Base liferaft only commits on follower acks; a single-replica leader is
-  // its own quorum, so commit the appended prefix explicitly (how the
-  // prefix became committed is a precondition here, not the mechanism under
-  // test — the proof consumes committedIndex however it advanced).
-  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
-    COMMITTED_ENTRY_COUNT,
-    leader.raft.term,
-  );
-  await leader.raft.commitEntries(uncommittedEntries);
-  return leader;
-}
-
-async function createLearner(transport, cache) {
-  const learner = new PartitionService({
-    partitionId: PARTITION_ID,
-    tableId: TABLE_NAME,
-    tableName: TABLE_NAME,
-    replicaId: LEARNER_REPLICA,
-    replicaIds: [LEADER_REPLICA, LEARNER_REPLICA],
-    peerAddresses: [LEADER_ADDRESS, LEARNER_ADDRESS],
-    nodeId: LEARNER_NODE,
-    transport,
-    systemTableCache: cache,
-    dbPath: ':memory:',
-    isJoiningExistingGroup: true,
-    leaderAddress: LEADER_ADDRESS,
-    learnerCatchUpCheckIntervalMs: RETRY_INTERVAL_MS,
-  });
-  await learner.initialize();
-  return learner;
-}
-
-function recordPromotionDeferrals(learner) {
-  const deferrals = [];
-  const baseLogger = learner.logger;
-  learner.logger = {
-    info: (message, payload) => {
-      if (payload && payload.replicaId === LEARNER_REPLICA &&
-          typeof payload.reason === 'string') {
-        deferrals.push({
-          reason: payload.reason,
-          proofReason: payload.proofReason,
-        });
-      }
-      baseLogger.info(message, payload);
-    },
-    warn: (...args) => baseLogger.warn(...args),
-    error: (...args) => baseLogger.error(...args),
-    debug: (...args) => baseLogger.debug(...args),
-    trace: (...args) => baseLogger.trace(...args),
-    fatal: (...args) => baseLogger.fatal(...args),
-  };
-  return deferrals;
-}
-
-async function createFiveNodeFixture(options = {}) {
-  const loopback = createLoopbackTransport();
-  const leaderTransport = createPartitionableTransport(loopback);
-  const leaderCache = new SystemTableCache();
-  const learnerCache = options.splitCaches ?
-    new SystemTableCache() :
-    leaderCache;
-  seedBootstrapTopology(leaderCache);
-  if (options.splitCaches) {
-    seedBootstrapTopology(learnerCache);
-  }
-  leaderTransport.state.dropToLearner = options.startPartitioned === true;
-  const leader = await createLeader(leaderTransport, leaderCache);
-  seedRecoveryTopology(leaderCache, options);
-  if (options.splitCaches) {
-    seedRecoveryTopology(learnerCache, options);
-  }
-  const learner = await createLearner(loopback, learnerCache);
-  const deferrals = recordPromotionDeferrals(learner);
-  return {
-    leader,
-    learner,
-    leaderCache,
-    learnerCache,
-    leaderTransport,
-    deferrals,
-    async shutdown() {
-      await learner.shutdown();
-      await leader.shutdown();
-    },
-  };
-}
 
 test('lagging learner is never promoted by elapsed time; healing the ' +
   'replication path promotes via the leader-observed applied index',

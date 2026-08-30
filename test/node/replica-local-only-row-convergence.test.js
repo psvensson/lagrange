@@ -449,3 +449,40 @@ test('CL-021: deferred durable services rows converge', async (t) => {
     },
   );
 });
+
+test('CL-021: the on-demand retry kick runs the same bounded pass', async (t) => {
+  // quest learner-promotion-proof-channel-wake: a partition learner whose
+  // promotion proof was refused learner_address_unresolvable kicks the
+  // deferred-row retry now instead of waiting for the tick — through the
+  // same pass, so the per-row backoff still bounds the write rate.
+  const nowRef = {value: 1_760_000_000_000};
+  const {gateway, calls} = createGateway();
+  const stateMachine = createStateMachine({gateway, nowRef});
+  await seedLocalOnlyReplica(stateMachine);
+
+  const kicked = await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  t.equal(kicked, 0, 'control plane still failing: nothing converged');
+  t.equal(calls.mutations.length, 1, 'the kick made one durable attempt');
+  t.equal(
+    stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+    true,
+    'the marker stays until a durable commit',
+  );
+
+  await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  t.equal(
+    calls.mutations.length,
+    1,
+    'an immediate second kick is bounded by the per-row backoff',
+  );
+
+  gateway.failNext = false;
+  nowRef.value += 60_000;
+  const persisted = await stateMachine.reconcileLocalOnlyServiceRowsNow();
+  t.equal(persisted, 1, 'after the backoff the kick converges the row');
+  t.equal(
+    stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+    false,
+    'marker cleared on durable commit',
+  );
+});

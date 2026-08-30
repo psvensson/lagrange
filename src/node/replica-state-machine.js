@@ -400,6 +400,20 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   /**
+   * CL-021 deferred durable services-row retry, on demand: the same
+   * reconcile pass the timeout-checker tick runs, for an owner that has
+   * evidence the row is still missing remotely (a partition learner whose
+   * promotion proof was refused learner_address_unresolvable). The pass's
+   * own bounds apply unchanged — per-row backoff, the in-flight guard and
+   * the transition-persist race guard — so a kick can never write more
+   * often than the tick would.
+   * @return {Promise<number>} Rows durably converged this pass.
+   */
+  reconcileLocalOnlyServiceRowsNow() {
+    return this._reconcileLocalOnlyServiceRows();
+  }
+
+  /**
    * CL-016: mark a service row as seeded locally (durable write deferred);
    * lifecycle persistence will UPSERT instead of UPDATE for it until a
    * durable write commits.

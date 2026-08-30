@@ -2,15 +2,18 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {readFollowerMatchIndex} from '../raft/liferaft.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
   evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
 } from '../raft/learner-promotion-progress.js';
 import {
   buildSnapshotCatchupIdentityFromCache,
 } from '../raft/snapshot-catchup.js';
+import {TRANSPORT_DEFAULT} from '../constants/transport.js';
 
 const {
   LifeRaft,
+  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -53,7 +56,9 @@ class PartitionServiceLearnerPromotionProofMethods {
    * the facts (live leadership, current term, committed index as the safe
    * promotion index, leader-observed learner match index, both membership
    * epochs) and answers with the raft layer's typed proof outcome. Every
-   * refusal is typed; a malformed request refuses REQUEST_INVALID.
+   * refusal is typed; a malformed request refuses REQUEST_INVALID with
+   * cause request_shape, an unresolvable learner address (its services row
+   * not yet in this cache) with cause learner_address_unresolvable.
    * @param {Object} payload request
    *   ({partitionId, replicaId, membershipEpoch})
    * @return {Object} {acknowledged, partitionId, learnerReplicaId, proof}
@@ -72,23 +77,21 @@ class PartitionServiceLearnerPromotionProofMethods {
       payload?.partitionId !== this.partitionId ||
       learnerReplicaId.length === 0
     ) {
-      return {
-        ...requestShape,
-        proof: refuseLearnerPromotionProof(
-          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-        ),
-      };
+      return this.refuseLearnerPromotionProofRequest(
+        requestShape,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
+        {requestedPartitionId: payload?.partitionId},
+      );
     }
     let learnerAddress = null;
     try {
       learnerAddress = this.buildPeerAddress(learnerReplicaId);
-    } catch (_addressError) {
-      return {
-        ...requestShape,
-        proof: refuseLearnerPromotionProof(
-          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
-        ),
-      };
+    } catch (addressError) {
+      return this.refuseLearnerPromotionProofRequest(
+        requestShape,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
+        {error: addressError.message},
+      );
     }
     const matchObservation = readFollowerMatchIndex(
       this.raft,
@@ -114,6 +117,35 @@ class PartitionServiceLearnerPromotionProofMethods {
       this.probeLearnerReplicationProgress(learnerAddress);
     }
     return {...requestShape, proof};
+  }
+  /**
+   * Leader-side typed REQUEST_INVALID refusal, logged at info so the two
+   * mints of one reason are distinguishable in a node log.
+   * @param {Object} requestShape response envelope without the proof
+   * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
+   * @param {Object} detail extra log fields
+   * @return {Object} response envelope with the refused proof
+   * @private
+   */
+  refuseLearnerPromotionProofRequest(requestShape, cause, detail) {
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_REQUEST_REFUSED,
+      {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        learnerReplicaId: requestShape.learnerReplicaId,
+        reason: LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+        cause,
+        ...detail,
+      },
+    );
+    return {
+      ...requestShape,
+      proof: refuseLearnerPromotionProof(
+        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+        cause,
+      ),
+    };
   }
   /**
    * Send the leader's last log entry to one learner so progress evidence
@@ -156,8 +188,12 @@ class PartitionServiceLearnerPromotionProofMethods {
   }
   /**
    * Learner-side proof request to the discovered leader. Any transport or
-   * response-shape failure returns a typed refused proof — fail-closed; the
-   * caller reschedules on its retry cadence.
+   * response-shape failure returns a typed refused proof with a typed
+   * cause — fail-closed; the caller reschedules on its retry cadence. The
+   * delivery carries a bounded timeout so one stalled round trip never
+   * stacks beyond the cadence. A leader refusal whose cause is
+   * learner_address_unresolvable re-asserts this learner's durable
+   * services row (quest learner-promotion-proof-channel-wake).
    * @param {Object} promotionObservation
    * @param {string} promotionObservation.leaderReplicaId discovered leader
    * @param {number} promotionObservation.membershipEpoch epoch observed at
@@ -168,39 +204,92 @@ class PartitionServiceLearnerPromotionProofMethods {
   async requestLearnerPromotionProofFromLeader(promotionObservation) {
     const leaderAddress = this.resolveLeaderAddressForPromotionProof();
     if (!leaderAddress || !this.transport) {
-      return refuseLearnerPromotionProof(
+      return this.refuseLearnerPromotionProofResponse(
         LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEADER_UNREACHABLE,
+        promotionObservation,
+        {},
       );
     }
     let response = null;
     try {
-      response = await this.transport.deliver(leaderAddress, {
-        type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
-        partitionId: this.partitionId,
-        replicaId: this.replicaId,
-        membershipEpoch: promotionObservation.membershipEpoch,
-      });
-    } catch (deliverError) {
-      this.logger.debug(
-        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED,
+      response = await this.transport.deliver(
+        leaderAddress,
         {
+          type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
           partitionId: this.partitionId,
           replicaId: this.replicaId,
-          leaderReplicaId: promotionObservation.leaderReplicaId,
-          reason: LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
-          error: deliverError.message,
+          membershipEpoch: promotionObservation.membershipEpoch,
         },
+        {timeoutMs: this.resolveLearnerPromotionProofDeliveryTimeoutMs()},
       );
-      return refuseLearnerPromotionProof(
+    } catch (deliverError) {
+      return this.refuseLearnerPromotionProofResponse(
         LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
+        promotionObservation,
+        {error: deliverError.message},
       );
     }
     if (!this.learnerPromotionProofResponseBindsThisLearner(response)) {
-      return refuseLearnerPromotionProof(
+      return this.refuseLearnerPromotionProofResponse(
         LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
+        promotionObservation,
+        {
+          responsePartitionId: response?.partitionId,
+          responseLearnerReplicaId: response?.learnerReplicaId,
+        },
       );
     }
+    this.reactToLearnerPromotionRefusalCause(response.proof);
     return response.proof;
+  }
+  /**
+   * Learner-side typed channel refusal (no leader address, delivery
+   * failure or timeout, response bound to another learner), logged at info.
+   * @param {string} reason LEARNER_PROMOTION_PROOF_REASON member
+   * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
+   * @param {Object} promotionObservation request-time observation
+   * @param {Object} detail extra log fields
+   * @return {Object} frozen refused proof
+   * @private
+   */
+  refuseLearnerPromotionProofResponse(
+    reason,
+    cause,
+    promotionObservation,
+    detail,
+  ) {
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_RESPONSE_REFUSED,
+      {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        learnerReplicaId: this.replicaId,
+        leaderReplicaId: promotionObservation.leaderReplicaId,
+        membershipEpoch: promotionObservation.membershipEpoch,
+        reason,
+        cause,
+        ...detail,
+      },
+    );
+    return refuseLearnerPromotionProof(reason, cause);
+  }
+  /**
+   * Proof delivery bound: never larger than the transport's
+   * MESSAGE_TIMEOUT_MS, and at most twice the retry cadence so a timed-out
+   * round trip plus the cadence stays within three intervals instead of
+   * stacking the 5 s router default on the 1 s timer.
+   * @return {number} milliseconds
+   * @private
+   */
+  resolveLearnerPromotionProofDeliveryTimeoutMs() {
+    return Math.min(
+      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+      this.learnerCatchUpCheckIntervalMs *
+        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE,
+    );
   }
   /**
    * Resolve the discovered leader's unified address, or null when it cannot

@@ -17,6 +17,7 @@ const {
   PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
+  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
@@ -40,7 +41,10 @@ class PartitionServiceLearnerPromotionMethods {
    * Schedule the next learner promotion check. The check is progress-proven
    * by the current leader; this cadence is ONLY the retry/backoff input —
    * elapsed time never satisfies promotion (quest
-   * learner-promotion-progress-proof).
+   * learner-promotion-progress-proof). A wake reason (own services row
+   * visible, published epoch changed) arms the same single timer now; the
+   * cadence stays the floor and the fallback (quest
+   * learner-promotion-proof-channel-wake).
    * @private
    */
   scheduleLearnerPromotion(
@@ -59,7 +63,10 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
-    const delayMs = this.learnerCatchUpCheckIntervalMs;
+    const delayMs =
+      PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS.has(scheduleReason) ?
+        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS :
+        this.learnerCatchUpCheckIntervalMs;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
@@ -441,6 +448,21 @@ class PartitionServiceLearnerPromotionMethods {
    */
   async checkLearnerPromotion() {
     this.learnerPromotionTimer = null;
+    this.learnerPromotionWake.checkInFlight = true;
+    try {
+      await this.runLearnerPromotionCheck();
+    } finally {
+      // Single-flight: wakes that arrived during this check drain into at
+      // most one immediate re-check now that it has completed.
+      this.drainLearnerPromotionWake();
+    }
+  }
+  /**
+   * The check body (gates in order); every deferral reschedules.
+   * @return {Promise<void>}
+   * @private
+   */
+  async runLearnerPromotionCheck() {
     if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
@@ -565,6 +587,8 @@ class PartitionServiceLearnerPromotionMethods {
     const requestedLeaderId = this.leaderId;
     const requestedMembershipEpoch =
       this.resolveLearnerPromotionMembershipEpoch();
+    this.learnerPromotionWake.requestedMembershipEpoch =
+      requestedMembershipEpoch;
     const proof = await this.requestLearnerPromotionProofFromLeader({
       leaderReplicaId: requestedLeaderId,
       membershipEpoch: requestedMembershipEpoch,
@@ -585,6 +609,7 @@ class PartitionServiceLearnerPromotionMethods {
         partitionId: this.partitionId,
         reason: proofValidation.reason,
         proofReason: proofValidation.proofReason,
+        proofCause: proofValidation.proofCause,
         leaderReplicaId: requestedLeaderId,
         membershipEpoch: requestedMembershipEpoch,
       });
