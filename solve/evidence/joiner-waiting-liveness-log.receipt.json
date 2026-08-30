@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "joiner-waiting-liveness-log",
+  "status": "pass",
+  "generatedAt": "2026-08-30T08:54:10.807Z",
+  "receipts": [
+    {
+      "id": "still-waiting-line-on-liveness-cadence",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^still-waiting-line-on-liveness-cadence\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "during a 30-second honest wait on the engaged operation-ledger formation barrier the REAL joining owner emits one typed still-waiting line per existing liveness-refresh tick (six lines at elapsed 0, 5000, ..., 25000 ms, on the exact instants of the liveness publications), each naming the owner's own unsatisfied gate (waiting_for_startup_authority), the startup-authority state and recovery reason codes it already snapshots, the elapsed ms since the wait began, and the remaining unchanged timeout budget"
+    },
+    {
+      "id": "no-line-once-gate-satisfied",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^no-line-once-gate-satisfied\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "no still-waiting line is emitted at or after the READY instant, and a barrier whose gate is already satisfied on its first poll emits no still-waiting line at all"
+    },
+    {
+      "id": "evidence-advance-debug-rate-limited",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^evidence-advance-debug-rate-limited\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "when the gate's evidence (the formation-release handoff pending cohort) changes on every 500 ms poll while the gate stays unsatisfied, the owner emits debug evidence-advance lines rate-limited to at most one per liveness-refresh window (five lines in 30 s, never two closer than 5000 ms), each carrying evidence different from the last logged line"
+    },
+    {
+      "id": "no-evidence-advance-without-change",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^no-evidence-advance-without-change\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "with static evidence for the whole wait no evidence-advance line is emitted (the debug line is not a second poll heartbeat)"
+    },
+    {
+      "id": "ready-instant-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^ready-instant-unchanged\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "the barrier releases on the exact poll at which the readiness owner's startup authority becomes ready (startedAt + 30000 ms) with the recording logger and with a silent logger alike, the state-change lines are exactly waiting_for_startup_authority then ledger_spread_satisfied, and no readiness decision reads anything but the owner's own snapshot"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "JOINING_DEFAULT discovery (5000), poll (500), timeout (120000) and heartbeat (5000) ms are the HEAD values, and the liveness publications land on the exact HEAD instants (six at startedAt + k * 5000) whether the evidence is static or advancing"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "detail": "two identical virtual-clock drives produce the identical log line sequence, liveness instants and READY instant"
+    }
+  ]
+}
