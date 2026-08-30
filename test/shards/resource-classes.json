@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2087,
+    "ordinary": 2088,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2104,
-  "digest": "fnv1a32-78e48369",
+  "censusSize": 2105,
+  "digest": "fnv1a32-86a08fe2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1768,6 +1768,7 @@
     "test/scripts/model-contract-tools.test.js": "ordinary",
     "test/scripts/model-invariants.test.js": "ordinary",
     "test/scripts/model-tlc-mode-selection.test.js": "ordinary",
+    "test/scripts/model-tlc-output-tail.test.js": "ordinary",
     "test/scripts/no-external-llm-guards.test.js": "ordinary",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "ordinary",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "ordinary",
