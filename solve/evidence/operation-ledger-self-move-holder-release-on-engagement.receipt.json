@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "operation-ledger-self-move-holder-release-on-engagement",
+  "status": "pass",
+  "generatedAt": "2026-08-30T06:33:44.561Z",
+  "receipts": [
+    {
+      "id": "engagement-resolves-stale-holder-through-lifecycle-read",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^engagement-resolves-stale-holder-through-lifecycle-read\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "on the dispatching node the successor's first engagement finds the drain-failed predecessor retained as the holder, resolves it through exactly one lifecycle read (the holder's own positive terminal row -> RELEASE), engages, and no further lifecycle read is issued"
+    },
+    {
+      "id": "local-terminal-settlement-clears-own-registration",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^local-terminal-settlement-clears-own-registration\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "after the predecessor's claim compare-and-set was refused under pressure (holder retained, row PENDING), the target's own drain-stale failOperation of that holder clears its registration at the commit; the successor engages on its first attempt without a lifecycle read and is sent at its creation instant"
+    },
+    {
+      "id": "successor-claims-first-attempt-after-predecessor-terminal",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^successor-claims-first-attempt-after-predecessor-terminal\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "the re-planned REPLACE (a distinct successor id) never parks held_by_other, engages exactly once, claims SENDING at its creation instant (+36 s) and the ledger spread is satisfied inside the 60 s window (READY at +59.6 s)"
+    },
+    {
+      "id": "live-holder-still-refuses-and-unresolved-reads-hold",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^live-holder-still-refuses-and-unresolved-reads-hold\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "a live PENDING holder and a live SENDING holder still refuse a candidate self-move at the engagement point (HELD_BY_OTHER, holder retained); an empty read and a failed read of the holder hold"
+    },
+    {
+      "id": "terminal-only-release-preserved",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^terminal-only-release-preserved\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "the holder's age past PENDING_TIMEOUT_MS, the target's orphan-reservation reconcile, a positive terminal row of another operation and the exempt ADD's terminal on the seed never release the holder"
+    },
+    {
+      "id": "idle-only-and-exclusion-preserved",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^idle-only-and-exclusion-preserved\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "the predecessor parks operation_ledger_self_move_waiting_for_idle_ledger while incumbents are in flight; from the successor's registration to its terminal every dependent is refused operation_ledger_self_move_in_flight and none is admitted"
+    },
+    {
+      "id": "budgets-and-cadence-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^budgets-and-cadence-unchanged\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "maxConcurrentAdds (5), CRITICAL_CHECK_DELAY_MS (5000), DISPATCH_RETRY_DELAY_MS (250), PENDING_TIMEOUT_MS (30000) and the incomplete-read backoff floor/ceiling (250/5000) are the HEAD values, the drain settles the predecessor stale only past PENDING_TIMEOUT_MS, parked re-drives follow within 2 x DISPATCH_RETRY_DELAY_MS and every dependent re-attempt within one priority retry cadence"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
+      "detail": "two identical virtual-clock drives produce the identical admission/dispatch event sequence and READY instant"
+    }
+  ]
+}
