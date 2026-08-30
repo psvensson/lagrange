@@ -1,0 +1,710 @@
+diff --git a/scripts/quest-evidence-harness-runtime.js b/scripts/quest-evidence-harness-runtime.js
+index 3b994bdd8f100527567e822e686b9378d0515d7f..822dc36552fdf7a6fba27e4a28e3349720c9b470 100644
+--- a/scripts/quest-evidence-harness-runtime.js
++++ b/scripts/quest-evidence-harness-runtime.js
+@@ -23,6 +23,33 @@ const EXIT_FAILED = 1;
+ const SHELL_EXECUTABLE = '/bin/sh';
+ const SHELL_COMMAND_FLAG = '-c';
+ const DEFAULT_SHELL_TIMEOUT_MS = 600_000;
++const OUTPUT_FLAG = '--output';
++const OUTPUT_FLAG_ASSIGNMENT_PREFIX = `${OUTPUT_FLAG}=`;
++const ARGV_COMMAND_OFFSET = 2;
++const OUTPUT_FLAG_VALUE_REQUIRED_ERROR =
++  `${OUTPUT_FLAG} requires a receipt file path`;
++
++// `--output <path>` (or `--output=<path>`) redirects the receipt to a scratch
++// path so a verifier can regenerate a receipt without dirtying the tracked
++// solve/evidence/ artifact; without it the harness writes its declared file.
++function resolveReceiptOutputFile(declaredOutputFile, argv) {
++  for (let index = 0; index < argv.length; index += 1) {
++    const argument = argv[index];
++    if (argument === OUTPUT_FLAG) {
++      const value = argv[index + 1];
++      if (typeof value !== 'string' || value.length === 0) {
++        throw new Error(OUTPUT_FLAG_VALUE_REQUIRED_ERROR);
++      }
++      return value;
++    }
++    if (argument.startsWith(OUTPUT_FLAG_ASSIGNMENT_PREFIX)) {
++      const value = argument.slice(OUTPUT_FLAG_ASSIGNMENT_PREFIX.length);
++      if (value.length === 0) throw new Error(OUTPUT_FLAG_VALUE_REQUIRED_ERROR);
++      return value;
++    }
++  }
++  return declaredOutputFile;
++}
+ 
+ function runReceipt(receipt) {
+   const command = `${NPM_EXECUTABLE} ${TEST_RUNNER.join(' ')} ` +
+@@ -78,6 +105,7 @@ function runShellReceipt(receipt) {
+  * @param {Object} options harness declaration
+  * @param {string} options.questId the quest the receipt file belongs to
+  * @param {string} options.outputFile solve/evidence/<quest>.receipt.json
++ *   (overridden by a `--output <path>` process argument)
+  * @param {Array<Object>} options.receipts frozen receipt declarations
+  *   ({id, testFile, detail}); a receipt with a verbatim `command`
+  *   string instead of `testFile` re-runs that shell command (with a
+@@ -85,6 +113,10 @@ function runShellReceipt(receipt) {
+  * @return {void} exits non-zero when any receipt command fails
+  */
+ function runQuestEvidenceHarness(options) {
++  const outputFile = resolveReceiptOutputFile(
++    options.outputFile,
++    process.argv.slice(ARGV_COMMAND_OFFSET),
++  );
+   const receipts = options.receipts.map((receipt) =>
+     typeof receipt.command === 'string' ?
+       runShellReceipt(receipt) :
+@@ -99,15 +131,15 @@ function runQuestEvidenceHarness(options) {
+     generatedAt: new Date().toISOString(),
+     receipts,
+   };
+-  fs.mkdirSync(path.dirname(options.outputFile), {recursive: true});
+-  fs.writeFileSync(options.outputFile, `${JSON.stringify(payload, null, 2)}\n`);
++  fs.mkdirSync(path.dirname(outputFile), {recursive: true});
++  fs.writeFileSync(outputFile, `${JSON.stringify(payload, null, 2)}\n`);
+   const failed = receipts.filter((r) => !r.passed);
+   for (const receipt of failed) {
+     process.stderr.write(
+       `FAIL ${receipt.id} (${receipt.command})\n${receipt.failure}\n`);
+   }
+   process.stdout.write(
+-    `${options.outputFile}: ${status} (${receipts.length - failed.length}/` +
++    `${outputFile}: ${status} (${receipts.length - failed.length}/` +
+     `${receipts.length} receipts passing)\n`);
+   process.exit(failed.length === 0 ? EXIT_OK : EXIT_FAILED);
+ }
+diff --git a/scripts/quest-evidence-solver-capture-foreign-evidence-exclusion.js b/scripts/quest-evidence-solver-capture-foreign-evidence-exclusion.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..58e93c405e6ad4352d03d2b471cb7ac8404841a9
+--- /dev/null
++++ b/scripts/quest-evidence-solver-capture-foreign-evidence-exclusion.js
+@@ -0,0 +1,105 @@
++// Deterministic evidence harness for the
++// solver-capture-foreign-evidence-exclusion quest: receipt declarations
++// only. The shared runtime (scripts/quest-evidence-harness-runtime.js)
++// re-runs each recorded proof command and writes the test-receipt probe
++// artifact (solve/evidence/solver-capture-foreign-evidence-exclusion
++// .receipt.json). Each receipt re-executes one focused witness scenario
++// rather than trusting a claim, so a regression that flips a witness red
++// flips this receipt to fail and the quest's doneWhen cannot close on stale
++// green evidence.
++//
++// Receipt honesty: the witness file uses raw node:test so each scenario is
++// independently selectable with --test-name-pattern by its anchored name.
++// On HEAD (before the cure) the foreign-receipt-excluded-from-auto-capture,
++// product-quest-not-refused-by-foreign-receipt,
++// foreign-receipt-only-change-captures-nothing and
++// harness-output-option-writes-to-scratch receipts are RED (the shared-
++// worktree receipt sweep and the missing scratch output);
++// own-receipt-still-captured-unchanged, harness-default-output-unchanged
++// and witness-deterministic are green and must stay green — a cure that
++// turns them red is rejected.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/solve/solver-capture-foreign-evidence-exclusion.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++// One verbatim proof command per scenario. node --test --test-name-pattern
++// selects exactly one top-level witness scenario by its anchored name, so a
++// green receipt is honest (its scenario exits 0) and a red receipt is honest
++// (its scenario exits non-zero).
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'foreign-receipt-excluded-from-auto-capture',
++    command: scenarioCommand('^foreign-receipt-excluded-from-auto-capture'),
++    detail: 'another quest\'s regenerated solve/evidence/<other>.receipt.json ' +
++      'is not swept into this quest\'s auto-captured attempt: the recorded ' +
++      'artifact names only this quest\'s own change and the foreign receipt ' +
++      'stays dirty and untouched in the worktree',
++  }),
++  Object.freeze({
++    id: 'product-quest-not-refused-by-foreign-receipt',
++    command: scenarioCommand('^product-quest-not-refused-by-foreign-receipt'),
++    detail: 'a product quest capturing beside a foreign receipt records its ' +
++      'attempt instead of being refused with "workflow changes must be ' +
++      'recorded in a workflow/Quest tooling Quest"',
++  }),
++  Object.freeze({
++    id: 'foreign-receipt-only-change-captures-nothing',
++    command: scenarioCommand('^foreign-receipt-only-change-captures-nothing'),
++    detail: 'when the only dirty path is another quest\'s receipt the ' +
++      'capture is empty and refused as nothing changed; no attempt is ' +
++      'recorded for a foreign receipt',
++  }),
++  Object.freeze({
++    id: 'own-receipt-still-captured-unchanged',
++    command: scenarioCommand('^own-receipt-still-captured-unchanged'),
++    detail: 'this quest\'s own regenerated receipt rides with the captured ' +
++      'change exactly as before while the foreign one does not',
++  }),
++  Object.freeze({
++    id: 'harness-output-option-writes-to-scratch',
++    command: scenarioCommand('^harness-output-option-writes-to-scratch'),
++    detail: 'the evidence harness runtime honours `--output <path>`: the ' +
++      'receipt is written to the scratch path, the declared solve/evidence ' +
++      'artifact is left untouched, and the summary names the scratch path',
++  }),
++  Object.freeze({
++    id: 'harness-default-output-unchanged',
++    command: scenarioCommand('^harness-default-output-unchanged'),
++    detail: 'without `--output` the runtime writes its declared ' +
++      'solve/evidence receipt with its generatedAt identity intact',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'two identical capture fixtures record the identical ' +
++      'changed-path set',
++  }),
++]);
++
++const QUEST_ID = 'solver-capture-foreign-evidence-exclusion';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'solver-capture-foreign-evidence-exclusion.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/scripts/solve/change-artifact.js b/scripts/solve/change-artifact.js
+index 1644ded1af2dddd42b0130443b8cb30d7fee64a3..cadb862308615ecb354405ea93536ad399c88098 100644
+--- a/scripts/solve/change-artifact.js
++++ b/scripts/solve/change-artifact.js
+@@ -142,6 +142,10 @@ const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
+   'report',
+   'state',
+ ]);
++const SOLVE_EVIDENCE_SUBTREE = 'evidence';
++const SOLVE_EVIDENCE_PREFIX = `${SOLVE_DATA_DIR}/${SOLVE_EVIDENCE_SUBTREE}/`;
++const EVIDENCE_RECEIPT_SUFFIX = '.receipt.json';
++const PATH_SEPARATOR = '/';
+ const DERIVED_SOLVER_BOOKKEEPING_PATHS = new Set([
+   'solve/changes/global-owner-debt-inventory/inventory.json',
+   'solve/changes/priority-recovery-owner-inventory/inventory.json',
+@@ -384,6 +388,38 @@ export function isVerificationBookkeeping(filePath, questId) {
+     isDerivedSolverBookkeeping(filePath);
+ }
+ 
++// The quest that owns an evidence artifact under solve/evidence/: the
++// evidence harness runtime writes solve/evidence/<quest>.receipt.json, and a
++// quest may keep a subtree solve/evidence/<quest>/. Null when the path is
++// not evidence or its owner cannot be read from the name — an unknown owner
++// is never treated as foreign, so an artifact of uncertain ownership stays
++// inside the sealed attempt where a verifier can see it.
++function evidenceOwnerQuestId(filePath) {
++  const normalized = normalizeSlash(filePath);
++  if (!normalized.startsWith(SOLVE_EVIDENCE_PREFIX)) return null;
++  const rest = normalized.slice(SOLVE_EVIDENCE_PREFIX.length);
++  const separator = rest.indexOf(PATH_SEPARATOR);
++  if (separator !== -1) {
++    const directory = rest.slice(0, separator);
++    return directory.length > 0 ? directory : null;
++  }
++  if (rest.endsWith(EVIDENCE_RECEIPT_SUFFIX)) {
++    const owner = rest.slice(0, rest.length - EVIDENCE_RECEIPT_SUFFIX.length);
++    return owner.length > 0 ? owner : null;
++  }
++  return null;
++}
++
++// Another quest's regenerated receipt is that quest's bookkeeping, never this
++// quest's change: sweeping it into an auto-captured attempt classifies the
++// attempt as a workflow change (solve/ prefix) and refuses a product quest,
++// or pollutes the recorded union of a workflow quest.
++export function isForeignQuestEvidence(filePath, questId) {
++  if (typeof questId !== 'string' || questId.length === 0) return false;
++  const owner = evidenceOwnerQuestId(filePath);
++  return owner !== null && owner !== String(questId);
++}
++
+ export function classifyPath(filePath) {
+   const normalized = normalizeSlash(filePath);
+   // Epic / planning memos under solve/ are decision documents, not Solver
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 3d12feb63de8d205086f39e7b8b7f588cdaf2b2a..021a33c8f09fc9cf9aa3b3ccd656b663ddb5e2c2 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -39,6 +39,7 @@ import {
+   expectedChangeDir,
+   inspectChangeArtifact,
+   inspectCommitChangeRefAdmission,
++  isForeignQuestEvidence,
+   requiresSourceVerification,
+ } from './change-artifact.js';
+ import {
+@@ -104,7 +105,10 @@ const SCOPE_PRESSURE_BLOCKED_PREFIX =
+ // self-poisons a product quest: the change-artifact honesty gate classifies
+ // solve/ paths as workflow changes and rejects the attempt. Only these
+ // generated paths are excluded — the operator's INTENTIONAL edits under
+-// solve/ (quest JSON, epics, specs) are still captured.
++// solve/ (quest JSON, epics, specs) are still captured. OTHER quests'
++// evidence receipts (solve/evidence/<other>.receipt.json, regenerated by
++// their harnesses in the shared worktree) are excluded per quest id below
++// (isForeignQuestEvidence); this quest's own evidence stays captured.
+ const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
+   'solve/FRONTIER.generated.md',
+   'solve/artifacts',
+@@ -215,7 +219,9 @@ function createAutoDiffChangeRef(root, quest, pending) {
+   const changedPaths = [...new Set([
+     ...changedPathsFromDiffContent(authored.stdout),
+     ...changedPathsFromDiffContent(removedReports.stdout),
+-  ])].sort();
++  ])]
++    .filter((filePath) => !isForeignQuestEvidence(filePath, quest.id))
++    .sort();
+   if (changedPaths.length === 0) {
+     throw new Error(AUTO_DIFF_EMPTY_ERROR);
+   }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index acc5bdb983f2a12326aaa4f21d61316f4879567c..d87e3ab6a6bd277a30d0d323c2e4ebb211606da4 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1842,
++    "unit": 1843,
+     "integration": 73,
+     "bootstrap": 172,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2094,
+-  "digest": "fnv1a32-45c0b5ab",
++  "censusSize": 2095,
++  "digest": "fnv1a32-f962dbc1",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -1907,6 +1907,7 @@
+     "test/solve/seal-freshness.test.js": "unit",
+     "test/solve/session-registry.test.js": "unit",
+     "test/solve/solver-attempt-base-pending-step-pin.test.js": "unit",
++    "test/solve/solver-capture-foreign-evidence-exclusion.test.js": "unit",
+     "test/solve/solver-land-recorded-attempt-union-guard.test.js": "unit",
+     "test/solve/solver-terminal-integrity-cutover.test.js": "unit",
+     "test/solve/solver-terminal-integrity-red-test-bootstrap.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index fda36c812e7382ea9b2ea383bb47cd3099bf6d2f..e909951b795dae76cc59e8a3985e8d255efe3ccf 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2077,
++    "ordinary": 2078,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2094,
+-  "digest": "fnv1a32-1c84cc9d",
++  "censusSize": 2095,
++  "digest": "fnv1a32-f7f1f98f",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -1906,6 +1906,7 @@
+     "test/solve/seal-freshness.test.js": "ordinary",
+     "test/solve/session-registry.test.js": "ordinary",
+     "test/solve/solver-attempt-base-pending-step-pin.test.js": "ordinary",
++    "test/solve/solver-capture-foreign-evidence-exclusion.test.js": "ordinary",
+     "test/solve/solver-land-recorded-attempt-union-guard.test.js": "ordinary",
+     "test/solve/solver-terminal-integrity-cutover.test.js": "ordinary",
+     "test/solve/solver-terminal-integrity-red-test-bootstrap.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index dbd62a25c26ba51593a0bc7f5c7c6d91597625a2..6ff5872f7e7d7f377e43cd5f1a6f31e7ffc5078b 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -17,7 +17,7 @@
+     "release-packaging": 10,
+     "runtime-primitives": 22,
+     "services-runtime": 166,
+-    "solver-tooling": 91,
++    "solver-tooling": 92,
+     "storage-partition": 140,
+     "storage-raft": 75,
+     "test-infrastructure": 102,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2094,
+-  "digest": "fnv1a32-e2557012",
++  "censusSize": 2095,
++  "digest": "fnv1a32-3705593e",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -1924,6 +1924,7 @@
+     "test/solve/seal-freshness.test.js": "solver-tooling",
+     "test/solve/session-registry.test.js": "solver-tooling",
+     "test/solve/solver-attempt-base-pending-step-pin.test.js": "solver-tooling",
++    "test/solve/solver-capture-foreign-evidence-exclusion.test.js": "solver-tooling",
+     "test/solve/solver-land-recorded-attempt-union-guard.test.js": "solver-tooling",
+     "test/solve/solver-terminal-integrity-cutover.test.js": "solver-tooling",
+     "test/solve/solver-terminal-integrity-red-test-bootstrap.test.js": "solver-tooling",
+diff --git a/test/solve/solver-capture-foreign-evidence-exclusion.test.js b/test/solve/solver-capture-foreign-evidence-exclusion.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4ecc827f6345710e713d65f55fe6ff8c5ffb4036
+--- /dev/null
++++ b/test/solve/solver-capture-foreign-evidence-exclusion.test.js
+@@ -0,0 +1,337 @@
++import assert from 'node:assert/strict';
++import {execFileSync, spawnSync} from 'node:child_process';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {test} from 'node:test';
++import {fileURLToPath} from 'node:url';
++
++import {inspectChangeArtifact} from '../../scripts/solve/change-artifact.js';
++import {EVENT_ATTEMPT} from '../../scripts/solve/constants.js';
++import {runStep} from '../../scripts/solve/step.js';
++import {readLog, saveQuest} from '../../scripts/solve/store.js';
++
++// Deterministic witness for the solver-capture-foreign-evidence-exclusion
++// quest, driven through the REAL step auto-capture (runStep --auto-diff ->
++// createAutoDiffChangeRef -> inspectChangeArtifact) and the REAL evidence
++// harness runtime on temporary repositories.
++//
++// The friction: every evidence harness rewrites solve/evidence/<its
++// quest>.receipt.json with a fresh generatedAt, so a shared worktree carries
++// OTHER quests' regenerated receipts as dirty paths. The auto-capture sweep
++// excluded solve/state, solve/log, solve/report, solve/artifacts and the
++// frontier board but not solve/evidence, so a foreign receipt rode into the
++// captured attempt: classified `workflow` (solve/ prefix) it refused a
++// product quest ("workflow changes must be recorded in a workflow/Quest
++// tooling Quest") or polluted a workflow quest's recorded union. Evidence
++// identity deliberately keeps generatedAt (a receipt is fresh evidence only
++// when regenerated); the cure is scoping the capture to this quest's own
++// evidence and giving the harness runtime `--output <path>` so a verifier
++// regenerates a receipt to scratch without dirtying solve/evidence.
++//
++// Every scenario name below is anchored to one sealed receipt id so the
++// evidence harness selects it with --test-name-pattern.
++
++const TMP_PREFIX = 'solver-capture-foreign-evidence-';
++const WORKFLOW_QUEST_ID = 'foreign-evidence-workflow';
++const PRODUCT_QUEST_ID = 'foreign-evidence-product';
++const OTHER_QUEST_ID = 'other-quest';
++const WORKFLOW_SOURCE = 'scripts/solve/fixture-owner.js';
++const PRODUCT_SOURCE = 'src/a.js';
++const WORKFLOW_SOURCE_BASE = 'export const owner = 1;\n';
++const WORKFLOW_SOURCE_CANDIDATE = 'export const owner = 2;\n';
++const PRODUCT_SOURCE_BASE = 'export const a = 1;\n';
++const PRODUCT_SOURCE_CANDIDATE = 'export const a = 2;\n';
++const ORACLE_OPEN = {metric: 2, target: 0};
++const ORACLE_CLOSER = {metric: 1, target: 0};
++const RECEIPT_SCHEMA = 'test-receipt/1';
++const FIXTURE_RECEIPT_ID = 'fixture-receipt';
++const FIXTURE_RECEIPT_COMMAND = 'true';
++const PRODUCT_PLAN_DOC = 'solve/epics/foreign-evidence-product.md';
++const TEST_RECEIPT_PROBE = 'test-receipt';
++const RECEIPT_GENERATED_AT_BASE = '2026-08-30T06:00:00.000Z';
++const RECEIPT_GENERATED_AT_REGENERATED = '2026-08-30T07:00:00.000Z';
++const WORKFLOW_SCOPE_REFUSAL =
++  /workflow changes must be recorded in a workflow\/Quest tooling Quest/u;
++const AUTO_DIFF_EMPTY = /auto-diff: git diff is empty/u;
++const RUNTIME_MODULE = fileURLToPath(new URL(
++  '../../scripts/quest-evidence-harness-runtime.js', import.meta.url));
++const HARNESS_FILE = 'harness.js';
++const HARNESS_QUEST_ID = 'scratch-output-quest';
++const HARNESS_DEFAULT_OUTPUT =
++  `solve/evidence/${HARNESS_QUEST_ID}.receipt.json`;
++const HARNESS_RECEIPT_ID = 'noop-receipt';
++const HARNESS_RECEIPT_COMMAND = 'true';
++const SCRATCH_RECEIPT_NAME = 'scratch.receipt.json';
++const OUTPUT_FLAG = '--output';
++const STATUS_PASS = 'pass';
++const STATUS_FAIL = 'fail';
++const EXIT_OK = 0;
++const TEXT_ENCODING = 'utf8';
++
++function git(root, args) {
++  return execFileSync('git', args, {
++    cwd: root,
++    encoding: TEXT_ENCODING,
++    stdio: ['ignore', 'pipe', 'pipe'],
++  }).trim();
++}
++
++function writeFile(root, relative, content) {
++  const file = path.join(root, relative);
++  fs.mkdirSync(path.dirname(file), {recursive: true});
++  fs.writeFileSync(file, content);
++}
++
++function receiptPath(questId) {
++  return `solve/evidence/${questId}.receipt.json`;
++}
++
++// A real test-receipt/1 artifact: one recorded command whose receipt is
++// still red, so the product quest's doneWhen measures it without closing.
++function receiptBytes(questId, generatedAt) {
++  return `${JSON.stringify({
++    schema: RECEIPT_SCHEMA,
++    quest: questId,
++    status: STATUS_FAIL,
++    generatedAt,
++    receipts: [{
++      id: FIXTURE_RECEIPT_ID,
++      passed: false,
++      command: FIXTURE_RECEIPT_COMMAND,
++      detail: 'fixture receipt',
++    }],
++  }, null, 2)}\n`;
++}
++
++function tmpDir(t) {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
++  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
++  return root;
++}
++
++// A temporary repository holding one workflow-owned source file, one runtime
++// source file, and the committed evidence receipts of this quest and of a
++// foreign quest — the shared-worktree shape the incident occurred in.
++function fixture(t, quest) {
++  const root = tmpDir(t);
++  git(root, ['init']);
++  git(root, ['config', 'user.email', 'solver@example.com']);
++  git(root, ['config', 'user.name', 'Solver']);
++  git(root, ['config', 'commit.gpgsign', 'false']);
++  writeFile(root, WORKFLOW_SOURCE, WORKFLOW_SOURCE_BASE);
++  writeFile(root, PRODUCT_SOURCE, PRODUCT_SOURCE_BASE);
++  writeFile(root, receiptPath(quest.id),
++    receiptBytes(quest.id, RECEIPT_GENERATED_AT_BASE));
++  writeFile(root, receiptPath(OTHER_QUEST_ID),
++    receiptBytes(OTHER_QUEST_ID, RECEIPT_GENERATED_AT_BASE));
++  git(root, ['add', '-A']);
++  git(root, ['commit', '-m', 'base']);
++  const oracleFile = path.join(root, 'solve', 'oracle', `${quest.id}.json`);
++  fs.mkdirSync(path.dirname(oracleFile), {recursive: true});
++  fs.writeFileSync(oracleFile, JSON.stringify(ORACLE_OPEN));
++  // A product quest must measure non-oracle evidence: its own test-receipt
++  // (the very artifact class the foreign receipt belongs to).
++  const metric = quest.class === 'product' ? {
++    probe: TEST_RECEIPT_PROBE,
++    args: {
++      file: path.join(root, receiptPath(quest.id)),
++      requiredReceipts: [FIXTURE_RECEIPT_ID],
++    },
++  } : {probe: 'oracle', args: {file: oracleFile}};
++  const sealed = {
++    ...quest,
++    authoringContractVersion: 1,
++    verificationContractVersion: 2,
++    priority: 1,
++    doneWhen: metric,
++    frontiers: [{id: `${quest.id}-main`, priority: 1, metric}],
++    constraints: [],
++  };
++  saveQuest(root, sealed);
++  return {root, quest: sealed, oracleFile};
++}
++
++// A process quest whose sealed statement cites a Solver tooling owner, so
++// its scope is workflow and its own source edit is admitted.
++function workflowQuest() {
++  return {
++    id: WORKFLOW_QUEST_ID,
++    class: 'process',
++    statement: `The auto-capture owner ${WORKFLOW_SOURCE} excludes foreign ` +
++      'evidence.',
++  };
++}
++
++function productQuest() {
++  return {
++    id: PRODUCT_QUEST_ID,
++    class: 'product',
++    statement: 'The runtime fixture reaches zero.',
++    links: {planDoc: PRODUCT_PLAN_DOC},
++  };
++}
++
++// The operator sequence: begin the step, make the source change, and — as a
++// foreign harness does in the shared worktree — regenerate the OTHER quest's
++// receipt (fresh generatedAt) before capturing with --auto-diff.
++function captureWithForeignReceipt(fx, sourcePath, candidate) {
++  assert.equal(runStep(fx.root, fx.quest).terminal, null, 'the step begins');
++  writeFile(fx.root, sourcePath, candidate);
++  fs.writeFileSync(fx.oracleFile, JSON.stringify(ORACLE_CLOSER));
++  writeFile(fx.root, receiptPath(OTHER_QUEST_ID),
++    receiptBytes(OTHER_QUEST_ID, RECEIPT_GENERATED_AT_REGENERATED));
++  return runStep(fx.root, fx.quest, {
++    autoDiff: true,
++    summary: 'auto-captured attempt beside a foreign receipt',
++  });
++}
++
++// The unchanged control: this quest's OWN receipt regenerated beside its
++// source change, with no foreign receipt in play.
++function captureWithOwnReceipt(fx, sourcePath, candidate) {
++  assert.equal(runStep(fx.root, fx.quest).terminal, null, 'the step begins');
++  writeFile(fx.root, sourcePath, candidate);
++  fs.writeFileSync(fx.oracleFile, JSON.stringify(ORACLE_CLOSER));
++  writeFile(fx.root, receiptPath(fx.quest.id),
++    receiptBytes(fx.quest.id, RECEIPT_GENERATED_AT_REGENERATED));
++  return runStep(fx.root, fx.quest, {
++    autoDiff: true,
++    summary: 'auto-captured attempt beside its own receipt',
++  });
++}
++
++function recordedChangedPaths(fx) {
++  const attempts = readLog(fx.root, fx.quest.id)
++    .filter((event) => event.type === EVENT_ATTEMPT);
++  assert.equal(attempts.length, 1, 'exactly one attempt is recorded');
++  return [...inspectChangeArtifact(fx.root, fx.quest, attempts[0].changeRef)
++    .changedPaths].sort();
++}
++
++function captureOutcome(t) {
++  const fx = fixture(t, workflowQuest());
++  captureWithForeignReceipt(fx, WORKFLOW_SOURCE, WORKFLOW_SOURCE_CANDIDATE);
++  return recordedChangedPaths(fx);
++}
++
++// A minimal harness that declares one always-green shell receipt through the
++// REAL runtime module, run as its own process the way every
++// scripts/quest-evidence-*.js harness is.
++function harnessFixture(t) {
++  const root = tmpDir(t);
++  writeFile(root, HARNESS_FILE, [
++    `import {runQuestEvidenceHarness} from ${JSON.stringify(RUNTIME_MODULE)};`,
++    'runQuestEvidenceHarness({',
++    `  questId: ${JSON.stringify(HARNESS_QUEST_ID)},`,
++    `  outputFile: ${JSON.stringify(HARNESS_DEFAULT_OUTPUT)},`,
++    `  receipts: [{id: ${JSON.stringify(HARNESS_RECEIPT_ID)}, ` +
++      `command: ${JSON.stringify(HARNESS_RECEIPT_COMMAND)}, ` +
++      'detail: \'always green\'}],',
++    '});',
++    '',
++  ].join('\n'));
++  return root;
++}
++
++function runHarness(root, extraArguments) {
++  return spawnSync(process.execPath, [HARNESS_FILE, ...extraArguments], {
++    cwd: root,
++    encoding: TEXT_ENCODING,
++  });
++}
++
++function readReceipt(file) {
++  return JSON.parse(fs.readFileSync(file, TEXT_ENCODING));
++}
++
++test('foreign-receipt-excluded-from-auto-capture: another quest\'s ' +
++  'regenerated receipt is not swept into this quest\'s auto-captured ' +
++  'attempt', (t) => {
++  const fx = fixture(t, workflowQuest());
++  captureWithForeignReceipt(fx, WORKFLOW_SOURCE, WORKFLOW_SOURCE_CANDIDATE);
++  assert.deepEqual(recordedChangedPaths(fx), [WORKFLOW_SOURCE],
++    'the recorded attempt names only this quest\'s own change');
++  assert.match(git(fx.root, ['status', '--porcelain', '--',
++    receiptPath(OTHER_QUEST_ID)]), /^ ?M /u,
++  'the foreign receipt stays dirty in the worktree, untouched');
++});
++
++test('product-quest-not-refused-by-foreign-receipt: a product quest\'s ' +
++  'auto-captured attempt is recorded instead of refused as a workflow ' +
++  'change', (t) => {
++  const fx = fixture(t, productQuest());
++  let outcome = null;
++  try {
++    outcome = captureWithForeignReceipt(
++      fx, PRODUCT_SOURCE, PRODUCT_SOURCE_CANDIDATE);
++  } catch (error) {
++    outcome = error;
++  }
++  assert.ok(!(outcome instanceof Error),
++    `the capture must not refuse: ${outcome?.message || ''}`);
++  assert.doesNotMatch(String(outcome?.message || ''), WORKFLOW_SCOPE_REFUSAL);
++  assert.deepEqual(recordedChangedPaths(fx), [PRODUCT_SOURCE]);
++});
++
++test('foreign-receipt-only-change-captures-nothing: when the only dirty ' +
++  'path is another quest\'s receipt the capture is empty and refused as ' +
++  'nothing changed', (t) => {
++  const fx = fixture(t, workflowQuest());
++  assert.equal(runStep(fx.root, fx.quest).terminal, null);
++  writeFile(fx.root, receiptPath(OTHER_QUEST_ID),
++    receiptBytes(OTHER_QUEST_ID, RECEIPT_GENERATED_AT_REGENERATED));
++  assert.throws(() => runStep(fx.root, fx.quest, {
++    autoDiff: true,
++    summary: 'nothing of this quest changed',
++  }), AUTO_DIFF_EMPTY, 'a foreign receipt alone is not a change');
++  assert.deepEqual(readLog(fx.root, fx.quest.id)
++    .filter((event) => event.type === EVENT_ATTEMPT), [],
++  'no attempt is recorded for a foreign receipt');
++});
++
++test('own-receipt-still-captured-unchanged: this quest\'s own regenerated ' +
++  'receipt is captured exactly as before', (t) => {
++  const fx = fixture(t, workflowQuest());
++  captureWithOwnReceipt(fx, WORKFLOW_SOURCE, WORKFLOW_SOURCE_CANDIDATE);
++  assert.deepEqual(recordedChangedPaths(fx),
++    [WORKFLOW_SOURCE, receiptPath(WORKFLOW_QUEST_ID)].sort(),
++    'the own receipt rides with the change');
++});
++
++test('harness-output-option-writes-to-scratch: `--output <path>` writes the ' +
++  'receipt to the scratch path and leaves solve/evidence untouched', (t) => {
++  const root = harnessFixture(t);
++  const scratch = path.join(tmpDir(t), SCRATCH_RECEIPT_NAME);
++  const run = runHarness(root, [OUTPUT_FLAG, scratch]);
++  assert.equal(run.status, EXIT_OK, run.stderr);
++  assert.ok(fs.existsSync(scratch), 'the scratch receipt is written');
++  const receipt = readReceipt(scratch);
++  assert.equal(receipt.quest, HARNESS_QUEST_ID);
++  assert.equal(receipt.status, STATUS_PASS);
++  assert.deepEqual(receipt.receipts.map((entry) => entry.id),
++    [HARNESS_RECEIPT_ID]);
++  assert.equal(fs.existsSync(path.join(root, HARNESS_DEFAULT_OUTPUT)), false,
++    'the declared solve/evidence receipt is not written');
++  assert.ok(run.stdout.includes(scratch), 'the summary names the scratch path');
++});
++
++test('harness-default-output-unchanged: without `--output` the harness ' +
++  'writes its declared solve/evidence receipt', (t) => {
++  const root = harnessFixture(t);
++  const run = runHarness(root, []);
++  assert.equal(run.status, EXIT_OK, run.stderr);
++  const receipt = readReceipt(path.join(root, HARNESS_DEFAULT_OUTPUT));
++  assert.equal(receipt.quest, HARNESS_QUEST_ID);
++  assert.equal(receipt.status, STATUS_PASS);
++  assert.equal(typeof receipt.generatedAt, 'string',
++    'the receipt keeps its generatedAt identity');
++});
++
++test('witness-deterministic: two identical capture fixtures record the ' +
++  'identical changed-path set', (t) => {
++  const first = captureOutcome(t);
++  const second = captureOutcome(t);
++  assert.deepEqual(first, second,
++    'the captured path set is a pure function of the tree and the quest id');
++});
