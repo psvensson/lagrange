@@ -162,6 +162,21 @@ export function insertPublishedEpochRow(cache, epoch) {
   );
 }
 
+// A same-epoch change of an already PUBLISHED publication row (any column
+// churn short of a new epoch): the cache notifies it like any other change.
+export function touchPublishedEpochRow(cache, epoch, touchSeq) {
+  cache.applySystemTableChange(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    CDCOperation.UPDATE,
+    {
+      publication_id: `publication-epoch-${epoch}`,
+      status: PUBLISHED_STATUS,
+      publication_epoch: epoch,
+      publication_touch: touchSeq,
+    },
+  );
+}
+
 // One-way replication partition: while engaged, every leader->learner
 // delivery is dropped (append fan-out, catch-up batches, probes). The
 // learner->leader direction (proof RPC, acks it cannot send anyway) stays up.

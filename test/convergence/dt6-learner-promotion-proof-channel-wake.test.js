@@ -27,6 +27,7 @@ import {
   insertServiceRow,
   recordServiceLog,
   resetFixtureRuntime,
+  touchPublishedEpochRow,
   updateServiceRow,
   waitFor,
 } from './dt6-learner-promotion-fixture.js';
@@ -48,10 +49,13 @@ import {
 //     ROW_WITHHOLD_S — or earlier when the learner re-asserts it through
 //     the replica state machine's CL-021 deferred-row retry;
 //   - the leader STALLS in periodic windows (LEADER_STALL_S stalled,
-//     LEADER_AWAKE_S awake): a proof delivery sent during a stall completes
-//     when the stall ends, or fails with a timeout when its bound expires
-//     first — the router semantics of transport.deliver({timeoutMs}), with
-//     the router default MESSAGE_TIMEOUT_MS when no bound is given.
+//     LEADER_AWAKE_S awake) and, when a sustained app-channel latency is
+//     injected, every proof round trip takes that long: a proof delivery
+//     completes when its delay elapses, or fails with a timeout when its
+//     bound expires first — the router semantics of
+//     transport.deliver({timeoutMs}), with the transport's configured
+//     messageTimeoutMs (the router default MESSAGE_TIMEOUT_MS on the
+//     scenario clock) when no bound is given.
 //
 // SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
 // the drive runs on a scaled real clock: one scenario second is the
@@ -75,11 +79,11 @@ const GREEN_ACTIVE_BOUND_S = 12;
 const HEAD_ACTIVE_FLOOR_S = 26;
 const DRIVE_BUDGET_S = 40;
 const WAKE_BOUND_MS = VIRTUAL_SECOND_MS / 2;
-const TIMEOUT_INTERVAL_MULTIPLE = 2;
-const EXPECTED_PROOF_TIMEOUT_MS = Math.min(
-  TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
-  RETRY_INTERVAL_MS * TIMEOUT_INTERVAL_MULTIPLE,
-);
+// The router-configured message timeout on the scenario clock: the proof
+// delivery timeout is exactly this value, never a multiple of the cadence.
+const ROUTER_TIMEOUT_MS = ROUTER_DEFAULT_TIMEOUT_S * VIRTUAL_SECOND_MS;
+const SUSTAINED_LATENCY_S = 3;
+const NO_LATENCY_S = 0;
 const HEAD_MESSAGE_TIMEOUT_MS = 5000;
 const HEAD_RETRY_INTERVAL_MS = 1000;
 const PUBLISHED_EPOCH_ONE = 1;
@@ -90,6 +94,23 @@ const FOREIGN_LEARNER_REPLICA = 'replica-foreign';
 const FOREIGN_PARTITION_ID = 'progress-proof-other';
 const OBSERVATION_INTERVALS = 5;
 const MIN_TIMEOUT_REQUESTS = 3;
+// Churn windows: the learner settles on its cadence, then CHURN_COUNT
+// same-content changes land CHURN_SPACING_MS apart, then the log is read
+// after CHURN_OBSERVE_INTERVALS more intervals. A transition-only wake
+// yields exactly one immediate wake in the window; a change-notification
+// wake yields one per change (the rejected candidate: 51 / 52).
+const SETTLE_INTERVALS = 3;
+const CHURN_COUNT = 50;
+const CHURN_SPACING_MS = 5;
+const CHURN_OBSERVE_INTERVALS = 2;
+const CHURN_WINDOW_INTERVALS = CHURN_OBSERVE_INTERVALS + Math.ceil(
+  (CHURN_COUNT * CHURN_SPACING_MS) / RETRY_INTERVAL_MS,
+);
+// Cadence ticks that fit the churn window, plus the one wake and one
+// boundary tick: the ceiling for checks that are NOT churn-driven.
+const MAX_CHURN_WINDOW_CHECKS = CHURN_WINDOW_INTERVALS + 2;
+const SINGLE_WAKE = 1;
+const NO_REQUESTS = 0;
 const SCHEDULING_SLACK_MS = VIRTUAL_SECOND_MS / 2;
 const REQUEST_INVALID = LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID;
 const PROGRESS_BEHIND = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
@@ -105,6 +126,7 @@ const WAKE_SERVICES_ROW_VISIBLE = 'services_row_visible';
 const WAKE_PUBLISHED_EPOCH_CHANGED = 'published_epoch_changed';
 const LOG_LEVEL_INFO = 'info';
 const OUTCOME_TIMEOUT = 'timeout';
+const WAKE_DELAY_MS = PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS;
 
 function seconds(clock, atMs) {
   return Number(((atMs - clock.originMs) / VIRTUAL_SECOND_MS).toFixed(2));
@@ -177,15 +199,17 @@ function completeProofRequest(request, clock, response, listeners) {
 }
 
 // Learner-side transport: observes every proof request (send instant,
-// carried epoch, delivery bound) and applies the leader stall with the
-// router's timeout semantics.
-function createProofChannelTransport(inner, clock, stallPlan) {
+// carried epoch, delivery bound) and applies the leader stall plus the
+// sustained round-trip latency with the router's timeout semantics. Like
+// the message router it carries its configured messageTimeoutMs — the
+// bound the learner passes explicitly on every proof delivery.
+function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
   const requests = [];
   const listeners = {onResponse: null};
-  const routerDefaultTimeoutMs = ROUTER_DEFAULT_TIMEOUT_S * VIRTUAL_SECOND_MS;
   return {
     requests,
     listeners,
+    messageTimeoutMs: ROUTER_TIMEOUT_MS,
     register: (address, handler) => inner.register(address, handler),
     unregister: (address) => inner.unregister(address),
     deliver: async (address, payload, options) => {
@@ -193,13 +217,14 @@ function createProofChannelTransport(inner, clock, stallPlan) {
         return inner.deliver(address, payload, options);
       }
       const request = recordProofRequest(requests, clock, payload, options);
-      const boundMs = resolveDeliveryBoundMs(options, routerDefaultTimeoutMs);
-      const stallMs = stallPlan.remainingStallMs(request.sentAtMs);
-      if (stallMs > boundMs) {
+      const boundMs = resolveDeliveryBoundMs(options, ROUTER_TIMEOUT_MS);
+      const delayMs =
+        stallPlan.remainingStallMs(request.sentAtMs) + latencyMs;
+      if (delayMs > boundMs) {
         return failProofDeliveryAtBound(request, clock, boundMs);
       }
-      if (stallMs > 0) {
-        await sleep(stallMs);
+      if (delayMs > 0) {
+        await sleep(delayMs);
       }
       const response = await inner.deliver(address, payload, options);
       completeProofRequest(request, clock, response, listeners);
@@ -261,6 +286,34 @@ function wakeReasons(learnerLog) {
     .map((entry) => entry.payload?.scheduleReason);
 }
 
+// Every immediate wake of one typed reason: the ones that armed the check
+// now and the ones coalesced into an in-flight check.
+function immediateWakeCount(learnerLog, wakeReason) {
+  return learnerLog.filter((entry) =>
+    (entry.message === PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED &&
+      entry.payload?.delayMs === WAKE_DELAY_MS &&
+      entry.payload?.scheduleReason === wakeReason) ||
+    (entry.message ===
+      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_WAKE_COALESCED &&
+      entry.payload?.wakeReason === wakeReason)).length;
+}
+
+// Observe a churn window: settle, mark, apply the changes, observe.
+async function driveChurnWindow(fixture, applyChange) {
+  await sleep(SETTLE_INTERVALS * RETRY_INTERVAL_MS);
+  const logIndex = fixture.learnerLog.length;
+  const requestCount = fixture.transport.requests.length;
+  for (let seq = 0; seq < CHURN_COUNT; seq++) {
+    applyChange(seq);
+    await sleep(CHURN_SPACING_MS);
+  }
+  await sleep(CHURN_OBSERVE_INTERVALS * RETRY_INTERVAL_MS);
+  return {
+    log: fixture.learnerLog.slice(logIndex),
+    requests: fixture.transport.requests.length - requestCount,
+  };
+}
+
 function learnerDeferrals(learnerLog) {
   return learnerLog
     .filter((entry) =>
@@ -284,6 +337,7 @@ async function createChannelFixture(options = {}) {
   });
   const landing = createRowLanding(clock);
   let transport = null;
+  const latencyMs = (options.latencyS ?? NO_LATENCY_S) * VIRTUAL_SECOND_MS;
   const fixture = await createFiveNodeFixture({
     splitCaches: true,
     startPartitioned: options.startPartitioned === true,
@@ -295,7 +349,8 @@ async function createChannelFixture(options = {}) {
       createDeferredRowStateMachine(clock, landing) :
       undefined,
     wrapLearnerTransport: (inner) => {
-      transport = createProofChannelTransport(inner, clock, stallPlan);
+      transport =
+        createProofChannelTransport(inner, clock, stallPlan, latencyMs);
       return transport;
     },
   });
@@ -648,12 +703,12 @@ test(
       t.diagnostic(`proof deliveries: ${JSON.stringify(requests.map((r) => [
         seconds(fixture.clock, r.sentAtMs), r.timeoutMs, r.outcome,
       ]))}`);
-      assert.equal(requests[0].timeoutMs, EXPECTED_PROOF_TIMEOUT_MS,
-        'the delivery bound is min(MESSAGE_TIMEOUT_MS, ' +
-        `${TIMEOUT_INTERVAL_MULTIPLE} x retry interval) = ` +
-        `${EXPECTED_PROOF_TIMEOUT_MS} ms`);
-      assert.ok(requests[0].timeoutMs <= TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
-        'never larger than MESSAGE_TIMEOUT_MS');
+      assert.equal(requests[0].timeoutMs, fixture.transport.messageTimeoutMs,
+        'the delivery timeout is the router-configured message timeout, ' +
+        'passed explicitly');
+      assert.equal(requests[0].timeoutMs, ROUTER_TIMEOUT_MS,
+        `the router-configured timeout is ${ROUTER_DEFAULT_TIMEOUT_S} s of ` +
+        'scenario time, never bounded to a multiple of the cadence');
       assert.equal(requests[0].outcome, OUTCOME_TIMEOUT,
         'the stalled delivery timed out at its bound');
       const transportFailures = fixture.learnerLog.filter((entry) =>
@@ -666,13 +721,141 @@ test(
       for (let index = 1; index < requests.length; index++) {
         const spacingMs = requests[index].sentAtMs - requests[index - 1].sentAtMs;
         assert.ok(
-          spacingMs <= EXPECTED_PROOF_TIMEOUT_MS + RETRY_INTERVAL_MS +
+          spacingMs <= ROUTER_TIMEOUT_MS + RETRY_INTERVAL_MS +
             SCHEDULING_SLACK_MS,
-          'a timeout never stacks beyond bound + interval (spacing ' +
-            `${spacingMs} ms)`);
+          'the next request is scheduled from completion: a timeout never ' +
+            `stacks beyond timeout + interval (spacing ${spacingMs} ms)`);
       }
       assert.equal(fixture.learner.role, RaftRole.LEARNER,
         'transport failures never promote');
+    } finally {
+      await fixture.shutdown();
+      resetFixtureRuntime();
+    }
+  },
+);
+
+test(
+  'proof-delivery-timeout-bounded-and-logged-under-latency: with the ' +
+  'router-configured timeout as the bound, a sustained 3 s round trip ' +
+  'still promotes',
+  async (t) => {
+    configureFixtureRuntime();
+    const fixture = await createChannelFixture({
+      publishedEpoch: PUBLISHED_EPOCH_ONE,
+      latencyS: SUSTAINED_LATENCY_S,
+    });
+    try {
+      const promoted = await waitForPromotion(fixture);
+      const activeAtS = seconds(fixture.clock, fixture.clock.now());
+      const {requests} = fixture.transport;
+      t.diagnostic(`latency ${SUSTAINED_LATENCY_S} s: promoted=${promoted} ` +
+        `at +${activeAtS} s; deliveries ${JSON.stringify(requests.map((r) => [
+          seconds(fixture.clock, r.sentAtMs), r.timeoutMs, r.outcome,
+        ]))}`);
+      assert.ok(requests.length >= 1, 'a proof was delivered');
+      assert.equal(requests[0].timeoutMs, fixture.transport.messageTimeoutMs,
+        'timeoutMs is the router-configured message timeout');
+      assert.equal(requests[0].timeoutMs, ROUTER_TIMEOUT_MS,
+        `the bound is ${ROUTER_DEFAULT_TIMEOUT_S} s of scenario time ` +
+        '(the router default), not 2 x the cadence');
+      assert.equal(promoted, true,
+        `a ${SUSTAINED_LATENCY_S} s round trip below the router timeout ` +
+        'promotes (a cadence-multiple bound times out forever)');
+      assert.ok(requests.every((request) => request.outcome !== OUTCOME_TIMEOUT),
+        'no delivery timed out below the router timeout');
+      assert.ok(activeAtS <= GREEN_ACTIVE_BOUND_S,
+        `voter by +${GREEN_ACTIVE_BOUND_S} s (observed +${activeAtS} s)`);
+      assert.ok(grantedProof(fixture), 'promotion was granted on a proof');
+    } finally {
+      await fixture.shutdown();
+      resetFixtureRuntime();
+    }
+  },
+);
+
+test(
+  'proof-wakes-on-published-epoch-change-transition-only: a learner ' +
+  'deferred before the proof gate wakes once per epoch transition, never ' +
+  'per publication change',
+  async (t) => {
+    configureFixtureRuntime();
+    const fixture = await createChannelFixture({startPartitioned: true});
+    try {
+      // Surplus ACTIVE voters cap the learner in the quorum-shape gate, so
+      // no proof is ever requested: the wake state has no request to
+      // anchor on and must track the observed epoch itself.
+      for (const [replicaId, nodeId] of SURPLUS_VOTERS) {
+        insertServiceRow(fixture.leaderCache, replicaId, nodeId,
+          RaftRole.FOLLOWER);
+        insertServiceRow(fixture.learnerCache, replicaId, nodeId,
+          RaftRole.FOLLOWER);
+      }
+      const capSeen = await waitFor(
+        () => learnerDeferrals(fixture.learnerLog).some(
+          (d) => d.reason === WOULD_EXCEED_TARGET),
+        DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
+      );
+      assert.equal(capSeen, true, 'the learner defers before the proof gate');
+      const window = await driveChurnWindow(fixture, (seq) => {
+        if (seq === 0) {
+          insertPublishedEpochRow(fixture.learnerCache, PUBLISHED_EPOCH_ONE);
+        }
+        touchPublishedEpochRow(fixture.learnerCache, PUBLISHED_EPOCH_ONE, seq);
+      });
+      const wakes = immediateWakeCount(window.log, WAKE_PUBLISHED_EPOCH_CHANGED);
+      const deferrals = learnerDeferrals(window.log).length;
+      t.diagnostic(`1 epoch insert + ${CHURN_COUNT} same-epoch updates: ` +
+        `immediate wakes ${wakes}, info deferrals ${deferrals}, proof ` +
+        `requests ${window.requests}`);
+      assert.equal(wakes, SINGLE_WAKE,
+        'exactly one published_epoch_changed wake: the epoch transition, ' +
+        `not the ${CHURN_COUNT} same-epoch publication changes`);
+      assert.ok(deferrals <= MAX_CHURN_WINDOW_CHECKS,
+        `info deferrals stay on the cadence (${deferrals} in the window)`);
+      assert.equal(window.requests, NO_REQUESTS,
+        'the capped learner never reaches the proof gate (gate order unchanged)');
+      assert.equal(fixture.learner.learnerPromotionWake.observedMembershipEpoch,
+        PUBLISHED_EPOCH_ONE, 'the hook itself tracks the observed epoch');
+      assert.equal(fixture.learner.role, RaftRole.LEARNER,
+        'no wake ever promotes');
+    } finally {
+      await fixture.shutdown();
+      resetFixtureRuntime();
+    }
+  },
+);
+
+test(
+  'proof-wakes-on-services-row-visibility-transition-only: the own row ' +
+  'wakes once when it first becomes visible, never on later row updates',
+  async (t) => {
+    configureFixtureRuntime();
+    // Replication is partitioned so every proof is refused progress_behind
+    // and the learner stays a learner for the whole window; its own row is
+    // the fixture's seed (never observed by the learner) until the first
+    // durable landing below.
+    const fixture = await createChannelFixture({startPartitioned: true});
+    try {
+      const window = await driveChurnWindow(fixture, () => {
+        updateServiceRow(
+          fixture.learnerCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
+        );
+      });
+      const wakes = immediateWakeCount(window.log, WAKE_SERVICES_ROW_VISIBLE);
+      t.diagnostic(`${CHURN_COUNT} own-row updates (first = the durable ` +
+        `landing): immediate wakes ${wakes}, proof requests ` +
+        `${window.requests} (cadence ceiling ${MAX_CHURN_WINDOW_CHECKS})`);
+      assert.equal(wakes, SINGLE_WAKE,
+        'exactly one services_row_visible wake: the local-only -> visible ' +
+        `transition, not the ${CHURN_COUNT - 1} later updates of the row`);
+      assert.ok(window.requests <= MAX_CHURN_WINDOW_CHECKS,
+        'proof requests stay on the cadence plus the one wake ' +
+        `(${window.requests} in the window)`);
+      assert.equal(fixture.learner.learnerPromotionWake.ownServicesRowVisible,
+        true, 'the wake state records the visible own row');
+      assert.equal(fixture.learner.role, RaftRole.LEARNER,
+        'no wake ever promotes');
     } finally {
       await fixture.shutdown();
       resetFixtureRuntime();

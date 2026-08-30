@@ -1,0 +1,875 @@
+diff --git a/scripts/quest-evidence-learner-promotion-proof-channel-wake.js b/scripts/quest-evidence-learner-promotion-proof-channel-wake.js
+index 21171ed0cf778fd11d228085904ab40c9c50e551..b33ff76554e821f9e4bc9df19eee434173900147 100644
+--- a/scripts/quest-evidence-learner-promotion-proof-channel-wake.js
++++ b/scripts/quest-evidence-learner-promotion-proof-channel-wake.js
+@@ -53,7 +53,10 @@ const RECEIPTS = Object.freeze([
+       'learner\'s first proof is refused request_invalid and the next ' +
+       'proof request follows the row\'s landing in its own cache within ' +
+       'half a retry interval (typed services_row_visible wake on the ' +
+-      'existing single-flight schedule), not on the 1 s timer + RTT',
++      'existing single-flight schedule), not on the 1 s timer + RTT; the ' +
++      'wake is the local-only -> visible transition alone: 50 later ' +
++      'updates of the visible row yield no further wake and no proof ' +
++      'request beyond the cadence',
+   }),
+   Object.freeze({
+     id: 'proof-wakes-on-published-epoch-change',
+@@ -61,7 +64,10 @@ const RECEIPTS = Object.freeze([
+     detail: 'a change of the latest PUBLISHED publication epoch re-requests ' +
+       'the proof within half a retry interval, the re-request binds the ' +
+       'new epoch (typed published_epoch_changed wake), and the grant after ' +
+-      'healing is bound to that epoch',
++      'healing is bound to that epoch; the wake is the epoch transition ' +
++      'alone, tracked by the hook itself: for a learner deferred before ' +
++      'the proof gate, one epoch insert plus 50 same-epoch updates of the ' +
++      'PUBLISHED row yield exactly one wake',
+   }),
+   Object.freeze({
+     id: 'typed-refusal-cause-address-unresolvable',
+@@ -83,10 +89,14 @@ const RECEIPTS = Object.freeze([
+   Object.freeze({
+     id: 'proof-delivery-timeout-bounded-and-logged',
+     command: scenarioCommand('^proof-delivery-timeout-bounded-and-logged'),
+-    detail: 'every proof delivery carries timeoutMs = min(MESSAGE_TIMEOUT_MS, ' +
+-      '2 x LEARNER_CATCH_UP_CHECK_INTERVAL_MS), a stalled delivery fails at ' +
+-      'that bound, proof_transport_failed is logged at info, and the next ' +
+-      'request never stacks beyond bound + interval',
++    detail: 'every proof delivery carries timeoutMs = the router-configured ' +
++      'message timeout (transport.messageTimeoutMs, else the configured ' +
++      'transport.messageTimeoutMs, else MESSAGE_TIMEOUT_MS 5000), never a ' +
++      'multiple of the cadence and never bounded below it; a stalled ' +
++      'delivery fails at that timeout, proof_transport_failed is logged at ' +
++      'info, the next request is scheduled from completion (never stacks ' +
++      'beyond timeout + interval), and a sustained 3 s round trip still ' +
++      'promotes',
+   }),
+   Object.freeze({
+     id: 'proof-semantics-and-voter-cap-unchanged',
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index e94db11d1fef790076c21585d9fffe7e03b8ebe0..bbcc6ae80e0d806c1d2c3d016547f240a40dba17 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -31,12 +31,12 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
+   // learner-promotion-progress-proof); elapsed time is ONLY the retry
+   // cadence below for re-requesting the proof, never a promotion condition.
+   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
+-  // An event wake (own services row visible, published epoch changed)
+-  // re-arms the single-flight check now; the cadence above stays the floor.
++  // An event wake (own services row first visible, latest PUBLISHED epoch
++  // changed) re-arms the single-flight check now; the cadence above stays
++  // the floor. The proof delivery timeout is the router-configured message
++  // timeout (never bounded below it); the next check is armed from
++  // completion, so a timeout never stacks with the cadence.
+   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
+-  // Proof delivery bound: min(MESSAGE_TIMEOUT_MS, this multiple of the retry
+-  // cadence) so one timed-out round trip never stacks beyond the cadence.
+-  LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE: NUM.TWO,
+   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
+   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
+   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+diff --git a/src/partition/partition-service-learner-promotion-methods.js b/src/partition/partition-service-learner-promotion-methods.js
+index 499304917010fdbd672531fe40d04876082dbe55..f9779e81be48a7bccae65b9e521b730b8c1d6451 100644
+--- a/src/partition/partition-service-learner-promotion-methods.js
++++ b/src/partition/partition-service-learner-promotion-methods.js
+@@ -587,8 +587,6 @@ class PartitionServiceLearnerPromotionMethods {
+     const requestedLeaderId = this.leaderId;
+     const requestedMembershipEpoch =
+       this.resolveLearnerPromotionMembershipEpoch();
+-    this.learnerPromotionWake.requestedMembershipEpoch =
+-      requestedMembershipEpoch;
+     const proof = await this.requestLearnerPromotionProofFromLeader({
+       leaderReplicaId: requestedLeaderId,
+       membershipEpoch: requestedMembershipEpoch,
+diff --git a/src/partition/partition-service-learner-promotion-proof-methods.js b/src/partition/partition-service-learner-promotion-proof-methods.js
+index d79cbc7ae9de5bdc05ae58c37d1ed1031f07df8f..209ead88e59387347e52cbcf719a224ec6791fbe 100644
+--- a/src/partition/partition-service-learner-promotion-proof-methods.js
++++ b/src/partition/partition-service-learner-promotion-proof-methods.js
+@@ -9,11 +9,14 @@ import {
+ import {
+   buildSnapshotCatchupIdentityFromCache,
+ } from '../raft/snapshot-catchup.js';
+-import {TRANSPORT_DEFAULT} from '../constants/transport.js';
++import {
++  TRANSPORT_CONFIG_KEY,
++  TRANSPORT_DEFAULT,
++} from '../constants/transport.js';
+ 
+ const {
++  ConfigurationManager,
+   LifeRaft,
+-  PARTITION_SERVICE_DEFAULT,
+   PARTITION_SERVICE_LITERAL,
+   PARTITION_SERVICE_LOG_MSG,
+   PARTITION_SERVICE_MESSAGE_TYPE,
+@@ -277,19 +280,23 @@ class PartitionServiceLearnerPromotionProofMethods {
+     return refuseLearnerPromotionProof(reason, cause);
+   }
+   /**
+-   * Proof delivery bound: never larger than the transport's
+-   * MESSAGE_TIMEOUT_MS, and at most twice the retry cadence so a timed-out
+-   * round trip plus the cadence stays within three intervals instead of
+-   * stacking the 5 s router default on the 1 s timer.
++   * Proof delivery timeout: the router-configured message timeout, resolved
++   * the way the router resolves it (its own messageTimeoutMs, else the
++   * configured transport.messageTimeoutMs, else TRANSPORT_DEFAULT
++   * .MESSAGE_TIMEOUT_MS) and passed explicitly so the bound is visible on
++   * the wire. It is never bounded below that timeout: a tighter bound
++   * starves promotion under sustained leader latency (a 3 s round trip
++   * times out forever against a 2 s bound). Not stacking with the cadence
++   * is the schedule's property — the next check is armed from completion.
+    * @return {number} milliseconds
+    * @private
+    */
+   resolveLearnerPromotionProofDeliveryTimeoutMs() {
+-    return Math.min(
+-      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+-      this.learnerCatchUpCheckIntervalMs *
+-        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE,
+-    );
++    return this.transport?.messageTimeoutMs ||
++      ConfigurationManager.getInstance().get(
++        TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS,
++      ) ||
++      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+   }
+   /**
+    * Resolve the discovered leader's unified address, or null when it cannot
+diff --git a/src/partition/partition-service-learner-promotion-wake-methods.js b/src/partition/partition-service-learner-promotion-wake-methods.js
+index 3f8a4478a8eaf85b515f8e8cad3080332ad9c50b..85bd1306f13d2c83d879f9229861ff63548cc1a6 100644
+--- a/src/partition/partition-service-learner-promotion-wake-methods.js
++++ b/src/partition/partition-service-learner-promotion-wake-methods.js
+@@ -12,24 +12,29 @@ const {
+   TABLES,
+ } = PARTITION_SERVICE_SHARED;
+ 
+-// The membership epoch before any proof was requested: the contract's
+-// bootstrap epoch (0), so the first published epoch the cache hydrates is
+-// itself a change worth one immediate re-request.
++// The membership epoch observed before the learner start seeds the wake
++// state from its cache: the contract's bootstrap epoch (0), so a cache that
++// hydrates its first PUBLISHED epoch only after the seed still wakes once.
+ const LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH = 0;
+ const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
+ 
+ /**
+  * Per-service learner-promotion wake bookkeeping, created by the service
+- * constructor. A wake that arrives while a check is in flight is coalesced
+- * (pendingReasons) and drained into one immediate re-check when the
+- * in-flight check completes — the proof channel stays single-flight.
++ * constructor. Both wake sources are CONTENT TRANSITIONS, never change
++ * notifications: observedMembershipEpoch is the latest PUBLISHED epoch the
++ * hook last saw (seeded at learner start), ownServicesRowVisible flips on
++ * the first own-row observation and stays set. A wake that arrives while a
++ * check is in flight is coalesced (pendingReasons) and drained into one
++ * immediate re-check when the in-flight check completes — the proof
++ * channel stays single-flight.
+  * @return {Object} mutable wake state
+  */
+ function createLearnerPromotionWakeState() {
+   return {
+     checkInFlight: false,
+     pendingReasons: new Set(),
+-    requestedMembershipEpoch: LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH,
++    observedMembershipEpoch: LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH,
++    ownServicesRowVisible: false,
+   };
+ }
+ 
+@@ -40,45 +45,81 @@ function createLearnerPromotionWakeState() {
+  * existing single-flight schedule immediately when an event makes a new
+  * answer likely — the learner's own services row becoming visible in its
+  * system-table cache (the leader can now resolve its address) or the
+- * latest PUBLISHED membership epoch changing (the proof binds to it). The
+- * retry cadence remains the floor and the fallback; no promotion decision
+- * lives here.
++ * latest PUBLISHED membership epoch changing (the proof binds to it). Both
++ * are transitions of the observed content: a row update after the row is
++ * visible and a publication change that leaves the latest PUBLISHED epoch
++ * unchanged are silent (no wake, no log). The retry cadence remains the
++ * floor and the fallback; no promotion decision lives here.
+  */
+ class PartitionServiceLearnerPromotionWakeMethods {
++  /**
++   * Learner start: observe the current cache content as the wake baseline
++   * so only later transitions wake. The own-row flag is deliberately left
++   * unobserved here: the row the cache may already hold is the CL-016
++   * local-only seed, whose durable landing is the transition under watch.
++   * @private
++   */
++  seedLearnerPromotionWakeObservation() {
++    this.learnerPromotionWake.observedMembershipEpoch =
++      this.resolveLearnerPromotionMembershipEpoch();
++  }
+   /**
+    * Cache-change hook (every table, every change): route the two wake
+    * sources; cheap early exits for everything else.
+    * @param {string} tableName
+-   * @param {string} operation
++   * @param {string} _operation
+    * @param {Object} record
+    * @private
+    */
+-  observeLearnerPromotionWakeSource(tableName, operation, record) {
++  observeLearnerPromotionWakeSource(tableName, _operation, record) {
+     if (!isCatchupLearnerRaftRole(this.role) || !record) {
+       return;
+     }
+     if (tableName === TABLES.SERVICES) {
+-      if (
+-        record.service_id === this.replicaId &&
+-        record.partition_id === this.partitionId &&
+-        record.service_type === SERVICE_TYPE.PARTITION
+-      ) {
+-        this.wakeLearnerPromotion(
+-          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
+-            .SERVICES_ROW_VISIBLE,
+-        );
+-      }
++      this.observeOwnServicesRowForLearnerPromotion(record);
+       return;
+     }
+-    if (tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS) {
+-      return;
++    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
++      this.observePublishedEpochForLearnerPromotion();
+     }
+-    const membershipEpoch = this.resolveLearnerPromotionMembershipEpoch();
++  }
++  /**
++   * Own-row source: exactly one wake, on the first observation of this
++   * learner's own partition services row (absent / local-only seed ->
++   * visible); every later update of the row is silent.
++   * @param {Object} record services row
++   * @private
++   */
++  observeOwnServicesRowForLearnerPromotion(record) {
++    const wake = this.learnerPromotionWake;
+     if (
+-      membershipEpoch === this.learnerPromotionWake.requestedMembershipEpoch
++      wake.ownServicesRowVisible ||
++      record.service_id !== this.replicaId ||
++      record.partition_id !== this.partitionId ||
++      record.service_type !== SERVICE_TYPE.PARTITION
+     ) {
+       return;
+     }
++    wake.ownServicesRowVisible = true;
++    this.wakeLearnerPromotion(
++      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++        .SERVICES_ROW_VISIBLE,
++    );
++  }
++  /**
++   * Epoch source: wake only when the resolved latest-PUBLISHED epoch
++   * differs from the last observed value, independent of whether a proof
++   * was requested; the observation is updated here, so same-epoch
++   * publication changes (any row, column or operation) are silent.
++   * @private
++   */
++  observePublishedEpochForLearnerPromotion() {
++    const wake = this.learnerPromotionWake;
++    const membershipEpoch = this.resolveLearnerPromotionMembershipEpoch();
++    if (membershipEpoch === wake.observedMembershipEpoch) {
++      return;
++    }
++    wake.observedMembershipEpoch = membershipEpoch;
+     this.wakeLearnerPromotion(
+       PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
+         .PUBLISHED_EPOCH_CHANGED,
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 6288fa1ba4cab27550b1d36433507ac09cdb272f..689d21b922612e0a1fb3244df7c3b572b5360b73 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -526,6 +526,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+     };
+     if (this.isJoiningExistingGroup) {
+       this.role = RaftRole.LEARNER;
++      this.seedLearnerPromotionWakeObservation();
+       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_AS_LEARNER, {
+         replicaId: this.replicaId,
+         partitionId: this.partitionId,
+diff --git a/test/convergence/dt6-learner-promotion-fixture.js b/test/convergence/dt6-learner-promotion-fixture.js
+index ac084b9d6df4275741cd01cc461a7bd18b58e49a..25e470ffef7381d39bcd7ac36d3f44ecc775d437 100644
+--- a/test/convergence/dt6-learner-promotion-fixture.js
++++ b/test/convergence/dt6-learner-promotion-fixture.js
+@@ -162,6 +162,21 @@ export function insertPublishedEpochRow(cache, epoch) {
+   );
+ }
+ 
++// A same-epoch change of an already PUBLISHED publication row (any column
++// churn short of a new epoch): the cache notifies it like any other change.
++export function touchPublishedEpochRow(cache, epoch, touchSeq) {
++  cache.applySystemTableChange(
++    TABLES.CONTROL_PLANE_PUBLICATIONS,
++    CDCOperation.UPDATE,
++    {
++      publication_id: `publication-epoch-${epoch}`,
++      status: PUBLISHED_STATUS,
++      publication_epoch: epoch,
++      publication_touch: touchSeq,
++    },
++  );
++}
++
+ // One-way replication partition: while engaged, every leader->learner
+ // delivery is dropped (append fan-out, catch-up batches, probes). The
+ // learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
+diff --git a/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js b/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js
+index d6d1434111e8a0b6bcdbf50d18053d688daff168..b22e107a8a6019b8303b783cd1e28ec7bb957de0 100644
+--- a/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js
++++ b/test/convergence/dt6-learner-promotion-proof-channel-wake.test.js
+@@ -27,6 +27,7 @@ import {
+   insertServiceRow,
+   recordServiceLog,
+   resetFixtureRuntime,
++  touchPublishedEpochRow,
+   updateServiceRow,
+   waitFor,
+ } from './dt6-learner-promotion-fixture.js';
+@@ -48,10 +49,13 @@ import {
+ //     ROW_WITHHOLD_S — or earlier when the learner re-asserts it through
+ //     the replica state machine's CL-021 deferred-row retry;
+ //   - the leader STALLS in periodic windows (LEADER_STALL_S stalled,
+-//     LEADER_AWAKE_S awake): a proof delivery sent during a stall completes
+-//     when the stall ends, or fails with a timeout when its bound expires
+-//     first — the router semantics of transport.deliver({timeoutMs}), with
+-//     the router default MESSAGE_TIMEOUT_MS when no bound is given.
++//     LEADER_AWAKE_S awake) and, when a sustained app-channel latency is
++//     injected, every proof round trip takes that long: a proof delivery
++//     completes when its delay elapses, or fails with a timeout when its
++//     bound expires first — the router semantics of
++//     transport.deliver({timeoutMs}), with the transport's configured
++//     messageTimeoutMs (the router default MESSAGE_TIMEOUT_MS on the
++//     scenario clock) when no bound is given.
+ //
+ // SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
+ // the drive runs on a scaled real clock: one scenario second is the
+@@ -75,11 +79,11 @@ const GREEN_ACTIVE_BOUND_S = 12;
+ const HEAD_ACTIVE_FLOOR_S = 26;
+ const DRIVE_BUDGET_S = 40;
+ const WAKE_BOUND_MS = VIRTUAL_SECOND_MS / 2;
+-const TIMEOUT_INTERVAL_MULTIPLE = 2;
+-const EXPECTED_PROOF_TIMEOUT_MS = Math.min(
+-  TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+-  RETRY_INTERVAL_MS * TIMEOUT_INTERVAL_MULTIPLE,
+-);
++// The router-configured message timeout on the scenario clock: the proof
++// delivery timeout is exactly this value, never a multiple of the cadence.
++const ROUTER_TIMEOUT_MS = ROUTER_DEFAULT_TIMEOUT_S * VIRTUAL_SECOND_MS;
++const SUSTAINED_LATENCY_S = 3;
++const NO_LATENCY_S = 0;
+ const HEAD_MESSAGE_TIMEOUT_MS = 5000;
+ const HEAD_RETRY_INTERVAL_MS = 1000;
+ const PUBLISHED_EPOCH_ONE = 1;
+@@ -90,6 +94,23 @@ const FOREIGN_LEARNER_REPLICA = 'replica-foreign';
+ const FOREIGN_PARTITION_ID = 'progress-proof-other';
+ const OBSERVATION_INTERVALS = 5;
+ const MIN_TIMEOUT_REQUESTS = 3;
++// Churn windows: the learner settles on its cadence, then CHURN_COUNT
++// same-content changes land CHURN_SPACING_MS apart, then the log is read
++// after CHURN_OBSERVE_INTERVALS more intervals. A transition-only wake
++// yields exactly one immediate wake in the window; a change-notification
++// wake yields one per change (the rejected candidate: 51 / 52).
++const SETTLE_INTERVALS = 3;
++const CHURN_COUNT = 50;
++const CHURN_SPACING_MS = 5;
++const CHURN_OBSERVE_INTERVALS = 2;
++const CHURN_WINDOW_INTERVALS = CHURN_OBSERVE_INTERVALS + Math.ceil(
++  (CHURN_COUNT * CHURN_SPACING_MS) / RETRY_INTERVAL_MS,
++);
++// Cadence ticks that fit the churn window, plus the one wake and one
++// boundary tick: the ceiling for checks that are NOT churn-driven.
++const MAX_CHURN_WINDOW_CHECKS = CHURN_WINDOW_INTERVALS + 2;
++const SINGLE_WAKE = 1;
++const NO_REQUESTS = 0;
+ const SCHEDULING_SLACK_MS = VIRTUAL_SECOND_MS / 2;
+ const REQUEST_INVALID = LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID;
+ const PROGRESS_BEHIND = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
+@@ -105,6 +126,7 @@ const WAKE_SERVICES_ROW_VISIBLE = 'services_row_visible';
+ const WAKE_PUBLISHED_EPOCH_CHANGED = 'published_epoch_changed';
+ const LOG_LEVEL_INFO = 'info';
+ const OUTCOME_TIMEOUT = 'timeout';
++const WAKE_DELAY_MS = PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS;
+ 
+ function seconds(clock, atMs) {
+   return Number(((atMs - clock.originMs) / VIRTUAL_SECOND_MS).toFixed(2));
+@@ -177,15 +199,17 @@ function completeProofRequest(request, clock, response, listeners) {
+ }
+ 
+ // Learner-side transport: observes every proof request (send instant,
+-// carried epoch, delivery bound) and applies the leader stall with the
+-// router's timeout semantics.
+-function createProofChannelTransport(inner, clock, stallPlan) {
++// carried epoch, delivery bound) and applies the leader stall plus the
++// sustained round-trip latency with the router's timeout semantics. Like
++// the message router it carries its configured messageTimeoutMs — the
++// bound the learner passes explicitly on every proof delivery.
++function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
+   const requests = [];
+   const listeners = {onResponse: null};
+-  const routerDefaultTimeoutMs = ROUTER_DEFAULT_TIMEOUT_S * VIRTUAL_SECOND_MS;
+   return {
+     requests,
+     listeners,
++    messageTimeoutMs: ROUTER_TIMEOUT_MS,
+     register: (address, handler) => inner.register(address, handler),
+     unregister: (address) => inner.unregister(address),
+     deliver: async (address, payload, options) => {
+@@ -193,13 +217,14 @@ function createProofChannelTransport(inner, clock, stallPlan) {
+         return inner.deliver(address, payload, options);
+       }
+       const request = recordProofRequest(requests, clock, payload, options);
+-      const boundMs = resolveDeliveryBoundMs(options, routerDefaultTimeoutMs);
+-      const stallMs = stallPlan.remainingStallMs(request.sentAtMs);
+-      if (stallMs > boundMs) {
++      const boundMs = resolveDeliveryBoundMs(options, ROUTER_TIMEOUT_MS);
++      const delayMs =
++        stallPlan.remainingStallMs(request.sentAtMs) + latencyMs;
++      if (delayMs > boundMs) {
+         return failProofDeliveryAtBound(request, clock, boundMs);
+       }
+-      if (stallMs > 0) {
+-        await sleep(stallMs);
++      if (delayMs > 0) {
++        await sleep(delayMs);
+       }
+       const response = await inner.deliver(address, payload, options);
+       completeProofRequest(request, clock, response, listeners);
+@@ -261,6 +286,34 @@ function wakeReasons(learnerLog) {
+     .map((entry) => entry.payload?.scheduleReason);
+ }
+ 
++// Every immediate wake of one typed reason: the ones that armed the check
++// now and the ones coalesced into an in-flight check.
++function immediateWakeCount(learnerLog, wakeReason) {
++  return learnerLog.filter((entry) =>
++    (entry.message === PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED &&
++      entry.payload?.delayMs === WAKE_DELAY_MS &&
++      entry.payload?.scheduleReason === wakeReason) ||
++    (entry.message ===
++      PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_WAKE_COALESCED &&
++      entry.payload?.wakeReason === wakeReason)).length;
++}
++
++// Observe a churn window: settle, mark, apply the changes, observe.
++async function driveChurnWindow(fixture, applyChange) {
++  await sleep(SETTLE_INTERVALS * RETRY_INTERVAL_MS);
++  const logIndex = fixture.learnerLog.length;
++  const requestCount = fixture.transport.requests.length;
++  for (let seq = 0; seq < CHURN_COUNT; seq++) {
++    applyChange(seq);
++    await sleep(CHURN_SPACING_MS);
++  }
++  await sleep(CHURN_OBSERVE_INTERVALS * RETRY_INTERVAL_MS);
++  return {
++    log: fixture.learnerLog.slice(logIndex),
++    requests: fixture.transport.requests.length - requestCount,
++  };
++}
++
+ function learnerDeferrals(learnerLog) {
+   return learnerLog
+     .filter((entry) =>
+@@ -284,6 +337,7 @@ async function createChannelFixture(options = {}) {
+   });
+   const landing = createRowLanding(clock);
+   let transport = null;
++  const latencyMs = (options.latencyS ?? NO_LATENCY_S) * VIRTUAL_SECOND_MS;
+   const fixture = await createFiveNodeFixture({
+     splitCaches: true,
+     startPartitioned: options.startPartitioned === true,
+@@ -295,7 +349,8 @@ async function createChannelFixture(options = {}) {
+       createDeferredRowStateMachine(clock, landing) :
+       undefined,
+     wrapLearnerTransport: (inner) => {
+-      transport = createProofChannelTransport(inner, clock, stallPlan);
++      transport =
++        createProofChannelTransport(inner, clock, stallPlan, latencyMs);
+       return transport;
+     },
+   });
+@@ -648,12 +703,12 @@ test(
+       t.diagnostic(`proof deliveries: ${JSON.stringify(requests.map((r) => [
+         seconds(fixture.clock, r.sentAtMs), r.timeoutMs, r.outcome,
+       ]))}`);
+-      assert.equal(requests[0].timeoutMs, EXPECTED_PROOF_TIMEOUT_MS,
+-        'the delivery bound is min(MESSAGE_TIMEOUT_MS, ' +
+-        `${TIMEOUT_INTERVAL_MULTIPLE} x retry interval) = ` +
+-        `${EXPECTED_PROOF_TIMEOUT_MS} ms`);
+-      assert.ok(requests[0].timeoutMs <= TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+-        'never larger than MESSAGE_TIMEOUT_MS');
++      assert.equal(requests[0].timeoutMs, fixture.transport.messageTimeoutMs,
++        'the delivery timeout is the router-configured message timeout, ' +
++        'passed explicitly');
++      assert.equal(requests[0].timeoutMs, ROUTER_TIMEOUT_MS,
++        `the router-configured timeout is ${ROUTER_DEFAULT_TIMEOUT_S} s of ` +
++        'scenario time, never bounded to a multiple of the cadence');
+       assert.equal(requests[0].outcome, OUTCOME_TIMEOUT,
+         'the stalled delivery timed out at its bound');
+       const transportFailures = fixture.learnerLog.filter((entry) =>
+@@ -666,10 +721,10 @@ test(
+       for (let index = 1; index < requests.length; index++) {
+         const spacingMs = requests[index].sentAtMs - requests[index - 1].sentAtMs;
+         assert.ok(
+-          spacingMs <= EXPECTED_PROOF_TIMEOUT_MS + RETRY_INTERVAL_MS +
++          spacingMs <= ROUTER_TIMEOUT_MS + RETRY_INTERVAL_MS +
+             SCHEDULING_SLACK_MS,
+-          'a timeout never stacks beyond bound + interval (spacing ' +
+-            `${spacingMs} ms)`);
++          'the next request is scheduled from completion: a timeout never ' +
++            `stacks beyond timeout + interval (spacing ${spacingMs} ms)`);
+       }
+       assert.equal(fixture.learner.role, RaftRole.LEARNER,
+         'transport failures never promote');
+@@ -680,6 +735,134 @@ test(
+   },
+ );
+ 
++test(
++  'proof-delivery-timeout-bounded-and-logged-under-latency: with the ' +
++  'router-configured timeout as the bound, a sustained 3 s round trip ' +
++  'still promotes',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({
++      publishedEpoch: PUBLISHED_EPOCH_ONE,
++      latencyS: SUSTAINED_LATENCY_S,
++    });
++    try {
++      const promoted = await waitForPromotion(fixture);
++      const activeAtS = seconds(fixture.clock, fixture.clock.now());
++      const {requests} = fixture.transport;
++      t.diagnostic(`latency ${SUSTAINED_LATENCY_S} s: promoted=${promoted} ` +
++        `at +${activeAtS} s; deliveries ${JSON.stringify(requests.map((r) => [
++          seconds(fixture.clock, r.sentAtMs), r.timeoutMs, r.outcome,
++        ]))}`);
++      assert.ok(requests.length >= 1, 'a proof was delivered');
++      assert.equal(requests[0].timeoutMs, fixture.transport.messageTimeoutMs,
++        'timeoutMs is the router-configured message timeout');
++      assert.equal(requests[0].timeoutMs, ROUTER_TIMEOUT_MS,
++        `the bound is ${ROUTER_DEFAULT_TIMEOUT_S} s of scenario time ` +
++        '(the router default), not 2 x the cadence');
++      assert.equal(promoted, true,
++        `a ${SUSTAINED_LATENCY_S} s round trip below the router timeout ` +
++        'promotes (a cadence-multiple bound times out forever)');
++      assert.ok(requests.every((request) => request.outcome !== OUTCOME_TIMEOUT),
++        'no delivery timed out below the router timeout');
++      assert.ok(activeAtS <= GREEN_ACTIVE_BOUND_S,
++        `voter by +${GREEN_ACTIVE_BOUND_S} s (observed +${activeAtS} s)`);
++      assert.ok(grantedProof(fixture), 'promotion was granted on a proof');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'proof-wakes-on-published-epoch-change-transition-only: a learner ' +
++  'deferred before the proof gate wakes once per epoch transition, never ' +
++  'per publication change',
++  async (t) => {
++    configureFixtureRuntime();
++    const fixture = await createChannelFixture({startPartitioned: true});
++    try {
++      // Surplus ACTIVE voters cap the learner in the quorum-shape gate, so
++      // no proof is ever requested: the wake state has no request to
++      // anchor on and must track the observed epoch itself.
++      for (const [replicaId, nodeId] of SURPLUS_VOTERS) {
++        insertServiceRow(fixture.leaderCache, replicaId, nodeId,
++          RaftRole.FOLLOWER);
++        insertServiceRow(fixture.learnerCache, replicaId, nodeId,
++          RaftRole.FOLLOWER);
++      }
++      const capSeen = await waitFor(
++        () => learnerDeferrals(fixture.learnerLog).some(
++          (d) => d.reason === WOULD_EXCEED_TARGET),
++        DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
++      );
++      assert.equal(capSeen, true, 'the learner defers before the proof gate');
++      const window = await driveChurnWindow(fixture, (seq) => {
++        if (seq === 0) {
++          insertPublishedEpochRow(fixture.learnerCache, PUBLISHED_EPOCH_ONE);
++        }
++        touchPublishedEpochRow(fixture.learnerCache, PUBLISHED_EPOCH_ONE, seq);
++      });
++      const wakes = immediateWakeCount(window.log, WAKE_PUBLISHED_EPOCH_CHANGED);
++      const deferrals = learnerDeferrals(window.log).length;
++      t.diagnostic(`1 epoch insert + ${CHURN_COUNT} same-epoch updates: ` +
++        `immediate wakes ${wakes}, info deferrals ${deferrals}, proof ` +
++        `requests ${window.requests}`);
++      assert.equal(wakes, SINGLE_WAKE,
++        'exactly one published_epoch_changed wake: the epoch transition, ' +
++        `not the ${CHURN_COUNT} same-epoch publication changes`);
++      assert.ok(deferrals <= MAX_CHURN_WINDOW_CHECKS,
++        `info deferrals stay on the cadence (${deferrals} in the window)`);
++      assert.equal(window.requests, NO_REQUESTS,
++        'the capped learner never reaches the proof gate (gate order unchanged)');
++      assert.equal(fixture.learner.learnerPromotionWake.observedMembershipEpoch,
++        PUBLISHED_EPOCH_ONE, 'the hook itself tracks the observed epoch');
++      assert.equal(fixture.learner.role, RaftRole.LEARNER,
++        'no wake ever promotes');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
++test(
++  'proof-wakes-on-services-row-visibility-transition-only: the own row ' +
++  'wakes once when it first becomes visible, never on later row updates',
++  async (t) => {
++    configureFixtureRuntime();
++    // Replication is partitioned so every proof is refused progress_behind
++    // and the learner stays a learner for the whole window; its own row is
++    // the fixture's seed (never observed by the learner) until the first
++    // durable landing below.
++    const fixture = await createChannelFixture({startPartitioned: true});
++    try {
++      const window = await driveChurnWindow(fixture, () => {
++        updateServiceRow(
++          fixture.learnerCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
++        );
++      });
++      const wakes = immediateWakeCount(window.log, WAKE_SERVICES_ROW_VISIBLE);
++      t.diagnostic(`${CHURN_COUNT} own-row updates (first = the durable ` +
++        `landing): immediate wakes ${wakes}, proof requests ` +
++        `${window.requests} (cadence ceiling ${MAX_CHURN_WINDOW_CHECKS})`);
++      assert.equal(wakes, SINGLE_WAKE,
++        'exactly one services_row_visible wake: the local-only -> visible ' +
++        `transition, not the ${CHURN_COUNT - 1} later updates of the row`);
++      assert.ok(window.requests <= MAX_CHURN_WINDOW_CHECKS,
++        'proof requests stay on the cadence plus the one wake ' +
++        `(${window.requests} in the window)`);
++      assert.equal(fixture.learner.learnerPromotionWake.ownServicesRowVisible,
++        true, 'the wake state records the visible own row');
++      assert.equal(fixture.learner.role, RaftRole.LEARNER,
++        'no wake ever promotes');
++    } finally {
++      await fixture.shutdown();
++      resetFixtureRuntime();
++    }
++  },
++);
++
+ test(
+   'proof-semantics-and-voter-cap-unchanged: leader-proven progress, epoch ' +
+   'binding, the target+1 voter cap and the budgets are the HEAD contract',
+diff --git a/test/partition/partition-service-learner-promotion-wake.test.js b/test/partition/partition-service-learner-promotion-wake.test.js
+index b40895c64d892970a6dbf82ea98236d921d0984b..3ec972347bf34208bdde9fbd153fedf4457f478f 100644
+--- a/test/partition/partition-service-learner-promotion-wake.test.js
++++ b/test/partition/partition-service-learner-promotion-wake.test.js
+@@ -3,12 +3,14 @@
+  * learner-promotion-proof-channel-wake): unit seams of the promotion owner
+  * around the existing single-flight schedule — an event wake re-arms the
+  * one timer now (the cadence stays the floor), wakes during an in-flight
+- * check coalesce into one immediate re-check, the cache-change hook routes
+- * only the learner's own services row and published-epoch changes, the
+- * learner_address_unresolvable cause re-asserts the durable row through
+- * the replica state machine, and the proof delivery bound derives from
+- * the cadence and MESSAGE_TIMEOUT_MS. Promotion itself is untouched: the
+- * dt6 witnesses prove the proof semantics end to end.
++ * check coalesce into one immediate re-check, the cache-change hook wakes
++ * only on CONTENT TRANSITIONS (the first observation of the learner's own
++ * services row; the latest PUBLISHED epoch differing from the last observed
++ * value — churn of either is silent), the learner_address_unresolvable
++ * cause re-asserts the durable row through the replica state machine, and
++ * the proof delivery timeout is the router-configured message timeout.
++ * Promotion itself is untouched: the dt6 witnesses prove the proof
++ * semantics end to end.
+  */
+ 
+ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+@@ -25,6 +27,7 @@ import {
+ } from '../../src/partition/partition-service-constants.js';
+ import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
+ import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
++import {CDC_OPERATION} from '../../src/constants/cdc.js';
+ import {
+   LEARNER_PROMOTION_PROOF_REASON,
+   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+@@ -37,10 +40,18 @@ const LEARNER_REPLICA_ID = 'replica-learner';
+ const OTHER_REPLICA_ID = 'replica-other';
+ const NODE_ID = 'node-learner';
+ const RETRY_INTERVAL_MS = 1000;
+-const WIDE_RETRY_INTERVAL_MS = 10_000;
+-const EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS = 2000;
++const SHORT_RETRY_INTERVAL_MS = 10;
++const ROUTER_TIMEOUT_MS = 7000;
++const CONFIGURED_TIMEOUT_MS = 1234;
+ const BOOTSTRAP_EPOCH = 0;
+ const PUBLISHED_EPOCH = 1;
++const NEXT_PUBLISHED_EPOCH = 2;
++const CHURN_COUNT = 50;
++const CHURN_OPERATIONS = [
++  CDC_OPERATION.INSERT,
++  CDC_OPERATION.UPDATE,
++  CDC_OPERATION.UPSERT,
++];
+ const SCHEDULE_REASON = PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON;
+ 
+ beforeEach(() => {
+@@ -69,6 +80,7 @@ function createLearner(options = {}) {
+     learnerCatchUpCheckIntervalMs:
+       options.retryIntervalMs || RETRY_INTERVAL_MS,
+     replicaStateMachine: options.replicaStateMachine,
++    transport: options.transport,
+   });
+   partition.role = RaftRole.LEARNER;
+   return partition;
+@@ -152,8 +164,28 @@ test('wakes during an in-flight check coalesce into one immediate ' +
+     'a promoted replica drains without re-arming');
+ });
+ 
+-test('the cache-change hook wakes only on the learner\'s own services row ' +
+-  'and on a published-epoch change', async (t) => {
++function churnOwnRow(partition, ownRow) {
++  for (let seq = 0; seq < CHURN_COUNT; seq++) {
++    partition.observeLearnerPromotionWakeSource(
++      TABLES.SERVICES, CHURN_OPERATIONS[seq % CHURN_OPERATIONS.length],
++      {...ownRow, churn: seq},
++    );
++  }
++}
++
++function churnPublications(partition) {
++  for (let seq = 0; seq < CHURN_COUNT; seq++) {
++    partition.observeLearnerPromotionWakeSource(
++      TABLES.CONTROL_PLANE_PUBLICATIONS,
++      CHURN_OPERATIONS[seq % CHURN_OPERATIONS.length],
++      {publication_id: `p-${seq}`},
++    );
++  }
++}
++
++test('the cache-change hook wakes on the first observation of the ' +
++  'learner\'s own services row and on a published-epoch transition; ' +
++  'churn of either is silent', async (t) => {
+   const partition = createLearner();
+   const wakes = [];
+   partition.wakeLearnerPromotion = (reason) => wakes.push(reason);
+@@ -179,34 +211,76 @@ test('the cache-change hook wakes only on the learner\'s own services row ' +
+     TABLES.SERVICES, CDCOperation.INSERT, null,
+   );
+   t.same(wakes, [], 'peer rows, other partitions and other tables never wake');
++  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, false,
++    'the own row is unobserved until the hook sees it');
+ 
+   partition.observeLearnerPromotionWakeSource(
+     TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
+   );
+   t.same(wakes, [SCHEDULE_REASON.SERVICES_ROW_VISIBLE],
+-    'the learner\'s own services row wakes services_row_visible');
++    'the first observation of the own row wakes services_row_visible');
++  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, true,
++    'the wake state records the visible own row');
++  churnOwnRow(partition, ownRow);
++  t.equal(wakes.length, 1,
++    `${CHURN_COUNT} later updates of the visible own row never wake`);
+ 
+-  partition.observeLearnerPromotionWakeSource(
+-    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
+-    {publication_id: 'p-0'},
+-  );
++  churnPublications(partition);
+   t.equal(wakes.length, 1,
+-    'a publication change that leaves the requested epoch unchanged is silent');
++    `${CHURN_COUNT} publication changes at the observed epoch are silent`);
+   membershipEpoch = PUBLISHED_EPOCH;
+   partition.observeLearnerPromotionWakeSource(
+     TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
+-    {publication_id: 'p-1'},
++    {publication_id: 'p-epoch-1'},
+   );
+   t.same(wakes, [
+     SCHEDULE_REASON.SERVICES_ROW_VISIBLE,
+     SCHEDULE_REASON.PUBLISHED_EPOCH_CHANGED,
+   ], 'a newer published epoch wakes published_epoch_changed');
++  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
++    PUBLISHED_EPOCH, 'the hook itself records the observed epoch');
++  churnPublications(partition);
++  t.equal(wakes.length, 2,
++    'same-epoch publication changes after the transition are silent even ' +
++    'though no proof was ever requested');
++  membershipEpoch = NEXT_PUBLISHED_EPOCH;
++  partition.observeLearnerPromotionWakeSource(
++    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.UPDATE,
++    {publication_id: 'p-epoch-2'},
++  );
++  t.equal(wakes.length, 3, 'every epoch transition wakes exactly once');
+ 
+   partition.role = RaftRole.FOLLOWER;
++  membershipEpoch = BOOTSTRAP_EPOCH;
+   partition.observeLearnerPromotionWakeSource(
++    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.UPDATE,
++    {publication_id: 'p-epoch-0'},
++  );
++  const voter = createLearner();
++  voter.role = RaftRole.FOLLOWER;
++  voter.wakeLearnerPromotion = (reason) => wakes.push(reason);
++  voter.observeLearnerPromotionWakeSource(
+     TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
+   );
+-  t.equal(wakes.length, 2, 'a voter never wakes the promotion check');
++  t.equal(wakes.length, 3, 'a voter never wakes the promotion check');
++});
++
++test('the learner start seeds the observed epoch from its cache, so the ' +
++  'epoch already hydrated is not a transition', async (t) => {
++  const partition = createLearner();
++  const wakes = [];
++  partition.wakeLearnerPromotion = (reason) => wakes.push(reason);
++  partition.resolveLearnerPromotionMembershipEpoch = () => PUBLISHED_EPOCH;
++  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
++    BOOTSTRAP_EPOCH, 'the wake state starts at the bootstrap epoch');
++  partition.seedLearnerPromotionWakeObservation();
++  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
++    PUBLISHED_EPOCH, 'the seed observes the hydrated epoch');
++  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, false,
++    'the seed leaves the own row unobserved (its durable landing is the ' +
++    'transition under watch)');
++  churnPublications(partition);
++  t.same(wakes, [], 'publication churn at the seeded epoch never wakes');
+ });
+ 
+ test('learner_address_unresolvable re-asserts the durable services row ' +
+@@ -256,14 +330,28 @@ test('learner_address_unresolvable re-asserts the durable services row ' +
+   );
+ });
+ 
+-test('the proof delivery bound is min(MESSAGE_TIMEOUT_MS, 2 x cadence)',
+-  async (t) => {
+-    const partition = createLearner();
+-    t.equal(partition.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+-      EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS,
+-      'at the 1 s cadence the bound is 2 s (a timeout + cadence < 5 s + 1 s)');
+-    const wide = createLearner({retryIntervalMs: WIDE_RETRY_INTERVAL_MS});
+-    t.equal(wide.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+-      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+-      'never larger than MESSAGE_TIMEOUT_MS');
++test('the proof delivery timeout is the router-configured message timeout, ' +
++  'never a cadence multiple', async (t) => {
++  const bare = createLearner();
++  t.equal(bare.resolveLearnerPromotionProofDeliveryTimeoutMs(),
++    TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
++    'without a router timeout the transport default (5000 ms) applies');
++  const routed = createLearner({
++    retryIntervalMs: SHORT_RETRY_INTERVAL_MS,
++    transport: {messageTimeoutMs: ROUTER_TIMEOUT_MS},
++  });
++  t.equal(routed.resolveLearnerPromotionProofDeliveryTimeoutMs(),
++    ROUTER_TIMEOUT_MS,
++    'the router\'s own messageTimeoutMs passes through unbounded, ' +
++    'independent of the cadence');
++  ConfigurationManager.resetInstance();
++  ConfigurationManager.getInstance().initialize({
++    node: {id: 'test-node'},
++    transport: {messageTimeoutMs: CONFIGURED_TIMEOUT_MS},
+   });
++  const configured = createLearner();
++  t.equal(configured.resolveLearnerPromotionProofDeliveryTimeoutMs(),
++    CONFIGURED_TIMEOUT_MS,
++    'a configured transport.messageTimeoutMs resolves the way the router ' +
++    'resolves it');
++});

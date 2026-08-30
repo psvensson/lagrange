@@ -3,12 +3,14 @@
  * learner-promotion-proof-channel-wake): unit seams of the promotion owner
  * around the existing single-flight schedule — an event wake re-arms the
  * one timer now (the cadence stays the floor), wakes during an in-flight
- * check coalesce into one immediate re-check, the cache-change hook routes
- * only the learner's own services row and published-epoch changes, the
- * learner_address_unresolvable cause re-asserts the durable row through
- * the replica state machine, and the proof delivery bound derives from
- * the cadence and MESSAGE_TIMEOUT_MS. Promotion itself is untouched: the
- * dt6 witnesses prove the proof semantics end to end.
+ * check coalesce into one immediate re-check, the cache-change hook wakes
+ * only on CONTENT TRANSITIONS (the first observation of the learner's own
+ * services row; the latest PUBLISHED epoch differing from the last observed
+ * value — churn of either is silent), the learner_address_unresolvable
+ * cause re-asserts the durable row through the replica state machine, and
+ * the proof delivery timeout is the router-configured message timeout.
+ * Promotion itself is untouched: the dt6 witnesses prove the proof
+ * semantics end to end.
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
@@ -25,6 +27,7 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
@@ -37,10 +40,18 @@ const LEARNER_REPLICA_ID = 'replica-learner';
 const OTHER_REPLICA_ID = 'replica-other';
 const NODE_ID = 'node-learner';
 const RETRY_INTERVAL_MS = 1000;
-const WIDE_RETRY_INTERVAL_MS = 10_000;
-const EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS = 2000;
+const SHORT_RETRY_INTERVAL_MS = 10;
+const ROUTER_TIMEOUT_MS = 7000;
+const CONFIGURED_TIMEOUT_MS = 1234;
 const BOOTSTRAP_EPOCH = 0;
 const PUBLISHED_EPOCH = 1;
+const NEXT_PUBLISHED_EPOCH = 2;
+const CHURN_COUNT = 50;
+const CHURN_OPERATIONS = [
+  CDC_OPERATION.INSERT,
+  CDC_OPERATION.UPDATE,
+  CDC_OPERATION.UPSERT,
+];
 const SCHEDULE_REASON = PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON;
 
 beforeEach(() => {
@@ -69,6 +80,7 @@ function createLearner(options = {}) {
     learnerCatchUpCheckIntervalMs:
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
+    transport: options.transport,
   });
   partition.role = RaftRole.LEARNER;
   return partition;
@@ -152,8 +164,28 @@ test('wakes during an in-flight check coalesce into one immediate ' +
     'a promoted replica drains without re-arming');
 });
 
-test('the cache-change hook wakes only on the learner\'s own services row ' +
-  'and on a published-epoch change', async (t) => {
+function churnOwnRow(partition, ownRow) {
+  for (let seq = 0; seq < CHURN_COUNT; seq++) {
+    partition.observeLearnerPromotionWakeSource(
+      TABLES.SERVICES, CHURN_OPERATIONS[seq % CHURN_OPERATIONS.length],
+      {...ownRow, churn: seq},
+    );
+  }
+}
+
+function churnPublications(partition) {
+  for (let seq = 0; seq < CHURN_COUNT; seq++) {
+    partition.observeLearnerPromotionWakeSource(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CHURN_OPERATIONS[seq % CHURN_OPERATIONS.length],
+      {publication_id: `p-${seq}`},
+    );
+  }
+}
+
+test('the cache-change hook wakes on the first observation of the ' +
+  'learner\'s own services row and on a published-epoch transition; ' +
+  'churn of either is silent', async (t) => {
   const partition = createLearner();
   const wakes = [];
   partition.wakeLearnerPromotion = (reason) => wakes.push(reason);
@@ -179,34 +211,76 @@ test('the cache-change hook wakes only on the learner\'s own services row ' +
     TABLES.SERVICES, CDCOperation.INSERT, null,
   );
   t.same(wakes, [], 'peer rows, other partitions and other tables never wake');
+  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, false,
+    'the own row is unobserved until the hook sees it');
 
   partition.observeLearnerPromotionWakeSource(
     TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
   );
   t.same(wakes, [SCHEDULE_REASON.SERVICES_ROW_VISIBLE],
-    'the learner\'s own services row wakes services_row_visible');
-
-  partition.observeLearnerPromotionWakeSource(
-    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
-    {publication_id: 'p-0'},
-  );
+    'the first observation of the own row wakes services_row_visible');
+  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, true,
+    'the wake state records the visible own row');
+  churnOwnRow(partition, ownRow);
   t.equal(wakes.length, 1,
-    'a publication change that leaves the requested epoch unchanged is silent');
+    `${CHURN_COUNT} later updates of the visible own row never wake`);
+
+  churnPublications(partition);
+  t.equal(wakes.length, 1,
+    `${CHURN_COUNT} publication changes at the observed epoch are silent`);
   membershipEpoch = PUBLISHED_EPOCH;
   partition.observeLearnerPromotionWakeSource(
     TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.INSERT,
-    {publication_id: 'p-1'},
+    {publication_id: 'p-epoch-1'},
   );
   t.same(wakes, [
     SCHEDULE_REASON.SERVICES_ROW_VISIBLE,
     SCHEDULE_REASON.PUBLISHED_EPOCH_CHANGED,
   ], 'a newer published epoch wakes published_epoch_changed');
+  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
+    PUBLISHED_EPOCH, 'the hook itself records the observed epoch');
+  churnPublications(partition);
+  t.equal(wakes.length, 2,
+    'same-epoch publication changes after the transition are silent even ' +
+    'though no proof was ever requested');
+  membershipEpoch = NEXT_PUBLISHED_EPOCH;
+  partition.observeLearnerPromotionWakeSource(
+    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.UPDATE,
+    {publication_id: 'p-epoch-2'},
+  );
+  t.equal(wakes.length, 3, 'every epoch transition wakes exactly once');
 
   partition.role = RaftRole.FOLLOWER;
+  membershipEpoch = BOOTSTRAP_EPOCH;
   partition.observeLearnerPromotionWakeSource(
+    TABLES.CONTROL_PLANE_PUBLICATIONS, CDCOperation.UPDATE,
+    {publication_id: 'p-epoch-0'},
+  );
+  const voter = createLearner();
+  voter.role = RaftRole.FOLLOWER;
+  voter.wakeLearnerPromotion = (reason) => wakes.push(reason);
+  voter.observeLearnerPromotionWakeSource(
     TABLES.SERVICES, CDCOperation.UPDATE, ownRow,
   );
-  t.equal(wakes.length, 2, 'a voter never wakes the promotion check');
+  t.equal(wakes.length, 3, 'a voter never wakes the promotion check');
+});
+
+test('the learner start seeds the observed epoch from its cache, so the ' +
+  'epoch already hydrated is not a transition', async (t) => {
+  const partition = createLearner();
+  const wakes = [];
+  partition.wakeLearnerPromotion = (reason) => wakes.push(reason);
+  partition.resolveLearnerPromotionMembershipEpoch = () => PUBLISHED_EPOCH;
+  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
+    BOOTSTRAP_EPOCH, 'the wake state starts at the bootstrap epoch');
+  partition.seedLearnerPromotionWakeObservation();
+  t.equal(partition.learnerPromotionWake.observedMembershipEpoch,
+    PUBLISHED_EPOCH, 'the seed observes the hydrated epoch');
+  t.equal(partition.learnerPromotionWake.ownServicesRowVisible, false,
+    'the seed leaves the own row unobserved (its durable landing is the ' +
+    'transition under watch)');
+  churnPublications(partition);
+  t.same(wakes, [], 'publication churn at the seeded epoch never wakes');
 });
 
 test('learner_address_unresolvable re-asserts the durable services row ' +
@@ -256,14 +330,28 @@ test('learner_address_unresolvable re-asserts the durable services row ' +
   );
 });
 
-test('the proof delivery bound is min(MESSAGE_TIMEOUT_MS, 2 x cadence)',
-  async (t) => {
-    const partition = createLearner();
-    t.equal(partition.resolveLearnerPromotionProofDeliveryTimeoutMs(),
-      EXPECTED_BOUND_AT_DEFAULT_CADENCE_MS,
-      'at the 1 s cadence the bound is 2 s (a timeout + cadence < 5 s + 1 s)');
-    const wide = createLearner({retryIntervalMs: WIDE_RETRY_INTERVAL_MS});
-    t.equal(wide.resolveLearnerPromotionProofDeliveryTimeoutMs(),
-      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
-      'never larger than MESSAGE_TIMEOUT_MS');
+test('the proof delivery timeout is the router-configured message timeout, ' +
+  'never a cadence multiple', async (t) => {
+  const bare = createLearner();
+  t.equal(bare.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+    TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+    'without a router timeout the transport default (5000 ms) applies');
+  const routed = createLearner({
+    retryIntervalMs: SHORT_RETRY_INTERVAL_MS,
+    transport: {messageTimeoutMs: ROUTER_TIMEOUT_MS},
   });
+  t.equal(routed.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+    ROUTER_TIMEOUT_MS,
+    'the router\'s own messageTimeoutMs passes through unbounded, ' +
+    'independent of the cadence');
+  ConfigurationManager.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: 'test-node'},
+    transport: {messageTimeoutMs: CONFIGURED_TIMEOUT_MS},
+  });
+  const configured = createLearner();
+  t.equal(configured.resolveLearnerPromotionProofDeliveryTimeoutMs(),
+    CONFIGURED_TIMEOUT_MS,
+    'a configured transport.messageTimeoutMs resolves the way the router ' +
+    'resolves it');
+});

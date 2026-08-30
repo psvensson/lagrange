@@ -526,6 +526,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     };
     if (this.isJoiningExistingGroup) {
       this.role = RaftRole.LEARNER;
+      this.seedLearnerPromotionWakeObservation();
       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_AS_LEARNER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,

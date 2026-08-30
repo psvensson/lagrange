@@ -587,8 +587,6 @@ class PartitionServiceLearnerPromotionMethods {
     const requestedLeaderId = this.leaderId;
     const requestedMembershipEpoch =
       this.resolveLearnerPromotionMembershipEpoch();
-    this.learnerPromotionWake.requestedMembershipEpoch =
-      requestedMembershipEpoch;
     const proof = await this.requestLearnerPromotionProofFromLeader({
       leaderReplicaId: requestedLeaderId,
       membershipEpoch: requestedMembershipEpoch,

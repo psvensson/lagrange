@@ -9,11 +9,14 @@ import {
 import {
   buildSnapshotCatchupIdentityFromCache,
 } from '../raft/snapshot-catchup.js';
-import {TRANSPORT_DEFAULT} from '../constants/transport.js';
+import {
+  TRANSPORT_CONFIG_KEY,
+  TRANSPORT_DEFAULT,
+} from '../constants/transport.js';
 
 const {
+  ConfigurationManager,
   LifeRaft,
-  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -277,19 +280,23 @@ class PartitionServiceLearnerPromotionProofMethods {
     return refuseLearnerPromotionProof(reason, cause);
   }
   /**
-   * Proof delivery bound: never larger than the transport's
-   * MESSAGE_TIMEOUT_MS, and at most twice the retry cadence so a timed-out
-   * round trip plus the cadence stays within three intervals instead of
-   * stacking the 5 s router default on the 1 s timer.
+   * Proof delivery timeout: the router-configured message timeout, resolved
+   * the way the router resolves it (its own messageTimeoutMs, else the
+   * configured transport.messageTimeoutMs, else TRANSPORT_DEFAULT
+   * .MESSAGE_TIMEOUT_MS) and passed explicitly so the bound is visible on
+   * the wire. It is never bounded below that timeout: a tighter bound
+   * starves promotion under sustained leader latency (a 3 s round trip
+   * times out forever against a 2 s bound). Not stacking with the cadence
+   * is the schedule's property — the next check is armed from completion.
    * @return {number} milliseconds
    * @private
    */
   resolveLearnerPromotionProofDeliveryTimeoutMs() {
-    return Math.min(
-      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
-      this.learnerCatchUpCheckIntervalMs *
-        PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE,
-    );
+    return this.transport?.messageTimeoutMs ||
+      ConfigurationManager.getInstance().get(
+        TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS,
+      ) ||
+      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
   }
   /**
    * Resolve the discovered leader's unified address, or null when it cannot

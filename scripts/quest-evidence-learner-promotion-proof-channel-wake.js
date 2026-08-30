@@ -53,7 +53,10 @@ const RECEIPTS = Object.freeze([
       'learner\'s first proof is refused request_invalid and the next ' +
       'proof request follows the row\'s landing in its own cache within ' +
       'half a retry interval (typed services_row_visible wake on the ' +
-      'existing single-flight schedule), not on the 1 s timer + RTT',
+      'existing single-flight schedule), not on the 1 s timer + RTT; the ' +
+      'wake is the local-only -> visible transition alone: 50 later ' +
+      'updates of the visible row yield no further wake and no proof ' +
+      'request beyond the cadence',
   }),
   Object.freeze({
     id: 'proof-wakes-on-published-epoch-change',
@@ -61,7 +64,10 @@ const RECEIPTS = Object.freeze([
     detail: 'a change of the latest PUBLISHED publication epoch re-requests ' +
       'the proof within half a retry interval, the re-request binds the ' +
       'new epoch (typed published_epoch_changed wake), and the grant after ' +
-      'healing is bound to that epoch',
+      'healing is bound to that epoch; the wake is the epoch transition ' +
+      'alone, tracked by the hook itself: for a learner deferred before ' +
+      'the proof gate, one epoch insert plus 50 same-epoch updates of the ' +
+      'PUBLISHED row yield exactly one wake',
   }),
   Object.freeze({
     id: 'typed-refusal-cause-address-unresolvable',
@@ -83,10 +89,14 @@ const RECEIPTS = Object.freeze([
   Object.freeze({
     id: 'proof-delivery-timeout-bounded-and-logged',
     command: scenarioCommand('^proof-delivery-timeout-bounded-and-logged'),
-    detail: 'every proof delivery carries timeoutMs = min(MESSAGE_TIMEOUT_MS, ' +
-      '2 x LEARNER_CATCH_UP_CHECK_INTERVAL_MS), a stalled delivery fails at ' +
-      'that bound, proof_transport_failed is logged at info, and the next ' +
-      'request never stacks beyond bound + interval',
+    detail: 'every proof delivery carries timeoutMs = the router-configured ' +
+      'message timeout (transport.messageTimeoutMs, else the configured ' +
+      'transport.messageTimeoutMs, else MESSAGE_TIMEOUT_MS 5000), never a ' +
+      'multiple of the cadence and never bounded below it; a stalled ' +
+      'delivery fails at that timeout, proof_transport_failed is logged at ' +
+      'info, the next request is scheduled from completion (never stacks ' +
+      'beyond timeout + interval), and a sustained 3 s round trip still ' +
+      'promotes',
   }),
   Object.freeze({
     id: 'proof-semantics-and-voter-cap-unchanged',

@@ -31,12 +31,12 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // learner-promotion-progress-proof); elapsed time is ONLY the retry
   // cadence below for re-requesting the proof, never a promotion condition.
   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
-  // An event wake (own services row visible, published epoch changed)
-  // re-arms the single-flight check now; the cadence above stays the floor.
+  // An event wake (own services row first visible, latest PUBLISHED epoch
+  // changed) re-arms the single-flight check now; the cadence above stays
+  // the floor. The proof delivery timeout is the router-configured message
+  // timeout (never bounded below it); the next check is armed from
+  // completion, so a timeout never stacks with the cadence.
   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
-  // Proof delivery bound: min(MESSAGE_TIMEOUT_MS, this multiple of the retry
-  // cadence) so one timed-out round trip never stacks beyond the cadence.
-  LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE: NUM.TWO,
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,

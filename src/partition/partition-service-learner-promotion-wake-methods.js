@@ -12,24 +12,29 @@ const {
   TABLES,
 } = PARTITION_SERVICE_SHARED;
 
-// The membership epoch before any proof was requested: the contract's
-// bootstrap epoch (0), so the first published epoch the cache hydrates is
-// itself a change worth one immediate re-request.
+// The membership epoch observed before the learner start seeds the wake
+// state from its cache: the contract's bootstrap epoch (0), so a cache that
+// hydrates its first PUBLISHED epoch only after the seed still wakes once.
 const LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH = 0;
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 
 /**
  * Per-service learner-promotion wake bookkeeping, created by the service
- * constructor. A wake that arrives while a check is in flight is coalesced
- * (pendingReasons) and drained into one immediate re-check when the
- * in-flight check completes — the proof channel stays single-flight.
+ * constructor. Both wake sources are CONTENT TRANSITIONS, never change
+ * notifications: observedMembershipEpoch is the latest PUBLISHED epoch the
+ * hook last saw (seeded at learner start), ownServicesRowVisible flips on
+ * the first own-row observation and stays set. A wake that arrives while a
+ * check is in flight is coalesced (pendingReasons) and drained into one
+ * immediate re-check when the in-flight check completes — the proof
+ * channel stays single-flight.
  * @return {Object} mutable wake state
  */
 function createLearnerPromotionWakeState() {
   return {
     checkInFlight: false,
     pendingReasons: new Set(),
-    requestedMembershipEpoch: LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH,
+    observedMembershipEpoch: LEARNER_PROMOTION_BOOTSTRAP_MEMBERSHIP_EPOCH,
+    ownServicesRowVisible: false,
   };
 }
 
@@ -40,45 +45,81 @@ function createLearnerPromotionWakeState() {
  * existing single-flight schedule immediately when an event makes a new
  * answer likely — the learner's own services row becoming visible in its
  * system-table cache (the leader can now resolve its address) or the
- * latest PUBLISHED membership epoch changing (the proof binds to it). The
- * retry cadence remains the floor and the fallback; no promotion decision
- * lives here.
+ * latest PUBLISHED membership epoch changing (the proof binds to it). Both
+ * are transitions of the observed content: a row update after the row is
+ * visible and a publication change that leaves the latest PUBLISHED epoch
+ * unchanged are silent (no wake, no log). The retry cadence remains the
+ * floor and the fallback; no promotion decision lives here.
  */
 class PartitionServiceLearnerPromotionWakeMethods {
+  /**
+   * Learner start: observe the current cache content as the wake baseline
+   * so only later transitions wake. The own-row flag is deliberately left
+   * unobserved here: the row the cache may already hold is the CL-016
+   * local-only seed, whose durable landing is the transition under watch.
+   * @private
+   */
+  seedLearnerPromotionWakeObservation() {
+    this.learnerPromotionWake.observedMembershipEpoch =
+      this.resolveLearnerPromotionMembershipEpoch();
+  }
   /**
    * Cache-change hook (every table, every change): route the two wake
    * sources; cheap early exits for everything else.
    * @param {string} tableName
-   * @param {string} operation
+   * @param {string} _operation
    * @param {Object} record
    * @private
    */
-  observeLearnerPromotionWakeSource(tableName, operation, record) {
+  observeLearnerPromotionWakeSource(tableName, _operation, record) {
     if (!isCatchupLearnerRaftRole(this.role) || !record) {
       return;
     }
     if (tableName === TABLES.SERVICES) {
-      if (
-        record.service_id === this.replicaId &&
-        record.partition_id === this.partitionId &&
-        record.service_type === SERVICE_TYPE.PARTITION
-      ) {
-        this.wakeLearnerPromotion(
-          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
-            .SERVICES_ROW_VISIBLE,
-        );
-      }
+      this.observeOwnServicesRowForLearnerPromotion(record);
       return;
     }
-    if (tableName !== TABLES.CONTROL_PLANE_PUBLICATIONS) {
-      return;
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      this.observePublishedEpochForLearnerPromotion();
     }
-    const membershipEpoch = this.resolveLearnerPromotionMembershipEpoch();
+  }
+  /**
+   * Own-row source: exactly one wake, on the first observation of this
+   * learner's own partition services row (absent / local-only seed ->
+   * visible); every later update of the row is silent.
+   * @param {Object} record services row
+   * @private
+   */
+  observeOwnServicesRowForLearnerPromotion(record) {
+    const wake = this.learnerPromotionWake;
     if (
-      membershipEpoch === this.learnerPromotionWake.requestedMembershipEpoch
+      wake.ownServicesRowVisible ||
+      record.service_id !== this.replicaId ||
+      record.partition_id !== this.partitionId ||
+      record.service_type !== SERVICE_TYPE.PARTITION
     ) {
       return;
     }
+    wake.ownServicesRowVisible = true;
+    this.wakeLearnerPromotion(
+      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
+        .SERVICES_ROW_VISIBLE,
+    );
+  }
+  /**
+   * Epoch source: wake only when the resolved latest-PUBLISHED epoch
+   * differs from the last observed value, independent of whether a proof
+   * was requested; the observation is updated here, so same-epoch
+   * publication changes (any row, column or operation) are silent.
+   * @private
+   */
+  observePublishedEpochForLearnerPromotion() {
+    const wake = this.learnerPromotionWake;
+    const membershipEpoch = this.resolveLearnerPromotionMembershipEpoch();
+    if (membershipEpoch === wake.observedMembershipEpoch) {
+      return;
+    }
+    wake.observedMembershipEpoch = membershipEpoch;
     this.wakeLearnerPromotion(
       PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
         .PUBLISHED_EPOCH_CHANGED,
