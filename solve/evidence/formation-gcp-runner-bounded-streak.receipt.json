@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-gcp-runner-bounded-streak",
+  "status": "pass",
+  "generatedAt": "2026-08-30T10:33:35.458Z",
+  "receipts": [
+    {
+      "id": "streak-run-count-must-equal-sealed-consecutive",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-run-count-must-equal-sealed-consecutive\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "--runs N is refused with the typed reason run_count_not_sealed_consecutive unless N equals the sealed consecutive count (3) read from the closure quest doneWhen; no run starts on refusal"
+    },
+    {
+      "id": "streak-refuses-dirty-source-before-each-run",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-refuses-dirty-source-before-each-run\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "a dirty src/ tree observed before a run aborts the streak with the typed outcome aborted_dirty_source after exactly the runs already executed"
+    },
+    {
+      "id": "streak-refuses-candidate-fingerprint-drift",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-refuses-candidate-fingerprint-drift\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "a source fingerprint differing from the run-1 candidate aborts before the next run with aborted_fingerprint_changed naming both fingerprints"
+    },
+    {
+      "id": "streak-report-is-projection-of-run-reports",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-report-is-projection-of-run-reports\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "three admitted passing runs complete the streak; the aggregate report copies each per-run verdict, path, fingerprint and failure reasons, carries no verdict of its own, and never enters the probe-scanned *.report.json surface"
+    },
+    {
+      "id": "streak-stops-at-first-failed-run-no-retry",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-stops-at-first-failed-run-no-retry\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "a failed per-run verdict ends the streak immediately (aborted_run_failed): no retry, no run-until-pass, no further runs"
+    },
+    {
+      "id": "streak-refuses-reverted-variant",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^streak-refuses-reverted-variant\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "the bounded streak admits only the fixed certification lane (streak_requires_fixed_variant) and never starts a reverted-control run"
+    },
+    {
+      "id": "reverted-control-lane-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^reverted-control-lane-unchanged\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "the single-run reverted control keeps its distinct scenario name, control block and expected-regression verdict byte-for-byte"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "detail": "two identical fake drives produce identical streak projections and dependency call sequences"
+    }
+  ]
+}
