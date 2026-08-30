@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-release-handoff-post-reopen-capture",
+  "status": "pass",
+  "generatedAt": "2026-08-30T11:08:12.946Z",
+  "receipts": [
+    {
+      "id": "post-reopen-completion-captures-successor",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^post-reopen-completion-captures-successor\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "a captured generation completing while the compatible reopen (observedAuthorityReady=false, priority_partitions_not_spread) is already observed admits the successor generation for the pre-ready JOINING candidates on the next evaluation (complete e:1 then active e:2, the 09-59 two-evaluation shape) with the completed generation's authority node, boot incarnation, fence identity and publication epoch, non-authorizing until the durable acknowledgement"
+    },
+    {
+      "id": "late-joiner-consumes-successor-and-releases",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^late-joiner-consumes-successor-and-releases\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "a distinct joiner process reaching the barrier after gen-1 completed under the reopen consumes the successor through the real CONSUMER validation (join-branch fence, acceptor-reply-only router evidence) and the real operation-ledger formation barrier releases ledger_spread_satisfied from it while the raw spread predicate is still pending; a joiner with no contract still fails closed"
+    },
+    {
+      "id": "pre-reopen-capture-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^pre-reopen-capture-unchanged\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "gen-1 completing with the authority READY still captures gen-2 on the READY path with the identical transition sequence (capture, acknowledgement, epoch growth, completion, successor capture, successor acknowledgement, retained reopen) and the late joiner consumes it"
+    },
+    {
+      "id": "no-candidates-no-capture",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^no-candidates-no-capture\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "a completion under the reopen with no pre-ready candidate mints nothing across repeated evaluations: four transitions (capture, acknowledgement, reopen, completion), three durable writes, and the contract stays complete"
+    },
+    {
+      "id": "successor-capture-bounded",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^successor-capture-bounded\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "repeated evaluations under the reopen after the successor capture mint no further generation, log no transition, issue no durable write, and leave the publication coordinator diagnostics unchanged (exactly one successor generation per completed generation)"
+    },
+    {
+      "id": "successor-capture-fails-closed",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^successor-capture-fails-closed\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "a JOINING row whose primary connection the seed has not adopted is not a capturable member until it is adopted (capture rule unchanged); a substantive authority block between completion and the next evaluation closes the successor admission for good (only the READY path captures afterwards); a captured successor member losing its primary connection revokes the successor fail-closed, the late joiner projection is null, the revoked cohort is not re-minted under the reopen nor on the same epoch, and only a READY authority on a newer epoch mints again"
+    },
+    {
+      "id": "pair-witnesses-unchanged",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/formation-release-handoff-closure.test.js test/control-plane/formation-release-handoff-consumer-parity.test.js",
+      "detail": "both registered witnesses of the formation-release-seed-contract-joiner-consumer pair stay green: the closure suite (capture, retention, revocation, restore, publication coordinator) and the consumer-parity witness (13 scenarios incl. seed-capture-retention-revocation-unchanged and budgets-and-single-owner-unchanged)"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/control-plane/formation-release-handoff-post-reopen-capture.test.js",
+      "detail": "two identical virtual-clock drives produce the identical transition sequence, successor contract and late-joiner projection, ending in the consumed successor generation"
+    }
+  ]
+}
