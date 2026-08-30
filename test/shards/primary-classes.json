@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1838,
+    "unit": 1839,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2089,
-  "digest": "fnv1a32-f7874a59",
+  "censusSize": 2090,
+  "digest": "fnv1a32-7bfdb0c9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1746,6 +1746,7 @@
     "test/scripts/entrypoint-defaults.test.js": "unit",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "unit",
     "test/scripts/examples-build-upload-run.test.js": "unit",
+    "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
     "test/scripts/generate-steering-llm-pack.test.js": "unit",
     "test/scripts/impact-contract-registry.test.js": "unit",
