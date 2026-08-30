@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solver-land-generated-output-coverage",
+  "status": "pass",
+  "generatedAt": "2026-08-30T10:18:30.158Z",
+  "receipts": [
+    {
+      "id": "fresh-generated-seal-covered-at-land",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^fresh-generated-seal-covered-at-land\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "the test/shards/impact-graph-seal.json rewritten by the landing's own inventory refresh (after the top-of-land union guard, before the commit gate audit) is covered because it is byte-identical to a fresh regeneration from the exact candidate, so the first land commits instead of reporting committed: no (commit-gate) and leaves no dirty seal for a hand checkout and a second land"
+    },
+    {
+      "id": "landing-commits-fresh-seal-with-union",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^landing-commits-fresh-seal-with-union\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "outside solve/ the landing commit is exactly the recorded union plus the fresh seal, whose committed bytes equal a regeneration from the committed tree; the landing never pushes"
+    },
+    {
+      "id": "classification-manifest-fresh-covered",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^classification-manifest-fresh-covered\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "dirty test classification manifests (the other registered generated outputs) byte-identical to their regeneration from the candidate are covered and ride the landing commit with the union"
+    },
+    {
+      "id": "stale-generated-output-stays-uncovered",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^stale-generated-output-stays-uncovered\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "a registered generated output whose bytes differ from a fresh regeneration stays uncovered: the landing blocks with the typed blocked-uncovered-source-paths problem naming it, commits nothing and never rewrites the operator's bytes"
+    },
+    {
+      "id": "non-generated-uncovered-path-still-blocks-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^non-generated-uncovered-path-still-blocks-unchanged\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "a dirty source path outside the recorded union blocks the landing exactly as before (the union guard from solver-land-recorded-attempt-union-guard keeps its semantics)"
+    },
+    {
+      "id": "evidence-only-landing-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^evidence-only-landing-unchanged\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "a quest with no delta outside solve/ keeps its verdict not-required landing and commits only solve/ artifacts"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/solve/solver-land-generated-output-coverage.test.js",
+      "detail": "two identical incident fixtures produce the identical landing outcome"
+    }
+  ]
+}
