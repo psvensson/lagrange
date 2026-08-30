@@ -1,0 +1,76 @@
+{
+  "id": "joiner-services-cache-late-row-convergence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A CDC-propagated system-table row that a joiner missed converges within one steady-state cooldown instead of never: the steady-state catch-up driver (MembershipPublicationCoordinatorReconcile, which already pulls control_plane_publications forward on the non-write-leader deferral tick) gains a sibling sweep over every OTHER CDC-propagated table (services included) behind its own 30000 ms cooldown, riding the same tick with the CL-014 catch-up's default local-first/owner-fallback read policy and never the publications leader pin, read-only and fail-soft. GCP run 2026-08-30T15-30-04: a services row for the result-table partition tbl-d915-p1 was inserted 31 seconds after joiner ef6a6eec's one-shot join-time hydration, the leader's follow-up CDC UPDATE found no local row ('No row found for CDC update') with no repairing event, and steady-state hydration re-read only publications, so that joiner's routing snapshot held canonicalLeaderServiceCount 0 for ten minutes and every distributed write it coordinated to the partition timed out (the merged top-10 was never written and the demo failed after 600 seconds). The publications sweep keeps its cooldown, single-table scope and leader-pinned token; leader election, readiness rules, budgets, the 60-second certification window and the 120-second barrier are unchanged. Proven deterministically through the real defer branch, the real sibling sweep and the real CL-014 hydrate: red on HEAD, green after.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/operational-ground-truth.md",
+    "closesCL": [],
+    "parentQuest": "release-0-2-five-node-convergence",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "e94f48a2c"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/joiner-services-cache-late-row-convergence.receipt.json",
+      "requiredReceipts": [
+        "late-services-row-converges-after-one-shot-hydration",
+        "steady-state-hydration-covers-all-propagated-tables",
+        "propagated-sweep-never-throws",
+        "publications-catchup-unchanged",
+        "publications-cooldown-and-pin-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "joiner-services-cache-late-row-convergence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/joiner-services-cache-late-row-convergence.receipt.json",
+          "requiredReceipts": [
+            "late-services-row-converges-after-one-shot-hydration",
+            "steady-state-hydration-covers-all-propagated-tables",
+            "propagated-sweep-never-throws",
+            "publications-catchup-unchanged",
+            "publications-cooldown-and-pin-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-catchup-owner",
+      "statement": "The steady-state catch-up driver (MembershipPublicationCoordinatorReconcile) remains the single owner of the deferral-tick sweeps and reuses the existing CL-014 hydrate; routing snapshots, the parallel-reduce loop and the partition CDC layer are consumers and re-derive nothing."
+    },
+    {
+      "id": "publications-sweep-unchanged",
+      "statement": "The publications sweep keeps its 5000 ms cooldown, its exact single-table scope and its owner-RPC leader-pinned authority token; the sibling sweep never applies that pin and uses the catch-up default local-first/owner-fallback policy."
+    },
+    {
+      "id": "bounded-and-fail-soft",
+      "statement": "The sibling sweep rides only the existing deferral tick behind its own 30000 ms cooldown (no new timer, sleep or cadence), never throws, and reads only; no write, promotion or trim."
+    },
+    {
+      "id": "unchanged-budgets-and-rules",
+      "statement": "Leader election, readiness rules, budgets, the 60-second GCP certification window and the 120-second barrier are unchanged; nothing derives cluster-ACTIVE or READY from nodes.status, publication counts or coverage."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness through the real defer branch, the real sibling sweep and the real CL-014 hydrate reproducing GCP run 2026-08-30T15-30-04 (a services row landing after the one-shot hydration with its fan-out dropped), red on HEAD and green after, with the two publications-scoped controls that must stay green; no GCP run is part of the proof."
+    }
+  ]
+}
