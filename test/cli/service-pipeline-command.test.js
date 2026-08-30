@@ -444,7 +444,14 @@ async () => withProject(async (project) => {
     'utf8'));
   assert.equal(manifest.artifact.digest, summary.digest);
   assert.equal(manifest.artifact.size_bytes, componentBytes.length);
-  assert.notEqual(manifest.artifact.digest.includes('0000'), true,
+  // The placeholder is the exact all-zero digest minted at generate time
+  // (src/cli/service-pipeline-command.js PLACEHOLDER_DIGEST). Asserting on the
+  // SUBSTRING '0000' also rejects a genuinely computed hash that happens to
+  // contain four zeros — roughly one run in a thousand — which is how the 0.2
+  // test:ci release receipt failed while the two assertions above (digest ===
+  // summary.digest, size_bytes === real component byte length) both passed and
+  // proved the digest was real. Compare against the placeholder itself.
+  assert.notEqual(manifest.artifact.digest, `sha256:${'0'.repeat(64)}`,
     'no placeholder digest survives the stamp');
 
   // Every generated binding pins package_id + manifest_digest as its
