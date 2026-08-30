@@ -36,6 +36,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:cl039-link-rate` — `node scripts/analyze-cl039-link-rate.js`
 - `analyze:distributed-failure` — Summarize a distributed failure report or bundle; the first analyzer to reach for over raw-log grep.
 - `analyze:fix-engagement` — Report whether candidate fixes actually engaged in a run.
+- `analyze:formation-release-phases` — Print per-node formation-release phases (W -> handoff observed -> barrier release -> READY with deltas) and the analyzer-classified outcome for one five-node GCP run directory.
 - `analyze:latent-blockers` — `node scripts/analyze-latent-blockers.js`
 - `analyze:leadership-flap` — `node scripts/analyze-leadership-flap.js`
 - `analyze:monotone-drain` — `node scripts/analyze-monotone-drain.js`
@@ -307,4 +308,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-205 scripts indexed; 32 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+206 scripts indexed; 33 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.

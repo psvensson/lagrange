@@ -143,6 +143,7 @@
     "analyze:replace-safety-blocks": "node scripts/analyze-replace-safety-blocks.js",
     "analyze:replace-ghost-retirements": "node scripts/analyze-replace-ghost-retirements.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
+    "analyze:formation-release-phases": "node scripts/checks/analyze-formation-release-phases.js",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
     "trends:gates": "node scripts/query-gate-trends.js",
     "triage": "node scripts/triage-distributed-failure.js",

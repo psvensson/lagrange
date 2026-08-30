@@ -94,6 +94,14 @@ const TEARDOWN_REVOCATION_REASONS = Object.freeze([
   REVOKE_REASON_COHORT_MEMBER_INELIGIBLE,
 ]);
 const MINIMUM_COHORT_COMPLETE = 0;
+// Recorded-evidence vocabulary shared with the per-phase projection
+// (analyze-formation-release-phases.js), which never re-derives a verdict.
+const FORMATION_LOG_EVIDENCE = Object.freeze({
+  TRANSITION_MESSAGE: FORMATION_TRANSITION_MESSAGE,
+  BARRIER_MESSAGE: FORMATION_BARRIER_MESSAGE,
+  BARRIER_RELEASED_STATE: BARRIER_LEDGER_SPREAD_SATISFIED,
+  FIELD_TIME, FIELD_MSG, FIELD_NODE_ID, FIELD_STATE,
+});
 // Frozen empty prototype for diagnostic accumulators: an empty diagnostic list
 // is data derived from an explicit outcome, never a raw empty-state literal
 // that encodes the verdict (system-guidelines §4.5).
@@ -783,6 +791,7 @@ function analyzeFormationReleaseEvents(events, expectedFingerprint) {
 }
 
 export {
+  FORMATION_LOG_EVIDENCE,
   GENERATION_CLASSIFICATION,
   analyzeFormationInvariants,
   analyzeFormationReleaseEvents,
