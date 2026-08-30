@@ -13,6 +13,9 @@ import {
   recordGithubGateReceipt,
 } from '../../scripts/checks/record-github-gate-receipt.js';
 import {
+  newestSoakReportPath,
+} from '../../scripts/checks/run-release-0-2-verification-scenarios.js';
+import {
   GATE_RECEIPT_SCHEMA,
   GITHUB_GATE_RECEIPT_SCHEMA,
   GITHUB_REQUIRED_CHECK,
@@ -63,6 +66,19 @@ const PROBE_RECEIPT_NAME = 'probe-exit';
 const PROBE_EXIT_SCRIPT = `process.exit(${PROBE_EXIT_CODE})`;
 const CHECK_RUN_OLD_ID = 11;
 const CHECK_RUN_NEW_ID = 12;
+const CI_RUN_ID = 101;
+const FULL_GATE_RUN_ID = 102;
+const FULL_GATE_WORKFLOW_PATH = '.github/workflows/full-gate.yml';
+const FULL_GATE_WORKFLOW_NAME = 'full-gate';
+const EARLIER_TIMESTAMP = '2026-08-30T10:00:00.000Z';
+const LATER_TIMESTAMP = '2026-08-30T11:00:00.000Z';
+const OLDER_SOAK_TIMESTAMP = '2026-08-22T08:00:00.000Z';
+const OTHER_VERSION = '0.1.0';
+const STRING_EXIT_CODE = '0';
+const SOAK_UNDATED_FILENAME = 'release-0-2-memory-soak.report.json';
+const SOAK_DATED_FILENAME =
+  'release-0-2-memory-soak-2026-08-25T05-40-00Z.report.json';
+const PORCELAIN_ARGS = ['status', '--porcelain', '--', '.', ':!solve'];
 
 function versionSources(version = RELEASE_VERSION) {
   return {
@@ -146,6 +162,8 @@ function gateReceipt(name, overrides = {}) {
     startedAt: FIXTURE_TIMESTAMP,
     finishedAt: FIXTURE_TIMESTAMP,
     headSha: FIXTURE_SHA,
+    treeClean: true,
+    treeCleanAtFinish: true,
     sourceFingerprint: FIXTURE_FINGERPRINT,
     sourceFingerprintAtFinish: FIXTURE_FINGERPRINT,
     version: RELEASE_VERSION,
@@ -167,25 +185,40 @@ function receiptsFact(overridesByName = {}, missing = []) {
   return receipts;
 }
 
-function remoteReceipt(overrides = {}) {
+function gateJob(overrides = {}) {
+  return {
+    found: true,
+    name: GITHUB_REQUIRED_CHECK.JOB,
+    workflowName: GITHUB_REQUIRED_CHECK.WORKFLOW,
+    workflowPath: GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
+    runId: CI_RUN_ID,
+    jobId: CHECK_RUN_NEW_ID,
+    conclusion: GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
+    status: STATUS_COMPLETED,
+    completedAt: FIXTURE_TIMESTAMP,
+    headSha: FIXTURE_SHA,
+    htmlUrl: '',
+    ...overrides,
+  };
+}
+
+// The shape record-github-gate-receipt.js writes; overrides apply to the
+// selected gateJob.
+function remoteReceipt(overrides = {}, receiptOverrides = {}) {
+  const job = gateJob(overrides);
   return {
     schema: GITHUB_GATE_RECEIPT_SCHEMA,
     sha: FIXTURE_SHA,
     repository: FIXTURE_REPOSITORY,
     requiredCheck: GITHUB_REQUIRED_CHECK.DISPLAY_NAME,
+    requiredWorkflowPath: GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
+    query: '',
     recordedAt: FIXTURE_TIMESTAMP,
-    checkRunCount: 1,
-    checkRun: {
-      found: true,
-      name: GITHUB_REQUIRED_CHECK.JOB,
-      conclusion: GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
-      status: STATUS_COMPLETED,
-      id: CHECK_RUN_NEW_ID,
-      htmlUrl: '',
-      completedAt: FIXTURE_TIMESTAMP,
-      headSha: FIXTURE_SHA,
-      ...overrides,
-    },
+    treeClean: true,
+    workflowRunCount: 1,
+    gateJobs: [job],
+    gateJob: job,
+    ...receiptOverrides,
   };
 }
 
@@ -221,21 +254,54 @@ function assertVerdict(derived, scenario, verdict, reason) {
   return entry;
 }
 
-function checkRunPayload(runs) {
-  return {total_count: runs.length, check_runs: runs};
+// GitHub Actions API shapes: a workflow run (carries the workflow file
+// path) and one of its jobs.
+function workflowRun(overrides = {}) {
+  return {
+    id: CI_RUN_ID,
+    name: GITHUB_REQUIRED_CHECK.WORKFLOW,
+    path: GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
+    head_sha: FIXTURE_SHA,
+    status: STATUS_COMPLETED,
+    ...overrides,
+  };
 }
 
-function checkRun(overrides = {}) {
+function fullGateRun() {
+  return workflowRun({
+    id: FULL_GATE_RUN_ID,
+    name: FULL_GATE_WORKFLOW_NAME,
+    path: FULL_GATE_WORKFLOW_PATH,
+  });
+}
+
+function apiJob(overrides = {}) {
   return {
     id: CHECK_RUN_NEW_ID,
+    run_id: CI_RUN_ID,
     name: GITHUB_REQUIRED_CHECK.JOB,
     head_sha: FIXTURE_SHA,
     status: STATUS_COMPLETED,
     conclusion: GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
     completed_at: FIXTURE_TIMESTAMP,
-    html_url: 'https://github.com/psvensson/lagrange/runs/12',
-    app: {slug: GITHUB_REQUIRED_CHECK.APP_SLUG},
+    html_url: 'https://github.com/psvensson/lagrange/actions/runs/101/job/12',
     ...overrides,
+  };
+}
+
+// Injected queries over a {runId: [jobs]} table; records every query so
+// the witness proves the network is never touched by anything else.
+function injectedQueries(runs, jobsByRun, log = []) {
+  return {
+    queryWorkflowRuns: (repository, sha) => {
+      log.push(['runs', repository, sha]);
+      return {total_count: runs.length, workflow_runs: runs};
+    },
+    queryRunJobs: (repository, runId) => {
+      log.push(['jobs', repository, runId]);
+      const jobs = jobsByRun[runId] || [];
+      return {total_count: jobs.length, jobs};
+    },
   };
 }
 
@@ -243,6 +309,15 @@ function withTempDir(run) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   try {
     return run(dir);
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+}
+
+async function withTempDirAsync(run) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+  try {
+    return await run(dir);
   } finally {
     fs.rmSync(dir, {recursive: true, force: true});
   }
@@ -447,6 +522,194 @@ test('local-receipt-nonzero-exit-fails: a receipt recording a non-zero exit ' +
   );
 });
 
+test('receipt-facts-only-exit-code-is-the-only-fact: a receipt with ' +
+  'passed:true but no exitCode, or a string exitCode, fails with ' +
+  'receipt_exit_code_missing naming it; passed is never honoured', () => {
+  const noExit = gateReceipt('test-gate', {passed: true});
+  delete noExit.exitCode;
+  const receipts = receiptsFact();
+  receipts['test-gate'].receipt = noExit;
+  const handWritten = deriveVerificationReports(passingFacts({receipts}));
+  const entry = assertVerdict(
+    handWritten,
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_EXIT_CODE_MISSING,
+  );
+  assert.equal(
+    entry.current.verdictReasonDetail,
+    `${VERIFICATION_REASON.RECEIPT_EXIT_CODE_MISSING}: test-gate`,
+  );
+  const stringExit = deriveVerificationReports(passingFacts({
+    receipts: receiptsFact({
+      'package-npm': {exitCode: STRING_EXIT_CODE, passed: true},
+    }),
+  }));
+  assertVerdict(
+    stringExit,
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_EXIT_CODE_MISSING,
+  );
+  const allPassedFlags = {};
+  for (const name of REQUIRED_GATE_RECEIPTS) {
+    allPassedFlags[name] = {exitCode: 1, passed: true};
+  }
+  assertVerdict(
+    deriveVerificationReports(
+      passingFacts({receipts: receiptsFact(allPassedFlags)}),
+    ),
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_FAILED,
+  );
+});
+
+test('receipt-facts-only-version-mismatch-fails: a receipt recorded with ' +
+  'another version fails with receipt_version_mismatch naming it', () => {
+  const derived = deriveVerificationReports(passingFacts({
+    receipts: receiptsFact({'docker-smoke': {version: OTHER_VERSION}}),
+  }));
+  const entry = assertVerdict(
+    derived,
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_VERSION_MISMATCH,
+  );
+  assert.equal(
+    entry.current.verdictReasonDetail,
+    `${VERIFICATION_REASON.RECEIPT_VERSION_MISMATCH}: docker-smoke`,
+  );
+});
+
+test('receipt-facts-only-dirty-tree-fails: a gate receipt recorded on a ' +
+  'dirty tree (at start or at finish) fails with receipt_tree_dirty naming ' +
+  'it, and a GitHub receipt recorded on a dirty tree fails with ' +
+  'remote_receipt_tree_dirty', () => {
+  assertVerdict(
+    deriveVerificationReports(passingFacts({
+      receipts: receiptsFact({'build-all': {treeClean: false}}),
+    })),
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_TREE_DIRTY,
+  );
+  const dirtyAtFinish = deriveVerificationReports(passingFacts({
+    receipts: receiptsFact({'test-ci': {treeCleanAtFinish: false}}),
+  }));
+  const entry = assertVerdict(
+    dirtyAtFinish,
+    VERIFICATION_SCENARIO.LOCAL_ARTIFACTS,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.RECEIPT_TREE_DIRTY,
+  );
+  assert.equal(
+    entry.current.verdictReasonDetail,
+    `${VERIFICATION_REASON.RECEIPT_TREE_DIRTY}: test-ci`,
+  );
+  assertVerdict(
+    deriveVerificationReports(passingFacts({
+      remote: remoteFact(remoteReceipt({}, {treeClean: false})),
+    })),
+    VERIFICATION_SCENARIO.REMOTE_EXACT_SHA,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.REMOTE_RECEIPT_TREE_DIRTY,
+  );
+});
+
+test('receipt-facts-only-workflow-attribution: a ci gate failure plus a ' +
+  'later full-gate gate success records the full-gate job under its own ' +
+  'workflow path and the derivation fails with remote_workflow_mismatch; ' +
+  'a ci gate success passes', () => {
+  const log = [];
+  const ciFailure = apiJob({
+    conclusion: CONCLUSION_FAILURE,
+    completed_at: EARLIER_TIMESTAMP,
+  });
+  const fullGateSuccess = apiJob({
+    id: CHECK_RUN_OLD_ID,
+    run_id: FULL_GATE_RUN_ID,
+    completed_at: LATER_TIMESTAMP,
+  });
+  const receipt = buildGithubGateReceipt({
+    sha: FIXTURE_SHA,
+    repository: FIXTURE_REPOSITORY,
+    queries: injectedQueries(
+      [workflowRun(), fullGateRun()],
+      {[CI_RUN_ID]: [ciFailure], [FULL_GATE_RUN_ID]: [fullGateSuccess]},
+      log,
+    ),
+    recordedAt: FIXTURE_TIMESTAMP,
+    treeClean: true,
+  });
+  assert.deepEqual(log, [
+    ['runs', FIXTURE_REPOSITORY, FIXTURE_SHA],
+    ['jobs', FIXTURE_REPOSITORY, CI_RUN_ID],
+    ['jobs', FIXTURE_REPOSITORY, FULL_GATE_RUN_ID],
+  ]);
+  assert.equal(receipt.gateJobs.length, 2);
+  assert.equal(receipt.gateJob.workflowPath, FULL_GATE_WORKFLOW_PATH);
+  assert.equal(receipt.gateJob.workflowName, FULL_GATE_WORKFLOW_NAME);
+  assert.equal(receipt.gateJob.runId, FULL_GATE_RUN_ID);
+  assert.equal(
+    receipt.gateJob.conclusion,
+    GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
+  );
+  const derived = deriveVerificationReports(
+    passingFacts({remote: remoteFact(receipt)}),
+  );
+  const entry = assertVerdict(
+    derived,
+    VERIFICATION_SCENARIO.REMOTE_EXACT_SHA,
+    VERIFICATION_VERDICT.FAIL,
+    VERIFICATION_REASON.REMOTE_WORKFLOW_MISMATCH,
+  );
+  assert.equal(entry.passed, false);
+  const ciOnly = buildGithubGateReceipt({
+    sha: FIXTURE_SHA,
+    repository: FIXTURE_REPOSITORY,
+    queries: injectedQueries([workflowRun()], {[CI_RUN_ID]: [apiJob()]}),
+    recordedAt: FIXTURE_TIMESTAMP,
+    treeClean: true,
+  });
+  assert.equal(
+    ciOnly.gateJob.workflowPath,
+    GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
+  );
+  assertVerdict(
+    deriveVerificationReports(passingFacts({remote: remoteFact(ciOnly)})),
+    VERIFICATION_SCENARIO.REMOTE_EXACT_SHA,
+    VERIFICATION_VERDICT.PASS,
+    VERIFICATION_REASON.VERIFIED,
+  );
+});
+
+test('receipt-facts-only-newest-soak-by-timestamp: the newest soak report ' +
+  'is chosen by its own timestamp field, so an undated older file that ' +
+  'sorts lexically last never wins', () => {
+  withTempDir((dir) => {
+    const older = soakReport();
+    older.timestamp = OLDER_SOAK_TIMESTAMP;
+    fs.writeFileSync(
+      path.join(dir, SOAK_UNDATED_FILENAME),
+      JSON.stringify(older),
+    );
+    fs.writeFileSync(
+      path.join(dir, SOAK_DATED_FILENAME),
+      JSON.stringify(soakReport()),
+    );
+    fs.writeFileSync(
+      path.join(dir, 'unrelated.report.json'),
+      JSON.stringify(soakReport()),
+    );
+    assert.equal(
+      newestSoakReportPath(dir),
+      path.join(dir, SOAK_DATED_FILENAME),
+    );
+    assert.equal(newestSoakReportPath(path.join(dir, 'absent')), '');
+  });
+});
+
 test('remote-success-passes: a GitHub receipt recording ci / gate success ' +
   'for the exact current HEAD derives PASS', () => {
   const derived = deriveVerificationReports(passingFacts());
@@ -592,56 +855,87 @@ test('gate-receipt-helper-records-real-exit-code: the helper runs the ' +
     assert.equal(receipt.sourceFingerprintAtFinish, receipt.sourceFingerprint);
     assert.equal(receipt.version, RELEASE_VERSION);
     assert.ok(receipt.startedAt <= receipt.finishedAt);
+    const porcelain = execFileSync(
+      'git', PORCELAIN_ARGS, {cwd: ROOT, encoding: 'utf8'},
+    ).trim();
+    assert.equal(receipt.treeClean, porcelain === '');
+    assert.equal(receipt.treeCleanAtFinish, porcelain === '');
   });
 });
 
-test('github-receipt-records-conclusion-without-network: the receipt builder ' +
-  'records the newest github-actions gate check run for the sha from an ' +
-  'injected check-runs payload, and absence as found false', () => {
-  const stale = checkRun({
+test('github-receipt-records-conclusion-without-network: the receipt ' +
+  'builder records the newest completed ci gate job for the sha from ' +
+  'injected workflow-run and job queries (an in-progress rerun never ' +
+  'clobbers it, absence is found false), and the recorder writes it to ' +
+  'disk without touching the network', async () => {
+  const stale = apiJob({
     id: CHECK_RUN_OLD_ID,
     conclusion: CONCLUSION_FAILURE,
-    completed_at: '2026-08-30T11:00:00.000Z',
+    completed_at: EARLIER_TIMESTAMP,
   });
-  const foreign = checkRun({name: 'lint', conclusion: CONCLUSION_FAILURE});
+  const inProgress = apiJob({
+    id: CHECK_RUN_NEW_ID + 1,
+    status: 'in_progress',
+    conclusion: null,
+    completed_at: null,
+  });
+  const foreign = apiJob({name: 'lint', conclusion: CONCLUSION_FAILURE});
   const receipt = buildGithubGateReceipt({
     sha: FIXTURE_SHA,
     repository: FIXTURE_REPOSITORY,
-    payload: checkRunPayload([stale, foreign, checkRun()]),
+    queries: injectedQueries(
+      [workflowRun()],
+      {[CI_RUN_ID]: [stale, foreign, apiJob(), inProgress]},
+    ),
     recordedAt: FIXTURE_TIMESTAMP,
+    treeClean: true,
   });
   assert.equal(receipt.schema, GITHUB_GATE_RECEIPT_SCHEMA);
   assert.equal(receipt.sha, FIXTURE_SHA);
-  assert.equal(receipt.checkRunCount, 3);
-  assert.equal(receipt.checkRun.found, true);
-  assert.equal(receipt.checkRun.id, CHECK_RUN_NEW_ID);
-  assert.equal(receipt.checkRun.conclusion, GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION);
-  assert.equal(receipt.checkRun.headSha, FIXTURE_SHA);
+  assert.equal(receipt.workflowRunCount, 1);
+  assert.equal(receipt.gateJobs.length, 3);
+  assert.equal(receipt.gateJob.found, true);
+  assert.equal(receipt.gateJob.jobId, CHECK_RUN_NEW_ID);
+  assert.equal(
+    receipt.gateJob.conclusion,
+    GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
+  );
+  assert.equal(receipt.gateJob.headSha, FIXTURE_SHA);
+  assert.equal(
+    receipt.gateJob.workflowPath,
+    GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
+  );
   const absent = buildGithubGateReceipt({
     sha: FIXTURE_SHA,
     repository: FIXTURE_REPOSITORY,
-    payload: checkRunPayload([foreign]),
+    queries: injectedQueries([workflowRun()], {[CI_RUN_ID]: [foreign]}),
     recordedAt: FIXTURE_TIMESTAMP,
+    treeClean: true,
   });
-  assert.equal(absent.checkRun.found, false);
-  assert.equal(absent.checkRun.conclusion, '');
-  withTempDir((dir) => {
-    const queries = [];
+  assert.equal(absent.gateJob.found, false);
+  assert.equal(absent.gateJob.conclusion, '');
+  await withTempDirAsync(async (dir) => {
+    const log = [];
     const outPath = path.join(dir, 'github-ci-gate.json');
-    const written = recordGithubGateReceipt({
+    const written = await recordGithubGateReceipt({
       sha: FIXTURE_SHA,
       repository: FIXTURE_REPOSITORY,
       outPath,
       recordedAt: FIXTURE_TIMESTAMP,
-      queryCheckRuns: (repository, sha) => {
-        queries.push([repository, sha]);
-        return checkRunPayload([checkRun({conclusion: CONCLUSION_FAILURE})]);
-      },
+      ...injectedQueries(
+        [workflowRun()],
+        {[CI_RUN_ID]: [apiJob({conclusion: CONCLUSION_FAILURE})]},
+        log,
+      ),
     });
-    assert.deepEqual(queries, [[FIXTURE_REPOSITORY, FIXTURE_SHA]]);
+    assert.deepEqual(log, [
+      ['runs', FIXTURE_REPOSITORY, FIXTURE_SHA],
+      ['jobs', FIXTURE_REPOSITORY, CI_RUN_ID],
+    ]);
     const onDisk = JSON.parse(fs.readFileSync(outPath, 'utf8'));
     assert.deepEqual(onDisk, written.receipt);
-    assert.equal(onDisk.checkRun.conclusion, CONCLUSION_FAILURE);
+    assert.equal(onDisk.gateJob.conclusion, CONCLUSION_FAILURE);
+    assert.equal(typeof onDisk.treeClean, 'boolean');
   });
 });
 
@@ -666,8 +960,7 @@ test('producer-cli-writes-discoverable-reports: the producer writes the ' +
         })),
       );
     }
-    const remote = remoteReceipt({headSha: head});
-    remote.sha = head;
+    const remote = remoteReceipt({headSha: head}, {sha: head});
     fs.writeFileSync(path.join(receiptDir, 'github-ci-gate.json'), JSON.stringify(remote));
     const reportDir = path.join(dir, 'reports');
     const result = spawnSync(NODE_BINARY, [

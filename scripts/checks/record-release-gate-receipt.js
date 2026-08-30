@@ -7,10 +7,11 @@
  * Runs <command...> (argv, no shell) with inherited stdio in the repository
  * root and writes test-output/reports/release-gate-receipts/<name>.json:
  * {schema, name, command, exitCode, signal, startedAt, finishedAt, headSha,
- * sourceFingerprint, sourceFingerprintAtFinish, version}. The receipt records
- * the REAL exit code of the command it ran and the release-candidate
- * identity before and after the run; it never decides whether the gate
- * passed. The verdict is owned by run-release-0-2-verification-scenarios.js,
+ * treeClean, treeCleanAtFinish, sourceFingerprint,
+ * sourceFingerprintAtFinish, version}. The receipt records the REAL exit
+ * code of the command it ran and the release-candidate identity (HEAD,
+ * porcelain-clean tree, src fingerprint, version) before and after the run;
+ * it never decides whether the gate passed. The verdict is owned by run-release-0-2-verification-scenarios.js,
  * which requires exit 0 on the current HEAD and source fingerprint. The
  * helper exits with the command's own exit code so a chained operator
  * sequence stops on the first red gate.
@@ -100,6 +101,8 @@ async function main() {
     startedAt,
     finishedAt,
     headSha: before.headSha,
+    treeClean: before.treeClean,
+    treeCleanAtFinish: after.treeClean,
     sourceFingerprint: before.sourceFingerprint,
     sourceFingerprintAtFinish: after.sourceFingerprint,
     version: before.versionSources.packageJson,

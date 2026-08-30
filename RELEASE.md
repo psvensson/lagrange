@@ -91,7 +91,8 @@ the chart):
    reports `analyzed: true` with at least 30 samples, no `insufficient-*`
    reason and no leak, and the report's `metadata.srcFingerprint` equals the
    current fingerprint (`fingerprint_missing` / `fingerprint_mismatch`
-   otherwise).
+   otherwise). "Newest" is by the report's own `timestamp` field (mtime
+   fallback), never by filename.
 2. **Local gates.** Record each required gate through the only honest writer,
    which runs the command and stores its real exit code:
    ```sh
@@ -109,15 +110,24 @@ the chart):
      helm package charts/lagrange-node --destination dist/
    ```
    Receipts land in `test-output/reports/release-gate-receipts/<name>.json`.
-   A missing receipt, a non-zero exit, or a receipt recorded on another HEAD
-   or fingerprint fails `release-0-2-verification-v3-local-artifacts` with the
-   typed reason naming the receipt.
+   The recorded integer `exitCode` is the only success fact (no `passed`
+   field exists or is honoured); a missing receipt, a missing or non-zero
+   exit code, a receipt recorded on another HEAD, fingerprint, or version,
+   or on a dirty tree (`treeClean` / `treeCleanAtFinish` from
+   `git status --porcelain` excluding `solve/`) fails
+   `release-0-2-verification-v3-local-artifacts` with the typed reason naming
+   the receipt.
 3. **Remote exact-SHA gate.** After `npm run publish`, record the GitHub
    `ci / gate` conclusion for the exact sha:
    ```sh
    npm run release:gate:remote-receipt -- --sha "$(git rev-parse HEAD)"
    ```
-   An absent receipt is `remote_receipt_missing` (FAIL, never skipped).
+   The helper lists the workflow runs for the sha and their jobs, records
+   every job named `gate` under its own workflow file, and selects the newest
+   completed one; the scenario requires that job to belong to
+   `.github/workflows/ci.yml` (`remote_workflow_mismatch` if `full-gate.yml`
+   was what last ran) with conclusion `success` for the exact HEAD. An absent
+   receipt is `remote_receipt_missing` (FAIL, never skipped).
 4. **Derive the scenarios.** `npm run release:verify:scenarios` writes the
    three frontier reports and the aggregate under `test-output/reports/`,
    each carrying the provenance (HEAD, fingerprint, version sources, soak

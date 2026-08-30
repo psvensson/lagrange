@@ -15,11 +15,10 @@
 // local-receipts-fail-closed, remote-receipt-fail-closed,
 // aggregate-requires-all-children, gate-receipt-helper-records-real-exit-code,
 // github-receipt-records-conclusion-without-network,
-// producer-cli-writes-discoverable-reports and witness-deterministic
-// receipts are RED (the witness cannot import the absent producer modules)
-// and soak-report-carries-src-fingerprint is RED (report metadata lacks
-// srcFingerprint);
-// existing-scenario-runners-unchanged is green and must stay green — a
+// producer-cli-writes-discoverable-reports, receipt-facts-only and
+// witness-deterministic receipts are RED (the witness cannot import the
+// absent producer modules); existing-scenario-runners-unchanged is green
+// and must stay green — a
 // producer that breaks the five-node/topology/snapshot runners or the
 // release identity guards it builds on is rejected.
 
@@ -47,14 +46,6 @@ function scenarioCommand(scenarioPattern) {
   return NODE_TEST_COMMAND_PREFIX +
     TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
     SPACE + WITNESS_TEST;
-}
-
-const RUN_METADATA_TEST = 'test/distributed/harness/__tests__/run.test.js';
-
-function runMetadataCommand(scenarioPattern) {
-  return NODE_TEST_COMMAND_PREFIX +
-    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
-    SPACE + RUN_METADATA_TEST;
 }
 
 const EXISTING_RUNNERS = Object.freeze([
@@ -143,13 +134,17 @@ const RECEIPTS = Object.freeze([
       'green and red reports',
   }),
   Object.freeze({
-    id: 'soak-report-carries-src-fingerprint',
-    command: runMetadataCommand('^soak-report-carries-src-fingerprint'),
-    detail: 'test/distributed/run.js buildReportMetadata (the single owner ' +
-      'of report metadata) stamps metadata.srcFingerprint and ' +
-      'srcFingerprintAlgo from the run config computed fingerprint on ' +
-      'every written report, empty when no fingerprinted config exists, ' +
-      'so a real memory-soak report can satisfy the producer oracle',
+    id: 'receipt-facts-only',
+    command: scenarioCommand('^receipt-facts-only'),
+    detail: 'a gate receipt passes on its recorded integer exitCode alone ' +
+      '(passed:true without exitCode and a string exitCode are ' +
+      'receipt_exit_code_missing), its version must equal 0.2.0 ' +
+      '(receipt_version_mismatch), both helpers record a porcelain-clean ' +
+      'tree fact and dirty receipts are rejected (receipt_tree_dirty, ' +
+      'remote_receipt_tree_dirty), the GitHub receipt attributes the gate ' +
+      'job to its workflow file so a full-gate success cannot stand in for ' +
+      'a failed ci gate (remote_workflow_mismatch), and the newest soak ' +
+      'report is chosen by its own timestamp, never lexical filename',
   }),
   Object.freeze({
     id: 'existing-scenario-runners-unchanged',

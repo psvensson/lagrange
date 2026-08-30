@@ -40,10 +40,15 @@ export const VERIFICATION_REASON = Object.freeze({
   SOAK_INSUFFICIENT_REASON: 'soak_insufficient_analysis_reason',
   SOAK_LEAK_DETECTED: 'soak_leak_detected',
   RECEIPT_MISSING: 'receipt_missing',
+  RECEIPT_EXIT_CODE_MISSING: 'receipt_exit_code_missing',
   RECEIPT_FAILED: 'receipt_failed',
+  RECEIPT_VERSION_MISMATCH: 'receipt_version_mismatch',
+  RECEIPT_TREE_DIRTY: 'receipt_tree_dirty',
   RECEIPT_SHA_MISMATCH: 'receipt_sha_mismatch',
   RECEIPT_FINGERPRINT_MISMATCH: 'receipt_fingerprint_mismatch',
   REMOTE_RECEIPT_MISSING: 'remote_receipt_missing',
+  REMOTE_RECEIPT_TREE_DIRTY: 'remote_receipt_tree_dirty',
+  REMOTE_WORKFLOW_MISMATCH: 'remote_workflow_mismatch',
   REMOTE_SHA_MISMATCH: 'remote_sha_mismatch',
   REMOTE_CHECK_NOT_FOUND: 'remote_check_not_found',
   REMOTE_CHECK_NOT_SUCCESS: 'remote_check_not_success',
@@ -83,13 +88,17 @@ export const GATE_RECEIPT_EXIT_SIGNAL = 128;
 export const GATE_RECEIPT_EXIT_SPAWN_FAILED = 127;
 
 // GitHub check identity of the required remote gate: the `gate` job of the
-// `ci` workflow, which GitHub renders as "ci / gate".
+// workflow file .github/workflows/ci.yml, which GitHub renders as
+// "ci / gate". full-gate.yml also owns a job id `gate`; only the workflow
+// path tells them apart, so the receipt records the path and the
+// derivation requires it.
 export const GITHUB_REQUIRED_CHECK = Object.freeze({
   WORKFLOW: 'ci',
+  WORKFLOW_PATH: '.github/workflows/ci.yml',
   JOB: 'gate',
   DISPLAY_NAME: 'ci / gate',
-  APP_SLUG: 'github-actions',
   SUCCESS_CONCLUSION: 'success',
+  COMPLETED_STATUS: 'completed',
 });
 
 export const GITHUB_GATE_RECEIPT_FILENAME = 'github-ci-gate.json';

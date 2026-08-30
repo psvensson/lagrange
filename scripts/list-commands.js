@@ -262,11 +262,11 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run release:gate:receipt -- <name> -- <command...>',
-        description: 'Run one local release gate and record its real exit code, HEAD sha, source fingerprint and version as a gate receipt.',
+        description: 'Run one local release gate and record its real exit code, HEAD sha, clean-tree state, source fingerprint and version as a gate receipt.',
       }),
       Object.freeze({
         command: 'npm run release:gate:remote-receipt -- --sha <sha>',
-        description: 'Record the GitHub ci / gate check-run conclusion for one exact sha as a receipt (fact only, no verdict).',
+        description: 'Record the GitHub gate job conclusion for one exact sha, attributed to its workflow file, as a receipt (fact only, no verdict).',
       }),
       Object.freeze({
         command: 'npm run release:verify:scenarios -- [--soak-report <path>] [--receipt-dir <dir>]',

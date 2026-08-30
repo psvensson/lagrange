@@ -30,6 +30,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 
 import {
   REPO_ROOT,
@@ -114,19 +115,37 @@ function parseArgs(argv) {
   return parsed;
 }
 
-function newestSoakReportPath(root) {
-  const dir = path.join(root, VERIFICATION_REPORT_DIR);
-  const candidates = [];
-  for (const name of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
-    if (stringStartsWith(name, SOAK_REPORT_PREFIX) &&
-        stringEndsWith(name, REPORT_FILE_EXTENSION)) {
-      candidates.push(path.join(dir, name));
+// A candidate's recency is its own timestamp field; a report without a
+// parseable timestamp falls back to its mtime. Never the filename: an
+// undated release-0-2-memory-soak.report.json sorts lexically after every
+// dated sibling.
+function soakReportRecency(filePath) {
+  const parsed = JSON.parse(fs.readFileSync(filePath, TEXT_ENCODING));
+  const stamped = Date.parse(String(parsed?.timestamp || EMPTY_PATH));
+  return Number.isFinite(stamped) ? stamped : fs.statSync(filePath).mtimeMs;
+}
+
+/**
+ * Newest memory-soak report in a directory by report timestamp.
+ * @param {string} dir directory holding <SOAK_REPORT_PREFIX>*.report.json
+ * @return {string} absolute path, or '' when none exists
+ */
+function newestSoakReportPath(dir) {
+  let newest = EMPTY_PATH;
+  let newestRecency = Number.NEGATIVE_INFINITY;
+  for (const name of fs.existsSync(dir) ? fs.readdirSync(dir).sort() : []) {
+    if (!stringStartsWith(name, SOAK_REPORT_PREFIX) ||
+        !stringEndsWith(name, REPORT_FILE_EXTENSION)) {
+      continue;
+    }
+    const candidate = path.join(dir, name);
+    const recency = soakReportRecency(candidate);
+    if (recency >= newestRecency) {
+      newest = candidate;
+      newestRecency = recency;
     }
   }
-  candidates.sort();
-  return candidates.length > 0 ?
-    candidates[candidates.length - 1] :
-    EMPTY_PATH;
+  return newest;
 }
 
 function loadJsonFact(root, filePath) {
@@ -147,7 +166,7 @@ function loadJsonFact(root, filePath) {
 
 function loadSoak(root, args) {
   const reportPath = args.soakReport === EMPTY_PATH ?
-    newestSoakReportPath(root) :
+    newestSoakReportPath(path.join(root, VERIFICATION_REPORT_DIR)) :
     args.soakReport;
   const fact = loadJsonFact(root, reportPath);
   return {
@@ -233,4 +252,8 @@ async function main() {
   process.exitCode = derived.allPassed ? EXIT_OK : EXIT_FAILED;
 }
 
-await main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await main();
+}
+
+export {newestSoakReportPath};

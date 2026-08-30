@@ -14,7 +14,9 @@
  */
 
 import {
+  GATE_RECEIPT_EXIT_OK,
   GITHUB_REQUIRED_CHECK,
+  RELEASE_VERSION,
   REQUIRED_GATE_RECEIPTS,
   SOAK_INSUFFICIENT_REASON_PREFIX,
   SOAK_MIN_SAMPLES_PER_NODE,
@@ -241,8 +243,10 @@ const SOAK_CONDITIONS = Object.freeze([
 
 // --- local artifacts ------------------------------------------------------
 
-function receiptPassed(receipt) {
-  return receipt?.exitCode === 0 || receipt?.passed === true;
+// The recorded integer exit code is the ONLY success fact a gate receipt
+// carries; no helper writes a `passed` field and none is honoured here.
+function receiptExitCodeRecorded(receipt) {
+  return Number.isInteger(receipt?.exitCode);
 }
 
 function receiptBoundToIdentity(receipt, identity) {
@@ -250,11 +254,25 @@ function receiptBoundToIdentity(receipt, identity) {
     receipt?.sourceFingerprintAtFinish === identity.sourceFingerprint;
 }
 
+function receiptTreeClean(receipt) {
+  return receipt?.treeClean === true && receipt?.treeCleanAtFinish === true;
+}
+
 function failingReceiptNames(ctx, violates) {
   const names = [];
   for (const name of REQUIRED_GATE_RECEIPTS) {
     const entry = ctx.receipts[name] || {present: false};
-    if (violates(entry, ctx.identity)) names.push(name);
+    if (entry.present === true && violates(entry.receipt, ctx.identity)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function missingReceiptNames(ctx) {
+  const names = [];
+  for (const name of REQUIRED_GATE_RECEIPTS) {
+    if (ctx.receipts[name]?.present !== true) names.push(name);
   }
   return names;
 }
@@ -264,16 +282,23 @@ const LOCAL_ARTIFACT_CONDITIONS = Object.freeze([
   Object.freeze({
     receipt: 'every required gate receipt present',
     reason: VERIFICATION_REASON.RECEIPT_MISSING,
-    evaluate: (ctx) => holdsForAll(
-      failingReceiptNames(ctx, (entry) => entry.present !== true),
-    ),
+    evaluate: (ctx) => holdsForAll(missingReceiptNames(ctx)),
   }),
   Object.freeze({
-    receipt: 'every receipt exitCode 0 (or passed true)',
+    receipt: 'every receipt records an integer exitCode',
+    reason: VERIFICATION_REASON.RECEIPT_EXIT_CODE_MISSING,
+    evaluate: (ctx) => holdsForAll(failingReceiptNames(
+      ctx,
+      (receipt) => !receiptExitCodeRecorded(receipt),
+    )),
+  }),
+  Object.freeze({
+    receipt: 'every receipt exitCode === 0',
     reason: VERIFICATION_REASON.RECEIPT_FAILED,
     evaluate: (ctx) => holdsForAll(failingReceiptNames(
       ctx,
-      (entry) => entry.present === true && !receiptPassed(entry.receipt),
+      (receipt) => receiptExitCodeRecorded(receipt) &&
+        receipt.exitCode !== GATE_RECEIPT_EXIT_OK,
     )),
   }),
   Object.freeze({
@@ -281,8 +306,7 @@ const LOCAL_ARTIFACT_CONDITIONS = Object.freeze([
     reason: VERIFICATION_REASON.RECEIPT_SHA_MISMATCH,
     evaluate: (ctx) => holdsForAll(failingReceiptNames(
       ctx,
-      (entry, identity) => entry.present === true &&
-        entry.receipt?.headSha !== identity.headSha,
+      (receipt, identity) => receipt?.headSha !== identity.headSha,
     )),
   }),
   Object.freeze({
@@ -290,8 +314,23 @@ const LOCAL_ARTIFACT_CONDITIONS = Object.freeze([
     reason: VERIFICATION_REASON.RECEIPT_FINGERPRINT_MISMATCH,
     evaluate: (ctx) => holdsForAll(failingReceiptNames(
       ctx,
-      (entry, identity) => entry.present === true &&
-        !receiptBoundToIdentity(entry.receipt, identity),
+      (receipt, identity) => !receiptBoundToIdentity(receipt, identity),
+    )),
+  }),
+  Object.freeze({
+    receipt: 'every receipt version equals RELEASE_VERSION',
+    reason: VERIFICATION_REASON.RECEIPT_VERSION_MISMATCH,
+    evaluate: (ctx) => holdsForAll(failingReceiptNames(
+      ctx,
+      (receipt) => receipt?.version !== RELEASE_VERSION,
+    )),
+  }),
+  Object.freeze({
+    receipt: 'every receipt recorded treeClean at start and finish',
+    reason: VERIFICATION_REASON.RECEIPT_TREE_DIRTY,
+    evaluate: (ctx) => holdsForAll(failingReceiptNames(
+      ctx,
+      (receipt) => !receiptTreeClean(receipt),
     )),
   }),
 ]);
@@ -306,19 +345,32 @@ const REMOTE_CONDITIONS = Object.freeze([
     evaluate: (ctx) => holds(ctx.remote.present === true),
   }),
   Object.freeze({
-    receipt: 'receipt sha and check-run head_sha equal current HEAD',
+    receipt: 'GitHub gate receipt recorded on a clean tree',
+    reason: VERIFICATION_REASON.REMOTE_RECEIPT_TREE_DIRTY,
+    evaluate: (ctx) => holds(ctx.remote.receipt?.treeClean === true),
+  }),
+  Object.freeze({
+    receipt: 'receipt sha and gate job head_sha equal current HEAD',
     reason: VERIFICATION_REASON.REMOTE_SHA_MISMATCH,
     evaluate: (ctx) => holds(
       ctx.remote.receipt?.sha === ctx.identity.headSha &&
-        ctx.remote.receipt?.checkRun?.headSha === ctx.identity.headSha,
+        ctx.remote.receipt?.gateJob?.headSha === ctx.identity.headSha,
     ),
   }),
   Object.freeze({
-    receipt: `${GITHUB_REQUIRED_CHECK.DISPLAY_NAME} check run found`,
+    receipt: `job ${GITHUB_REQUIRED_CHECK.JOB} found for the sha`,
     reason: VERIFICATION_REASON.REMOTE_CHECK_NOT_FOUND,
     evaluate: (ctx) => holds(
-      ctx.remote.receipt?.checkRun?.found === true &&
-        ctx.remote.receipt?.checkRun?.name === GITHUB_REQUIRED_CHECK.JOB,
+      ctx.remote.receipt?.gateJob?.found === true &&
+        ctx.remote.receipt?.gateJob?.name === GITHUB_REQUIRED_CHECK.JOB,
+    ),
+  }),
+  Object.freeze({
+    receipt: `gate job belongs to ${GITHUB_REQUIRED_CHECK.WORKFLOW_PATH}`,
+    reason: VERIFICATION_REASON.REMOTE_WORKFLOW_MISMATCH,
+    evaluate: (ctx) => holds(
+      ctx.remote.receipt?.gateJob?.workflowPath ===
+        GITHUB_REQUIRED_CHECK.WORKFLOW_PATH,
     ),
   }),
   Object.freeze({
@@ -326,7 +378,7 @@ const REMOTE_CONDITIONS = Object.freeze([
       GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
     reason: VERIFICATION_REASON.REMOTE_CHECK_NOT_SUCCESS,
     evaluate: (ctx) => holds(
-      ctx.remote.receipt?.checkRun?.conclusion ===
+      ctx.remote.receipt?.gateJob?.conclusion ===
         GITHUB_REQUIRED_CHECK.SUCCESS_CONCLUSION,
     ),
   }),
@@ -366,6 +418,7 @@ function receiptPaths(receipts) {
 function buildProvenance(facts) {
   return {
     headCommit: facts.identity.headSha,
+    treeClean: facts.identity.treeClean === true,
     sourceFingerprint: facts.identity.sourceFingerprint,
     releaseVersion: facts.identity.releaseVersion,
     versionSources: facts.identity.versionSources,
