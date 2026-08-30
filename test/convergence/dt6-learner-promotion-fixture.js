@@ -24,6 +24,7 @@ import {
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
+import {readFollowerMatchIndex} from '../../src/raft/liferaft.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -95,6 +96,34 @@ export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
     };
     poll();
   });
+}
+
+// The leader's own replication observable for the learner: the proof's
+// learnerMatchIndex input (readFollowerMatchIndex) against the committed
+// prefix the proof's safePromotionIndex is read from. A witness that must
+// sequence an injected event AFTER the learner is caught up reads this —
+// the same owner observable the proof consumes — never elapsed time.
+export function readLeaderReplicationToLearner(leader) {
+  const committedIndex = leader.raftProvider.getCommittedIndex(leader.raft);
+  const {matchIndex} = readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS);
+  return {
+    committedIndex,
+    matchIndex,
+    proven: Number.isFinite(matchIndex) && matchIndex >= committedIndex,
+  };
+}
+
+// Resolves true once the leader has proven the learner's replication
+// (match index at the committed prefix), false at the budget or when the
+// cancel predicate holds (the fixture shut down first).
+export function waitForLeaderReplicationToLearner(leader, timeoutMs, options = {}) {
+  const isCancelled = typeof options.isCancelled === 'function' ?
+    options.isCancelled :
+    () => false;
+  return waitFor(
+    () => isCancelled() || readLeaderReplicationToLearner(leader).proven,
+    timeoutMs,
+  ).then((settled) => settled && !isCancelled());
 }
 
 function buildServiceRow(replicaId, nodeId, raftRole) {

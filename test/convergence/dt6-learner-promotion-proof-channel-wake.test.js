@@ -25,11 +25,13 @@ import {
   createFiveNodeFixture,
   insertPublishedEpochRow,
   insertServiceRow,
+  readLeaderReplicationToLearner,
   recordServiceLog,
   resetFixtureRuntime,
   touchPublishedEpochRow,
   updateServiceRow,
   waitFor,
+  waitForLeaderReplicationToLearner,
 } from './dt6-learner-promotion-fixture.js';
 
 // Deterministic witness for the learner-promotion proof channel (quest
@@ -65,8 +67,25 @@ import {
 // interval: an event-driven re-request lands within a few milliseconds,
 // a timer-only re-request no earlier than a full interval.
 //
+// ROW LANDING SCHEDULE (quest
+// learner-promotion-proof-channel-witness-determinism): the durable landing
+// of the learner's services row is an explicit fixture schedule, never a
+// wall-clock race. The leader cache gains the row first (INSERT; the leader
+// joins the learner as a raft peer and replicates the committed prefix on
+// liferaft's wall-clock heartbeat), the fixture then waits until the leader
+// has PROVEN that replication (its own learnerMatchIndex observable at the
+// committed prefix — the proof's input, never elapsed time), and only then
+// does the target's own cache see its local-only seed row converge
+// (UPDATE, the services_row_visible wake). The wake proof request therefore
+// always meets a caught-up learner: two drives yield the identical
+// sequence on any host. Before this schedule both landings were applied
+// together and the wake request raced the leader's first append+ack on the
+// host event loop — progress_behind then a cadence grant when the request
+// won, a direct grant when it lost under load.
+//
 // Each test below is one quest receipt
-// (scripts/quest-evidence-learner-promotion-proof-channel-wake.js).
+// (scripts/quest-evidence-learner-promotion-proof-channel-wake.js and
+// scripts/quest-evidence-learner-promotion-proof-channel-witness-determinism.js).
 
 const VIRTUAL_SECOND_MS = 200;
 const RETRY_INTERVAL_MS = VIRTUAL_SECOND_MS;
@@ -114,6 +133,7 @@ const NO_REQUESTS = 0;
 const SCHEDULING_SLACK_MS = VIRTUAL_SECOND_MS / 2;
 const REQUEST_INVALID = LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID;
 const PROGRESS_BEHIND = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
+const PROGRESS_PROVEN = LEARNER_PROMOTION_PROOF_REASON.PROGRESS_PROVEN;
 const TRANSPORT_FAILED = LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED;
 const EPOCH_MISMATCH = LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH;
 const WOULD_EXCEED_TARGET = 'would_exceed_target_replica_count';
@@ -127,6 +147,17 @@ const WAKE_PUBLISHED_EPOCH_CHANGED = 'published_epoch_changed';
 const LOG_LEVEL_INFO = 'info';
 const OUTCOME_TIMEOUT = 'timeout';
 const WAKE_DELAY_MS = PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_WAKE_DELAY_MS;
+// The exact cpp drive on the row landing schedule: one typed refusal while
+// the row is withheld, one CL-021 kick, one services_row_visible wake, and
+// the wake proof request granted — never a progress_behind cycle.
+const SINGLE_KICK = 1;
+const NO_REQUESTS_DURING_LANDING = 0;
+const QUANTIZED_DEFERRALS = Object.freeze([
+  [REQUEST_INVALID, CAUSE_ADDRESS_UNRESOLVABLE],
+]);
+const QUANTIZED_REQUEST_OUTCOMES =
+  Object.freeze([REQUEST_INVALID, PROGRESS_PROVEN]);
+const QUANTIZED_WAKES = Object.freeze([WAKE_SERVICES_ROW_VISIBLE]);
 
 function seconds(clock, atMs) {
   return Number(((atMs - clock.originMs) / VIRTUAL_SECOND_MS).toFixed(2));
@@ -233,26 +264,55 @@ function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
   };
 }
 
-// The durable landing of the learner's services row: the leader cache gains
-// it (INSERT, CDC fan-out) and the target's own cache sees its local-only
-// seed row converge (UPDATE). Idempotent.
+// The durable landing of the learner's services row on the fixture's
+// explicit schedule (see ROW LANDING SCHEDULE above): (1) the leader cache
+// gains the row (INSERT, CDC fan-out; the leader joins the learner as a
+// raft peer), (2) the fixture waits for the leader to PROVE the learner's
+// replication on its own match-index observable, (3) the target's own
+// cache sees its local-only seed row converge (UPDATE — the wake).
+// landedAtMs / requestCountAtLanding anchor step 3, the learner-visible
+// landing. Idempotent; never rejects; cancelled by fixture shutdown.
 function createRowLanding(clock) {
-  const landing = {landedAtMs: null, requestCountAtLanding: null, fixture: null};
+  const landing = {
+    landedAtMs: null,
+    requestCountAtLanding: null,
+    leaderLandedAtMs: null,
+    requestCountAtLeaderLanding: null,
+    replicationProven: null,
+    replicationAtLanding: null,
+    fixture: null,
+    cancelled: false,
+    settled: null,
+  };
+  landing.cancel = () => {
+    landing.cancelled = true;
+  };
   landing.land = () => {
-    if (landing.landedAtMs !== null || !landing.fixture) {
-      return;
+    if (landing.settled !== null || !landing.fixture) {
+      return landing.settled || Promise.resolve();
     }
-    landing.landedAtMs = clock.now();
-    landing.requestCountAtLanding =
-      landing.fixture.learnerTransport.requests.length;
+    const {fixture} = landing;
+    landing.leaderLandedAtMs = clock.now();
+    landing.requestCountAtLeaderLanding =
+      fixture.learnerTransport.requests.length;
     insertServiceRow(
-      landing.fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE,
-      RaftRole.LEARNER,
+      fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
     );
-    updateServiceRow(
-      landing.fixture.learnerCache, LEARNER_REPLICA, LEARNER_NODE,
-      RaftRole.LEARNER,
-    );
+    landing.settled = waitForLeaderReplicationToLearner(
+      fixture.leader, DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
+      {isCancelled: () => landing.cancelled},
+    ).then((proven) => {
+      landing.replicationProven = proven;
+      landing.replicationAtLanding =
+        readLeaderReplicationToLearner(fixture.leader);
+      landing.landedAtMs = clock.now();
+      landing.requestCountAtLanding =
+        fixture.learnerTransport.requests.length;
+      updateServiceRow(
+        fixture.learnerCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
+      );
+    });
+    return landing.settled;
   };
   return landing;
 }
@@ -265,8 +325,7 @@ function createDeferredRowStateMachine(clock, landing) {
     kicks,
     reconcileLocalOnlyServiceRowsNow() {
       kicks.push(clock.now());
-      landing.land();
-      return Promise.resolve(kicks.length);
+      return landing.land().then(() => kicks.length);
     },
   };
 }
@@ -361,7 +420,9 @@ async function createChannelFixture(options = {}) {
   let withholdTimer = null;
   if (options.withholdRow === true) {
     withholdTimer = setTimeout(
-      landing.land,
+      () => {
+        landing.land();
+      },
       ROW_WITHHOLD_S * VIRTUAL_SECOND_MS,
     );
   }
@@ -376,6 +437,7 @@ async function createChannelFixture(options = {}) {
     stateMachine: fixture.learner.replicaStateMachine,
     async shutdown() {
       clearTimeout(withholdTimer);
+      landing.cancel();
       await fixture.shutdown();
     },
   };
@@ -432,6 +494,18 @@ async function runCppDrive() {
         wakeRequest.sentAtMs - fixture.landing.landedAtMs :
         null,
       kicks: fixture.stateMachine.kicks.length,
+      // The landing schedule as observed: replication proven before the
+      // learner-visible landing, the phase length in real ms, and the proof
+      // requests sent inside the phase (must be none).
+      replicationProven: fixture.landing.replicationProven,
+      replicationAtLanding: fixture.landing.replicationAtLanding,
+      landingPhaseMs: fixture.landing.landedAtMs === null ?
+        null :
+        fixture.landing.landedAtMs - fixture.landing.leaderLandedAtMs,
+      requestsDuringLanding: fixture.landing.requestCountAtLanding === null ?
+        null :
+        fixture.landing.requestCountAtLanding -
+          fixture.landing.requestCountAtLeaderLanding,
       deferrals: deferrals.map((d) => [d.proofReason, d.cause]),
       wakes: wakeReasons(fixture.learnerLog).filter((reason) =>
         reason === WAKE_SERVICES_ROW_VISIBLE ||
@@ -982,5 +1056,43 @@ test(
       'identical drives produce the identical event sequence');
     assert.ok(first.activeAtS <= GREEN_ACTIVE_BOUND_S,
       'both drives land inside the bound');
+  },
+);
+
+test(
+  'witness-landing-quantized: the row landing is the fixture\'s explicit ' +
+  'schedule — the leader proves the learner\'s replication before the ' +
+  'learner-visible landing, so the wake proof request never races it',
+  async (t) => {
+    const drive = await runCppDrive();
+    t.diagnostic(`landing phase ${drive.landingPhaseMs} ms real (cadence ` +
+      `${RETRY_INTERVAL_MS} ms); replication at landing ` +
+      `${JSON.stringify(drive.replicationAtLanding)}; requests during ` +
+      `landing ${drive.requestsDuringLanding}; requests ` +
+      `${JSON.stringify(drive.requests)}; deferrals ` +
+      `${JSON.stringify(drive.deferrals)}; voter at +${drive.activeAtS} s`);
+    assert.equal(drive.replicationProven, true,
+      'the leader proved the learner\'s replication (match index at the ' +
+      'committed prefix) before the learner-visible landing');
+    assert.equal(drive.replicationAtLanding.matchIndex, COMMITTED_ENTRY_COUNT,
+      'the leader-observed match index at the landing is the committed prefix');
+    assert.equal(drive.requestsDuringLanding, NO_REQUESTS_DURING_LANDING,
+      'no proof request was sent between the leader-side and the ' +
+      'learner-visible landing');
+    assert.deepEqual(drive.deferrals, QUANTIZED_DEFERRALS,
+      'exactly one refusal, typed learner_address_unresolvable — never a ' +
+      'progress_behind cycle');
+    assert.deepEqual(drive.requests.map(([, outcome]) => outcome),
+      QUANTIZED_REQUEST_OUTCOMES,
+      'exactly two proof round trips: the withheld-row refusal and the ' +
+      'granted wake request');
+    assert.deepEqual(drive.wakes, QUANTIZED_WAKES,
+      'exactly one wake, typed services_row_visible');
+    assert.equal(drive.kicks, SINGLE_KICK, 'exactly one CL-021 kick');
+    assert.equal(drive.promoted, true, 'the learner became a voter');
+    assert.ok(drive.wakeDelayMs !== null && drive.wakeDelayMs < WAKE_BOUND_MS,
+      `the granted request follows the landing within ${WAKE_BOUND_MS} ms`);
+    assert.equal(drive.proof.learnerMatchIndex, drive.proof.safePromotionIndex,
+      'the grant carries learnerMatchIndex === safePromotionIndex');
   },
 );
