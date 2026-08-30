@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "learner-promotion-proof-channel-wake",
+  "status": "pass",
+  "generatedAt": "2026-08-30T03:18:51.762Z",
+  "receipts": [
+    {
+      "id": "proof-wakes-on-services-row-visibility",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^proof-wakes-on-services-row-visibility\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "with its services row withheld from the leader cache, the learner's first proof is refused request_invalid and the next proof request follows the row's landing in its own cache within half a retry interval (typed services_row_visible wake on the existing single-flight schedule), not on the 1 s timer + RTT; the wake is the local-only -> visible transition alone: 50 later updates of the visible row yield no further wake and no proof request beyond the cadence"
+    },
+    {
+      "id": "proof-wakes-on-published-epoch-change",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^proof-wakes-on-published-epoch-change\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "a change of the latest PUBLISHED publication epoch re-requests the proof within half a retry interval, the re-request binds the new epoch (typed published_epoch_changed wake), and the grant after healing is bound to that epoch; the wake is the epoch transition alone, tracked by the hook itself: for a learner deferred before the proof gate, one epoch insert plus 50 same-epoch updates of the PUBLISHED row yield exactly one wake"
+    },
+    {
+      "id": "typed-refusal-cause-address-unresolvable",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^typed-refusal-cause-address-unresolvable\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "the leader's request_invalid carries cause learner_address_unresolvable when buildPeerAddress throws and request_shape for a malformed request, the learner mints response_binding_mismatch for a response bound to another learner, and all three are logged at info with learnerReplicaId/partitionId"
+    },
+    {
+      "id": "learner-reasserts-row-on-unresolvable",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^learner-reasserts-row-on-unresolvable\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "on learner_address_unresolvable the learner kicks the replica state machine's CL-021 deferred services-row retry (reconcileLocalOnlyServiceRowsNow) immediately after the refusal, at most once per refusal, and the re-asserted row wakes the next proof"
+    },
+    {
+      "id": "proof-delivery-timeout-bounded-and-logged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^proof-delivery-timeout-bounded-and-logged\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "every proof delivery carries timeoutMs = the router-configured message timeout (transport.messageTimeoutMs, else the configured transport.messageTimeoutMs, else MESSAGE_TIMEOUT_MS 5000), never a multiple of the cadence and never bounded below it; a stalled delivery fails at that timeout, proof_transport_failed is logged at info, the next request is scheduled from completion (never stacks beyond timeout + interval), and a sustained 3 s round trip still promotes"
+    },
+    {
+      "id": "proof-semantics-and-voter-cap-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^proof-semantics-and-voter-cap-unchanged\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "learnerMatchIndex < safePromotionIndex refuses progress_behind, a publication-epoch mismatch refuses epoch_mismatch, a lagging learner is never promoted by elapsed retry ticks, above target+1 active voters the quorum-shape gate refuses would_exceed_target_replica_count even when the proof would grant, and LEARNER_CATCH_UP_CHECK_INTERVAL_MS (1000) / MESSAGE_TIMEOUT_MS (5000) are the HEAD values (green on HEAD and after)"
+    },
+    {
+      "id": "cpp-learner-active-within-bound",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^cpp-learner-active-within-bound\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "with the learner's services row withheld from the leader cache for 22 s and the leader stalling 5 s in every 7 s, the learner is a voter by +12 s of scenario time (HEAD: +26 s) after a typed learner_address_unresolvable refusal, a services-row re-assert and a wake under half an interval, on a proof with learnerMatchIndex === safePromotionIndex and equal published epochs on both sides"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "detail": "two identical cpp drives produce the identical refusal/wake event sequence and both land inside the bound"
+    }
+  ]
+}
