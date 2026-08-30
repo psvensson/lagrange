@@ -163,6 +163,11 @@ const SCENARIO_ASSERTION_POLICY = Object.freeze({
   }),
 });
 const SCENARIO_FILTER_ALL = 'all';
+// Stamped on every written report so a release verification (the
+// release-0-2-verification-v3 memory-soak oracle) can bind the report to the
+// exact source bytes the run booted; empty when no fingerprinted launch
+// config reached the report (the oracle reads that as fingerprint_missing).
+const REPORT_SOURCE_FINGERPRINT_ABSENT = '';
 const BENCHMARK_GATE_STATUS = Object.freeze({
   PASSED: 'passed',
   FAILED: 'failed',
@@ -628,6 +633,12 @@ function buildReportMetadata(args, runConfig, deterministicDebug) {
     raftProvider: resolveRunRaftProvider(runConfig),
     configPath: String(args?.config || CLI.DEFAULT_CONFIG),
     scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
+    srcFingerprint: String(
+      runConfig?.docker?.srcFingerprint || REPORT_SOURCE_FINGERPRINT_ABSENT,
+    ),
+    srcFingerprintAlgo: String(
+      runConfig?.docker?.srcFingerprintAlgo || REPORT_SOURCE_FINGERPRINT_ABSENT,
+    ),
   };
   if (deterministicDebug?.enabled === true) {
     metadata.deterministicDebug = {

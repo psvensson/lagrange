@@ -144,6 +144,37 @@ describe('parseArgs', () => {
   });
 });
 
+describe('report metadata source fingerprint', () => {
+  // Release verification binds a memory-soak report to the exact booted
+  // source bytes through metadata.srcFingerprint; the report-metadata owner
+  // stamps the run config's computed fingerprint on every written report.
+  it('soak-report-carries-src-fingerprint: metadata stamps the run config ' +
+    'srcFingerprint and algorithm, empty when no fingerprinted config exists',
+  () => {
+    const fingerprint = 'abcdef0123456789';
+    const stamped = runModule.buildReportMetadata(
+      {config: 'local.json', scenario: null},
+      {
+        raftProvider: 'liferaft',
+        docker: {
+          srcFingerprint: fingerprint,
+          srcFingerprintAlgo: SOURCE_FINGERPRINT_ALGORITHM,
+        },
+      },
+      {enabled: false},
+    );
+    assert.equal(stamped.srcFingerprint, fingerprint);
+    assert.equal(stamped.srcFingerprintAlgo, SOURCE_FINGERPRINT_ALGORITHM);
+    const unstamped = runModule.buildReportMetadata(
+      {config: 'local.json', scenario: null},
+      {raftProvider: 'liferaft'},
+      {enabled: false},
+    );
+    assert.equal(unstamped.srcFingerprint, '');
+    assert.equal(unstamped.srcFingerprintAlgo, '');
+  });
+});
+
 describe('deterministic debug mode helpers', () => {
   it('pins seed and sampling intervals and records settings in report metadata',
     () => {

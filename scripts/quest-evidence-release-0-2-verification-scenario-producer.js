@@ -16,7 +16,9 @@
 // aggregate-requires-all-children, gate-receipt-helper-records-real-exit-code,
 // github-receipt-records-conclusion-without-network,
 // producer-cli-writes-discoverable-reports and witness-deterministic
-// receipts are RED (the witness cannot import the absent producer modules);
+// receipts are RED (the witness cannot import the absent producer modules)
+// and soak-report-carries-src-fingerprint is RED (report metadata lacks
+// srcFingerprint);
 // existing-scenario-runners-unchanged is green and must stay green — a
 // producer that breaks the five-node/topology/snapshot runners or the
 // release identity guards it builds on is rejected.
@@ -45,6 +47,14 @@ function scenarioCommand(scenarioPattern) {
   return NODE_TEST_COMMAND_PREFIX +
     TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
     SPACE + WITNESS_TEST;
+}
+
+const RUN_METADATA_TEST = 'test/distributed/harness/__tests__/run.test.js';
+
+function runMetadataCommand(scenarioPattern) {
+  return NODE_TEST_COMMAND_PREFIX +
+    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
+    SPACE + RUN_METADATA_TEST;
 }
 
 const EXISTING_RUNNERS = Object.freeze([
@@ -131,6 +141,15 @@ const RECEIPTS = Object.freeze([
     command: scenarioCommand('^witness-deterministic'),
     detail: 'two derivations of identical facts produce byte-identical ' +
       'green and red reports',
+  }),
+  Object.freeze({
+    id: 'soak-report-carries-src-fingerprint',
+    command: runMetadataCommand('^soak-report-carries-src-fingerprint'),
+    detail: 'test/distributed/run.js buildReportMetadata (the single owner ' +
+      'of report metadata) stamps metadata.srcFingerprint and ' +
+      'srcFingerprintAlgo from the run config computed fingerprint on ' +
+      'every written report, empty when no fingerprinted config exists, ' +
+      'so a real memory-soak report can satisfy the producer oracle',
   }),
   Object.freeze({
     id: 'existing-scenario-runners-unchanged',
