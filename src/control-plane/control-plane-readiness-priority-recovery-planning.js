@@ -8,6 +8,41 @@ import {
 const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
   'priority_recovery_planning_projection_build';
 
+// Structural walk bound for the planning-projection equality check. A genuine
+// difference deeper than this reads as "not equal", so the bound can only
+// DECLINE a canonical identity, never grant one.
+const PLANNING_PROJECTION_EQUALITY_MAX_DEPTH = 12;
+
+// Reference-first structural equality for planning-projection content.
+//
+// The projection is literally `{...planningSnapshot, <derived overrides>}`, so
+// every key it does NOT override is copied BY REFERENCE and settles in one
+// `===`. Only the overridden keys are ever walked, nothing is stringified, and
+// nothing is allocated beyond the key lists — cheap enough to run on the build
+// path. Any shape it cannot decide (differing key sets, differing array-ness,
+// excess depth) reads as NOT equal, which declines a canonical identity.
+function planningProjectionValueEquals(left, right, depth) {
+  if (left === right) {
+    return true;
+  }
+  if (
+    depth <= 0 ||
+    left === null ||
+    right === null ||
+    typeof left !== 'object' ||
+    typeof right !== 'object' ||
+    Array.isArray(left) !== Array.isArray(right)
+  ) {
+    return false;
+  }
+  const leftKeys = Object.keys(left);
+  if (leftKeys.length !== Object.keys(right).length) {
+    return false;
+  }
+  return leftKeys.every((key) => Object.hasOwn(right, key) &&
+    planningProjectionValueEquals(left[key], right[key], depth - 1));
+}
+
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -584,28 +619,31 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
   // identity memo missed. Live evidence: 42762 gate builds across 33 seed
   // gaps (archived run 18-53-48-768Z-natural-manual); production-composition
   // rig evidence: 1430 of 2242 projection calls per 1000 owner builds were
-  // re-normalisations of an already canonical snapshot, all byte-identical.
+  // re-normalisations of an already canonical snapshot.
   //
-  // FIXED POINT. The projection is a pure derivation of its input snapshot
-  // (the recovery gate is read off the snapshot itself, and every override is
-  // idempotent) plus exactly ONE live input: the local cluster-incarnation
-  // fence, consulted only for this node's own snapshot. So re-normalising a
-  // canonical snapshot is the identity function on content. Recording the
-  // output as its own canonical answer — a SELF entry carrying no projection
-  // reference, so the WeakMap never holds a back-reference to its own key and
-  // the entry dies with the snapshot it describes — makes it the identity
-  // function on identity too.
+  // VERIFIED FIXED POINT. Re-normalising a canonical snapshot is OFTEN the
+  // identity function on content — but far from always. A 21600-shape search of
+  // the planning-snapshot space finds 15235 shapes (70.5%) whose second
+  // normalisation differs from the first, and no cheap structural precondition
+  // separates them: the narrowest candidate (status is a non-empty string AND
+  // epoch is an integer) accepts 9770 shapes of which 3405 still diverge. So a
+  // snapshot becomes canonical only once THIS call's real rebuild has been
+  // observed to return content-equal to it. It is then recorded as its own
+  // canonical answer — a SELF entry carrying no projection reference, so the
+  // WeakMap never holds a back-reference to its own key and the entry dies with
+  // the snapshot it describes. Shapes that fail verification never become
+  // canonical and rebuild per call exactly as they did before this owner
+  // existed. The verification costs no extra build: it compares the rebuild the
+  // caller already asked for against the input it was derived from.
   //
-  // FRESHNESS PARITY. Reuse is gated on the floored source generation — the
-  // generation component of the readiness-planning memo version key, which
-  // already covers every planning source table INCLUDING
-  // CONTROL_PLANE_PUBLICATIONS — plus the reference identity of that one live
-  // input and of the two owners the derivation reads (the planning source
-  // cache and the membership publication owner), so an entry can never
-  // outlive its inputs. Both entries carry the identical gate, so a served
-  // identity is never fresher-looking than a rebuild: by the fixed point
-  // above, the object returned on a hit is byte-identical to the object a
-  // rebuild would mint.
+  // FRESHNESS PARITY. Every entry is gated on the reference identity of the
+  // three things the derivation actually reads — the admission fence, the
+  // planning source cache and the membership publication owner — so an entry
+  // can never outlive its inputs. A DERIVED entry hands back a different object
+  // than the caller passed in, so it additionally carries the floored source
+  // generation, exactly as this memo did before. A SELF entry does not: it is a
+  // proof about one object, and readCanonicalPlanningProjection records why that
+  // proof cannot expire with the generation.
   // The version key's LIVE publication component stays where it is
   // load-bearing and where it is paid for once per read rather than once per
   // projection call: the node-scoped planning memos
@@ -635,11 +673,11 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     if (canonical) {
       return canonical;
     }
-    return this.adoptCanonicalPlanningProjection(
+    return this.recordPlanningProjectionIdentity(
+      planningSnapshot,
       this.buildTrackedPriorityRecoveryPlanningProjection(planningSnapshot),
       generation,
       admissionEvidenceSource,
-      planningSnapshot,
     );
   }
 
@@ -659,14 +697,27 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
   }
 
   // The canonical answer this snapshot's identity entry serves, or null when
-  // there is none current. A SELF entry (projection === null) means the
-  // snapshot IS the canonical projection for this generation.
+  // there is none current.
   //
   // The entry names EVERY owner it was derived from, so it can never outlive
   // its inputs: a replacement system-table cache can present IDENTICAL table
   // mutation counters, and a replacement membership owner reads different
   // publications, so neither is separable by the floored generation alone. A
   // snapshot retained across either swap therefore misses and re-derives.
+  //
+  // A SELF entry (projection === null) is a VERIFIED proof that this snapshot
+  // is its own canonical projection, and that proof does not expire with the
+  // floored generation. buildPriorityRecoveryPlanningProjectionUntracked is a
+  // pure function of exactly three things — the snapshot, this node's id, and
+  // the admission fence: its gate builder (publication-recovery-gate.js) reads
+  // no clock, no cache and no instance state, and its two helpers
+  // (resolvePendingAckEvidenceStateFromSources,
+  // filterPriorityRecoveryReasonCodesForPublicationGate) are pure in their
+  // arguments. The snapshot is the WeakMap key, the node id is fixed for the
+  // instance, and the fence is compared above — so a rebuild here would return
+  // the same content it returned when the proof was taken, whatever the
+  // generation now is. The generation still gates the DERIVED entry below,
+  // where reuse hands back a different object than the caller passed in.
   readCanonicalPlanningProjection(
     planningSnapshot,
     generation,
@@ -677,60 +728,81 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     );
     if (
       !cached ||
-      cached.generation !== generation ||
       cached.admissionEvidenceSource !== admissionEvidenceSource ||
       cached.planningSourceCache !== this.systemTableCache ||
       cached.membershipPublicationOwner !== this.membershipPublicationService
     ) {
       return null;
     }
-    return cached.projection || planningSnapshot;
+    if (cached.projection === null) {
+      return planningSnapshot;
+    }
+    return cached.generation === generation ? cached.projection : null;
   }
 
-  // Declare a freshly built projection CANONICAL for this generation: the SELF
-  // entry. `projection: null` keeps the entry free of any reference to its own
-  // WeakMap key, so it dies with the snapshot it describes and retains nothing
-  // of its own.
+  // Install this call's identity entry, and grant a canonical identity ONLY
+  // when this call's own rebuild VERIFIED it. The caller always receives the
+  // rebuild, exactly as it did before this owner existed; what the entry buys
+  // is that the NEXT re-normalisation of either object is served rather than
+  // minting the next link of a fresh-object chain.
   //
-  // The version-key-forced miss paths build unconditionally, bypassing the
-  // identity lookup above precisely so a moved publication mints a genuinely
-  // fresh identity. That fresh projection is still canonical, and the ~6
-  // sub-builders that re-normalise it within the same readiness build must
-  // reuse it rather than mint byte-equal copies — so they adopt it here too,
-  // passing no input snapshot of their own.
-  adoptCanonicalPlanningProjection(
+  // Normalisation is NOT universally idempotent. buildPublicationRecoveryGateSnapshot
+  // spreads the gate the projection already derived back through its
+  // provided-owner-stream branch, which defaults an ABSENT publication status or
+  // epoch to UNKNOWN/0 on that second pass but to null on the first. A snapshot
+  // carrying no status string or no finite epoch therefore re-normalises to
+  // different owner-visible content (publicationStatus null -> "UNKNOWN",
+  // publicationEpoch null -> 0, and the same pair plus publicationStatusNormalized
+  // inside publicationRecoveryGate) — measured on release-0.2 formation paths
+  // reached through buildPriorityControlPlaneRecoveryProjection, where
+  // publicationEpoch null-vs-0 is decision-bearing for
+  // isRetainedPublicationEpochAhead.
+  //
+  // So the fixed point is VERIFIED, never assumed: a SELF entry is installed only
+  // when the rebuild the caller already asked for came back content-equal to the
+  // input it was derived from. Shapes that fail the check never become canonical
+  // and keep rebuilding exactly as they did before this owner existed. The
+  // verification costs no extra build — it compares two objects the call already
+  // holds.
+  recordPlanningProjectionIdentity(
+    planningSnapshot,
     projection,
-    sourceGeneration,
+    generation,
     admissionEvidenceSource,
-    inputSnapshot = null,
   ) {
-    if (
-      !projection ||
-      typeof projection !== 'object' ||
-      sourceGeneration === null ||
-      sourceGeneration === undefined
-    ) {
+    if (!projection || typeof projection !== 'object') {
       return projection;
     }
     if (!this.planningProjectionByInputSnapshot) {
       this.planningProjectionByInputSnapshot = new WeakMap();
     }
     const entry = {
-      generation: sourceGeneration,
-      admissionEvidenceSource: admissionEvidenceSource === undefined ?
-        this.getLocalClusterIncarnationFence() :
-        admissionEvidenceSource,
+      generation,
+      admissionEvidenceSource,
       planningSourceCache: this.systemTableCache,
       membershipPublicationOwner: this.membershipPublicationService,
       projection: null,
     };
-    if (inputSnapshot && inputSnapshot !== projection) {
-      this.planningProjectionByInputSnapshot.set(inputSnapshot, {
-        ...entry,
-        projection,
-      });
+    if (planningProjectionValueEquals(
+      projection,
+      planningSnapshot,
+      PLANNING_PROJECTION_EQUALITY_MAX_DEPTH,
+    )) {
+      // Verified: the input already IS its own canonical projection, so it
+      // becomes the one identity every later re-normalisation is served. The
+      // rebuild is canonical too, and by the SAME proof: the projection is a
+      // pure function of its input's content, and this rebuild's content was
+      // just shown equal to that input's, so re-normalising the rebuild must
+      // return the rebuild. Recording both keeps the caller that already holds
+      // one of them from starting a fresh chain.
+      this.planningProjectionByInputSnapshot.set(planningSnapshot, entry);
+      this.planningProjectionByInputSnapshot.set(projection, entry);
+      return projection;
     }
-    this.planningProjectionByInputSnapshot.set(projection, entry);
+    this.planningProjectionByInputSnapshot.set(planningSnapshot, {
+      ...entry,
+      projection,
+    });
     return projection;
   }
 

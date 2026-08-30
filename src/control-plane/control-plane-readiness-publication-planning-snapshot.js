@@ -382,19 +382,9 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     // must produce a genuinely fresh projection identity even when the derived
     // input identity is unchanged — the observable
     // projection-planning-identity-memoization pins.
-    // The forced-fresh projection is nonetheless CANONICAL: adopt it so the
-    // sub-builders that re-normalise it inside this readiness build reuse its
-    // identity instead of minting byte-equal copies.
-    const builtProjection = this.buildTrackedPriorityRecoveryPlanningProjection(
+    const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
     );
-    const projection =
-      typeof this.adoptCanonicalPlanningProjection === 'function' ?
-        this.adoptCanonicalPlanningProjection(
-          builtProjection,
-          sourceGeneration,
-        ) :
-        builtProjection;
     if (memo && memoKey) {
       memo.set(memoKey, {
         projection,

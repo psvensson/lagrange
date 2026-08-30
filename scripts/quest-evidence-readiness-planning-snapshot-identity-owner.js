@@ -11,24 +11,52 @@
 // names, so each scenario is independently selectable with
 // --test-name-pattern. No tap shim is involved and the flag is NOT inert.
 //
-// RED ON HEAD (before the cure): stable-inputs-burst-returns-one-canonical-
-// identity, version-key-change-mints-one-fresh-identity,
-// source-generation-change-mints-a-fresh-identity,
-// identical-counter-cache-swap-drops-the-canonical-identity,
-// canonical-identity-retains-no-back-reference and
-// formation-shaped-build-rate-after-identity-owner. On HEAD the canonical
-// planning snapshot has no identity owner: every producer that re-normalises an
-// already-canonical snapshot mints a fresh byte-equal object, so no burst can
-// share one identity, no entry exists to inspect, and the measured rate is
-// 344.8 heavy planning builds/s rather than 162.4.
+// WHAT THIS QUEST GOT WRONG FIRST. The first candidate ASSUMED that
+// re-normalising an already-canonical planning snapshot is content-neutral, and
+// adopted every projection as canonical for free. An independent verifier
+// shadow-audited every identity hit against a forced rebuild and found real
+// divergences on release-0.2 formation paths. Reproduced here: over
+// test/control-plane that candidate served 15258 divergent identities in 54343
+// hits. renormalisation-fixed-point-is-not-universal measures how wrong the
+// assumption was — 15235 of 21600 planning-snapshot shapes (70.5%) re-normalise
+// to different content, and the narrowest cheap structural precondition still
+// admits 3405 divergent shapes, so NO precondition may stand in for a real
+// check. The shipped guard is therefore the comparison itself, paid for with
+// the rebuild the call already performed. The same audit over the same suites
+// now reports 29811 hits and ZERO divergences.
 //
-// GREEN ON HEAD and must stay green: renormalisation-is-a-byte-identical-
-// fixed-point, renormalisation-fixed-point-holds-across-the-whole-rig,
-// identity-observable-preserved, membership-owner-swap-drops-the-canonical-
-// identity, budgets-and-cadence-unchanged and witness-deterministic. The two
-// fixed-point receipts are the LICENCE for the cure, not the cure: they hold on
-// HEAD because re-normalisation was always content-neutral — the cure only
-// stops it minting a new object. The other four are the controls.
+// RED ON HEAD (7 of 17): stable-inputs-burst-returns-one-canonical-identity,
+// verified-canonical-identity-is-generation-independent,
+// identical-counter-cache-swap-drops-the-canonical-identity,
+// canonical-identity-retains-no-back-reference,
+// formation-shaped-build-rate-after-identity-owner,
+// gate-snapshot-build-rate-does-not-regress and
+// shadow-audit-over-the-rig-finds-no-divergence. On HEAD the canonical planning
+// snapshot has no identity owner: every producer that re-normalises an
+// already-canonical snapshot mints a fresh byte-equal object and starts the next
+// link of a fresh-object chain, so no burst can share one identity, no entry
+// exists to inspect, and the measured rates are 344.8 heavy planning builds/s
+// and 823.6 gate snapshot builds/s rather than 243.6 and 722.4. Read
+// shadow-audit-over-the-rig-finds-no-divergence as the WEAKEST of the seven: on
+// HEAD it is red only because there is no identity lookup to audit.
+//
+// RED ON THE REJECTED CANDIDATE, which is the discriminator this quest exists
+// for: every-adopted-identity-is-verified-over-the-shape-space is green on HEAD
+// and green here, and RED on the assumed-fixed-point candidate — it is the
+// receipt that separates a verified identity owner from an assumed one, and no
+// other receipt does.
+//
+// GREEN ON HEAD and must stay green (10): renormalisation-fixed-point-is-not-
+// universal, renormalisation-is-a-byte-identical-fixed-point,
+// renormalisation-fixed-point-holds-across-the-whole-rig,
+// every-adopted-identity-is-verified-over-the-shape-space,
+// version-key-change-mints-one-fresh-identity,
+// derived-identity-is-generation-gated, identity-observable-preserved,
+// membership-owner-swap-drops-the-canonical-identity,
+// budgets-and-cadence-unchanged and witness-deterministic. The fixed-point
+// receipts describe a property of the SHIPPED normalizer, not of this change:
+// they state exactly where reuse is licensed and where it is not, and the audit
+// receipts are the guard that only the licensed cases are ever served.
 
 import path from 'node:path';
 
@@ -55,15 +83,25 @@ function scenarioCommand(scenarioPattern) {
 
 const RECEIPTS = Object.freeze([
   Object.freeze({
+    id: 'renormalisation-fixed-point-is-not-universal',
+    command: scenarioCommand('^renormalisation-fixed-point-is-not-universal'),
+    detail: 'the REFUTATION that sets the guard: over 21600 planning-snapshot ' +
+      'shapes (publication status x epoch exhaustive, every other recovery-gate ' +
+      'input swept deterministically around them) 15235 re-normalise to ' +
+      'DIFFERENT content, and the narrowest cheap structural precondition — ' +
+      'status is a non-empty string and epoch is an integer — accepts 9770 ' +
+      'shapes of which 3405 still diverge, so no precondition may stand in for ' +
+      'a real check',
+  }),
+  Object.freeze({
     id: 'renormalisation-is-a-byte-identical-fixed-point',
     command: scenarioCommand(
       '^renormalisation-is-a-byte-identical-fixed-point',
     ),
-    detail: 'the LICENCE for the cure: over every publication state a winner ' +
-      'row can take (epoch 2/3 x PUBLISHED/ACKNOWLEDGING plus ' +
-      'no-membership-row), a FORCED rebuild of an already-canonical planning ' +
-      'snapshot is byte-identical to that snapshot — so serving the same ' +
-      'object can never present content a rebuild would not have produced',
+    detail: 'the licensed case, stated exactly: for the publication states a ' +
+      'winner row actually takes, a FORCED rebuild of an already-canonical ' +
+      'planning snapshot is byte-identical to that snapshot, so serving the ' +
+      'same object presents nothing a rebuild would not have produced',
   }),
   Object.freeze({
     id: 'renormalisation-fixed-point-holds-across-the-whole-rig',
@@ -76,14 +114,35 @@ const RECEIPTS = Object.freeze([
       'its input, with the identity owner forced off so the rebuild runs',
   }),
   Object.freeze({
+    id: 'every-adopted-identity-is-verified-over-the-shape-space',
+    command: scenarioCommand(
+      '^every-adopted-identity-is-verified-over-the-shape-space',
+    ),
+    detail: 'the guard proven over the SAME 21600-shape space that refutes ' +
+      'the assumption: every identity the real owner serves is shadow-compared ' +
+      'against a forced rebuild of that input, and zero diverge — the 15235 ' +
+      'non-idempotent shapes simply never become canonical',
+  }),
+  Object.freeze({
+    id: 'shadow-audit-over-the-rig-finds-no-divergence',
+    command: scenarioCommand('^shadow-audit-over-the-rig-finds-no-divergence'),
+    detail: 'the independent verifier\'s audit in miniature: the ' +
+      'production-composition formation sequence run with EVERY identity hit ' +
+      'shadow-compared against a forced rebuild of the same input, zero ' +
+      'divergences (the same audit over all of test/control-plane reports ' +
+      '29811 hits and 0 divergences, against 54343 hits and 15258 divergences ' +
+      'for the assumed-fixed-point candidate this replaces)',
+  }),
+  Object.freeze({
     id: 'stable-inputs-burst-returns-one-canonical-identity',
     command: scenarioCommand(
       '^stable-inputs-burst-returns-one-canonical-identity',
     ),
     detail: '40 consecutive re-normalisations of one canonical planning ' +
-      'snapshot through the REAL owner return that same frozen object and ' +
-      'rebuild nothing at all; on HEAD each call mints a fresh byte-equal ' +
-      'identity that defeats every downstream identity memo',
+      'snapshot through the REAL owner cost ONE build in total — the ' +
+      'verification that makes it canonical, whose result is content-equal to ' +
+      'its input and is what the first call returns — and then serve one frozen ' +
+      'identity; on HEAD each of the 40 minted a fresh byte-equal identity',
   }),
   Object.freeze({
     id: 'version-key-change-mints-one-fresh-identity',
@@ -91,18 +150,29 @@ const RECEIPTS = Object.freeze([
     detail: 'the freshness negative: a publications winner that advances ' +
       'WITHOUT a system-table write — the case the floored generation cannot ' +
       'see — still mints a FRESH planning-answer identity through ' +
-      'getPriorityRecoveryPlanningAnswerSync and rebuilds exactly once, then ' +
-      'holds; the identity owner never absorbs a version-key-forced miss',
+      'getPriorityRecoveryPlanningAnswerSync, at the cost of the ' +
+      'version-key-forced rebuild plus the one verification that makes the ' +
+      'fresh projection canonical, and then holds',
   }),
   Object.freeze({
-    id: 'source-generation-change-mints-a-fresh-identity',
+    id: 'derived-identity-is-generation-gated',
+    command: scenarioCommand('^derived-identity-is-generation-gated'),
+    detail: 'a DERIVED entry hands back a different object than the caller ' +
+      'passed in, so its reuse still carries the floored source generation: a ' +
+      'raw planning snapshot is reused inside one generation and re-derives ' +
+      'exactly once in the next',
+  }),
+  Object.freeze({
+    id: 'verified-canonical-identity-is-generation-independent',
     command: scenarioCommand(
-      '^source-generation-change-mints-a-fresh-identity',
+      '^verified-canonical-identity-is-generation-independent',
     ),
-    detail: 'a source-table write observed in the next floored generation ' +
-      're-projects the same canonical snapshot to a fresh identity exactly ' +
-      'once, and that new identity is itself the fixed point of the new ' +
-      'window: identity rotation tracks the generation, not the call count',
+    detail: 'a SELF entry is a PROOF that a snapshot is its own projection, ' +
+      'and the proof does not expire with the generation: the projection is a ' +
+      'pure function of the snapshot, this node id and the admission fence, ' +
+      'all three gated. Not taken on trust — the scenario shadow-compares the ' +
+      'identity served AFTER a source write and floor rotation against a ' +
+      'forced rebuild in the new generation',
   }),
   Object.freeze({
     id: 'identity-observable-preserved',
@@ -125,6 +195,15 @@ const RECEIPTS = Object.freeze([
       'frozen and unmutated',
   }),
   Object.freeze({
+    id: 'membership-owner-swap-drops-the-canonical-identity',
+    command: scenarioCommand(
+      '^membership-owner-swap-drops-the-canonical-identity',
+    ),
+    detail: 'the second owner-reference negative: a replacement membership ' +
+      'publication owner reads different publications, so a snapshot retained ' +
+      'across that swap re-derives exactly once rather than being served',
+  }),
+  Object.freeze({
     id: 'canonical-identity-retains-no-back-reference',
     command: scenarioCommand('^canonical-identity-retains-no-back-reference'),
     detail: 'the retention bound: identity entries live in a WeakMap and the ' +
@@ -138,7 +217,7 @@ const RECEIPTS = Object.freeze([
     detail: 'CONTROL (green on HEAD, must stay green): the readiness ' +
       'planning drain queue still carries maxConcurrency 1, ' +
       'maxItemsPerDrain 1 and its macrotask-class scheduler; the shipped ' +
-      '250ms generation refresh floor — not a new cadence — bounds identity ' +
+      '250ms generation refresh floor — not a new cadence — bounds derived ' +
       'reuse; and the identity owner and the planning memos read ONE ' +
       'generation component. No budget, cadence or scheduler value moves',
   }),
@@ -151,9 +230,16 @@ const RECEIPTS = Object.freeze([
       'formation-shaped churn on a virtual clock through the real ' +
       'ControlPlaneReadinessService owner build falls from 1724 heavy ' +
       'planning builds (344.8/s, within 3% of the 355/s measured on the ' +
-      'failing five-node GCP seed) to 812 (162.4/s), a 52.9% cut, while ' +
-      'publications winner reads stay at 824 — the identity owner adds no ' +
-      'read',
+      'failing five-node GCP seed) to 1218 (243.6/s), a 29.4% cut, while ' +
+      'publications winner reads stay at 824 — the identity owner adds no read',
+  }),
+  Object.freeze({
+    id: 'gate-snapshot-build-rate-does-not-regress',
+    command: scenarioCommand('^gate-snapshot-build-rate-does-not-regress'),
+    detail: 'the verification rebuild is real work, so the LARGEST ' +
+      'instrumented site on the failing seed is measured too rather than ' +
+      'assumed neutral: publication recovery gate snapshot builds over the ' +
+      'same sequence fall from 4118 (823.6/s) to 3612 (722.4/s)',
   }),
   Object.freeze({
     id: 'witness-deterministic',
