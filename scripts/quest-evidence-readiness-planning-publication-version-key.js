@@ -26,8 +26,25 @@
 // unchanged by construction. Its bound (1724 heavy planning builds = 344.8/s,
 // and 824 publications winner reads, over a 1000-call formation-shaped churn
 // on a virtual clock) is the PRE-change measurement, so a cure that raises the
-// rate is rejected. Read together with budgets-and-cadence-unchanged, these
-// two receipts are the "no cadence, budget or rate movement" control pair.
+// rate is rejected. It is the ONLY genuine both-sides
+// control in this harness.
+//
+// budgets-and-cadence-unchanged is NOT a both-sides control, despite what an
+// earlier revision of this header claimed: on HEAD it fails with a
+// missing-method TypeError like the cure receipts, because the scenario
+// reaches the version-key surface that HEAD does not have. It asserts the
+// unchanged floored generation, stale grace, macrotask drain and
+// maxItemsPerDrain on the CURED tree only.
+//
+// Red-on-HEAD count, measured rather than asserted: 11 of the 12 witness
+// scenarios are red at base; only formation-shaped-build-rate-at-pre-change-
+// bound is green there. Every base-red scenario fails via
+// `isMemoizedMembershipPublicationPlanningProjectionEpochStale is not a
+// function` — a missing-method failure, which the verification template
+// disqualifies as proof of the mechanism. The discriminating evidence is
+// therefore the equivalence matrix (the removed veto restored as an oracle
+// over all 25 ordered publication-state pairs) plus its mutations, not the
+// base-red count.
 
 import path from 'node:path';
 
@@ -120,7 +137,8 @@ const RECEIPTS = Object.freeze([
   Object.freeze({
     id: 'budgets-and-cadence-unchanged',
     command: scenarioCommand('^budgets-and-cadence-unchanged'),
-    detail: 'CONTROL (green on HEAD, must stay green): the floored planning ' +
+    detail: 'CONTROL on the cured tree (red at base with a missing-method ' +
+      'TypeError, so NOT a both-sides control): the floored planning ' +
       'generation still invalidates both memos, the 15s wall-time stale ' +
       'grace bound is unchanged for the projection memo and the merge memo, ' +
       'and the grace is still read from the owner-configured budget — no ' +
