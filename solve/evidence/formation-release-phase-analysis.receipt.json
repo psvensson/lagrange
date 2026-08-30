@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-release-phase-analysis",
+  "status": "pass",
+  "generatedAt": "2026-08-30T10:51:07.987Z",
+  "receipts": [
+    {
+      "id": "phase-timeline-per-node",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^phase-timeline-per-node\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "every cohort member of every captured generation gets W (capture) -> handoff observed -> barrier release -> READY instants with deltas from W over the recorded 07-13-07 excerpt"
+    },
+    {
+      "id": "phase-outcome-from-analyzer-classification",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^phase-outcome-from-analyzer-classification\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "each generation's classified outcome, the closure verdict, the failure reasons and completionMs are copied from the closure analyzer, never re-derived (single classification owner)"
+    },
+    {
+      "id": "phase-cli-renders-report-dir",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^phase-cli-renders-report-dir\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "the CLI reads report.json and full-logs/ from one per-run report directory and prints the per-node timeline and classified outcome as text and as --json"
+    },
+    {
+      "id": "phase-projection-carries-no-new-verdict",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^phase-projection-carries-no-new-verdict\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "the projection exposes no pass/fail field of its own at the run, generation or node level beyond the analyzer's copied verdict"
+    },
+    {
+      "id": "analyzer-classification-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^analyzer-classification-unchanged\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "the closure analyzer still classifies the recorded run on its own: completed + retained_uncompleted_at_teardown, closure failed"
+    },
+    {
+      "id": "npm-script-registered",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^npm-script-registered\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "package.json exposes analyze:formation-release-phases and the npm run commands index lists it"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/scripts/analyze-formation-release-phases.test.js",
+      "detail": "two projections (and renderings) of the identical recorded run are identical"
+    }
+  ]
+}
