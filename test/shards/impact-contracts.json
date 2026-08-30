@@ -196,6 +196,21 @@
         "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
         "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js"
       ]
+    },
+    "formation-release-handoff": {
+      "description": "The seed-owned formation-release handoff: the seed captures, retains and revokes a JOINING cohort generation and publishes a durable release contract; joiners consume it through a typed CONSUMER validation role and release their formation barrier from the whole-plane authority answer, never minting release authority, so the seed authority, the contract/evidence/publication projection and the joiner consumer barrier stay one owner contract.",
+      "owners": [
+        "src/control-plane/formation-release-handoff-closure-owner.js",
+        "src/control-plane/formation-release-handoff-contract.js",
+        "src/control-plane/formation-release-handoff-evidence.js",
+        "src/control-plane/formation-release-handoff-publication.js",
+        "src/control-plane/control-plane-readiness-formation-release-methods.js",
+        "src/bootstrap/node-joining-operation-ledger-formation-readiness.js"
+      ],
+      "tests": [
+        "test/control-plane/formation-release-handoff-closure.test.js",
+        "test/control-plane/formation-release-handoff-consumer-parity.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -365,6 +380,32 @@
         "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js",
         "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js",
         "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js"
+      ]
+    },
+    "formation-release-seed-contract-joiner-consumer": {
+      "description": "The seed release authority and the joiner consumer/barrier must keep agreeing on a retained cohort generation: a consumer predicate that nulls a valid seed contract strands the cohort on the raw spread predicate (the 2026-08-28..30 class), so any change to either endpoint re-runs both formation-release witnesses.",
+      "endpoints": [
+        {
+          "id": "seed-release-authority",
+          "owners": [
+            "src/control-plane/formation-release-handoff-closure-owner.js",
+            "src/control-plane/formation-release-handoff-contract.js",
+            "src/control-plane/formation-release-handoff-evidence.js",
+            "src/control-plane/formation-release-handoff-publication.js"
+          ]
+        },
+        {
+          "id": "joiner-consumer-barrier",
+          "owners": [
+            "src/control-plane/control-plane-readiness-formation-release-methods.js",
+            "src/bootstrap/node-joining-operation-ledger-formation-readiness.js"
+          ]
+        }
+      ],
+      "contract": "formation-release-handoff",
+      "witnessTests": [
+        "test/control-plane/formation-release-handoff-closure.test.js",
+        "test/control-plane/formation-release-handoff-consumer-parity.test.js"
       ]
     }
   }
