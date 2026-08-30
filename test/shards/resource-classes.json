@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2082,
+    "ordinary": 2083,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2099,
-  "digest": "fnv1a32-cf262def",
+  "censusSize": 2100,
+  "digest": "fnv1a32-c13e225a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1076,6 +1076,7 @@
     "test/partition/managed-merge-workflow.test.js": "ordinary",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "ordinary",
     "test/partition/managed-split-metrics-provider.test.js": "ordinary",
+    "test/partition/managed-split-resume-under-write-load.test.js": "ordinary",
     "test/partition/managed-split-workflow-terminal-lifecycle.test.js": "ordinary",
     "test/partition/managed-split-workflow-transition-persistence.test.js": "ordinary",
     "test/partition/managed-split-workflow.test.js": "ordinary",

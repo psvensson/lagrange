@@ -179,6 +179,50 @@ class ManagedSplitTopologyAdapter {
     );
   }
 
+  /**
+   * Observe the query plane's routing evidence for one split child: its
+   * canonical leader node and the node ids whose services are routable
+   * on the serve dimension the write path uses. The workflow owner
+   * decides cutover readiness from this evidence.
+   * @param {string} partitionId - Child partition ID.
+   * @return {{leaderNodeId: string, routableNodeIds: string[]}}
+   */
+  resolveSplitChildLeaderRoutingEvidence(partitionId) {
+    const queryExecutor = this.sqlQueryEngine?.queryExecutor;
+    if (typeof queryExecutor?.getPartitionRoutingSnapshot !==
+        LOCAL_STR_FUNCTION) {
+      return {leaderNodeId: '', routableNodeIds: []};
+    }
+    const routingSnapshot = queryExecutor.getPartitionRoutingSnapshot(
+      partitionId,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    );
+    return {
+      leaderNodeId: String(routingSnapshot?.canonicalLeaderNodeId || ''),
+      routableNodeIds: (routingSnapshot?.routableServices || [])
+        .map((service) => String(service?.node_id ?? service?.nodeId ?? ''))
+        .filter((nodeId) => nodeId.length > 0),
+    };
+  }
+
+  /**
+   * The engine's table-partition provisioning poll cadence: the wait
+   * interval every routable wait already runs on.
+   * @return {number}
+   */
+  resolveRoutingWaitPollIntervalMs() {
+    return this.sqlQueryEngine?.tablePartitionProvisioningPollIntervalMs;
+  }
+
+  /**
+   * Sleep through the engine's clock-owned sleep.
+   * @param {number} ms
+   * @return {Promise<void>}
+   */
+  delay(ms) {
+    return this.sqlQueryEngine?.sleep(ms);
+  }
+
   get logger() {
     return this.sqlQueryEngine?.logger || console;
   }

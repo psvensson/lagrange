@@ -43,6 +43,11 @@ class ManagedSplitWorkflowStateMethods {
         Array.isArray(options.siblingPartitionIds) ?
           [...options.siblingPartitionIds] :
           [],
+      // A resumed plan rides the pending row so an admission block or
+      // deferral persisted before planning cannot drop it.
+      ...this.buildSplitPlanTransitionMetadata(
+        options.persistedSplitPlan || null,
+      ),
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: {
         state: PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
         operationType: STORAGE_ADMISSION_OPERATION_TYPE.PARTITION_SPLIT,

@@ -606,6 +606,16 @@ const MANAGED_SPLIT_LOG_MSG = Object.freeze({
     'Managed split workflow ownership claim refused',
   OWNERSHIP_LOST: 'Managed split workflow ownership lost',
   ACK_REJECTED: 'Managed split source acknowledgement rejected',
+  CUTOVER_AWAITING_CHILD_LEADERS:
+    'Managed split cutover waiting: a child partition\'s canonical leader ' +
+    'service is not serve-routable; the source keeps serving',
+  CUTOVER_REFUSED_CHILD_LEADER_UNROUTABLE:
+    'Managed split cutover refused: a child partition\'s canonical leader ' +
+    'service stayed unroutable for the whole readiness budget; the source ' +
+    'remains authoritative',
+  PERSISTED_PLAN_RESUMED:
+    'Managed split retry resumed the persisted split plan instead of ' +
+    'planning new children',
 });
 
 const SPLIT_MERGE_DEFAULT = Object.freeze({

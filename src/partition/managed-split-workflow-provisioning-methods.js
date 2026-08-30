@@ -5,6 +5,7 @@ import {
   STORAGE_ADMISSION_DECISION_TYPE,
 } from '../rebalancer/storage-admission-constants.js';
 import {
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
@@ -83,6 +84,78 @@ class ManagedSplitWorkflowProvisioningMethods {
         keyRange: rightRange,
       },
     };
+  }
+
+  /**
+   * Resolve the split plan for one admitted execution: a persisted plan
+   * is resumed as-is (never re-planned); otherwise the planner runs and
+   * a retryable planning failure becomes a typed deferral.
+   * @param {Object} input
+   * @return {Promise<{splitPlan: Object}|{deferredExecution: Object}>}
+   * @private
+   */
+  async resolveExecutionSplitPlan(input) {
+    if (input.persistedSplitPlan) {
+      this.logger.info(MANAGED_SPLIT_LOG_MSG.PERSISTED_PLAN_RESUMED, {
+        workflowId: input.deferralContext.workflowId,
+        partitionId: input.deferralContext.partitionId,
+        ...this.buildSplitPlanTransitionMetadata(input.persistedSplitPlan),
+      });
+      return {splitPlan: input.persistedSplitPlan};
+    }
+    try {
+      return {
+        splitPlan: await this.buildManagedSplitPlan(
+          input.partitionInfo,
+          input.tableName,
+          input.tableId,
+          input.primaryKeyColumn,
+        ),
+      };
+    } catch (error) {
+      const deferredExecution =
+        await this.handleRetryableSplitPlanningFailure({
+          ...input.deferralContext,
+          error,
+        });
+      if (deferredExecution) {
+        return {deferredExecution};
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Build the durable plan fields (split key + child ids) carried on
+   * every transition row once a plan exists, so a deferred or blocked
+   * retry resumes the same children instead of planning new ones.
+   * @param {Object|null} splitPlan - Resolved or persisted split plan.
+   * @return {Object} Metadata fields ({} when no plan exists yet).
+   * @private
+   */
+  buildSplitPlanTransitionMetadata(splitPlan) {
+    if (!splitPlan) {
+      return {};
+    }
+    return {
+      [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: splitPlan.medianKey,
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
+        splitPlan.leftPartition.partitionId,
+        splitPlan.rightPartition.partitionId,
+      ],
+    };
+  }
+
+  /**
+   * Resolve the child partition ids of one plan ([] when no plan).
+   * @param {Object|null} splitPlan
+   * @return {string[]}
+   * @private
+   */
+  resolveSplitPlanTargetPartitionIds(splitPlan) {
+    return this.buildSplitPlanTransitionMetadata(splitPlan)[
+      PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
+    ] || [];
   }
 
   /**

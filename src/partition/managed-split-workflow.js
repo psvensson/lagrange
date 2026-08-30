@@ -28,40 +28,27 @@ import {
   ManagedSplitWorkflowDissolutionMethods,
 } from './managed-split-workflow-dissolution-methods.js';
 import {
+  ManagedSplitWorkflowCutoverReadinessMethods,
+} from './managed-split-workflow-cutover-readiness-methods.js';
+import {
+  ManagedSplitWorkflowAbortMethods,
+} from './managed-split-workflow-abort-methods.js';
+import {
+  DEFAULT_QUORUM_REPLICA_COUNT,
+  applyManagedSplitTopologyBindings,
+} from './managed-split-workflow-topology-bindings.js';
+import {
   buildSplitWorkflowOwnerId,
   ManagedSplitWorkflowOwnershipMethods,
 } from './managed-split-workflow-ownership-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
-const LOCAL_STR_GETPARTITIONINFO = 'getPartitionInfo';
-const LOCAL_STR_GETTABLEINFO = 'getTableInfo';
-const LOCAL_STR_LISTTABLEINFOS = 'listTableInfos';
-const LOCAL_STR_PARSEPARTITIONTRANSITION = 'parsePartitionTransition';
-const LOCAL_STR_ISLOCALMANAGEDSPLITLEADER = 'isLocalManagedSplitLeader';
-const LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION = 'resolveActivePartitionVersion';
-const LOCAL_STR_BUILDMANAGEDSPLITPLAN = 'buildManagedSplitPlan';
-const LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS = 'resolveProvisionTargetNodeIds';
-const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS = 'getRoutablePartitionServiceNodeIds';
-const LOCAL_STR_ISSYSTEMTABLEPARTITIONID = 'isSystemTablePartitionId';
-const LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT = 'captureTopologySnapshot';
-const LOCAL_STR_CALCULATEQUORUMREPLICACOUNT = 'calculateQuorumReplicaCount';
-const LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET = 'createExecutionTimeoutBudget';
-const LOCAL_STR_ESTIMATESPLITADMISSIONBYTES = 'estimateSplitAdmissionBytes';
-const LOCAL_STR_WAITFORTABLEPARTITIONMETADATA = 'waitForTablePartitionMetadata';
-const LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING = 'probeInitialTablePartitionProvisioning';
-const LOCAL_STR_PROVISIONINITIALTABLEPARTITION = 'provisionInitialTablePartition';
-const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION = 'startSplitReplicationOnSourcePartition';
-const LOCAL_STR_LISTTABLEPARTITIONROWS = 'listTablePartitionRows';
-const LOCAL_STR_LISTPARTITIONSERVICEROWS = 'listPartitionServiceRows';
-const LOCAL_STR_DELIVERREPLICAREMOVAL = 'deliverReplicaRemoval';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
 const LOCAL_STR_MANAGED_SPLIT_WORKFLOW = 'managed-split-workflow';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 const ACTIVE_PARTITION_STATE = 'NORMAL';
-const DEFAULT_QUORUM_REPLICA_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 // Durable ownership lease for split workflow claims: long enough to
@@ -71,14 +58,6 @@ const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 const DEFAULT_WORKFLOW_LEASE_MS = 60000;
 const SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-function bindTopologyMethod(topologyAdapter, methodName) {
-  if (!topologyAdapter ||
-      typeof topologyAdapter[methodName] !== LOCAL_STR_FUNCTION) {
-    return null;
-  }
-  return topologyAdapter[methodName].bind(topologyAdapter);
-}
-
 /**
  * First-class managed split workflow owner.
  */
@@ -89,111 +68,7 @@ class ManagedSplitWorkflow {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.topologyAdapter = options.topologyAdapter || null;
-    this.getCDCIntegrationService =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_GETCDCINTEGRATIONSERVICE) ||
-      options.getCDCIntegrationService ||
-      (() => options.cdcIntegrationService || null);
-    this.getPartitionInfo =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_GETPARTITIONINFO) ||
-      options.getPartitionInfo || (() => null);
-    this.getTableInfo =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_GETTABLEINFO) ||
-      options.getTableInfo || (() => null);
-    this.listTableInfos =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_LISTTABLEINFOS) ||
-      options.listTableInfos || (() => []);
-    this.parsePartitionTransition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_PARSEPARTITIONTRANSITION) ||
-      options.parsePartitionTransition ||
-      (() => null);
-    this.isLocalManagedSplitLeader =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ISLOCALMANAGEDSPLITLEADER) ||
-      options.isLocalManagedSplitLeader ||
-      (() => false);
-    this.resolveActivePartitionVersion =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION) ||
-      options.resolveActivePartitionVersion ||
-      (() => 1);
-    this.buildManagedSplitPlan =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_BUILDMANAGEDSPLITPLAN) ||
-      options.buildManagedSplitPlan ||
-      (async () => {
-        throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
-      });
-    this.resolveProvisionTargetNodeIds =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS) ||
-      options.resolveProvisionTargetNodeIds ||
-      (() => []);
-    this.getRoutablePartitionServiceNodeIds =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS,
-      ) ||
-      options.getRoutablePartitionServiceNodeIds ||
-      (() => []);
-    this.isSystemTablePartitionId =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_ISSYSTEMTABLEPARTITIONID,
-      ) ||
-      options.isSystemTablePartitionId ||
-      (() => false);
-    this.captureTopologySnapshot =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT) ||
-      options.captureTopologySnapshot || null;
-    this.calculateQuorumReplicaCount =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CALCULATEQUORUMREPLICACOUNT) ||
-      options.calculateQuorumReplicaCount ||
-      (() => DEFAULT_QUORUM_REPLICA_COUNT);
-    this.storageAdmissionService =
-      options.storageAdmissionService ||
-      this.topologyAdapter?.storageAdmissionService || null;
-    this.createExecutionTimeoutBudget =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET) ||
-      options.createExecutionTimeoutBudget || null;
-    this.messageRouter =
-      options.messageRouter || this.topologyAdapter?.messageRouter || null;
-    this.pressureGovernor = options.pressureGovernor || null;
-    this.estimateSplitAdmissionBytes =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ESTIMATESPLITADMISSIONBYTES) ||
-      options.estimateSplitAdmissionBytes ||
-      ((partitionInfo) => this.defaultEstimateSplitAdmissionBytes(partitionInfo));
-    this.waitForTablePartitionMetadata =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_WAITFORTABLEPARTITIONMETADATA) ||
-      options.waitForTablePartitionMetadata || (async () => {});
-    this.probeInitialTablePartitionProvisioning =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING,
-      ) ||
-      options.probeInitialTablePartitionProvisioning || null;
-    this.provisionInitialTablePartition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_PROVISIONINITIALTABLEPARTITION) ||
-      options.provisionInitialTablePartition || (async () => {});
-    this.startSplitReplicationOnSourcePartition =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION,
-      ) ||
-      options.startSplitReplicationOnSourcePartition || (async () => {});
-    this.listTablePartitionRows =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_LISTTABLEPARTITIONROWS,
-      ) ||
-      options.listTablePartitionRows || (() => []);
-    this.listPartitionServiceRows =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_LISTPARTITIONSERVICEROWS,
-      ) ||
-      options.listPartitionServiceRows || (() => []);
-    this.deliverReplicaRemoval =
-      bindTopologyMethod(
-        this.topologyAdapter,
-        LOCAL_STR_DELIVERREPLICAREMOVAL,
-      ) ||
-      options.deliverReplicaRemoval || (async () => null);
+    applyManagedSplitTopologyBindings(this, options);
     this.splitCompletionListener =
       typeof options.splitCompletionListener === LOCAL_STR_FUNCTION ?
         options.splitCompletionListener :
@@ -343,6 +218,16 @@ class ManagedSplitWorkflow {
     const retryMetadata = this.resolvePendingRetryMetadata(
       existingTransition,
     );
+    // A retry of a deferred/blocked split resumes the persisted plan
+    // (split key + child ids) and carries it on every transition row it
+    // writes, so no intermediate admission block can drop the plan and
+    // let a later retry mint a second pair of v(N+1) children over the
+    // same key range (run 2026-08-30T12:04:46Z re-planned median 9001
+    // beside the persisted median 2501).
+    const persistedSplitPlan = this.resolvePersistedSplitPlan(
+      existingTransition,
+      partitionInfo,
+    );
     const scheduledRetry = this.resolveScheduledRetry(existingTransition);
     const scheduledRetryOutcome = await this.resolveExecutionGateOutcome({
       partitionId,
@@ -433,6 +318,9 @@ class ManagedSplitWorkflow {
       tableId,
       tableInfo,
       sourcePartitionId: partitionId,
+      targetPartitionIds: this.resolveSplitPlanTargetPartitionIds(
+        persistedSplitPlan,
+      ),
     });
     const workflow = await this.workflowCoordinator.registerWorkflow({
       workflowId,
@@ -455,6 +343,7 @@ class ManagedSplitWorkflow {
         retryMetadata,
         estimatedBytes,
         siblingPartitionIds,
+        persistedSplitPlan,
       }),
       createdAt: now,
       updatedAt: now,
@@ -506,36 +395,26 @@ class ManagedSplitWorkflow {
         return admissionGateOutcome.result;
       }
 
-      let splitPlan = this.resolvePersistedSplitPlan(
-        existingTransition,
+      const planOutcome = await this.resolveExecutionSplitPlan({
+        persistedSplitPlan,
         partitionInfo,
-      );
-      if (!splitPlan) {
-        try {
-          splitPlan = await this.buildManagedSplitPlan(
-            partitionInfo,
-            tableName,
-            tableId,
-            primaryKeyColumn,
-          );
-        } catch (error) {
-          const deferredExecution =
-            await this.handleRetryableSplitPlanningFailure({
-              workflowId,
-              partitionId,
-              tableId,
-              tableName,
-              targetVersion,
-              admission: compactAdmission,
-              retryMetadata,
-              error,
-            });
-          if (deferredExecution) {
-            return deferredExecution;
-          }
-          throw error;
-        }
+        tableName,
+        tableId,
+        primaryKeyColumn,
+        deferralContext: {
+          workflowId,
+          partitionId,
+          tableId,
+          tableName,
+          targetVersion,
+          admission: compactAdmission,
+          retryMetadata,
+        },
+      });
+      if (planOutcome.deferredExecution) {
+        return planOutcome.deferredExecution;
       }
+      const splitPlan = planOutcome.splitPlan;
       const childProvisioningTargetNodeIdsByPartitionId =
         this.planChildProvisioningTargetNodeIds({
           childPartitionIds: [
@@ -587,12 +466,7 @@ class ManagedSplitWorkflow {
           compactAdmission,
         [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
           transitionTopologySnapshot,
-        [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]:
-          splitPlan.medianKey,
-        [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
-          splitPlan.leftPartition.partitionId,
-          splitPlan.rightPartition.partitionId,
-        ],
+        ...this.buildSplitPlanTransitionMetadata(splitPlan),
       };
       this.ensureCanonicalSplitParticipants(
         workflowId,
@@ -773,26 +647,20 @@ function assignManagedSplitWorkflowMethods(targetPrototype, sourcePrototype) {
   }
 }
 
-assignManagedSplitWorkflowMethods(
-  ManagedSplitWorkflow.prototype,
-  ManagedSplitWorkflowStateMethods.prototype,
-);
-assignManagedSplitWorkflowMethods(
-  ManagedSplitWorkflow.prototype,
-  ManagedSplitWorkflowExecutionGateMethods.prototype,
-);
-assignManagedSplitWorkflowMethods(
-  ManagedSplitWorkflow.prototype,
-  ManagedSplitWorkflowProvisioningMethods.prototype,
-);
-assignManagedSplitWorkflowMethods(
-  ManagedSplitWorkflow.prototype,
-  ManagedSplitWorkflowDissolutionMethods.prototype,
-);
-assignManagedSplitWorkflowMethods(
-  ManagedSplitWorkflow.prototype,
-  ManagedSplitWorkflowOwnershipMethods.prototype,
-);
+for (const mixin of [
+  ManagedSplitWorkflowStateMethods,
+  ManagedSplitWorkflowExecutionGateMethods,
+  ManagedSplitWorkflowProvisioningMethods,
+  ManagedSplitWorkflowDissolutionMethods,
+  ManagedSplitWorkflowOwnershipMethods,
+  ManagedSplitWorkflowCutoverReadinessMethods,
+  ManagedSplitWorkflowAbortMethods,
+]) {
+  assignManagedSplitWorkflowMethods(
+    ManagedSplitWorkflow.prototype,
+    mixin.prototype,
+  );
+}
 
 export {
   ManagedSplitWorkflow,
