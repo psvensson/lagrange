@@ -1,0 +1,44 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "model-report-deterministic-output-tail",
+  "status": "pass",
+  "generatedAt": "2026-08-30T14:26:13.831Z",
+  "receipts": [
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^success-report-stable-across-timestamps\" test/scripts/model-tlc-output-tail.test.js",
+      "detail": "rendering the same converged TLC run with two different wall-clock stamps, seeds, pids, and parse paths yields byte-identical report JSON, identical to rendering the bare no-error verdict line; the tail is the TLC no-error verdict sentinel"
+    },
+    {
+      "id": "failure-tail-bounded-timestamp-free",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^failure-tail-bounded-and-timestamp-free\" test/scripts/model-tlc-output-tail.test.js",
+      "detail": "a non-converged run keeps a bounded tail (at most TLC_OUTPUT_TAIL_LINE_LIMIT lines) that retains the deterministic counterexample content and drops every wall-clock stamp, seed, pid, absolute path, and trace-exploration file name; converged, temporalViolated, expectedFailureObserved, and expectationMet are unchanged"
+    },
+    {
+      "id": "report-fields-run-independent",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^report-fields-run-independent\" test/scripts/model-tlc-output-tail.test.js",
+      "detail": "no field of a rendered route or stall report embeds a run value (stamp, seed, pid, checkout path, scratch path, trace epoch, collision estimate); module and config paths are checkout-relative"
+    },
+    {
+      "id": "writer-byte-identical-across-cli-runs",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^cli-writes-byte-identical-report-across-runs\" test/scripts/model-tlc-output-tail.test.js",
+      "detail": "the real scripts/model-tlc.js writer, driven twice through a fake java emitting two differently stamped converged outputs, writes byte-identical report files"
+    },
+    {
+      "id": "model-contracts-leaves-tree-clean",
+      "passed": true,
+      "command": "npm run model:contracts >/dev/null 2>&1 && [ \"$(git status --porcelain -- architecture/contracts/evidence | wc -l)\" -eq 0 ]",
+      "detail": "self-guarding shell proof: after a full `npm run model:contracts` (the test:gate model step) `git status --porcelain architecture/contracts/evidence` is empty, so the release-gate receipt can record treeCleanAtFinish:true"
+    },
+    {
+      "id": "model-outcomes-unchanged",
+      "passed": true,
+      "command": "npm run model:tlc >/dev/null 2>&1 && node --input-type=module -e \"import fs from 'node:fs';import {CONFIGS} from './scripts/model-tlc-configs.js';for (const config of CONFIGS) {  const report = JSON.parse(fs.readFileSync(    'test-output/reports/' + config.report, 'utf8'));  if (report.expectationMet !== true ||      report.converged !== config.expectConverged) {    throw new Error('model outcome changed: ' + config.mode);  }}\"",
+      "detail": "every registered TLC configuration still meets its declared expectation and carries its declared convergence outcome after the tail change: what is checked and the pass/fail semantics are unchanged"
+    }
+  ]
+}
