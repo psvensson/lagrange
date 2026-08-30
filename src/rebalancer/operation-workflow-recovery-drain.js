@@ -360,9 +360,16 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     });
   }
 
-  resolvePriorityRecoveryOperationDrainOwnerState(operation, drainAction) {
+  resolvePriorityRecoveryOperationDrainOwnerState(
+    operation,
+    drainAction,
+    drainState,
+  ) {
     if (this.repository.isOperationLocallyOwned(operation)) {
-      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
+      return drainState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.RECOVERING_DISPATCH_PARKED ?
+        PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED :
+        PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
     if (
       drainAction ===
@@ -476,6 +483,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         this.resolvePriorityRecoveryOperationDrainOwnerState(
           operation,
           action,
+          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
         );
       return Object.freeze({
         state: PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
@@ -548,6 +556,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       this.resolvePriorityRecoveryOperationDrainOwnerState(
         operation,
         action,
+        state,
       );
     return Object.freeze({
       state,

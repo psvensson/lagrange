@@ -568,12 +568,32 @@ function isPriorityRecoveryDispatchPendingRemoteRetryActive(
   );
 }
 
+// A PENDING ledger self-move whose owner's dispatch lane holds fresh park
+// evidence (operation-workflow-ledger-self-move-park-evidence.js) is
+// progressing on that lane: it re-reads the IDLE_ONLY census on every
+// DISPATCH_RETRY_DELAY_MS and claims on the incumbents' terminal. The
+// dispatch-pending re-entry leaves it there — its owner effect / arm would
+// prime the claim through the coordinator-created ingress without the
+// census — exactly as the drain leaves it (RECOVERING_DISPATCH_PARKED /
+// SKIP_LOCAL_PARKED_LANE). Without fresh evidence nothing changes.
+function shouldLeavePriorityRecoveryDispatchPendingToParkedLane(
+  owner,
+  operation,
+) {
+  return owner.hasFreshOperationLedgerSelfMoveParkEvidence(operation);
+}
+
 async function applyPriorityRecoveryDispatchPendingOwnerProgress(
   owner,
   operation,
   decisionSnapshot,
   options = {},
 ) {
+  if (
+    shouldLeavePriorityRecoveryDispatchPendingToParkedLane(owner, operation)
+  ) {
+    return true;
+  }
   if (
     shouldApplyPriorityRecoveryDispatchPendingOwnerEffectBeforeDrain(
       decisionSnapshot,
@@ -727,6 +747,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
       owner.resolvePriorityRecoveryOperationDrainOwnerState(
         operation,
         action,
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
       );
     return Object.freeze({
       state: PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,
@@ -789,6 +810,7 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
     owner.resolvePriorityRecoveryOperationDrainOwnerState(
       operation,
       action,
+      state,
     );
   return Object.freeze({
     state,

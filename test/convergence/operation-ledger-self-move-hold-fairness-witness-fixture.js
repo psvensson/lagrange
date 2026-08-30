@@ -1099,9 +1099,11 @@ export {
   STALE_CLAIM_REDRIVE_AT_MS,
   SUCCESSOR_PLANNED_AT_MS,
   admittedWithin,
+  buildRecoveryPendingNodeReadiness,
   refusalsWithin,
   runClaimRefusedThenLocalSettlementScenario,
   runDependentsStreamAfterRegistrationScenario,
   runFailedHolderDoesNotStarveSuccessorScenario,
   runLiveSendingHolderProbeScenario,
+  snapshotHolder,
 };

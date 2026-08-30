@@ -8,7 +8,7 @@
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 168,
-    "convergence-topology": 75,
+    "convergence-topology": 76,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2092,
-  "digest": "fnv1a32-39c5bbd8",
+  "censusSize": 2093,
+  "digest": "fnv1a32-59d256fe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -653,6 +653,7 @@
     "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js": "convergence-topology",
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": "convergence-topology",
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": "convergence-topology",
+    "test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js": "convergence-topology",
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": "convergence-topology",
     "test/convergence/dt6-publication-ack-recovery-gate-network.test.js": "convergence-topology",
     "test/convergence/dt6-publication-failback-network.test.js": "convergence-topology",

@@ -2,11 +2,15 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   isDisruptiveOperationLedgerSelfMove,
 } from './replica-status.js';
+import {
+  OPERATION_LEDGER_SELF_MOVE_PARK_KIND,
+  isPendingOperationLedgerSelfMove,
+  recordOperationLedgerSelfMoveParkEvidence,
+} from './operation-workflow-ledger-self-move-park-evidence.js';
 
 const {
   DISPATCH_RETRY_DELAY_MS,
   REBALANCER_SKIP_REASON,
-  WORKFLOW_STEP,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 // The dispatch-time side of the run-20 ledger self-move interlock, owned by
@@ -33,6 +37,11 @@ const {
 // and the next exempt emergency ADD is short, and a 5 s backoff missed it
 // (GCP run 23-58-17: census failure 00:01:42.59, re-read 00:01:54.91, the
 // re-planned control_plane_publications learner filled the gap, +14.4 s).
+// Every park behind a live incumbent or a refused engagement is recorded as
+// the owner's typed, time-bounded park evidence
+// (operation-workflow-ledger-self-move-park-evidence.js): the owner's own
+// priority-recovery drain reads a fresh park as progress, not staleness. A
+// failed census read records nothing (it proves no incumbent).
 const OPERATION_LEDGER_SELF_MOVE_IDLE_VISIBILITY_DEFER_REASON =
   'operation_ledger_self_move_idle_visibility_deferred';
 const OPERATION_LEDGER_SELF_MOVE_WAITING_DEFER_REASON =
@@ -71,16 +80,6 @@ const OPERATION_LEDGER_SELF_MOVE_CLAIM_ENGAGEMENT = Object.freeze({
   PROCEED: 'proceed',
   PARKED: 'parked',
 });
-
-function isPendingOperationLedgerSelfMove(operation) {
-  return (
-    operation?.workflowStep === WORKFLOW_STEP.PENDING &&
-    isDisruptiveOperationLedgerSelfMove(
-      operation?.type,
-      operation?.partitionId,
-    )
-  );
-}
 
 function buildOperationLedgerSelfMoveRetryError(message) {
   const error = new Error(message);
@@ -211,6 +210,12 @@ async function ensureOperationLedgerSelfMoveDispatchIdleOrSkip(
     OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_PREFIX +
       String(conflictingOperation.operationId),
   );
+  recordOperationLedgerSelfMoveParkEvidence(
+    owner,
+    operation,
+    OPERATION_LEDGER_SELF_MOVE_PARK_KIND.WAITING_FOR_INCUMBENT,
+    [String(conflictingOperation.operationId)],
+  );
   return owner.parkOperationLedgerSelfMoveDispatch(
     operation,
     OPERATION_LEDGER_SELF_MOVE_WAITING_DEFER_REASON,
@@ -244,6 +249,12 @@ async function engageOperationLedgerSelfMoveHoldForClaim(owner, operation) {
   const waitError = buildOperationLedgerSelfMoveRetryError(
     OPERATION_LEDGER_SELF_MOVE_HOLD_NOT_ENGAGED_MESSAGE_PREFIX +
       String(engagement),
+  );
+  recordOperationLedgerSelfMoveParkEvidence(
+    owner,
+    operation,
+    OPERATION_LEDGER_SELF_MOVE_PARK_KIND.WAITING_FOR_IDLE_LEDGER,
+    [],
   );
   owner.parkOperationLedgerSelfMoveDispatch(
     operation,

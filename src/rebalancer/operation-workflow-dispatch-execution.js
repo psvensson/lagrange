@@ -141,6 +141,11 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         operation,
         options,
       );
+      if (claimedOperation) {
+        // The committed claim ends the park: the SENDING row carries its own
+        // step budget from here.
+        this.clearOperationLedgerSelfMoveParkEvidence(operation.operationId);
+      }
       return claimedOperation;
     } finally {
       LEDGER_SELF_MOVE_GATE.disengageOperationLedgerSelfMoveHoldAfterClaim(

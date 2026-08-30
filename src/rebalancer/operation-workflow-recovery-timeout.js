@@ -583,9 +583,12 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     return this.normalizeOperationDrainEpochMillis(stepEntry.timestamp);
   }
 
+  // The drain's clock is the owner's clock (resolveTimeoutCheckNowMs:
+  // RealTimeSource.now() === Date.now() in production), the same clock the
+  // dispatch gate stamps its park evidence with.
   resolvePriorityRecoveryOperationDrainStepAgeMs(
     operation,
-    now = Date.now(),
+    now = this.resolveTimeoutCheckNowMs(),
   ) {
     const stepEnteredAtMs = this.resolveOperationStepEnteredAtMs(operation);
     const updatedAtMs = this.normalizeOperationDrainEpochMillis(
@@ -619,7 +622,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     return null;
   }
 
-  isPriorityRecoveryOperationDrainStepStale(operation, now = Date.now()) {
+  isPriorityRecoveryOperationDrainStepStale(
+    operation,
+    now = this.resolveTimeoutCheckNowMs(),
+  ) {
     const ageMs = this.resolvePriorityRecoveryOperationDrainStepAgeMs(
       operation,
       now,
@@ -654,7 +660,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // conservatively still treated as active. The downstream quorum projection in
   // evaluateRemoveSafety independently protects the voter-ready minimum, so the
   // gate is a serialization guard, not the sole quorum protector.
-  isConcurrentOperationStalePastStepTimeout(operation, now = Date.now()) {
+  isConcurrentOperationStalePastStepTimeout(
+    operation,
+    now = this.resolveTimeoutCheckNowMs(),
+  ) {
     return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
   }
 
@@ -723,7 +732,36 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     );
   }
 
+  // A stale classification of a PENDING ledger self-move that this owner's
+  // own dispatch lane parked recently (fresh park evidence, bounded by the
+  // PENDING step budget from the LAST park) is progress: the drain settles it
+  // RECOVERING_DISPATCH_PARKED (NOOP) and the lane claims on the incumbents'
+  // terminal. Without fresh evidence — never parked, or a lane silent for a
+  // full PENDING_TIMEOUT_MS — the stale rules below apply unchanged.
   resolvePriorityRecoveryOperationDrainStaleState(
+    mappedState,
+    completion,
+    operation,
+    sourceState,
+  ) {
+    const staleState = this.resolvePriorityRecoveryOperationDrainStepStaleState(
+      mappedState,
+      completion,
+      operation,
+      sourceState,
+    );
+    if (
+      staleState ===
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+          .STALE_WITHOUT_RETIREMENT_EVIDENCE &&
+      this.hasFreshOperationLedgerSelfMoveParkEvidence(operation)
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.RECOVERING_DISPATCH_PARKED;
+    }
+    return staleState;
+  }
+
+  resolvePriorityRecoveryOperationDrainStepStaleState(
     mappedState,
     completion,
     operation,
