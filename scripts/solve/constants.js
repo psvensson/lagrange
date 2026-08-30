@@ -318,6 +318,15 @@ export const LANDING_UNION_STATUS = Object.freeze({
   COVERED: 'covered',
   UNCOVERED: 'uncovered',
 });
+// A registered generated output (generated-dependencies.js) that is dirty
+// at landing is covered by the recorded union only when its ambient bytes
+// are byte-identical to a fresh deterministic regeneration from the exact
+// candidate; anything else stays an uncovered path.
+export const GENERATED_OUTPUT_COVERAGE = Object.freeze({
+  FRESH: 'fresh',
+  STALE: 'stale',
+  UNAVAILABLE: 'unavailable',
+});
 // The base an attempt is recorded against (pending-step.js): a pending
 // step's pin is the single source for every attempt of that step; the
 // active source epoch base, then live HEAD, only otherwise.
