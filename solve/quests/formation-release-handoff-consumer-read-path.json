@@ -1,0 +1,80 @@
+{
+  "id": "formation-release-handoff-consumer-read-path",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A joiner can read the seed-published formation-release handoff contract while every control_plane_publications replica host is recovery-pending: the consumer projection's durable read of the authority publication is exempt from the controlPlaneRecoveryEligible routing gate exactly as the corresponding write already is (bootstrap exemption for this read), a no-contract sentinel from the durable read is treated as absent (typed variant, never a truthy string) so the projection falls back to the cached authority-published row, and every row obtained either way still passes validateFormationReleaseHandoffConsumerContract in the CONSUMER role (authority incarnation, publication id, epoch floor, cohort within canonical set, member evidence) before releaseAuthorized can reach the barrier. Seed capture, retention and revocation, the consumer validation predicates, the 60-second certification window and the single startup-authority owner are unchanged. Proven by the consumer-parity witness extended with a non-hosting joiner whose getPublication yields no routable candidate while its system-table cache holds the authority-published row: red on HEAD (formationReleaseHandoff null, barrier waits on the raw spread predicate), green after (state active, releaseAuthorized true, barrier ledger_spread_satisfied within the retained generation). Root cause from the 9d5deb4f1 GCP streak: all seven contract consumptions since 9c4fd323c were by cpp-hosting joiners; non-hosting joiners polled an active, authorized contract for 3-35 s without consuming (07-06-30: n4 released raw at W+68.0; 07-13-07: n3/n4 never).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "architecture/contracts/active-gate-convergence.md",
+    "closesCL": [],
+    "parentQuest": "formation-release-handoff-consumer-parity",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "dae475a3b375c6d017b99ba54b774f756bc63760"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-release-handoff-consumer-read-path.receipt.json",
+      "requiredReceipts": [
+        "non-hosting-joiner-reads-authority-publication-during-recovery",
+        "no-contract-sentinel-is-typed-absent",
+        "cached-authority-row-fallback-validated",
+        "consumer-validation-predicates-unchanged",
+        "barrier-releases-within-retained-generation",
+        "seed-capture-retention-revocation-unchanged",
+        "budgets-and-single-owner-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-release-handoff-consumer-read-path-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-release-handoff-consumer-read-path.receipt.json",
+          "requiredReceipts": [
+            "non-hosting-joiner-reads-authority-publication-during-recovery",
+            "no-contract-sentinel-is-typed-absent",
+            "cached-authority-row-fallback-validated",
+            "consumer-validation-predicates-unchanged",
+            "barrier-releases-within-retained-generation",
+            "seed-capture-retention-revocation-unchanged",
+            "budgets-and-single-owner-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-formation-release-owner",
+      "statement": "The seed-owned formation-release handoff closure owner remains the sole minting authority; the joiner projection reads and validates, never mints or re-derives release authority; the publication read exemption is scoped to this consumer read of the authority publication."
+    },
+    {
+      "id": "validation-before-release",
+      "statement": "A row obtained through the exempt durable read or the cached fallback is consumed only after validateFormationReleaseHandoffConsumerContract in the CONSUMER role; no path lets an unvalidated or stale row reach releaseAuthorized. Fail-closed cases (different authority incarnation, regressed epoch, revoked generation, cohort outside the canonical set, restarted joiner) stay null."
+    },
+    {
+      "id": "unchanged-budgets-and-owner-rules",
+      "statement": "Seed capture/retention/revocation, the consumer validation predicates, the 60-second GCP certification window and the 120-second internal barrier, readiness floors, polling cadences and the single startup-authority owner are unchanged. No sleeps or polling acceleration."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Prove through test/control-plane/formation-release-handoff-consumer-parity.test.js (or a sibling on the same fixture) with a real non-hosting joiner (getPublication yields no routable candidate; cache holds the authority row) red on HEAD and green after, before any GCP run."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    }
+  ]
+}
