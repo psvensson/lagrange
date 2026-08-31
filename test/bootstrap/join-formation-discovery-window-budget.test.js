@@ -22,11 +22,12 @@ import {
 // Measured defect: test/integration/three-node-seed-rebalance.integration.test.js
 // bounds each join at 12000ms and node3's join measures 12441-14212ms
 // standalone on an idle 20-core host. The largest avoidable term in that budget
-// is the join-time priority-placement formation barrier: the cluster grows to
-// three nodes while the operation ledger's initial replica set is larger, so
-// the cohort check can never engage and every join sleeps out the FULL
-// production discovery window before reaching the same
-// bypassed_insufficient_formation_cohort answer.
+// is the join-time priority-placement formation barrier: in every observed run
+// of the three-node shape the cohort check does not engage, so each join sleeps
+// out the FULL production discovery window before reaching the same
+// bypassed_insufficient_formation_cohort answer. The bypass is EMPIRICAL, not
+// structural - INITIAL_REPLICA_IDS[replica_operations] has exactly three
+// entries, so engagement is reachable at three nodes.
 //
 // Measured, paired, standalone runs on an idle 20-core host (the file is
 // already the serial lane's work: primary class `integration` maps to the
@@ -154,8 +155,9 @@ async function driveBarrier({
   }
 }
 
-// A single joiner can never reach the ledger's initial replica count, so the
-// cohort never engages - exactly the three-node shape of the integration test.
+// A single joiner does not reach the ledger's initial replica count (three), so
+// the cohort does not engage - the observed three-node shape of the integration
+// test. Engagement is covered by the sibling scenario below.
 const INSUFFICIENT_COHORT = Object.freeze([JOINER_1_NODE_ID]);
 
 test('configured-discovery-window-bounds-the-unengaged-bypass', async () => {

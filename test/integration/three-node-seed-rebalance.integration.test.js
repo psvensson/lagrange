@@ -54,11 +54,15 @@ const POLL_INTERVAL_MS = 100;
 const CLEANUP_TIMEOUT_MS = 10000;
 // Harness time compression for the join-time priority-placement formation
 // barrier, in the same class as TEST_CONFIG's compressed election and
-// leadership waits. This cluster grows to three nodes while the operation
-// ledger's initial replica set is larger, so the barrier's cohort check can
-// never engage and every join sleeps out the FULL production 5s discovery
-// window before reaching the same `bypassed_insufficient_formation_cohort`
-// answer. Compressing the window changes no barrier decision - only how long
+// leadership waits. In every observed run of this three-node shape the
+// barrier's cohort check does not engage, so each join sleeps out the FULL
+// production 5s discovery window before reaching the same
+// `bypassed_insufficient_formation_cohort` answer. That bypass is EMPIRICAL,
+// not structural: INITIAL_REPLICA_IDS[replica_operations] has exactly three
+// entries, so engagement is reachable at three nodes and a cohort that turned
+// sufficient inside the compressed window would bypass here where production
+// would engage. The compression therefore changes no barrier decision in the
+// observed shape, and an ENGAGED barrier is never released by it. Compressing the window changes no barrier decision - only how long
 // the joins sleep before reaching the same bypass.
 //
 // Measured, paired, standalone runs on an idle 20-core host (the file is
