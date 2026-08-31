@@ -51,6 +51,15 @@ function yieldEventLoopTurn() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+// `commitAndApplySlice` answers an empty slice for a CLOSED log (its
+// single-writer contract: a closed adapter owns no transaction to commit in).
+// That is node teardown, not a stalled apply loop, so the scheduler must stop
+// rather than raise NO_DURABLE_PROGRESS - the raised rejection escapes as a
+// detached unhandledRejection whenever a caller ignores the returned promise.
+function isClosedCommitLog(log) {
+  return typeof log?.isOpen === 'function' && log.isOpen() === false;
+}
+
 function readCommittedIndex(log) {
   if (typeof log?.getCommittedIndex === 'function') {
     return Number(log.getCommittedIndex()) || 0;
@@ -92,6 +101,9 @@ async function commitAndApplyEntries(raft, entries) {
       throw error;
     }
     if (!Array.isArray(applied) || applied.length === 0) {
+      if (isClosedCommitLog(raft.log)) {
+        return;
+      }
       throw new Error(NO_DURABLE_PROGRESS_MESSAGE);
     }
     runDeferredEffects(raft, effects.afterCommit);

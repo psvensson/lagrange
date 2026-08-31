@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 106,
     "architecture-governance": 19,
-    "bootstrap-membership": 241,
+    "bootstrap-membership": 242,
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 172,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2110,
-  "digest": "fnv1a32-11352d16",
+  "censusSize": 2111,
+  "digest": "fnv1a32-0fe86386",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -163,6 +163,7 @@
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap-membership",
     "test/bootstrap/join-coordinator.test.js": "bootstrap-membership",
     "test/bootstrap/join-delegate-bundles.test.js": "bootstrap-membership",
+    "test/bootstrap/join-formation-discovery-window-budget.test.js": "bootstrap-membership",
     "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/join-message-group-phase.test.js": "bootstrap-membership",
     "test/bootstrap/join-readiness-evaluator.test.js": "bootstrap-membership",
