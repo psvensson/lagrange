@@ -1,0 +1,90 @@
+{
+  "id": "readiness-planning-deferral-bounded",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The readiness-planning snapshot owner's serve admission for an already-completed build no longer rests on the build's token STATUS. A build stamped TOKEN_STATUS.STALE records only THAT the source token advanced while the build was in flight; the built content is a real read of live cache state and its floored planning generation is stamped at completion, so it carries exactly the staleness class a build that landed current carries when it is reused across the same floored generation window. Refusing it outright converted a token-rotation race into an UNBOUNDED denial: under sustained source churn no build ever lands current, so every reader received the all-false deferred contract whose sole reason is planning_snapshot_refresh_pending, for as long as the churn lasted. Measured on GCP run 2026-08-31T00-12-47: 88 seconds in which the live user-table partition tbl-67f4035f1e5f9fd2a0245f5d35ff9de9-p1 kept serviceRowCount 3 and activeAddressedServiceCount 3 with the coordinator its own p1 raft leader, every candidate was denied by the single reason planning_snapshot_refresh_pending, routableServiceCount was 0 in 23 of 23 routing samples, and the INSERT (writes have no attempt ceiling, only the absolute execution deadline) retried to its deadline and failed PARTITION_SERVICE_NOT_FOUND. canReuseCompletedSnapshot now admits a completed build through either exact token equality on a build that landed current OR the pre-existing floored-generation disjunct, both gated as before by isCompletedSnapshotLive, and publishCompleted returns the build it just produced whenever that same admission holds instead of the deferred contract. Freshness semantics are unchanged: the stale stamp still stands and stays observable in completedTokenStatusByOwnerKey, the replacement build is still enqueued immediately, and the deferred contract is still served whenever the generation is saturated, the floored generation has rotated, or the positive-decision live veto has moved — so planning_snapshot_refresh_pending becomes honest evidence-absence bounded by those two sealed bounds rather than an indefinite denial. The safety bar is proved, not asserted: an in-witness oracle reconfirms every single serve admission against both bounds, and a differential audit compares every snapshot served from a STALE-stamped build against a forced rebuild of the same owner at serve time with zero divergence on dimensions and reason codes, while the safety negative shows a moved live veto and genuinely not-ready evidence are still never routable. No scheduler, maxItemsPerDrain, macrotask yield, budget, cadence, 60 second certification window or second ACTIVE/READY authority is touched, and the shared production-composition formation rig measures the sealed 1218 heavy planning builds and 824 publications winner reads before and after. Whether the asymmetric user-table fail-open at query-executor-partition-routing-snapshot.js remains necessary is NOT decided here: it was not required for any witness in this Quest and stays unchanged.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/operational-ground-truth.md",
+    "closesCL": [],
+    "parentQuest": "publication-readiness-churn-liveness-closure",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "be124c1e3"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-planning-deferral-bounded.receipt.json",
+      "requiredReceipts": [
+        "witness-deterministic",
+        "token-rotation-live-lock-precondition",
+        "user-table-partition-routable-under-token-churn",
+        "write-path-terminal-verdict-cleared",
+        "serve-admission-never-rests-on-token-status",
+        "stale-serve-divergence-audit",
+        "live-veto-move-still-denies",
+        "production-composition-control-denial-vocabulary",
+        "unchanged-control-rig-build-rate"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "readiness-planning-deferral-bounded-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/readiness-planning-deferral-bounded.receipt.json",
+          "requiredReceipts": [
+            "witness-deterministic",
+            "token-rotation-live-lock-precondition",
+            "user-table-partition-routable-under-token-churn",
+            "write-path-terminal-verdict-cleared",
+            "serve-admission-never-rests-on-token-status",
+            "stale-serve-divergence-audit",
+            "live-veto-move-still-denies",
+            "production-composition-control-denial-vocabulary",
+            "unchanged-control-rig-build-rate"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "serve-admission-is-token-status-independent",
+      "statement": "Serve admission for an already-completed build rests only on the two sealed bounds — the floored planning generation (or exact token equality for a build that landed current) and the positive-decision live veto. The completed record's TOKEN_STATUS may be stamped and observed but must never be a precondition of serving, and no new bound, ceiling, cache, authority or fallback path may be introduced to replace it."
+    },
+    {
+      "id": "admitted-staleness-class-is-not-widened",
+      "statement": "The staleness a STALE-stamped build may be served under is exactly the class the sealed floored-generation reuse already admits for a build that landed current: same 250 ms floored generation, same live veto, same isCompletedSnapshotLive gate. Proved by an in-witness oracle that reconfirms both bounds on EVERY admission, not by inspection."
+    },
+    {
+      "id": "never-routable-on-answer-changing-staleness",
+      "statement": "A service is never reported routable on evidence that is stale in a way that changes the answer. Proved by a differential audit comparing every snapshot served from a STALE-stamped build against a forced rebuild of the same owner at serve time (zero divergence on dimensions and reason codes), plus the safety negative that a moved positive-decision live veto and genuinely not-ready evidence stay non-routable."
+    },
+    {
+      "id": "freshness-pursuit-and-diagnostics-unchanged",
+      "statement": "publishCompleted still stamps TOKEN_STATUS.STALE, still exposes it through completedTokenStatusByOwnerKey, and still enqueues the replacement build with the same reason codes. The deferred contract is still returned for a saturated generation, a rotated floored generation or a moved live veto, so planning_snapshot_refresh_pending remains a real evidence-absent answer."
+    },
+    {
+      "id": "no-rate-scheduler-or-budget-movement",
+      "statement": "The floored planning generation (250 ms), the stale grace, the macrotask drain, maxItemsPerDrain 1, every budget and cadence, the 60 s certification window and the sealed macrotask-yield-required constraint are untouched. The shared production-composition formation rig must measure exactly 1218 heavy planning builds and 824 publications winner reads before and after."
+    },
+    {
+      "id": "single-owner-serve-admission-scope",
+      "statement": "Source scope is the readiness-planning snapshot owner's serve admission. No cross-owner priority edge, no scheduler change, no second ACTIVE or READY authority, and no change to the asymmetric system-table leader fail-open in query-executor-partition-routing-snapshot.js — whether that fail-open must widen to user tables is an explicit owner decision this Quest does not take."
+    },
+    {
+      "id": "claims-must-be-measured",
+      "statement": "Every denial, build-rate and divergence number comes from the deterministic witness or the production-composition rig that matches the live seed within three percent, never from a projection. That this cure clears the five-node GCP ratings load is NOT claimed here: it requires the five-node run."
+    }
+  ]
+}
