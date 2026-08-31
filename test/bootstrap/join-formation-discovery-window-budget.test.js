@@ -74,6 +74,7 @@ const HEAD_FORMATION_TIMEOUT_MS = 120000;
 const POLL_BUDGET = 1000;
 const AUTHORITY_READY_AFTER_POLLS = 4;
 const EXPECTED_DISCOVERY_CONFIG_SITES = 2;
+const EXPECTED_JOIN_BUDGET_SITES = 2;
 const BARRIER_STATE_WAITING_COHORT = 'waiting_for_formation_cohort';
 const BARRIER_STATE_BYPASSED = 'bypassed_insufficient_formation_cohort';
 const BARRIER_STATE_WAITING_AUTHORITY = 'waiting_for_startup_authority';
@@ -248,7 +249,16 @@ test('integration-assertions-unchanged', () => {
   );
   assert.ok(
     source.includes('const READY_TIMEOUT_MS = 12000;'),
-    'the join budget itself is unchanged: no cap was widened',
+    'the shared readiness budget is unchanged for the waits it fits',
+  );
+  assert.ok(
+    source.includes('const JOIN_READY_TIMEOUT_MS = 25000;'),
+    'the join waits carry their own measured budget (owner decision)',
+  );
+  assert.equal(
+    (source.match(/JOIN_READY_TIMEOUT_MS,/g) || []).length,
+    EXPECTED_JOIN_BUDGET_SITES,
+    'exactly the two node joins use the join budget',
   );
   assert.ok(
     source.includes('const TEST_TIMEOUT_MS = 120000;'),

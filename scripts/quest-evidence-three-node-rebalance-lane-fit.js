@@ -36,11 +36,21 @@
 // residual is an owner budget/convergence decision, deliberately NOT hidden by
 // a widened cap.
 //
-// Post-cure standalone pass rate: 2/10 (0/10 before). The release blocker is
-// therefore NOT cleared by this quest's cure, and the integration receipt
-// below stays red on purpose.
+// The barrier compression alone left the file red 8/10 (0/10 green before it),
+// because node3's join is convergence-bound, not barrier-bound: this harness
+// runs three FULL nodes in ONE process on ONE event loop, so a joiner's
+// convergence interleaves with the seed's and the earlier joiner's
+// control-plane work. Node3's join measured 12441-14748ms in every observation
+// both before and after the compression, against a 12000ms bound - a bound
+// below the observed floor can never pass. Owner decision (2026-08-31): the
+// shared READY_TIMEOUT_MS was MIS-SET for this wait rather than masking a
+// regression, so the join waits get their own measured budget
+// (JOIN_READY_TIMEOUT_MS = 25000, ~1.7x the observed maximum) while
+// READY_TIMEOUT_MS stays 12000 for the waits it fits and TEST_TIMEOUT_MS,
+// every production default and every assertion stay untouched.
+// Post-decision standalone pass rate: 8/8 (29.2-37.8s wall).
 //
-// Red-before-the-fix receipts: three-node-seed-rebalance-integration-green,
+// Red-before-the-cure receipts: three-node-seed-rebalance-integration-green,
 // integration-assertions-unchanged and
 // closed-log-commit-slice-stops-without-no-durable-progress.
 // Green before AND after (controls that must stay green — a cure that turns
@@ -89,12 +99,11 @@ const RECEIPTS = Object.freeze([
     timeoutMs: INTEGRATION_TIMEOUT_MS,
     detail: 'the release-gate file itself, run through the same classified ' +
       'runner npm run test:ci uses (primary integration -> exclusive lane, ' +
-      'jobs=1). This receipt is DELIBERATELY still red at 8/10 standalone ' +
-      'runs (0/10 before the cure): the cure removed the barrier sleep but ' +
-      'node3\'s join is convergence-bound above the UNCHANGED 12000ms ' +
-      'READY_TIMEOUT_MS, so the quest cannot close green until an owner ' +
-      'decides the budget or the convergence latency. It is kept in the ' +
-      'harness so no stale green can be claimed for the release gate',
+      'jobs=1), completes its three-node growth inside the owner-decided ' +
+      'JOIN_READY_TIMEOUT_MS of 25000ms and the UNCHANGED 120000ms ' +
+      'TEST_TIMEOUT_MS parent cap: 8/8 green standalone (29.2-37.8s), ' +
+      'against 0/10 on the branch tip where every run failed with `node3 ' +
+      'join timed out after 12000ms`',
   }),
   Object.freeze({
     id: 'configured-discovery-window-bounds-the-unengaged-bypass',
@@ -132,10 +141,11 @@ const RECEIPTS = Object.freeze([
     command: scenarioCommand('^integration-assertions-unchanged'),
     detail: 'control on the cured file: the exact ordered set of nine ' +
       'assertion messages is unchanged and the assertion count matches, ' +
-      'READY_TIMEOUT_MS is still 12000 and TEST_TIMEOUT_MS still 120000 (no ' +
-      'cap was widened), both joiners carry the compressed discovery ' +
-      'window as a named constant, and the joins still inherit the shared ' +
-      'harness bootstrap config',
+      'TEST_TIMEOUT_MS is still 120000 and READY_TIMEOUT_MS still 12000 for ' +
+      'the waits it fits, the two joins (and only those) carry the ' +
+      'owner-decided JOIN_READY_TIMEOUT_MS of 25000, both joiners carry the ' +
+      'compressed discovery window as a named constant, and the joins still ' +
+      'inherit the shared harness bootstrap config',
   }),
   Object.freeze({
     id: 'closed-log-commit-slice-stops-without-no-durable-progress',

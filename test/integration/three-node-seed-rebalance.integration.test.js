@@ -31,6 +31,24 @@ import {
 
 const TEST_TIMEOUT_MS = 120000;
 const READY_TIMEOUT_MS = 12000;
+// The join waits get their own measured budget. READY_TIMEOUT_MS fits the
+// operations it actually bounds (seed bootstrap, seed API initialize, the
+// nodes-ready convergence poll); it does not fit a node JOIN in this harness,
+// and it never did. This file runs three full nodes in ONE process on ONE
+// event loop, so a joiner's convergence is interleaved with the seed's and the
+// earlier joiner's control-plane work. Measured standalone on an idle 20-core
+// host, both BEFORE and AFTER the formation-barrier compression below:
+//
+//   node2 join  3796-4855ms
+//   node3 join 12441-14748ms   (12441, 12474, 12971, 13238, 13448, 14212,
+//                               14748 - every observation over 12000ms)
+//
+// A bound below the observed floor can never pass, so 12000ms was mis-set for
+// this wait rather than masking a regression - the joins are not slower than
+// they were, and no production default is involved. 25000ms is ~1.7x the
+// observed maximum, and stays far inside the UNCHANGED 120000ms TEST_TIMEOUT_MS
+// parent cap. Owner decision, recorded 2026-08-31.
+const JOIN_READY_TIMEOUT_MS = 25000;
 const REBALANCE_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
 const CLEANUP_TIMEOUT_MS = 10000;
@@ -335,14 +353,14 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
 
         const node2Result = await withTimeout(
           () => node2JoinService.join(),
-          READY_TIMEOUT_MS,
+          JOIN_READY_TIMEOUT_MS,
           'node2 join',
         );
         t.equal(node2Result.success, true, 'second node should join');
 
         const node3Result = await withTimeout(
           () => node3JoinService.join(),
-          READY_TIMEOUT_MS,
+          JOIN_READY_TIMEOUT_MS,
           'node3 join',
         );
         t.equal(node3Result.success, true, 'third node should join');

@@ -1,15 +1,14 @@
 {
   "schema": "test-receipt/1",
   "quest": "three-node-rebalance-lane-fit",
-  "status": "fail",
-  "generatedAt": "2026-08-31T00:38:59.131Z",
+  "status": "pass",
+  "generatedAt": "2026-08-31T00:47:10.700Z",
   "receipts": [
     {
       "id": "three-node-seed-rebalance-integration-green",
-      "passed": false,
+      "passed": true,
       "command": "npm run test:file -- test/integration/three-node-seed-rebalance.integration.test.js >/dev/null",
-      "detail": "the release-gate file itself, run through the same classified runner npm run test:ci uses (primary integration -> exclusive lane, jobs=1). This receipt is DELIBERATELY still red at 8/10 standalone runs (0/10 before the cure): the cure removed the barrier sleep but node3's join is convergence-bound above the UNCHANGED 12000ms READY_TIMEOUT_MS, so the quest cannot close green until an owner decides the budget or the convergence latency. It is kept in the harness so no stale green can be claimed for the release gate",
-      "failure": "Command failed: /bin/sh -c npm run test:file -- test/integration/three-node-seed-rebalance.integration.test.js >/dev/null"
+      "detail": "the release-gate file itself, run through the same classified runner npm run test:ci uses (primary integration -> exclusive lane, jobs=1), completes its three-node growth inside the owner-decided JOIN_READY_TIMEOUT_MS of 25000ms and the UNCHANGED 120000ms TEST_TIMEOUT_MS parent cap: 8/8 green standalone (29.2-37.8s), against 0/10 on the branch tip where every run failed with `node3 join timed out after 12000ms`"
     },
     {
       "id": "configured-discovery-window-bounds-the-unengaged-bypass",
@@ -33,7 +32,7 @@
       "id": "integration-assertions-unchanged",
       "passed": true,
       "command": "node --test --test-name-pattern=\"^integration-assertions-unchanged\" test/bootstrap/join-formation-discovery-window-budget.test.js",
-      "detail": "control on the cured file: the exact ordered set of nine assertion messages is unchanged and the assertion count matches, READY_TIMEOUT_MS is still 12000 and TEST_TIMEOUT_MS still 120000 (no cap was widened), both joiners carry the compressed discovery window as a named constant, and the joins still inherit the shared harness bootstrap config"
+      "detail": "control on the cured file: the exact ordered set of nine assertion messages is unchanged and the assertion count matches, TEST_TIMEOUT_MS is still 120000 and READY_TIMEOUT_MS still 12000 for the waits it fits, the two joins (and only those) carry the owner-decided JOIN_READY_TIMEOUT_MS of 25000, both joiners carry the compressed discovery window as a named constant, and the joins still inherit the shared harness bootstrap config"
     },
     {
       "id": "closed-log-commit-slice-stops-without-no-durable-progress",
