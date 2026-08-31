@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "three-node-rebalance-lane-fit",
+  "status": "fail",
+  "generatedAt": "2026-08-31T00:38:59.131Z",
+  "receipts": [
+    {
+      "id": "three-node-seed-rebalance-integration-green",
+      "passed": false,
+      "command": "npm run test:file -- test/integration/three-node-seed-rebalance.integration.test.js >/dev/null",
+      "detail": "the release-gate file itself, run through the same classified runner npm run test:ci uses (primary integration -> exclusive lane, jobs=1). This receipt is DELIBERATELY still red at 8/10 standalone runs (0/10 before the cure): the cure removed the barrier sleep but node3's join is convergence-bound above the UNCHANGED 12000ms READY_TIMEOUT_MS, so the quest cannot close green until an owner decides the budget or the convergence latency. It is kept in the harness so no stale green can be claimed for the release gate",
+      "failure": "Command failed: /bin/sh -c npm run test:file -- test/integration/three-node-seed-rebalance.integration.test.js >/dev/null"
+    },
+    {
+      "id": "configured-discovery-window-bounds-the-unengaged-bypass",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^configured-discovery-window-bounds-the-unengaged-bypass\" test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "detail": "the REAL barrier loop on a virtual clock proves the mechanism: an unengaged cohort reaches the identical two-state waiting_for_formation_cohort -> bypassed_insufficient_formation_cohort answer under the production window and under the compressed one, and the configured window bounds the bypass instant exactly, so the whole saving is sleep the barrier no longer performs rather than a decision it no longer makes"
+    },
+    {
+      "id": "default-discovery-window-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^default-discovery-window-unchanged\" test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "detail": "control: the production joining budgets (priorityPlacementFormationDiscoveryMs 5000, PollMs 500, TimeoutMs 120000) are untouched — the compression lives only in the test's own join config"
+    },
+    {
+      "id": "engaged-cohort-still-latches-under-a-compressed-window",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^engaged-cohort-still-latches-under-a-compressed-window\" test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "detail": "control: a genuinely sufficient formation cohort still latches the barrier and waits for the readiness owner's startup authority past the compressed discovery window, so compression can never skip a real barrier"
+    },
+    {
+      "id": "integration-assertions-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^integration-assertions-unchanged\" test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "detail": "control on the cured file: the exact ordered set of nine assertion messages is unchanged and the assertion count matches, READY_TIMEOUT_MS is still 12000 and TEST_TIMEOUT_MS still 120000 (no cap was widened), both joiners carry the compressed discovery window as a named constant, and the joins still inherit the shared harness bootstrap config"
+    },
+    {
+      "id": "closed-log-commit-slice-stops-without-no-durable-progress",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-catchup-batching.test.js",
+      "detail": "the second observed failure signature of the same file: a log adapter closed by teardown under an already-queued commit slice answers an empty slice, which the scheduler read as a stalled apply loop and threw — escaping as a detached unhandledRejection that TAP charges to the running test. A closed log now stops the loop, while an OPEN log answering an empty slice still fails closed with the unchanged no-durable-progress guard"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "detail": "two identical virtual-clock drives of the real barrier loop produce the identical release instant and state sequence, so the mechanism receipts above are reproducible rather than sampled"
+    }
+  ]
+}

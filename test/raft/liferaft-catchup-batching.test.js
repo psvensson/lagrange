@@ -1051,6 +1051,52 @@ test('SQLite follower catch-up batches persistence and yields commit apply',
     );
 
     await t.test(
+      'a closed adapter stops the commit loop instead of raising ' +
+      'no-durable-progress',
+      async (t) => {
+        const raft = new LifeRaft('node-closed-commit', SQLITE_RAFT_OPTIONS);
+        const entries = buildEntries(1, 4);
+        raft.log.saveCommands(entries);
+        const applied = [];
+        raft.on('commit', (command) => applied.push(command.index));
+        try {
+          // Node teardown closes the adapter under an already-queued slice.
+          // `commitAndApplySlice` answers an empty slice for a closed log, and
+          // the scheduler used to read that as a stalled apply loop and throw;
+          // the rejection escapes as a detached unhandledRejection whenever the
+          // caller ignores the returned promise, which is what failed the
+          // three-node seed-rebalance integration test during its teardown.
+          raft.log.ownedDb.close();
+          await raft.commitEntries(entries);
+          t.same(applied, [], 'a closed log applies nothing');
+          t.equal(raft.log.isOpen(), false, 'the log stayed closed');
+        } finally {
+          raft.end();
+        }
+      },
+    );
+
+    await t.test(
+      'an OPEN log that answers an empty slice still fails closed',
+      async (t) => {
+        const raft = new LifeRaft('node-empty-slice', SQLITE_RAFT_OPTIONS);
+        const entries = buildEntries(1, 4);
+        raft.log.saveCommands(entries);
+        raft.log.commitAndApplySlice = () => [];
+        try {
+          await t.rejects(
+            raft.commitEntries(entries),
+            /no durable progress/,
+            'the stalled-apply guard is unchanged for an open log',
+          );
+        } finally {
+          raft.end();
+          raft.log?.ownedDb?.close();
+        }
+      },
+    );
+
+    await t.test(
       'a closed adapter preserves the existing in-memory save contract',
       async (t) => {
         const db = new Database(':memory:');
