@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-planning-deferral-bounded",
+  "status": "pass",
+  "generatedAt": "2026-08-31T02:31:13.550Z",
+  "receipts": [
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "two identical drives of the token-churn sequence produce identical routing samples, identical owner build counts, identical completed token statuses and identical serve-admission counts"
+    },
+    {
+      "id": "token-rotation-live-lock-precondition",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^token-rotation-live-lock-precondition\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "PRECONDITION (green both sides): under a transport fingerprint that rotates on every captureToken() every completed build is stamped TOKEN_STATUS.STALE, so no build ever lands current — the exact state publishCompleted answered with the all-false deferred contract"
+    },
+    {
+      "id": "user-table-partition-routable-under-token-churn",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^user-table-partition-routable-under-token-churn\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "RED on HEAD (23 of 23 samples starved): across the sampling shape of the failing run a live user-table partition keeps three active addressed service rows and its canonical leader row, and no sample denies every candidate nor answers an unbounded planning_snapshot_refresh_pending denial"
+    },
+    {
+      "id": "write-path-terminal-verdict-cleared",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^write-path-terminal-verdict-cleared\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "RED on HEAD: the real QueryExecutor write-delivery loop (no attempt ceiling, absolute deadline only) does not return PARTITION_SERVICE_NOT_FOUND past its deadline for the user-table partition the GCP run failed on"
+    },
+    {
+      "id": "serve-admission-never-rests-on-token-status",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^serve-admission-never-rests-on-token-status\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "THE SAFETY ORACLE, red on HEAD because no completed snapshot is ever served there: the drive does serve snapshots from builds stamped STALE, and every single admission is independently reconfirmed to hold BOTH sealed bounds — the positive-decision live veto is unmoved AND either the token is equal or the floored planning generation matches. Token status is never load-bearing"
+    },
+    {
+      "id": "stale-serve-divergence-audit",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^stale-serve-divergence-audit\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "RED on HEAD (zero served snapshots to audit): every snapshot served from a STALE-stamped completed build is compared against a forced rebuild of the same owner at serve time, over the whole drive, with zero divergence on the decision-bearing fields (dimensions and reason codes)"
+    },
+    {
+      "id": "live-veto-move-still-denies",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^live-veto-move-still-denies\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "THE SAFETY NEGATIVE (green both sides, must stay green): a moved positive-decision live veto (expired ready lease and heartbeat) refuses every completed build, and evidence that genuinely says not-ready is never reported routable — the cure admits staleness, never a false positive"
+    },
+    {
+      "id": "production-composition-control-denial-vocabulary",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^production-composition-control-denial-vocabulary\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "CONTROL (green on HEAD, must stay green): the full ControlPlaneReadinessService and MembershipPublicationCoordinator on the production-composition cache, sampled 23 times under source churn, never name planning_snapshot_refresh_pending as a routing denial for a live user partition"
+    },
+    {
+      "id": "unchanged-control-rig-build-rate",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^unchanged-control-rig-build-rate\" test/control-plane/readiness-planning-deferral-bounded.test.js",
+      "detail": "THE RATE CONTROL (green on HEAD, must stay green): the shared production-composition formation rig measures 1218 heavy planning builds and 824 publications winner reads over its 1000-call formation-shaped churn — the sealed pre-change values. The cure changes only the serve admission of an already-completed build, so neither count may move"
+    }
+  ]
+}
