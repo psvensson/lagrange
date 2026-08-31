@@ -17,7 +17,7 @@
     "release-packaging": 10,
     "runtime-primitives": 22,
     "services-runtime": 167,
-    "solver-tooling": 93,
+    "solver-tooling": 94,
     "storage-partition": 141,
     "storage-raft": 75,
     "test-infrastructure": 107,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2111,
-  "digest": "fnv1a32-0fe86386",
+  "censusSize": 2112,
+  "digest": "fnv1a32-6f408191",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1927,6 +1927,7 @@
     "test/solve/rejection-decomposition.test.js": "solver-tooling",
     "test/solve/rejection-escalation.test.js": "solver-tooling",
     "test/solve/rejection-findings.test.js": "solver-tooling",
+    "test/solve/rejection-repair-amendment-path.test.js": "solver-tooling",
     "test/solve/reopen.test.js": "solver-tooling",
     "test/solve/report-retention.test.js": "solver-tooling",
     "test/solve/report.test.js": "solver-tooling",

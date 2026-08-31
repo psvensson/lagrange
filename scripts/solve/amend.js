@@ -41,11 +41,29 @@ const BAR_EXPANSION_TEMPLATE_USAGE =
   'amend: verification-bar-expansion requires --template ' +
   '<kebab-case-category>';
 export const AMENDMENT_KIND_BAR_EXPANSION = LOCAL_STR_OWNED_001;
+// Raises the receipt bar and nothing else. oracle-command-correction can
+// rewrite doneWhen args arbitrarily, so it is gated behind a recorded verifier
+// rejection; but ADDING required receipts is monotone — it can only make the
+// quest harder to close — so routing it through that gate created a dead end:
+// the rejection that demands new receipts can only be recorded against the
+// bytes it rejected, and repairing them is what invalidates those bytes. This
+// kind is safe by construction (strict superset, same probe, same receipt
+// file) and therefore needs no rejection finding at all.
+const LOCAL_STR_OWNED_002 = 'receipt-bar-strengthen';
+export const AMENDMENT_KIND_RECEIPT_BAR = LOCAL_STR_OWNED_002;
 export const AMENDMENT_KINDS = Object.freeze([
   AMENDMENT_KIND_CLASS,
   AMENDMENT_KIND_ORACLE_COMMAND,
   AMENDMENT_KIND_STATEMENT,
   AMENDMENT_KIND_BAR_EXPANSION,
+  AMENDMENT_KIND_RECEIPT_BAR,
+]);
+// Kinds that do NOT require a recorded verifier-rejection finding:
+// class-correction (its verdict is a command output, and lintQuest re-checks
+// the result) and receipt-bar-strengthen (monotone by validation).
+const UNGATED_AMENDMENT_KINDS = Object.freeze([
+  AMENDMENT_KIND_CLASS,
+  AMENDMENT_KIND_RECEIPT_BAR,
 ]);
 // The 3rd correction is not a correction — it is drift. The successor path
 // (park + `solve new --from`) stays the answer, same shape as the
@@ -81,8 +99,39 @@ export function applyAmendments(sealed, amendments) {
         amendment.template,
       ];
     }
+    if (amendment.amendmentKind === AMENDMENT_KIND_RECEIPT_BAR &&
+      effective.doneWhen) {
+      effective.doneWhen = {
+        ...effective.doneWhen,
+        args: amendment.doneWhenArgs,
+      };
+      // The sealed projection carries frontierMetrics (not frontiers), and
+      // validateGoalpostsImmutable compares against it, so the raised bar has
+      // to land there or an honest amendment would read as goalpost drift.
+      effective.frontierMetrics = strengthenedMetrics(
+        effective.frontierMetrics, effective.doneWhen.probe,
+        amendment.doneWhenArgs);
+    }
   }
   return effective;
+}
+
+// The test-receipt probe measures ONLY requiredReceipts, so a bar raised in
+// doneWhen alone would be a bar nothing measures. A metric that shares the
+// probe AND the receipt file is the one doneWhen speaks for; any other metric
+// measures something else and is left untouched.
+function strengthenMetric(metric, probe, doneWhenArgs) {
+  if (!metric || metric.probe !== probe ||
+    metric.args?.file !== doneWhenArgs.file) {
+    return metric;
+  }
+  return {...metric, args: doneWhenArgs};
+}
+
+function strengthenedMetrics(metrics, probe, doneWhenArgs) {
+  if (!Array.isArray(metrics)) return metrics;
+  return metrics.map((metric) =>
+    strengthenMetric(metric, probe, doneWhenArgs));
 }
 
 // The verifier-driven kinds require a VERIFIER finding, referenced exactly
@@ -91,6 +140,8 @@ export function applyAmendments(sealed, amendments) {
 // launder any amendment — the excerpt floor and the kind restriction are the
 // teeth of the evidence-linkage rule.
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const AMEND_PREFIX = 'amend: ';
+const LIST_SEP = ', ';
 const MIN_CLAIM_EXCERPT_LENGTH = 12;
 
 function verifierFindingReferenced(log, reference) {
@@ -115,6 +166,18 @@ function amendedQuestFile(quest, amendment, effective) {
   if (amendment.amendmentKind === AMENDMENT_KIND_ORACLE_COMMAND) {
     next.doneWhen = {...next.doneWhen, args: amendment.doneWhenArgs};
   }
+  if (amendment.amendmentKind === AMENDMENT_KIND_RECEIPT_BAR) {
+    next.doneWhen = {...next.doneWhen, args: amendment.doneWhenArgs};
+    // The file carries whole frontiers; the sealed projection carries only
+    // their metrics. Both move, through the same rule.
+    next.frontiers = Array.isArray(next.frontiers) ?
+      next.frontiers.map((frontier) => ({
+        ...frontier,
+        metric: strengthenMetric(
+          frontier?.metric, next.doneWhen.probe, amendment.doneWhenArgs),
+      })) :
+      next.frontiers;
+  }
   if (amendment.amendmentKind === AMENDMENT_KIND_BAR_EXPANSION) {
     // Rebuild from the sealed-effective list, never the file's own: a file
     // that drifted from the declaration must not compound through amendment.
@@ -124,6 +187,139 @@ function amendedQuestFile(quest, amendment, effective) {
     ];
   }
   return next;
+}
+
+const RECEIPT_BAR_FILE_CHANGE_PROBLEM =
+  'amend: receipt-bar-strengthen cannot change the receipt file (sealed ';
+const RECEIPT_BAR_FILE_CHANGE_SUFFIX =
+  '); a different oracle is a successor quest';
+const RECEIPT_BAR_DROP_PROBLEM =
+  'amend: receipt-bar-strengthen only ADDS receipts — it cannot drop ';
+const RECEIPT_BAR_DROP_SUFFIX =
+  '. Removing or rewriting a sealed receipt is oracle-command-correction ' +
+  '(which requires a verifier-rejection finding), or a successor quest';
+const REQUIRED_RECEIPTS_KEY = 'requiredReceipts';
+const FILE_KEY = 'file';
+const RECEIPT_BAR_KEY_SET_PROBLEM =
+  'amend: receipt-bar-strengthen must restate the sealed doneWhen args ' +
+  'exactly, changing only requiredReceipts; expected key(s): ';
+const RECEIPT_BAR_KEY_SET_GOT = '; got: ';
+const RECEIPT_BAR_SIBLING_KEY_PROBLEM =
+  'amend: receipt-bar-strengthen cannot change the sealed doneWhen arg ';
+const RECEIPT_BAR_ID_PROBLEM =
+  'amend: receipt-bar-strengthen requires unique, non-empty receipt ids; a ' +
+  'duplicate or non-string id would raise the count without raising the bar ' +
+  'and could never be removed';
+const RECEIPT_BAR_NO_OP_PROBLEM =
+  'amend: receipt-bar-strengthen must add at least one receipt; the sealed ' +
+  'bar already requires every receipt listed';
+const REJECTION_FINDING_GUIDANCE =
+  ' Record one with: solve finding --id <quest> --frontier <frontier> ' +
+  '--kind verifier-rejection --evidence subagent:<id> --review <reviewId> ' +
+  '--verification-scope attempt|candidate --verification-fingerprint <the ' +
+  'review manifest fingerprint> --finding "<category>: <what concretely ' +
+  'failed>" --claim "<summary>". If you only need to ADD required receipts, ' +
+  'use --kind receipt-bar-strengthen, which needs no rejection finding.';
+const AMEND_EVIDENCE_PROBLEM_SUFFIX =
+  ' requires --evidence referencing a recorded verifier-rejection finding ' +
+  '(its ts, its evidence ref, or a claim excerpt of at least ';
+const AMEND_EVIDENCE_PROBLEM_TAIL = ' characters).';
+const RECEIPT_BAR_USAGE =
+  'amend: receipt-bar-strengthen requires --done-when-args ' +
+  '\'{"file":"<same receipt file>","requiredReceipts":[...]}\' whose ' +
+  'requiredReceipts is a strict SUPERSET of the sealed list (the probe and ' +
+  'the receipt file are immutable)';
+
+function parseDoneWhenArgs(args) {
+  try {
+    const parsed = JSON.parse(String(args['done-when-args'] || ''));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ?
+      parsed :
+      null;
+  } catch {
+    return null;
+  }
+}
+
+// Monotone by validation, checked as SETS and in BOTH directions. Every read
+// is an own-property read: a polluted Object.prototype must not be able to
+// supply a `file` the caller never wrote.
+function ownValue(record, key) {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
+function uniqueStrings(values) {
+  const seen = new Set();
+  for (const value of values) {
+    // Whitespace padding yields an id no receipt can match and which this
+    // kind can never drop: fail closed rather than brick the oracle.
+    if (typeof value !== 'string' || value.trim().length === 0 ||
+      value !== value.trim()) {
+      return null;
+    }
+    if (seen.has(value)) return null;
+    seen.add(value);
+  }
+  return seen;
+}
+
+// Keys other than requiredReceipts are part of the sealed oracle: this kind
+// may add receipts and change nothing else, so they must be present and
+// byte-identical. Checking only for UNEXPECTED keys let a sealed key be
+// dropped or rewritten with no verifier gate at all.
+function unchangedSiblingKeyProblem(sealedArgs, doneWhenArgs) {
+  const sealedKeys = Object.keys(sealedArgs).sort();
+  const nextKeys = Object.keys(doneWhenArgs).sort();
+  if (sealedKeys.length !== nextKeys.length ||
+    sealedKeys.some((key, index) => key !== nextKeys[index])) {
+    return RECEIPT_BAR_KEY_SET_PROBLEM + sealedKeys.join(LIST_SEP) +
+      RECEIPT_BAR_KEY_SET_GOT + nextKeys.join(LIST_SEP);
+  }
+  for (const key of sealedKeys) {
+    if (key === REQUIRED_RECEIPTS_KEY) continue;
+    if (JSON.stringify(ownValue(sealedArgs, key)) !==
+      JSON.stringify(ownValue(doneWhenArgs, key))) {
+      return RECEIPT_BAR_SIBLING_KEY_PROBLEM + key;
+    }
+  }
+  return null;
+}
+
+function buildReceiptBarAmendment(effective, args) {
+  const doneWhenArgs = parseDoneWhenArgs(args);
+  if (!doneWhenArgs) {
+    throw new Error(RECEIPT_BAR_USAGE);
+  }
+  const sealedArgs = effective.doneWhen?.args || {};
+  const sealedList = ownValue(sealedArgs, REQUIRED_RECEIPTS_KEY);
+  const nextList = ownValue(doneWhenArgs, REQUIRED_RECEIPTS_KEY);
+  if (!Array.isArray(sealedList) || !Array.isArray(nextList)) {
+    throw new Error(RECEIPT_BAR_USAGE);
+  }
+  if (ownValue(doneWhenArgs, FILE_KEY) !== ownValue(sealedArgs, FILE_KEY)) {
+    throw new Error(RECEIPT_BAR_FILE_CHANGE_PROBLEM +
+      ownValue(sealedArgs, FILE_KEY) + RECEIPT_BAR_FILE_CHANGE_SUFFIX);
+  }
+  const keyProblem = unchangedSiblingKeyProblem(sealedArgs, doneWhenArgs);
+  if (keyProblem) {
+    throw new Error(keyProblem);
+  }
+  const nextSet = uniqueStrings(nextList);
+  if (nextSet === null) {
+    throw new Error(RECEIPT_BAR_ID_PROBLEM);
+  }
+  const dropped = sealedList.filter((receipt) => !nextSet.has(receipt));
+  if (dropped.length > 0) {
+    throw new Error(RECEIPT_BAR_DROP_PROBLEM + dropped.join(LIST_SEP) +
+      RECEIPT_BAR_DROP_SUFFIX);
+  }
+  // Set-wise, not length-wise: [a,b] -> [a,b,b] is longer but adds nothing.
+  const sealedSet = new Set(sealedList);
+  if (nextSet.size <= sealedSet.size) {
+    throw new Error(RECEIPT_BAR_NO_OP_PROBLEM);
+  }
+  return {amendmentKind: AMENDMENT_KIND_RECEIPT_BAR, doneWhenArgs,
+    prior: {doneWhenArgs: sealedArgs}};
 }
 
 function buildAmendment(effective, args) {
@@ -167,6 +363,9 @@ function buildAmendment(effective, args) {
     }
     return {amendmentKind: kind, doneWhenArgs,
       prior: {doneWhenArgs: effective.doneWhen?.args || null}};
+  }
+  if (kind === AMENDMENT_KIND_RECEIPT_BAR) {
+    return buildReceiptBarAmendment(effective, args);
   }
   if (kind === AMENDMENT_KIND_BAR_EXPANSION) {
     const template = String(args.template || '').trim();
@@ -212,12 +411,11 @@ export function runAmendCommand(root, args) {
   // verdict it cites is a command output, not a log event, and the amended
   // class is machine-re-checked by lintQuest below anyway. The verifier-driven
   // kinds must reference an actual recorded verifier finding.
-  if (amendment.amendmentKind !== AMENDMENT_KIND_CLASS &&
+  if (!UNGATED_AMENDMENT_KINDS.includes(amendment.amendmentKind) &&
     !verifierFindingReferenced(log, evidence)) {
-    throw new Error(
-      `amend: ${amendment.amendmentKind} requires --evidence referencing a ` +
-      'recorded verifier-rejection finding (its ts, its evidence ref, or a ' +
-      `claim excerpt of at least ${MIN_CLAIM_EXCERPT_LENGTH} characters)`);
+    throw new Error(AMEND_PREFIX + amendment.amendmentKind +
+      AMEND_EVIDENCE_PROBLEM_SUFFIX + MIN_CLAIM_EXCERPT_LENGTH +
+      AMEND_EVIDENCE_PROBLEM_TAIL + REJECTION_FINDING_GUIDANCE);
   }
   const nextQuest = amendedQuestFile(quest, amendment, effective);
   const lint = lintQuest(nextQuest, {root});

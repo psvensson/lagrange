@@ -1,0 +1,1014 @@
+diff --git a/scripts/quest-evidence-solver-rejection-repair-amendment-path.js b/scripts/quest-evidence-solver-rejection-repair-amendment-path.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6bd09ad6d70083d5af92facb4f44e6d564b525d1
+--- /dev/null
++++ b/scripts/quest-evidence-solver-rejection-repair-amendment-path.js
+@@ -0,0 +1,137 @@
++// Deterministic evidence harness for the solver-rejection-repair-amendment-path
++// quest: receipt declarations only. The shared runtime re-runs each recorded
++// proof command and writes the test-receipt probe artifact.
++//
++// Receipt honesty: the witness uses raw node:test (not the repo tap shim), so
++// --test-name-pattern selects exactly one anchored scenario per receipt.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST = 'test/solve/rejection-repair-amendment-path.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'rejection-binds-to-sealed-review-manifest',
++    command: scenarioCommand('^rejection-binds-to-sealed-review-manifest'),
++    detail: 'a verifier-rejection records against the sealed review manifest ' +
++      'fingerprint on a root whose worktree bytes no current-bytes projection ' +
++      'could reproduce. This is the whole point: a rejection is a claim about ' +
++      'the bytes that WERE reviewed, and repairing them is what makes those ' +
++      'bytes non-current, so binding the check to the worktree made the ' +
++      'strengthen-after-rejection path unreachable',
++  }),
++  Object.freeze({
++    id: 'rejection-binding-refuses-wrong-fingerprint',
++    command: scenarioCommand('^rejection-binding-refuses-wrong-fingerprint'),
++    detail: 'a fingerprint that does not equal the sealed manifest value is ' +
++      'refused naming the review id, so review binding is a real check and ' +
++      'not a way to launder an arbitrary fingerprint',
++  }),
++  Object.freeze({
++    id: 'rejection-requires-review-when-one-exists',
++    command: scenarioCommand('^rejection-requires-review-when-one-exists'),
++    detail: 'once a review has been minted for the quest, an attempt-scope ' +
++      'rejection without --review is refused. This closes the hole where ' +
++      'attempt scope validated NOTHING: its fingerprint was accepted ' +
++      'unchecked, so the one path that stayed usable after repair proved ' +
++      'nothing at all',
++  }),
++  Object.freeze({
++    id: 'receipt-bar-strengthen-needs-no-rejection-finding',
++    command: scenarioCommand(
++      '^receipt-bar-strengthen-needs-no-rejection-finding'),
++    detail: 'adding required receipts succeeds on a quest with zero recorded ' +
++      'findings, and the result passes ensureSealedGoal. Strengthening is ' +
++      'monotone, so gating it behind a rejection finding was the dead end ' +
++      'that forced a successor quest',
++  }),
++  Object.freeze({
++    id: 'receipt-bar-strengthen-refuses-removal',
++    command: scenarioCommand('^receipt-bar-strengthen-refuses-removal'),
++    detail: 'dropping a sealed receipt is refused naming the dropped id, and ' +
++      'a no-op restatement is refused; a refused amendment leaves the quest ' +
++      'byte-identical, so the kind cannot weaken a bar or burn an amendment',
++  }),
++  Object.freeze({
++    id: 'receipt-bar-strengthen-refuses-probe-or-file-change',
++    command: scenarioCommand(
++      '^receipt-bar-strengthen-refuses-probe-or-file-change'),
++    detail: 'swapping the receipt file is refused, and smuggling any key that ' +
++      'was not in the sealed args is refused: the oracle itself stays ' +
++      'immutable, which is what makes the kind safe without a rejection gate',
++  }),
++  Object.freeze({
++    id: 'receipt-bar-strengthen-updates-frontier-metric',
++    command: scenarioCommand(
++      '^receipt-bar-strengthen-updates-frontier-metric'),
++    detail: 'the frontier sharing the doneWhen oracle is raised too, while a ' +
++      'frontier on a different receipt file is untouched. The test-receipt ' +
++      'probe measures ONLY requiredReceipts, so raising doneWhen alone would ' +
++      'have raised a bar that nothing measures',
++  }),
++  Object.freeze({
++    id: 'scope-validated-before-bytes',
++    command: scenarioCommand('^scope-validated-before-bytes'),
++    detail: 'aggregate and both on a rejection both report the actionable ' +
++      'attempt|candidate message and never a bytes mismatch. Previously the ' +
++      'bytes comparison ran first, so the SAME wrong flag reported a scope ' +
++      'error on a quest without candidate-contract attempts and a fingerprint ' +
++      'mismatch on one with them',
++  }),
++  Object.freeze({
++    id: 'amend-refusal-names-the-actionable-flags',
++    command: scenarioCommand('^amend-refusal-names-the-actionable-flags'),
++    detail: 'the refusal names --kind verifier-rejection, --review, ' +
++      '--verification-fingerprint and points at receipt-bar-strengthen for ' +
++      'pure strengthening, so a caller is not left discovering five required ' +
++      'flags one refusal at a time',
++  }),
++  Object.freeze({
++    id: 'existing-amendment-kinds-unchanged',
++    command: scenarioCommand('^existing-amendment-kinds-unchanged'),
++    detail: 'CONTROL — the sealed amendment vocabulary still lists the four ' +
++      'prior kinds in order, class-correction still needs no verifier ' +
++      'finding, and applyAmendments still projects it. Must stay green',
++  }),
++  Object.freeze({
++    id: 'existing-rejection-flow-unchanged',
++    command: scenarioCommand('^existing-rejection-flow-unchanged'),
++    detail: 'CONTROL — a quest with NO minted review keeps the previous ' +
++      'attempt-scope contract, so the review requirement binds exactly where ' +
++      'a sealed referent exists and the existing CLI contract tests that ' +
++      'model review-less quests are unaffected. Must stay green',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'three runs on three fresh temp roots produce one identical ' +
++      'doneWhen + frontier-args projection, so the receipt cannot pass by ' +
++      'leftover state in a reused root',
++  }),
++]);
++
++const QUEST_ID = 'solver-rejection-repair-amendment-path';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'solver-rejection-repair-amendment-path.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 763c42dc2aa6556ef7c2ae1271cbba1044985fe1..e5df280c69797d1b25854adc4e2938a0e6d0b967 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -87,6 +87,24 @@ import {
+   REJECTION_FINDING_USAGE,
+ } from './solve/rejection-findings.js';
+ import {recordRejectionDecomposition} from './solve/rejection-decomposition.js';
++import {
++  questHasMintedReview,
++  reviewManifestSection,
++} from './solve/review-request.js';
++
++const REJECTION_SCOPE_PROBLEM =
++  'verifier-rejection requires --verification-scope attempt|candidate';
++const REVIEW_FINGERPRINT_PROBLEM =
++  'verification fingerprint does not match review ';
++const REVIEW_FINGERPRINT_SEALED = ' (sealed ';
++const REVIEW_FINGERPRINT_NONE = 'none';
++const REVIEW_FINGERPRINT_CLOSE = ')';
++const REJECTION_REVIEW_REQUIRED_PROBLEM =
++  'verifier-rejection requires --review <reviewId> once a review has been ' +
++  'minted for this quest, so the fingerprint is checked against the sealed ' +
++  'review manifest rather than current bytes (which the repair this ' +
++  'rejection demands will change). Review manifests are in ' +
++  'solve/state/reviews/.';
+ import {
+   continueQuestWorkflow,
+   landQuestWorkflow,
+@@ -645,9 +663,45 @@ function cmdFinding(root, args) {
+   const verificationScope = optionalStringArgument(args, 'verification-scope');
+   const verificationFingerprint =
+     optionalStringArgument(args, 'verification-fingerprint');
++  const verificationReview = optionalStringArgument(args, 'review');
++  // Scope validity is decided BEFORE any bytes comparison. The bytes checks
++  // below only run for some scopes and only when the quest happens to have
++  // candidate-contract attempts, so leaving scope validation to
++  // buildVerificationFinding made the refusal a caller sees depend on quest
++  // state: the same wrong --verification-scope reported "requires
++  // attempt|candidate" on one quest and a fingerprint mismatch on another.
++  if (kind === VERIFIER_REJECTION_FINDING_KIND && verificationScope &&
++    ![VERIFICATION_SCOPE.ATTEMPT, VERIFICATION_SCOPE.CANDIDATE]
++      .includes(verificationScope)) {
++    throw new Error(REJECTION_SCOPE_PROBLEM);
++  }
+   let verificationReceipt = null;
+   let verificationSchemaVersion = null;
+-  if (kind && verificationScope) {
++  // A rejection is a claim about the bytes that WERE reviewed. Those stop
++  // being current the moment the repair it demanded is applied, so binding the
++  // check to the worktree made a rejection recordable only in the window
++  // before any fix — and the one scope that stayed recordable afterwards
++  // (attempt) validated nothing at all. The sealed review manifest is the
++  // immutable record of exactly what was verified, so bind to that instead.
++  if (kind && verificationReview) {
++    const sealedSection = reviewManifestSection(
++      root, verificationReview, id, verificationScope);
++    if (sealedSection?.fingerprint !== verificationFingerprint) {
++      throw new Error(REVIEW_FINGERPRINT_PROBLEM + verificationReview +
++        REVIEW_FINGERPRINT_SEALED +
++        (sealedSection?.fingerprint || REVIEW_FINGERPRINT_NONE) +
++        REVIEW_FINGERPRINT_CLOSE);
++    }
++    // The manifest section IS the verification receipt: it carries the same
++    // fingerprint, baseCommit, paths and attempt indices the current-bytes
++    // projection would have produced, frozen at mint time.
++    verificationReceipt = sealedSection;
++    verificationSchemaVersion = VERIFICATION_CONTRACT_VERSION;
++  } else if (kind === VERIFIER_REJECTION_FINDING_KIND &&
++    questHasMintedReview(root, id)) {
++    throw new Error(REJECTION_REVIEW_REQUIRED_PROBLEM);
++  }
++  if (kind && verificationScope && !verificationReview) {
+     const verificationProjection = verificationState(
+       root, quest, readLog(root, id));
+     if (verificationScope === VERIFICATION_SCOPE.CANDIDATE) {
+diff --git a/scripts/solve/amend.js b/scripts/solve/amend.js
+index d523fba237613cd691b10b9760ee142b41b84247..423f72e13d91fb756f0201c9f3380e0bb4f154dc 100644
+--- a/scripts/solve/amend.js
++++ b/scripts/solve/amend.js
+@@ -41,11 +41,29 @@ const BAR_EXPANSION_TEMPLATE_USAGE =
+   'amend: verification-bar-expansion requires --template ' +
+   '<kebab-case-category>';
+ export const AMENDMENT_KIND_BAR_EXPANSION = LOCAL_STR_OWNED_001;
++// Raises the receipt bar and nothing else. oracle-command-correction can
++// rewrite doneWhen args arbitrarily, so it is gated behind a recorded verifier
++// rejection; but ADDING required receipts is monotone — it can only make the
++// quest harder to close — so routing it through that gate created a dead end:
++// the rejection that demands new receipts can only be recorded against the
++// bytes it rejected, and repairing them is what invalidates those bytes. This
++// kind is safe by construction (strict superset, same probe, same receipt
++// file) and therefore needs no rejection finding at all.
++const LOCAL_STR_OWNED_002 = 'receipt-bar-strengthen';
++export const AMENDMENT_KIND_RECEIPT_BAR = LOCAL_STR_OWNED_002;
+ export const AMENDMENT_KINDS = Object.freeze([
+   AMENDMENT_KIND_CLASS,
+   AMENDMENT_KIND_ORACLE_COMMAND,
+   AMENDMENT_KIND_STATEMENT,
+   AMENDMENT_KIND_BAR_EXPANSION,
++  AMENDMENT_KIND_RECEIPT_BAR,
++]);
++// Kinds that do NOT require a recorded verifier-rejection finding:
++// class-correction (its verdict is a command output, and lintQuest re-checks
++// the result) and receipt-bar-strengthen (monotone by validation).
++const UNGATED_AMENDMENT_KINDS = Object.freeze([
++  AMENDMENT_KIND_CLASS,
++  AMENDMENT_KIND_RECEIPT_BAR,
+ ]);
+ // The 3rd correction is not a correction — it is drift. The successor path
+ // (park + `solve new --from`) stays the answer, same shape as the
+@@ -81,16 +99,49 @@ export function applyAmendments(sealed, amendments) {
+         amendment.template,
+       ];
+     }
++    if (amendment.amendmentKind === AMENDMENT_KIND_RECEIPT_BAR &&
++      effective.doneWhen) {
++      effective.doneWhen = {
++        ...effective.doneWhen,
++        args: amendment.doneWhenArgs,
++      };
++      // The sealed projection carries frontierMetrics (not frontiers), and
++      // validateGoalpostsImmutable compares against it, so the raised bar has
++      // to land there or an honest amendment would read as goalpost drift.
++      effective.frontierMetrics = strengthenedMetrics(
++        effective.frontierMetrics, effective.doneWhen.probe,
++        amendment.doneWhenArgs);
++    }
+   }
+   return effective;
+ }
+ 
++// The test-receipt probe measures ONLY requiredReceipts, so a bar raised in
++// doneWhen alone would be a bar nothing measures. A metric that shares the
++// probe AND the receipt file is the one doneWhen speaks for; any other metric
++// measures something else and is left untouched.
++function strengthenMetric(metric, probe, doneWhenArgs) {
++  if (!metric || metric.probe !== probe ||
++    metric.args?.file !== doneWhenArgs.file) {
++    return metric;
++  }
++  return {...metric, args: doneWhenArgs};
++}
++
++function strengthenedMetrics(metrics, probe, doneWhenArgs) {
++  if (!Array.isArray(metrics)) return metrics;
++  return metrics.map((metric) =>
++    strengthenMetric(metric, probe, doneWhenArgs));
++}
++
+ // The verifier-driven kinds require a VERIFIER finding, referenced exactly
+ // (its ts or subagent evidence ref) or by a substantial claim excerpt. A
+ // substring over any finding kind would let a self-authored one-word finding
+ // launder any amendment — the excerpt floor and the kind restriction are the
+ // teeth of the evidence-linkage rule.
+ const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
++const AMEND_PREFIX = 'amend: ';
++const LIST_SEP = ', ';
+ const MIN_CLAIM_EXCERPT_LENGTH = 12;
+ 
+ function verifierFindingReferenced(log, reference) {
+@@ -115,6 +166,18 @@ function amendedQuestFile(quest, amendment, effective) {
+   if (amendment.amendmentKind === AMENDMENT_KIND_ORACLE_COMMAND) {
+     next.doneWhen = {...next.doneWhen, args: amendment.doneWhenArgs};
+   }
++  if (amendment.amendmentKind === AMENDMENT_KIND_RECEIPT_BAR) {
++    next.doneWhen = {...next.doneWhen, args: amendment.doneWhenArgs};
++    // The file carries whole frontiers; the sealed projection carries only
++    // their metrics. Both move, through the same rule.
++    next.frontiers = Array.isArray(next.frontiers) ?
++      next.frontiers.map((frontier) => ({
++        ...frontier,
++        metric: strengthenMetric(
++          frontier?.metric, next.doneWhen.probe, amendment.doneWhenArgs),
++      })) :
++      next.frontiers;
++  }
+   if (amendment.amendmentKind === AMENDMENT_KIND_BAR_EXPANSION) {
+     // Rebuild from the sealed-effective list, never the file's own: a file
+     // that drifted from the declaration must not compound through amendment.
+@@ -126,6 +189,85 @@ function amendedQuestFile(quest, amendment, effective) {
+   return next;
+ }
+ 
++const RECEIPT_BAR_FILE_CHANGE_PROBLEM =
++  'amend: receipt-bar-strengthen cannot change the receipt file (sealed ';
++const RECEIPT_BAR_FILE_CHANGE_SUFFIX =
++  '); a different oracle is a successor quest';
++const RECEIPT_BAR_EXTRA_KEY_PROBLEM =
++  'amend: receipt-bar-strengthen may only restate the sealed doneWhen args ' +
++  'with more requiredReceipts; unexpected key(s): ';
++const RECEIPT_BAR_DROP_PROBLEM =
++  'amend: receipt-bar-strengthen only ADDS receipts — it cannot drop ';
++const RECEIPT_BAR_DROP_SUFFIX =
++  '. Removing or rewriting a sealed receipt is oracle-command-correction ' +
++  '(which requires a verifier-rejection finding), or a successor quest';
++const RECEIPT_BAR_NO_OP_PROBLEM =
++  'amend: receipt-bar-strengthen must add at least one receipt; the sealed ' +
++  'bar already requires every receipt listed';
++const REJECTION_FINDING_GUIDANCE =
++  ' Record one with: solve finding --id <quest> --frontier <frontier> ' +
++  '--kind verifier-rejection --evidence subagent:<id> --review <reviewId> ' +
++  '--verification-scope attempt|candidate --verification-fingerprint <the ' +
++  'review manifest fingerprint> --finding "<category>: <what concretely ' +
++  'failed>" --claim "<summary>". If you only need to ADD required receipts, ' +
++  'use --kind receipt-bar-strengthen, which needs no rejection finding.';
++const AMEND_EVIDENCE_PROBLEM_SUFFIX =
++  ' requires --evidence referencing a recorded verifier-rejection finding ' +
++  '(its ts, its evidence ref, or a claim excerpt of at least ';
++const AMEND_EVIDENCE_PROBLEM_TAIL = ' characters).';
++const RECEIPT_BAR_USAGE =
++  'amend: receipt-bar-strengthen requires --done-when-args ' +
++  '\'{"file":"<same receipt file>","requiredReceipts":[...]}\' whose ' +
++  'requiredReceipts is a strict SUPERSET of the sealed list (the probe and ' +
++  'the receipt file are immutable)';
++
++function parseDoneWhenArgs(args) {
++  try {
++    const parsed = JSON.parse(String(args['done-when-args'] || ''));
++    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ?
++      parsed :
++      null;
++  } catch {
++    return null;
++  }
++}
++
++// Monotone by validation: same receipt file, and every sealed receipt still
++// required. That is what lets this kind skip the verifier-rejection gate.
++function buildReceiptBarAmendment(effective, args) {
++  const doneWhenArgs = parseDoneWhenArgs(args);
++  if (!doneWhenArgs) {
++    throw new Error(RECEIPT_BAR_USAGE);
++  }
++  const sealedArgs = effective.doneWhen?.args || {};
++  const sealed = Array.isArray(sealedArgs.requiredReceipts) ?
++    sealedArgs.requiredReceipts : [];
++  const next = Array.isArray(doneWhenArgs.requiredReceipts) ?
++    doneWhenArgs.requiredReceipts : null;
++  if (next === null) {
++    throw new Error(RECEIPT_BAR_USAGE);
++  }
++  if (doneWhenArgs.file !== sealedArgs.file) {
++    throw new Error(RECEIPT_BAR_FILE_CHANGE_PROBLEM + sealedArgs.file +
++      RECEIPT_BAR_FILE_CHANGE_SUFFIX);
++  }
++  const extraKeys = Object.keys(doneWhenArgs).filter(
++    (key) => !Object.hasOwn(sealedArgs, key));
++  if (extraKeys.length > 0) {
++    throw new Error(RECEIPT_BAR_EXTRA_KEY_PROBLEM + extraKeys.join(LIST_SEP));
++  }
++  const dropped = sealed.filter((receipt) => !next.includes(receipt));
++  if (dropped.length > 0) {
++    throw new Error(RECEIPT_BAR_DROP_PROBLEM + dropped.join(LIST_SEP) +
++      RECEIPT_BAR_DROP_SUFFIX);
++  }
++  if (next.length <= sealed.length) {
++    throw new Error(RECEIPT_BAR_NO_OP_PROBLEM);
++  }
++  return {amendmentKind: AMENDMENT_KIND_RECEIPT_BAR, doneWhenArgs,
++    prior: {doneWhenArgs: sealedArgs}};
++}
++
+ function buildAmendment(effective, args) {
+   const kind = String(args.kind || '');
+   if (kind === AMENDMENT_KIND_CLASS) {
+@@ -168,6 +310,9 @@ function buildAmendment(effective, args) {
+     return {amendmentKind: kind, doneWhenArgs,
+       prior: {doneWhenArgs: effective.doneWhen?.args || null}};
+   }
++  if (kind === AMENDMENT_KIND_RECEIPT_BAR) {
++    return buildReceiptBarAmendment(effective, args);
++  }
+   if (kind === AMENDMENT_KIND_BAR_EXPANSION) {
+     const template = String(args.template || '').trim();
+     if (!/^[a-z0-9][a-z0-9-]*$/u.test(template)) {
+@@ -212,12 +357,11 @@ export function runAmendCommand(root, args) {
+   // verdict it cites is a command output, not a log event, and the amended
+   // class is machine-re-checked by lintQuest below anyway. The verifier-driven
+   // kinds must reference an actual recorded verifier finding.
+-  if (amendment.amendmentKind !== AMENDMENT_KIND_CLASS &&
++  if (!UNGATED_AMENDMENT_KINDS.includes(amendment.amendmentKind) &&
+     !verifierFindingReferenced(log, evidence)) {
+-    throw new Error(
+-      `amend: ${amendment.amendmentKind} requires --evidence referencing a ` +
+-      'recorded verifier-rejection finding (its ts, its evidence ref, or a ' +
+-      `claim excerpt of at least ${MIN_CLAIM_EXCERPT_LENGTH} characters)`);
++    throw new Error(AMEND_PREFIX + amendment.amendmentKind +
++      AMEND_EVIDENCE_PROBLEM_SUFFIX + MIN_CLAIM_EXCERPT_LENGTH +
++      AMEND_EVIDENCE_PROBLEM_TAIL + REJECTION_FINDING_GUIDANCE);
+   }
+   const nextQuest = amendedQuestFile(quest, amendment, effective);
+   const lint = lintQuest(nextQuest, {root});
+diff --git a/scripts/solve/review-request.js b/scripts/solve/review-request.js
+index 0fb88d94450488188653f11af8a9178f60edb994..105c4fad9df71ae35ecee410f51f798d07aed6ff 100644
+--- a/scripts/solve/review-request.js
++++ b/scripts/solve/review-request.js
+@@ -189,7 +189,7 @@ function currentReviewManifest(root, quest, state, suppliedLog) {
+   });
+ }
+ 
+-function reviewIdFor(manifest) {
++export function reviewIdFor(manifest) {
+   const digest = crypto.createHash('sha256')
+     .update(jsonStringify(manifest))
+     .digest('hex');
+@@ -267,3 +267,47 @@ export function assertReviewCurrent(root, quest, state, reviewId, log) {
+   }
+   return {...request, preflight};
+ }
++
++// The sealed fingerprint a verifier-rejection must cite. A review manifest is
++// immutable once minted (loadReviewRequest re-derives its id from the manifest
++// bytes), so this is the one referent that still identifies the reviewed bytes
++// after the repair the rejection demanded has changed them.
++const AGGREGATE_SCOPE = 'aggregate';
++const BOTH_SCOPE = 'both';
++const REVIEW_FILE_SUFFIX = '.json';
++const FOREIGN_QUEST_REVIEW_PREFIX = 'review ';
++const FOREIGN_QUEST_REVIEW_SUFFIX = ' belongs to another Quest';
++
++export function reviewManifestSection(root, reviewId, questId, scope) {
++  const request = loadReviewRequest(root, reviewId);
++  if (request.manifest.questId !== questId) {
++    throw new Error(FOREIGN_QUEST_REVIEW_PREFIX + reviewId +
++      FOREIGN_QUEST_REVIEW_SUFFIX);
++  }
++  return scope === AGGREGATE_SCOPE || scope === BOTH_SCOPE ?
++    request.manifest.aggregate :
++    request.manifest.candidate;
++}
++
++// Whether any review has been minted for this quest. Used to require review
++// binding exactly where a sealed referent exists, so quests that never reached
++// review (and the CLI contract tests that model them) are unaffected.
++export function questHasMintedReview(root, questId) {
++  const directory = path.join(root, REVIEW_DIRECTORY);
++  let entries;
++  try {
++    entries = fs.readdirSync(directory);
++  } catch {
++    return false;
++  }
++  return entries.some((entry) => {
++    if (!entry.endsWith(REVIEW_FILE_SUFFIX)) return false;
++    try {
++      const request = jsonParse(
++        fs.readFileSync(path.join(directory, entry), TEXT_ENCODING));
++      return request?.manifest?.questId === questId;
++    } catch {
++      return false;
++    }
++  });
++}
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 3e5703d3ff74c4b7f6dfa17865ecf167bae11ce1..2cd5e60d4abf21cd068be75fe5330419e85ba6b0 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1858,
++    "unit": 1859,
+     "integration": 73,
+-    "bootstrap": 173,
++    "bootstrap": 175,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-b243c74e",
++  "censusSize": 2114,
++  "digest": "fnv1a32-823e8338",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -134,6 +134,8 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap",
+     "test/bootstrap/create-message-group-phase.test.js": "bootstrap",
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap",
++    "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap",
++    "test/bootstrap/critical-placement-convergence.test.js": "bootstrap",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap",
+@@ -1910,6 +1912,7 @@
+     "test/solve/rejection-decomposition.test.js": "unit",
+     "test/solve/rejection-escalation.test.js": "unit",
+     "test/solve/rejection-findings.test.js": "unit",
++    "test/solve/rejection-repair-amendment-path.test.js": "unit",
+     "test/solve/reopen.test.js": "unit",
+     "test/solve/report-retention.test.js": "unit",
+     "test/solve/report.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 437a3e8de40e28e0604631950a24dad7bbcf83a2..e0be725ea790bab3a84e497e446d5b839456b5d6 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2094,
++    "ordinary": 2097,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-6c63f2b6",
++  "censusSize": 2114,
++  "digest": "fnv1a32-b74ea154",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -133,6 +133,8 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "ordinary",
+     "test/bootstrap/create-message-group-phase.test.js": "ordinary",
+     "test/bootstrap/create-self-hosted-registration.test.js": "ordinary",
++    "test/bootstrap/critical-placement-classification-control.test.js": "ordinary",
++    "test/bootstrap/critical-placement-convergence.test.js": "ordinary",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "ordinary",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "ordinary",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "ordinary",
+@@ -1909,6 +1911,7 @@
+     "test/solve/rejection-decomposition.test.js": "ordinary",
+     "test/solve/rejection-escalation.test.js": "ordinary",
+     "test/solve/rejection-findings.test.js": "ordinary",
++    "test/solve/rejection-repair-amendment-path.test.js": "ordinary",
+     "test/solve/reopen.test.js": "ordinary",
+     "test/solve/report-retention.test.js": "ordinary",
+     "test/solve/report.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index f584428674e90140a2886347c5812278a979e57e..093a6a95237c29dd8c05fb9a91c2eb69b65949b7 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 242,
++    "bootstrap-membership": 244,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -17,7 +17,7 @@
+     "release-packaging": 10,
+     "runtime-primitives": 22,
+     "services-runtime": 167,
+-    "solver-tooling": 93,
++    "solver-tooling": 94,
+     "storage-partition": 141,
+     "storage-raft": 75,
+     "test-infrastructure": 107,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-0fe86386",
++  "censusSize": 2114,
++  "digest": "fnv1a32-d09151b0",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -151,6 +151,8 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap-membership",
+     "test/bootstrap/create-message-group-phase.test.js": "bootstrap-membership",
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap-membership",
++    "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap-membership",
++    "test/bootstrap/critical-placement-convergence.test.js": "bootstrap-membership",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap-membership",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap-membership",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",
+@@ -1927,6 +1929,7 @@
+     "test/solve/rejection-decomposition.test.js": "solver-tooling",
+     "test/solve/rejection-escalation.test.js": "solver-tooling",
+     "test/solve/rejection-findings.test.js": "solver-tooling",
++    "test/solve/rejection-repair-amendment-path.test.js": "solver-tooling",
+     "test/solve/reopen.test.js": "solver-tooling",
+     "test/solve/report-retention.test.js": "solver-tooling",
+     "test/solve/report.test.js": "solver-tooling",
+diff --git a/test/solve/rejection-repair-amendment-path.test.js b/test/solve/rejection-repair-amendment-path.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f64c7978c6d5e5688c61aa5c6e98f79b1ec4d73b
+--- /dev/null
++++ b/test/solve/rejection-repair-amendment-path.test.js
+@@ -0,0 +1,384 @@
++// Witness for the solver-rejection-repair-amendment-path quest.
++// Raw node:test (not the tap shim) so --test-name-pattern selects exactly one
++// scenario and each receipt is independently honest.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import os from 'node:os';
++import {execFileSync} from 'node:child_process';
++import {fileURLToPath} from 'node:url';
++
++import {saveQuest, loadQuest, readLog} from '../../scripts/solve/store.js';
++import {
++  AMENDMENT_KINDS,
++  applyAmendments,
++  questAmendments,
++  runAmendCommand,
++} from '../../scripts/solve/amend.js';
++import {ensureSealedGoal} from '../../scripts/solve/loop.js';
++import {reviewIdFor} from '../../scripts/solve/review-request.js';
++
++const CLI = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)), '../../scripts/solve.js');
++const QUEST_ID = 'repair-path-fixture';
++const SEALED_RECEIPTS = ['alpha-receipt', 'beta-receipt'];
++const RECEIPT_FILE = 'solve/evidence/repair-path-fixture.receipt.json';
++
++function tmp() {
++  return fs.mkdtempSync(path.join(os.tmpdir(), 'repair-path-'));
++}
++
++function cli(root, args) {
++  return execFileSync('node', [CLI, ...args, '--root', root],
++    {encoding: 'utf8'});
++}
++
++function cliError(root, args) {
++  try {
++    cli(root, args);
++    return '';
++  } catch (error) {
++    return `${error.stdout || ''}${error.stderr || ''}${error.message || ''}`;
++  }
++}
++
++function goal() {
++  const args = {file: RECEIPT_FILE, requiredReceipts: [...SEALED_RECEIPTS]};
++  return {
++    id: QUEST_ID,
++    authoringContractVersion: 1,
++    statement: 'The process contract holds.',
++    class: 'process',
++    priority: 1,
++    constraints: [],
++    links: {roadmapRow: 'row-1'},
++    doneWhen: {probe: 'test-receipt', args},
++    frontiers: [
++      {id: `${QUEST_ID}-main`, priority: 1,
++        metric: {probe: 'test-receipt', args}},
++      // A frontier on a DIFFERENT oracle must not be swept along.
++      {id: `${QUEST_ID}-other`, priority: 2,
++        metric: {probe: 'test-receipt',
++          args: {file: 'solve/evidence/other.receipt.json',
++            requiredReceipts: ['other-receipt']}}},
++    ],
++  };
++}
++
++function sealed(root) {
++  const quest = goal();
++  saveQuest(root, quest);
++  ensureSealedGoal(root, quest);
++  return quest;
++}
++
++// Mint a review manifest the way the real flow does, so loadReviewRequest's
++// immutable-identity check passes.
++function mintReview(root, questId, fingerprints = {}) {
++  const manifest = {
++    schemaVersion: 1,
++    questId,
++    candidate: {
++      fingerprint: fingerprints.candidate || `sha256:${'1'.repeat(64)}`,
++      baseCommit: 'a'.repeat(40),
++      paths: ['scripts/solve/amend.js'],
++      sourcePaths: [],
++      firstAttemptIndex: 0,
++      lastAttemptIndex: 0,
++    },
++    aggregate: {
++      fingerprint: fingerprints.aggregate || `sha256:${'2'.repeat(64)}`,
++      baseCommit: 'a'.repeat(40),
++      paths: ['scripts/solve/amend.js'],
++    },
++  };
++  const id = reviewIdFor(manifest);
++  const file = path.join(root, 'solve', 'state', 'reviews', `${id}.json`);
++  fs.mkdirSync(path.dirname(file), {recursive: true});
++  fs.writeFileSync(file, `${JSON.stringify(
++    {id, createdAt: new Date().toISOString(), manifest}, null, 2)}\n`);
++  return {id, manifest};
++}
++
++function strengthenArgs(extra) {
++  return JSON.stringify({
++    file: RECEIPT_FILE,
++    requiredReceipts: [...SEALED_RECEIPTS, ...extra],
++  });
++}
++
++function recordRejection(root, questId, reviewId, fingerprint) {
++  return cli(root, [
++    'finding', '--id', questId, '--frontier', `${questId}-main`,
++    '--kind', 'verifier-rejection', '--evidence', 'subagent:verifier-1',
++    '--review', reviewId,
++    '--verification-scope', 'candidate',
++    '--verification-fingerprint', fingerprint,
++    '--finding', 'harness-fidelity: the guard was not exercised by any fixture',
++    '--claim', 'the verifier rejected this candidate',
++  ]);
++}
++
++test('rejection-binds-to-sealed-review-manifest', () => {
++  const root = tmp();
++  sealed(root);
++  const {id, manifest} = mintReview(root, QUEST_ID);
++
++  // The repair has already changed the worktree: no current-bytes projection
++  // can reproduce the reviewed fingerprint. Binding to the manifest still works.
++  recordRejection(root, QUEST_ID, id, manifest.candidate.fingerprint);
++
++  const rejection = readLog(root, QUEST_ID)
++    .filter((event) => event.kind === 'verifier-rejection').at(-1);
++  assert.ok(rejection, 'the rejection is recorded after the repair');
++  assert.equal(rejection.verification.fingerprint,
++    manifest.candidate.fingerprint);
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('rejection-binding-refuses-wrong-fingerprint', () => {
++  const root = tmp();
++  sealed(root);
++  const {id} = mintReview(root, QUEST_ID);
++
++  const message = cliError(root, [
++    'finding', '--id', QUEST_ID, '--frontier', `${QUEST_ID}-main`,
++    '--kind', 'verifier-rejection', '--evidence', 'subagent:verifier-1',
++    '--review', id,
++    '--verification-scope', 'candidate',
++    '--verification-fingerprint', `sha256:${'9'.repeat(64)}`,
++    '--finding', 'harness-fidelity: the guard was not exercised by any fixture',
++    '--claim', 'the verifier rejected this candidate',
++  ]);
++  assert.match(message, /does not match review/u);
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('rejection-requires-review-when-one-exists', () => {
++  const root = tmp();
++  sealed(root);
++  mintReview(root, QUEST_ID);
++
++  const message = cliError(root, [
++    'finding', '--id', QUEST_ID, '--frontier', `${QUEST_ID}-main`,
++    '--kind', 'verifier-rejection', '--evidence', 'subagent:verifier-1',
++    '--verification-scope', 'attempt',
++    '--verification-fingerprint', `sha256:${'a'.repeat(64)}`,
++    '--finding', 'harness-fidelity: the guard was not exercised by any fixture',
++    '--claim', 'the verifier rejected this candidate',
++  ]);
++  assert.match(message, /requires --review/u,
++    'the unchecked attempt path is closed once a sealed referent exists');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('receipt-bar-strengthen-needs-no-rejection-finding', () => {
++  const root = tmp();
++  const quest = sealed(root);
++  assert.equal(questAmendments(readLog(root, QUEST_ID)).length, 0);
++
++  runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': strengthenArgs(['gamma-receipt']),
++    'evidence': 'verifier demanded a receipt for the unexercised guard',
++  });
++
++  const amended = loadQuest(root, QUEST_ID);
++  assert.deepEqual(amended.doneWhen.args.requiredReceipts,
++    [...SEALED_RECEIPTS, 'gamma-receipt']);
++  assert.doesNotThrow(() => ensureSealedGoal(root, amended),
++    'the strengthened bar is legal against sealed + amendments');
++  assert.equal(amended.doneWhen.probe, quest.doneWhen.probe);
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('receipt-bar-strengthen-refuses-removal', () => {
++  const root = tmp();
++  sealed(root);
++
++  assert.throws(() => runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': JSON.stringify({
++      file: RECEIPT_FILE,
++      requiredReceipts: ['alpha-receipt', 'gamma-receipt'],
++    }),
++    'evidence': 'attempting to drop a sealed receipt',
++  }), /only ADDS receipts — it cannot drop beta-receipt/u);
++
++  assert.throws(() => runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': strengthenArgs([]),
++    'evidence': 'attempting a no-op',
++  }), /must add at least one receipt/u);
++
++  assert.deepEqual(loadQuest(root, QUEST_ID).doneWhen.args.requiredReceipts,
++    SEALED_RECEIPTS, 'a refused amendment changes nothing');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('receipt-bar-strengthen-refuses-probe-or-file-change', () => {
++  const root = tmp();
++  sealed(root);
++
++  assert.throws(() => runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': JSON.stringify({
++      file: 'solve/evidence/somewhere-else.receipt.json',
++      requiredReceipts: [...SEALED_RECEIPTS, 'gamma-receipt'],
++    }),
++    'evidence': 'attempting to swap the oracle',
++  }), /cannot change the receipt file/u);
++
++  assert.throws(() => runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': JSON.stringify({
++      file: RECEIPT_FILE,
++      requiredReceipts: [...SEALED_RECEIPTS, 'gamma-receipt'],
++      consecutive: 3,
++    }),
++    'evidence': 'attempting to smuggle another arg',
++  }), /unexpected key/u);
++
++  assert.equal(loadQuest(root, QUEST_ID).doneWhen.args.file, RECEIPT_FILE);
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('receipt-bar-strengthen-updates-frontier-metric', () => {
++  const root = tmp();
++  sealed(root);
++
++  runAmendCommand(root, {
++    'id': QUEST_ID,
++    'kind': 'receipt-bar-strengthen',
++    'done-when-args': strengthenArgs(['gamma-receipt']),
++    'evidence': 'verifier demanded a receipt for the unexercised guard',
++  });
++
++  const amended = loadQuest(root, QUEST_ID);
++  const main = amended.frontiers.find((f) => f.id === `${QUEST_ID}-main`);
++  const other = amended.frontiers.find((f) => f.id === `${QUEST_ID}-other`);
++
++  // The probe measures ONLY requiredReceipts, so a bar raised in doneWhen
++  // alone would be a bar nothing measures.
++  assert.deepEqual(main.metric.args.requiredReceipts,
++    [...SEALED_RECEIPTS, 'gamma-receipt'],
++    'the frontier that shares the oracle is raised too');
++  assert.deepEqual(other.metric.args.requiredReceipts, ['other-receipt'],
++    'a frontier on a different oracle is untouched');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('scope-validated-before-bytes', () => {
++  const root = tmp();
++  sealed(root);
++
++  // Scope validity must not depend on quest state: an invalid rejection scope
++  // reports the actionable flag, never a fingerprint mismatch.
++  for (const scope of ['aggregate', 'both']) {
++    const message = cliError(root, [
++      'finding', '--id', QUEST_ID, '--frontier', `${QUEST_ID}-main`,
++      '--kind', 'verifier-rejection', '--evidence', 'subagent:verifier-1',
++      '--verification-scope', scope,
++      '--verification-fingerprint', `sha256:${'a'.repeat(64)}`,
++      '--finding', 'harness-fidelity: the guard was not exercised by fixtures',
++      '--claim', 'the verifier rejected this candidate',
++    ]);
++    assert.match(message,
++      /verifier-rejection requires --verification-scope attempt\|candidate/u);
++    assert.doesNotMatch(message, /does not match current bytes/u);
++  }
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('amend-refusal-names-the-actionable-flags', () => {
++  const root = tmp();
++  sealed(root);
++
++  let message = '';
++  try {
++    runAmendCommand(root, {
++      'id': QUEST_ID,
++      'kind': 'oracle-command-correction',
++      'done-when-args': strengthenArgs(['gamma-receipt']),
++      'evidence': 'no such finding is recorded here',
++    });
++  } catch (error) {
++    message = error.message;
++  }
++
++  assert.match(message, /--kind verifier-rejection/u);
++  assert.match(message, /--verification-fingerprint/u);
++  assert.match(message, /--review <reviewId>/u);
++  assert.match(message, /receipt-bar-strengthen/u,
++    'the refusal points at the ungated path for pure strengthening');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('existing-amendment-kinds-unchanged', () => {
++  // CONTROL: the sealed amendment vocabulary and its gate are intact.
++  assert.deepEqual([...AMENDMENT_KINDS], [
++    'class-correction', 'oracle-command-correction', 'statement-strengthen',
++    'verification-bar-expansion', 'receipt-bar-strengthen',
++  ]);
++
++  const root = tmp();
++  const quest = sealed(root);
++  runAmendCommand(root, {id: QUEST_ID, kind: 'class-correction',
++    class: 'product', evidence: 'quest-lint: statement classifies as product'});
++  assert.equal(loadQuest(root, QUEST_ID).class, 'product',
++    'class-correction still works and still needs no verifier finding');
++
++  const effective = applyAmendments(quest, questAmendments(readLog(root, QUEST_ID)));
++  assert.equal(effective.class, 'product');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('existing-rejection-flow-unchanged', () => {
++  // CONTROL: a quest with NO minted review keeps the previous contract, so the
++  // CLI contract tests that model review-less quests are unaffected.
++  const root = tmp();
++  sealed(root);
++
++  cli(root, [
++    'finding', '--id', QUEST_ID, '--frontier', `${QUEST_ID}-main`,
++    '--kind', 'verifier-rejection', '--evidence', 'subagent:verifier-1',
++    '--verification-scope', 'attempt',
++    '--verification-fingerprint', `sha256:${'a'.repeat(64)}`,
++    '--finding', 'harness-fidelity: the guard was not exercised by any fixture',
++    '--claim', 'the verifier rejected this candidate',
++  ]);
++
++  const rejection = readLog(root, QUEST_ID)
++    .filter((event) => event.kind === 'verifier-rejection').at(-1);
++  assert.ok(rejection, 'attempt-scope rejection still records without a review');
++  assert.equal(rejection.verification.scope, 'attempt');
++  fs.rmSync(root, {recursive: true, force: true});
++});
++
++test('witness-deterministic', () => {
++  const fingerprints = [];
++  for (let run = 0; run < 3; run += 1) {
++    const root = tmp();
++    sealed(root);
++    runAmendCommand(root, {
++      'id': QUEST_ID,
++      'kind': 'receipt-bar-strengthen',
++      'done-when-args': strengthenArgs(['gamma-receipt']),
++      'evidence': 'verifier demanded a receipt for the unexercised guard',
++    });
++    const amended = loadQuest(root, QUEST_ID);
++    fingerprints.push(JSON.stringify({
++      doneWhen: amended.doneWhen,
++      frontiers: amended.frontiers.map((f) => f.metric.args),
++    }));
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  assert.equal(new Set(fingerprints).size, 1,
++    'repeated runs on fresh roots produce one identical projection');
++});

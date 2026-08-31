@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2094,
+    "ordinary": 2095,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2111,
-  "digest": "fnv1a32-6c63f2b6",
+  "censusSize": 2112,
+  "digest": "fnv1a32-a6e75beb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1909,6 +1909,7 @@
     "test/solve/rejection-decomposition.test.js": "ordinary",
     "test/solve/rejection-escalation.test.js": "ordinary",
     "test/solve/rejection-findings.test.js": "ordinary",
+    "test/solve/rejection-repair-amendment-path.test.js": "ordinary",
     "test/solve/reopen.test.js": "ordinary",
     "test/solve/report-retention.test.js": "ordinary",
     "test/solve/report.test.js": "ordinary",

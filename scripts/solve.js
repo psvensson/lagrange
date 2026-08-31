@@ -88,6 +88,25 @@ import {
 } from './solve/rejection-findings.js';
 import {recordRejectionDecomposition} from './solve/rejection-decomposition.js';
 import {
+  questHasMintedReview,
+  reviewManifestSection,
+} from './solve/review-request.js';
+
+const REJECTION_SCOPE_PROBLEM =
+  'verifier-rejection requires --verification-scope attempt|candidate';
+const REVIEW_FINGERPRINT_PROBLEM =
+  'verification fingerprint does not match review ';
+const REVIEW_FINGERPRINT_SEALED = ' (sealed ';
+const REVIEW_FINGERPRINT_NONE = 'none';
+const REVIEW_FINGERPRINT_CLOSE = ')';
+const REJECTION_REVIEW_REQUIRED_PROBLEM =
+  'verifier-rejection requires --review <reviewId> once a review has been ' +
+  'minted for this quest, so the fingerprint is checked against the sealed ' +
+  'review manifest rather than current bytes (which the repair this ' +
+  'rejection demands will change). Review manifests are in ' +
+  'solve/state/reviews/. If no minted review covers the bytes you are ' +
+  'rejecting, mint one with: solve land --id <quest>.';
+import {
   continueQuestWorkflow,
   landQuestWorkflow,
   startQuestWorkflow,
@@ -645,9 +664,45 @@ function cmdFinding(root, args) {
   const verificationScope = optionalStringArgument(args, 'verification-scope');
   const verificationFingerprint =
     optionalStringArgument(args, 'verification-fingerprint');
+  const verificationReview = optionalStringArgument(args, 'review');
+  // Scope validity is decided BEFORE any bytes comparison. The bytes checks
+  // below only run for some scopes and only when the quest happens to have
+  // candidate-contract attempts, so leaving scope validation to
+  // buildVerificationFinding made the refusal a caller sees depend on quest
+  // state: the same wrong --verification-scope reported "requires
+  // attempt|candidate" on one quest and a fingerprint mismatch on another.
+  if (kind === VERIFIER_REJECTION_FINDING_KIND && verificationScope &&
+    ![VERIFICATION_SCOPE.ATTEMPT, VERIFICATION_SCOPE.CANDIDATE]
+      .includes(verificationScope)) {
+    throw new Error(REJECTION_SCOPE_PROBLEM);
+  }
   let verificationReceipt = null;
   let verificationSchemaVersion = null;
-  if (kind && verificationScope) {
+  // A rejection is a claim about the bytes that WERE reviewed. Those stop
+  // being current the moment the repair it demanded is applied, so binding the
+  // check to the worktree made a rejection recordable only in the window
+  // before any fix — and the one scope that stayed recordable afterwards
+  // (attempt) validated nothing at all. The sealed review manifest is the
+  // immutable record of exactly what was verified, so bind to that instead.
+  if (kind && verificationReview) {
+    const sealedSection = reviewManifestSection(
+      root, verificationReview, id, verificationScope);
+    if (sealedSection?.fingerprint !== verificationFingerprint) {
+      throw new Error(REVIEW_FINGERPRINT_PROBLEM + verificationReview +
+        REVIEW_FINGERPRINT_SEALED +
+        (sealedSection?.fingerprint || REVIEW_FINGERPRINT_NONE) +
+        REVIEW_FINGERPRINT_CLOSE);
+    }
+    // The manifest section IS the verification receipt: it carries the same
+    // fingerprint, baseCommit, paths and attempt indices the current-bytes
+    // projection would have produced, frozen at mint time.
+    verificationReceipt = sealedSection;
+    verificationSchemaVersion = VERIFICATION_CONTRACT_VERSION;
+  } else if (kind === VERIFIER_REJECTION_FINDING_KIND &&
+    questHasMintedReview(root, id)) {
+    throw new Error(REJECTION_REVIEW_REQUIRED_PROBLEM);
+  }
+  if (kind && verificationScope && !verificationReview) {
     const verificationProjection = verificationState(
       root, quest, readLog(root, id));
     if (verificationScope === VERIFICATION_SCOPE.CANDIDATE) {

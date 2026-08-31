@@ -189,7 +189,7 @@ function currentReviewManifest(root, quest, state, suppliedLog) {
   });
 }
 
-function reviewIdFor(manifest) {
+export function reviewIdFor(manifest) {
   const digest = crypto.createHash('sha256')
     .update(jsonStringify(manifest))
     .digest('hex');
@@ -231,7 +231,7 @@ export function loadReviewRequest(root, reviewId) {
   try {
     request = jsonParse(fs.readFileSync(file, TEXT_ENCODING));
   } catch {
-    throw new Error(`land: unknown review id ${reviewId}`);
+    throw new Error(`unknown review id ${reviewId}`);
   }
   if (!request || typeof request !== 'object' ||
     !objectHasOwn(request, REVIEW_ID_FIELD) ||
@@ -239,7 +239,7 @@ export function loadReviewRequest(root, reviewId) {
     !request.manifest || typeof request.manifest !== 'object' ||
     request.id !== reviewId ||
     reviewIdFor(request.manifest) !== reviewId) {
-    throw new Error(`land: review ${reviewId} failed its immutable identity check`);
+    throw new Error(`review ${reviewId} failed its immutable identity check`);
   }
   return request;
 }
@@ -266,4 +266,48 @@ export function assertReviewCurrent(root, quest, state, reviewId, log) {
     );
   }
   return {...request, preflight};
+}
+
+// The sealed fingerprint a verifier-rejection must cite. A review manifest is
+// immutable once minted (loadReviewRequest re-derives its id from the manifest
+// bytes), so this is the one referent that still identifies the reviewed bytes
+// after the repair the rejection demanded has changed them.
+const AGGREGATE_SCOPE = 'aggregate';
+const BOTH_SCOPE = 'both';
+const REVIEW_FILE_SUFFIX = '.json';
+const FOREIGN_QUEST_REVIEW_PREFIX = 'review ';
+const FOREIGN_QUEST_REVIEW_SUFFIX = ' belongs to another Quest';
+
+export function reviewManifestSection(root, reviewId, questId, scope) {
+  const request = loadReviewRequest(root, reviewId);
+  if (request.manifest.questId !== questId) {
+    throw new Error(FOREIGN_QUEST_REVIEW_PREFIX + reviewId +
+      FOREIGN_QUEST_REVIEW_SUFFIX);
+  }
+  return scope === AGGREGATE_SCOPE || scope === BOTH_SCOPE ?
+    request.manifest.aggregate :
+    request.manifest.candidate;
+}
+
+// Whether any review has been minted for this quest. Used to require review
+// binding exactly where a sealed referent exists, so quests that never reached
+// review (and the CLI contract tests that model them) are unaffected.
+export function questHasMintedReview(root, questId) {
+  const directory = path.join(root, REVIEW_DIRECTORY);
+  let entries;
+  try {
+    entries = fs.readdirSync(directory);
+  } catch {
+    return false;
+  }
+  return entries.some((entry) => {
+    if (!entry.endsWith(REVIEW_FILE_SUFFIX)) return false;
+    try {
+      const request = jsonParse(
+        fs.readFileSync(path.join(directory, entry), TEXT_ENCODING));
+      return request?.manifest?.questId === questId;
+    } catch {
+      return false;
+    }
+  });
 }
