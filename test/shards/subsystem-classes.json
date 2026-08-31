@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 106,
     "architecture-governance": 19,
-    "bootstrap-membership": 242,
+    "bootstrap-membership": 244,
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 172,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2112,
-  "digest": "fnv1a32-6f408191",
+  "censusSize": 2114,
+  "digest": "fnv1a32-d09151b0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -151,6 +151,8 @@
     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap-membership",
     "test/bootstrap/create-message-group-phase.test.js": "bootstrap-membership",
     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap-membership",
+    "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap-membership",
+    "test/bootstrap/critical-placement-convergence.test.js": "bootstrap-membership",
     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap-membership",
     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap-membership",
     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",
