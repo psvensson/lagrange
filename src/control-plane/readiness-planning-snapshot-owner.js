@@ -477,17 +477,42 @@ class ReadinessPlanningSnapshotOwner {
     return nodeRow !== null && nodeRow !== undefined;
   }
 
+  // Serve admission for an ALREADY-completed build. Two bounds decide it, and
+  // the completed record's token STATUS is not one of them.
+  //
+  // Exact-token reuse requires the build to have landed current: nothing moved
+  // between its capture and its publication, so the stored token still names
+  // the live source vector.
+  //
+  // Floored reuse admits a build whose exact token has rotated, bounded by the
+  // 250ms floored planning generation stamped at completion and by the
+  // positive-decision live veto. It was introduced for reads that arrive after
+  // a current build (live: every readiness evaluation rebuilt its snapshot
+  // plus a full projection-evidence normalization — the 31.4% inclusive
+  // residual in the archived profiled run 20-55-51-160Z), and it is the same
+  // admission a build stamped STALE needs: `tokenStatus` records only THAT the
+  // source token advanced while the build was in flight, never that the built
+  // content is unfit. The build read live cache state, and its
+  // `sourceGeneration` is stamped at completion, so a STALE build carries
+  // exactly the staleness class a CURRENT build carries when it is reused
+  // across the same floored generation window — the same bound, the same veto,
+  // no widening.
+  //
+  // Refusing STALE outright turned a token-rotation race into an UNBOUNDED
+  // denial. Under sustained source churn no build ever lands current, so every
+  // reader received the all-false deferred contract whose sole reason is
+  // PLANNING_SNAPSHOT_REFRESH_PENDING, for as long as the churn lasted:
+  // measured on GCP run 2026-08-31T00-12-47 as 88s in which a live user-table
+  // partition's raft leader was denied in 23 of 23 routing samples with all
+  // three replica service rows present and active, and the INSERT retried to
+  // its deadline and failed with PARTITION_SERVICE_NOT_FOUND. An owner that
+  // cannot land a current build has an answer that is stale within a bounded
+  // window, not an answer of "definitively not ready".
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     return !token.generationSaturated &&
-      completed.tokenStatus === TOKEN_STATUS.CURRENT &&
       completed.buildOptionsKey === buildOptionsKey &&
-      (this.tokensEqual(completed.capturedToken, token) ||
-        // Floored reuse: under formation-rate churn the exact token rotates
-        // between consecutive reads (live: every readiness evaluation
-        // rebuilt its snapshot plus a full projection-evidence
-        // normalization — the 31.4% inclusive residual in the archived
-        // profiled run 20-55-51-160Z). One completed snapshot per floored
-        // generation caps that at one rebuild per window.
+      ((completed.tokenStatus === TOKEN_STATUS.CURRENT &&
+        this.tokensEqual(completed.capturedToken, token)) ||
         this.matchesCompletedSourceGeneration(completed)) &&
       this.isCompletedSnapshotLive(ownerKey, completed);
   }
@@ -626,6 +651,8 @@ class ReadinessPlanningSnapshotOwner {
     });
     this.rememberCompleted(ownerKey, buildOptionsKey, completed);
     if (!current) {
+      // Freshness pursuit is unchanged: the stale stamp stands, the diagnostic
+      // stays observable, and a replacement build is queued immediately.
       this.enqueueBuild(
         ownerKey,
         tokenCurrent ?
@@ -634,7 +661,19 @@ class ReadinessPlanningSnapshotOwner {
         buildOptions,
         currentToken,
       );
-      return this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
+      // The caller still gets the honest answer this build produced whenever
+      // it clears the same serve admission every stored snapshot clears. Only
+      // an admission failure — a saturated generation, a rotated floored
+      // generation, or a moved live veto — yields the deferred contract, which
+      // is then evidence-absence rather than an unbounded denial.
+      return this.canReuseCompletedSnapshot(
+        ownerKey,
+        completed,
+        currentToken,
+        buildOptionsKey,
+      ) ?
+        snapshot :
+        this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
     }
     if (notifyListeners) {
       this.notifySnapshotPublished(ownerKey, snapshot, capturedToken);

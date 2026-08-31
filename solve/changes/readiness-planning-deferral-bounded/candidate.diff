@@ -1,0 +1,927 @@
+diff --git a/scripts/quest-evidence-readiness-planning-deferral-bounded.js b/scripts/quest-evidence-readiness-planning-deferral-bounded.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..44dcef27b77c1a06e28b4032c1700df9de04ea90
+--- /dev/null
++++ b/scripts/quest-evidence-readiness-planning-deferral-bounded.js
+@@ -0,0 +1,163 @@
++// Deterministic evidence harness for the readiness-planning-deferral-bounded
++// quest: receipt declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the test-receipt probe artifact
++// (solve/evidence/readiness-planning-deferral-bounded.receipt.json). Each
++// receipt re-executes one focused witness scenario rather than trusting a
++// claim, so a regression that flips a witness red flips this receipt to fail.
++//
++// Receipt honesty: the witness file uses raw node:test, so each scenario is
++// independently selectable with --test-name-pattern by its anchored name.
++//
++// Red-on-HEAD count, MEASURED on be124c1e3 by stashing only the owner change
++// and re-running the whole witness file: 4 of the 9 scenarios are red at base
++// and 5 are green.
++//
++// RED on HEAD (the cure receipts):
++//   user-table-partition-routable-under-token-churn — 23 of 23 routing
++//     samples deny every candidate of a live user-table partition, each with
++//     the single reason planning_snapshot_refresh_pending, exactly the
++//     measured GCP shape.
++//   write-path-terminal-verdict-cleared — the write lane's terminal verdict
++//     past its deadline is PARTITION_SERVICE_NOT_FOUND.
++//   serve-admission-never-rests-on-token-status — no completed snapshot is
++//     ever served at base, so the drive cannot exhibit a stale serve.
++//   stale-serve-divergence-audit — same reason: the audit observes zero
++//     served completed snapshots at base.
++// These fail on the MEASURED denial, not on a missing method: every symbol
++// the witness touches exists on HEAD, so the base-red result is evidence of
++// the mechanism rather than of an absent API.
++//
++// GREEN on HEAD and after (controls and preconditions):
++//   witness-deterministic, token-rotation-live-lock-precondition,
++//   live-veto-move-still-denies,
++//   production-composition-control-denial-vocabulary,
++//   unchanged-control-rig-build-rate.
++// unchanged-control-rig-build-rate is the rate control: it pins the shared
++// production-composition formation rig at the sealed pre-change measurement
++// carried by readiness-planning-canonical-identity-verified-owner (1218 heavy
++// planning builds and 824 publications winner reads over a 1000-call
++// formation-shaped churn on a virtual clock), so a cure that moves the
++// measured build rate is rejected.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/control-plane/readiness-planning-deferral-bounded.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++// One verbatim proof command per scenario. node --test --test-name-pattern
++// selects exactly one top-level witness scenario by its anchored name, so a
++// green receipt is honest (its scenario exits 0) and a red receipt is honest
++// (its scenario exits non-zero).
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'two identical drives of the token-churn sequence produce ' +
++      'identical routing samples, identical owner build counts, identical ' +
++      'completed token statuses and identical serve-admission counts',
++  }),
++  Object.freeze({
++    id: 'token-rotation-live-lock-precondition',
++    command: scenarioCommand('^token-rotation-live-lock-precondition'),
++    detail: 'PRECONDITION (green both sides): under a transport fingerprint ' +
++      'that rotates on every captureToken() every completed build is ' +
++      'stamped TOKEN_STATUS.STALE, so no build ever lands current — the ' +
++      'exact state publishCompleted answered with the all-false deferred ' +
++      'contract',
++  }),
++  Object.freeze({
++    id: 'user-table-partition-routable-under-token-churn',
++    command: scenarioCommand(
++      '^user-table-partition-routable-under-token-churn',
++    ),
++    detail: 'RED on HEAD (23 of 23 samples starved): across the sampling ' +
++      'shape of the failing run a live user-table partition keeps three ' +
++      'active addressed service rows and its canonical leader row, and no ' +
++      'sample denies every candidate nor answers an unbounded ' +
++      'planning_snapshot_refresh_pending denial',
++  }),
++  Object.freeze({
++    id: 'write-path-terminal-verdict-cleared',
++    command: scenarioCommand('^write-path-terminal-verdict-cleared'),
++    detail: 'RED on HEAD: the real QueryExecutor write-delivery loop ' +
++      '(no attempt ceiling, absolute deadline only) does not return ' +
++      'PARTITION_SERVICE_NOT_FOUND past its deadline for the user-table ' +
++      'partition the GCP run failed on',
++  }),
++  Object.freeze({
++    id: 'serve-admission-never-rests-on-token-status',
++    command: scenarioCommand('^serve-admission-never-rests-on-token-status'),
++    detail: 'THE SAFETY ORACLE, red on HEAD because no completed snapshot ' +
++      'is ever served there: the drive does serve snapshots from builds ' +
++      'stamped STALE, and every single admission is independently ' +
++      'reconfirmed to hold BOTH sealed bounds — the positive-decision live ' +
++      'veto is unmoved AND either the token is equal or the floored ' +
++      'planning generation matches. Token status is never load-bearing',
++  }),
++  Object.freeze({
++    id: 'stale-serve-divergence-audit',
++    command: scenarioCommand('^stale-serve-divergence-audit'),
++    detail: 'RED on HEAD (zero served snapshots to audit): every snapshot ' +
++      'served from a STALE-stamped completed build is compared against a ' +
++      'forced rebuild of the same owner at serve time, over the whole ' +
++      'drive, with zero divergence on the decision-bearing fields ' +
++      '(dimensions and reason codes)',
++  }),
++  Object.freeze({
++    id: 'live-veto-move-still-denies',
++    command: scenarioCommand('^live-veto-move-still-denies'),
++    detail: 'THE SAFETY NEGATIVE (green both sides, must stay green): a ' +
++      'moved positive-decision live veto (expired ready lease and ' +
++      'heartbeat) refuses every completed build, and evidence that ' +
++      'genuinely says not-ready is never reported routable — the cure ' +
++      'admits staleness, never a false positive',
++  }),
++  Object.freeze({
++    id: 'production-composition-control-denial-vocabulary',
++    command: scenarioCommand(
++      '^production-composition-control-denial-vocabulary',
++    ),
++    detail: 'CONTROL (green on HEAD, must stay green): the full ' +
++      'ControlPlaneReadinessService and MembershipPublicationCoordinator ' +
++      'on the production-composition cache, sampled 23 times under source ' +
++      'churn, never name planning_snapshot_refresh_pending as a routing ' +
++      'denial for a live user partition',
++  }),
++  Object.freeze({
++    id: 'unchanged-control-rig-build-rate',
++    command: scenarioCommand('^unchanged-control-rig-build-rate'),
++    detail: 'THE RATE CONTROL (green on HEAD, must stay green): the shared ' +
++      'production-composition formation rig measures 1218 heavy planning ' +
++      'builds and 824 publications winner reads over its 1000-call ' +
++      'formation-shaped churn — the sealed pre-change values. The cure ' +
++      'changes only the serve admission of an already-completed build, so ' +
++      'neither count may move',
++  }),
++]);
++
++const QUEST_ID = 'readiness-planning-deferral-bounded';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'readiness-planning-deferral-bounded.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/control-plane/readiness-planning-snapshot-owner.js b/src/control-plane/readiness-planning-snapshot-owner.js
+index c9755e3eab17d0c0ecdd842c5d012994ac0fc716..64b21ffc6d0fb72d3328c3c90053f134b2468b2d 100644
+--- a/src/control-plane/readiness-planning-snapshot-owner.js
++++ b/src/control-plane/readiness-planning-snapshot-owner.js
+@@ -477,17 +477,42 @@ class ReadinessPlanningSnapshotOwner {
+     return nodeRow !== null && nodeRow !== undefined;
+   }
+ 
++  // Serve admission for an ALREADY-completed build. Two bounds decide it, and
++  // the completed record's token STATUS is not one of them.
++  //
++  // Exact-token reuse requires the build to have landed current: nothing moved
++  // between its capture and its publication, so the stored token still names
++  // the live source vector.
++  //
++  // Floored reuse admits a build whose exact token has rotated, bounded by the
++  // 250ms floored planning generation stamped at completion and by the
++  // positive-decision live veto. It was introduced for reads that arrive after
++  // a current build (live: every readiness evaluation rebuilt its snapshot
++  // plus a full projection-evidence normalization — the 31.4% inclusive
++  // residual in the archived profiled run 20-55-51-160Z), and it is the same
++  // admission a build stamped STALE needs: `tokenStatus` records only THAT the
++  // source token advanced while the build was in flight, never that the built
++  // content is unfit. The build read live cache state, and its
++  // `sourceGeneration` is stamped at completion, so a STALE build carries
++  // exactly the staleness class a CURRENT build carries when it is reused
++  // across the same floored generation window — the same bound, the same veto,
++  // no widening.
++  //
++  // Refusing STALE outright turned a token-rotation race into an UNBOUNDED
++  // denial. Under sustained source churn no build ever lands current, so every
++  // reader received the all-false deferred contract whose sole reason is
++  // PLANNING_SNAPSHOT_REFRESH_PENDING, for as long as the churn lasted:
++  // measured on GCP run 2026-08-31T00-12-47 as 88s in which a live user-table
++  // partition's raft leader was denied in 23 of 23 routing samples with all
++  // three replica service rows present and active, and the INSERT retried to
++  // its deadline and failed with PARTITION_SERVICE_NOT_FOUND. An owner that
++  // cannot land a current build has an answer that is stale within a bounded
++  // window, not an answer of "definitively not ready".
+   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
+     return !token.generationSaturated &&
+-      completed.tokenStatus === TOKEN_STATUS.CURRENT &&
+       completed.buildOptionsKey === buildOptionsKey &&
+-      (this.tokensEqual(completed.capturedToken, token) ||
+-        // Floored reuse: under formation-rate churn the exact token rotates
+-        // between consecutive reads (live: every readiness evaluation
+-        // rebuilt its snapshot plus a full projection-evidence
+-        // normalization — the 31.4% inclusive residual in the archived
+-        // profiled run 20-55-51-160Z). One completed snapshot per floored
+-        // generation caps that at one rebuild per window.
++      ((completed.tokenStatus === TOKEN_STATUS.CURRENT &&
++        this.tokensEqual(completed.capturedToken, token)) ||
+         this.matchesCompletedSourceGeneration(completed)) &&
+       this.isCompletedSnapshotLive(ownerKey, completed);
+   }
+@@ -626,6 +651,8 @@ class ReadinessPlanningSnapshotOwner {
+     });
+     this.rememberCompleted(ownerKey, buildOptionsKey, completed);
+     if (!current) {
++      // Freshness pursuit is unchanged: the stale stamp stands, the diagnostic
++      // stays observable, and a replacement build is queued immediately.
+       this.enqueueBuild(
+         ownerKey,
+         tokenCurrent ?
+@@ -634,7 +661,19 @@ class ReadinessPlanningSnapshotOwner {
+         buildOptions,
+         currentToken,
+       );
+-      return this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
++      // The caller still gets the honest answer this build produced whenever
++      // it clears the same serve admission every stored snapshot clears. Only
++      // an admission failure — a saturated generation, a rotated floored
++      // generation, or a moved live veto — yields the deferred contract, which
++      // is then evidence-absence rather than an unbounded denial.
++      return this.canReuseCompletedSnapshot(
++        ownerKey,
++        completed,
++        currentToken,
++        buildOptionsKey,
++      ) ?
++        snapshot :
++        this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
+     }
+     if (notifyListeners) {
+       this.notifySnapshotPublished(ownerKey, snapshot, capturedToken);
+diff --git a/test/control-plane/readiness-planning-deferral-bounded.test.js b/test/control-plane/readiness-planning-deferral-bounded.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a018386f04bcc4d54ef4bc7d806ac3dba412eee
+--- /dev/null
++++ b/test/control-plane/readiness-planning-deferral-bounded.test.js
+@@ -0,0 +1,576 @@
++// Deterministic witness for the readiness-planning token-rotation live-lock
++// measured on the five-node GCP run 2026-08-31T00-12-47.
++//
++// Mechanism: under sustained source churn the planning token advances while
++// every build is in flight, publishCompleted stamps every completed build
++// TOKEN_STATUS.STALE, and canReuseCompletedSnapshot refused a STALE build
++// outright — so every reader received the all-false deferred contract whose
++// sole reason is planning_snapshot_refresh_pending, for as long as the churn
++// lasted. Measured live: 88s, all three ratings-p1 replica service rows
++// present and active, the coordinator its own p1 raft leader, and the leader
++// denied in 23 of 23 routing samples; the INSERT (writes have no attempt
++// ceiling) retried to its deadline and failed PARTITION_SERVICE_NOT_FOUND.
++//
++// The drive runs the REAL ReadinessPlanningSnapshotOwner, the REAL floored
++// planning version key, the REAL QueryExecutor routing and write-delivery
++// paths and a REAL versioned system-table cache, under the forensic's
++// proposed token clock: the transport fingerprint rotates on every
++// captureToken(), so `tokenCurrent` is false in publishCompleted by
++// construction. A transient joiner entering and leaving the router's
++// connected set is the production shape of that rotation, and it moves no
++// input of any replica's own readiness answer.
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  COLUMN,
++  SERVICE_STATUS,
++  SERVICE_TYPE,
++  TABLES,
++} from '../../src/constants/index.js';
++import {CONTROL_PLANE_READINESS_DIMENSION} from
++  '../../src/control-plane/control-plane-readiness-constants.js';
++import {QueryExecutor} from '../../src/query/query-executor.js';
++import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
++import {ControlPlaneReadinessService} from
++  '../../src/control-plane/control-plane-readiness-service.js';
++import {MembershipPublicationCoordinator} from
++  '../../src/control-plane/membership-publication-coordinator.js';
++import {ReadinessPlanningSnapshotOwner} from
++  '../../src/control-plane/readiness-planning-snapshot-owner.js';
++import {TOKEN_STATUS} from
++  '../../src/control-plane/readiness-planning-version-contract.js';
++import {readMembershipPlanningDerivationVersionKey} from
++  '../../src/control-plane/membership-planning-version-key.js';
++import {
++  NODE_COUNT,
++  T0,
++  createFormationShapedCache,
++  driveFormationShapedChurn,
++} from './readiness-planning-formation-rig.js';
++
++// The failing user table from the forensic run, verbatim. A user table has no
++// system-table classification, so it never reaches the system-table leader
++// fail-open and is filtered strictly by readiness.
++const USER_TABLE_NAME = 'tbl-67f4035f1e5f9fd2a0245f5d35ff9de9';
++const USER_PARTITION_ID = `${USER_TABLE_NAME}-p1`;
++const REPLICA_NODE_IDS = Object.freeze(['node-0', 'node-1', 'node-2']);
++const LEADER_NODE_ID = 'node-0';
++// The failing run's own sampling shape: 23 routing samples over 88s.
++const ROUTING_SAMPLE_COUNT = 23;
++const SAMPLE_STEP_MS = 4000;
++const STALE_HEARTBEAT_MAX_AGE_MS = 300_000;
++const READY_LEASE_WINDOW_MS = 600_000;
++const DRAIN_ROUNDS = 24;
++const COMPOSITION_DRAIN_ROUNDS = 60;
++const WRITE_DEADLINE_MS = 150;
++const UNHEALTHY_ROUNDS = 3;
++const UNHEALTHY_REVISION_BASE = 1000;
++const REFRESH_PENDING = 'planning_snapshot_refresh_pending';
++const ALL_FILTERED = 'all_services_filtered_by_readiness';
++// The sealed pre-change measurement of the shared production-composition rig,
++// carried by readiness-planning-canonical-identity-verified-owner. This Quest
++// changes only the serve admission of an already-completed build, so the
++// measured build rate must be identical.
++const SEALED_RIG_HEAVY_BUILDS = 1218;
++const SEALED_RIG_PUBLICATION_WINNER_READS = 824;
++
++// The reconcile queue falls back to `console` when no logging service is
++// initialized, and this witness drives thousands of enqueues.
++const logging = LoggingService.getInstance();
++if (!logging.isInitialized()) {
++  logging.initialize({level: 'error'});
++}
++
++function readinessDecisionVector(snapshot) {
++  return JSON.stringify({
++    nodeId: snapshot?.nodeId ?? null,
++    dimensions: snapshot?.dimensions ? {...snapshot.dimensions} : null,
++    reasons: (snapshot?.reasons || []).map((reason) => reason?.code ?? reason),
++  });
++}
++
++function installUserTablePartition(cache) {
++  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
++    partition_id: USER_PARTITION_ID,
++    table_name: USER_TABLE_NAME,
++    leader_node_id: LEADER_NODE_ID,
++  });
++  for (let index = 0; index < REPLICA_NODE_IDS.length; index++) {
++    const nodeId = REPLICA_NODE_IDS[index];
++    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
++      [COLUMN.SERVICE_ID]: `user-service-${index}`,
++      [COLUMN.NODE_ID]: nodeId,
++      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
++      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
++      [COLUMN.ADDRESS]: `${nodeId}/partition/${USER_PARTITION_ID}`,
++      partition_id: USER_PARTITION_ID,
++      raft_role: nodeId === LEADER_NODE_ID ? 'leader' : 'follower',
++    });
++  }
++}
++
++/**
++ * Drive the REAL planning owner under a token that rotates on every capture.
++ * @param {Object} [options]
++ * @return {Object}
++ */
++function createTokenChurnDrive(options = {}) {
++  const state = {clock: T0, healthy: true, transientPeer: 0};
++  const cache = createFormationShapedCache(T0);
++  installUserTablePartition(cache);
++  const pendingDrains = [];
++  const buildRecords = [];
++  const service = {
++    nodeId: LEADER_NODE_ID,
++    clusterMemberStaleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
++    // The forensic's token clock: a transient joiner flapping in and out of
++    // the router's connected set rotates the transport fingerprint on every
++    // captureToken(), and therefore the planning token, without moving any
++    // input of a replica's own readiness answer.
++    messageRouter: {
++      getConnectedNodes: () => {
++        state.transientPeer += 1;
++        const connected = [];
++        for (let index = 0; index < NODE_COUNT; index++) {
++          connected.push(`node-${index}`);
++        }
++        if (state.transientPeer % 2 === 1) connected.push('joiner-transient');
++        return new Set(connected);
++      },
++    },
++    getNodeRow: (nodeId) => cache.get(TABLES.NODES, nodeId),
++    readPlanningProjectionSourceGeneration: (nowMs) =>
++      readMembershipPlanningDerivationVersionKey(cache, nowMs),
++    buildNodeReadinessSyncCurrent(nodeId) {
++      buildRecords.push({nodeId, atMs: state.clock});
++      const dimensions = {};
++      const names = Object.values(CONTROL_PLANE_READINESS_DIMENSION);
++      for (let index = 0; index < names.length; index++) {
++        dimensions[names[index]] = state.healthy;
++      }
++      const nodeRow = cache.get(TABLES.NODES, nodeId);
++      return Object.freeze({
++        nodeId,
++        observedAt: new Date(state.clock).toISOString(),
++        lifecycleState: state.healthy ? 'ready' : 'failed',
++        dimensions: Object.freeze(dimensions),
++        reasons: Object.freeze(state.healthy ?
++          [] :
++          [Object.freeze({code: 'cluster_member_unhealthy'})]),
++        nodeEvidence: Object.freeze({
++          lastHeartbeat: Number(nodeRow?.[COLUMN.LAST_HEARTBEAT]) || null,
++          readyLeaseExpiresAt:
++            Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]) || null,
++        }),
++      });
++    },
++  };
++  const owner = new ReadinessPlanningSnapshotOwner({
++    service,
++    now: () => state.clock,
++    scheduleDrainFn: (callback) => {
++      pendingDrains.push(callback);
++      return null;
++    },
++  });
++  cache.onCacheChange((tableName, _operation, record) => {
++    owner.recordTableChange(tableName, record);
++  });
++  const readinessService = {
++    getNodeReadinessSync: (nodeId, readOptions = {}) => owner.readSync(
++      nodeId,
++      readOptions,
++      () => service.buildNodeReadinessSyncCurrent(nodeId),
++    ),
++  };
++  const executor = new QueryExecutor({
++    nodeId: LEADER_NODE_ID,
++    systemCache: cache,
++    controlPlaneReadinessService: readinessService,
++    messageRouter: {
++      getConnectionState: () => 'connected',
++      deliver: async () => ({success: false, error: 'participant offline'}),
++      sendToNode: async () => ({success: false, error: 'participant offline'}),
++    },
++  });
++  const servedCompletions = [];
++  const originalCanReuse = owner.canReuseCompletedSnapshot;
++  owner.canReuseCompletedSnapshot = function(
++    ownerKey,
++    completed,
++    token,
++    buildOptionsKey,
++  ) {
++    const admitted = originalCanReuse.call(
++      this,
++      ownerKey,
++      completed,
++      token,
++      buildOptionsKey,
++    );
++    if (admitted) {
++      servedCompletions.push({
++        ownerKey,
++        tokenStatus: completed.tokenStatus,
++        sourceGenerationMatches:
++          this.matchesCompletedSourceGeneration(completed),
++        live: this.isCompletedSnapshotLive(ownerKey, completed),
++        tokenEqual: this.tokensEqual(completed.capturedToken, token),
++        vector: readinessDecisionVector(completed.snapshot),
++      });
++    }
++    return admitted;
++  };
++  return {
++    buildRecords,
++    cache,
++    executor,
++    owner,
++    servedCompletions,
++    service,
++    state,
++    advance(ms) {
++      state.clock += ms;
++    },
++    async drain(rounds = DRAIN_ROUNDS) {
++      for (let round = 0; round < rounds; round++) {
++        const batch = pendingDrains.splice(0, pendingDrains.length);
++        if (batch.length === 0) return round;
++        for (let index = 0; index < batch.length; index++) batch[index]();
++        await new Promise((resolve) => setImmediate(resolve));
++      }
++      return rounds;
++    },
++    forceRebuild(nodeId) {
++      return service.buildNodeReadinessSyncCurrent(nodeId);
++    },
++    setHealthy(healthy) {
++      state.healthy = healthy;
++    },
++    shutdown() {
++      owner.shutdown();
++    },
++    options,
++  };
++}
++
++function readRoutingSample(drive) {
++  const snapshot = drive.executor.getPartitionRoutingSnapshot(
++    USER_PARTITION_ID,
++    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
++  );
++  const leaderDenial = snapshot.deniedByNodeId?.[LEADER_NODE_ID] || null;
++  return {
++    routableServiceCount: snapshot.routableServiceCount,
++    activeAddressedServiceCount: snapshot.activeAddressedServiceCount,
++    serviceRowCount: snapshot.serviceRowCount,
++    canonicalLeaderServiceCount: snapshot.canonicalLeaderServiceCount,
++    reasonCode: snapshot.reasonCode,
++    leaderReasonCodes: (leaderDenial?.reasonCodes || []).map(
++      (code) => String(code?.code ?? code),
++    ),
++  };
++}
++
++/**
++ * Sample the user-table partition exactly as the failing write lane did.
++ * @param {Object} drive
++ * @return {Promise<Array<Object>>}
++ */
++async function sampleUserPartitionRouting(drive) {
++  const samples = [];
++  for (let index = 0; index < ROUTING_SAMPLE_COUNT; index++) {
++    drive.advance(SAMPLE_STEP_MS);
++    // The ratings load wrote continuously through the whole window.
++    drive.cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPDATE', {
++      operation_id: 'ratings-load-operation',
++      revision: index + 1,
++      updated_at: drive.state.clock,
++    });
++    await drive.drain();
++    samples.push(readRoutingSample(drive));
++  }
++  return samples;
++}
++
++async function measureDrive() {
++  const drive = createTokenChurnDrive();
++  try {
++    drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++    await drive.drain();
++    const samples = await sampleUserPartitionRouting(drive);
++    const diagnostics = drive.owner.getDiagnostics();
++    const tokenStatuses = Object.values(
++      diagnostics.completedTokenStatusByOwnerKey,
++    );
++    return {
++      samples,
++      buildCount: diagnostics.buildCount,
++      completionCount: tokenStatuses.length,
++      staleCompletionCount: tokenStatuses.filter(
++        (status) => status === TOKEN_STATUS.STALE,
++      ).length,
++      servedCount: drive.servedCompletions.length,
++      staleServedCount: drive.servedCompletions.filter(
++        (entry) => entry.tokenStatus === TOKEN_STATUS.STALE,
++      ).length,
++      unprovenAdmissions: drive.servedCompletions.filter(
++        (entry) => !(entry.live &&
++          (entry.tokenEqual || entry.sourceGenerationMatches)),
++      ).length,
++    };
++  } finally {
++    drive.shutdown();
++  }
++}
++
++// Two identical drives produce identical routing samples, build counts,
++// completed token statuses and serve-admission counts.
++test('witness-deterministic', async () => {
++  const first = await measureDrive();
++  const second = await measureDrive();
++  assert.deepEqual(second.samples, first.samples,
++    'two runs produce identical routing samples');
++  assert.equal(second.buildCount, first.buildCount,
++    'two runs perform identical owner build counts');
++  assert.equal(second.staleCompletionCount, first.staleCompletionCount,
++    'two runs stamp identical completed token statuses');
++  assert.equal(second.servedCount, first.servedCount,
++    'two runs admit identical numbers of completed snapshots');
++});
++
++// The live-lock precondition: under a token that rotates on every capture no
++// build ever lands current, so every completed build is stamped STALE.
++test('token-rotation-live-lock-precondition', async () => {
++  const measured = await measureDrive();
++  assert.ok(measured.buildCount > ROUTING_SAMPLE_COUNT,
++    'the drive completes a build for every sampled window');
++  assert.equal(measured.staleCompletionCount, measured.completionCount,
++    'every completed build is stamped STALE — the live-lock precondition');
++});
++
++// RED on HEAD: 23 of 23 samples deny every candidate of a live user-table
++// partition, each with the single reason planning_snapshot_refresh_pending.
++test('user-table-partition-routable-under-token-churn', async () => {
++  const measured = await measureDrive();
++  assert.equal(measured.samples.length, ROUTING_SAMPLE_COUNT,
++    'the drive samples the partition as often as the failing run did');
++  assert.ok(
++    measured.samples.every((sample) => sample.serviceRowCount === 3 &&
++      sample.activeAddressedServiceCount === 3 &&
++      sample.canonicalLeaderServiceCount === 1),
++    'all three replica rows stay active and the leader row stays present',
++  );
++  assert.equal(
++    measured.samples.filter(
++      (sample) => sample.routableServiceCount === 0,
++    ).length,
++    0,
++    'no sample denies every candidate of a live user-table partition',
++  );
++  assert.equal(
++    measured.samples.filter(
++      (sample) => sample.reasonCode === ALL_FILTERED &&
++        sample.leaderReasonCodes.length > 0 &&
++        sample.leaderReasonCodes.every((code) => code === REFRESH_PENDING),
++    ).length,
++    0,
++    'no sample answers an unbounded planning_snapshot_refresh_pending denial',
++  );
++});
++
++// RED on HEAD: the real write-delivery loop, whose only retry authority is the
++// absolute execution deadline, returns PARTITION_SERVICE_NOT_FOUND.
++test('write-path-terminal-verdict-cleared', async () => {
++  const drive = createTokenChurnDrive();
++  try {
++    drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++    await drive.drain();
++    await sampleUserPartitionRouting(drive);
++    const result = await drive.executor.executeOnPartition(
++      USER_PARTITION_ID,
++      'INSERT INTO ratings VALUES (1)',
++      [],
++      false,
++      true,
++      false,
++      {
++        tableName: USER_TABLE_NAME,
++        timeoutBudget: {deadlineMs: Date.now() + WRITE_DEADLINE_MS},
++      },
++    );
++    assert.notEqual(
++      result?.error,
++      QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
++      'the write lane does not report the partition service as not found',
++    );
++  } finally {
++    drive.shutdown();
++  }
++});
++
++// THE SAFETY ORACLE. Every serve admission is independently reconfirmed to
++// rest on BOTH sealed bounds — the positive-decision live veto is unmoved AND
++// either the token is equal or the floored planning generation matches. The
++// completed record's token STATUS is never load-bearing, so the staleness
++// class admitted here is exactly the one the sealed floored reuse already
++// admits for a build that landed current.
++test('serve-admission-never-rests-on-token-status', async () => {
++  const measured = await measureDrive();
++  assert.ok(measured.staleServedCount > 0,
++    'the drive serves snapshots from builds stamped STALE');
++  assert.equal(measured.unprovenAdmissions, 0,
++    'no completed snapshot is served unless the two sealed bounds hold');
++});
++
++// The differential audit: every snapshot served from a STALE-stamped build is
++// compared against a forced rebuild of the same owner at serve time.
++test('stale-serve-divergence-audit', async () => {
++  const drive = createTokenChurnDrive();
++  try {
++    drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++    await drive.drain();
++    await sampleUserPartitionRouting(drive);
++    const audited = drive.servedCompletions;
++    const divergences = audited.filter((entry) =>
++      readinessDecisionVector(drive.forceRebuild(entry.ownerKey)) !==
++        entry.vector);
++    assert.ok(audited.length > 0,
++      'the audit observes served completed snapshots');
++    assert.equal(divergences.length, 0,
++      'no served snapshot disagrees with a forced rebuild of the same owner');
++  } finally {
++    drive.shutdown();
++  }
++});
++
++// THE SAFETY NEGATIVE. The cure admits staleness, never a false positive.
++test('live-veto-move-still-denies', async () => {
++  const drive = createTokenChurnDrive();
++  try {
++    drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++    await drive.drain();
++    await sampleUserPartitionRouting(drive);
++    // (i) the live veto moves: every replica's ready lease and heartbeat
++    // expire, so no completed build may be served from store.
++    for (let index = 0; index < REPLICA_NODE_IDS.length; index++) {
++      drive.cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
++        [COLUMN.NODE_ID]: REPLICA_NODE_IDS[index],
++        [COLUMN.LAST_HEARTBEAT]: T0 - READY_LEASE_WINDOW_MS,
++        [COLUMN.READY_LEASE_EXPIRES_AT]: T0 - READY_LEASE_WINDOW_MS,
++      });
++    }
++    drive.advance(SAMPLE_STEP_MS);
++    const afterVetoMove = readRoutingSample(drive);
++    assert.equal(afterVetoMove.routableServiceCount, 0,
++      'a moved positive-decision live veto refuses every completed build');
++    // (ii) the built evidence itself says not-ready.
++    drive.setHealthy(false);
++    for (let round = 0; round < UNHEALTHY_ROUNDS; round++) {
++      drive.advance(SAMPLE_STEP_MS);
++      drive.cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPDATE', {
++        operation_id: 'ratings-load-operation',
++        revision: UNHEALTHY_REVISION_BASE + round,
++        updated_at: drive.state.clock,
++      });
++      await drive.drain();
++    }
++    const afterUnhealthy = readRoutingSample(drive);
++    assert.equal(afterUnhealthy.routableServiceCount, 0,
++      'a node whose evidence says not-ready is never reported routable');
++  } finally {
++    drive.shutdown();
++  }
++});
++
++// CONTROL (green on HEAD, must stay green). In this composition the real
++// service exposes getReusableNodeReadinessSnapshotSync, so a node-table-only
++// token advance can still be rebased forward and the deferred contract is
++// escaped even on HEAD. The receipt guards the cure against a regression in
++// the full composition's denial vocabulary rather than witnessing the cure.
++test('production-composition-control-denial-vocabulary', async () => {
++  const state = {clock: T0};
++  const cache = createFormationShapedCache(T0);
++  installUserTablePartition(cache);
++  const pendingDrains = [];
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: LEADER_NODE_ID,
++    systemTableCache: cache,
++    now: () => state.clock,
++    readinessPlanningScheduleDrainFn: (callback) => {
++      pendingDrains.push(callback);
++      return null;
++    },
++    messageRouter: {
++      getConnectionState: () => 'connected',
++      getConnectedNodes: () => new Set(
++        Array.from({length: NODE_COUNT}, (_, index) => `node-${index}`),
++      ),
++    },
++  });
++  readiness.syncOwnerDependencies({
++    membershipPublicationService: new MembershipPublicationCoordinator({
++      nodeId: LEADER_NODE_ID,
++      systemTableCache: cache,
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      controlPlaneReadinessService: readiness,
++      now: () => state.clock,
++    }),
++  });
++  const executor = new QueryExecutor({
++    nodeId: LEADER_NODE_ID,
++    systemCache: cache,
++    controlPlaneReadinessService: readiness,
++    messageRouter: {getConnectionState: () => 'connected'},
++  });
++  const drain = async () => {
++    for (let round = 0; round < COMPOSITION_DRAIN_ROUNDS; round++) {
++      const batch = pendingDrains.splice(0, pendingDrains.length);
++      if (batch.length === 0) return round;
++      for (let index = 0; index < batch.length; index++) batch[index]();
++      await new Promise((resolve) => setImmediate(resolve));
++    }
++    return COMPOSITION_DRAIN_ROUNDS;
++  };
++  try {
++    executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++    await drain();
++    let refreshPendingSamples = 0;
++    for (let index = 0; index < ROUTING_SAMPLE_COUNT; index++) {
++      state.clock += SAMPLE_STEP_MS;
++      cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'UPDATE', {
++        operation_id: 'ratings-load-operation',
++        revision: index + 1,
++        updated_at: state.clock,
++      });
++      await drain();
++      const snapshot = executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
++      const codes = (snapshot.deniedByNodeId?.[LEADER_NODE_ID]?.reasonCodes ||
++        []).map((code) => String(code?.code ?? code));
++      if (codes.includes(REFRESH_PENDING)) refreshPendingSamples += 1;
++    }
++    assert.equal(refreshPendingSamples, 0,
++      'the production composition never names planning_snapshot_refresh_' +
++        'pending as a routing denial for a live user partition');
++  } finally {
++    readiness.shutdownReadinessPlanningOwner();
++  }
++});
++
++// THE RATE CONTROL (green on HEAD, must stay green): the cure changes only
++// the serve admission of an already-completed build, so the sealed
++// production-composition rig measurement may not move.
++test('unchanged-control-rig-build-rate', async () => {
++  const measured = driveFormationShapedChurn();
++  assert.equal(measured.heavyBuilds, SEALED_RIG_HEAVY_BUILDS,
++    'heavy planning builds stay at the sealed identity-owner measurement');
++  assert.equal(
++    measured.publicationWinnerReads,
++    SEALED_RIG_PUBLICATION_WINNER_READS,
++    'publication winner reads stay at the sealed measurement',
++  );
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index f7bc06eeeee7c71101a914c9bd2a55eb4e8adfa9..b0201626828da5bd610ea01e2225182cab6b5b65 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1857,
++    "unit": 1858,
+     "integration": 73,
+     "bootstrap": 172,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2109,
+-  "digest": "fnv1a32-d4dbb1a2",
++  "censusSize": 2110,
++  "digest": "fnv1a32-9ad051b3",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -556,6 +556,7 @@
+     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "unit",
+     "test/control-plane/readiness-owner-authority-contract.test.js": "unit",
+     "test/control-plane/readiness-per-change-reuse.test.js": "unit",
++    "test/control-plane/readiness-planning-deferral-bounded.test.js": "unit",
+     "test/control-plane/readiness-planning-diagnostics-retention.test.js": "unit",
+     "test/control-plane/readiness-planning-liveness-veto.test.js": "unit",
+     "test/control-plane/readiness-planning-publication-atomicity.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 34e0b0906db6cd3756eb85c8095e7f21ebdcd444..27aef2bbdc020b196be1e0c23484a175670b503c 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2092,
++    "ordinary": 2093,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2109,
+-  "digest": "fnv1a32-ecb444b6",
++  "censusSize": 2110,
++  "digest": "fnv1a32-26700fdf",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -555,6 +555,7 @@
+     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "ordinary",
+     "test/control-plane/readiness-owner-authority-contract.test.js": "ordinary",
+     "test/control-plane/readiness-per-change-reuse.test.js": "ordinary",
++    "test/control-plane/readiness-planning-deferral-bounded.test.js": "ordinary",
+     "test/control-plane/readiness-planning-diagnostics-retention.test.js": "ordinary",
+     "test/control-plane/readiness-planning-liveness-veto.test.js": "ordinary",
+     "test/control-plane/readiness-planning-publication-atomicity.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 7c6a39541d9f15afd93030b34d4c553644361314..282d37a061ace4eb3311bd10953fdfc968d731a3 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -7,7 +7,7 @@
+     "bootstrap-membership": 241,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+-    "control-plane": 171,
++    "control-plane": 172,
+     "convergence-topology": 76,
+     "distributed-harness": 166,
+     "examples-e2e": 7,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2109,
+-  "digest": "fnv1a32-4aa92d31",
++  "censusSize": 2110,
++  "digest": "fnv1a32-11352d16",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -573,6 +573,7 @@
+     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "control-plane",
+     "test/control-plane/readiness-owner-authority-contract.test.js": "control-plane",
+     "test/control-plane/readiness-per-change-reuse.test.js": "control-plane",
++    "test/control-plane/readiness-planning-deferral-bounded.test.js": "control-plane",
+     "test/control-plane/readiness-planning-diagnostics-retention.test.js": "control-plane",
+     "test/control-plane/readiness-planning-liveness-veto.test.js": "control-plane",
+     "test/control-plane/readiness-planning-publication-atomicity.test.js": "control-plane",

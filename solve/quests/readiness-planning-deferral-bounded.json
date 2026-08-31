@@ -1,0 +1,90 @@
+{
+  "id": "readiness-planning-deferral-bounded",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The readiness-planning snapshot owner's deferral is bounded: serve admission rests on the floored planning generation (or exact token equality for a current build) plus the positive-decision live veto, never on TOKEN_STATUS, so a completed build whose source token advanced mid-flight is served under exactly the class the sealed floored reuse already admits instead of being discarded for the all-false deferred contract. On GCP run 2026-08-31T00-12-47 the ratings load failed with PARTITION_SERVICE_NOT_FOUND for user table ratings partition p1 while the partition was fully present: the coordinator was p1's own raft leader with three active addressed service rows, yet every candidate was denied by the single reason planning_snapshot_refresh_pending in all 23 samples across 88 seconds, because under sustained write load the token advanced during every build and no build ever landed current. Measured on a deterministic drive of the real owner, routing and write-delivery path with the transport fingerprint rotating on every captureToken: 576 builds and 3 completions on both sides with all three stamped STALE (freshness pursuit and diagnostics unchanged), samples denied 23 of 23 before and 0 of 23 after with all three services routable, 646 stale serves all inside the sealed reuse class, zero divergences against a forced rebuild at serve time, and the safety negatives still denying (a moved live veto and genuinely not-ready evidence both yield routableServiceCount zero). No new bound, cache, authority or fallback; the 250 ms floored generation, stale grace, macrotask drain, maxItemsPerDrain, budgets, cadences and the 60-second window are untouched, and the system-table leader fail-open is unchanged. Clearing the five-node GCP ratings load is not claimed here: that requires the run.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/operational-ground-truth.md",
+    "closesCL": [],
+    "parentQuest": "readiness-planning-canonical-identity-verified-owner",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "be124c1e3"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-planning-deferral-bounded.receipt.json",
+      "requiredReceipts": [
+        "witness-deterministic",
+        "token-rotation-live-lock-precondition",
+        "user-table-partition-routable-under-token-churn",
+        "write-path-terminal-verdict-cleared",
+        "serve-admission-never-rests-on-token-status",
+        "stale-serve-divergence-audit",
+        "live-veto-move-still-denies",
+        "production-composition-control-denial-vocabulary",
+        "unchanged-control-rig-build-rate"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "readiness-planning-deferral-bounded-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/readiness-planning-deferral-bounded.receipt.json",
+          "requiredReceipts": [
+            "witness-deterministic",
+            "token-rotation-live-lock-precondition",
+            "user-table-partition-routable-under-token-churn",
+            "write-path-terminal-verdict-cleared",
+            "serve-admission-never-rests-on-token-status",
+            "stale-serve-divergence-audit",
+            "live-veto-move-still-denies",
+            "production-composition-control-denial-vocabulary",
+            "unchanged-control-rig-build-rate"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "serve-admission-is-token-status-independent",
+      "statement": "Serve admission rests only on the floored planning generation (or exact token equality for a current build) and the positive-decision live veto; TOKEN_STATUS may be stamped and observed but is never a precondition, and no new bound, cache, authority or fallback replaces it."
+    },
+    {
+      "id": "admitted-staleness-class-is-not-widened",
+      "statement": "A STALE build is served under exactly the class the sealed floored reuse already admits, proved by an in-witness oracle over every admission rather than by inspection."
+    },
+    {
+      "id": "never-routable-on-answer-changing-staleness",
+      "statement": "No service is reported routable on evidence that is stale in a way that changes the answer; proved by a zero-divergence forced-rebuild audit over every stale serve plus a two-part safety negative (moved live veto, genuine not-ready)."
+    },
+    {
+      "id": "freshness-pursuit-and-diagnostics-unchanged",
+      "statement": "The stale stamp, the completed token-status bookkeeping, the replacement enqueue and the reason codes are unchanged; the deferred contract still answers genuine evidence absence."
+    },
+    {
+      "id": "no-rate-scheduler-or-budget-movement",
+      "statement": "The 250 ms floored generation, the stale grace, the macrotask drain, maxItemsPerDrain 1, budgets, cadences, the 60-second window and macrotask-yield-required are untouched; the rig stays pinned at 1218 heavy builds and 824 winner reads."
+    },
+    {
+      "id": "single-owner-serve-admission-scope",
+      "statement": "No cross-owner priority edge, no scheduler change, no second ACTIVE or READY authority, and no change to the system-table leader fail-open; widening that fail-open to user tables remains an explicit owner decision recorded separately."
+    },
+    {
+      "id": "claims-must-be-measured",
+      "statement": "Every denial, rate and divergence number comes from the deterministic witness or the production-composition rig that matches the live seed within three percent; clearing the five-node GCP run is not claimed here."
+    }
+  ]
+}
