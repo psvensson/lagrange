@@ -37,6 +37,7 @@ const LOCAL_STR_OWNED_008 = '?? ';
 const LOCAL_STR_OWNED_009 = 'source verification requires a recorded Git base commit';
 const LOCAL_STR_OWNED_010 = 'source verification could not inspect Git status';
 const LOCAL_STR_OWNED_011 = 'source verification cannot fingerprint untracked paths; stage intent with git add -N';
+const UNTRACKED_PATHS_SEPARATOR = ', ';
 const LOCAL_STR_OWNED_012 = '(missing changeRef)';
 const LOCAL_STR_OWNED_013 = '\t';
 const LOCAL_STR_OWNED_014 = '\0';
@@ -462,7 +463,10 @@ export function findApprovedRejectionReplacement(
   return null;
 }
 
-function gitStatusHasUntracked(root, paths) {
+// The untracked paths under `paths`, GIT_STATUS_UNAVAILABLE when git status
+// itself failed. Returning the offending paths (not a boolean) lets the
+// caller name them and lets the landing workflow repair them (C7).
+function gitStatusUntrackedPaths(root, paths) {
   const gitArguments = ['status', '--porcelain', '--'];
   appendAll(gitArguments, paths);
   const result = spawnSync('git', gitArguments, {
@@ -470,10 +474,14 @@ function gitStatusHasUntracked(root, paths) {
     encoding: 'utf8',
   });
   if (result.status !== 0) return GIT_STATUS_UNAVAILABLE;
-  return arraySome(
-    stringSplit(String(result.stdout || ''), LOCAL_STR_OWNED_007),
-    (line) => stringStartsWith(line, LOCAL_STR_OWNED_008),
-  );
+  const offending = [];
+  for (const line of stringSplit(
+    String(result.stdout || ''), LOCAL_STR_OWNED_007)) {
+    if (stringStartsWith(line, LOCAL_STR_OWNED_008)) {
+      offending.push(stringTrim(line.slice(LOCAL_STR_OWNED_008.length)));
+    }
+  }
+  return offending;
 }
 
 export function canonicalSourceDelta(root, baseCommit, paths) {
@@ -491,14 +499,16 @@ export function canonicalSourceDelta(root, baseCommit, paths) {
   if (sortedPaths.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: []};
   }
-  const untracked = gitStatusHasUntracked(root, sortedPaths);
+  const untracked = gitStatusUntrackedPaths(root, sortedPaths);
   if (untracked === GIT_STATUS_UNAVAILABLE) {
     return {ok: false, fingerprint: null, content: null,
       problem: LOCAL_STR_OWNED_010};
   }
-  if (untracked) {
+  if (untracked.length > 0) {
     return {ok: false, fingerprint: null, content: null,
-      problem: LOCAL_STR_OWNED_011};
+      untrackedPaths: untracked,
+      problem: `${LOCAL_STR_OWNED_011}: ` +
+        arrayJoin(untracked, UNTRACKED_PATHS_SEPARATOR)};
   }
   const gitArguments = [
     'diff', '--binary', '--full-index', '--no-ext-diff', baseCommit,
