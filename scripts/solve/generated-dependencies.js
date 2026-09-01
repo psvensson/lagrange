@@ -174,6 +174,13 @@ function registeredGeneratedOutputStep(filePath) {
   return null;
 }
 
+// Lightweight registry surface for consumers that only need to know WHICH
+// paths are generated collateral (template suggestion, path filtering) —
+// never the snapshot machinery.
+export function registeredGeneratedOutputPaths() {
+  return arrayMap(REGISTERED_GENERATED_OUTPUT_STEPS, (step) => step.output);
+}
+
 export function isRegisteredGeneratedOutput(filePath) {
   return registeredGeneratedOutputStep(filePath) !== null;
 }
