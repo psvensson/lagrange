@@ -1169,8 +1169,14 @@ function cmdPreflight(root, args) {
 // stages intent for untracked sources, inherits theory/model fields, and
 // records through the unchanged step gates.
 function cmdReattempt(root, args) {
+  const quest = loadQuest(root, args.id || args._[0]);
   const {result, output} = runReattemptCommand(root, args, loadQuest);
   process.stdout.write(output);
+  // A terminal result (theory gate, blocked disposition) recorded NO
+  // replacement attempt — measured 2026-09-01: claiming "recorded" over a
+  // theory-gate stop sent the operator to land a candidate that was never
+  // replaced, and the landing re-minted reviews against drifting v2 bytes.
+  if (writeStepTerminal(root, quest, result)) return;
   const moved = result.progressed ? 'PROGRESS' : 'flat';
   const violations = result.violations?.length ?
     ` violations: ${result.violations.join('; ')}` : '';
