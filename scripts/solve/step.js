@@ -171,9 +171,26 @@ function autoIngestFrontierEvidence(root, quest, log, state) {
   return {log, state, decision: null};
 }
 
+// Reattempt pick: a SOLVED quest has no OPEN frontier, so a replacement
+// attempt pins the frontier of the most recent recorded attempt event.
+function reattemptFrontierPick(quest, state, log) {
+  const latest = [...log].reverse().find((event) => event.type === 'attempt');
+  if (!latest) return null;
+  const def = quest.frontiers.find(
+    (frontier) => frontier.id === latest.frontier);
+  const frontierState = state.frontiers.find(
+    (frontier) => frontier.id === latest.frontier);
+  if (!def || !frontierState) return null;
+  return {def, state: frontierState};
+}
+
 function stepBegin(root, quest, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
+  // Reattempt mode: a SOLVED quest whose landing candidate must be replaced
+  // (stale bytes, rejected fingerprint) may pin a new step; every commit
+  // gate below still applies unchanged.
+  const allowSolvedReattempt = options.allowSolvedReattempt === true;
   if (loadPending(root, quest.id)) {
     if (options.force) {
       clearPending(root, quest.id);
@@ -186,14 +203,14 @@ function stepBegin(root, quest, options = {}) {
 
   let log = readLog(root, quest.id);
   let state = projectState(quest, log);
-  if (state.questStatus === STATUS_SOLVED) {
+  if (state.questStatus === STATUS_SOLVED && !allowSolvedReattempt) {
     return {terminal: 'solved', evidence: state.questEvidence};
   }
 
   const ingested = autoIngestFrontierEvidence(root, quest, log, state);
   if (ingested.decision) return gateDecisionToStepResult(ingested.decision);
   ({log, state} = ingested);
-  if (state.questStatus === STATUS_SOLVED) {
+  if (state.questStatus === STATUS_SOLVED && !allowSolvedReattempt) {
     return {terminal: 'solved', evidence: state.questEvidence};
   }
 
@@ -209,7 +226,8 @@ function stepBegin(root, quest, options = {}) {
   // attempt (the verifier ruled the recorded candidate insufficient), so the
   // begin-step must proceed to pin that attempt rather than re-close. Only a
   // stale done=false EVIDENCE reopen with already-green live doneWhen re-closes.
-  if (boundVerifierRejectionEvents(log).size === 0) {
+  if (!allowSolvedReattempt &&
+    boundVerifierRejectionEvents(log).size === 0) {
     const recovered = recordQuestSolvedIfDone(root, quest, ctx, {accepted: true});
     if (recovered.done) {
       state = projectState(quest, readLog(root, quest.id));
@@ -217,7 +235,8 @@ function stepBegin(root, quest, options = {}) {
     }
   }
 
-  const pick = pickFrontier(quest, state, ctx.scoreFn);
+  const pick = pickFrontier(quest, state, ctx.scoreFn) ||
+    (allowSolvedReattempt ? reattemptFrontierPick(quest, state, log) : null);
   if (!pick) return {terminal: 'exhausted'};
 
   const health = analyzeQuestHealth(root, quest, {state});

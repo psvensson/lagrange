@@ -49,6 +49,7 @@ import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
 import {runPreflightCommand} from './solve/preflight.js';
+import {runReattemptCommand} from './solve/reattempt.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runParkCommand} from './solve/park.js';
@@ -103,6 +104,7 @@ const REVIEW_FINGERPRINT_PROBLEM =
 const REVIEW_FINGERPRINT_SEALED = ' (sealed ';
 const REVIEW_FINGERPRINT_NONE = 'none';
 const REVIEW_FINGERPRINT_CLOSE = ')';
+const ATTEMPT_DONE_SUFFIX = ' DONE';
 const REJECTION_REVIEW_REQUIRED_PROBLEM =
   'verifier-rejection requires --review <reviewId> once a review has been ' +
   'minted for this quest, so the fingerprint is checked against the sealed ' +
@@ -1027,7 +1029,7 @@ function cmdStep(root, args) {
     `${r.engagementWitness.message}\n` : '';
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
-    `(${moved})${r.done ? ' DONE' : ''}${viol}\n${autoDiffLine}${templateLines}` +
+    `(${moved})${r.done ? ATTEMPT_DONE_SUFFIX : ''}${viol}\n${autoDiffLine}${templateLines}` +
     witnessLine + commitLine(r.commit));
   emitAdvisories(root, quest);
   refreshFrontierBoard(root);
@@ -1146,6 +1148,22 @@ function cmdPreflight(root, args) {
   const {output, ok} = runPreflightCommand(root, args, loadQuest);
   process.stdout.write(output);
   if (!ok) process.exitCode = 1;
+}
+
+// First-class replacement attempt: regenerates byte-contract dependencies,
+// stages intent for untracked sources, inherits theory/model fields, and
+// records through the unchanged step gates.
+function cmdReattempt(root, args) {
+  const {result, output} = runReattemptCommand(root, args, loadQuest);
+  process.stdout.write(output);
+  const moved = result.progressed ? 'PROGRESS' : 'flat';
+  const violations = result.violations?.length ?
+    ` violations: ${result.violations.join('; ')}` : '';
+  process.stdout.write(
+    `recorded replacement attempt on ${result.frontier}: metric ` +
+    `${result.before} -> ${result.after} (${moved})` +
+    `${result.done ? ATTEMPT_DONE_SUFFIX : ''}${violations}\n` +
+    (result.changeRef ? `changeRef: ${result.changeRef}\n` : ''));
 }
 
 function cmdUpgrade(root, args) {
@@ -1405,6 +1423,7 @@ const COMMANDS = {
   'inherit-candidate': cmdInheritCandidate,
   'correct-attempt-base': cmdCorrectAttemptBase,
   'preflight': cmdPreflight,
+  'reattempt': cmdReattempt,
 };
 
 function main() {
