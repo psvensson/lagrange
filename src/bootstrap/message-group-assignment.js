@@ -8,6 +8,11 @@ import {LoggingService} from '../logging/logging-service.js';
 import {STRING} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
+  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from './replication-target-authority.js';
+import {
   MESSAGE_GROUP_ASSIGNMENT_DEFAULT,
   MESSAGE_GROUP_ASSIGNMENT_ERROR,
   MESSAGE_GROUP_ASSIGNMENT_LOG_MSG,
@@ -83,12 +88,20 @@ class MessageGroupAssignment {
         {newNodeId, newGroupId},
       );
 
+      // The identity-mint plan for a reused group follows the group's
+      // DECLARED policy, decoded by the single authority. The observed
+      // replica count (existingReplicas.length) is runtime identity state:
+      // a partially formed group reported 1 and that count was silently
+      // restated as the plan, failing the odd/minimum validation and
+      // under-minting on restart.
+      const reusedGroupTarget = resolveDesiredReplicationFactor(existingGroup);
       return {
         strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
         groupId: newGroupId,
-        replicaCount: existingReplicas.length > 0 ?
-          existingReplicas.length :
-          MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
+        replicaCount:
+          reusedGroupTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED ?
+            DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT :
+            reusedGroupTarget.replicationFactor,
         reuseExistingGroup: true,
         startupReplicaIds,
       };
@@ -137,7 +150,9 @@ class MessageGroupAssignment {
     return {
       strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
       groupId: newGroupId,
-      replicaCount: MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
+      // A fresh self-hosted group is a creation: its plan follows the
+      // MESSAGE_GROUPS schema declaration, not a restated literal.
+      replicaCount: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
     };
   }
 

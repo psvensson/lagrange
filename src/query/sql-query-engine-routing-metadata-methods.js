@@ -1,5 +1,9 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
+import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {buildControlPlaneReadAuthority} from
@@ -48,11 +52,6 @@ const AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE = Object.freeze({
   COMPLETE: 'complete',
   INCOMPLETE: 'incomplete',
   UNKNOWN: 'unknown',
-});
-
-const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD = Object.freeze({
-  REPLICA_COUNT: 'replica_count',
-  REPLICA_COUNT_CAMEL: 'replicaCount',
 });
 
 
@@ -483,27 +482,17 @@ class SQLQueryEngineRoutingMetadataMethods {
     const observedServiceCount = Array.isArray(serviceRows) ?
       serviceRows.length :
       0;
-    const partitionReplicaCount =
-      partitionRow?.[
-        AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD.REPLICA_COUNT
-      ] ??
-      partitionRow?.[
-        AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD.REPLICA_COUNT_CAMEL
-      ];
-    const expectedReplicaCount = Number(
-      partitionReplicaCount,
-    );
-    if (
-      !Number.isFinite(expectedReplicaCount) ||
-      expectedReplicaCount <= 0
-    ) {
+    // Row decode is owned by the single policy authority; an undeclared
+    // policy keeps this overlay's explicit UNKNOWN coverage state.
+    const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.UNKNOWN,
         expectedReplicaCount: 0,
         observedServiceCount,
       });
     }
-    const normalizedExpectedReplicaCount = Math.floor(expectedReplicaCount);
+    const normalizedExpectedReplicaCount = desiredTarget.replicationFactor;
     if (observedServiceCount >= normalizedExpectedReplicaCount) {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.COMPLETE,

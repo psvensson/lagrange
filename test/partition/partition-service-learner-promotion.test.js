@@ -416,7 +416,12 @@ test('PartitionService - learner promotion discounts stale local voter row',
 test('PartitionService - learner promotes when voter count would be odd', async (t) => {
   // Create a mock system table cache with 2 active voters (one was removed)
   const mockCache = {
-    get: () => null, // Not used for voter counting
+    // The promotion target is the DECLARED policy on the partitions row.
+    get: (tableName, id) => (
+      tableName === TABLES.PARTITIONS && id === 'test-partition' ?
+        {partition_id: 'test-partition', replica_count: 3} :
+        null
+    ),
     filter: (tableName, predicate) => {
       if (tableName === TABLES.SERVICES) {
         // Return 2 active partition replicas (one was removed)
@@ -1143,7 +1148,12 @@ test(
   'PartitionService - learner promotion uses startup leader hint for stable joins',
   async (t) => {
     const mockCache = {
-      get: () => null,
+      // The promotion target is the DECLARED policy on the partitions row.
+      get: (tableName, id) => (
+        tableName === TABLES.PARTITIONS && id === 'test-partition' ?
+          {partition_id: 'test-partition', replica_count: 3} :
+          null
+      ),
       filter: (tableName, predicate) => {
         if (tableName === TABLES.SERVICES) {
           const services = [

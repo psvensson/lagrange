@@ -2,6 +2,10 @@ import {TABLES, SERVICE_TYPE} from '../constants/index.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {ReplicaStatus} from './replica-operation-progress.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 
 const {isOperationLedgerPartitionTable} = REBALANCE_COORDINATOR_SHARED;
 
@@ -71,10 +75,12 @@ function readTargetReplicaCount(systemTableCache, partitionId) {
     return null;
   }
   const partitionRow = systemTableCache.get(TABLES.PARTITIONS, partitionId);
-  const replicaCount = Number(partitionRow?.replica_count);
-  return Number.isInteger(replicaCount) && replicaCount > 0 ?
-    replicaCount :
-    null;
+  // Grammar owned by the single policy authority; this caller keeps its
+  // explicit null on an undeclared policy.
+  const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+  return desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED ?
+    null :
+    desiredTarget.replicationFactor;
 }
 
 function readPlacementEligibleNodeIds(systemTableCache, options = {}) {

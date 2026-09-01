@@ -1,6 +1,10 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -251,14 +255,14 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       this.systemTableCache,
       this.entityId,
     );
-    const configuredReplicaCount = Number(
-      partitionRow?.replica_count ?? partitionRow?.replicaCount,
-    );
-    if (
-      Number.isFinite(configuredReplicaCount) &&
-      configuredReplicaCount > 0
-    ) {
-      return Math.floor(configuredReplicaCount);
+    // Row decode is owned by the single policy authority. The fallback below
+    // is the bootstrap expected RF: it may only keep readiness CONSERVATIVE
+    // while the freshly seeded row is not yet observable (an undeclared target
+    // of 0 would shrink the quorum target to 1 and RELEASE on a lone node);
+    // it never overrides a declared row.
+    const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+    if (desiredTarget.source !== REPLICATION_TARGET_SOURCE.UNDECLARED) {
+      return desiredTarget.replicationFactor;
     }
     return PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT;
   }

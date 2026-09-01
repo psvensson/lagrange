@@ -143,6 +143,5 @@ function applyManagedSplitTopologyBindings(workflow, options) {
 }
 
 export {
-  DEFAULT_QUORUM_REPLICA_COUNT,
   applyManagedSplitTopologyBindings,
 };

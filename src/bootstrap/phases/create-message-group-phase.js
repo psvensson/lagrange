@@ -220,7 +220,8 @@ class CreateMessageGroupPhase {
    */
   async phaseCreateSelfHostedMessageGroup(assignment) {
     const groupId = assignment.groupId;
-    const replicaCount = assignment.replicaCount || NUM.THREE;
+    const replicaCount = assignment.replicaCount ||
+      DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT;
     const logger = this.delegates.getLogger();
     const config = this.delegates.getConfig();
     const messageRouter = this.delegates.getMessageRouter();

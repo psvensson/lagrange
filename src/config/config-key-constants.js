@@ -171,8 +171,6 @@ const CONFIG_KEY = Object.freeze({
   NODE_REINTEGRATION_HEALTH_CHECK_INTERVAL_MS: 'nodeReintegration.healthCheckIntervalMs',
 
   REPLICA_RECOVERY_CHECK_INTERVAL_MS: 'replicaRecovery.checkIntervalMs',
-  REPLICA_RECOVERY_MIN_PARTITION_REPLICAS: 'replicaRecovery.minPartitionReplicas',
-  REPLICA_RECOVERY_MIN_MESSAGE_GROUP_REPLICAS: 'replicaRecovery.minMessageGroupReplicas',
   REPLICA_RECOVERY_DELAY_MS: 'replicaRecovery.recoveryDelayMs',
 
   TRANSPORT_CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',

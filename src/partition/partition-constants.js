@@ -478,6 +478,9 @@ const SPLIT_MERGE_ERROR_MSG = Object.freeze({
 const MANAGED_MERGE_ERROR_MSG = Object.freeze({
   SOURCE_PARTITIONS_REQUIRED:
     'Managed merge requires two distinct source partition ids',
+  REPLICATION_POLICY_UNDECLARED:
+    'Managed merge requires a declared replication policy on the source ' +
+    'partition row',
   PARTITION_NOT_FOUND: 'Managed merge source partition not found',
   TABLE_NOT_FOUND: 'Managed merge table not found',
   TABLE_MISMATCH:

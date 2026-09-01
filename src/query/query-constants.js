@@ -178,6 +178,9 @@ const QUERY_ERROR_MSG = Object.freeze({
     ': key range overlaps a persisted in-flight transition',
   TABLE_SPLIT_PRIMARY_KEY_REQUIRED:
     'Partition split orchestration requires a single-column partition key',
+  TABLE_SPLIT_REPLICATION_POLICY_UNDECLARED:
+    'Managed partition split requires a declared replication policy on the ' +
+    'source partition row',
   TABLE_SPLIT_PARTITION_NOT_FOUND:
     'Partition split source partition metadata not found',
   TABLE_SPLIT_TABLE_NOT_FOUND:

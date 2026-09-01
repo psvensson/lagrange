@@ -10,6 +10,10 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -81,11 +85,6 @@ class ReplicaRecoveryService extends EventEmitter {
     const config = ConfigurationManager.getInstance();
     this.checkIntervalMs = config.get(CONFIG_KEY.REPLICA_RECOVERY_CHECK_INTERVAL_MS) ||
       REPLICA_RECOVERY_DEFAULT.CHECK_INTERVAL_MS;
-    this.minPartitionReplicas = config.get(CONFIG_KEY.REPLICA_RECOVERY_MIN_PARTITION_REPLICAS) ||
-      REPLICA_RECOVERY_DEFAULT.MIN_PARTITION_REPLICAS;
-    this.minMessageGroupReplicas =
-      config.get(CONFIG_KEY.REPLICA_RECOVERY_MIN_MESSAGE_GROUP_REPLICAS) ||
-      REPLICA_RECOVERY_DEFAULT.MIN_MESSAGE_GROUP_REPLICAS;
     this.recoveryDelayMs = config.get(CONFIG_KEY.REPLICA_RECOVERY_DELAY_MS) ||
       REPLICA_RECOVERY_DEFAULT.RECOVERY_DELAY_MS;
 
@@ -139,8 +138,6 @@ class ReplicaRecoveryService extends EventEmitter {
     this.logger.info(REPLICA_RECOVERY_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
-      minPartitionReplicas: this.minPartitionReplicas,
-      minMessageGroupReplicas: this.minMessageGroupReplicas,
     });
   }
 
@@ -203,24 +200,34 @@ class ReplicaRecoveryService extends EventEmitter {
   }
 
   /**
-   * Check partition replica counts and trigger recovery if needed.
-   * @return {Promise<Object>} Summary for partition entities.
+   * Scan one entity class for replica deficits and trigger recovery.
+   * Desired RF is DECLARED policy, decoded by the single authority. An
+   * undeclared policy is an unreadable requirement: recovery must not
+   * substitute a config minimum for it (that fallback silently restated
+   * policy), so the row is warned about and skipped instead.
+   * @param {Object} spec - Entity scan specification.
+   * @return {Promise<Object>} Summary counts for the entity class.
    * @private
    */
-  async checkPartitionReplicas() {
-    const partitions = this.getPartitions();
+  async checkReplicaDeficits(spec) {
     let deficitCount = REPLICA_RECOVERY_NUM.ZERO;
     let recoveryCount = REPLICA_RECOVERY_NUM.ZERO;
 
-    for (const partition of partitions) {
-      const healthyReplicas = this.getHealthyPartitionReplicas(partition.partition_id);
-      const targetCount = partition.replica_count || this.minPartitionReplicas;
+    for (const row of spec.rows) {
+      const context = {nodeId: this.nodeId, ...spec.rowContext(row)};
+      const healthyReplicas = spec.healthyReplicasFor(row);
+      const desiredTarget = resolveDesiredReplicationFactor(row);
+      if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+        this.logger.warn(spec.undeclaredLogMessage, context);
+        continue;
+      }
+      const targetCount = desiredTarget.replicationFactor;
 
       if (healthyReplicas.length < targetCount) {
         deficitCount += 1;
         try {
-          recoveryCount += await this.triggerPartitionRecovery(
-            partition,
+          recoveryCount += await spec.triggerRecovery(
+            row,
             healthyReplicas,
             targetCount,
           );
@@ -229,9 +236,8 @@ class ReplicaRecoveryService extends EventEmitter {
             throw error;
           }
           this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
-            nodeId: this.nodeId,
-            entityType: REPLICA_RECOVERY_ENTITY_TYPE.PARTITION,
-            partitionId: partition.partition_id,
+            ...context,
+            entityType: spec.entityType,
             error: error.message,
           });
         }
@@ -245,45 +251,40 @@ class ReplicaRecoveryService extends EventEmitter {
   }
 
   /**
+   * Check partition replica counts and trigger recovery if needed.
+   * @return {Promise<Object>} Summary for partition entities.
+   * @private
+   */
+  async checkPartitionReplicas() {
+    return this.checkReplicaDeficits({
+      rows: this.getPartitions(),
+      rowContext: (row) => ({partitionId: row.partition_id}),
+      healthyReplicasFor: (row) =>
+        this.getHealthyPartitionReplicas(row.partition_id),
+      undeclaredLogMessage: REPLICA_RECOVERY_LOG_MSG.PARTITION_POLICY_UNDECLARED,
+      entityType: REPLICA_RECOVERY_ENTITY_TYPE.PARTITION,
+      triggerRecovery: (row, healthyReplicas, targetCount) =>
+        this.triggerPartitionRecovery(row, healthyReplicas, targetCount),
+    });
+  }
+
+  /**
    * Check message group replica counts and trigger recovery if needed.
    * @return {Promise<Object>} Summary for message group entities.
    * @private
    */
   async checkMessageGroupReplicas() {
-    const messageGroups = this.getMessageGroups();
-    let deficitCount = REPLICA_RECOVERY_NUM.ZERO;
-    let recoveryCount = REPLICA_RECOVERY_NUM.ZERO;
-
-    for (const group of messageGroups) {
-      const healthyReplicas = this.getHealthyMessageGroupReplicas(group.group_id);
-      const targetCount = group.replica_count || this.minMessageGroupReplicas;
-
-      if (healthyReplicas.length < targetCount) {
-        deficitCount += 1;
-        try {
-          recoveryCount += await this.triggerMessageGroupRecovery(
-            group,
-            healthyReplicas,
-            targetCount,
-          );
-        } catch (error) {
-          if (error?.isCritical) {
-            throw error;
-          }
-          this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
-            nodeId: this.nodeId,
-            entityType: REPLICA_RECOVERY_ENTITY_TYPE.MESSAGE_GROUP,
-            groupId: group.group_id,
-            error: error.message,
-          });
-        }
-      }
-    }
-
-    return {
-      deficitCount,
-      recoveryCount,
-    };
+    return this.checkReplicaDeficits({
+      rows: this.getMessageGroups(),
+      rowContext: (row) => ({groupId: row.group_id}),
+      healthyReplicasFor: (row) =>
+        this.getHealthyMessageGroupReplicas(row.group_id),
+      undeclaredLogMessage:
+        REPLICA_RECOVERY_LOG_MSG.MESSAGE_GROUP_POLICY_UNDECLARED,
+      entityType: REPLICA_RECOVERY_ENTITY_TYPE.MESSAGE_GROUP,
+      triggerRecovery: (row, healthyReplicas, targetCount) =>
+        this.triggerMessageGroupRecovery(row, healthyReplicas, targetCount),
+    });
   }
 
   /**
@@ -743,8 +744,6 @@ class ReplicaRecoveryService extends EventEmitter {
       nodeId: this.nodeId,
       checkIntervalMs: this.checkIntervalMs,
       currentCheckIntervalMs: this.currentCheckIntervalMs,
-      minPartitionReplicas: this.minPartitionReplicas,
-      minMessageGroupReplicas: this.minMessageGroupReplicas,
       pendingRecoveries: this.pendingRecoveries.size,
       recoveryCount: this.recoveryCount,
       isRunning: this.monitoringActive,
