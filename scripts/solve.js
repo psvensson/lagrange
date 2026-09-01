@@ -892,6 +892,20 @@ function authorizedScopeSignature(root, quest) {
   }
 }
 
+// The scope already on record for this quest: the union of changed paths across
+// recorded attempt artifacts, from the same analyzer the scope guard uses. Every
+// path in it was admitted through the gate once, so a candidate it covers is a
+// re-submission of recorded work, never scope growth. Advisory-derived like the
+// candidate signature: unreadable artifacts record no anchor and charge as before.
+function recordedAttemptScopeSignature(root, quest) {
+  try {
+    return analyzeScopePressure(root, quest, readLog(root, quest.id),
+      {ignoreBaselines: true}).changedPaths || null;
+  } catch {
+    return null;
+  }
+}
+
 function cmdOverride(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('override: --id <questId> is required');
@@ -918,6 +932,7 @@ function cmdOverride(root, args) {
     problem: typeof args.problem === 'string' ? args.problem : null,
     reason: args.reason,
     scopeSignature: authorizedScopeSignature(root, quest),
+    recordedScope: recordedAttemptScopeSignature(root, quest),
   });
   process.stdout.write(
     `recorded override of ${code} for ${args.frontier} @ ${stamped.ts}\n` +

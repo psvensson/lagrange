@@ -131,4 +131,46 @@ tap.test('same-guard overrides are capped per frontier and code', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('recorded-attempt coverage re-authorizes when no override signature does', (t) => {
+    // A file can enter the tree between the last override and the attempt
+    // snapshot: the recorded, reviewed attempt covers it but no override
+    // signature does. Re-submitting that attempt byte-identically reaches no
+    // path beyond recorded work, so the recorded-scope anchor must make it a
+    // free re-authorization — otherwise verified work parks at the cap.
+    const {root, quest} = setup();
+    const scope = ['src/a.js'];
+    for (let i = 0; i < SAME_GUARD_OVERRIDE_LIMIT; i += 1) {
+      scope.push(`src/grown-${i}.js`);
+      override(root, quest, {scopeSignature: [...scope]});
+    }
+    const candidate = [...scope, 'src/late-arrival.js'];
+    t.throws(() => override(root, quest, {scopeSignature: candidate}),
+      /re-scope instead of overriding again/u,
+      'without a recorded-scope anchor the late path is charged as growth');
+    const again = override(root, quest, {
+      scopeSignature: candidate,
+      recordedScope: candidate,
+    });
+    t.equal(again.scopeReauthorization, true,
+      'coverage by the recorded attempt union is a free re-authorization');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('the recorded-scope anchor never authorizes unrecorded growth', (t) => {
+    const {root, quest} = setup();
+    const scope = ['src/a.js'];
+    for (let i = 0; i < SAME_GUARD_OVERRIDE_LIMIT; i += 1) {
+      scope.push(`src/grown-${i}.js`);
+      override(root, quest, {scopeSignature: [...scope]});
+    }
+    t.throws(() => override(root, quest, {
+      scopeSignature: [...scope, 'src/never-recorded.js'],
+      recordedScope: [...scope],
+    }), /re-scope instead of overriding again/u,
+    'a path outside both anchors is still genuine scope growth');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });
