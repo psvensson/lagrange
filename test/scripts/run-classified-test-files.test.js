@@ -42,7 +42,8 @@ test('the executor runs classified lanes serially with their owned budgets', () 
     [INTEGRATION, TOOLCHAIN, ORDINARY], {
       root,
       spawn(command, args, options) {
-        calls.push({args, command, tapTimeout: options.env.TAP_TIMEOUT});
+        calls.push({args, command, tapTimeout: options.env.TAP_TIMEOUT,
+          tapTimeoutFloor: options.env.TAP_TIMEOUT_FLOOR});
         return {status: 0};
       },
     });
@@ -52,7 +53,12 @@ test('the executor runs classified lanes serially with their owned budgets', () 
     ['--jobs=4', '--jobs=1', '--jobs=1']);
   assert.deepEqual(calls.map((call) => call.args.at(-1)),
     [ORDINARY, TOOLCHAIN, INTEGRATION]);
-  assert.equal(calls[2].tapTimeout, '120');
+  // The exclusive lane advises a floor and never sets TAP_TIMEOUT itself:
+  // the runner owns the final value and lifts it to a file's declared
+  // budget, so a 480s declaration is never cut to the lane default.
+  assert.equal(calls[2].tapTimeout, undefined);
+  assert.equal(calls[2].tapTimeoutFloor, '120');
+  assert.equal(calls[0].tapTimeoutFloor, undefined);
 });
 
 test('the classified plan fails closed on duplicates and unknown paths', () => {

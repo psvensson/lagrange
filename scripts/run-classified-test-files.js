@@ -40,7 +40,7 @@ const RESOURCE_FLAG = '--resource';
 const EXCLUDE_FLAG = '--exclude';
 const EXCLUDE_PREFIX_FLAG = '--exclude-prefix';
 const MAX_FILES_PER_RUN = 100;
-const EXCLUSIVE_TAP_TIMEOUT_SECONDS = '120';
+const EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS = '120';
 const NEWLINE = '\n';
 const DUPLICATE_FILES_PROBLEM =
   'classified test plan contains duplicate files';
@@ -118,9 +118,12 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
       `jobs=${lane.jobs}${NEWLINE}`,
     );
     for (const batch of chunks(lane.files, MAX_FILES_PER_RUN)) {
+      // A floor, not a cap: the runner owns the final TAP_TIMEOUT and
+      // lifts it to the file's declared budget when that is larger. An
+      // explicit caller TAP_TIMEOUT flows through process.env and wins.
       const env = lane.resourceClass === RESOURCE_CLASS_EXCLUSIVE ? {
         ...process.env,
-        TAP_TIMEOUT: process.env.TAP_TIMEOUT ?? EXCLUSIVE_TAP_TIMEOUT_SECONDS,
+        TAP_TIMEOUT_FLOOR: EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS,
       } : process.env;
       const result = spawn(process.execPath,
         [RUNNER, `--jobs=${lane.jobs}`, ...batch],

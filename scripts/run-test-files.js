@@ -223,13 +223,21 @@ function prepareTestRun(file, options) {
   // options and passed only while faster than 30s, then flaked on the
   // slower CI runner). Only the TAP_TIMEOUT env genuinely extends the
   // cap, so lift it to the LARGEST option declared in the file. An
-  // explicit caller TAP_TIMEOUT (for example the classified exclusive lane)
-  // still wins; the per-file kill (--timeout-ms, default 600s) still
-  // bounds the whole process.
+  // explicit caller TAP_TIMEOUT still wins outright; a caller that only
+  // wants a minimum (for example the classified exclusive lane) passes
+  // TAP_TIMEOUT_FLOOR instead, which raises undeclared files without
+  // cutting a file below its own declaration — clobbering declarations
+  // is exactly how a 480s formation test came to die at 120s while its
+  // declared budget said otherwise. The per-file kill (--timeout-ms,
+  // default 600s) still bounds the whole process.
   if (env.TAP_TIMEOUT === undefined) {
     const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile);
-    if (declaredTimeoutSeconds !== null) {
-      env.TAP_TIMEOUT = String(declaredTimeoutSeconds);
+    const resolvedTimeoutSeconds = Math.max(
+      declaredTimeoutSeconds ?? 0,
+      parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
+    );
+    if (resolvedTimeoutSeconds > 0) {
+      env.TAP_TIMEOUT = String(resolvedTimeoutSeconds);
     }
   }
   return {
@@ -257,6 +265,13 @@ const UNRESOLVED_TIMEOUT_ERROR =
 // hard error. Falling back to the default cap is exactly how 18 files came to
 // declare 45s-300s and run at 30s anyway; a refactor to
 // `const T = BASE * MULTIPLIER;` must fail loudly instead of re-creating that.
+// A floor is advice, not authority: it raises files with no usable
+// declaration and never lowers one that declares more.
+function parsedTimeoutFloorSeconds(value) {
+  const seconds = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : 0;
+}
+
 function largestDeclaredTimeoutSeconds(absoluteFile) {
   let source;
   try {
