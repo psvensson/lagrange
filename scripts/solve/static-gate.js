@@ -20,6 +20,8 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {fileSizeAdmissionProblems} from './file-size-admission.js';
+
 // Only trees the repository's lint configuration actually covers (`lint` and
 // `lint:scripts`); gating an unlinted tree would manufacture false blocks.
 const LINTED_PATH_PATTERN = /^(?:src|test|scripts)\/.+\.(?:js|mjs|cjs)$/u;
@@ -41,6 +43,9 @@ const GIT_TRACKED_CHANGES_ARGUMENTS = Object.freeze(
   ['diff', '--name-only', 'HEAD']);
 const GIT_UNTRACKED_ARGUMENTS = Object.freeze(
   ['ls-files', '--others', '--exclude-standard']);
+// Standalone CLI parity with an auto-diff attempt: the working tree is
+// compared against HEAD, so HEAD is the file-size admission base.
+const STANDALONE_BASE_COMMIT = 'HEAD';
 
 function boundedOutput(result) {
   const lines = `${result.stdout || ''}${LINE_SEPARATOR}${result.stderr || ''}`
@@ -69,13 +74,20 @@ function runChecker(root, label, scriptPath, extraArgs, jsPaths) {
   return [];
 }
 
-export function staticQualityProblems(root, changedPaths) {
+export function staticQualityProblems(root, changedPaths, options = {}) {
   const jsPaths = [...new Set(changedPaths || [])]
     .filter((filePath) => LINTED_PATH_PATTERN.test(filePath) &&
       fs.existsSync(path.join(root, filePath)))
     .sort();
   if (jsPaths.length === 0) return [];
   return [
+    // The attempt-time projection of the pre-commit oversized-file ratchet
+    // (C3): a touched file the candidate pushes over its scope threshold is
+    // named here, where repair costs one edit, instead of at landing, where
+    // it costs a review round. Requires the attempt base commit; callers
+    // without one (no admission base to compare against) skip it.
+    ...(options.baseCommit ?
+      fileSizeAdmissionProblems(root, options.baseCommit, jsPaths) : []),
     ...runChecker(
       root,
       ESLINT_LABEL,
@@ -130,7 +142,8 @@ function main() {
   const argPaths = process.argv.slice(2);
   const changedPaths = argPaths.length > 0 ?
     argPaths : workingTreeChangedPaths(root);
-  const problems = staticQualityProblems(root, changedPaths);
+  const problems = staticQualityProblems(
+    root, changedPaths, {baseCommit: STANDALONE_BASE_COMMIT});
   if (problems.length === 0) {
     process.stdout.write(
       `static gate clean over ${changedPaths.length} changed path(s)\n`);

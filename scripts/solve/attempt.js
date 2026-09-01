@@ -194,7 +194,7 @@ export function runAttemptCommand(root, args) {
   // changed-path lint and literal-guideline checkers before this attempt
   // seals its artifact.
   const staticProblems = staticQualityProblems(
-    root, changeInspection.changedPaths);
+    root, changeInspection.changedPaths, {baseCommit: workspaceBaseCommit});
   if (staticProblems.length > 0) {
     const decision = resolveGateDecision(root, quest, {
       status: CONTINUATION_BLOCKED_STATIC_QUALITY,

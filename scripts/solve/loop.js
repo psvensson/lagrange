@@ -384,7 +384,8 @@ function applyAttempt(root, quest, ctx, pick, before, runAuthorizations = null) 
   if (result && result.changeRef && inspectChangeRef) {
     const changeInspection = inspectChangeRef(result.changeRef);
     const staticProblems = changeInspection && changeInspection.valid ?
-      staticQualityProblems(root, changeInspection.changedPaths) : [];
+      staticQualityProblems(root, changeInspection.changedPaths,
+        {baseCommit: workspaceBaseCommit}) : [];
     if (staticProblems.length > 0) {
       const decision = resolveGateDecision(root, quest, {
         status: CONTINUATION_BLOCKED_STATIC_QUALITY,

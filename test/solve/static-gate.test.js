@@ -63,3 +63,24 @@ tap.test('clean checkers pass', (t) => {
   t.same(staticQualityProblems(root, ['src/x.js']), []);
   t.end();
 });
+
+tap.test('file-size admission gates only when a base commit is given', (t) => {
+  const root = fixture({eslint: PASSING_CHECKER, literals: PASSING_CHECKER});
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const SOURCE_THRESHOLD = 800;
+  const oversized = 'export const line = 1;\n'.repeat(SOURCE_THRESHOLD + 1);
+  fs.writeFileSync(path.join(root, 'src/big.js'), oversized);
+  t.same(staticQualityProblems(root, ['src/big.js']), [],
+    'no admission base, no file-size gate (legacy callers unchanged)');
+  // A non-resolving base means the file did not exist at the base — a file
+  // the attempt introduces over the threshold is the ratchet-moving case.
+  const problems = staticQualityProblems(
+    root, ['src/big.js'], {baseCommit: 'HEAD'});
+  t.equal(problems.length, 1, 'the oversized touched file is refused');
+  t.match(problems[0], /file-size admission: src\/big\.js/u);
+  t.match(problems[0], /threshold 800/u, 'names the scope threshold');
+  t.same(
+    staticQualityProblems(root, ['src/x.js'], {baseCommit: 'HEAD'}), [],
+    'a file under the threshold is admitted');
+  t.end();
+});

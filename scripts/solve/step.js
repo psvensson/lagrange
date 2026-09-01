@@ -433,7 +433,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     if (!decisionContinues(decision)) throw new Error(escalationProblem);
   }
   const staticProblems = staticQualityProblems(
-    root, changeInspection.changedPaths);
+    root, changeInspection.changedPaths, {baseCommit: sourceBaseCommit});
   if (staticProblems.length > 0) {
     const decision = resolveGateDecision(root, quest, {
       status: CONTINUATION_BLOCKED_STATIC_QUALITY,
