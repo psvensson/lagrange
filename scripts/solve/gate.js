@@ -123,9 +123,11 @@ function softAdvisoriesSpent(log, frontierId, code) {
 }
 
 // An unconsumed recorded-reason override for `code` on this frontier, or null. An override
-// (EVENT_GUARD_OVERRIDE) authorizes exactly ONE subsequent bypass of the named guard: the
-// bypass records an ADVISORY gate decision tagged `override`, which is counted here as a
-// consumption. Both counters reset on honest progress (lastProgressIndex), mirroring the
+// (EVENT_GUARD_OVERRIDE) authorizes ONE logical run's bypass of the named guard: the first
+// bypass records an ADVISORY gate decision tagged `override`, which is counted here as the
+// consumption; later gate sites in the SAME run reuse the deposited run authorization
+// (createRunAuthorizations) instead of re-consuming. Both counters reset on honest
+// progress (lastProgressIndex), mirroring the
 // explore/soft-first budgets, so an override can never permanently disable a guard. When a
 // recorded override pins a specific `problem` substring it only authorizes matching
 // problems, and a co-occurring residual problem keeps the combined continuation gated;
@@ -136,6 +138,40 @@ function signatureCovers(candidate, authorized) {
     if (!authorized.includes(candidate[index])) return false;
   }
   return true;
+}
+
+// One recorded override authorizes one full LOGICAL RUN (a component attempt,
+// one autonomous-loop cycle, one supervised commit), not one gate site. The
+// caller that owns the run creates this map and threads it through every
+// resolveGateDecision context in that run: the first gate site the override
+// bypasses records the single consuming ADVISORY gate-decision and deposits
+// the authorization here; later sites in the same run whose problems and scope
+// signature are covered reuse it WITHOUT appending a second consuming record.
+// The map never outlives its run, so the recorded-consumption semantics of
+// activeOverride (reset on honest progress, SAME_GUARD_OVERRIDE_LIMIT budget)
+// are unchanged across runs.
+export function createRunAuthorizations() {
+  return new Map();
+}
+
+const RUN_AUTHORIZATION_KEY_SEPARATOR = '|';
+
+function runAuthorizationKey(frontierId, code) {
+  return `${frontierId}${RUN_AUTHORIZATION_KEY_SEPARATOR}${code}`;
+}
+
+// A held run authorization covers a later gate site only when every CURRENT
+// problem is one the consuming site authorized exactly, and the current scope
+// signature is covered by the authorized signature (an absent signature on
+// either side matches everything, mirroring activeOverride). A residual or
+// re-phrased problem falls through to the real guard.
+function runAuthorizationCovers(held, problems, scopeSignature) {
+  if (!held) return false;
+  const everyProblemAuthorized = (problems || []).every((problem) =>
+    held.problems.includes(problem));
+  if (!everyProblemAuthorized) return false;
+  if (!scopeSignature || !held.scopeSignature) return true;
+  return signatureCovers(scopeSignature, held.scopeSignature);
 }
 
 function activeOverride(log, frontierId, code, problems = [], scopeSignature = null) {
@@ -166,6 +202,7 @@ function activeOverride(log, frontierId, code, problems = [], scopeSignature = n
       reason: active.reason,
       problems: authorizedProblems,
       coversAllProblems: authorizedProblems.length === problems.length,
+      authorizedScopeSignature: active.scopeSignature || null,
     };
   }
   return null;
@@ -286,6 +323,8 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   if (continuationIsAllowed(continuation)) return null;
   const {log = [], frontier = null, rungIndex = null, softFirst = false,
     scopeSignature = null} = context;
+  const runAuthorizations = context.runAuthorizations instanceof Map ?
+    context.runAuthorizations : null;
   const decided = continuationDisposition(continuation, {
     questId: quest.id,
     frontier,
@@ -304,15 +343,40 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // honour an unconsumed operator/agent override for an OVERRIDABLE (heuristic) guard:
   // record the bypass as an ADVISORY gate decision tagged with the override reason and let
   // the caller continue. This is the judgement escape hatch the rule-author could not
-  // anticipate — it is single-use (consumed by this very record), reset by honest progress,
+  // anticipate — it is consumed ONCE PER LOGICAL RUN (the consuming record below; later
+  // sites in the same run reuse it via context.runAuthorizations without a second charge),
+  // reset by honest progress,
   // and refused for the honesty/integrity invariants (continuationOverridable returns false
   // for regression/unrecorded-evidence/metric-projection/measurement/terminal), so it can
   // bend a process heuristic but never sign off on a dishonest move. The override is honoured
   // in BOTH the autonomous and supervised paths — it is an explicit, recorded decision, not a
   // soft-first delay — so it does not depend on context.softFirst.
   if (continuationOverridable(continuation)) {
+    const held = runAuthorizations ?
+      runAuthorizations.get(runAuthorizationKey(frontier, code)) : null;
+    if (runAuthorizationCovers(held, problems, scopeSignature)) {
+      return {
+        disposition: DISPOSITION_ADVISORY,
+        code,
+        outcome: OUTCOME_CONTINUE,
+        override: held.reason,
+        problems: [...problems],
+        scopeSignature,
+        nextCommand: null,
+        frontier,
+        rungIndex,
+        reusedRunAuthorization: true,
+      };
+    }
     const override = activeOverride(log, frontier, code, problems, scopeSignature);
     if (override?.coversAllProblems) {
+      if (runAuthorizations) {
+        runAuthorizations.set(runAuthorizationKey(frontier, code), {
+          reason: override.reason,
+          problems: [...override.problems],
+          scopeSignature: override.authorizedScopeSignature,
+        });
+      }
       appendEvent(root, quest.id, {
         type: EVENT_GATE_DECISION,
         frontier,

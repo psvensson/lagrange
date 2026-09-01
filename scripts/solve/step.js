@@ -48,6 +48,7 @@ import {
   theoryGateContinuation,
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
+  createRunAuthorizations,
 } from './gate.js';
 import {staticQualityProblems} from './static-gate.js';
 import {
@@ -96,12 +97,13 @@ function configureContext(root, quest, options = {}) {
   return ctx;
 }
 
-function theoryGateResult(root, quest, log, problems, pick) {
+function theoryGateResult(root, quest, log, problems, pick, runAuthorizations = null) {
   const continuation = theoryGateContinuation(problems);
   const decision = resolveGateDecision(root, quest, continuation, {
     log,
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
+    runAuthorizations,
   });
   return decisionContinues(decision) ? null : gateDecisionToStepResult(decision);
 }
@@ -318,6 +320,7 @@ function assertScopeAdmission(
   pending,
   changeInspection,
   sourceBaseCommit,
+  runAuthorizations = null,
 ) {
   const scopePressure = analyzeScopePressureCandidate(
     root, quest, log, changeInspection, {
@@ -359,6 +362,7 @@ function assertScopeAdmission(
     frontier: pending.frontier,
     rungIndex: pending.rungIndex,
     scopeSignature: admittedScopePaths,
+    runAuthorizations,
   });
   if (!decisionContinues(decision)) {
     const error = new Error(scopeProblem);
@@ -371,6 +375,9 @@ function assertScopeAdmission(
 function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
+  // One recorded override authorizes this whole supervised commit (C4): every
+  // admission gate below shares this map.
+  const runAuthorizations = createRunAuthorizations();
   const changeInspection = ctx.honestyCtx.inspectChangeRef(changeRef);
   if (!changeInspection.valid) {
     throw new Error(
@@ -400,7 +407,8 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   if (!admission.ok) throw new Error(admission.problem);
 
   assertScopeAdmission(
-    root, quest, log, pending, changeInspection, sourceBaseCommit);
+    root, quest, log, pending, changeInspection, sourceBaseCommit,
+    runAuthorizations);
   // Same admission pair as the attempt wrapper (see attempt.js): repeated
   // failed rejection rounds gate toward reframing, and machine-checkable
   // lint/guideline findings never earn a verifier round. Both are
@@ -420,6 +428,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
       log,
       frontier: pending.frontier,
       rungIndex: pending.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) throw new Error(escalationProblem);
   }
@@ -434,6 +443,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
       log,
       frontier: pending.frontier,
       rungIndex: pending.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) {
       throw new Error(staticProblems.join(STATIC_PROBLEM_SEPARATOR));
@@ -458,7 +468,8 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     modelNotApplicable: options.modelNotApplicable,
     phase: 'commit',
   });
-  const gateResult = theoryGateResult(root, quest, log, readinessProblems, pick);
+  const gateResult = theoryGateResult(
+    root, quest, log, readinessProblems, pick, runAuthorizations);
   if (gateResult) return gateResult;
 
   // Advisory only (never blocks): a source-changing commit under an effective

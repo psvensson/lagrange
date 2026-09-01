@@ -15,7 +15,8 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
-  appendGuardOverride, appendReflection, readFindings, readRulesOutFindings}
+  appendGuardOverride, appendReflection, readFindings, readRulesOutFindings,
+  guardOverrideBudgetRemaining}
   from './solve/store.js';
 import {buildSealFreshnessAdvisory} from './solve/seal-freshness.js';
 import {
@@ -34,6 +35,7 @@ import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
 import {
   QUEST_CLASS_PRODUCT,
   QUEST_CLASSES,
+  SAME_GUARD_OVERRIDE_LIMIT,
   SOLVE_DATA_DIR,
 } from './solve/constants.js';
 import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
@@ -863,7 +865,8 @@ const OVERRIDE_GUARD_ALIASES = Object.freeze({
 const OVERRIDE_REAUTHORIZED_LINE =
   '(re-authorizes an already-covered scope — no lifetime budget spent)\n';
 const OVERRIDE_CHARGED_LINE =
-  '(authorizes one bypass of the next matching guard; reset by honest progress)\n';
+  '(authorizes one full run past the next matching guard; reset by honest ' +
+  'progress)\n';
 
 // The scope this override authorizes, read from the change artifacts already on
 // record — never from the operator's --reason. A later override whose scope is
@@ -915,7 +918,10 @@ function cmdOverride(root, args) {
   process.stdout.write(
     `recorded override of ${code} for ${args.frontier} @ ${stamped.ts}\n` +
     (stamped.scopeReauthorization ?
-      OVERRIDE_REAUTHORIZED_LINE : OVERRIDE_CHARGED_LINE));
+      OVERRIDE_REAUTHORIZED_LINE : OVERRIDE_CHARGED_LINE) +
+    `remaining lifetime budget for (${args.frontier}, ${code}): ` +
+    `${guardOverrideBudgetRemaining(root, id, args.frontier, code)} of ` +
+    `${SAME_GUARD_OVERRIDE_LIMIT}\n`);
 }
 
 function cmdReflect(root, args) {

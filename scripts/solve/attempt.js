@@ -29,6 +29,7 @@ import {
   theoryGateContinuation,
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
+  createRunAuthorizations,
 } from './gate.js';
 import {staticQualityProblems} from './static-gate.js';
 import {
@@ -68,6 +69,10 @@ export function runAttemptCommand(root, args) {
   const def = quest.frontiers.find((f) => f.id === frontierId);
   const fState = state.frontiers.find((f) => f.id === frontierId);
   if (!def || !fState) throw new Error(`frontier ${frontierId} not found`);
+  // One recorded override authorizes this whole component run (C4): every
+  // gate site below shares this map so the first bypass consumes and the
+  // rest reuse without a second charge.
+  const runAuthorizations = createRunAuthorizations();
 
   // Check theory gate problems before we run the harness
   const readinessProblems = stepTheoryGateProblems({
@@ -87,7 +92,7 @@ export function runAttemptCommand(root, args) {
       root,
       quest,
       theoryGateContinuation(readinessProblems),
-      {log, frontier: frontierId, rungIndex: fState.rungIndex},
+      {log, frontier: frontierId, rungIndex: fState.rungIndex, runAuthorizations},
     );
     // Soft-first: an advisory downgrade proceeds to run the harness this attempt.
     if (!decisionContinues(decision)) {
@@ -114,6 +119,7 @@ export function runAttemptCommand(root, args) {
       log,
       frontier: frontierId,
       rungIndex: fState.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) {
       return {...gateDecisionToStepResult(decision), blocked: true};
@@ -133,6 +139,7 @@ export function runAttemptCommand(root, args) {
       log,
       frontier: frontierId,
       rungIndex: fState.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) {
       return {...gateDecisionToStepResult(decision), blocked: true};
@@ -197,6 +204,7 @@ export function runAttemptCommand(root, args) {
       log,
       frontier: frontierId,
       rungIndex: fState.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) {
       return {...gateDecisionToStepResult(decision), blocked: true};
@@ -221,6 +229,7 @@ export function runAttemptCommand(root, args) {
       log,
       frontier: frontierId,
       rungIndex: fState.rungIndex,
+      runAuthorizations,
     });
     if (!decisionContinues(decision)) throw new Error(scopeProblem);
   }

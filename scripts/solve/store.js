@@ -715,6 +715,20 @@ export function appendGuardOverride(root, questId, override) {
   });
 }
 
+// Remaining lifetime override budget for (frontier, code): the limit minus the
+// CHARGED overrides on record (scope re-authorizations are free). Single owner
+// of the budget arithmetic appendGuardOverride enforces above, exported so the
+// override verb can print the balance instead of the operator discovering it
+// by exhausting it.
+export function guardOverrideBudgetRemaining(root, questId, frontier, code) {
+  const charged = arrayFilter(readLog(root, questId), (event) =>
+    event.type === EVENT_GUARD_OVERRIDE &&
+    (event.frontier || null) === (frontier || null) &&
+    event.code === code &&
+    event.scopeReauthorization !== true).length;
+  return SAME_GUARD_OVERRIDE_LIMIT - charged;
+}
+
 // Record a step-back reflection turn (a free-form reframing note). The note may be null
 // when the executor declined to produce one; the event still resets the reflection cadence
 // so the loop does not re-request a reflection every cycle.
