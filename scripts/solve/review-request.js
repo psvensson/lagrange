@@ -95,7 +95,7 @@ function sourceEpoch(root, aggregate) {
   return {headCommit, candidateBaseCommit: aggregate.baseCommit};
 }
 
-function requiredReviewTemplates(root, quest, state, log) {
+export function requiredReviewTemplates(root, quest, state, log) {
   const catalog = loadTemplateCategories(root);
   const byCategory = new Map();
   const sealed = sealedVerificationTemplates(quest, log);

@@ -48,6 +48,7 @@ import {applyInheritedParentLinks, applySiblingSkeleton}
 import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
+import {runPreflightCommand} from './solve/preflight.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runParkCommand} from './solve/park.js';
@@ -1139,6 +1140,14 @@ function cmdAudit(root, args) {
   process.stdout.write(output);
 }
 
+// Batch read-only landing diagnostics: every standing refusal in one pass,
+// no log event, no override consumption. Exit 1 when problems stand.
+function cmdPreflight(root, args) {
+  const {output, ok} = runPreflightCommand(root, args, loadQuest);
+  process.stdout.write(output);
+  if (!ok) process.exitCode = 1;
+}
+
 function cmdUpgrade(root, args) {
   process.stdout.write(runUpgradeCommand(root, args));
 }
@@ -1395,6 +1404,7 @@ const COMMANDS = {
   'amend': cmdAmend,
   'inherit-candidate': cmdInheritCandidate,
   'correct-attempt-base': cmdCorrectAttemptBase,
+  'preflight': cmdPreflight,
 };
 
 function main() {
