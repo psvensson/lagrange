@@ -87,6 +87,7 @@ export const REJECTION_ESCALATION_GUIDANCE =
 // closure-gate boundary, so the shared constants owner defines them.
 export const INTEGRITY_SCOPE_ATTEMPT = 'attempt-integrity';
 export const INTEGRITY_SCOPE_GOALPOSTS = 'goalposts';
+export const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
 export const INTEGRITY_RESOLUTION_FRESH_SAMPLE = 'fresh-accepted-sample';
 export const INTEGRITY_RESOLUTION_NEW_QUEST = 'new-quest-only';
 

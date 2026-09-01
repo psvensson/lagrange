@@ -18,7 +18,6 @@ const FRONTIER_INTEGRITY_UNRESOLVED =
 const CHANGE_IDENTITY_UNSEALABLE =
   'changeRef artifact is missing a sealable content identity';
 const INTEGRITY_SCOPE_REGRESSION = 'regression';
-const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
 const CLOSURE_INVARIANT_WARNING_PREFIX =
   'WARN Solver closure invariant trigger failed: ';
 
@@ -60,6 +59,7 @@ import {
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_REFLECTION,
   EVENT_EVIDENCE_INGESTED,
+  INTEGRITY_SCOPE_THEORY_GATE,
 } from './constants.js';
 import {
   INTEGRITY_EVENT_SCHEMA_VERSION,
