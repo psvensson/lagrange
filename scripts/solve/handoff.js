@@ -49,7 +49,9 @@ import {
   checkpointVerificationPreflight,
   checkpointVerificationPreflightLines,
 } from './checkpoint-preflight.js';
-import {verificationState} from './verification.js';
+import {verificationState, questContractExcludesCollateral}
+  from './verification.js';
+import {regenerateGeneratedOutputsAtRoot} from './generated-dependencies.js';
 import {CONTINUATION_BLOCKED_SCOPE} from './continuation.js';
 import {
   refreshSpecLadderForCommit,
@@ -826,6 +828,13 @@ function commitFinalHandoff(
     projectState(quest, log).questStatus === STATUS_SOLVED) {
     refreshSpecLadderForCommit(root, quest);
   }
+  // Collateral verification contract: the landing itself regenerates every
+  // registered generated output at the landing tree BEFORE the final scope
+  // calculation, so the fresh bytes ride this commit and the receipt records
+  // their digests. A checkpoint takes no collateral.
+  const generatedOutputs = !checkpoint &&
+    questContractExcludesCollateral(quest) ?
+    regenerateGeneratedOutputsAtRoot(root) : null;
   const handoff = buildHandoff(root, quest, {checkpoint, checkpointReason});
   if (!handoff.ok) {
     return {
@@ -876,6 +885,7 @@ function commitFinalHandoff(
     pushed: false,
     questId,
     inventoryRefresh,
+    ...(generatedOutputs ? {generatedOutputs} : {}),
   };
 }
 

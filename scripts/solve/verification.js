@@ -19,6 +19,7 @@ import {
   requiresSourceVerification,
   parseCommitChangeRef,
 } from './change-artifact.js';
+import {isRegisteredGeneratedOutput} from './generated-dependencies.js';
 import {
   canonicalCommitDelta,
 } from './content-addressed-change-artifact.js';
@@ -50,6 +51,22 @@ const GIT_STATUS_UNAVAILABLE = Symbol('git_status_unavailable');
 
 export const LEGACY_VERIFICATION_CONTRACT_VERSION = 1;
 export const VERIFICATION_CONTRACT_VERSION = 2;
+// Contract version 3: registered generated outputs (generated-dependencies.js)
+// are landing collateral — excluded from attempt artifacts, reviewed paths and
+// verification fingerprints, and regenerated at the landing tree instead.
+// Gating is per recorded event: attempts stamped 2 keep byte semantics
+// forever, so historical approvals are never reinterpreted.
+export const COLLATERAL_VERIFICATION_CONTRACT_VERSION =
+  VERIFICATION_CONTRACT_VERSION + 1;
+
+export function attemptContractExcludesCollateral(version) {
+  return Number.isInteger(version) &&
+    version >= COLLATERAL_VERIFICATION_CONTRACT_VERSION;
+}
+
+export function questContractExcludesCollateral(quest) {
+  return attemptContractExcludesCollateral(quest?.verificationContractVersion);
+}
 export const VERIFIER_APPROVAL_FINDING_KIND = LOCAL_STR_OWNED_001;
 const LOCAL_STR_OWNED_020 = 'verifier-rejection';
 const LOCAL_STR_COMMIT_MIXED_AGGREGATE =
@@ -228,16 +245,20 @@ export function resolveWorkspaceBaseCommit(root) {
   return regExpTest(/^[0-9a-f]{40}$/u, sha) ? sha : null;
 }
 
-function reviewedChangePaths(inspection, questId) {
-  return arrayFilter(
+function reviewedChangePaths(inspection, questId, contractVersion) {
+  const paths = arrayFilter(
     inspection?.changedPaths || [],
     (filePath) => !isVerificationBookkeeping(filePath, questId),
   );
+  if (!attemptContractExcludesCollateral(contractVersion)) return paths;
+  return arrayFilter(paths,
+    (filePath) => !isRegisteredGeneratedOutput(filePath));
 }
 
 export function sourceVerificationFingerprint(root, quest, event) {
   const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-  const reviewPaths = reviewedChangePaths(inspection, quest.id);
+  const reviewPaths = reviewedChangePaths(
+    inspection, quest.id, event.verificationContractVersion);
   if (parseCommitChangeRef(event.changeRef)) {
     return formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
   }
@@ -257,7 +278,8 @@ function rawSourceChangingAttempts(root, quest, log, options = {}) {
     const event = log[index];
     if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
     const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-    const reviewPaths = reviewedChangePaths(inspection, quest.id);
+    const reviewPaths = reviewedChangePaths(
+      inspection, quest.id, event.verificationContractVersion);
     const sourcePaths = arrayFilter(reviewPaths, requiresSourceVerification);
     if (sourcePaths.length === 0) continue;
     arrayPush(attempts, {
@@ -268,12 +290,18 @@ function rawSourceChangingAttempts(root, quest, log, options = {}) {
       sourcePaths,
       fingerprint: attemptFingerprint(event),
       verificationVersion: event.verificationContractVersion || null,
+      excludesCollateral: attemptContractExcludesCollateral(
+        event.verificationContractVersion),
       contracted: arrayIncludes(
-        [LEGACY_VERIFICATION_CONTRACT_VERSION, VERIFICATION_CONTRACT_VERSION],
+        [LEGACY_VERIFICATION_CONTRACT_VERSION, VERIFICATION_CONTRACT_VERSION,
+          COLLATERAL_VERIFICATION_CONTRACT_VERSION],
         event.verificationContractVersion,
       ),
-      candidateContract: event.verificationContractVersion ===
-        VERIFICATION_CONTRACT_VERSION,
+      candidateContract: arrayIncludes(
+        [VERIFICATION_CONTRACT_VERSION,
+          COLLATERAL_VERIFICATION_CONTRACT_VERSION],
+        event.verificationContractVersion,
+      ),
     });
   }
   return attempts;
@@ -757,6 +785,11 @@ function buildLandingCandidate(root, quest, attempts) {
     paths,
     sourcePaths,
     attempts: selected,
+    // A candidate excludes collateral only when every selected attempt was
+    // recorded under the collateral contract; one v2 attempt keeps the whole
+    // candidate on byte semantics so history is never reinterpreted.
+    excludesCollateral: selected.every(
+      (attempt) => attempt.excludesCollateral),
     firstAttemptIndex: selected[0].index,
     lastAttemptIndex: selected[selected.length - 1].index,
   };
@@ -968,6 +1001,11 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
   const covered = rejectionDecompositionCoverage(root, log, rejection);
   const remainingPaths = arrayFilter(rejection.receipt.paths,
     (filePath) => !isVerificationBookkeeping(filePath, null) &&
+      // A collateral-contract replacement never reviews registered generated
+      // outputs; the landing regenerates them, so a rejected receipt's
+      // output paths are discharged by the contract, not by re-review.
+      !(candidate.excludesCollateral &&
+        isRegisteredGeneratedOutput(filePath)) &&
       !setHas(covered, filePath));
   if (remainingPaths.length === 0) return null;
   const replacementPaths = capturedSet(arrayFilter(candidate.paths || [],

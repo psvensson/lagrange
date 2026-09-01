@@ -79,6 +79,7 @@ import {
 import {
   buildVerificationFinding,
   verificationState,
+  COLLATERAL_VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
   VERIFIER_REJECTION_FINDING_KIND,
@@ -184,7 +185,7 @@ function questTemplate(id, statement, questClass) {
   return {
     id,
     authoringContractVersion: QUEST_AUTHORING_CONTRACT_VERSION,
-    verificationContractVersion: VERIFICATION_CONTRACT_VERSION,
+    verificationContractVersion: COLLATERAL_VERIFICATION_CONTRACT_VERSION,
     statement: statement || 'Describe the terminal success condition in one line.',
     priority: 1,
     // class: "product" (default) goals must be MEASURED against a real artifact;

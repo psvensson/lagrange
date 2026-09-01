@@ -126,7 +126,9 @@ function fail(result, stage) {
   throw new Error(`land: generated dependency ${stage} failed${detail ? `: ${detail}` : ''}`);
 }
 
-export function generatedDependencyReceiptInSnapshot(snapshot, aggregate) {
+export function generatedDependencyReceiptInSnapshot(
+  snapshot, aggregate, options = {}) {
+  const collateral = options.collateral === true;
   const paths = aggregate.sourcePaths || aggregate.paths || [];
   const selected = selectedDependencies(paths);
   if (selected.length === 0) {
@@ -141,7 +143,10 @@ export function generatedDependencyReceiptInSnapshot(snapshot, aggregate) {
       const generated = run(snapshot, process.execPath, arraySlice(step.argv));
       if (generated.status !== 0) fail(generated, `${dependency.id}/${step.output}`);
       const after = fs.readFileSync(beforePath);
-      if (before === null || !bufferEquals(before, after)) {
+      // Collateral contract: the landing regenerates registered outputs at
+      // the landing tree, so the candidate's recorded bytes are never
+      // required to be fresh; the receipt records the fresh digests instead.
+      if (!collateral && (before === null || !bufferEquals(before, after))) {
         throw new Error(
           `land: generated dependency is stale in the exact candidate: ${step.output}; ` +
           `run node ${arrayJoin(step.argv, ARGUMENT_SEPARATOR)} and record a replacement attempt`,
@@ -150,6 +155,7 @@ export function generatedDependencyReceiptInSnapshot(snapshot, aggregate) {
       arrayPush(outputs, {path: step.output, sha256: sha256(after), size: after.length});
     });
     arrayPush(entries, {id: dependency.id, scope: dependency.scope,
+      ...(collateral ? {collateral: true} : {}),
       triggerPaths: arraySort(arrayFilter(paths, (filePath) =>
         regExpTest(dependency.trigger, filePath))),
       steps: arrayMap(dependency.steps, (step) => ({
@@ -160,9 +166,35 @@ export function generatedDependencyReceiptInSnapshot(snapshot, aggregate) {
   return {schemaVersion: MANIFEST_SCHEMA_VERSION, registryVersion: 1, entries};
 }
 
-export function generatedDependencyReceipt(root, aggregate) {
+export function generatedDependencyReceipt(root, aggregate, options = {}) {
   return withCandidateSnapshot(root, aggregate, (snapshot) =>
-    generatedDependencyReceiptInSnapshot(snapshot, aggregate));
+    generatedDependencyReceiptInSnapshot(snapshot, aggregate, options));
+}
+
+const LANDING_REGENERATION_OUTPUT_MISSING =
+  'produced no output file at the landing tree';
+
+// Landing-tree regeneration under the collateral contract: run each
+// registered producer whose script exists at the landing tree, rewrite its
+// output in place, and return the fresh digests for the landing receipt.
+// A failing producer fails the landing closed.
+export function regenerateGeneratedOutputsAtRoot(root) {
+  const outputs = [];
+  arrayForEach(REGISTERED_GENERATED_OUTPUT_STEPS, (step) => {
+    if (!fs.existsSync(path.join(root, step.argv[0]))) return;
+    const generated = run(root, process.execPath, arraySlice(step.argv));
+    if (generated.status !== 0) fail(generated, step.output);
+    const file = path.join(root, step.output);
+    if (!fs.existsSync(file)) {
+      throw new Error(
+        `land: generated dependency ${step.output} failed: ` +
+        LANDING_REGENERATION_OUTPUT_MISSING);
+    }
+    const bytes = fs.readFileSync(file);
+    arrayPush(outputs,
+      {path: step.output, sha256: sha256(bytes), size: bytes.length});
+  });
+  return outputs;
 }
 
 function registeredGeneratedOutputStep(filePath) {

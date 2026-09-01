@@ -18,6 +18,8 @@ import {
 import {
   writeContentAddressedChangeArtifact,
 } from './content-addressed-change-artifact.js';
+import {registeredGeneratedOutputPaths} from './generated-dependencies.js';
+import {questContractExcludesCollateral} from './verification.js';
 
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
@@ -124,6 +126,13 @@ export function createAutoDiffChangeRef(root, quest, pin) {
       AUTO_DIFF_UNTRACKED_ERROR_SUFFIX,
     );
   }
+  // Collateral verification contract (verification.js v3): registered
+  // generated outputs are landing collateral regenerated at the landing
+  // tree, never reviewed attempt bytes.
+  const excludedCollateralPathspecs = questContractExcludesCollateral(quest) ?
+    registeredGeneratedOutputPaths()
+      .map((outputPath) => `:(exclude)${outputPath}`) :
+    [];
   // Discover only current index/worktree changes. The source epoch pin can be
   // older than HEAD after an unrelated commit; discovering paths from that pin
   // would silently sweep the intervening commit into this Quest. Once the
@@ -132,6 +141,7 @@ export function createAutoDiffChangeRef(root, quest, pin) {
   const authored = gitCapture(root, [
     'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--', '.',
     ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
+    ...excludedCollateralPathspecs,
   ]);
   if (authored.status !== 0 || typeof authored.stdout !== 'string') {
     throw new Error(

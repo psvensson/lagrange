@@ -327,6 +327,10 @@ export const GENERATED_OUTPUT_COVERAGE = Object.freeze({
   FRESH: 'fresh',
   STALE: 'stale',
   UNAVAILABLE: 'unavailable',
+  // Collateral verification contract (verification.js v3): a dirty
+  // registered output is covered because the landing itself regenerates it
+  // at the landing tree; no byte comparison against the candidate applies.
+  COLLATERAL: 'collateral',
 });
 // The base an attempt is recorded against (pending-step.js): a pending
 // step's pin is the single source for every attempt of that step; the

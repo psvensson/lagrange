@@ -186,8 +186,11 @@ tap.test('step --commit --auto-diff', async (t) => {
     const {quest, oracle} = makeOracleQuest(root);
     runStep(root, quest);
 
+    // Byte-large but line-small: the content-addressed descriptor threshold
+    // is about payload size, and the file-size admission gate (line-count
+    // ratchet) must stay quiet for this fixture.
     fs.writeFileSync(path.join(root, 'src', 'demo.js'),
-      `after\n${'large-change\n'.repeat(5000)}`);
+      `after\n${'large-change'.repeat(5000)}\n`);
     fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
     const result = runStep(root, quest, {autoDiff: true, summary: 'large'});
 
