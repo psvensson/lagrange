@@ -6,6 +6,9 @@
  * The class receives required dependencies via constructor injection.
  */
 
+import {
+  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+} from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
 import {MessageGroupServiceRowOwner} from
   '../../message-group/message-group-service-row-owner.js';
@@ -674,7 +677,10 @@ class CreateMessageGroupPhase {
     const messageGroupRow = {
       group_id: groupId,
       group_name: groupId,
-      replica_count: replicas.length,
+      // Policy, not an identity count. Writing replicas.length here made a
+      // group that came up with one replica persist a DECLARED target of 1,
+      // which recovery then reads through the canonical decoder as authority.
+      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
       leader_node_id: this.nodeId,
       policy: JSON.stringify(
         CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY,

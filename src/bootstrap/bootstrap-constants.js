@@ -129,9 +129,12 @@ const BOOTSTRAP_NODE_READY_REBALANCE_TABLES = Object.freeze([
 // Keep this short so cluster-growth runs surface placement changes in-time.
 const BOOTSTRAP_REBALANCE_DELAY_MS = 5000;
 
+// REPLICA_COUNT was removed: it restated MESSAGE_GROUPS_SCHEMA's declared
+// replica_count as a literal 3, which agreed with the schema only by
+// coincidence and made this a second creation authority for the same column.
+// The seeded row now reads DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT.
 const BOOTSTRAP_MESSAGE_GROUP = Object.freeze({
   NAME: 'message_group_seed',
-  REPLICA_COUNT: 3,
   POLICY: Object.freeze({
     TARGET_REPLICA_COUNT: 3,
     MAX_REPLICA_COUNT: 5,

@@ -82,7 +82,12 @@ class MessageGroupService extends EventEmitter {
         options.now :
         MESSAGE_GROUP_OPERATION_LEDGER_NOW;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
-    this.replicaIds = options.replicaIds || [this.replicaId];
+    // COPY, for the same reason as the partition sibling: this list is
+    // mutated in place by raft lifecycle, and callers hand in the shared
+    // INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration.
+    this.replicaIds = Array.isArray(options.replicaIds) ?
+      [...options.replicaIds] :
+      [this.replicaId];
     this.transport = options.transport;
     this.raftProvider = options.raftProvider || new LiferaftProvider();
     assertRaftProviderContract(this.raftProvider);

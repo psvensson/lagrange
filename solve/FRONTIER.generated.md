@@ -54,7 +54,7 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 9
+## Open quests — 10
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -64,6 +64,7 @@ Areas: bootstrap (1) · harness-control-snapshot (2) · membership-publication (
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-30 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-30 | — |
 | release-0-2-verification-v2 | product | 0 | 0 | 2026-08-25 | — |
+| replication-target-authority | product | 3 | 0 | 2026-08-31 | — |
 | restore-deterministic-cloud-gate | process | 2 | 0 | 2026-08-30 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-08-30 | — |

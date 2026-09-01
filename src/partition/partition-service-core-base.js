@@ -48,6 +48,14 @@ const {
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
+// COPY, never the caller's array: this list is mutated in place by raft peer
+// reconciliation, and callers hand in the shared system-table declaration.
+// Taking it by reference made a minted replacement replica append to the
+// declaration itself, so every later reader saw a raised replication factor.
+function copyPeerList(replicaIds, ownReplicaId) {
+  return Array.isArray(replicaIds) ? [...replicaIds] : [ownReplicaId];
+}
+
 class PartitionServiceCoreBase extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -73,7 +81,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
     };
     this.replicaId = options.replicaId;
-    this.replicaIds = options.replicaIds || [this.replicaId];
+    this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
     this.raftProvider = options.raftProvider || new LiferaftProvider();

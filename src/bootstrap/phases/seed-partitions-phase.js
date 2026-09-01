@@ -30,7 +30,7 @@ import {
   SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
-  INITIAL_REPLICA_IDS,
+  getInitialReplicaIds,
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
 } from '../system-table-schemas-constants.js';
@@ -79,7 +79,10 @@ class SeedPartitionsPhase {
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
       const tableName = schema.tableName;
       const partitionId = INITIAL_PARTITION_IDS[tableName];
-      const replicaIds = INITIAL_REPLICA_IDS[tableName];
+      // No `|| []` fallback: a system table with no declared replica set is
+      // a broken bootstrap, and substituting an empty list would seed zero
+      // replicas silently instead of failing where it always failed.
+      const replicaIds = getInitialReplicaIds(tableName);
 
       logger.debug(BOOTSTRAP_LOG_MSG.CREATING_SYSTEM_PARTITION, {
         tableName,
@@ -335,7 +338,7 @@ class SeedPartitionsPhase {
 
       await d.waitForMessageGroupLeadership(
         INITIAL_MESSAGE_GROUP_ID,
-        INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+        [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
       );
 
       logger.debug(
@@ -635,7 +638,7 @@ class SeedPartitionsPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const configReplicaIds =
-      INITIAL_REPLICA_IDS[SYSTEM_TABLE_NAME.CONFIG] || [];
+      getInitialReplicaIds(SYSTEM_TABLE_NAME.CONFIG) || [];
     for (const replicaId of configReplicaIds) {
       const configPartition =
         d.getPartitionServices().get(replicaId);

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2097,
+    "ordinary": 2098,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2114,
-  "digest": "fnv1a32-b74ea154",
+  "censusSize": 2115,
+  "digest": "fnv1a32-7e41a07f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -219,6 +219,7 @@
     "test/bootstrap/register-node-in-cluster.test.js": "ordinary",
     "test/bootstrap/rejoin-hints.test.js": "ordinary",
     "test/bootstrap/replica-evidence-conflict.test.js": "ordinary",
+    "test/bootstrap/replication-target-authority.test.js": "ordinary",
     "test/bootstrap/required-dependency-validation.property.test.js": "ordinary",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "ordinary",
     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "ordinary",

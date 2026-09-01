@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 106,
     "architecture-governance": 19,
-    "bootstrap-membership": 244,
+    "bootstrap-membership": 245,
     "cdc-metadata": 54,
     "cli-tooling": 96,
     "control-plane": 172,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2114,
-  "digest": "fnv1a32-d09151b0",
+  "censusSize": 2115,
+  "digest": "fnv1a32-bab5324e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -237,6 +237,7 @@
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
+    "test/bootstrap/replication-target-authority.test.js": "bootstrap-membership",
     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap-membership",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap-membership",
     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap-membership",

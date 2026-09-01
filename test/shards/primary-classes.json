@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1859,
     "integration": 73,
-    "bootstrap": 175,
+    "bootstrap": 176,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2114,
-  "digest": "fnv1a32-823e8338",
+  "censusSize": 2115,
+  "digest": "fnv1a32-fb9e84b5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -220,6 +220,7 @@
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap",
+    "test/bootstrap/replication-target-authority.test.js": "bootstrap",
     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap",
     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap",
