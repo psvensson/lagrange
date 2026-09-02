@@ -1,0 +1,639 @@
+diff --git a/scripts/quest-evidence-critical-system-placement-distinct-node-invariant-v2.js b/scripts/quest-evidence-critical-system-placement-distinct-node-invariant-v2.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7a1c7e6f64718985140caa6dfda2e6873406001c
+--- /dev/null
++++ b/scripts/quest-evidence-critical-system-placement-distinct-node-invariant-v2.js
+@@ -0,0 +1,120 @@
++// Deterministic evidence harness for the
++// critical-system-placement-distinct-node-invariant quest: receipt
++// declarations only. The shared runtime re-runs each recorded proof command
++// and writes the test-receipt probe artifact, so a regression that flips a
++// witness red flips its receipt to fail and doneWhen cannot close on stale
++// green evidence.
++//
++// Receipt honesty: the witness file uses raw node:test (not the repo tap
++// shim), so --test-name-pattern selects exactly one anchored scenario per
++// receipt. Every receipt is green today; the quest's honest RED is recorded
++// separately in the attempt: with the evaluator module removed the whole
++// witness fails to resolve its import (0 pass / 1 fail), because the deliverable
++// of this slice IS the evaluator.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST = 'test/bootstrap/critical-placement-convergence.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'seed-local-replicas-are-not-converged',
++    command: scenarioCommand('^seed-local-replicas-are-not-converged'),
++    detail: 'the exact shape system tables are created with — three logical ' +
++      'replicas of services-p1 all on the seed — evaluates as NOT converged ' +
++      '(distinctNodeCount 1 < requiredReplicaCount 3, reason ' +
++      'insufficient_distinct_nodes). This is the defect an RF=3 assertion ' +
++      'cannot see: it is already satisfied at t=0 by a single-node cluster',
++  }),
++  Object.freeze({
++    id: 'distinct-nodes-meeting-required-count-are-converged',
++    command: scenarioCommand(
++      '^distinct-nodes-meeting-required-count-are-converged'),
++    detail: 'the same three replicas spread across seed/node-2/node-3 ' +
++      'evaluate as converged with a sorted distinct node-id list, so the ' +
++      'invariant is satisfiable and not vacuously false',
++  }),
++  Object.freeze({
++    id: 'critical-set-is-the-declared-vocabulary',
++    command: scenarioCommand('^critical-set-is-the-declared-vocabulary'),
++    detail: 'the evaluated partition set equals CRITICAL_SYSTEM_PARTITION_IDS ' +
++      'from system-partition-classification.js exactly; the evaluator holds ' +
++      'no local copy of the critical set that could silently drift',
++  }),
++  Object.freeze({
++    id: 'required-count-derives-from-initial-replica-ids',
++    command: scenarioCommand(
++      '^required-count-derives-from-initial-replica-ids'),
++    detail: 'requiredReplicaCount equals getInitialReplicaIds(table).length ' +
++      'from the declaring module, so no replication-factor literal is ' +
++      'hardcoded in the evaluator and changing the declaration moves the bar',
++  }),
++  Object.freeze({
++    id: 'non-serving-service-rows-do-not-count',
++    command: scenarioCommand('^non-serving-service-rows-do-not-count'),
++    detail: 'stopped replicas contribute no failure domain: two stopped rows ' +
++      'on distinct nodes plus one active seed row is distinctNodeCount 1 and ' +
++      'not converged',
++  }),
++  Object.freeze({
++    id: 'absent-evidence-is-not-converged',
++    command: scenarioCommand('^absent-evidence-is-not-converged'),
++    detail: 'undefined, empty and null row sets all evaluate NOT converged ' +
++      'with the typed placement_evidence_absent reason; absence is never ' +
++      'read as satisfaction and is never skipped (fail-closed)',
++  }),
++  Object.freeze({
++    id: 'repeated-node-rows-count-once',
++    command: scenarioCommand('^repeated-node-rows-count-once'),
++    detail: 'a node holding several replicas of the same partition is one ' +
++      'failure domain: five rows across three nodes is distinctNodeCount 3, ' +
++      'proving the measure is distinct nodes rather than row count',
++  }),
++  Object.freeze({
++    id: 'evaluator-mints-no-readiness-verdict',
++    command: scenarioCommand('^evaluator-mints-no-readiness-verdict'),
++    detail: 'neither returned snapshot carries ready/active/phase/verdict/' +
++      'status/trafficReady/lifecycle keys and both are frozen: the evaluator ' +
++      'is a projection and creates no second cluster-ACTIVE or READY authority',
++  }),
++  Object.freeze({
++    id: 'classification-vocabulary-unchanged',
++    command: scenarioCommand('^classification-vocabulary-unchanged'),
++    detail: 'CONTROL — the existing classification surface is untouched: the ' +
++      'critical set still equals first-partition-of-every-system-table and ' +
++      'classifySystemPartition still returns its exact six-key shape. This ' +
++      'receipt must stay green; a change that reds it is rejected',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'the convergence answer is identical for forward, reversed and ' +
++      'repeated row order, so the receipt cannot pass by input ordering luck',
++  }),
++]);
++
++const QUEST_ID = 'critical-system-placement-distinct-node-invariant-v2';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'critical-system-placement-distinct-node-invariant-v2.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/bootstrap/critical-placement-convergence.js b/src/bootstrap/critical-placement-convergence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1b7abfefc57df1d6b67da61d131529c8a7a30e8c
+--- /dev/null
++++ b/src/bootstrap/critical-placement-convergence.js
+@@ -0,0 +1,198 @@
++import {SERVICE_STATUS} from '../constants/index.js';
++import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
++import {
++  CRITICAL_SYSTEM_PARTITION_IDS,
++  resolvePartitionTableId,
++} from './system-partition-classification.js';
++import {getInitialReplicaIds} from './system-table-schemas-constants.js';
++
++const arrayIsArray = Array.isArray;
++const arrayPush = Function.call.bind(Array.prototype.push);
++const sortArray = Function.call.bind(Array.prototype.sort);
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const SetConstructor = Set;
++const setAdd = Function.call.bind(Set.prototype.add);
++const setHas = Function.call.bind(Set.prototype.has);
++const stringTrim = Function.call.bind(String.prototype.trim);
++const DESCRIPTOR_VALUE_FIELD = 'value';
++const EMPTY_STRING = '';
++
++// Service-row column names, named once here rather than written raw at each
++// read site.
++const SERVICE_ROW_FIELD = Object.freeze({
++  NODE_ID: 'node_id',
++  PARTITION_ID: 'partition_id',
++  STATUS: 'status',
++});
++
++// Why this exists: system tables are created with their full replica count
++// already satisfied on the seed alone (system-table-schemas-constants.js:
++// "Each partition has 3 replicas on the seed node"). A logical replica count
++// is therefore satisfied at t=0 by a single-node cluster and proves nothing
++// about serving topology. The only sound formation question is how many
++// DISTINCT nodes actually hold the partition.
++const CRITICAL_PLACEMENT_REASON = Object.freeze({
++  CONVERGED: 'converged',
++  EVIDENCE_ABSENT: 'placement_evidence_absent',
++  INSUFFICIENT_DISTINCT_NODES: 'insufficient_distinct_nodes',
++  REQUIRED_COUNT_UNKNOWN: 'required_replica_count_unknown',
++});
++
++function normalizeNonEmptyString(value) {
++  if (typeof value !== 'string') {
++    return EMPTY_STRING;
++  }
++  return stringTrim(value);
++}
++
++function readOwnField(record, propertyName) {
++  const descriptor = objectGetOwnPropertyDescriptor(record, propertyName);
++  if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD)) {
++    return EMPTY_STRING;
++  }
++  return normalizeNonEmptyString(descriptor.value);
++}
++
++/**
++ * Required replica count for one critical partition, read from the declared
++ * initial replica IDs rather than any local replication-factor literal.
++ *
++ * @param {string} tableId
++ * @return {number} the declared count, or 0 when the table declares none.
++ */
++function resolveRequiredReplicaCount(tableId) {
++  const initialReplicaIds = getInitialReplicaIds(tableId);
++  return arrayIsArray(initialReplicaIds) ? initialReplicaIds.length : 0;
++}
++
++/**
++ * Distinct serving node IDs holding one partition. A node that holds several
++ * replicas of the same partition contributes one failure domain, so it is
++ * counted once; non-active rows contribute none.
++ *
++ * @param {Object[]} serviceRows
++ * @param {string} partitionId
++ * @return {string[]} sorted distinct node IDs
++ */
++function resolveDistinctServingNodeIds(serviceRows, partitionId) {
++  const distinctNodeIds = new SetConstructor();
++  for (let index = 0; index < serviceRows.length; index += 1) {
++    const serviceRow = serviceRows[index];
++    if (readOwnField(serviceRow, SERVICE_ROW_FIELD.PARTITION_ID) !==
++        partitionId) {
++      continue;
++    }
++    if (readOwnField(serviceRow, SERVICE_ROW_FIELD.STATUS) !==
++        SERVICE_STATUS.ACTIVE) {
++      continue;
++    }
++    const nodeId = readOwnField(serviceRow, SERVICE_ROW_FIELD.NODE_ID);
++    if (nodeId.length === 0) {
++      continue;
++    }
++    setAdd(distinctNodeIds, nodeId);
++  }
++  const nodeIds = [];
++  distinctNodeIds.forEach((nodeId) => arrayPush(nodeIds, nodeId));
++  sortArray(nodeIds);
++  return nodeIds;
++}
++
++function resolvePlacementReason(requiredReplicaCount, distinctNodeCount) {
++  if (requiredReplicaCount === 0) {
++    return CRITICAL_PLACEMENT_REASON.REQUIRED_COUNT_UNKNOWN;
++  }
++  if (distinctNodeCount === 0) {
++    return CRITICAL_PLACEMENT_REASON.EVIDENCE_ABSENT;
++  }
++  return distinctNodeCount >= requiredReplicaCount ?
++    CRITICAL_PLACEMENT_REASON.CONVERGED :
++    CRITICAL_PLACEMENT_REASON.INSUFFICIENT_DISTINCT_NODES;
++}
++
++/**
++ * Placement convergence for one critical partition. This is a projection over
++ * supplied rows: it mints no readiness verdict and no lifecycle transition,
++ * and derives nothing from nodes.status, publication counts, or coverage.
++ *
++ * @param {Object} options
++ * @param {string} options.partitionId
++ * @param {Object[]} [options.serviceRows]
++ * @return {Object} frozen placement snapshot
++ */
++function resolveCriticalPartitionPlacement(options = {}) {
++  const partitionId = normalizeNonEmptyString(options.partitionId);
++  const serviceRows = copyDenseOwnDataRecordArray(options.serviceRows) || [];
++  const tableId = resolvePartitionTableId({partitionId}) || EMPTY_STRING;
++  const requiredReplicaCount = resolveRequiredReplicaCount(tableId);
++  const distinctNodeIds = resolveDistinctServingNodeIds(
++    serviceRows,
++    partitionId,
++  );
++  const distinctNodeCount = distinctNodeIds.length;
++  const reasonCode = resolvePlacementReason(
++    requiredReplicaCount,
++    distinctNodeCount,
++  );
++  return Object.freeze({
++    partitionId,
++    tableId,
++    requiredReplicaCount,
++    distinctNodeCount,
++    distinctNodeIds: Object.freeze(distinctNodeIds),
++    converged: reasonCode === CRITICAL_PLACEMENT_REASON.CONVERGED,
++    reasonCode,
++  });
++}
++
++/**
++ * Placement convergence across the whole declared critical partition set.
++ * Convergence is all-or-nothing and fails closed: absent evidence is never
++ * read as satisfaction.
++ *
++ * @param {Object} options
++ * @param {Object[]} [options.serviceRows]
++ * @return {Object} frozen convergence snapshot
++ */
++function resolveCriticalPlacementConvergence(options = {}) {
++  const serviceRows = copyDenseOwnDataRecordArray(options.serviceRows) || [];
++  const partitionIds = [];
++  CRITICAL_SYSTEM_PARTITION_IDS.forEach(
++    (partitionId) => arrayPush(partitionIds, partitionId),
++  );
++  sortArray(partitionIds);
++
++  const partitions = [];
++  const pendingPartitionIds = [];
++  for (let index = 0; index < partitionIds.length; index += 1) {
++    const placement = resolveCriticalPartitionPlacement({
++      partitionId: partitionIds[index],
++      serviceRows,
++    });
++    arrayPush(partitions, placement);
++    if (!placement.converged) {
++      arrayPush(pendingPartitionIds, placement.partitionId);
++    }
++  }
++
++  return Object.freeze({
++    converged: pendingPartitionIds.length === 0 && partitions.length > 0,
++    partitions: Object.freeze(partitions),
++    pendingPartitionIds: Object.freeze(pendingPartitionIds),
++  });
++}
++
++function isCriticalPlacementPartitionId(partitionId) {
++  return setHas(
++    CRITICAL_SYSTEM_PARTITION_IDS,
++    normalizeNonEmptyString(partitionId),
++  );
++}
++
++export {
++  CRITICAL_PLACEMENT_REASON,
++  isCriticalPlacementPartitionId,
++  resolveCriticalPartitionPlacement,
++  resolveCriticalPlacementConvergence,
++};
+diff --git a/test/bootstrap/critical-placement-convergence.test.js b/test/bootstrap/critical-placement-convergence.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..817c4e915437e9380d99c5d340aec8990bdf451b
+--- /dev/null
++++ b/test/bootstrap/critical-placement-convergence.test.js
+@@ -0,0 +1,214 @@
++// Witness for the critical-system-placement-distinct-node-invariant quest.
++// Raw node:test (not the tap shim) so --test-name-pattern selects exactly one
++// scenario and each receipt is independently honest.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  CRITICAL_PLACEMENT_REASON,
++  isCriticalPlacementPartitionId,
++  resolveCriticalPartitionPlacement,
++  resolveCriticalPlacementConvergence,
++} from '../../src/bootstrap/critical-placement-convergence.js';
++import {
++  CRITICAL_SYSTEM_PARTITION_IDS,
++  classifySystemPartition,
++} from '../../src/bootstrap/system-partition-classification.js';
++import {
++  SYSTEM_TABLE_NAME,
++  getInitialReplicaIds,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++
++const SERVICES_PARTITION_ID = `${SYSTEM_TABLE_NAME.SERVICES}-p1`;
++
++function serviceRow(replicaId, nodeId, status = 'active') {
++  return {
++    service_id: `svc-${replicaId}`,
++    service_type: 'partition',
++    node_id: nodeId,
++    partition_id: SERVICES_PARTITION_ID,
++    replica_id: replicaId,
++    status,
++  };
++}
++
++// The exact shape system tables are created with: three logical replicas, one
++// physical failure domain.
++function seedLocalRows() {
++  return [
++    serviceRow(`${SERVICES_PARTITION_ID}-r1`, 'seed'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r2`, 'seed'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r3`, 'seed'),
++  ];
++}
++
++function spreadRows() {
++  return [
++    serviceRow(`${SERVICES_PARTITION_ID}-r1`, 'seed'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r2`, 'node-2'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r3`, 'node-3'),
++  ];
++}
++
++test('seed-local-replicas-are-not-converged', () => {
++  const rows = seedLocalRows();
++  assert.equal(rows.length, 3, 'fixture holds the full logical replica count');
++
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: rows,
++  });
++
++  assert.equal(placement.requiredReplicaCount, 3);
++  assert.equal(placement.distinctNodeCount, 1);
++  assert.equal(placement.converged, false,
++    'three replicas on one node must NOT satisfy formation readiness');
++  assert.equal(placement.reasonCode,
++    CRITICAL_PLACEMENT_REASON.INSUFFICIENT_DISTINCT_NODES);
++});
++
++test('distinct-nodes-meeting-required-count-are-converged', () => {
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: spreadRows(),
++  });
++
++  assert.equal(placement.distinctNodeCount, 3);
++  assert.deepEqual([...placement.distinctNodeIds], ['node-2', 'node-3', 'seed']);
++  assert.equal(placement.converged, true);
++  assert.equal(placement.reasonCode, CRITICAL_PLACEMENT_REASON.CONVERGED);
++});
++
++test('critical-set-is-the-declared-vocabulary', () => {
++  const convergence = resolveCriticalPlacementConvergence({serviceRows: []});
++  const evaluated = convergence.partitions.map((p) => p.partitionId).sort();
++  const declared = [...CRITICAL_SYSTEM_PARTITION_IDS].sort();
++
++  assert.deepEqual(evaluated, declared,
++    'the evaluator must read the declared critical set, not a local copy');
++  for (const partitionId of declared) {
++    assert.equal(isCriticalPlacementPartitionId(partitionId), true);
++  }
++  assert.equal(isCriticalPlacementPartitionId('user_table-p1'), false);
++});
++
++test('required-count-derives-from-initial-replica-ids', () => {
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: spreadRows(),
++  });
++  const declaredCount =
++    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length;
++
++  assert.equal(placement.requiredReplicaCount, declaredCount,
++    'required count must come from the declared replica IDs');
++  assert.equal(placement.tableId, SYSTEM_TABLE_NAME.SERVICES);
++});
++
++test('non-serving-service-rows-do-not-count', () => {
++  const rows = [
++    serviceRow(`${SERVICES_PARTITION_ID}-r1`, 'seed'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r2`, 'node-2', 'stopped'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r3`, 'node-3', 'stopped'),
++  ];
++
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: rows,
++  });
++
++  assert.equal(placement.distinctNodeCount, 1,
++    'stopped replicas contribute no serving failure domain');
++  assert.equal(placement.converged, false);
++});
++
++test('absent-evidence-is-not-converged', () => {
++  for (const rows of [undefined, [], null]) {
++    const placement = resolveCriticalPartitionPlacement({
++      partitionId: SERVICES_PARTITION_ID,
++      serviceRows: rows,
++    });
++    assert.equal(placement.converged, false, 'absence is not satisfaction');
++    assert.equal(placement.reasonCode,
++      CRITICAL_PLACEMENT_REASON.EVIDENCE_ABSENT);
++  }
++
++  const convergence = resolveCriticalPlacementConvergence({serviceRows: []});
++  assert.equal(convergence.converged, false);
++  assert.ok(convergence.pendingPartitionIds.length > 0);
++});
++
++test('repeated-node-rows-count-once', () => {
++  const rows = [
++    ...spreadRows(),
++    serviceRow(`${SERVICES_PARTITION_ID}-r4`, 'node-2'),
++    serviceRow(`${SERVICES_PARTITION_ID}-r5`, 'node-2'),
++  ];
++
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: rows,
++  });
++
++  assert.equal(placement.distinctNodeCount, 3,
++    'a node holding several replicas is one failure domain');
++  assert.equal(placement.distinctNodeIds.length, 3);
++});
++
++test('evaluator-mints-no-readiness-verdict', () => {
++  const placement = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    serviceRows: spreadRows(),
++  });
++  const convergence = resolveCriticalPlacementConvergence({
++    serviceRows: spreadRows(),
++  });
++
++  const forbidden = ['ready', 'active', 'phase', 'verdict', 'status',
++    'trafficReady', 'lifecycle'];
++  for (const key of forbidden) {
++    assert.equal(Object.hasOwn(placement, key), false,
++      `placement must not mint ${key}`);
++    assert.equal(Object.hasOwn(convergence, key), false,
++      `convergence must not mint ${key}`);
++  }
++  assert.equal(Object.isFrozen(placement), true);
++  assert.equal(Object.isFrozen(convergence), true);
++});
++
++test('classification-vocabulary-unchanged', () => {
++  // Control: the existing classification surface must be untouched.
++  const declared = [...CRITICAL_SYSTEM_PARTITION_IDS].sort();
++  const expected = Object.values(SYSTEM_TABLE_NAME)
++    .map((tableName) => `${tableName}-p1`).sort();
++  assert.deepEqual(declared, expected);
++
++  const classification = classifySystemPartition({
++    partitionId: SERVICES_PARTITION_ID,
++  });
++  assert.equal(classification.systemTable, true);
++  assert.equal(classification.bootstrapCritical, true);
++  assert.deepEqual(Object.keys(classification).sort(), [
++    'bootstrapCritical', 'formationLivenessDependency', 'operationLedger',
++    'partitionClass', 'priorityControlPlane', 'systemTable',
++  ]);
++});
++
++test('witness-deterministic', () => {
++  const forward = resolveCriticalPlacementConvergence({
++    serviceRows: spreadRows(),
++  });
++  const reversed = resolveCriticalPlacementConvergence({
++    serviceRows: [...spreadRows()].reverse(),
++  });
++
++  assert.deepEqual(JSON.parse(JSON.stringify(forward)),
++    JSON.parse(JSON.stringify(reversed)),
++    'row order must not change the answer');
++
++  const repeated = resolveCriticalPlacementConvergence({
++    serviceRows: spreadRows(),
++  });
++  assert.deepEqual(JSON.parse(JSON.stringify(forward)),
++    JSON.parse(JSON.stringify(repeated)));
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 3e5703d3ff74c4b7f6dfa17865ecf167bae11ce1..e7b454823051e423de6ecd3dc9b94a5f4732a69f 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -4,12 +4,12 @@
+   "counts": {
+     "unit": 1858,
+     "integration": 73,
+-    "bootstrap": 173,
++    "bootstrap": 174,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-b243c74e",
++  "censusSize": 2112,
++  "digest": "fnv1a32-bd5493b6",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -134,6 +134,7 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap",
+     "test/bootstrap/create-message-group-phase.test.js": "bootstrap",
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap",
++    "test/bootstrap/critical-placement-convergence.test.js": "bootstrap",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 437a3e8de40e28e0604631950a24dad7bbcf83a2..dacdf76234a0baea510617980fbe366681334412 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2094,
++    "ordinary": 2095,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-6c63f2b6",
++  "censusSize": 2112,
++  "digest": "fnv1a32-ef24edbe",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -133,6 +133,7 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "ordinary",
+     "test/bootstrap/create-message-group-phase.test.js": "ordinary",
+     "test/bootstrap/create-self-hosted-registration.test.js": "ordinary",
++    "test/bootstrap/critical-placement-convergence.test.js": "ordinary",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "ordinary",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "ordinary",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index f584428674e90140a2886347c5812278a979e57e..52864cd1e1771ad0aa04896b392014ead7faede4 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 242,
++    "bootstrap-membership": 243,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2111,
+-  "digest": "fnv1a32-0fe86386",
++  "censusSize": 2112,
++  "digest": "fnv1a32-820d5b37",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -151,6 +151,7 @@
+     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap-membership",
+     "test/bootstrap/create-message-group-phase.test.js": "bootstrap-membership",
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap-membership",
++    "test/bootstrap/critical-placement-convergence.test.js": "bootstrap-membership",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap-membership",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap-membership",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",

@@ -1,0 +1,92 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solver-rejection-repair-amendment-path",
+  "status": "pass",
+  "generatedAt": "2026-08-31T06:50:43.235Z",
+  "receipts": [
+    {
+      "id": "rejection-binds-to-sealed-review-manifest",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^rejection-binds-to-sealed-review-manifest\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "a verifier-rejection records against the sealed review manifest fingerprint on a root whose worktree bytes no current-bytes projection could reproduce. This is the whole point: a rejection is a claim about the bytes that WERE reviewed, and repairing them is what makes those bytes non-current, so binding the check to the worktree made the strengthen-after-rejection path unreachable"
+    },
+    {
+      "id": "rejection-binding-refuses-wrong-fingerprint",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^rejection-binding-refuses-wrong-fingerprint\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "a fingerprint that does not equal the sealed manifest value is refused naming the review id, so review binding is a real check and not a way to launder an arbitrary fingerprint"
+    },
+    {
+      "id": "rejection-requires-review-when-one-exists",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^rejection-requires-review-when-one-exists\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "once a review has been minted for the quest, an attempt-scope rejection without --review is refused. This closes the hole where attempt scope validated NOTHING: its fingerprint was accepted unchecked, so the one path that stayed usable after repair proved nothing at all"
+    },
+    {
+      "id": "receipt-bar-strengthen-needs-no-rejection-finding",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^receipt-bar-strengthen-needs-no-rejection-finding\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "adding required receipts succeeds on a quest with zero recorded findings, and the result passes ensureSealedGoal. Strengthening is monotone, so gating it behind a rejection finding was the dead end that forced a successor quest"
+    },
+    {
+      "id": "receipt-bar-strengthen-refuses-removal",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^receipt-bar-strengthen-refuses-removal\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "dropping a sealed receipt is refused naming the dropped id; a no-op restatement is refused; DUPLICATE padding ([a,b] -> [a,b,b]) is refused, which a length comparison would have accepted while adding nothing; and non-string, null, object, empty, whitespace-only and whitespace-PADDED ids are refused, because such a receipt could never be satisfied and this kind could never drop it, so accepting one would brick the oracle. A refused amendment leaves the quest byte-identical. Mutation-verified: removing either the type/empty test or the duplicate test reds this scenario"
+    },
+    {
+      "id": "receipt-bar-strengthen-preserves-sibling-args",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^receipt-bar-strengthen-preserves-sibling-args\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "a sealed doneWhen arg other than requiredReceipts (minRuns) can be neither dropped nor rewritten: the key set must match exactly and every sibling value must be byte-identical. Checking only for UNEXPECTED keys was one-directional and let a sealed arg be weakened with no verifier gate at all. Also pins the intrinsics defense: with Object.prototype.file polluted, args that omit file are refused, because a plain inherited read would have accepted them and silently dropped the sealed key from the saved oracle. Mutation-verified: weakening ownValue to a plain read reds this scenario"
+    },
+    {
+      "id": "receipt-bar-strengthen-refuses-probe-or-file-change",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^receipt-bar-strengthen-refuses-probe-or-file-change\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "swapping the receipt file is refused, and smuggling any key that was not in the sealed args is refused: the oracle itself stays immutable, which is what makes the kind safe without a rejection gate"
+    },
+    {
+      "id": "receipt-bar-strengthen-updates-frontier-metric",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^receipt-bar-strengthen-updates-frontier-metric\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "the frontier sharing the doneWhen oracle is raised too, while a frontier on a different receipt file is untouched. The test-receipt probe measures ONLY requiredReceipts, so raising doneWhen alone would have raised a bar that nothing measures"
+    },
+    {
+      "id": "scope-validated-before-bytes",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^scope-validated-before-bytes\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "aggregate and both on a rejection both report the actionable attempt|candidate message and never a bytes mismatch — asserted on a quest that HAS a candidate-contract attempt, which is the only shape that discriminates: without one the bytes branch never runs and the pre-change code throws the identical string, so the same assertion on an attempt-less fixture was a receipt that could not fail (verified by mutation: removing the reorder now reds exactly this scenario)"
+    },
+    {
+      "id": "amend-refusal-names-the-actionable-flags",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^amend-refusal-names-the-actionable-flags\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "the refusal names --kind verifier-rejection, --review, --verification-fingerprint and points at receipt-bar-strengthen for pure strengthening, so a caller is not left discovering five required flags one refusal at a time"
+    },
+    {
+      "id": "existing-amendment-kinds-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^existing-amendment-kinds-unchanged\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "CONTROL — the sealed amendment vocabulary still lists the four prior kinds in order, class-correction still needs no verifier finding, and applyAmendments still projects it. Must stay green"
+    },
+    {
+      "id": "existing-rejection-flow-unchanged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^existing-rejection-flow-unchanged\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "CONTROL — a quest with NO minted review keeps the previous attempt-scope contract, so the review requirement binds exactly where a sealed referent exists and the existing CLI contract tests that model review-less quests are unaffected. Must stay green"
+    },
+    {
+      "id": "review-binding-refuses-another-quests-review",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^review-binding-refuses-another-quests-review\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "a review minted for a DIFFERENT quest cannot launder its fingerprint into this quest's log: reviewManifestSection checks manifest.questId, the refusal names it, and nothing is recorded. Without this scenario the guard had zero coverage and its deletion left the whole bar green"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/solve/rejection-repair-amendment-path.test.js",
+      "detail": "three runs on three fresh temp roots produce one identical doneWhen + frontier-args projection, so the receipt cannot pass by leftover state in a reused root"
+    }
+  ]
+}
