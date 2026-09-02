@@ -5,6 +5,19 @@ const RATINGS_FILE = resolve(DATA_DIR, 'u.data');
 
 const RATINGS_URL =
   'https://files.grouplens.org/datasets/movielens/ml-100k/u.data';
+// Digest-pinned fallback sources, tried in order when the canonical host
+// cannot serve (2026-08-29..: files.grouplens.org served an expired leaf
+// certificate for days and every CI gate red-lined on the fetch step). The
+// wayback snapshot is pinned to an exact timestamp with the id_ modifier so
+// it serves the archived original bytes, and the downloader verifies
+// RATINGS_SHA256 for EVERY source - the digest, not the transport, is the
+// integrity boundary, exactly as the CI dataset step already treats it.
+const RATINGS_FALLBACK_URLS = Object.freeze([
+  'https://web.archive.org/web/20260606124251id_/' +
+    'https://files.grouplens.org/datasets/movielens/ml-100k/u.data',
+]);
+const RATINGS_SHA256 =
+  '06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490';
 
 const CREATE_RATINGS_SQL = `
   CREATE TABLE IF NOT EXISTS ratings (
@@ -120,7 +133,9 @@ function computeTopMovies(rows) {
 export {
   CREATE_RATINGS_SQL,
   DATA_DIR,
+  RATINGS_FALLBACK_URLS,
   RATINGS_FILE,
+  RATINGS_SHA256,
   RATINGS_AGGREGATE_SQL,
   RATINGS_SELECT_SQL,
   RATINGS_TOP_QUALITY_SQL,
