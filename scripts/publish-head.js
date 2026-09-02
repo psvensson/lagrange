@@ -18,22 +18,45 @@ const ZERO_SHA = '0'.repeat(40);
 // The publisher announces each stage with elapsed time on stderr, and a
 // failure names the stage it died in instead of surfacing only a stack.
 const PUBLISH_STARTED_AT_MS = Date.now();
-let currentPublishStage = 'preflight';
+const PUBLISH_STAGE_PREFIX = '[publish +';
+const PUBLISH_STAGE_MARKER = 's] >> ';
+const PUBLISH_FAILURE_MARKER = 's] XX FAILED in stage: ';
+const PUBLISH_LINE_PREFIX = '[publish] ';
+const PUBLISH_INITIAL_STAGE = 'preflight';
+const PUBLISH_MILLISECONDS_PER_SECOND = 1000;
+const PUBLISH_NOT_PUSHED_NOTE =
+  'nothing was pushed unless the failed stage is AFTER ' +
+  '"pushing HEAD to origin/main"';
+const NEWLINE = '\n';
+const PUBLISH_SHORT_SHA_LENGTH = 9;
+const PUBLISH_STAGE_LABEL = Object.freeze({
+  RESOLVE_HEAD: 'resolving HEAD and querying the remote main SHA',
+  VALIDATE_REQUEST: 'validating the publish request for head ',
+  CREATE_WORKTREE: 'creating the exact-HEAD gate worktree',
+  RUN_GATE: 'running the pre-push gate in the worktree (LONG: the gate ' +
+    'prints its own [pre-push] stage lines below)',
+  PUSH: 'pushing HEAD to origin/main',
+  RECEIPT: 'push verified on the remote; writing the publish receipt for ',
+  DONE: 'done - pushed and receipted',
+});
+let currentPublishStage = PUBLISH_INITIAL_STAGE;
+function publishElapsedSeconds() {
+  return Math.round(
+    (Date.now() - PUBLISH_STARTED_AT_MS) / PUBLISH_MILLISECONDS_PER_SECOND);
+}
 function publishStage(label) {
   currentPublishStage = label;
-  const elapsedSeconds = Math.round(
-    (Date.now() - PUBLISH_STARTED_AT_MS) / 1000);
-  process.stderr.write(`[publish +${elapsedSeconds}s] >> ${label}\n`);
+  process.stderr.write(
+    PUBLISH_STAGE_PREFIX + publishElapsedSeconds() +
+    PUBLISH_STAGE_MARKER + label + NEWLINE);
 }
 function reportPublishFailure(error) {
-  const elapsedSeconds = Math.round(
-    (Date.now() - PUBLISH_STARTED_AT_MS) / 1000);
   process.stderr.write(
-    `\n[publish +${elapsedSeconds}s] XX FAILED in stage: ` +
-    `${currentPublishStage}\n` +
-    `[publish] ${error?.message || String(error)}\n` +
-    '[publish] nothing was pushed unless the failed stage is AFTER ' +
-    '"pushing HEAD to origin/main"\n');
+    NEWLINE +
+    PUBLISH_STAGE_PREFIX + publishElapsedSeconds() +
+    PUBLISH_FAILURE_MARKER + currentPublishStage + NEWLINE +
+    PUBLISH_LINE_PREFIX + (error?.message || String(error)) + NEWLINE +
+    PUBLISH_LINE_PREFIX + PUBLISH_NOT_PUSHED_NOTE + NEWLINE);
 }
 // ------------------------------------------------------------------------
 
@@ -304,12 +327,12 @@ function buildPublishReceipt(observed, args) {
 
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
-  publishStage('resolving HEAD and querying the remote main SHA');
+  publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
   const head = git(run, root, ['rev-parse', 'HEAD']);
   const headMessage = git(run, root, ['log', '-1', '--format=%B', head]);
   const remoteBefore = remoteMainSha(run, root);
-  publishStage(`validating the publish request (head ${head.slice(0, 9)}, ` +
-    `remote ${String(remoteBefore).slice(0, 9)})`);
+  publishStage(PUBLISH_STAGE_LABEL.VALIDATE_REQUEST +
+    head.slice(0, PUBLISH_SHORT_SHA_LENGTH));
   const runner = validatePublishRequest({
     headMessage,
     runner: args.runner || null,
@@ -318,7 +341,7 @@ export function publishExactHead(root, args = {}, options = {}) {
     remoteSha: remoteBefore,
   });
   assertFastForward(run, root, remoteBefore, head);
-  publishStage('creating the exact-HEAD gate worktree');
+  publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);
 
   const parent = path.join(root, 'test-output', 'publish-worktrees');
   fs.mkdirSync(parent, {recursive: true});
@@ -331,15 +354,14 @@ export function publishExactHead(root, args = {}, options = {}) {
     ],
     {cwd: root});
     added = true;
-    publishStage('running the pre-push gate in the worktree (LONG: the ' +
-      'gate prints its own [pre-push] stage lines below)');
+    publishStage(PUBLISH_STAGE_LABEL.RUN_GATE);
     const gateEnv = gateExactHead(
       run, root, worktree, head, remoteBefore, args);
-    publishStage('pushing HEAD to origin/main');
+    publishStage(PUBLISH_STAGE_LABEL.PUSH);
     const {ciUrl, remoteAfter} = pushGatedHead(
       run, root, worktree, head, gateEnv, options.queryCi);
-    publishStage(`push verified on the remote (${remoteAfter.slice(0, 9)}); ` +
-      'writing the publish receipt');
+    publishStage(PUBLISH_STAGE_LABEL.RECEIPT +
+      remoteAfter.slice(0, PUBLISH_SHORT_SHA_LENGTH));
     retained = null;
     const receipt = buildPublishReceipt(
       {head, remoteBefore, remoteAfter, runner, ciUrl}, args);
@@ -390,7 +412,7 @@ function main() {
   try {
     const args = parseArgs(process.argv.slice(2));
     const receipt = publishExactHead(process.cwd(), args);
-    publishStage('done - pushed and receipted');
+    publishStage(PUBLISH_STAGE_LABEL.DONE);
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   } catch (error) {
     reportPublishFailure(error);

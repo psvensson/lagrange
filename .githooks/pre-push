@@ -188,6 +188,6 @@ else
   # file reruns standalone once, reported never hidden, and a standalone
   # failure stays red (run-test-files.js owns the mechanics and the 5-file
   # breakage cap).
-  stage "post-push test corpus (LONG: ~30-45 min; per-file results stream below)"
+  stage "full test corpus - runs BEFORE the push; CI re-runs it after (LONG: ~30-45 min; per-file results stream below)"
   LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi
