@@ -24,7 +24,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-08-30: tightened 1441 -> 1439 while landing the self-move holder-release
 // interlock fix (consumer-parity and holder-release fixtures stopped exporting
 // helpers nothing imports).
-const BASELINE_UNUSED_EXPORT_COUNT = 1439;
+// 2026-09-02: tightened 1439 -> 1438 per checker hint after landing
+// critical-placement-authoritative-evidence (isConvergedPlacementCount
+// removed; every new evidence/observer export has a consumer).
+const BASELINE_UNUSED_EXPORT_COUNT = 1438;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
