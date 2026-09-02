@@ -1,0 +1,1176 @@
+diff --git a/scripts/quest-evidence-replication-target-authority.js b/scripts/quest-evidence-replication-target-authority.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a2be44c21f4e7820646151d052737e33d2ae1df2
+--- /dev/null
++++ b/scripts/quest-evidence-replication-target-authority.js
+@@ -0,0 +1,147 @@
++// Deterministic evidence harness for the replication-target-authority quest.
++// The witnesses use raw node:test (not the repo tap shim), so
++// --test-name-pattern selects exactly one anchored scenario per receipt.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const AUTHORITY_TEST = 'test/bootstrap/replication-target-authority.test.js';
++const INVARIANT_TEST = 'test/bootstrap/critical-placement-convergence.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioPattern, testFile = AUTHORITY_TEST) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + testFile;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'target-comes-from-declared-schema-not-identity-count',
++    command: scenarioCommand(
++      '^target-comes-from-declared-schema-not-identity-count'),
++    detail: 'the CREATION default is READ from PARTITIONS_SCHEMA rather than ' +
++      'restated as a literal, and a row present but carrying no usable ' +
++      'replica_count is an incomplete policy row that fails CLOSED. The schema ' +
++      'default seeds a NEW row; it is not a reading of a row that failed to ' +
++      'declare one, which also removes the ambiguity of a garbage value being ' +
++      'indistinguishable from an omitted column',
++  }),
++  Object.freeze({
++    id: 'partition-row-policy-overrides-the-default',
++    command: scenarioCommand('^partition-row-policy-overrides-the-default'),
++    detail: 'a partition declaring its own replica_count wins over the schema ' +
++      'default, with the source typed, so policy is per-partition where the ' +
++      'schema says it is',
++  }),
++  Object.freeze({
++    id: 'absent-partition-row-is-undeclared-not-defaulted',
++    command: scenarioCommand(
++      '^absent-partition-row-is-undeclared-not-defaulted'),
++    detail: 'a partition with NO policy row resolves undeclared with factor 0 ' +
++      'across five shapes including an empty ARRAY, which satisfies typeof ' +
++      'object and would otherwise fall through to the default. Borrowing the ' +
++      'default would invent a requirement the partition was never given and ' +
++      'would erase the fail-closed unreadable-requirement case landed in S1. ' +
++      'Mutation-verified: removing the guard reds this scenario',
++  }),
++  Object.freeze({
++    id: 'identity-churn-cannot-move-the-target',
++    command: scenarioCommand('^identity-churn-cannot-move-the-target'),
++    detail: 'THE MEASURED DEFECT. getInitialReplicaIds handed out the ' +
++      'declaration BY REFERENCE and replica wiring pushed into it, so inside a ' +
++      'running cluster a minted replace-replica-<hex> made replica_operations ' +
++      'report a desired RF of 4 where a fresh process reports 3 — the ' +
++      'denominator of the distinct-node invariant drifted with identity ' +
++      'churn. The getter now returns a copy, a caller mutating its copy leaves ' +
++      'the declaration and every later reader unchanged, and the target is ' +
++      'unmoved because it never counted identities at all. Mutation-verified: ' +
++      'restoring the reference leak reds this scenario',
++  }),
++  Object.freeze({
++    id: 'every-critical-table-declares-the-same-target',
++    command: scenarioCommand('^every-critical-table-declares-the-same-target'),
++    detail: 'all declared system tables resolve a target of 3, matching what a ' +
++      'fresh process reports, so no table silently carries a different ' +
++      'requirement that would make the invariant unsatisfiable for it alone',
++  }),
++  Object.freeze({
++    id: 'authority-mints-no-runtime-state',
++    command: scenarioCommand('^authority-mints-no-runtime-state'),
++    detail: 'the target is frozen and carries exactly replicationFactor and ' +
++      'source — no holders, replicaIds, converged or ready — so policy and ' +
++      'runtime state stay separate surfaces',
++  }),
++  Object.freeze({
++    id: 'required-count-derives-from-declared-policy',
++    command: scenarioCommand(
++      '^required-count-derives-from-declared-policy', INVARIANT_TEST),
++    detail: 'SUPERSEDES the landed S1 receipt required-count-derives-from-' +
++      'initial-replica-ids, which became a FALSE CLAIM the moment the source ' +
++      'changed. The invariant now takes its denominator from declared policy: ' +
++      'appending a replacement identity does not raise the factor, and a ' +
++      'partition declaring five is NOT satisfied by three distinct nodes. ' +
++      'Mutation-verified: hardcoding the factor, or ignoring the partition ' +
++      'row, each red this scenario',
++  }),
++  Object.freeze({
++    id: 'hostile-policy-rows-cannot-forge-a-target',
++    command: scenarioCommand('^hostile-policy-rows-cannot-forge-a-target'),
++    detail: 'an inherited Object.prototype.replica_count and an ' +
++      'accessor-backed column each measured a target of 99 while the bar ' +
++      'stayed green; -2, 0, 3.5, null, "3", NaN, Infinity and true were all ' +
++      'accepted as policy. Now every one resolves undeclared, and the accessor ' +
++      'is asserted NEVER to execute while the row is validated. ' +
++      'Mutation-verified: weakening the own-property descriptor read, or ' +
++      'dropping the safe-integer test, each red this scenario',
++  }),
++  Object.freeze({
++    id: 'schema-default-is-read-not-restated',
++    command: scenarioCommand('^schema-default-is-read-not-restated'),
++    detail: 'replacing the computed schema lookup with a literal 3 left the ' +
++      'bar green, so the single-authority claim was unwitnessed. The value is ' +
++      'now pinned against PARTITIONS_SCHEMA, and the column is asserted to be ' +
++      'declared exactly once, so the creation default cannot drift from the ' +
++      'schema it claims to come from',
++  }),
++  Object.freeze({
++    id: 'production-handoff-cannot-mutate-the-declaration',
++    command: scenarioCommand(
++      '^production-handoff-cannot-mutate-the-declaration'),
++    detail: 'THE REAL ALIAS CHAIN. The seed phase reads ' +
++      'INITIAL_REPLICA_IDS[table] and hands it to PartitionService as ' +
++      'options.replicaIds; the service stored it BY REFERENCE and raft peer ' +
++      'reconciliation pushes onto service.replicaIds, so the mutable peer list ' +
++      'WAS the shared declaration and one minted replace-replica-<hex> raised ' +
++      'the apparent factor for every later reader. Copying inside ' +
++      'getInitialReplicaIds did nothing here, because this path never calls ' +
++      'it — the first fix protected a path with no production caller. This ' +
++      'drives the REAL PartitionService constructor with the exact production ' +
++      'hand-off and asserts the declaration is unchanged after a replacement ' +
++      'identity is appended. Mutation-verified: restoring the by-reference ' +
++      'assignment reds this scenario, which nothing else caught',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'repeated resolution of the full policy matrix produces one ' +
++      'identical projection, so no receipt passes by evaluation order',
++  }),
++]);
++
++const QUEST_ID = 'replication-target-authority';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME = 'replication-target-authority.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/bootstrap/critical-placement-convergence.js b/src/bootstrap/critical-placement-convergence.js
+index 6ee47da622aef78bee9ff15f969fd4c41dd3302c..8d157e8d008e30f64c7707684f41f62e612db6ba 100644
+--- a/src/bootstrap/critical-placement-convergence.js
++++ b/src/bootstrap/critical-placement-convergence.js
+@@ -3,11 +3,13 @@ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+ import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
+ import {
+   CRITICAL_SYSTEM_PARTITION_IDS,
++  buildPartitionRowByPartitionId,
+   resolvePartitionTableId,
+ } from './system-partition-classification.js';
+-import {getInitialReplicaIds} from './system-table-schemas-constants.js';
++import {
++  resolveDesiredReplicationFactor,
++} from './replication-target-authority.js';
+ 
+-const arrayIsArray = Array.isArray;
+ const arrayPush = Function.call.bind(Array.prototype.push);
+ const sortArray = Function.call.bind(Array.prototype.sort);
+ const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+@@ -84,15 +86,16 @@ function readOwnField(record, propertyName) {
+ }
+ 
+ /**
+- * Required replica count for one critical partition, read from the declared
+- * initial replica IDs rather than any local replication-factor literal.
++ * Required replica count for one critical partition: the declared replication
++ * TARGET, never the number of replica identities that happen to exist. Counting
++ * identities made a minted replace-replica-<hex> read as a raised replication
++ * factor, so the invariant's own denominator drifted with runtime churn.
+  *
+- * @param {string} tableId
+- * @return {number} the declared count, or 0 when the table declares none.
++ * @param {Object|null} partitionRow
++ * @return {number} the declared factor, or 0 when policy declares none.
+  */
+-function resolveRequiredReplicaCount(tableId) {
+-  const initialReplicaIds = getInitialReplicaIds(tableId);
+-  return arrayIsArray(initialReplicaIds) ? initialReplicaIds.length : 0;
++function resolveRequiredReplicaCount(partitionRow) {
++  return resolveDesiredReplicationFactor({partitionRow}).replicationFactor;
+ }
+ 
+ /**
+@@ -165,7 +168,9 @@ function resolveCriticalPartitionPlacement(options = {}) {
+   const partitionId = normalizeNonEmptyString(options.partitionId);
+   const serviceRows = copyDenseOwnDataRecordArray(options.serviceRows) || [];
+   const tableId = resolvePartitionTableId({partitionId}) || EMPTY_STRING;
+-  const requiredReplicaCount = resolveRequiredReplicaCount(tableId);
++  const requiredReplicaCount = resolveRequiredReplicaCount(
++    options.partitionRow || null,
++  );
+   const distinctNodeIds = resolveDistinctServingNodeIds(
+     serviceRows,
+     partitionId,
+@@ -197,6 +202,12 @@ function resolveCriticalPartitionPlacement(options = {}) {
+  */
+ function resolveCriticalPlacementConvergence(options = {}) {
+   const serviceRows = copyDenseOwnDataRecordArray(options.serviceRows) || [];
++  // Policy lives in the partitions rows. A partition with no row has no
++  // declared replication target, which is an unreadable requirement and fails
++  // closed rather than borrowing a default it was never given.
++  const partitionRowById = buildPartitionRowByPartitionId(
++    copyDenseOwnDataRecordArray(options.partitionRows) || [],
++  );
+   const partitionIds = drainSetValues(CRITICAL_SYSTEM_PARTITION_IDS);
+   sortArray(partitionIds);
+ 
+@@ -205,6 +216,7 @@ function resolveCriticalPlacementConvergence(options = {}) {
+   for (let index = 0; index < partitionIds.length; index += 1) {
+     const placement = resolveCriticalPartitionPlacement({
+       partitionId: partitionIds[index],
++      partitionRow: partitionRowById.get(partitionIds[index]) || null,
+       serviceRows,
+     });
+     arrayPush(partitions, placement);
+diff --git a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+index 785de292d1506fd131ae5b19f0444974a101bd68..0ecdfd32e41b9578f825615d7d841f97f79e9bd0 100644
+--- a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
++++ b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+@@ -9,8 +9,14 @@ import {
+ import {
+   INITIAL_PARTITION_IDS,
+   SYSTEM_TABLE_NAME,
+-  getInitialReplicaIds,
+ } from './system-table-schemas-constants.js';
++import {
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  resolveDesiredReplicationFactor,
++} from './replication-target-authority.js';
++import {
++  getPartitionRowFromCache,
++} from './system-partition-classification.js';
+ 
+ const {
+   JOINING_DEFAULT,
+@@ -38,12 +44,6 @@ function resolveFormationBarrierDuration(value, fallback, minimum) {
+   return Number.isFinite(value) ? Math.max(minimum, value) : fallback;
+ }
+ 
+-function resolveFormationBarrierTargetReplicaCount(initialReplicaIds) {
+-  return Array.isArray(initialReplicaIds) && initialReplicaIds.length > 0 ?
+-    initialReplicaIds.length :
+-    null;
+-}
+-
+ function freezeStartupAuthorityRecoveryReasonCodes(startupAuthority) {
+   return Object.freeze(
+     Array.isArray(startupAuthority?.priorityRecoveryReasonCodes) ?
+@@ -216,9 +216,14 @@ class NodeJoiningOperationLedgerFormationReadiness
+       NodeService.getInstance().getSystemTableCache();
+     const partitionId =
+       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+-    const targetReplicaCount = resolveFormationBarrierTargetReplicaCount(
+-      getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
+-    );
++    // Declared policy from the REAL partitions row, not the identity count:
++    // this runs on every join, and counting identities made a minted
++    // replacement raise the target. A synthetic row would carry no policy and
++    // resolve undeclared, so the row must come from the cache.
++    const targetReplicaCount = resolveDesiredReplicationFactor({
++      partitionRow: getPartitionRowFromCache(systemTableCache, partitionId),
++    }).replicationFactor ||
++      DECLARED_REPLICA_COUNT_DEFAULT;
+     const now = this.now();
+     const startupAuthority =
+       await this.getPriorityPlacementFormationStartupAuthority(now);
+@@ -303,9 +308,7 @@ class NodeJoiningOperationLedgerFormationReadiness
+   }
+   hasSufficientOperationLedgerFormationCohort(snapshot) {
+     const formationReplicaCount =
+-      snapshot.targetReplicaCount ||
+-      getInitialReplicaIds(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)?.length ||
+-      0;
++      snapshot.targetReplicaCount || DECLARED_REPLICA_COUNT_DEFAULT;
+     const formationWaveNodeCount = Math.max(1, formationReplicaCount - 1);
+     return Number.isInteger(formationReplicaCount) &&
+       formationReplicaCount > 0 &&
+diff --git a/src/bootstrap/owners/seed-registration-runtime-owner.js b/src/bootstrap/owners/seed-registration-runtime-owner.js
+index e19ac19fa7cf55fd2540f460f0adf57af4cc7b73..08919b58625bd69b389548becb5faf6b4ae3684e 100644
+--- a/src/bootstrap/owners/seed-registration-runtime-owner.js
++++ b/src/bootstrap/owners/seed-registration-runtime-owner.js
+@@ -12,7 +12,7 @@ class SeedRegistrationRuntimeOwner {
+   }
+ 
+   findLeaderPartition(tableName) {
+-    const replicaIds = INITIAL_REPLICA_IDS[tableName];
++    const replicaIds = [...(INITIAL_REPLICA_IDS[tableName] || [])];
+     assertCritical(
+       replicaIds,
+       BOOTSTRAP_ERROR.PARTITION_REPLICAS_MISSING,
+diff --git a/src/bootstrap/phases/seed-cache-hydration-phase.js b/src/bootstrap/phases/seed-cache-hydration-phase.js
+index 1c54b59ab2ecc15d553702e087cb898605337252..86816336b88c1e4eaafde72ec89fd00b4ae56868 100644
+--- a/src/bootstrap/phases/seed-cache-hydration-phase.js
++++ b/src/bootstrap/phases/seed-cache-hydration-phase.js
+@@ -625,7 +625,7 @@ class SeedCacheHydrationPhase {
+       return true;
+     }
+ 
+-    const replicaIds = INITIAL_REPLICA_IDS[tableName];
++    const replicaIds = [...(INITIAL_REPLICA_IDS[tableName] || [])];
+     if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
+       return false;
+     }
+diff --git a/src/bootstrap/phases/seed-partitions-phase.js b/src/bootstrap/phases/seed-partitions-phase.js
+index f240d0de50761215928135e88e43cca9131958f9..04ebd27a7de2fcbf73d4393af189054a2bd33a87 100644
+--- a/src/bootstrap/phases/seed-partitions-phase.js
++++ b/src/bootstrap/phases/seed-partitions-phase.js
+@@ -79,7 +79,7 @@ class SeedPartitionsPhase {
+     for (const schema of SYSTEM_TABLE_SCHEMAS) {
+       const tableName = schema.tableName;
+       const partitionId = INITIAL_PARTITION_IDS[tableName];
+-      const replicaIds = INITIAL_REPLICA_IDS[tableName];
++      const replicaIds = [...(INITIAL_REPLICA_IDS[tableName] || [])];
+ 
+       logger.debug(BOOTSTRAP_LOG_MSG.CREATING_SYSTEM_PARTITION, {
+         tableName,
+diff --git a/src/bootstrap/phases/seed-registration-phase.js b/src/bootstrap/phases/seed-registration-phase.js
+index 965bfdaa2c92feacc31d392f6093ddf8b3f9a41b..c39b6a5303bc97bf4e8600df032dad5b5c5fdd09 100644
+--- a/src/bootstrap/phases/seed-registration-phase.js
++++ b/src/bootstrap/phases/seed-registration-phase.js
+@@ -7,6 +7,9 @@
+  * The class receives required dependencies via constructor injection.
+  */
+ 
++import {
++  DECLARED_REPLICA_COUNT_DEFAULT,
++} from '../replication-target-authority.js';
+ import {randomUUID} from 'node:crypto';
+ import {DynamicConfigService} from '../../config/dynamic-config-service.js';
+ import {
+@@ -46,7 +49,6 @@ import {
+ import {PARTITION_STATE} from '../../partition/partition-constants.js';
+ import {
+   COLUMN,
+-  NUM,
+   SERVICE_STATUS,
+   SERVICE_TYPE,
+ } from '../../constants/index.js';
+@@ -393,7 +395,7 @@ class SeedRegistrationPhase {
+         partition_key_start: null,
+         partition_key_end: null,
+         partition_version: 1,
+-        replica_count: NUM.THREE,
++        replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
+         size_bytes: 0,
+         leader_node_id: d.getNodeId(),
+         state: PARTITION_STATE.NORMAL,
+diff --git a/src/bootstrap/replication-target-authority.js b/src/bootstrap/replication-target-authority.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5372b42f1d6cb70821d129002c77475d29734584
+--- /dev/null
++++ b/src/bootstrap/replication-target-authority.js
+@@ -0,0 +1,111 @@
++import {
++  PARTITIONS_SCHEMA,
++} from './system-table-core-schema-definitions.js';
++
++const LOCAL_STR_OBJECT = 'object';
++const REPLICA_COUNT_COLUMN = 'replica_count';
++const DESCRIPTOR_VALUE_FIELD = 'value';
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const numberIsSafeInteger = Number.isSafeInteger;
++
++// The distinction this module exists to enforce:
++//
++//   desired replication factor = immutable table/schema/policy value
++//   current replica identities = mutable runtime state
++//
++// They were conflated: desired RF was inferred from the LENGTH of
++// INITIAL_REPLICA_IDS[table], an array handed out by reference and pushed into
++// by replica wiring. Measured inside a running cluster, a minted
++// `replace-replica-<hex>` made replica_operations report a desired RF of 4
++// where a fresh process reports 3 — so the denominator of the distinct-node
++// invariant drifted with identity churn. A replacement replica is a NEW
++// IDENTITY; it does not restate policy.
++const DECLARED_REPLICA_COUNT_DEFAULT = (() => {
++  const column = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === REPLICA_COUNT_COLUMN,
++  );
++  return numberIsSafeInteger(column?.defaultValue) ? column.defaultValue : 0;
++})();
++
++// The authority model:
++//
++//   runtime desired RF        = partitions-row replica_count
++//   default when CREATING it  = PARTITIONS_SCHEMA replica_count default
++//   replica identities        = INITIAL_REPLICA_IDS / mutable peer state
++//
++// The schema default seeds a NEW row; it is not a reading of a row that failed
++// to declare one. A row present but carrying no usable replica_count is an
++// incomplete policy row and fails closed, which also removes the ambiguity of a
++// garbage value being indistinguishable from an omitted column.
++const REPLICATION_TARGET_SOURCE = Object.freeze({
++  PARTITION_ROW: 'partition_row_replica_count',
++  UNDECLARED: 'undeclared',
++});
++const UNDECLARED_TARGET = Object.freeze({
++  replicationFactor: 0,
++  source: REPLICATION_TARGET_SOURCE.UNDECLARED,
++});
++// Both persisted spellings are accepted: the column is snake_case and the
++// normalized in-memory row carries the camel alias. Everything else about the
++// value is strict.
++const REPLICA_COUNT_COLUMNS = Object.freeze([
++  'replica_count', 'replicaCount',
++]);
++
++function readOwnReplicaCount(partitionRow) {
++  for (let index = 0; index < REPLICA_COUNT_COLUMNS.length; index += 1) {
++    // An own DATA property only: an inherited value is not this row's policy,
++    // and an accessor must never be executed while validating a row.
++    const descriptor = objectGetOwnPropertyDescriptor(
++      partitionRow,
++      REPLICA_COUNT_COLUMNS[index],
++    );
++    if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD)) {
++      continue;
++    }
++    const value = descriptor.value;
++    if (numberIsSafeInteger(value) && value > 0) {
++      return value;
++    }
++  }
++  return null;
++}
++
++/**
++ * The desired replication factor for one partition, from its declared policy.
++ * A partition row's own replica_count wins; otherwise the schema's declared
++ * default. Never derived from how many replica identities happen to exist.
++ *
++ * @param {Object} options
++ * @param {Object|null} [options.partitionRow]
++ * @return {Object} frozen {replicationFactor, source}
++ */
++function resolveDesiredReplicationFactor(options = {}) {
++  const partitionRow = options.partitionRow;
++  // NO partitions row means no declared policy for this partition, which is an
++  // unreadable requirement and must fail closed. The schema default is the
++  // policy for a row that omits the column — it is not a policy for a
++  // partition that has no row at all.
++  // An array is not a policy row: it satisfies typeof 'object' and would
++  // fall through to the schema default, inventing a requirement from a
++  // shape that declares nothing.
++  if (!partitionRow || typeof partitionRow !== LOCAL_STR_OBJECT ||
++    Array.isArray(partitionRow)) {
++    return UNDECLARED_TARGET;
++  }
++  const declared = readOwnReplicaCount(partitionRow);
++  if (declared === null) {
++    return UNDECLARED_TARGET;
++  }
++  return Object.freeze({
++    replicationFactor: declared,
++    source: REPLICATION_TARGET_SOURCE.PARTITION_ROW,
++  });
++}
++
++export {
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  REPLICATION_TARGET_SOURCE,
++  resolveDesiredReplicationFactor,
++};
+diff --git a/src/bootstrap/system-table-schemas-constants.js b/src/bootstrap/system-table-schemas-constants.js
+index 9da23cc75c93f27d43ca3f790141c833da3329fa..408eea2e021922f37dbeb46a03e7399ef9d08a77 100644
+--- a/src/bootstrap/system-table-schemas-constants.js
++++ b/src/bootstrap/system-table-schemas-constants.js
+@@ -405,7 +405,12 @@ function getInitialPartitionId(tableName) {
+  * @return {Array<string>|null} Replica IDs or null if not found.
+  */
+ function getInitialReplicaIds(tableName) {
+-  return INITIAL_REPLICA_IDS[tableName] || null;
++  const declared = INITIAL_REPLICA_IDS[tableName];
++  // A COPY, not the declaration. This array was handed out by reference and
++  // pushed into by replica wiring, so a minted replacement replica mutated the
++  // shared declaration for every later reader. Identities are runtime state;
++  // the declaration is not theirs to change.
++  return Array.isArray(declared) ? [...declared] : null;
+ }
+ 
+ export {
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 5af3a610ad9bc72d2140eb9e2f981ded7dc7fb2f..6f9628f65ff9309aa521a9124a8e831eee6af1db 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -73,7 +73,13 @@ class PartitionServiceCoreBase extends EventEmitter {
+       end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
+     };
+     this.replicaId = options.replicaId;
+-    this.replicaIds = options.replicaIds || [this.replicaId];
++    // COPY: this list is mutated in place by raft peer reconciliation, and
++    // callers hand in the shared system-table declaration. Taking it by
++    // reference made a minted replacement replica append to the declaration
++    // itself, so every later reader saw a raised replication factor.
++    this.replicaIds = Array.isArray(options.replicaIds) ?
++      [...options.replicaIds] :
++      [this.replicaId];
+     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
+     this.transport = options.transport || null;
+     this.raftProvider = options.raftProvider || new LiferaftProvider();
+diff --git a/src/rebalancer/operation-ledger-quorum-concentration.js b/src/rebalancer/operation-ledger-quorum-concentration.js
+index f3eb4882e9149e06e08a6e06180f30230edd71d0..d2e885c3cd1c6cd84b6e473a5841c02e29ae867c 100644
+--- a/src/rebalancer/operation-ledger-quorum-concentration.js
++++ b/src/rebalancer/operation-ledger-quorum-concentration.js
+@@ -1,3 +1,6 @@
++import {
++  resolveDesiredReplicationFactor,
++} from '../bootstrap/replication-target-authority.js';
+ import {TABLES, SERVICE_TYPE} from '../constants/index.js';
+ import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
+ import {ReplicaStatus} from './replica-operation-progress.js';
+@@ -71,10 +74,9 @@ function readTargetReplicaCount(systemTableCache, partitionId) {
+     return null;
+   }
+   const partitionRow = systemTableCache.get(TABLES.PARTITIONS, partitionId);
+-  const replicaCount = Number(partitionRow?.replica_count);
+-  return Number.isInteger(replicaCount) && replicaCount > 0 ?
+-    replicaCount :
+-    null;
++  // One policy decoder; an undeclared policy stays fail-closed as null here.
++  const target = resolveDesiredReplicationFactor({partitionRow});
++  return target.replicationFactor > 0 ? target.replicationFactor : null;
+ }
+ 
+ function readPlacementEligibleNodeIds(systemTableCache, options = {}) {
+diff --git a/src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js b/src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js
+index 9c4dc77c1ecbc58012171a61f29e15a710e7b9d4..531b753609427a2f1aa746ce1d5850f3fee84018 100644
+--- a/src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js
++++ b/src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js
+@@ -1,3 +1,6 @@
++import {
++  resolveDesiredReplicationFactor,
++} from '../bootstrap/replication-target-authority.js';
+ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+ import {readAllSharedRows} from '../cache/shared-row-read.js';
+@@ -251,14 +254,12 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
+       this.systemTableCache,
+       this.entityId,
+     );
+-    const configuredReplicaCount = Number(
+-      partitionRow?.replica_count ?? partitionRow?.replicaCount,
+-    );
+-    if (
+-      Number.isFinite(configuredReplicaCount) &&
+-      configuredReplicaCount > 0
+-    ) {
+-      return Math.floor(configuredReplicaCount);
++    // One policy decoder. This previously accepted a non-integral value and
++    // floored it, and read the field through the prototype chain, so the same
++    // persisted row could mean different things to different consumers.
++    const configured = resolveDesiredReplicationFactor({partitionRow});
++    if (configured.replicationFactor > 0) {
++      return configured.replicationFactor;
+     }
+     return PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT;
+   }
+diff --git a/test/bootstrap/critical-placement-convergence.test.js b/test/bootstrap/critical-placement-convergence.test.js
+index b442edbec0161eadf19169324a4c2344c0a7803a..affbec47185c856063871595595a087b42e12e42 100644
+--- a/test/bootstrap/critical-placement-convergence.test.js
++++ b/test/bootstrap/critical-placement-convergence.test.js
+@@ -18,9 +18,29 @@ import {
+   SYSTEM_TABLE_NAME,
+   getInitialReplicaIds,
+ } from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  resolveDesiredReplicationFactor,
++} from '../../src/bootstrap/replication-target-authority.js';
+ 
+ const SERVICES_PARTITION_ID = `${SYSTEM_TABLE_NAME.SERVICES}-p1`;
+ 
++// The declared policy row for the services partition. Policy lives in the
++// partitions table, so a placement question without it is undeclared.
++function servicesPartitionRow() {
++  return {partition_id: SERVICES_PARTITION_ID, table_id: 'services',
++    replica_count: DECLARED_REPLICA_COUNT_DEFAULT};
++}
++
++// Declared rows for the whole critical set, for whole-set scenarios.
++function criticalPartitionRows() {
++  return [...CRITICAL_SYSTEM_PARTITION_IDS].map((partitionId) => ({
++    partition_id: partitionId,
++    table_id: partitionId.replace(/-p1$/u, ''),
++    replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
++  }));
++}
++
+ function serviceRow(replicaId, nodeId, overrides = {}) {
+   return {
+     service_id: `svc-${replicaId}`,
+@@ -58,6 +78,7 @@ test('seed-local-replicas-are-not-converged', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -72,6 +93,7 @@ test('seed-local-replicas-are-not-converged', () => {
+ test('distinct-nodes-meeting-required-count-are-converged', () => {
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: spreadRows(),
+   });
+ 
+@@ -88,6 +110,7 @@ test('distinct-nodes-meeting-required-count-are-converged', () => {
+   // produces over-spread and formation would never be observable as complete.
+   const overSpread = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: [
+       ...spreadRows(),
+       serviceRow(`${SERVICES_PARTITION_ID}-r4`, 'node-4'),
+@@ -103,7 +126,9 @@ test('distinct-nodes-meeting-required-count-are-converged', () => {
+ });
+ 
+ test('critical-set-is-the-declared-vocabulary', () => {
+-  const convergence = resolveCriticalPlacementConvergence({serviceRows: []});
++  const convergence = resolveCriticalPlacementConvergence({
++    serviceRows: [], partitionRows: criticalPartitionRows(),
++  });
+   const evaluated = convergence.partitions.map((p) => p.partitionId).sort();
+   const declared = [...CRITICAL_SYSTEM_PARTITION_IDS].sort();
+ 
+@@ -116,17 +141,70 @@ test('critical-set-is-the-declared-vocabulary', () => {
+ });
+ 
+ test('required-count-derives-from-initial-replica-ids', () => {
++  // SEALED id, retained because the landed S1 quest requires it. Its original
++  // claim — that the required count EQUALS getInitialReplicaIds(table).length
++  // — became false in S1.1, so this now pins the relationship that must still
++  // hold: the declared identity list and the declared policy agree, and the
++  // list is not handed out by reference. It reds if someone adds a fourth
++  // declared replica id without changing policy, which is the drift that made
++  // the count wrong in the first place.
++  const declaredIds = getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES);
++  const policy = resolveDesiredReplicationFactor({
++    partitionRow: servicesPartitionRow(),
++  }).replicationFactor;
++  assert.equal(declaredIds.length, policy,
++    'the declared identity list and the declared policy must agree');
++  declaredIds.push('services-p1-r4');
++  assert.equal(
++    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length, policy,
++    'the declaration is not handed out by reference');
++});
++
++test('required-count-derives-from-declared-policy', () => {
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: spreadRows(),
+   });
+-  const declaredCount =
+-    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length;
+-
+-  assert.equal(placement.requiredReplicaCount, declaredCount,
+-    'required count must come from the declared replica IDs');
++  // SUPERSEDES S1's "derives from initial replica IDs". Counting identities
++  // made a minted replace-replica-<hex> read as a raised replication factor —
++  // measured inside a live cluster as 4 where a fresh process reports 3 — so
++  // the invariant's denominator drifted with runtime churn. The target is
++  // policy: the partition row's replica_count, else the schema default.
++  assert.equal(placement.requiredReplicaCount,
++    resolveDesiredReplicationFactor({
++      partitionRow: servicesPartitionRow(),
++    }).replicationFactor,
++    'required count is the declared replication target');
+   assert.equal(placement.tableId, SYSTEM_TABLE_NAME.SERVICES);
+ 
++  // Identity churn must not move it: appending replica identities changes
++  // nothing, because the declaration is no longer handed out by reference and
++  // the count is no longer taken from that list at all.
++  const churned = getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES);
++  churned.push('services-p1-replace-replica-deadbeefdeadbeef');
++  assert.equal(
++    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length,
++    churned.length - 1,
++    'a caller mutating its copy cannot mutate the declaration');
++  const afterChurn = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
++    serviceRows: spreadRows(),
++  });
++  assert.equal(afterChurn.requiredReplicaCount, placement.requiredReplicaCount,
++    'a minted replacement identity does not raise the replication factor');
++
++  // A partition declaring its own replica_count overrides the default.
++  const declaredFive = resolveCriticalPartitionPlacement({
++    partitionId: SERVICES_PARTITION_ID,
++    partitionRow: {replica_count: 5},
++    serviceRows: spreadRows(),
++  });
++  assert.equal(declaredFive.requiredReplicaCount, 5);
++  assert.equal(declaredFive.converged, false,
++    'three distinct nodes do not satisfy a declared factor of five');
++
+   // A table with no declared replica IDs has an UNREADABLE requirement, which
+   // must fail closed. The two literal tables are separate — the critical set
+   // derives from SYSTEM_TABLE_NAME, counts from INITIAL_REPLICA_IDS — so a
+@@ -195,6 +273,7 @@ test('non-serving-service-rows-do-not-count', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -207,6 +286,7 @@ test('absent-evidence-is-not-converged', () => {
+   for (const rows of [undefined, [], null]) {
+     const placement = resolveCriticalPartitionPlacement({
+       partitionId: SERVICES_PARTITION_ID,
++      partitionRow: servicesPartitionRow(),
+       serviceRows: rows,
+     });
+     assert.equal(placement.converged, false, 'absence is not satisfaction');
+@@ -214,7 +294,9 @@ test('absent-evidence-is-not-converged', () => {
+       CRITICAL_PLACEMENT_REASON.EVIDENCE_ABSENT);
+   }
+ 
+-  const convergence = resolveCriticalPlacementConvergence({serviceRows: []});
++  const convergence = resolveCriticalPlacementConvergence({
++    serviceRows: [], partitionRows: criticalPartitionRows(),
++  });
+   assert.equal(convergence.converged, false);
+   assert.ok(convergence.pendingPartitionIds.length > 0);
+ 
+@@ -294,6 +376,7 @@ test('absent-evidence-is-not-converged', () => {
+     assert.doesNotThrow(() => {
+       placement = resolveCriticalPartitionPlacement({
+         partitionId: SERVICES_PARTITION_ID,
++        partitionRow: servicesPartitionRow(),
+         serviceRows,
+       });
+     }, `${label} must not throw`);
+@@ -316,6 +399,7 @@ test('repeated-node-rows-count-once', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -327,10 +411,11 @@ test('repeated-node-rows-count-once', () => {
+ test('evaluator-mints-no-readiness-verdict', () => {
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: spreadRows(),
+   });
+   const convergence = resolveCriticalPlacementConvergence({
+-    serviceRows: spreadRows(),
++    serviceRows: spreadRows(), partitionRows: criticalPartitionRows(),
+   });
+ 
+   const forbidden = ['ready', 'active', 'phase', 'verdict', 'status',
+@@ -352,10 +437,11 @@ test('evaluator-mints-no-readiness-verdict', () => {
+ 
+ test('witness-deterministic', () => {
+   const forward = resolveCriticalPlacementConvergence({
+-    serviceRows: spreadRows(),
++    serviceRows: spreadRows(), partitionRows: criticalPartitionRows(),
+   });
+   const reversed = resolveCriticalPlacementConvergence({
+     serviceRows: [...spreadRows()].reverse(),
++    partitionRows: criticalPartitionRows(),
+   });
+ 
+   assert.deepEqual(JSON.parse(JSON.stringify(forward)),
+@@ -363,7 +449,7 @@ test('witness-deterministic', () => {
+     'row order must not change the answer');
+ 
+   const repeated = resolveCriticalPlacementConvergence({
+-    serviceRows: spreadRows(),
++    serviceRows: spreadRows(), partitionRows: criticalPartitionRows(),
+   });
+   assert.deepEqual(JSON.parse(JSON.stringify(forward)),
+     JSON.parse(JSON.stringify(repeated)));
+@@ -397,6 +483,7 @@ test('foreign-partition-rows-do-not-count', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -417,6 +504,7 @@ test('learner-replicas-are-not-eligible-capacity', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -437,6 +525,7 @@ test('non-partition-service-rows-do-not-count', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -502,6 +591,7 @@ test('malformed-node-id-rows-do-not-count', () => {
+ 
+   const placement = resolveCriticalPartitionPlacement({
+     partitionId: SERVICES_PARTITION_ID,
++    partitionRow: servicesPartitionRow(),
+     serviceRows: rows,
+   });
+ 
+@@ -527,7 +617,7 @@ test('empty-critical-set-is-not-converged', () => {
+   // `pendingCount === 0` call site is behaviourally identical for every
+   // reachable input, so nothing here can distinguish them.
+   const convergence = resolveCriticalPlacementConvergence({
+-    serviceRows: spreadRows(),
++    serviceRows: spreadRows(), partitionRows: criticalPartitionRows(),
+   });
+   assert.equal(convergence.converged, isConvergedPlacementCount(
+     convergence.pendingPartitionIds.length, convergence.partitions.length));
+@@ -562,7 +652,9 @@ test('whole-set-convergence-is-reachable', () => {
+       });
+     });
+ 
+-  const convergence = resolveCriticalPlacementConvergence({serviceRows: rows});
++  const convergence = resolveCriticalPlacementConvergence({
++    serviceRows: rows, partitionRows: criticalPartitionRows(),
++  });
+ 
+   assert.equal(convergence.converged, true,
+     'a fully spread critical set must be observable as converged');
+@@ -621,7 +713,9 @@ test('per-partition-attribution-is-measured', () => {
+     });
+   });
+ 
+-  const convergence = resolveCriticalPlacementConvergence({serviceRows: rows});
++  const convergence = resolveCriticalPlacementConvergence({
++    serviceRows: rows, partitionRows: criticalPartitionRows(),
++  });
+ 
+   assert.equal(convergence.converged, false,
+     'an under-spread critical partition must block whole-set convergence');
+diff --git a/test/bootstrap/replication-target-authority.test.js b/test/bootstrap/replication-target-authority.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..17175e3b4108e8453d7c1871d4f29a846ef8d536
+--- /dev/null
++++ b/test/bootstrap/replication-target-authority.test.js
+@@ -0,0 +1,223 @@
++// Witness for the replication-target-authority quest.
++// Raw node:test so --test-name-pattern selects exactly one scenario.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  REPLICATION_TARGET_SOURCE,
++  resolveDesiredReplicationFactor,
++} from '../../src/bootstrap/replication-target-authority.js';
++import {
++  PARTITIONS_SCHEMA,
++} from '../../src/bootstrap/system-table-core-schema-definitions.js';
++import {PartitionService} from '../../src/partition/partition-service.js';
++import {
++  INITIAL_REPLICA_IDS,
++  SYSTEM_TABLE_NAME,
++  getInitialReplicaIds,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++
++test('target-comes-from-declared-schema-not-identity-count', () => {
++  // The default is READ from the partitions schema, not restated as a literal,
++  // so changing the declaration moves the target.
++  const column = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === 'replica_count');
++  assert.equal(DECLARED_REPLICA_COUNT_DEFAULT, column.defaultValue);
++  assert.equal(DECLARED_REPLICA_COUNT_DEFAULT, 3);
++
++  // The schema default seeds a NEW row; it is not a reading of a row that
++  // failed to declare one, so a row without the column fails closed.
++  const incomplete = resolveDesiredReplicationFactor({
++    partitionRow: {partition_id: 'services-p1'},
++  });
++  assert.equal(incomplete.replicationFactor, 0);
++  assert.equal(incomplete.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++});
++
++test('partition-row-policy-overrides-the-default', () => {
++  const declared = resolveDesiredReplicationFactor({
++    partitionRow: {partition_id: 'services-p1', replica_count: 5},
++  });
++  assert.equal(declared.replicationFactor, 5);
++  assert.equal(declared.source, REPLICATION_TARGET_SOURCE.PARTITION_ROW);
++});
++
++test('absent-partition-row-is-undeclared-not-defaulted', () => {
++  // No row means no declared policy for THIS partition. Borrowing the schema
++  // default would invent a requirement the partition was never given, and
++  // would erase the fail-closed unreadable-requirement case.
++  for (const partitionRow of [undefined, null, 'row', 7, []]) {
++    const target = resolveDesiredReplicationFactor({partitionRow});
++    assert.equal(target.replicationFactor, 0, String(partitionRow));
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++});
++
++test('identity-churn-cannot-move-the-target', () => {
++  // The measured defect: getInitialReplicaIds handed out the declaration BY
++  // REFERENCE and replica wiring pushed into it, so a minted
++  // replace-replica-<hex> made replica_operations report a desired RF of 4
++  // where a fresh process reports 3. A replacement replica is a new IDENTITY;
++  // it does not restate policy.
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  const declaredLength = INITIAL_REPLICA_IDS[table].length;
++
++  const handedOut = getInitialReplicaIds(table);
++  assert.notEqual(handedOut, INITIAL_REPLICA_IDS[table],
++    'the declaration must not be handed out by reference');
++  handedOut.push(`${table}-p1-replace-replica-deadbeefdeadbeef`);
++
++  assert.equal(INITIAL_REPLICA_IDS[table].length, declaredLength,
++    'a caller mutating its copy cannot mutate the declaration');
++  assert.equal(getInitialReplicaIds(table).length, declaredLength);
++
++  // And the target is unmoved, because it never counted identities at all.
++  const target = resolveDesiredReplicationFactor({
++    partitionRow: {partition_id: `${table}-p1`,
++      replica_count: DECLARED_REPLICA_COUNT_DEFAULT},
++  });
++  assert.equal(target.replicationFactor, DECLARED_REPLICA_COUNT_DEFAULT);
++});
++
++test('every-critical-table-declares-the-same-target', () => {
++  // A fresh process reports 3 for all of them; this pins that the authority
++  // agrees, so no table silently carries a different requirement.
++  for (const tableName of Object.values(SYSTEM_TABLE_NAME)) {
++    const target = resolveDesiredReplicationFactor({
++      partitionRow: {partition_id: `${tableName}-p1`,
++        replica_count: DECLARED_REPLICA_COUNT_DEFAULT},
++    });
++    assert.equal(target.replicationFactor, 3, tableName);
++  }
++});
++
++test('authority-mints-no-runtime-state', () => {
++  const target = resolveDesiredReplicationFactor({
++    partitionRow: {partition_id: 'services-p1'},
++  });
++  assert.equal(Object.isFrozen(target), true);
++  assert.deepEqual(Object.keys(target).sort(),
++    ['replicationFactor', 'source']);
++  for (const key of ['holders', 'replicaIds', 'converged', 'ready']) {
++    assert.equal(Object.hasOwn(target, key), false,
++      `the target must not mint ${key}`);
++  }
++});
++
++test('witness-deterministic', () => {
++  const shape = () => JSON.stringify([
++    resolveDesiredReplicationFactor({}),
++    resolveDesiredReplicationFactor({partitionRow: {}}),
++    resolveDesiredReplicationFactor({partitionRow: {replica_count: 5}}),
++  ]);
++  const first = shape();
++  assert.equal(shape(), first);
++  assert.equal(shape(), first);
++});
++
++test('hostile-policy-rows-cannot-forge-a-target', () => {
++  // Each of these previously left the bar green while producing a wrong
++  // target: the own-property read (Object.prototype and getter rows measured
++  // 99), and the safe-integer/positive test (-2, 0, 3.5, null all accepted).
++  /* eslint-disable no-extend-native */
++  Object.prototype.replica_count = 99;
++  try {
++    const polluted = resolveDesiredReplicationFactor({
++      partitionRow: {partition_id: 'services-p1'},
++    });
++    assert.equal(polluted.replicationFactor, 0,
++      'an inherited replica_count must not become the declared target');
++    assert.equal(polluted.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  } finally {
++    delete Object.prototype.replica_count;
++  }
++  /* eslint-enable no-extend-native */
++
++  let getterReads = 0;
++  const getterRow = {partition_id: 'services-p1'};
++  Object.defineProperty(getterRow, 'replica_count', {
++    enumerable: true,
++    get() {
++      getterReads += 1;
++      return 99;
++    },
++  });
++  assert.equal(
++    resolveDesiredReplicationFactor({partitionRow: getterRow})
++      .replicationFactor, 0,
++    'an accessor-backed replica_count is not a declared value');
++  assert.equal(getterReads, 0, 'the accessor must never be executed');
++
++  // Non-integer and non-positive declarations are not policy either.
++  for (const bad of [-2, 0, 3.5, null, '3', NaN, Infinity, true]) {
++    const target = resolveDesiredReplicationFactor({
++      partitionRow: {partition_id: 'services-p1', replica_count: bad},
++    });
++    assert.equal(target.replicationFactor, 0, `replica_count ${String(bad)}`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++});
++
++test('schema-default-is-read-not-restated', () => {
++  // Replacing the computed lookup with a literal 3 left the bar green, so the
++  // "single authority" claim was unwitnessed: pin that the value tracks the
++  // schema rather than a copy of it.
++  const column = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === 'replica_count');
++  assert.equal(DECLARED_REPLICA_COUNT_DEFAULT, column.defaultValue);
++  const declaredElsewhere = PARTITIONS_SCHEMA.columns
++    .filter((candidate) => candidate.name === 'replica_count').length;
++  assert.equal(declaredElsewhere, 1,
++    'exactly one replica_count declaration in the partitions schema');
++  // The default is what a NEW row is created with, so pin it against the
++  // schema rather than a restated literal.
++  assert.equal(
++    resolveDesiredReplicationFactor({
++      partitionRow: {replica_count: DECLARED_REPLICA_COUNT_DEFAULT},
++    }).replicationFactor,
++    column.defaultValue,
++    'the creation default is the schema value, not a restated literal');
++});
++
++test('production-handoff-cannot-mutate-the-declaration', () => {
++  // THE REAL ALIAS CHAIN, not the getter. The seed phase reads
++  // INITIAL_REPLICA_IDS[table] and hands it to PartitionService as
++  // options.replicaIds; the service stored it BY REFERENCE, and raft peer
++  // reconciliation pushes onto service.replicaIds. That made the service's
++  // mutable peer list the shared declaration itself, so one minted
++  // replace-replica-<hex> raised the apparent replication factor for every
++  // later reader. Copying inside getInitialReplicaIds did nothing here,
++  // because this path never calls it.
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  const declaredLength = INITIAL_REPLICA_IDS[table].length;
++
++  const service = new PartitionService({
++    partitionId: `${table}-p1`,
++    tableId: table,
++    replicaId: INITIAL_REPLICA_IDS[table][0],
++    // The exact production hand-off: the declaration, by reference.
++    replicaIds: INITIAL_REPLICA_IDS[table],
++    nodeId: 'seed',
++  });
++
++  assert.notEqual(service.replicaIds, INITIAL_REPLICA_IDS[table],
++    'the service peer list must not BE the declaration');
++
++  // What reconciliation does on a replacement replica.
++  service.replicaIds.push(`${table}-p1-replace-replica-a1b2c3d4e5f60718`);
++
++  assert.equal(service.replicaIds.length, declaredLength + 1,
++    'the service tracks the new peer');
++  assert.equal(INITIAL_REPLICA_IDS[table].length, declaredLength,
++    'the declaration is unchanged by a minted replacement identity');
++  assert.equal(getInitialReplicaIds(table).length, declaredLength);
++
++  // And the declared target is unmoved, because it never counted identities.
++  assert.equal(
++    resolveDesiredReplicationFactor({
++      partitionRow: {partition_id: `${table}-p1`,
++        replica_count: DECLARED_REPLICA_COUNT_DEFAULT},
++    }).replicationFactor,
++    DECLARED_REPLICA_COUNT_DEFAULT);
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 2cd5e60d4abf21cd068be75fe5330419e85ba6b0..9bceced4ff39a48a1354148e6ad59aa59b759f92 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -4,12 +4,12 @@
+   "counts": {
+     "unit": 1859,
+     "integration": 73,
+-    "bootstrap": 175,
++    "bootstrap": 176,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-823e8338",
++  "censusSize": 2115,
++  "digest": "fnv1a32-fb9e84b5",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -220,6 +220,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap",
+     "test/bootstrap/rejoin-hints.test.js": "bootstrap",
+     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap",
++    "test/bootstrap/replication-target-authority.test.js": "bootstrap",
+     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e0be725ea790bab3a84e497e446d5b839456b5d6..80c46b63d2f070fe563c4d1575ca89527bcbae69 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2097,
++    "ordinary": 2098,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-b74ea154",
++  "censusSize": 2115,
++  "digest": "fnv1a32-7e41a07f",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -219,6 +219,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "ordinary",
+     "test/bootstrap/rejoin-hints.test.js": "ordinary",
+     "test/bootstrap/replica-evidence-conflict.test.js": "ordinary",
++    "test/bootstrap/replication-target-authority.test.js": "ordinary",
+     "test/bootstrap/required-dependency-validation.property.test.js": "ordinary",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "ordinary",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 093a6a95237c29dd8c05fb9a91c2eb69b65949b7..33a859e41d4daedc0fc7b9554b6f54ce068d3b6c 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 244,
++    "bootstrap-membership": 245,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-d09151b0",
++  "censusSize": 2115,
++  "digest": "fnv1a32-bab5324e",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -237,6 +237,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
+     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
+     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
++    "test/bootstrap/replication-target-authority.test.js": "bootstrap-membership",
+     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap-membership",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap-membership",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap-membership",

@@ -1,0 +1,2867 @@
+diff --git a/scripts/quest-evidence-replication-target-authority-a2-contract-v2.js b/scripts/quest-evidence-replication-target-authority-a2-contract-v2.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a2bddab40cd9420987706218552cbce7e1553d16
+--- /dev/null
++++ b/scripts/quest-evidence-replication-target-authority-a2-contract-v2.js
+@@ -0,0 +1,418 @@
++// Deterministic evidence harness for the
++// replication-target-authority-a2-contract-v2 quest (S1.1-A2). The witnesses use raw node:test (not the repo tap shim), so
++// --test-name-pattern selects exactly one anchored scenario per receipt.
++//
++// SCOPE. This quest proves the authority CONTRACT: the decoder's runtime input
++// is the persisted policy row, only accepted own data properties of that row
++// can yield a factor, missing or invalid policy fails closed, a fixed row
++// decodes the same factor however production identity state is varied, creation
++// writes take their factor from the owning schema declaration, identity
++// containers do not alias declarations, and the decoder's import closure holds
++// no identity owner.
++//
++// It deliberately does NOT claim that the module can never read any other
++// possible JavaScript state. That whole-program purity universal is the sealed
++// clause the parent quest replication-policy-authority-substrate lost six
++// adversarial rounds to; it is recorded there as a verification-infrastructure
++// research item. It also states no consumer inventory: whether every
++// behaviour-changing desired-RF consumer resolves through this decoder belongs
++// to the successor consumer-convergence quest and to S6.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const AUTHORITY_TEST = 'test/bootstrap/replication-target-authority.test.js';
++// NOT a bare `node --test --test-name-pattern` run. That exits 0 when the
++// pattern matches NOTHING and reports `# tests 1 / # pass 1` (the file-level
++// subtest), so a renamed or deleted scenario is indistinguishable from a
++// passing one and every receipt in this file would be a shell. The runner
++// requires the named top-level `ok <n> - <scenario>` TAP line.
++const ANCHORED_RUNNER =
++  'node test/bootstrap/run-anchored-scenario-helper.js ';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioName, testFile = AUTHORITY_TEST) {
++  return ANCHORED_RUNNER + testFile + SPACE + scenarioName;
++}
++
++// The one receipt that must NOT be graded by the runner alone. Every other
++// receipt trusts the runner, so a neutered runner keeps them all green while
++// the witness is genuinely red. Guarding only the ABSENT case was still a
++// point fix: a runner that accepts a FAILING scenario satisfied it. The
++// control drives a fixture file covering all three outcome classes and demands
++// the runner's verdict on each, so a runner that is wrong in ANY direction -
++// or keyed to a particular probe NAME - fails this receipt.
++const RUNNER_FIXTURES = 'test/bootstrap/anchored-runner-fixture-cases.js';
++const FIXTURE_PASSES = 'anchored-runner-fixture-passes';
++const FIXTURE_FAILS = 'anchored-runner-fixture-fails';
++const FIXTURE_ABSENT = 'anchored-runner-fixture-absent-on-purpose';
++const SHELL_IF = 'if ';
++const SHELL_THEN_FAIL = '; then exit 1; fi; ';
++const SHELL_AND = ' && ';
++
++const WITNESS_ABSENT_PROBE = 'witness-absent-probe-that-does-not-exist';
++
++function mustReject(scenarioName, testFile = RUNNER_FIXTURES) {
++  return SHELL_IF + scenarioCommand(scenarioName, testFile) +
++    SHELL_THEN_FAIL;
++}
++
++// Grading the runner ONLY against the fixture file left one bypass open: a
++// runner honest for that path and permissive for every other one suppressed
++// its own detector, so the harness read green while witness scenarios were red.
++// The control therefore ALSO runs the witness file directly, with the runner
++// out of the mediating position entirely, and requires it green.
++const WITNESS_DIRECT = 'node --test ' + AUTHORITY_TEST;
++
++function runnerVerdictIsTrustworthy(scenarioName) {
++  return mustReject(FIXTURE_FAILS) + mustReject(FIXTURE_ABSENT) +
++    mustReject(WITNESS_ABSENT_PROBE, AUTHORITY_TEST) +
++    scenarioCommand(FIXTURE_PASSES, RUNNER_FIXTURES) + SHELL_AND +
++    WITNESS_DIRECT + SHELL_AND +
++    scenarioCommand(scenarioName);
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'decoder-input-is-one-positional-policy-row',
++    command: scenarioCommand('decoder-input-is-one-positional-policy-row'),
++    detail: 'CLAUSE 1, and the structural repair the whole contract rests on. ' +
++      'The decoder took an options object, and an options bag is an open ' +
++      'channel: what it may read had to be ARGUED about instead of read off ' +
++      'the signature, which is precisely how six rounds of adversarial review ' +
++      'turned a release proof into a program-analysis problem. It now takes ' +
++      'exactly one POSITIONAL parameter - a plain identifier, arity one on the ' +
++      'AST and on the function object - so the only runtime value it is handed ' +
++      'IS the persisted policy row. A second argument decides nothing. And ' +
++      'there is NO bootstrap fallback: because the creation default is a real ' +
++      'non-zero 3, failing closed and borrowing the bootstrap default are ' +
++      'distinguishable answers, and every undeclared input must decode 0. A ' +
++      'formation consumer may separately consult the bootstrap expected RF to ' +
++      'remain BLOCKED before persisted policy is observable; that is the ' +
++      'consumer\'s own barrier decision and never a value this can return',
++  }),
++  Object.freeze({
++    id: 'only-own-row-data-properties-can-yield-a-factor',
++    command: scenarioCommand('only-own-row-data-properties-can-yield-a-factor'),
++    detail: 'CLAUSE 2, observed on BOTH decode branches, which is the exact ' +
++      'repair to the Round-6 rejection. A recording proxy sees only the path ' +
++      'the call it mediates takes: a row declaring 3 exercises the DECLARED ' +
++      'branch and a row declaring nothing exercises the UNDECLARED branch, so ' +
++      'each left the other unobserved and a branch-conditional read was ' +
++      'invisible. Both branches are now driven through a proxy that traps ' +
++      'every reflective operation - get, has, ownKeys, getOwnPropertyDescriptor, ' +
++      'getPrototypeOf and every mutating trap - and each must probe only ' +
++      'replica_count and replicaCount and use exactly ONE operation, an ' +
++      'own-descriptor read. A prototype walk, a plain get, an enumeration or ' +
++      'any write to the row would each surface as a second trap. Inherited ' +
++      'values and accessors are rejected without the accessor ever executing',
++  }),
++  Object.freeze({
++    id: 'missing-or-invalid-policy-is-undeclared-and-fails-closed',
++    command: scenarioCommand(
++      'missing-or-invalid-policy-is-undeclared-and-fails-closed'),
++    detail: 'CLAUSE 3. A partition with no usable persisted policy has an ' +
++      'UNREADABLE requirement and must fail closed rather than invent one. ' +
++      'Absent, null, non-objects, arrays, and rows with no accepted spelling ' +
++      'all decode UNDECLARED with factor 0; so does every present-but-invalid ' +
++      'value on either spelling - 0, negatives, fractions, coercible strings, ' +
++      'booleans, NaN, the infinities, boxed numbers, BigInt and the ' +
++      'unsafe-integer 2**53. The array case is what the shape guard actually ' +
++      'protects: an array satisfies typeof object and can carry an OWN ' +
++      'replica_count, so without the rejection it decodes as a policy. This ' +
++      'is falsifiable only because the creation default is non-zero, so ' +
++      'borrowing it would be visible as a 3 where a 0 is required',
++  }),
++  Object.freeze({
++    id: 'identity-state-cannot-move-a-fixed-policy-row',
++    command: scenarioCommand('identity-state-cannot-move-a-fixed-policy-row'),
++    detail: 'CLAUSE 4, the metamorphic direction and the product invariant ' +
++      'this quest exists for. replica_count is held at 3 while the real ' +
++      'production identity-bearing state reachable from the fixture is varied ' +
++      'CUMULATIVELY: minted replace-replica-<hex> identities appended to every ' +
++      'INITIAL_REPLICA_IDS list and to INITIAL_MESSAGE_GROUP_REPLICA_IDS, ' +
++      'growth of the live PartitionService and MessageGroupService peer lists, ' +
++      'peer ordering reversed everywhere, node identity and replica identity ' +
++      'replaced, peer counts collapsed to one, inflated far past the target, ' +
++      'and finally emptied. The decode must stay 3 from partition_row_replica_' +
++      'count throughout. This is the measured defect the quest lineage started ' +
++      'from: the seed phase handed the declaration to PartitionService BY ' +
++      'REFERENCE, raft reconciliation pushed a replacement identity onto it, ' +
++      'and desired RF read 4 where a fresh process read 3. Non-vacuity is ' +
++      'enforced: an identity digest is taken at every step and all of them ' +
++      'must differ, so a fixture that failed to perturb anything cannot pass ' +
++      'as invariance',
++  }),
++  Object.freeze({
++    id: 'policy-row-alone-moves-the-target',
++    command: scenarioCommand('policy-row-alone-moves-the-target'),
++    detail: 'CLAUSE 4, the differential direction. Identity state is held ' +
++      'fixed - once at baseline and again in the fully perturbed world where ' +
++      'every declaration and peer list has been rewritten - and only the row ' +
++      'varies: RF 3 decodes 3, RF 5 decodes 5, the camel spelling of 7 decodes ' +
++      '7, and a missing column, an absent row or an invalid value decode ' +
++      'UNDECLARED. Both worlds must agree. The decoder is also shown not to be ' +
++      'a constant function, so "the row decides" is a claim with content ' +
++      'rather than one satisfied by always answering the same thing',
++  }),
++  Object.freeze({
++    id: 'decoded-factor-is-a-function-of-the-row-alone',
++    command: scenarioCommand('decoded-factor-is-a-function-of-the-row-alone'),
++    detail: 'CLAUSE 4 as a single artifact: the full identity-state x row ' +
++      'matrix. Down the identity axis every row decodes to exactly one value; ' +
++      'across the row axis the answers differ. That IS the direction of ' +
++      'authority - policy authors the factor, identity does not - stated as a ' +
++      'property of a measured matrix rather than as a list of malicious ' +
++      'expressions somebody thought to rule out, which is the enumeration ' +
++      'shape that lost rounds 1 through 6. Both non-vacuity guards are ' +
++      'asserted here too: the identity states are pairwise distinct, and more ' +
++      'than one distinct answer appears across rows',
++  }),
++  Object.freeze({
++    id: 'decoder-closure-excludes-identity-owners',
++    command: scenarioCommand('decoder-closure-excludes-identity-owners'),
++    detail: 'the cheap STRUCTURAL boundary, computed over the same static ' +
++      'import graph the Solver\'s own import-closure projection reads with ' +
++      'es-module-lexer. It answers only "can this module reach an identity ' +
++      'owner by import at all", which is the question the contract needs and ' +
++      'the one an import graph can actually answer; it is explicitly NOT a ' +
++      'dataflow analyzer. A runtime identity owner is a module that declares ' +
++      'the seed identity lists or keeps a mutable this.replicaIds peer ' +
++      'container - 19 modules today. The decoder\'s 43-module closure ' +
++      'intersects that set emptily. POSITIVE CONTROL: the same computation is ' +
++      'run from seed-registration-phase.js and partition-service.js, which DO ' +
++      'reach identity owners, so an empty intersection for the decoder cannot ' +
++      'be an artifact of a detector that never fires. Three known owners are ' +
++      'asserted present in the owner set, so renaming one empties the set and ' +
++      'reds this receipt rather than passing quietly',
++  }),
++  Object.freeze({
++    id: 'replica-count-assignment-census-is-pinned',
++    command: scenarioCommand('replica-count-assignment-census-is-pinned'),
++    detail: 'the REPO-WIDE half of clause 5, and the direct repair to round-1 ' +
++      'blocking finding creation-write-authority-scope. The predecessor stated ' +
++      'the persisted-write universal without qualification but SCANNED two ' +
++      'bootstrap files, so a replica_count assignment anywhere else was ' +
++      'silently admitted - and six already existed, plus one the scan could ' +
++      'not even see because it is a member assignment rather than an ' +
++      'object-literal property: group.replica_count = group.replicas.length in ' +
++      'the join-admission read model. The census now covers ALL of src/ in ' +
++      'both syntactic forms and finds eleven sites, each of which must fall ' +
++      'into exactly one PINNED reviewed class. bootstrap-declared (3) must be ' +
++      'an owning-table declared-default identifier. declared-policy-source (6) ' +
++      'is the user-plane config default or a validated parent-row policy - a ' +
++      'real authority this Quest does not own, and the honest reason the ' +
++      'owning-schema property is scoped to bootstrap rather than asserted ' +
++      'universally. observed-count projection (2) is an in-memory bootstrap ' +
++      'read model that is never persisted, enumerated rather than excluded by ' +
++      'a pattern precisely because a field named replica_count carrying an ' +
++      'OBSERVED count next to a persisted column of the same name is the ' +
++      'confusion this contract keeps separated. No site outside that class may ' +
++      'derive from a length or count. Positively controlled against both ' +
++      'syntactic forms of the defect, and the exemption class is asserted to ' +
++      'actually contain a count so it cannot be a free pass',
++  }),
++  Object.freeze({
++    id: 'creation-writes-declared-policy-not-identity-count',
++    command: scenarioCommand('creation-writes-declared-policy-not-identity-count'),
++    detail: 'CLAUSE 5, driven through the REAL creation path and then closed ' +
++      'universally. A self-hosted group comes up with ONE local replica; ' +
++      'writing replicas.length persisted a DECLARED target of 1, and every ' +
++      'later reader decodes that row as authority, so an accident of startup ' +
++      'timing became policy. The staged row carries the declared default at ' +
++      'identity counts straddling it and decodes back through the authority to ' +
++      'the same value. The universal half constrains the FORM of every ' +
++      'persisted replica_count write at the BOOTSTRAP creation sites: the ' +
++      'value must BE a declared-default identifier, so no runtime quantity of ' +
++      'any kind - identity count, node id, clock, config, or one not yet ' +
++      'invented - can be it, and the write count is pinned at three so a new ' +
++      'bootstrap write must be reviewed rather than silently admitted. The ' +
++      'REPO-WIDE half of the clause is a separate receipt, ' +
++      'replica-count-assignment-census-is-pinned: scoping a universal to the ' +
++      'two files that satisfy it is not a proof of the universal, which is ' +
++      'the round-1 rejection this pair repairs',
++  }),
++  Object.freeze({
++    id: 'creation-default-tracks-schema-declaration',
++    command: scenarioCommand('creation-default-tracks-schema-declaration'),
++    detail: 'the creation default is READ from the PARTITIONS declaration, not ' +
++      'restated as a literal. The property is SEMANTIC, so it is proved by ' +
++      'drifting the declaration and re-evaluating: a restated literal cannot ' +
++      'follow the drift. A row created with that default then decodes back to ' +
++      'it, so what creation persists is what the authority later reads',
++  }),
++  Object.freeze({
++    id: 'message-group-creation-site-follows-its-own-declaration',
++    command: scenarioCommand(
++      'message-group-creation-site-follows-its-own-declaration'),
++    detail: 'THE SITE, not the constant. A review mutation re-pointed the ' +
++      'production message-group write at the PARTITIONS authority - the exact ' +
++      'cross-table leak this contract closes - and every receipt stayed green, ' +
++      'because nothing pinned which constant the site consumes and both ' +
++      'schemas declare 3. An in-process re-import cannot prove it either: ESM ' +
++      'caches by specifier, so the re-imported phase keeps the original ' +
++      'authority module. The drift therefore happens in a FRESH process before ' +
++      'the authority is first evaluated, and the REAL creation path is driven ' +
++      'at BOTH message-group creation sites: each staged row follows a drifted ' +
++      'MESSAGE_GROUPS declaration and does NOT follow a drifted PARTITIONS one',
++  }),
++  Object.freeze({
++    id: 'partitions-creation-site-follows-its-own-declaration',
++    command: scenarioCommand(
++      'partitions-creation-site-follows-its-own-declaration'),
++    detail: 'the PARTITIONS half, which once had NO witness at all: a review ' +
++      'mutation replaced the seed-registration write with a literal 1 - a ' +
++      'bootstrap persisting a declared target of 1 for every seeded system ' +
++      'table - and all receipts stayed green. SeedRegistrationPhase.' +
++      'registerSystemTables is now driven under schema drift in a fresh ' +
++      'process, proving every seeded partitions row follows the PARTITIONS ' +
++      'declaration and not the message-group one',
++  }),
++  Object.freeze({
++    id: 'message-group-policy-comes-from-its-own-schema',
++    command: scenarioCommand('message-group-policy-comes-from-its-own-schema'),
++    detail: 'do not replace one cross-table authority leak with a shared ' +
++      'default. Because the two schemas currently declare the SAME number, the ' +
++      'claim needs two arrows: the message-group default must follow a drifted ' +
++      'MESSAGE_GROUPS declaration, and must NOT follow a drifted PARTITIONS ' +
++      'one. Either arrow alone is satisfied by a shared constant',
++  }),
++  Object.freeze({
++    id: 'declaration-handoffs-return-copies',
++    command: scenarioCommand('declaration-handoffs-return-copies'),
++    detail: 'CLAUSE 6 on the hand-off ACCESSORS, and the direct repair to ' +
++      'round-1 blocking finding identity-container-aliasing. The assertion ' +
++      'that getInitialReplicaIds returns a copy lived in the identity-churn ' +
++      'receipt, and retiring that receipt in favour of the metamorphic one ' +
++      'took the assertion with it: reverting the accessor to the by-reference ' +
++      'return then left the ENTIRE bar green while the declaration was live ' +
++      'and mutable through it. The copy is load-bearing - ' +
++      'critical-placement-convergence derives a required replica count from ' +
++      'the LENGTH of that array - so the aliasing is measurable in production, ' +
++      'not theoretical. The accessor is now witnessed directly, a missing ' +
++      'table is asserted to stay null rather than become an empty list, and ' +
++      'the MESSAGE-GROUP equivalent is driven through the real ' +
++      'SeedMessageGroupsPhase: what the phase hands each queued service ' +
++      'descriptor must not be the declaration, and mutating what consumers ' +
++      'received must not move it',
++  }),
++  Object.freeze({
++    id: 'defensive-copies-do-not-disarm-critical-assertions',
++    command: scenarioCommand(
++      'defensive-copies-do-not-disarm-critical-assertions'),
++    detail: 'the regression class round 1 found in this candidate, now pinned. ' +
++      'Hardening the hand-off sites by copying introduced ' +
++      '[...(INITIAL_REPLICA_IDS[tableName] || [])], which is ALWAYS a truthy ' +
++      'array, so the assertCritical on the next line became unreachable: a ' +
++      'table with no declared replica set stopped raising the critical ' +
++      '"Partition replica set not configured" and fell through to a ' +
++      'leader-missing throw on an error key that does not exist in ' +
++      'bootstrap-constants, handing the operator an Error with no message and ' +
++      'no isCritical. The copy was gratuitous there - the list is only ' +
++      'iterated - and has been reverted; the sibling `|| []` fallbacks that ' +
++      'would have silently seeded zero replicas are gone too. The scenario ' +
++      'asserts the critical error is raised WITH its isCritical flag and its ' +
++      'own message, and that a declared table with no leader still returns ' +
++      'null rather than throwing, so the guard is not simply rejecting ' +
++      'everything',
++  }),
++  Object.freeze({
++    id: 'production-handoff-cannot-mutate-the-declaration',
++    command: scenarioCommand('production-handoff-cannot-mutate-the-declaration'),
++    detail: 'CLAUSE 6, on the real alias chain rather than a getter. The seed ' +
++      'phase reads INITIAL_REPLICA_IDS[table] and hands it to PartitionService ' +
++      'as options.replicaIds; the service stored it BY REFERENCE and raft peer ' +
++      'reconciliation pushes onto service.replicaIds, which made the service\'s ' +
++      'mutable peer list the shared declaration itself. Copying inside ' +
++      'getInitialReplicaIds did nothing here, because this path never calls ' +
++      'it. The service now copies, so a minted replacement identity grows the ' +
++      'service list and leaves the declaration and the next reader untouched',
++  }),
++  Object.freeze({
++    id: 'message-group-handoff-cannot-mutate-the-declaration',
++    command: scenarioCommand(
++      'message-group-handoff-cannot-mutate-the-declaration'),
++    detail: 'the exact sibling of the partition leak, once left open one line ' +
++      'short: the seed phase hands INITIAL_MESSAGE_GROUP_REPLICA_IDS to the ' +
++      'service by reference and raft lifecycle pushes onto service.replicaIds. ' +
++      'The service copies, so the declaration cannot grow by replacement',
++  }),
++  Object.freeze({
++    id: 'every-critical-table-declares-the-same-target',
++    command: scenarioCommand('every-critical-table-declares-the-same-target'),
++    detail: 'the per-table claim about PERSISTED policy, driven through the ' +
++      'real seeding path instead of asserted against rows the test itself ' +
++      'built from the constant it was checking. Every seeded partitions row ' +
++      'follows the one PARTITIONS declaration and moves with it; the ' +
++      'message_groups row follows its own and does not move with PARTITIONS; ' +
++      'and lengthening EVERY identity list - not one, which left a cross-table ' +
++      'length reaching partitions.replica_count invisible - changes no seeded ' +
++      'value. SCOPE: a consumer that computes a requirement from a table\'s ' +
++      'identity-list length is not covered here and is not this quest\'s claim',
++  }),
++  Object.freeze({
++    id: 'authority-mints-no-runtime-state',
++    command: scenarioCommand('authority-mints-no-runtime-state'),
++    detail: 'the projection is frozen and carries EXACTLY replicationFactor ' +
++      'and source, checked on both branches and over Reflect.ownKeys so a ' +
++      'non-enumerable or symbol key cannot hide. The typed source STRINGS are ' +
++      'pinned, not just the symbol names, because comparing a target\'s source ' +
++      'to the same constant that produced it cannot detect a rename. The ' +
++      'authority mints no holders, replica identities, convergence or readiness',
++  }),
++  Object.freeze({
++    id: 'hostile-policy-rows-cannot-forge-a-target',
++    command: scenarioCommand('hostile-policy-rows-cannot-forge-a-target'),
++    detail: 'the accepted spelling set is an ALLOWLIST measured at runtime, ' +
++      'not a blocklist of guessed names: enumerating eight rejected spellings ' +
++      'still let a ninth in, and TARGET_REPLICA_COUNT already exists in this ' +
++      'codebase as a placement-policy key, so this is a live forge surface. A ' +
++      'proxy row records exactly which keys the decoder probes. Prototype ' +
++      'pollution, accessor rows, non-integers, non-positives and the ' +
++      'unsafe-integer 2**53 are all rejected, and a row whose two spellings ' +
++      'DISAGREE fails closed rather than taking the second opinion - iterating ' +
++      'with continue-on-invalid let a rejected snake value be rescued by the ' +
++      'alias, so {replica_count: \'9\', replicaCount: 4} decoded to 4',
++  }),
++  Object.freeze({
++    id: 'absent-scenario-cannot-pass-as-a-receipt',
++    command: runnerVerdictIsTrustworthy(
++      'absent-scenario-cannot-pass-as-a-receipt'),
++    detail: 'THE HARNESS-FIDELITY CONTROL, and the reason every receipt in ' +
++      'this file runs through test/bootstrap/run-anchored-scenario-helper.js. ' +
++      '`node --test --test-name-pattern` exits 0 when the pattern matches ' +
++      'NOTHING and prints `# tests 1 / # pass 1` for the file-level subtest, ' +
++      'so counts cannot distinguish a match from a miss: a review mutation ' +
++      'renamed one scenario and the harness reported a full green with it ' +
++      'never run, making every receipt a shell that proved only that the FILE ' +
++      'loaded. The runner requires the named top-level `ok <n> - <scenario>` ' +
++      'TAP line and clears NODE_TEST_CONTEXT and NODE_OPTIONS from the child. ' +
++      'This receipt grades the runner in all three outcome classes against a ' +
++      'fixture file AND against the witness, and additionally runs the witness ' +
++      'directly with the runner out of the mediating position entirely',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('witness-deterministic'),
++    detail: 'repeated resolution of the full policy matrix produces one ' +
++      'identical projection, so no receipt passes by evaluation order. The ' +
++      'identity walk is replayed too: it mutates real identity declarations ' +
++      'and restores them, so a leaked mutation would surface as a second, ' +
++      'different matrix rather than as a later scenario passing for free',
++  }),
++]);
++
++const QUEST_ID = 'replication-target-authority-a2-contract-v2';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'replication-target-authority-a2-contract-v2.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/bootstrap/bootstrap-constants.js b/src/bootstrap/bootstrap-constants.js
+index b001c94d3113cd05014c32527a83f09842cc48b1..ef57706b7d710adae85206e50f35927e0650057b 100644
+--- a/src/bootstrap/bootstrap-constants.js
++++ b/src/bootstrap/bootstrap-constants.js
+@@ -129,9 +129,12 @@ const BOOTSTRAP_NODE_READY_REBALANCE_TABLES = Object.freeze([
+ // Keep this short so cluster-growth runs surface placement changes in-time.
+ const BOOTSTRAP_REBALANCE_DELAY_MS = 5000;
+ 
++// REPLICA_COUNT was removed: it restated MESSAGE_GROUPS_SCHEMA's declared
++// replica_count as a literal 3, which agreed with the schema only by
++// coincidence and made this a second creation authority for the same column.
++// The seeded row now reads DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT.
+ const BOOTSTRAP_MESSAGE_GROUP = Object.freeze({
+   NAME: 'message_group_seed',
+-  REPLICA_COUNT: 3,
+   POLICY: Object.freeze({
+     TARGET_REPLICA_COUNT: 3,
+     MAX_REPLICA_COUNT: 5,
+diff --git a/src/bootstrap/owners/seed-registration-runtime-owner.js b/src/bootstrap/owners/seed-registration-runtime-owner.js
+index e19ac19fa7cf55fd2540f460f0adf57af4cc7b73..5901c89944bb06a46b4ca0647b417cfac4dc9117 100644
+--- a/src/bootstrap/owners/seed-registration-runtime-owner.js
++++ b/src/bootstrap/owners/seed-registration-runtime-owner.js
+@@ -12,6 +12,11 @@ class SeedRegistrationRuntimeOwner {
+   }
+ 
+   findLeaderPartition(tableName) {
++    // NOT copied: this list is only iterated here. Defensively spreading it
++    // made the value always a truthy array, which silently made the
++    // assertCritical below unreachable - a table with no declared replica
++    // set stopped raising the critical 'replica set not configured' and
++    // fell through to a leader-missing throw instead.
+     const replicaIds = INITIAL_REPLICA_IDS[tableName];
+     assertCritical(
+       replicaIds,
+diff --git a/src/bootstrap/phases/create-message-group-phase.js b/src/bootstrap/phases/create-message-group-phase.js
+index a66541a80d64608a128b44482bccbdf41e325f7e..de75befecf99be0c414e6322007bfe3649bdc410 100644
+--- a/src/bootstrap/phases/create-message-group-phase.js
++++ b/src/bootstrap/phases/create-message-group-phase.js
+@@ -6,6 +6,9 @@
+  * The class receives required dependencies via constructor injection.
+  */
+ 
++import {
++  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++} from '../replication-target-authority.js';
+ import {NodeService} from '../../node/node-service.js';
+ import {MessageGroupServiceRowOwner} from
+   '../../message-group/message-group-service-row-owner.js';
+@@ -674,7 +677,10 @@ class CreateMessageGroupPhase {
+     const messageGroupRow = {
+       group_id: groupId,
+       group_name: groupId,
+-      replica_count: replicas.length,
++      // Policy, not an identity count. Writing replicas.length here made a
++      // group that came up with one replica persist a DECLARED target of 1,
++      // which recovery then reads through the canonical decoder as authority.
++      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+       leader_node_id: this.nodeId,
+       policy: JSON.stringify(
+         CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY,
+diff --git a/src/bootstrap/phases/seed-cache-hydration-phase.js b/src/bootstrap/phases/seed-cache-hydration-phase.js
+index 1c54b59ab2ecc15d553702e087cb898605337252..3409900b38155f06cb30ed55618e90ec3fdc1858 100644
+--- a/src/bootstrap/phases/seed-cache-hydration-phase.js
++++ b/src/bootstrap/phases/seed-cache-hydration-phase.js
+@@ -36,7 +36,7 @@ import {
+ import {
+   SYSTEM_TABLE_NAME,
+   INITIAL_PARTITION_IDS,
+-  INITIAL_REPLICA_IDS,
++  getInitialReplicaIds,
+ } from '../system-table-schemas-constants.js';
+ import {
+   TABLES,
+@@ -536,8 +536,7 @@ class SeedCacheHydrationPhase {
+   async subscribeToInitialSystemTableCDC() {
+     for (const tableName of CACHE_HYDRATION_TABLES) {
+       const partitionId = INITIAL_PARTITION_IDS[tableName];
+-      const replicaIds =
+-        INITIAL_REPLICA_IDS[tableName] || [];
++      const replicaIds = getInitialReplicaIds(tableName) || [];
+       if (!partitionId ||
+           replicaIds.length === 0) {
+         continue;
+@@ -625,7 +624,8 @@ class SeedCacheHydrationPhase {
+       return true;
+     }
+ 
+-    const replicaIds = INITIAL_REPLICA_IDS[tableName];
++    // No `|| []`: it would make the Array.isArray guard below dead.
++    const replicaIds = getInitialReplicaIds(tableName);
+     if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
+       return false;
+     }
+diff --git a/src/bootstrap/phases/seed-message-groups-phase.js b/src/bootstrap/phases/seed-message-groups-phase.js
+index 481b7f7d657f931bd9c784d75b777a19b48ea094..56905fa99c97cc3055337acbf0656b6070667d56 100644
+--- a/src/bootstrap/phases/seed-message-groups-phase.js
++++ b/src/bootstrap/phases/seed-message-groups-phase.js
+@@ -58,7 +58,7 @@ class SeedMessageGroupsPhase {
+     const logger = d.getLogger();
+     const config = d.getConfig();
+     const groupId = INITIAL_MESSAGE_GROUP_ID;
+-    const replicaIds = INITIAL_MESSAGE_GROUP_REPLICA_IDS;
++    const replicaIds = [...INITIAL_MESSAGE_GROUP_REPLICA_IDS];
+     const replicaStaggerDelayMs = config.replicaStaggerDelayMs;
+ 
+     logger.debug(BOOTSTRAP_LOG_MSG.CREATING_MESSAGE_GROUP, {
+diff --git a/src/bootstrap/phases/seed-partitions-phase.js b/src/bootstrap/phases/seed-partitions-phase.js
+index f240d0de50761215928135e88e43cca9131958f9..857db660ad7308ac42cbbb02147b448220913307 100644
+--- a/src/bootstrap/phases/seed-partitions-phase.js
++++ b/src/bootstrap/phases/seed-partitions-phase.js
+@@ -30,7 +30,7 @@ import {
+   SYSTEM_TABLE_NAME,
+   SYSTEM_TABLE_SCHEMAS,
+   INITIAL_PARTITION_IDS,
+-  INITIAL_REPLICA_IDS,
++  getInitialReplicaIds,
+   INITIAL_MESSAGE_GROUP_ID,
+   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
+ } from '../system-table-schemas-constants.js';
+@@ -79,7 +79,10 @@ class SeedPartitionsPhase {
+     for (const schema of SYSTEM_TABLE_SCHEMAS) {
+       const tableName = schema.tableName;
+       const partitionId = INITIAL_PARTITION_IDS[tableName];
+-      const replicaIds = INITIAL_REPLICA_IDS[tableName];
++      // No `|| []` fallback: a system table with no declared replica set is
++      // a broken bootstrap, and substituting an empty list would seed zero
++      // replicas silently instead of failing where it always failed.
++      const replicaIds = getInitialReplicaIds(tableName);
+ 
+       logger.debug(BOOTSTRAP_LOG_MSG.CREATING_SYSTEM_PARTITION, {
+         tableName,
+@@ -335,7 +338,7 @@ class SeedPartitionsPhase {
+ 
+       await d.waitForMessageGroupLeadership(
+         INITIAL_MESSAGE_GROUP_ID,
+-        INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++        [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
+       );
+ 
+       logger.debug(
+@@ -635,7 +638,7 @@ class SeedPartitionsPhase {
+     const d = this.delegates;
+     const logger = d.getLogger();
+     const configReplicaIds =
+-      INITIAL_REPLICA_IDS[SYSTEM_TABLE_NAME.CONFIG] || [];
++      getInitialReplicaIds(SYSTEM_TABLE_NAME.CONFIG) || [];
+     for (const replicaId of configReplicaIds) {
+       const configPartition =
+         d.getPartitionServices().get(replicaId);
+diff --git a/src/bootstrap/phases/seed-registration-phase.js b/src/bootstrap/phases/seed-registration-phase.js
+index 965bfdaa2c92feacc31d392f6093ddf8b3f9a41b..946c8a530092d83b3c50da4498766bd02e2fa2c8 100644
+--- a/src/bootstrap/phases/seed-registration-phase.js
++++ b/src/bootstrap/phases/seed-registration-phase.js
+@@ -7,6 +7,10 @@
+  * The class receives required dependencies via constructor injection.
+  */
+ 
++import {
++  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++  DECLARED_REPLICA_COUNT_DEFAULT,
++} from '../replication-target-authority.js';
+ import {randomUUID} from 'node:crypto';
+ import {DynamicConfigService} from '../../config/dynamic-config-service.js';
+ import {
+@@ -46,7 +50,6 @@ import {
+ import {PARTITION_STATE} from '../../partition/partition-constants.js';
+ import {
+   COLUMN,
+-  NUM,
+   SERVICE_STATUS,
+   SERVICE_TYPE,
+ } from '../../constants/index.js';
+@@ -145,7 +148,11 @@ class SeedRegistrationPhase {
+     const groupData = {
+       group_id: INITIAL_MESSAGE_GROUP_ID,
+       group_name: BOOTSTRAP_MESSAGE_GROUP.NAME,
+-      replica_count: BOOTSTRAP_MESSAGE_GROUP.REPLICA_COUNT,
++      // The OWNING table's declaration. This was a restated literal 3 in
++      // BOOTSTRAP_MESSAGE_GROUP that agreed with MESSAGE_GROUPS_SCHEMA only
++      // by coincidence, so a change to the schema default would have left
++      // this seeded row behind.
++      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+       policy: JSON.stringify(BOOTSTRAP_MESSAGE_GROUP.POLICY),
+       created_at: now,
+@@ -393,7 +400,7 @@ class SeedRegistrationPhase {
+         partition_key_start: null,
+         partition_key_end: null,
+         partition_version: 1,
+-        replica_count: NUM.THREE,
++        replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
+         size_bytes: 0,
+         leader_node_id: d.getNodeId(),
+         state: PARTITION_STATE.NORMAL,
+diff --git a/src/bootstrap/replication-target-authority.js b/src/bootstrap/replication-target-authority.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e834d5d2c31b950d5ef7ce0256fd55bc3393ace9
+--- /dev/null
++++ b/src/bootstrap/replication-target-authority.js
+@@ -0,0 +1,130 @@
++import {
++  MESSAGE_GROUPS_SCHEMA,
++  PARTITIONS_SCHEMA,
++} from './system-table-core-schema-definitions.js';
++
++const LOCAL_STR_OBJECT = 'object';
++const REPLICA_COUNT_COLUMN = 'replica_count';
++const DESCRIPTOR_VALUE_FIELD = 'value';
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const numberIsSafeInteger = Number.isSafeInteger;
++
++// The single authority for desired replication factor.
++//
++//   desired RF        = a valid persisted partition policy row
++//   creation default  = the schema's declared replica_count
++//   replica identities = mutable runtime state, never a factor
++//
++// A replacement replica is a new IDENTITY. It does not restate policy, and no
++// count of identities determines the target.
++const DECLARED_REPLICA_COUNT_DEFAULT = (() => {
++  const column = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === REPLICA_COUNT_COLUMN,
++  );
++  return numberIsSafeInteger(column?.defaultValue) ? column.defaultValue : 0;
++})();
++
++// The authority model:
++//
++//   runtime desired RF        = partitions-row replica_count
++//   default when CREATING it  = PARTITIONS_SCHEMA replica_count default
++//   replica identities        = INITIAL_REPLICA_IDS / mutable peer state
++//
++// The schema default seeds a NEW row; it is not a reading of a row that failed
++// to declare one. A row present but carrying no usable replica_count is an
++// incomplete policy row and fails closed, which also removes the ambiguity of a
++// garbage value being indistinguishable from an omitted column.
++const REPLICATION_TARGET_SOURCE = Object.freeze({
++  PARTITION_ROW: 'partition_row_replica_count',
++  UNDECLARED: 'undeclared',
++});
++const UNDECLARED_TARGET = Object.freeze({
++  replicationFactor: 0,
++  source: REPLICATION_TARGET_SOURCE.UNDECLARED,
++});
++// Both persisted spellings are accepted: the column is snake_case and the
++// normalized in-memory row carries the camel alias. Everything else about the
++// value is strict.
++const REPLICA_COUNT_COLUMNS = Object.freeze([
++  'replica_count', 'replicaCount',
++]);
++
++function readOwnReplicaCount(partitionRow) {
++  for (let index = 0; index < REPLICA_COUNT_COLUMNS.length; index += 1) {
++    // An own DATA property only: an inherited value is not this row's policy,
++    // and an accessor must never be executed while validating a row.
++    const descriptor = objectGetOwnPropertyDescriptor(
++      partitionRow,
++      REPLICA_COUNT_COLUMNS[index],
++    );
++    if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD)) {
++      continue;
++    }
++    // The FIRST spelling that is actually present decides. Continuing past a
++    // present-but-invalid value let the alias overrule a rejection:
++    // {replica_count: '9', replicaCount: 4} decoded to 4, and
++    // {replica_count: 0, replicaCount: 9} decoded to 9, so a row whose two
++    // spellings disagree took the second opinion instead of failing closed.
++    const value = descriptor.value;
++    return numberIsSafeInteger(value) && value > 0 ? value : null;
++  }
++  return null;
++}
++
++/**
++ * The desired replication factor for one partition, decoded from that
++ * partition's PERSISTED policy row and from nothing else.
++ *
++ * The runtime input is the row itself, passed positionally. It was an options
++ * object, and that shape was the problem: an options bag is an open channel,
++ * so every later reader had to be argued about rather than read off the
++ * signature. One positional row makes the authority boundary structural — the
++ * only runtime value the decoder is handed IS the persisted policy.
++ *
++ * There is deliberately NO bootstrap fallback here. A formation consumer may
++ * separately consult the bootstrap expected RF in order to stay BLOCKED while
++ * persisted policy is not yet observable; that is the consumer's decision
++ * about its own barrier and must never become a value this decoder can return.
++ *
++ * @param {Object|null} partitionRow the persisted partitions policy row
++ * @return {Object} frozen {replicationFactor, source}
++ */
++function resolveDesiredReplicationFactor(partitionRow) {
++  // NO partitions row means no declared policy for this partition, which is an
++  // unreadable requirement and must fail closed. The schema default is the
++  // policy for a row that omits the column — it is not a policy for a
++  // partition that has no row at all.
++  // An array is not a policy row: it satisfies typeof 'object' and would
++  // fall through to the schema default, inventing a requirement from a
++  // shape that declares nothing.
++  if (!partitionRow || typeof partitionRow !== LOCAL_STR_OBJECT ||
++    Array.isArray(partitionRow)) {
++    return UNDECLARED_TARGET;
++  }
++  const declared = readOwnReplicaCount(partitionRow);
++  if (declared === null) {
++    return UNDECLARED_TARGET;
++  }
++  return Object.freeze({
++    replicationFactor: declared,
++    source: REPLICATION_TARGET_SOURCE.PARTITION_ROW,
++  });
++}
++
++// Each table declares its own creation default; a MESSAGE_GROUPS row must not
++// be seeded from the PARTITIONS declaration, or that schema's own default is
++// read by nothing while its rows silently follow another table's policy.
++const DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT = (() => {
++  const column = MESSAGE_GROUPS_SCHEMA.columns.find(
++    (candidate) => candidate.name === REPLICA_COUNT_COLUMN,
++  );
++  return numberIsSafeInteger(column?.defaultValue) ? column.defaultValue : 0;
++})();
++
++export {
++  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  REPLICATION_TARGET_SOURCE,
++  resolveDesiredReplicationFactor,
++};
+diff --git a/src/bootstrap/system-table-schemas-constants.js b/src/bootstrap/system-table-schemas-constants.js
+index 9da23cc75c93f27d43ca3f790141c833da3329fa..408eea2e021922f37dbeb46a03e7399ef9d08a77 100644
+--- a/src/bootstrap/system-table-schemas-constants.js
++++ b/src/bootstrap/system-table-schemas-constants.js
+@@ -405,7 +405,12 @@ function getInitialPartitionId(tableName) {
+  * @return {Array<string>|null} Replica IDs or null if not found.
+  */
+ function getInitialReplicaIds(tableName) {
+-  return INITIAL_REPLICA_IDS[tableName] || null;
++  const declared = INITIAL_REPLICA_IDS[tableName];
++  // A COPY, not the declaration. This array was handed out by reference and
++  // pushed into by replica wiring, so a minted replacement replica mutated the
++  // shared declaration for every later reader. Identities are runtime state;
++  // the declaration is not theirs to change.
++  return Array.isArray(declared) ? [...declared] : null;
+ }
+ 
+ export {
+diff --git a/src/message-group/message-group-service-state.js b/src/message-group/message-group-service-state.js
+index 501448c967a4a02478ecec06437a6e03957f491f..652991342e4a297587d29635c7517f69db221b97 100644
+--- a/src/message-group/message-group-service-state.js
++++ b/src/message-group/message-group-service-state.js
+@@ -82,7 +82,12 @@ class MessageGroupService extends EventEmitter {
+         options.now :
+         MESSAGE_GROUP_OPERATION_LEDGER_NOW;
+     this.nodeId = options.nodeId || STRING.UNKNOWN;
+-    this.replicaIds = options.replicaIds || [this.replicaId];
++    // COPY, for the same reason as the partition sibling: this list is
++    // mutated in place by raft lifecycle, and callers hand in the shared
++    // INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration.
++    this.replicaIds = Array.isArray(options.replicaIds) ?
++      [...options.replicaIds] :
++      [this.replicaId];
+     this.transport = options.transport;
+     this.raftProvider = options.raftProvider || new LiferaftProvider();
+     assertRaftProviderContract(this.raftProvider);
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 5af3a610ad9bc72d2140eb9e2f981ded7dc7fb2f..caf9155bd85ee2c9cd317119226b9a5378efe7ff 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -48,6 +48,14 @@ const {
+   isMetadataPublicationLifecycleReady,
+   normalizePublishedRaftRole,
+ } = PARTITION_SERVICE_SHARED;
++// COPY, never the caller's array: this list is mutated in place by raft peer
++// reconciliation, and callers hand in the shared system-table declaration.
++// Taking it by reference made a minted replacement replica append to the
++// declaration itself, so every later reader saw a raised replication factor.
++function copyPeerList(replicaIds, ownReplicaId) {
++  return Array.isArray(replicaIds) ? [...replicaIds] : [ownReplicaId];
++}
++
+ class PartitionServiceCoreBase extends EventEmitter {
+   constructor(options = {}) {
+     super();
+@@ -73,7 +81,7 @@ class PartitionServiceCoreBase extends EventEmitter {
+       end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
+     };
+     this.replicaId = options.replicaId;
+-    this.replicaIds = options.replicaIds || [this.replicaId];
++    this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
+     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
+     this.transport = options.transport || null;
+     this.raftProvider = options.raftProvider || new LiferaftProvider();
+diff --git a/test/bootstrap/anchored-runner-fixture-cases.js b/test/bootstrap/anchored-runner-fixture-cases.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c893d0e1fecbe736833d5876a26ab00ae4e34a0d
+--- /dev/null
++++ b/test/bootstrap/anchored-runner-fixture-cases.js
+@@ -0,0 +1,32 @@
++// Fixture scenarios for the anchored-runner control. One of these FAILS on
++// purpose, so the tests are registered only when this file is the entry point
++// of a `node --test` run: importing it (for the names) must not register a
++// deliberate failure into the importing suite, and the file deliberately does
++// not match the *.test.js discovery glob so no lane collects it.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++const FIXTURE_SCENARIO = Object.freeze({
++  PASSES: 'anchored-runner-fixture-passes',
++  FAILS: 'anchored-runner-fixture-fails',
++  ABSENT: 'anchored-runner-fixture-absent-on-purpose',
++});
++const ENTRY_ARGV_INDEX = 1;
++const DELIBERATE_FAILURE = 'deliberate fixture failure';
++
++function isEntryPoint() {
++  const entry = process.argv[ENTRY_ARGV_INDEX];
++  return typeof entry === 'string' && entry.endsWith(
++    'anchored-runner-fixture-cases.js');
++}
++
++if (isEntryPoint()) {
++  test(FIXTURE_SCENARIO.PASSES, () => {
++    assert.ok(true);
++  });
++  test(FIXTURE_SCENARIO.FAILS, () => {
++    assert.fail(DELIBERATE_FAILURE);
++  });
++}
++
++export {FIXTURE_SCENARIO};
+diff --git a/test/bootstrap/replication-identity-variation-fixture.js b/test/bootstrap/replication-identity-variation-fixture.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e581f78d8ab51b3680d710be467237f5c1b42bca
+--- /dev/null
++++ b/test/bootstrap/replication-identity-variation-fixture.js
+@@ -0,0 +1,208 @@
++// The metamorphic identity fixture for the replication policy authority
++// contract.
++//
++// It lives beside the witness rather than inside it because it is a fixture,
++// not an assertion, and because the two together exceed this repository's
++// test file-size threshold.
++
++import {
++  resolveDesiredReplicationFactor,
++} from '../../src/bootstrap/replication-target-authority.js';
++import {PartitionService} from '../../src/partition/partition-service.js';
++import {
++  MessageGroupService,
++} from '../../src/message-group/message-group-service.js';
++import {
++  INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++  INITIAL_REPLICA_IDS,
++  SYSTEM_TABLE_NAME,
++  getInitialReplicaIds,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++
++// ---------------------------------------------------------------------------
++// The metamorphic fixture for CLAUSE 4.
++//
++// Each variation perturbs identity-bearing state that REAL production code
++// owns and mutates - the seed declarations, the peer lists PartitionService
++// and MessageGroupService keep, minted replacement identities, node identity,
++// and peer ordering and count. They are applied CUMULATIVELY, so by the last
++// one almost nothing about the cluster's identity picture is what it was.
++// ---------------------------------------------------------------------------
++
++const FIXED_POLICY_ROW = Object.freeze(
++  {partition_id: 'services-p1', replica_count: 3});
++const MINTED_REPLACEMENT = '-replace-replica-a1b2c3d4e5f60718';
++
++function snapshotIdentityDeclarations() {
++  const tables = Object.keys(INITIAL_REPLICA_IDS);
++  return {
++    tables,
++    perTable: tables.map((table) => [...INITIAL_REPLICA_IDS[table]]),
++    messageGroup: [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
++  };
++}
++
++function restoreIdentityDeclarations(snapshot) {
++  snapshot.tables.forEach((table, index) => {
++    INITIAL_REPLICA_IDS[table].splice(
++      0, INITIAL_REPLICA_IDS[table].length, ...snapshot.perTable[index]);
++  });
++  INITIAL_MESSAGE_GROUP_REPLICA_IDS.splice(
++    0, INITIAL_MESSAGE_GROUP_REPLICA_IDS.length, ...snapshot.messageGroup);
++}
++
++function buildIdentityFixture() {
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  const partitionService = new PartitionService({
++    partitionId: `${table}-p1`,
++    tableId: table,
++    replicaId: INITIAL_REPLICA_IDS[table][0],
++    replicaIds: INITIAL_REPLICA_IDS[table],
++    nodeId: 'seed',
++  });
++  const messageGroupService = new MessageGroupService({
++    transport: {
++      deliver: () => {},
++      initialize: () => {},
++      setServiceNodeResolver: () => {},
++    },
++    groupId: 'mg-1',
++    replicaId: INITIAL_MESSAGE_GROUP_REPLICA_IDS[0],
++    replicaIds: INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++    nodeId: 'seed',
++  });
++  return {table, partitionService, messageGroupService};
++}
++
++// What the cluster's identity state looks like right now, as one comparable
++// value. Two variations that produce the SAME digest have not actually varied
++// anything, and the receipts below refuse that.
++function identityDigest(fixture) {
++  return JSON.stringify({
++    declarations: Object.keys(INITIAL_REPLICA_IDS).map(
++      (table) => [table, [...INITIAL_REPLICA_IDS[table]]]),
++    messageGroupDeclaration: [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
++    handedOut: getInitialReplicaIds(fixture.table),
++    partitionPeers: [...fixture.partitionService.replicaIds],
++    partitionNode: fixture.partitionService.nodeId,
++    partitionReplica: fixture.partitionService.replicaId,
++    messageGroupPeers: [...fixture.messageGroupService.replicaIds],
++    messageGroupNode: fixture.messageGroupService.nodeId,
++  });
++}
++
++const IDENTITY_VARIATIONS = Object.freeze([
++  Object.freeze({
++    name: 'baseline',
++    apply: () => {},
++  }),
++  Object.freeze({
++    name: 'minted-replacement-identities-on-every-declaration',
++    apply: () => {
++      for (const table of Object.keys(INITIAL_REPLICA_IDS)) {
++        INITIAL_REPLICA_IDS[table].push(
++          `${table}-p1${MINTED_REPLACEMENT}`, `${table}-p2${MINTED_REPLACEMENT}`);
++      }
++      INITIAL_MESSAGE_GROUP_REPLICA_IDS.push(`mg-1${MINTED_REPLACEMENT}`);
++    },
++  }),
++  Object.freeze({
++    name: 'runtime-peer-lists-grow-by-replacement',
++    apply: (fixture) => {
++      fixture.partitionService.replicaIds.push(
++        `${fixture.table}-p1${MINTED_REPLACEMENT}`);
++      fixture.messageGroupService.replicaIds.push(
++        `mg-1${MINTED_REPLACEMENT}`);
++    },
++  }),
++  Object.freeze({
++    name: 'peer-ordering-reversed-everywhere',
++    apply: (fixture) => {
++      for (const table of Object.keys(INITIAL_REPLICA_IDS)) {
++        INITIAL_REPLICA_IDS[table].reverse();
++      }
++      INITIAL_MESSAGE_GROUP_REPLICA_IDS.reverse();
++      fixture.partitionService.replicaIds.reverse();
++      fixture.messageGroupService.replicaIds.reverse();
++    },
++  }),
++  Object.freeze({
++    name: 'node-and-replica-identity-replaced',
++    apply: (fixture) => {
++      fixture.partitionService.nodeId = 'node-a7f3';
++      fixture.partitionService.replicaId =
++        `${fixture.table}-p1${MINTED_REPLACEMENT}`;
++      fixture.messageGroupService.nodeId = 'node-a7f3';
++      fixture.messageGroupService.replicaId = `mg-1${MINTED_REPLACEMENT}`;
++    },
++  }),
++  Object.freeze({
++    name: 'peer-counts-collapsed-to-one',
++    apply: (fixture) => {
++      for (const table of Object.keys(INITIAL_REPLICA_IDS)) {
++        INITIAL_REPLICA_IDS[table].splice(1);
++      }
++      INITIAL_MESSAGE_GROUP_REPLICA_IDS.splice(1);
++      fixture.partitionService.replicaIds.splice(1);
++      fixture.messageGroupService.replicaIds.splice(1);
++    },
++  }),
++  Object.freeze({
++    name: 'peer-counts-inflated-far-past-the-target',
++    apply: (fixture) => {
++      const inflate = (list, prefix) => {
++        for (let index = 0; index < 17; index += 1) {
++          list.push(`${prefix}-inflated-${index}`);
++        }
++      };
++      for (const table of Object.keys(INITIAL_REPLICA_IDS)) {
++        inflate(INITIAL_REPLICA_IDS[table], table);
++      }
++      inflate(INITIAL_MESSAGE_GROUP_REPLICA_IDS, 'mg-1');
++      inflate(fixture.partitionService.replicaIds, fixture.table);
++      inflate(fixture.messageGroupService.replicaIds, 'mg-1');
++    },
++  }),
++  Object.freeze({
++    name: 'every-identity-list-emptied',
++    apply: (fixture) => {
++      for (const table of Object.keys(INITIAL_REPLICA_IDS)) {
++        INITIAL_REPLICA_IDS[table].length = 0;
++      }
++      INITIAL_MESSAGE_GROUP_REPLICA_IDS.length = 0;
++      fixture.partitionService.replicaIds.length = 0;
++      fixture.messageGroupService.replicaIds.length = 0;
++    },
++  }),
++]);
++
++// Walks the cumulative identity variations and decodes `rows` at each step.
++// Returns one entry per variation: what identity looked like, and what every
++// row decoded to there.
++function decodeAcrossIdentityVariations(rows) {
++  const snapshot = snapshotIdentityDeclarations();
++  try {
++    const fixture = buildIdentityFixture();
++    return IDENTITY_VARIATIONS.map((variation) => {
++      variation.apply(fixture);
++      return {
++        name: variation.name,
++        digest: identityDigest(fixture),
++        decoded: rows.map(({label, row}) => [label,
++          JSON.stringify(resolveDesiredReplicationFactor(row))]),
++      };
++    });
++  } finally {
++    restoreIdentityDeclarations(snapshot);
++  }
++}
++export {
++  FIXED_POLICY_ROW,
++  IDENTITY_VARIATIONS,
++  MINTED_REPLACEMENT,
++  decodeAcrossIdentityVariations,
++  identityDigest,
++  restoreIdentityDeclarations,
++  snapshotIdentityDeclarations,
++  buildIdentityFixture,
++};
+diff --git a/test/bootstrap/replication-policy-structural-census.js b/test/bootstrap/replication-policy-structural-census.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ca3b4f94d51faaf5e81fff4a4ed378b339079d94
+--- /dev/null
++++ b/test/bootstrap/replication-policy-structural-census.js
+@@ -0,0 +1,212 @@
++// Structural census helpers for the replication policy authority contract.
++//
++// Everything here reads SOURCE, not behaviour: the set of replica_count
++// assignments in src/, the modules that own runtime replica identity, and the
++// decoder's static import closure. They live outside the witness because the
++// witness is a behavioural artifact and these are a source census, and because
++// the two together exceed this repository's test file-size threshold.
++//
++// Nothing here is a dataflow analyzer. Each function answers one finite,
++// enumerable question about the source text, and the witness pins the answer.
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {parse} from 'espree';
++import {
++  initSync as initializeModuleLexer,
++  parse as parseModuleImports,
++} from 'es-module-lexer';
++
++const REPO_ROOT = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)), '../..');
++
++// STRUCTURAL, not sampled. Four review rounds showed that probing creation
++// sites with particular runtime values can only ever rule out the variants
++// somebody thought to try: a maximum, an offset maximum, a ternary on nodeId,
++// a config read and a clock are all different samples of the same open claim.
++// The sealed clause "an identity count is never persisted as desired RF" is
++// universal, so it is proved universally: in the files that write the
++// persisted replica_count column, the value expression must BE one of the two
++// declared-default identifiers. Any call, member access, ternary, arithmetic
++// or literal fails, whatever it would evaluate to.
++const PERSISTED_REPLICA_COUNT_COLUMN = 'replica_count';
++const DECLARED_DEFAULT_IDENTIFIERS = Object.freeze([
++  'DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT',
++  'DECLARED_REPLICA_COUNT_DEFAULT',
++]);
++const CREATION_SITE_FILES = Object.freeze([
++  'src/bootstrap/phases/create-message-group-phase.js',
++  'src/bootstrap/phases/seed-registration-phase.js',
++]);
++
++function walkNodes(node, visit) {
++  if (!node || typeof node !== 'object') return;
++  if (node.type) visit(node);
++  for (const key of Object.keys(node)) {
++    const value = node[key];
++    if (Array.isArray(value)) value.forEach((item) => walkNodes(item, visit));
++    else if (value && typeof value === 'object' && value.type) {
++      walkNodes(value, visit);
++    }
++  }
++}
++
++function parseRepoFile(relativePath) {
++  return parse(fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8'),
++    {ecmaVersion: 'latest', sourceType: 'module', loc: true});
++}
++
++function persistedReplicaCountWrites(relativePath) {
++  const writes = [];
++  walkNodes(parseRepoFile(relativePath), (node) => {
++    if (node.type !== 'Property' || !node.key) return;
++    const key = node.key.name ?? node.key.value;
++    if (key !== PERSISTED_REPLICA_COUNT_COLUMN) return;
++    writes.push({
++      line: node.loc.start.line,
++      valueType: node.value.type,
++      valueName: node.value.name ?? null,
++    });
++  });
++  return writes;
++}
++
++// The STRUCTURAL dependency boundary. A module that owns runtime replica
++// identity either declares the seed identity lists or keeps a mutable peer
++// container of its own; both are marks of ownership that survive renaming a
++// variable, and neither matches a module that merely names the string.
++const IDENTITY_OWNER_MARKERS = Object.freeze([
++  /\bthis\.replicaIds\b/u,
++  /\b(?:const|let|var|function)\s+(?:INITIAL_REPLICA_IDS|INITIAL_MESSAGE_GROUP_REPLICA_IDS|getInitialReplicaIds)\b/u,
++]);
++const SOURCE_ROOT = 'src';
++const JS_SUFFIX = '.js';
++const RELATIVE_SPECIFIER_PREFIX = '.';
++
++initializeModuleLexer();
++
++function sourceFilesUnder(relativeDirectory, collected = []) {
++  for (const entry of fs.readdirSync(path.join(REPO_ROOT, relativeDirectory),
++    {withFileTypes: true})) {
++    const child = path.posix.join(relativeDirectory, entry.name);
++    if (entry.isDirectory()) sourceFilesUnder(child, collected);
++    else if (entry.name.endsWith(JS_SUFFIX)) collected.push(child);
++  }
++  return collected;
++}
++
++function identityOwnerModules() {
++  return sourceFilesUnder(SOURCE_ROOT).filter((relativePath) => {
++    const source = fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
++    return IDENTITY_OWNER_MARKERS.some((marker) => marker.test(source));
++  });
++}
++
++// The transitive STATIC import closure, read with the same module lexer the
++// Solver's own import-closure projection uses. Dynamic import() is deliberately
++// out of scope: this is an import-graph boundary, not a dataflow analysis.
++function staticImportClosure(entryRelativePath) {
++  const seen = new Set();
++  const queue = [entryRelativePath];
++  while (queue.length > 0) {
++    const current = queue.shift();
++    if (seen.has(current)) continue;
++    seen.add(current);
++    const source = fs.readFileSync(path.join(REPO_ROOT, current), 'utf8');
++    const [imports] = parseModuleImports(source, current);
++    for (const imported of imports) {
++      if (typeof imported.n !== 'string' ||
++        !imported.n.startsWith(RELATIVE_SPECIFIER_PREFIX)) continue;
++      const resolved = path.posix.join(path.posix.dirname(current), imported.n);
++      if (fs.existsSync(path.join(REPO_ROOT, resolved))) queue.push(resolved);
++    }
++  }
++  return seen;
++}
++// ---------------------------------------------------------------------------
++// THE REPO-WIDE replica_count ASSIGNMENT CENSUS.
++//
++// Review round 1 landed the gap this closes: the persisted-write universal was
++// stated without qualification but SCANNED over two bootstrap files, so a
++// replica_count assignment anywhere else was silently admitted - and six of
++// them already existed. Scoping a universal to the two files that satisfy it
++// is not a proof of the universal.
++//
++// The census is therefore over ALL of src/, it finds object-literal properties
++// AND member assignments, and every site must fall into exactly one pinned
++// class with its reason recorded. A new site anywhere lands in no class and
++// fails closed.
++// ---------------------------------------------------------------------------
++
++const REPLICA_COUNT_ASSIGNMENT_COLUMN = 'replica_count';
++const LENGTH_PROPERTY = 'length';
++
++// Every place a replica_count is WRITTEN, in either syntactic form. Scanning
++// only object-literal properties missed `group.replica_count =
++// group.replicas.length`, which is exactly the shape the contract forbids.
++function replicaCountAssignments(source, label) {
++  const found = [];
++  const record = (node, valueNode) => {
++    found.push({
++      site: `${label}:${node.loc.start.line}`,
++      valueType: valueNode.type,
++      valueName: valueNode.name ?? null,
++      valueText: source.slice(valueNode.range[0], valueNode.range[1])
++        .replace(/\s+/gu, ' '),
++      derivesFromACount: expressionReadsALength(valueNode),
++    });
++  };
++  walkNodes(parse(source,
++    {ecmaVersion: 'latest', sourceType: 'module', loc: true, range: true}),
++  (node) => {
++    if (node.type === 'Property' && node.key &&
++      (node.key.name ?? node.key.value) === REPLICA_COUNT_ASSIGNMENT_COLUMN) {
++      record(node, node.value);
++      return;
++    }
++    if (node.type === 'AssignmentExpression' &&
++      node.left?.type === 'MemberExpression' &&
++      (node.left.property?.name ?? node.left.property?.value) ===
++        REPLICA_COUNT_ASSIGNMENT_COLUMN) {
++      record(node, node.right);
++    }
++  });
++  return found;
++}
++
++// A replication factor is a policy, never a tally. Any `.length` read anywhere
++// inside the written expression means the value is derived from a count of
++// something - which is the defect class, whatever the something is named.
++function expressionReadsALength(valueNode) {
++  let readsALength = false;
++  walkNodes(valueNode, (node) => {
++    if (node.type === 'MemberExpression' &&
++      (node.property?.name ?? node.property?.value) === LENGTH_PROPERTY) {
++      readsALength = true;
++    }
++  });
++  return readsALength;
++}
++
++function repositoryReplicaCountAssignments() {
++  const census = [];
++  for (const relativePath of sourceFilesUnder('src')) {
++    const source = fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
++    if (!source.includes(REPLICA_COUNT_ASSIGNMENT_COLUMN)) continue;
++    census.push(...replicaCountAssignments(source, relativePath));
++  }
++  return census.sort((left, right) => left.site.localeCompare(right.site));
++}
++
++export {
++  CREATION_SITE_FILES,
++  DECLARED_DEFAULT_IDENTIFIERS,
++  identityOwnerModules,
++  parseRepoFile,
++  persistedReplicaCountWrites,
++  replicaCountAssignments,
++  repositoryReplicaCountAssignments,
++  staticImportClosure,
++  walkNodes,
++};
+diff --git a/test/bootstrap/replication-target-authority.test.js b/test/bootstrap/replication-target-authority.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf37b54ba5325ee4f6eb3804dc3a4ba2cd1885d1
+--- /dev/null
++++ b/test/bootstrap/replication-target-authority.test.js
+@@ -0,0 +1,1321 @@
++// Witness for the replication-target-authority quest.
++// Raw node:test so --test-name-pattern selects exactly one scenario.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {spawnSync} from 'node:child_process';
++import {
++  CREATION_SITE_FILES,
++  DECLARED_DEFAULT_IDENTIFIERS,
++  identityOwnerModules,
++  parseRepoFile,
++  persistedReplicaCountWrites,
++  replicaCountAssignments,
++  repositoryReplicaCountAssignments,
++  staticImportClosure,
++  walkNodes,
++} from './replication-policy-structural-census.js';
++import {
++  FIXED_POLICY_ROW,
++  IDENTITY_VARIATIONS,
++  MINTED_REPLACEMENT,
++  buildIdentityFixture,
++  decodeAcrossIdentityVariations,
++  identityDigest,
++  restoreIdentityDeclarations,
++  snapshotIdentityDeclarations,
++} from './replication-identity-variation-fixture.js';
++import {
++  RUN_OUTCOME,
++  classifyRun,
++} from './run-anchored-scenario-helper.js';
++import {
++  FIXTURE_SCENARIO,
++} from './anchored-runner-fixture-cases.js';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++
++import {
++  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++  DECLARED_REPLICA_COUNT_DEFAULT,
++  REPLICATION_TARGET_SOURCE,
++  resolveDesiredReplicationFactor,
++} from '../../src/bootstrap/replication-target-authority.js';
++import {
++  MESSAGE_GROUPS_SCHEMA,
++  PARTITIONS_SCHEMA,
++} from '../../src/bootstrap/system-table-core-schema-definitions.js';
++import {PartitionService} from '../../src/partition/partition-service.js';
++import {
++  MessageGroupService,
++} from '../../src/message-group/message-group-service.js';
++import {
++  INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++  INITIAL_REPLICA_IDS,
++  SYSTEM_TABLE_NAME,
++  getInitialReplicaIds,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  SeedMessageGroupsPhase,
++} from '../../src/bootstrap/phases/seed-message-groups-phase.js';
++import {
++  SeedRegistrationRuntimeOwner,
++} from '../../src/bootstrap/owners/seed-registration-runtime-owner.js';
++import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
++
++const REPO_ROOT = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)), '../..');
++
++// ---------------------------------------------------------------------------
++// A2-CONTRACT.
++//
++// The clause this witness used to carry was "the decoder reads only a policy
++// row" - a whole-program purity assertion over JavaScript. Six adversarial
++// rounds showed that discharging it is a general program-analysis problem, not
++// a release property: behavioural sampling covers the values someone thought
++// of, syntactic universals cover the syntax they can see, and an instrumented
++// call covers the paths that one call exercises, so each technique lost to the
++// first channel it did not cover.
++//
++// The product invariant 0.2 actually needs is narrower and falsifiable:
++//
++//   for a FIXED authoritative persisted policy row,
++//   runtime replica/identity state cannot change desired RF.
++//
++// So the boundary is made STRUCTURAL first - one positional row, no options
++// bag, and an import closure containing no runtime identity owner - and the
++// invariance is then measured METAMORPHICALLY against the real production
++// identity state this fixture can reach, instead of by enumerating malicious
++// expressions.
++// ---------------------------------------------------------------------------
++
++const AUTHORITY_MODULE = 'src/bootstrap/replication-target-authority.js';
++const ACCEPTED_ROW_SPELLINGS = Object.freeze(
++  ['replicaCount', 'replica_count']);
++
++test('decoder-input-is-one-positional-policy-row', () => {
++  // CLAUSE 1. The decoder's runtime input IS the persisted policy row. It was
++  // an options object, and that shape was the whole difficulty: an options bag
++  // is an open channel, so what the decoder may read had to be argued about
++  // instead of read off the signature. One positional row makes the authority
++  // boundary structural.
++  let decoder = null;
++  walkNodes(parseRepoFile(AUTHORITY_MODULE), (node) => {
++    if (node.type === 'FunctionDeclaration' &&
++      node.id?.name === 'resolveDesiredReplicationFactor') decoder = node;
++  });
++  assert.ok(decoder, 'the decoder must still be a named function declaration');
++  assert.equal(decoder.params.length, 1,
++    'the decoder takes exactly one parameter: the persisted policy row');
++  assert.equal(decoder.params[0].type, 'Identifier',
++    'the parameter is the row itself - not a defaulted, destructured or rest ' +
++    `options bag; it is a ${decoder.params[0].type}`);
++  assert.equal(resolveDesiredReplicationFactor.length, 1,
++    'the declared arity is one, observed on the function itself');
++
++  // And behaviourally: a second argument decides nothing. Reintroducing an
++  // options bag behind an extra parameter would reopen the same channel.
++  const row = {partition_id: 'services-p1', replica_count: 3};
++  const bare = resolveDesiredReplicationFactor(row);
++  assert.equal(bare.replicationFactor, 3);
++  for (const extra of [
++    {replicaIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g']},
++    {peers: ['n1', 'n2', 'n3', 'n4', 'n5']},
++    {expectedReplicationFactor: 9},
++    9, 'nine', null, undefined,
++  ]) {
++    assert.deepEqual(resolveDesiredReplicationFactor(row, extra), bare,
++      `a second argument must not decide anything: ${String(extra)}`);
++  }
++
++  // NO BOOTSTRAP FALLBACK inside the decoder. The creation default is a real
++  // non-zero number here, so "failed closed" and "borrowed the bootstrap
++  // default" are DISTINGUISHABLE answers rather than the same 3. A formation
++  // consumer may separately consult the bootstrap expected RF in order to stay
++  // BLOCKED before persisted policy is observable; that is the consumer's
++  // decision about its own barrier and must never be a value this returns.
++  assert.ok(DECLARED_REPLICA_COUNT_DEFAULT > 0,
++    'the creation default must be non-zero or this arrow cannot discriminate');
++  for (const undeclaredInput of [undefined, null, {}, {partition_id: 'p1'}]) {
++    const target = resolveDesiredReplicationFactor(undeclaredInput);
++    assert.equal(target.replicationFactor, 0,
++      `${JSON.stringify(undeclaredInput)} must fail closed, not fall back`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++});
++
++// Records every reflective operation the decoder performs on a row, whichever
++// trap it goes through. A plain `get` recorder sees only one of them.
++const OBSERVED_ROW_TRAPS = Object.freeze([
++  'get', 'has', 'ownKeys', 'getOwnPropertyDescriptor', 'getPrototypeOf',
++  'setPrototypeOf', 'set', 'defineProperty', 'deleteProperty',
++  'preventExtensions', 'isExtensible',
++]);
++
++function observedRow(target) {
++  const probedKeys = [];
++  const usedTraps = [];
++  const handler = {};
++  for (const trap of OBSERVED_ROW_TRAPS) {
++    handler[trap] = (...args) => {
++      usedTraps.push(trap);
++      if (typeof args[1] === 'string') probedKeys.push(args[1]);
++      return Reflect[trap](...args);
++    };
++  }
++  return {
++    proxy: new Proxy(target, handler),
++    keys: () => [...new Set(probedKeys)].sort(),
++    traps: () => [...new Set(usedTraps)].sort(),
++  };
++}
++
++test('only-own-row-data-properties-can-yield-a-factor', () => {
++  // CLAUSE 2, observed on BOTH decode branches. Observing one branch is what
++  // the previous receipt structure did and it is why it lost: a proxy row that
++  // declares 3 exercises only the DECLARED path, and a proxy row that declares
++  // nothing exercises only the UNDECLARED path, so each left the other
++  // unobserved and a branch-conditional identity read was invisible.
++  const branches = [
++    {name: 'declared', row: {partition_id: 'p1', replica_count: 3},
++      factor: 3, source: REPLICATION_TARGET_SOURCE.PARTITION_ROW,
++      keys: ['replica_count']},
++    {name: 'undeclared', row: {partition_id: 'p1'},
++      factor: 0, source: REPLICATION_TARGET_SOURCE.UNDECLARED,
++      keys: ACCEPTED_ROW_SPELLINGS},
++  ];
++  for (const branch of branches) {
++    const observed = observedRow(branch.row);
++    const target = resolveDesiredReplicationFactor(observed.proxy);
++    assert.equal(target.replicationFactor, branch.factor, branch.name);
++    assert.equal(target.source, branch.source, branch.name);
++    assert.deepEqual(observed.keys(), branch.keys,
++      `the ${branch.name} branch probes exactly the accepted spellings, ` +
++      `measured at runtime; it probed ${JSON.stringify(observed.keys())}`);
++    for (const key of observed.keys()) {
++      assert.ok(ACCEPTED_ROW_SPELLINGS.includes(key),
++        `${key} is not an accepted persisted policy spelling`);
++    }
++    // ONE reflective operation, in both branches: an own-descriptor read. A
++    // prototype walk, a plain get, an ownKeys enumeration or any write to the
++    // row would each show up here as a second trap.
++    assert.deepEqual(observed.traps(), ['getOwnPropertyDescriptor'],
++      `the ${branch.name} branch must read the row through an own-descriptor ` +
++      `read and nothing else; it used ${JSON.stringify(observed.traps())}`);
++  }
++
++  // An INHERITED value is not this row's policy, and an accessor is never
++  // executed while validating one - the two ways a non-own, non-data property
++  // could otherwise supply a factor.
++  const inherited = Object.create({replica_count: 5});
++  inherited.partition_id = 'p1';
++  assert.equal(resolveDesiredReplicationFactor(inherited).replicationFactor, 0,
++    'an inherited replica_count is not this row\'s declared policy');
++
++  let accessorReads = 0;
++  const accessorRow = {partition_id: 'p1'};
++  Object.defineProperty(accessorRow, 'replica_count', {
++    enumerable: true,
++    get() {
++      accessorReads += 1;
++      return 5;
++    },
++  });
++  assert.equal(
++    resolveDesiredReplicationFactor(accessorRow).replicationFactor, 0,
++    'an accessor-backed replica_count is not a declared value');
++  assert.equal(accessorReads, 0, 'the accessor must never be executed');
++});
++
++test('missing-or-invalid-policy-is-undeclared-and-fails-closed', () => {
++  // CLAUSE 3. No usable persisted policy means the requirement is UNREADABLE,
++  // and an unreadable requirement fails closed. It never borrows the creation
++  // default, the schema default, an identity count, or anything else - which
++  // is only a testable distinction because the creation default is non-zero.
++  assert.ok(DECLARED_REPLICA_COUNT_DEFAULT > 0,
++    'the creation default must be non-zero or fail-closed is unfalsifiable');
++
++  // An array is the case the shape guard actually protects: it satisfies
++  // typeof 'object', and Object.assign([], {replica_count: 5}) carries an OWN
++  // replica_count, so without the rejection it decodes as a policy of five.
++  const arrayCarryingPolicy = Object.assign([], {replica_count: 5});
++  const missing = [
++    undefined, null, false, 0, 7, 'row', Symbol('row'),
++    [], arrayCarryingPolicy, {}, {partition_id: 'services-p1'},
++    {partition_id: 'services-p1', replicas: ['a', 'b', 'c', 'd', 'e']},
++  ];
++  for (const partitionRow of missing) {
++    const target = resolveDesiredReplicationFactor(partitionRow);
++    assert.equal(target.replicationFactor, 0,
++      `missing policy ${String(partitionRow)} must decode UNDECLARED`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++
++  // Present but not a positive safe integer is INVALID, not a hint. 2**53 is
++  // the unsafe-integer case: without it Number.isSafeInteger could be weakened
++  // to Number.isInteger and nothing would notice.
++  const invalid = [
++    0, -1, -2, 3.5, '3', '', true, false, null, undefined, NaN, Infinity,
++    -Infinity, 2 ** 53, [3], {valueOf: () => 3}, Object(3), 3n,
++  ];
++  for (const value of invalid) {
++    for (const spelling of ACCEPTED_ROW_SPELLINGS) {
++      const target = resolveDesiredReplicationFactor(
++        {partition_id: 'services-p1', [spelling]: value});
++      assert.equal(target.replicationFactor, 0,
++        `${spelling} = ${String(value)} is not a declared policy`);
++      assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++    }
++  }
++});
++
++test('identity-state-cannot-move-a-fixed-policy-row', () => {
++  // CLAUSE 4, the metamorphic direction. Hold replica_count = 3 and vary the
++  // real identity-bearing state as hard as this fixture can. The measured
++  // defect this replaces was exactly this shape: the seed phase handed
++  // INITIAL_REPLICA_IDS to PartitionService by reference, raft reconciliation
++  // pushed a minted replace-replica-<hex> onto it, and desired RF read 4 where
++  // a fresh process read 3.
++  const steps = decodeAcrossIdentityVariations(
++    [{label: 'fixed', row: FIXED_POLICY_ROW}]);
++
++  const expected = JSON.stringify({
++    replicationFactor: 3,
++    source: REPLICATION_TARGET_SOURCE.PARTITION_ROW,
++  });
++  for (const step of steps) {
++    assert.deepEqual(step.decoded, [['fixed', expected]],
++      `identity variation ${step.name} moved the target`);
++  }
++
++  // NON-VACUITY. The variations must actually have varied identity state, or
++  // "invariant under identity" would be a statement about a fixture that never
++  // changed. Every digest is distinct, so every step is a real perturbation.
++  const digests = steps.map((step) => step.digest);
++  assert.equal(new Set(digests).size, digests.length,
++    'each identity variation must actually change identity state');
++  assert.ok(steps.length >= 6,
++    'the fixture must exercise several independent identity dimensions');
++
++  // And the declarations are restored, so this receipt cannot leave the
++  // process in a state that makes a later scenario pass or fail for free.
++  assert.ok(INITIAL_MESSAGE_GROUP_REPLICA_IDS.length > 0,
++    'the identity declarations must be restored after the walk');
++});
++
++const POLICY_ROW_CASES = Object.freeze([
++  Object.freeze({label: 'rf-3', row: Object.freeze({replica_count: 3}),
++    factor: 3, source: REPLICATION_TARGET_SOURCE.PARTITION_ROW}),
++  Object.freeze({label: 'rf-5', row: Object.freeze({replica_count: 5}),
++    factor: 5, source: REPLICATION_TARGET_SOURCE.PARTITION_ROW}),
++  Object.freeze({label: 'rf-7-camel', row: Object.freeze({replicaCount: 7}),
++    factor: 7, source: REPLICATION_TARGET_SOURCE.PARTITION_ROW}),
++  Object.freeze({label: 'missing-column', row: Object.freeze({partition_id: 'p'}),
++    factor: 0, source: REPLICATION_TARGET_SOURCE.UNDECLARED}),
++  Object.freeze({label: 'no-row', row: null,
++    factor: 0, source: REPLICATION_TARGET_SOURCE.UNDECLARED}),
++  Object.freeze({label: 'invalid-value', row: Object.freeze({replica_count: '5'}),
++    factor: 0, source: REPLICATION_TARGET_SOURCE.UNDECLARED}),
++]);
++
++test('policy-row-alone-moves-the-target', () => {
++  // CLAUSE 4, the differential direction. Identity state is held fixed - at
++  // the BASELINE and again at the most heavily perturbed state the fixture
++  // reaches - and only the row varies. RF 3 decodes 3, RF 5 decodes 5,
++  // missing or invalid decodes UNDECLARED, in both worlds.
++  const snapshot = snapshotIdentityDeclarations();
++  try {
++    const fixture = buildIdentityFixture();
++    const assertRowsDecide = (where) => {
++      for (const testCase of POLICY_ROW_CASES) {
++        const target = resolveDesiredReplicationFactor(testCase.row);
++        assert.equal(target.replicationFactor, testCase.factor,
++          `${testCase.label} under ${where}`);
++        assert.equal(target.source, testCase.source,
++          `${testCase.label} under ${where}`);
++      }
++    };
++    const baselineDigest = identityDigest(fixture);
++    assertRowsDecide('baseline identity');
++
++    for (const variation of IDENTITY_VARIATIONS) variation.apply(fixture);
++    assert.notEqual(identityDigest(fixture), baselineDigest,
++      'the perturbed world must differ from the baseline one');
++    assertRowsDecide('fully perturbed identity');
++  } finally {
++    restoreIdentityDeclarations(snapshot);
++  }
++
++  // The decoder is not a constant function: distinct declared rows produce
++  // distinct factors, so "the row decides" is a claim with content.
++  const declaredFactors = POLICY_ROW_CASES
++    .filter((testCase) => testCase.factor > 0)
++    .map((testCase) => testCase.factor);
++  assert.equal(new Set(declaredFactors).size, declaredFactors.length,
++    'distinct declared rows must produce distinct factors');
++});
++
++test('decoded-factor-is-a-function-of-the-row-alone', () => {
++  // CLAUSE 4 as one artifact: the full identity-state x row matrix. For every
++  // row, the decode is CONSTANT down the identity axis; across rows it is not
++  // constant. That is the direction of authority, stated as a property of the
++  // measured matrix rather than as a list of expressions someone ruled out.
++  const steps = decodeAcrossIdentityVariations(POLICY_ROW_CASES);
++  assert.ok(steps.length > 1, 'the matrix needs several identity states');
++
++  const byRow = new Map();
++  for (const step of steps) {
++    for (const [label, decoded] of step.decoded) {
++      if (!byRow.has(label)) byRow.set(label, new Set());
++      byRow.get(label).add(decoded);
++    }
++  }
++  assert.equal(byRow.size, POLICY_ROW_CASES.length,
++    'every row case must appear in every identity state');
++  for (const [label, decodes] of byRow) {
++    assert.equal(decodes.size, 1,
++      `row ${label} decoded ${decodes.size} different ways across identity ` +
++      `states: ${JSON.stringify([...decodes])}`);
++  }
++
++  // The column axis moves. Without this the matrix could be "constant" simply
++  // because the decoder answers the same thing to everything.
++  const distinctAnswers = new Set(
++    [...byRow.values()].map((decodes) => [...decodes][0]));
++  assert.ok(distinctAnswers.size > 1,
++    'the row axis must actually change the answer');
++  assert.equal(new Set(steps.map((step) => step.digest)).size, steps.length,
++    'each identity state in the matrix must be genuinely different');
++});
++
++test('decoder-closure-excludes-identity-owners', () => {
++  // The cheap STRUCTURAL boundary, over the same static import graph the
++  // Solver's own import-closure projection uses. Not a dataflow analyzer: it
++  // answers only "can this module reach an identity owner by import at all",
++  // which is the question the contract needs and the one an import graph can
++  // actually answer.
++  const owners = identityOwnerModules();
++  assert.ok(owners.length > 10,
++    'the identity-owner set must be substantial, or the boundary is vacuous');
++  for (const known of [
++    'src/bootstrap/system-table-schemas-constants.js',
++    'src/partition/partition-service-core-base.js',
++    'src/message-group/message-group-service-state.js',
++  ]) {
++    assert.ok(owners.includes(known),
++      `${known} owns runtime replica identity and must be classified as an ` +
++      'owner; if it was renamed or reshaped, repair the marker set');
++  }
++
++  const closure = staticImportClosure(AUTHORITY_MODULE);
++  assert.ok(closure.size > 1,
++    'the decoder must still have a real import closure to constrain');
++  const reachable = [...closure].filter((module) => owners.includes(module));
++  assert.deepEqual(reachable, [],
++    'the decoder module must not be able to reach a runtime replica, peer or ' +
++    `placement identity owner by import; it reaches ${JSON.stringify(reachable)}`);
++
++  // POSITIVE CONTROL. The detector has to fire on modules that DO reach an
++  // identity owner, or an empty intersection proves nothing about the decoder.
++  for (const consumer of [
++    'src/bootstrap/phases/seed-registration-phase.js',
++    'src/partition/partition-service.js',
++  ]) {
++    const consumerClosure = staticImportClosure(consumer);
++    const consumerOwners =
++      [...consumerClosure].filter((module) => owners.includes(module));
++    assert.ok(consumerOwners.length > 0,
++      `${consumer} does reach identity owners, so the boundary check must ` +
++      'report them; it reported none, which means it cannot fail');
++  }
++});
++
++test('every-critical-table-declares-the-same-target', () => {
++  // Was vacuous: it BUILT each row from DECLARED_REPLICA_COUNT_DEFAULT and
++  // then asserted the decode equalled 3, so every iteration was
++  // assert.equal(3, 3) and the only per-table difference was a string. It read
++  // no per-table declaration and could not detect a table carrying a different
++  // one. It now drives the REAL seeding path and inspects what each system
++  // table actually gets persisted.
++  //
++  // SCOPE: this is the per-table claim about PERSISTED policy. A consumer that
++  // computes a requirement from a table's identity-list length is NOT covered
++  // here and is not this Quest's to catch - see the successor quest.
++  const seededBody = `
++    const {SeedRegistrationPhase} = await import('${REPO_ROOT}/src/bootstrap/` +
++    `phases/seed-registration-phase.js');
++    const constants = await import('${REPO_ROOT}/src/bootstrap/` +
++    `system-table-schemas-constants.js');
++    if (globalThis.__driftIdentities) {
++      // EVERY identity list, not one. Lengthening a single table left a
++      // CROSS-table identity length reaching partitions.replica_count
++      // invisible, and never touched the message-group list at all.
++      for (const table of Object.keys(constants.INITIAL_REPLICA_IDS)) {
++        constants.INITIAL_REPLICA_IDS[table].push(
++          'drifted-a', 'drifted-b', 'drifted-c', 'drifted-d');
++      }
++      constants.INITIAL_MESSAGE_GROUP_REPLICA_IDS.push(
++        'drifted-mg-a', 'drifted-mg-b', 'drifted-mg-c', 'drifted-mg-d');
++    }
++    const rows = [];
++    const phase = new SeedRegistrationPhase({delegates: {
++      getLogger: () => ({info(){}, warn(){}, error(){}, debug(){}}),
++      getNodeId: () => 'seed',
++      getLeaderMessageGroupService: () => null,
++    }});
++    phase.ensureSystemTableWriter = () => ({
++      upsertSystemTableRow: async (table, row) => {rows.push([table, row]);},
++    });
++    await phase.registerSystemTables(1);
++    // BOTH writes this phase makes. The message_groups write was unprotected:
++    // an identity length reaching it left every receipt green.
++    await phase.registerMessageGroup(1);
++    const byTable = {};
++    for (const [table, row] of rows) {
++      if (table === 'partitions') byTable[row.table_id] = row.replica_count;
++      if (table === 'message_groups') {
++        byTable['message_groups:' + row.group_id] = row.replica_count;
++      }
++    }
++    console.log(JSON.stringify({byTable}));
++  `;
++
++  const declaredOf = (schema) => schema.columns.find(
++    (candidate) => candidate.name === 'replica_count').defaultValue;
++  const declared = declaredOf(PARTITIONS_SCHEMA);
++  const declaredGroups = declaredOf(MESSAGE_GROUPS_SCHEMA);
++  const splitByOwner = (byTable) => {
++    const partitions = {};
++    const groups = {};
++    for (const [key, value] of Object.entries(byTable)) {
++      if (key.startsWith('message_groups:')) groups[key] = value;
++      else partitions[key] = value;
++    }
++    return {partitions, groups};
++  };
++
++  const seeded = creationSiteUnderDrift({
++    messageGroupDefault: declaredGroups, partitionsDefault: declared,
++    body: seededBody});
++  const first = splitByOwner(seeded.byTable);
++  const tables = Object.keys(first.partitions);
++  assert.ok(tables.length > 1, 'the probe must seed several system tables');
++  assert.ok(Object.keys(first.groups).length > 0,
++    'the probe must also seed the message_groups row');
++  assert.deepEqual([...new Set(Object.values(first.partitions))], [declared],
++    'no system table may silently carry a different declared requirement, ' +
++    `got ${JSON.stringify(first.partitions)}`);
++  assert.deepEqual([...new Set(Object.values(first.groups))], [declaredGroups],
++    'the message_groups row follows its OWN declaration');
++
++  // Non-vacuity arrow: the single PARTITIONS declaration is what every system
++  // table's partition row follows, so moving it moves all of them together,
++  // while the message-group row - a DIFFERENT owning table - does not move.
++  const drifted = splitByOwner(creationSiteUnderDrift({
++    messageGroupDefault: declaredGroups, partitionsDefault: declared + 4,
++    body: seededBody}).byTable);
++  assert.deepEqual([...new Set(Object.values(drifted.partitions))],
++    [declared + 4],
++    'every system table follows the one PARTITIONS declaration');
++  assert.deepEqual([...new Set(Object.values(drifted.groups))],
++    [declaredGroups],
++    'the PARTITIONS declaration must not reach the message_groups row');
++  assert.deepEqual(Object.keys(drifted.partitions).sort(), tables.sort(),
++    'the same table set is seeded either way');
++
++  // Identity churn on EVERY list - including the message-group list - changes
++  // NO persisted value at either write. Lengthening one list left a
++  // cross-table identity length reaching partitions.replica_count invisible.
++  const identityBody =
++    `globalThis.__driftIdentities = true;\n${seededBody}`;
++  const underChurn = creationSiteUnderDrift({
++    messageGroupDefault: declaredGroups, partitionsDefault: declared,
++    body: identityBody});
++  assert.deepEqual(underChurn.byTable, seeded.byTable,
++    'longer identity lists must not change any seeded declaration');
++});
++
++test('authority-mints-no-runtime-state', () => {
++  // BOTH branches. Asserting only the row-without-a-count case tests the
++  // frozen UNDECLARED constant and never reaches the minted projection, so a
++  // key added on the declared path survives undetected.
++  const undeclared = resolveDesiredReplicationFactor({partition_id: 'services-p1'});
++  const declared = resolveDesiredReplicationFactor({partition_id: 'services-p1', replica_count: 3});
++  assert.equal(declared.source, REPLICATION_TARGET_SOURCE.PARTITION_ROW,
++    'the declared branch must actually be exercised');
++
++  // The source vocabulary is part of the contract consumers will branch on,
++  // so pin the STRINGS, not just the symbol names: comparing a target's source
++  // to the same constant that produced it cannot detect a renamed value.
++  assert.deepEqual({...REPLICATION_TARGET_SOURCE}, {
++    PARTITION_ROW: 'partition_row_replica_count',
++    UNDECLARED: 'undeclared',
++  }, 'the typed source values are a stable contract');
++  assert.equal(undeclared.source, 'undeclared');
++  assert.equal(declared.source, 'partition_row_replica_count');
++
++  for (const target of [undeclared, declared]) {
++    assert.equal(Object.isFrozen(target), true);
++    assert.deepEqual(Object.keys(target).sort(),
++      ['replicationFactor', 'source'],
++      'the projection carries EXACTLY the factor and its source');
++    assert.deepEqual(Reflect.ownKeys(target).sort(),
++      ['replicationFactor', 'source'],
++      'including non-enumerable and symbol keys');
++    for (const key of ['holders', 'replicaIds', 'converged', 'ready']) {
++      assert.equal(Object.hasOwn(target, key), false,
++        `the target must not mint ${key}`);
++    }
++  }
++});
++
++test('witness-deterministic', () => {
++  // Same inputs, same answers, repeatedly - so a receipt that passes once is
++  // not passing on process state that happened to be right that time.
++  const shape = () => JSON.stringify(POLICY_ROW_CASES.map(
++    (testCase) => [testCase.label,
++      resolveDesiredReplicationFactor(testCase.row)]));
++  const first = shape();
++  assert.equal(shape(), first);
++  assert.equal(shape(), first);
++
++  // And the matrix walk itself is deterministic: it mutates real identity
++  // declarations and restores them, so running it twice must produce the same
++  // matrix. A leaked mutation would show up here as a second, different one.
++  const firstMatrix = JSON.stringify(
++    decodeAcrossIdentityVariations(POLICY_ROW_CASES));
++  assert.equal(JSON.stringify(
++    decodeAcrossIdentityVariations(POLICY_ROW_CASES)), firstMatrix,
++  'the identity walk must restore what it perturbed');
++});
++
++test('hostile-policy-rows-cannot-forge-a-target', () => {
++  // Each of these previously left the bar green while producing a wrong
++  // target: the own-property read (Object.prototype and getter rows measured
++  // 99), and the safe-integer/positive test (-2, 0, 3.5, null all accepted).
++  /* eslint-disable no-extend-native */
++  Object.prototype.replica_count = 99;
++  try {
++    const polluted = resolveDesiredReplicationFactor({partition_id: 'services-p1'});
++    assert.equal(polluted.replicationFactor, 0,
++      'an inherited replica_count must not become the declared target');
++    assert.equal(polluted.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  } finally {
++    delete Object.prototype.replica_count;
++  }
++  /* eslint-enable no-extend-native */
++
++  let getterReads = 0;
++  const getterRow = {partition_id: 'services-p1'};
++  Object.defineProperty(getterRow, 'replica_count', {
++    enumerable: true,
++    get() {
++      getterReads += 1;
++      return 99;
++    },
++  });
++  assert.equal(
++    resolveDesiredReplicationFactor(getterRow)
++      .replicationFactor, 0,
++    'an accessor-backed replica_count is not a declared value');
++  assert.equal(getterReads, 0, 'the accessor must never be executed');
++
++  // Non-integer and non-positive declarations are not policy either.
++  // 2**53 is the UNSAFE-integer case: without it, Number.isSafeInteger could
++  // be weakened to Number.isInteger and nothing here would notice.
++  for (const bad of [-2, 0, 3.5, null, '3', NaN, Infinity, true, 2 ** 53]) {
++    const target = resolveDesiredReplicationFactor({partition_id: 'services-p1', replica_count: bad});
++    assert.equal(target.replicationFactor, 0, `replica_count ${String(bad)}`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++
++  // The camel alias is the normalized in-memory spelling and IS accepted on
++  // its own; without this the alias could be dropped entirely unnoticed.
++  assert.equal(
++    resolveDesiredReplicationFactor({partition_id: 'services-p1', replicaCount: 4}).replicationFactor, 4, 'the normalized camel spelling is policy');
++
++  // The accepted spelling set is pinned as an ALLOWLIST, not a blocklist of
++  // guessed names. Enumerating eight spellings that must be rejected still let
++  // a ninth in: prepending 'REPLICA_COUNT' to the accepted columns left every
++  // receipt green, and TARGET_REPLICA_COUNT already exists in this codebase as
++  // a placement-policy key, so this is a live forge surface. The exact set is
++  // read out of the module and compared whole.
++  // OBSERVED AT RUNTIME. Reading the array literal out of the source only pins
++  // that literal: widening by spread from another constant, by concat, by a
++  // second lookup path, or by normalising the key first all leave the literal
++  // byte-identical while a forged spelling decodes. A proxy row records every
++  // key the decoder actually probes, so the accepted set is measured, not read.
++  const probedKeys = [];
++  const recordingRow = new Proxy({}, {
++    getOwnPropertyDescriptor(target, property) {
++      if (typeof property === 'string') probedKeys.push(property);
++      return Reflect.getOwnPropertyDescriptor(target, property);
++    },
++    get(target, property, receiver) {
++      if (typeof property === 'string') probedKeys.push(property);
++      return Reflect.get(target, property, receiver);
++    },
++    has(target, property) {
++      if (typeof property === 'string') probedKeys.push(property);
++      return Reflect.has(target, property);
++    },
++    ownKeys(target) {
++      probedKeys.push('*ownKeys*');
++      return Reflect.ownKeys(target);
++    },
++  });
++  assert.equal(
++    resolveDesiredReplicationFactor(recordingRow)
++      .replicationFactor, 0,
++    'a row declaring nothing is undeclared');
++  assert.deepEqual([...new Set(probedKeys)].sort(),
++    ['replicaCount', 'replica_count'],
++    'the decoder probes EXACTLY the two accepted spellings, measured at ' +
++    `runtime; it probed ${JSON.stringify([...new Set(probedKeys)])}`);
++
++  for (const spelling of [
++    'target_replica_count', 'targetReplicaCount', 'desiredReplicationFactor',
++    'desired_replication_factor', 'replicas', 'replicaCountTarget',
++    'replica_count_target', 'count', 'REPLICA_COUNT',
++  ]) {
++    const target = resolveDesiredReplicationFactor({partition_id: 'services-p1', [spelling]: 9});
++    assert.equal(target.replicationFactor, 0,
++      `${spelling} is not a declared replica_count spelling`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++
++  // But a row whose two spellings DISAGREE fails closed. Iterating the
++  // spellings with continue-on-invalid let a rejected snake value be rescued
++  // by the alias, so a hostile or half-migrated row could take the second
++  // opinion: {replica_count: '9', replicaCount: 4} decoded to 4.
++  for (const row of [
++    {replica_count: '9', replicaCount: 4},
++    {replica_count: -1, replicaCount: 4},
++    {replica_count: 0, replicaCount: 9},
++  ]) {
++    const target = resolveDesiredReplicationFactor(row);
++    assert.equal(target.replicationFactor, 0,
++      `disagreeing spellings must fail closed: ${JSON.stringify(row)}`);
++    assert.equal(target.source, REPLICATION_TARGET_SOURCE.UNDECLARED);
++  }
++});
++
++test('creation-default-tracks-schema-declaration', async () => {
++  // The property that matters is SEMANTIC, not syntactic: if the schema's
++  // declared default changes, the creation default follows it. How the
++  // implementation achieves that — a lookup, a helper, some later mechanism —
++  // is not the claim, and a source-text proof would pin the wrong thing.
++  const column = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === 'replica_count');
++  const declared = column.defaultValue;
++  assert.equal(DECLARED_REPLICA_COUNT_DEFAULT, declared);
++
++  // Drift the declaration and re-evaluate: a restated literal cannot follow.
++  column.defaultValue = declared + 1;
++  try {
++    // The specifier is assembled at runtime so static import analysis does
++    // not record a second edge to the same module: a literal
++    // '...?schema-drift=1' is counted as an extra inbound edge while being
++    // deduped to one importer, which breaks the canonical import-graph seal.
++    const driftSpecifier =
++      `${'../../src/bootstrap/replication-target-authority.js'}?drift=1`;
++    const drifted = await import(driftSpecifier);
++    assert.equal(drifted.DECLARED_REPLICA_COUNT_DEFAULT, declared + 1,
++      'the creation default must track the schema declaration');
++  } finally {
++    column.defaultValue = declared;
++  }
++
++  // And a row created with that default decodes back to it, so the value the
++  // creation path writes is the value policy then reads.
++  assert.equal(
++    resolveDesiredReplicationFactor(
++      {replica_count: DECLARED_REPLICA_COUNT_DEFAULT}).replicationFactor,
++    declared);
++});
++
++test('production-handoff-cannot-mutate-the-declaration', () => {
++  // THE REAL ALIAS CHAIN, not the getter. The seed phase reads
++  // INITIAL_REPLICA_IDS[table] and hands it to PartitionService as
++  // options.replicaIds; the service stored it BY REFERENCE, and raft peer
++  // reconciliation pushes onto service.replicaIds. That made the service's
++  // mutable peer list the shared declaration itself, so one minted
++  // replace-replica-<hex> raised the apparent replication factor for every
++  // later reader. Copying inside getInitialReplicaIds did nothing here,
++  // because this path never calls it.
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  const declaredLength = INITIAL_REPLICA_IDS[table].length;
++
++  const service = new PartitionService({
++    partitionId: `${table}-p1`,
++    tableId: table,
++    replicaId: INITIAL_REPLICA_IDS[table][0],
++    // The exact production hand-off: the declaration, by reference.
++    replicaIds: INITIAL_REPLICA_IDS[table],
++    nodeId: 'seed',
++  });
++
++  assert.notEqual(service.replicaIds, INITIAL_REPLICA_IDS[table],
++    'the service peer list must not BE the declaration');
++
++  // What reconciliation does on a replacement replica.
++  service.replicaIds.push(`${table}-p1-replace-replica-a1b2c3d4e5f60718`);
++
++  assert.equal(service.replicaIds.length, declaredLength + 1,
++    'the service tracks the new peer');
++  assert.equal(INITIAL_REPLICA_IDS[table].length, declaredLength,
++    'the declaration is unchanged by a minted replacement identity');
++  assert.equal(getInitialReplicaIds(table).length, declaredLength);
++
++  // And the declared target is unmoved, because it never counted identities.
++  assert.equal(
++    resolveDesiredReplicationFactor({
++      partition_id: `${table}-p1`,
++      replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
++    }).replicationFactor,
++    DECLARED_REPLICA_COUNT_DEFAULT);
++});
++
++test('message-group-handoff-cannot-mutate-the-declaration', () => {
++  // The exact sibling of the partition leak, left open one line short: the
++  // seed phase hands INITIAL_MESSAGE_GROUP_REPLICA_IDS to the service by
++  // reference and raft lifecycle pushes onto service.replicaIds.
++  const declaredLength = INITIAL_MESSAGE_GROUP_REPLICA_IDS.length;
++  const service = new MessageGroupService({
++    // A MessageRouter-shaped transport: deliver + initialize +
++    // setServiceNodeResolver is what the service validates.
++    transport: {
++      deliver: () => {},
++      initialize: () => {},
++      setServiceNodeResolver: () => {},
++    },
++    groupId: 'mg-1',
++    replicaId: INITIAL_MESSAGE_GROUP_REPLICA_IDS[0],
++    replicaIds: INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++    nodeId: 'seed',
++  });
++
++  assert.notEqual(service.replicaIds, INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++    'the service peer list must not BE the declaration');
++  service.replicaIds.push('mg-1-replace-replica-a1b2c3d4e5f60718');
++  assert.equal(INITIAL_MESSAGE_GROUP_REPLICA_IDS.length, declaredLength,
++    'a minted replacement identity must not grow the declaration');
++});
++
++test('message-group-policy-comes-from-its-own-schema', async () => {
++  // Do not replace one cross-table authority leak with a shared default. The
++  // claim is SEMANTIC and needs two arrows, because the two schemas currently
++  // declare the SAME number: the message-group default must follow the
++  // MESSAGE_GROUPS declaration, and must NOT follow the PARTITIONS one.
++  const groupsColumn = MESSAGE_GROUPS_SCHEMA.columns.find(
++    (candidate) => candidate.name === 'replica_count');
++  const partitionsColumn = PARTITIONS_SCHEMA.columns.find(
++    (candidate) => candidate.name === 'replica_count');
++  assert.equal(DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++    groupsColumn.defaultValue);
++
++  const declaredGroups = groupsColumn.defaultValue;
++  const declaredPartitions = partitionsColumn.defaultValue;
++  const authority = '../../src/bootstrap/replication-target-authority.js';
++
++  // Arrow 1: drift MESSAGE_GROUPS, the message-group default follows.
++  groupsColumn.defaultValue = declaredGroups + 1;
++  try {
++    const drifted = await import(`${authority}?mg-drift=1`);
++    assert.equal(drifted.DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++      declaredGroups + 1,
++      'the message-group default must track the MESSAGE_GROUPS declaration');
++  } finally {
++    groupsColumn.defaultValue = declaredGroups;
++  }
++
++  // Arrow 2: drift PARTITIONS, the message-group default does NOT move. This
++  // is what fails if the message-group path is re-pointed at the partitions
++  // declaration while both happen to declare the same value.
++  partitionsColumn.defaultValue = declaredPartitions + 7;
++  try {
++    const drifted = await import(`${authority}?part-drift=1`);
++    assert.equal(drifted.DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
++      declaredGroups,
++      'the PARTITIONS declaration must not reach message-group policy');
++    assert.equal(drifted.DECLARED_REPLICA_COUNT_DEFAULT,
++      declaredPartitions + 7);
++  } finally {
++    partitionsColumn.defaultValue = declaredPartitions;
++  }
++});
++
++test('creation-writes-declared-policy-not-identity-count', async () => {
++  // The identity-count write, driven through the REAL creation path rather
++  // than asserted against source text. The property is INVARIANCE, not a
++  // single inequality: a fixed declaration with a VARYING identity count must
++  // persist the same value every time. Two data points that vary both the
++  // declaration and the count let an offset maximum slip through -
++  // Math.max(DECLARED, replicas.length - 2) passed a 5-identity probe and a
++  // 1-identity probe while still deriving policy from identities in
++  // production. Any function of replicas.length that is not constant now reds.
++  const {CreateMessageGroupPhase} =
++    await import('../../src/bootstrap/phases/create-message-group-phase.js');
++  const {MESSAGE_GROUP_ASSIGNMENT_STRATEGY} =
++    await import('../../src/bootstrap/message-group-assignment-constants.js');
++
++  const stageRowWithReplicaCount = async (identityCount) => {
++    const localReplicas = Array.from({length: identityCount},
++      (_unused, index) => `mg-1-replica-${index}`);
++    const phase = new CreateMessageGroupPhase({
++      nodeId: 'seed',
++      delegates: {
++        getBootstrapResponse: () => ({
++          messageGroupAssignment: {
++            strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
++            groupId: 'mg-1',
++          },
++        }),
++        getMessageGroupServices: () => new Map(
++          localReplicas.map((id) => [id, {groupId: 'mg-1'}])),
++        getNow: () => () => 1,
++        getLogger: () => ({info: () => {}, warn: () => {}, error: () => {}}),
++        seedJoinTimeCacheRow: () => {},
++        registerMessageGroupService: async () => {},
++      },
++    });
++    await phase.registerCreateSelfHostedMetadata();
++    const row = phase.pendingCreateSelfHostedMessageGroupRow;
++    assert.ok(row, `no message_groups row staged for ${identityCount}`);
++    return row.replica_count;
++  };
++
++  // Counts below, at, and above the declared default, and far above it.
++  const counts = [1, 2, 3, 5, 9, 17];
++  const persisted = [];
++  for (const identityCount of counts) {
++    persisted.push(await stageRowWithReplicaCount(identityCount));
++  }
++
++  assert.deepEqual([...new Set(persisted)],
++    [DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT],
++    'persisted policy must not vary with the identity count, got ' +
++    `${JSON.stringify(counts.map((c, i) => [c, persisted[i]]))}`);
++  // Non-vacuity: the probe must include counts on BOTH sides of the declared
++  // default, or "invariant" could hold simply because every count matched it.
++  assert.ok(
++    counts.some((c) => c < DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT) &&
++    counts.some((c) => c > DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT),
++    'the probe must straddle the declared default');
++
++  // And the row the creation path writes decodes back to that same policy,
++  // so what creation persists is what the authority later reads.
++  assert.equal(
++    resolveDesiredReplicationFactor({replica_count: persisted[0]}).replicationFactor,
++    DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT);
++
++  // THE UNIVERSAL. Everything above samples behaviour; this constrains the
++  // form of every persisted write, so no runtime quantity of ANY kind -
++  // identity count, node id, clock, config, or one not yet invented - can be
++  // the value. Combined with the drift arrows, which prove each declared
++  // constant tracks its owning schema, the pair is a complete proof of the
++  // creation clause rather than a list of ruled-out variants.
++  let totalWrites = 0;
++  for (const relativePath of CREATION_SITE_FILES) {
++    const writes = persistedReplicaCountWrites(relativePath);
++    assert.ok(writes.length > 0,
++      `${relativePath} must still contain a persisted replica_count write; ` +
++      'a moved or renamed write would make this check silently vacuous');
++    totalWrites += writes.length;
++    for (const write of writes) {
++      assert.equal(write.valueType, 'Identifier',
++        `${relativePath}:${write.line} persists replica_count from a ` +
++        `${write.valueType}; only a declared-default identifier is allowed, ` +
++        'because any expression can read a runtime quantity');
++      assert.ok(DECLARED_DEFAULT_IDENTIFIERS.includes(write.valueName),
++        `${relativePath}:${write.line} persists replica_count from ` +
++        `${write.valueName}, which is not an owning-table declared default`);
++    }
++  }
++  assert.equal(totalWrites, 3,
++    'the three known persisted replica_count writes must all be accounted ' +
++    'for; a new one must be reviewed, not silently admitted');
++});
++
++// Drifting a schema default and re-importing IN-PROCESS cannot prove which
++// constant a production site consumes: ESM caches by specifier, so a re-import
++// of the phase resolves the SAME authority module and keeps the original
++// constant. The drift has to happen in a FRESH process, before the authority
++// module is first evaluated, and then the real creation path has to be driven.
++function creationSiteUnderDrift({messageGroupDefault, partitionsDefault, body}) {
++  const script = `
++    const defs = await import('${REPO_ROOT}/src/bootstrap/` +
++    `system-table-core-schema-definitions.js');
++    const column = (schema) => schema.columns.find(
++      (candidate) => candidate.name === 'replica_count');
++    column(defs.MESSAGE_GROUPS_SCHEMA).defaultValue = ${messageGroupDefault};
++    column(defs.PARTITIONS_SCHEMA).defaultValue = ${partitionsDefault};
++    ${body}
++  `;
++  const child = spawnSync(process.execPath,
++    ['--input-type=module', '-e', script],
++    {cwd: REPO_ROOT, encoding: 'utf8'});
++  assert.equal(child.status, 0,
++    `drift probe failed: ${child.stderr || child.stdout}`);
++  return JSON.parse(child.stdout.trim().split('\n').pop());
++}
++
++const MESSAGE_GROUP_CREATION_BODY = `
++  const strategies = await import('${REPO_ROOT}/src/bootstrap/` +
++  `message-group-assignment-constants.js');
++  const {CreateMessageGroupPhase} = await import('${REPO_ROOT}/src/bootstrap/` +
++  `phases/create-message-group-phase.js');
++  const phase = new CreateMessageGroupPhase({
++    nodeId: 'seed',
++    delegates: {
++      getBootstrapResponse: () => ({messageGroupAssignment: {
++        strategy: strategies.MESSAGE_GROUP_ASSIGNMENT_STRATEGY
++          .CREATE_SELF_HOSTED,
++        groupId: 'mg-1'}}),
++      getMessageGroupServices: () => new Map([['mg-1-replica-0',
++        {groupId: 'mg-1'}]]),
++      getNow: () => () => 1,
++      getLogger: () => ({info(){}, warn(){}, error(){}}),
++      seedJoinTimeCacheRow: () => {},
++      registerMessageGroupService: async () => {},
++    },
++  });
++  await phase.registerCreateSelfHostedMetadata();
++  const row = phase.pendingCreateSelfHostedMessageGroupRow;
++  if (!row) throw new Error('creation path staged no message_groups row');
++
++  // The OTHER message-group creation site. Converting it without witnessing it
++  // left mutation M18 (restating a literal 3 here) fully green.
++  const {SeedRegistrationPhase} = await import('${REPO_ROOT}/src/bootstrap/` +
++  `phases/seed-registration-phase.js');
++  const seedRows = [];
++  const seedPhase = new SeedRegistrationPhase({delegates: {
++    getLogger: () => ({info(){}, warn(){}, error(){}, debug(){}}),
++    getNodeId: () => 'seed',
++    getLeaderMessageGroupService: () => null,
++  }});
++  seedPhase.ensureSystemTableWriter = () => ({
++    upsertSystemTableRow: async (table, seedRow) => {
++      seedRows.push([table, seedRow]);
++    },
++  });
++  await seedPhase.registerMessageGroup(1);
++  const seeded = seedRows.find(([table]) => table === 'message_groups');
++  if (!seeded) throw new Error('seed path wrote no message_groups row');
++
++  console.log(JSON.stringify({
++    replicaCount: row.replica_count,
++    seedReplicaCount: seeded[1].replica_count}));
++`;
++
++test('message-group-creation-site-follows-its-own-declaration', () => {
++  // THE SITE, not the constant. Mutation A survived the earlier receipt set:
++  // re-pointing this production write at the PARTITIONS authority left every
++  // receipt green, because nothing pinned which constant the site consumes and
++  // both schemas declare 3. These two arrows separate them.
++  const body = MESSAGE_GROUP_CREATION_BODY;
++
++  // Arrow 1: the message-group declaration moves BOTH rows it seeds. Both
++  // message-group creation sites are covered, because converting the
++  // seed-registration one without witnessing it left a restated literal there
++  // undetectable.
++  const followsOwn = creationSiteUnderDrift({
++    messageGroupDefault: 7, partitionsDefault: 3, body});
++  assert.equal(followsOwn.replicaCount, 7,
++    'the staged MESSAGE_GROUPS row must follow the MESSAGE_GROUPS default');
++  assert.equal(followsOwn.seedReplicaCount, 7,
++    'the SEEDED MESSAGE_GROUPS row must follow it too');
++
++  // Arrow 2: the partitions declaration does NOT reach either of them.
++  const ignoresPartitions = creationSiteUnderDrift({
++    messageGroupDefault: 7, partitionsDefault: 9, body});
++  assert.equal(ignoresPartitions.replicaCount, 7,
++    'the PARTITIONS declaration must not reach the message-group write');
++  assert.equal(ignoresPartitions.seedReplicaCount, 7,
++    'nor the seed-registration message-group write');
++});
++
++test('partitions-creation-site-follows-its-own-declaration', () => {
++  // The PARTITIONS half, which had no witness at all: mutation B replaced this
++  // write with a literal 1 and every receipt stayed green.
++  const body = `
++    const {SeedRegistrationPhase} = await import('${REPO_ROOT}/src/bootstrap/` +
++    `phases/seed-registration-phase.js');
++    const rows = [];
++    const phase = new SeedRegistrationPhase({delegates: {
++      getLogger: () => ({info(){}, warn(){}, error(){}, debug(){}}),
++      getNodeId: () => 'seed',
++    }});
++    phase.ensureSystemTableWriter = () => ({
++      upsertSystemTableRow: async (table, row) => {rows.push([table, row]);},
++    });
++    await phase.registerSystemTables(1);
++    const partitionRows = rows.filter(([table]) => table === 'partitions');
++    console.log(JSON.stringify({
++      counts: [...new Set(partitionRows.map(([, row]) => row.replica_count))],
++      rowCount: partitionRows.length}));
++  `;
++
++  // Arrow 1: the partitions declaration moves every seeded partition row.
++  const followsOwn = creationSiteUnderDrift({
++    messageGroupDefault: 3, partitionsDefault: 9, body});
++  assert.ok(followsOwn.rowCount > 0, 'the probe must seed partition rows');
++  assert.deepEqual(followsOwn.counts, [9],
++    'every seeded PARTITIONS row must follow the PARTITIONS default');
++
++  // Arrow 2: the message-group declaration does NOT reach it.
++  const ignoresMessageGroups = creationSiteUnderDrift({
++    messageGroupDefault: 7, partitionsDefault: 9, body});
++  assert.deepEqual(ignoresMessageGroups.counts, [9],
++    'the MESSAGE_GROUPS declaration must not reach the partitions write');
++});
++
++test('absent-scenario-cannot-pass-as-a-receipt', () => {
++  // The harness-fidelity control. `node --test --test-name-pattern` exits 0
++  // when the pattern matches NOTHING and prints `# tests 1 / # pass 1` for the
++  // file-level subtest, so receipts built directly on it were shells: renaming
++  // a scenario left the harness reporting 13/13 with that scenario never run.
++  // Every receipt in this quest now goes through the anchored runner, so this
++  // scenario is what stops the whole receipt set from becoming vacuous again.
++  const runner = 'test/bootstrap/run-anchored-scenario-helper.js';
++  const witness = 'test/bootstrap/replication-target-authority.test.js';
++  const run = (scenarioName) => spawnSync(
++    process.execPath, [runner, witness, scenarioName],
++    {cwd: REPO_ROOT, encoding: 'utf8'});
++
++  const present = run('authority-mints-no-runtime-state');
++  assert.equal(present.status, 0,
++    `a real scenario must pass: ${present.stderr}`);
++
++  const absent = run('this-scenario-does-not-exist');
++  assert.notEqual(absent.status, 0,
++    'an ABSENT scenario must fail the receipt, not pass silently');
++  assert.match(absent.stderr, /DID NOT RUN/u);
++
++  // All THREE outcome classes through the real CLI, against the fixture file.
++  // Guarding only the ABSENT case was a point fix: a runner that accepted a
++  // FAILING scenario satisfied it while every other receipt stayed green.
++  const fixtures = 'test/bootstrap/anchored-runner-fixture-cases.js';
++  const runFixture = (scenarioName) => spawnSync(
++    process.execPath, [runner, fixtures, scenarioName],
++    {cwd: REPO_ROOT, encoding: 'utf8'});
++
++  assert.equal(runFixture(FIXTURE_SCENARIO.PASSES).status, 0,
++    'a fixture scenario that genuinely passes must be accepted');
++  assert.notEqual(runFixture(FIXTURE_SCENARIO.FAILS).status, 0,
++    'a fixture scenario that FAILED must be rejected, not reported as run');
++  assert.notEqual(runFixture(FIXTURE_SCENARIO.ABSENT).status, 0,
++    'a fixture scenario that does not exist must be rejected');
++
++  // The bare form the receipts used to use still exits 0 on no match, which is
++  // why the runner exists. If node ever fixes this, the assertion below fails
++  // and the runner can be reconsidered - it must not silently become dead.
++  const bare = spawnSync(process.execPath,
++    ['--test', '--test-name-pattern=^this-scenario-does-not-exist$', witness],
++    {cwd: REPO_ROOT, encoding: 'utf8'});
++  assert.equal(bare.status, 0,
++    'documented node behaviour: a zero-match pattern run still exits 0');
++
++  // The classifier as a unit, so the TAP shapes that must not be mistaken for
++  // a pass are pinned without paying for a subprocess each.
++  const name = 'target-scenario';
++  assert.equal(classifyRun(`ok 1 - ${name}`, name, 0),
++    RUN_OUTCOME.RAN_AND_PASSED);
++  assert.equal(classifyRun(`not ok 1 - ${name}`, name, 1),
++    RUN_OUTCOME.SCENARIO_FAILED);
++  assert.equal(classifyRun('1..0\nok 1 - some/file.test.js', name, 0),
++    RUN_OUTCOME.SCENARIO_ABSENT,
++    'the file-level subtest of a zero-match run is not the scenario');
++  assert.equal(classifyRun(`    ok 1 - ${name}`, name, 0),
++    RUN_OUTCOME.SCENARIO_ABSENT,
++    'an INDENTED result line is a nested subtest, not the anchored scenario');
++  assert.equal(classifyRun(`ok 1 - prefix - ${name}`, name, 0),
++    RUN_OUTCOME.RAN_AND_PASSED);
++  assert.equal(classifyRun(`ok 1 - ${name}-longer`, name, 0),
++    RUN_OUTCOME.SCENARIO_ABSENT,
++    'a scenario whose name merely EXTENDS the target is not the target');
++  assert.equal(classifyRun(`ok 1 - ${name}`, name, 1),
++    RUN_OUTCOME.PROCESS_ERROR,
++    'a named pass with a non-zero exit is still a failure');
++});
++
++test('declaration-handoffs-return-copies', () => {
++  // CLAUSE 6, on the hand-off ACCESSORS rather than only on the services that
++  // consume them. Review round 1 landed this gap: the receipt that asserted
++  // getInitialReplicaIds returns a copy was retired when the identity-churn
++  // scenario was replaced by the metamorphic one, and reverting the accessor
++  // to `INITIAL_REPLICA_IDS[tableName] || null` then left the whole bar green
++  // while the declaration was live and mutable through it. The copy is
++  // load-bearing: critical-placement-convergence derives a required replica
++  // count from the LENGTH of that array, so aliasing is measurable.
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  const declaredLength = INITIAL_REPLICA_IDS[table].length;
++
++  const handedOut = getInitialReplicaIds(table);
++  assert.notEqual(handedOut, INITIAL_REPLICA_IDS[table],
++    'the declaration must not be handed out by reference');
++  handedOut.push(`${table}-p1${MINTED_REPLACEMENT}`);
++  assert.equal(INITIAL_REPLICA_IDS[table].length, declaredLength,
++    'a caller mutating its copy cannot mutate the declaration');
++  assert.equal(getInitialReplicaIds(table).length, declaredLength,
++    'nor what the NEXT reader is handed');
++
++  // A missing table is still distinguishable from an empty declaration, so
++  // the copy did not turn "not configured" into "configured with nobody".
++  assert.equal(getInitialReplicaIds('table-that-does-not-exist'), null,
++    'an undeclared table must stay null, not become an empty list');
++
++  // THE MESSAGE-GROUP EQUIVALENT, driven through the real seed phase rather
++  // than asserted against its source text. The phase hands a replicaIds list
++  // into each queued service descriptor; that value must not be the shared
++  // declaration, and mutating what the consumer received must not move it.
++  const declaredGroupLength = INITIAL_MESSAGE_GROUP_REPLICA_IDS.length;
++  const handedToConsumers = [];
++  const phase = new SeedMessageGroupsPhase({delegates: {
++    getLogger: () => ({info() {}, warn() {}, error() {}, debug() {}}),
++    getConfig: () => ({replicaStaggerDelayMs: 0}),
++    getNodeId: () => 'seed',
++    resetMessageGroupReplicas: () => {},
++    createBootstrapServiceDescriptor: () => ({}),
++    queueBootstrapServiceReplica: (_descriptor, options) => {
++      handedToConsumers.push(options.replicaIds);
++    },
++    triggerBootstrapReconciler: async () => {},
++    incrementMessageGroupsCreated: () => {},
++    getMessageGroupReplicas: () => [],
++  }});
++  return phase.phaseMessageGroups().then(() => {
++    assert.ok(handedToConsumers.length > 0,
++      'the seed phase must queue at least one message-group replica');
++    for (const handed of handedToConsumers) {
++      assert.notEqual(handed, INITIAL_MESSAGE_GROUP_REPLICA_IDS,
++        'the message-group declaration must not be handed on by reference');
++      handed.push(`mg-1${MINTED_REPLACEMENT}`);
++    }
++    assert.equal(INITIAL_MESSAGE_GROUP_REPLICA_IDS.length, declaredGroupLength,
++      'consumers mutating what they were handed cannot move the declaration');
++  });
++});
++
++test('defensive-copies-do-not-disarm-critical-assertions', () => {
++  // The regression class review round 1 found in this very candidate. The
++  // hand-off sites were hardened by copying, and one of those copies -
++  // `[...(INITIAL_REPLICA_IDS[tableName] || [])]` - made the value ALWAYS a
++  // truthy array, which silently made the assertCritical on the next line
++  // unreachable. A table with no declared replica set stopped raising the
++  // critical 'Partition replica set not configured' and fell through to a
++  // leader-missing throw on an error key that does not exist, so the operator
++  // got an Error with no message and no isCritical. Copying to protect a
++  // declaration must never cost a fail-closed check.
++  const owner = new SeedRegistrationRuntimeOwner({delegates: {
++    getPartitionServices: () => new Map(),
++  }});
++
++  assert.throws(
++    () => owner.findLeaderPartition('table-with-no-declared-replica-set'),
++    (error) => {
++      assert.equal(error.isCritical, true,
++        'a missing replica declaration must raise a CRITICAL error');
++      assert.equal(error.message, BOOTSTRAP_ERROR.PARTITION_REPLICAS_MISSING,
++        'and must name the missing replica set, not a downstream symptom');
++      return true;
++    },
++    'an undeclared table must fail closed at the replica-set assertion');
++
++  // And the declared path still works, so the guard above is not simply
++  // rejecting everything.
++  const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
++  assert.equal(owner.findLeaderPartition(table), null,
++    'a declared table with no leader yet returns null, it does not throw');
++});
++
++// Every replica_count assignment in src/, classified. A site that falls into
++// no class is an unreviewed write and fails closed.
++const BOOTSTRAP_DECLARED_SITES = Object.freeze([
++  'src/bootstrap/phases/create-message-group-phase.js:683',
++  'src/bootstrap/phases/seed-registration-phase.js:155',
++  'src/bootstrap/phases/seed-registration-phase.js:403',
++]);
++// Declared policy from a source this Quest does not own and does not change:
++// the user-plane config default for user tables, and the validated parent-row
++// policy a managed split or merge carries to its children. Neither is an
++// identity count, and neither is the owning system-table schema declaration -
++// which is exactly why the clause about the owning schema is scoped to the
++// bootstrap sites above rather than asserted over these.
++const DECLARED_POLICY_SOURCE_SITES = Object.freeze([
++  'src/cli/core/remote-cache-service-rows.js:107',
++  'src/partition/managed-merge-workflow.js:670',
++  'src/partition/managed-split-workflow.js:487',
++  'src/partition/managed-split-workflow.js:501',
++  'src/query/table-creation-service-create-table.js:210',
++  'src/query/table-creation-service-partition-provisioning.js:138',
++]);
++// An OBSERVATION, not a policy: the join-admission read model counts the live
++// message-group replicas it can see and reports that count in the bootstrap
++// response. It is never persisted. It is enumerated here rather than excluded
++// by a pattern, because a field named replica_count carrying an observed
++// identity count next to a persisted column of the same name is precisely the
++// confusion this contract exists to keep separated - a consumer that read this
++// as desired RF would be the defect, and that consumer question belongs to the
++// successor quest, not to this one.
++const OBSERVED_COUNT_PROJECTION_SITES = Object.freeze([
++  'src/bootstrap/owners/bootstrap-join-admission-owner.js:757',
++  'src/bootstrap/owners/bootstrap-join-admission-owner.js:768',
++]);
++
++test('replica-count-assignment-census-is-pinned', () => {
++  // The repo-wide half of the creation clause. Scoping a universal to the two
++  // files that satisfy it is not a proof of the universal: six replica_count
++  // assignments already existed outside the bootstrap creation sites, and one
++  // of them - a member assignment, a form the old scan could not even see -
++  // IS a count of identities.
++  const census = repositoryReplicaCountAssignments();
++  const classified = new Map([
++    ...BOOTSTRAP_DECLARED_SITES.map((site) => [site, 'bootstrap-declared']),
++    ...DECLARED_POLICY_SOURCE_SITES.map((site) => [site, 'declared-policy']),
++    ...OBSERVED_COUNT_PROJECTION_SITES.map((site) => [site, 'observed-count']),
++  ]);
++
++  assert.deepEqual(census.map((entry) => entry.site).sort(),
++    [...classified.keys()].sort(),
++    'every replica_count assignment in src/ must be a REVIEWED site; an ' +
++    'unclassified one is an unproved write and a missing one means the ' +
++    'census stopped seeing a site it used to cover');
++
++  for (const entry of census) {
++    const category = classified.get(entry.site);
++    if (category === 'bootstrap-declared') {
++      assert.equal(entry.valueType, 'Identifier',
++        `${entry.site} persists from a ${entry.valueType}; only a declared-` +
++        'default identifier is allowed, because any expression can read a ' +
++        'runtime quantity');
++      assert.ok(DECLARED_DEFAULT_IDENTIFIERS.includes(entry.valueName),
++        `${entry.site} persists from ${entry.valueName}, which is not an ` +
++        'owning-table declared default');
++    }
++    if (category !== 'observed-count') {
++      assert.equal(entry.derivesFromACount, false,
++        `${entry.site} derives a replication factor from a count: ` +
++        `${entry.valueText}. A factor is a policy, never a tally`);
++    }
++  }
++
++  // The one site that IS a count must still be a count, or this class is
++  // carrying an exemption nothing needs.
++  assert.ok(
++    census.some((entry) =>
++      OBSERVED_COUNT_PROJECTION_SITES.includes(entry.site) &&
++      entry.derivesFromACount),
++    'the observed-count class must actually contain an observed count');
++
++  // POSITIVE CONTROL. The detector has to fire on the defect shape in both
++  // syntactic forms, or an empty violation list proves nothing.
++  const hostile = replicaCountAssignments(
++    'const row = {replica_count: replicas.length};\n' +
++    'row.replica_count = peers.length;\n', 'control');
++  assert.equal(hostile.length, 2,
++    'both an object-literal write and a member assignment must be found');
++  for (const entry of hostile) {
++    assert.equal(entry.derivesFromACount, true,
++      `${entry.valueText} must be reported as derived from a count`);
++  }
++});
+diff --git a/test/bootstrap/run-anchored-scenario-helper.js b/test/bootstrap/run-anchored-scenario-helper.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a5a747f25862eb50f7b3404d69e344dc5e0aaa25
+--- /dev/null
++++ b/test/bootstrap/run-anchored-scenario-helper.js
+@@ -0,0 +1,157 @@
++// Runs ONE anchored node:test scenario and fails closed unless that exact
++// scenario actually executed and passed.
++//
++// `node --test --test-name-pattern=<p>` exits 0 when the pattern matches
++// NOTHING, and its TAP summary is then indistinguishable from a real pass: a
++// bogus pattern reports `# tests 1 / # pass 1`, because the file-level subtest
++// is what ran. A receipt whose command is a bare pattern run therefore proves
++// only that the FILE loaded — a renamed, deleted, or accidentally filtered
++// scenario passes as loudly as a green one.
++//
++// The discriminator is the named TAP line. A real match emits
++// `ok <n> - <scenario>` at top level; a zero-match run emits `1..0` and only
++// the file path. This runner requires the named line, so a receipt built on it
++// cannot pass while its scenario is absent.
++
++import {spawnSync} from 'node:child_process';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++
++const NODE_EXECUTABLE = process.execPath;
++const TEST_FLAG = '--test';
++const NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern=';
++const CHILD_STDIO = ['ignore', 'pipe', 'pipe'];
++const UTF8_ENCODING = 'utf8';
++const EXIT_OK = 0;
++const EXIT_FAILED = 1;
++const ARGV_TEST_FILE_INDEX = 2;
++const ARGV_SCENARIO_INDEX = 3;
++const ARGV_ENTRY_INDEX = 1;
++const REGEXP_METACHARACTERS = /[.*+?^${}()|[\]\\]/gu;
++const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
++const USAGE =
++  'usage: node test/bootstrap/run-anchored-scenario-helper.js ' +
++  '<testFile> <scenarioName>';
++const NEWLINE = '\n';
++const RESULT_SEPARATOR = ' - ';
++const PASS_LINE_PREFIX = 'ok ';
++const FAIL_LINE_PREFIX = 'not ok ';
++const PATTERN_ANCHOR_START = '^';
++const PATTERN_ANCHOR_END = '$';
++const ENV_TEST_CONTEXT = 'NODE_TEST_CONTEXT';
++const ENV_NODE_OPTIONS = 'NODE_OPTIONS';
++const REASON_PREFIX = 'run-anchored-scenario: ';
++const SCENARIO_FAILED_REASON = 'scenario FAILED: ';
++const SCENARIO_ABSENT_REASON = 'scenario DID NOT RUN: ';
++const SCENARIO_ABSENT_DETAIL =
++  'no top-level `ok <n> - <scenario>` line. A zero-match ' +
++  '--test-name-pattern run exits 0 and reports `# pass 1`, so an ' +
++  'absent scenario must be caught here';
++const IN_FILE_JOINER = ' in ';
++const DETAIL_SEPARATOR = ' — ';
++const EXIT_REASON_PREFIX = 'test process exited ';
++
++function escapeForRegExp(value) {
++  return value.replace(REGEXP_METACHARACTERS, REGEXP_ESCAPE_REPLACEMENT);
++}
++
++// Top level only: an indented `ok 1 - name` belongs to a nested subtest and
++// must not satisfy the anchor.
++function hasTopLevelResultLine(output, prefix, scenarioName) {
++  const suffix = `${RESULT_SEPARATOR}${scenarioName}`;
++  return output.split(NEWLINE).some((line) => {
++    if (!line.startsWith(prefix)) return false;
++    return line.trimEnd().endsWith(suffix);
++  });
++}
++
++// One explicit state model for the run, rather than several independent ifs
++// each returning its own outcome object.
++const RUN_OUTCOME = Object.freeze({
++  RAN_AND_PASSED: 'ran_and_passed',
++  SCENARIO_FAILED: 'scenario_failed',
++  SCENARIO_ABSENT: 'scenario_absent',
++  PROCESS_ERROR: 'process_error',
++});
++
++function classifyRun(output, scenarioName, status) {
++  if (hasTopLevelResultLine(output, FAIL_LINE_PREFIX, scenarioName)) {
++    return RUN_OUTCOME.SCENARIO_FAILED;
++  }
++  if (!hasTopLevelResultLine(output, PASS_LINE_PREFIX, scenarioName)) {
++    return RUN_OUTCOME.SCENARIO_ABSENT;
++  }
++  return status === EXIT_OK ?
++    RUN_OUTCOME.RAN_AND_PASSED :
++    RUN_OUTCOME.PROCESS_ERROR;
++}
++
++function describeOutcome(outcome, {scenarioName, testFile, status}) {
++  const reasons = {
++    [RUN_OUTCOME.SCENARIO_FAILED]:
++      () => SCENARIO_FAILED_REASON + scenarioName,
++    [RUN_OUTCOME.SCENARIO_ABSENT]:
++      () => SCENARIO_ABSENT_REASON + scenarioName + IN_FILE_JOINER +
++        testFile + DETAIL_SEPARATOR + SCENARIO_ABSENT_DETAIL,
++    [RUN_OUTCOME.PROCESS_ERROR]:
++      () => EXIT_REASON_PREFIX + String(status),
++  };
++  return reasons[outcome]?.();
++}
++
++function runAnchoredScenario(testFile, scenarioName) {
++  const pattern =
++    NAME_PATTERN_FLAG_PREFIX + PATTERN_ANCHOR_START +
++    escapeForRegExp(scenarioName) + PATTERN_ANCHOR_END;
++  // NODE_TEST_CONTEXT switches the runner's reporter away from TAP, and an
++  // inherited --test-name-pattern in NODE_OPTIONS would filter the child a
++  // second time. Either one makes the named result line disappear and would
++  // report a present scenario as absent, so the child gets a clean env.
++  const childEnv = {...process.env};
++  delete childEnv[ENV_TEST_CONTEXT];
++  delete childEnv[ENV_NODE_OPTIONS];
++  const child = spawnSync(
++    NODE_EXECUTABLE,
++    [TEST_FLAG, pattern, testFile],
++    {stdio: CHILD_STDIO, encoding: UTF8_ENCODING, env: childEnv},
++  );
++  const output = [child.stdout, child.stderr].filter(Boolean).join(NEWLINE);
++  const outcome = classifyRun(output, scenarioName, child.status);
++  return {
++    outcome,
++    output,
++    reason: describeOutcome(outcome, {
++      scenarioName, testFile, status: child.status,
++    }),
++  };
++}
++
++// Runs as a CLI for the receipts, and is imported by the witness so the
++// classifier can be asserted directly rather than only through a subprocess.
++function main() {
++  const testFile = process.argv[ARGV_TEST_FILE_INDEX];
++  const scenarioName = process.argv[ARGV_SCENARIO_INDEX];
++  if (!testFile || !scenarioName) {
++    process.stderr.write(`${USAGE}${NEWLINE}`);
++    process.exit(EXIT_FAILED);
++  }
++  const result = runAnchoredScenario(testFile, scenarioName);
++  if (result.outcome !== RUN_OUTCOME.RAN_AND_PASSED) {
++    process.stdout.write(result.output);
++    process.stderr.write(
++      `${REASON_PREFIX}${result.reason}${NEWLINE}`);
++    process.exit(EXIT_FAILED);
++  }
++  process.stdout.write(result.output);
++  process.exit(EXIT_OK);
++}
++
++if (process.argv[ARGV_ENTRY_INDEX] &&
++  path.resolve(process.argv[ARGV_ENTRY_INDEX]) ===
++    fileURLToPath(import.meta.url)) {
++  main();
++}
++
++// Only what the witness actually asserts on: an exported-but-unused symbol
++// is dead surface and the unused-export ratchet counts it.
++export {RUN_OUTCOME, classifyRun};
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 2cd5e60d4abf21cd068be75fe5330419e85ba6b0..9bceced4ff39a48a1354148e6ad59aa59b759f92 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -4,12 +4,12 @@
+   "counts": {
+     "unit": 1859,
+     "integration": 73,
+-    "bootstrap": 175,
++    "bootstrap": 176,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-823e8338",
++  "censusSize": 2115,
++  "digest": "fnv1a32-fb9e84b5",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -220,6 +220,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap",
+     "test/bootstrap/rejoin-hints.test.js": "bootstrap",
+     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap",
++    "test/bootstrap/replication-target-authority.test.js": "bootstrap",
+     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e0be725ea790bab3a84e497e446d5b839456b5d6..80c46b63d2f070fe563c4d1575ca89527bcbae69 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2097,
++    "ordinary": 2098,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-b74ea154",
++  "censusSize": 2115,
++  "digest": "fnv1a32-7e41a07f",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -219,6 +219,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "ordinary",
+     "test/bootstrap/rejoin-hints.test.js": "ordinary",
+     "test/bootstrap/replica-evidence-conflict.test.js": "ordinary",
++    "test/bootstrap/replication-target-authority.test.js": "ordinary",
+     "test/bootstrap/required-dependency-validation.property.test.js": "ordinary",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "ordinary",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 093a6a95237c29dd8c05fb9a91c2eb69b65949b7..33a859e41d4daedc0fc7b9554b6f54ce068d3b6c 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 244,
++    "bootstrap-membership": 245,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-d09151b0",
++  "censusSize": 2115,
++  "digest": "fnv1a32-bab5324e",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -237,6 +237,7 @@
+     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
+     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
+     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
++    "test/bootstrap/replication-target-authority.test.js": "bootstrap-membership",
+     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap-membership",
+     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap-membership",
+     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap-membership",

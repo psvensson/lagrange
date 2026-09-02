@@ -1,0 +1,116 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "replication-target-authority-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-31T15:16:48.019Z",
+  "receipts": [
+    {
+      "id": "target-comes-from-declared-schema-not-identity-count",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^target-comes-from-declared-schema-not-identity-count\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "the CREATION default is READ from PARTITIONS_SCHEMA rather than restated as a literal, and a row present but carrying no usable replica_count is an incomplete policy row that fails CLOSED. The schema default seeds a NEW row; it is not a reading of a row that failed to declare one, so a garbage value and an omitted column are both simply undeclared"
+    },
+    {
+      "id": "partition-row-policy-overrides-the-default",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^partition-row-policy-overrides-the-default\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "a partition declaring its own replica_count wins over the schema default, with the source typed, so policy is per-partition where the schema says it is"
+    },
+    {
+      "id": "absent-partition-row-is-undeclared-not-defaulted",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^absent-partition-row-is-undeclared-not-defaulted\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "a partition with NO policy row resolves undeclared with factor 0 across five shapes including an empty ARRAY, which satisfies typeof object and would otherwise fall through to the default. Borrowing the default would invent a requirement the partition was never given and would erase the fail-closed unreadable-requirement case landed in S1. Mutation-verified: removing the guard reds this scenario"
+    },
+    {
+      "id": "identity-churn-cannot-move-the-target",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^identity-churn-cannot-move-the-target\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "THE MEASURED DEFECT. getInitialReplicaIds handed out the declaration BY REFERENCE and replica wiring pushed into it, so inside a running cluster a minted replace-replica-<hex> made replica_operations report a desired RF of 4 where a fresh process reports 3 — the denominator of the distinct-node invariant drifted with identity churn. The getter now returns a copy, a caller mutating its copy leaves the declaration and every later reader unchanged, and the target is unmoved because it never counted identities at all. Mutation-verified: restoring the reference leak reds this scenario"
+    },
+    {
+      "id": "every-critical-table-declares-the-same-target",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^every-critical-table-declares-the-same-target\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "all declared system tables resolve a target of 3, matching what a fresh process reports, so no table silently carries a different requirement that would make the invariant unsatisfiable for it alone"
+    },
+    {
+      "id": "authority-mints-no-runtime-state",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^authority-mints-no-runtime-state\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "the target is frozen and carries exactly replicationFactor and source — no holders, replicaIds, converged or ready — so policy and runtime state stay separate surfaces"
+    },
+    {
+      "id": "required-count-derives-from-declared-policy",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^required-count-derives-from-declared-policy\" test/bootstrap/critical-placement-convergence.test.js",
+      "detail": "SUPERSEDES the landed S1 receipt required-count-derives-from-initial-replica-ids, which became a FALSE CLAIM the moment the source changed. The invariant now takes its denominator from declared policy: appending a replacement identity does not raise the factor, and a partition declaring five is NOT satisfied by three distinct nodes. Mutation-verified: hardcoding the factor, or ignoring the partition row, each red this scenario"
+    },
+    {
+      "id": "hostile-policy-rows-cannot-forge-a-target",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^hostile-policy-rows-cannot-forge-a-target\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "an inherited Object.prototype.replica_count and an accessor-backed column each measured a target of 99 while the bar stayed green; -2, 0, 3.5, null, \"3\", NaN, Infinity and true were all accepted as policy. Now every one resolves undeclared, and the accessor is asserted NEVER to execute while the row is validated. Mutation-verified: weakening the own-property descriptor read, or dropping the safe-integer test, each red this scenario"
+    },
+    {
+      "id": "creation-default-tracks-schema-declaration",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^creation-default-tracks-schema-declaration\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "the claim is SEMANTIC, not syntactic: if the schema-declared replica_count default changes, the creation default follows it. The probe drifts the declaration to 4 and re-evaluates, so an implementation restating a literal cannot track it and reds. How the value is obtained — lookup, helper, or a later mechanism — is not the claim, and no source-text proof is asserted"
+    },
+    {
+      "id": "production-handoff-cannot-mutate-the-declaration",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^production-handoff-cannot-mutate-the-declaration\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "THE REAL ALIAS CHAIN. The seed phase reads INITIAL_REPLICA_IDS[table] and hands it to PartitionService as options.replicaIds; the service stored it BY REFERENCE and raft peer reconciliation pushes onto service.replicaIds, so the mutable peer list WAS the shared declaration and one minted replace-replica-<hex> raised the apparent factor for every later reader. Copying inside getInitialReplicaIds did nothing here, because this path never calls it — the first fix protected a path with no production caller. This drives the REAL PartitionService constructor with the exact production hand-off and asserts the declaration is unchanged after a replacement identity is appended. Mutation-verified: restoring the by-reference assignment reds this scenario, which nothing else caught"
+    },
+    {
+      "id": "message-group-handoff-cannot-mutate-the-declaration",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^message-group-handoff-cannot-mutate-the-declaration\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "the SIBLING of the partition leak, left open one line short: the seed phase hands INITIAL_MESSAGE_GROUP_REPLICA_IDS to the service by reference and raft lifecycle pushes onto service.replicaIds, so one minted identity grew the declaration for every later reader. Drives the REAL MessageGroupService constructor. Mutation-verified: restoring the by-reference assignment reds this scenario"
+    },
+    {
+      "id": "readiness-target-reads-declared-policy",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^readiness-target-reads-declared-policy\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "the readiness consumer decides the control-plane replica target through the canonical decoder: a declared five is the target, a non-integral 5.7 is NOT silently floored into policy, and an inherited Object.prototype.replica_count is not this row's policy. The previous reader did all three wrong. Mutation-verified: reverting it reds this"
+    },
+    {
+      "id": "missing-policy-hydration-cannot-release-the-formation-barrier",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^missing-policy-hydration-cannot-release-the-formation-barrier\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "THREE PROVENANCE CLASSES kept distinct. persisted desired RF is a valid replica_count from the authoritative row; BOOTSTRAP EXPECTED RF is that table's schema creation default, usable ONLY to keep initial formation safely blocked while the freshly seeded row becomes observable; authoritative UNKNOWN is missing or invalid policy where evidence is required. The barrier exists to remain BLOCKED, so it may use bootstrap expected RF — and MUST, because a zero target disarms it: a false cohort never latches barrierEngaged and BYPASSED_INSUFFICIENT_COHORT is a RELEASE state, releasing in 50ms in the very window it polices. This exception does NOT extend to authoritative consumers, which report UNKNOWN instead, and a bootstrap default can never turn UNKNOWN into a KNOWN state. Mutation-verified: a literal target, and a zero target, each red this scenario"
+    },
+    {
+      "id": "rejected-policy-cannot-be-locally-reinterpreted",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^rejected-policy-cannot-be-locally-reinterpreted\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "THE DEFECT THAT ACTUALLY HAPPENED, now a permanent negative control. A consumer wrote resolveDesiredReplicationFactor(...).replicationFactor || Number(raw); the decoder returns 0 for every row it REJECTS, so the || arm re-read exactly those inputs with pre-decoder semantics — an inherited value gave 99, an accessor gave 42 AND WAS EXECUTED, \"9\" gave 9 — while gating voter promotion. This pins that a rejected policy stays rejected at the readiness and promotion decisions, and that no consumer executes an accessor while validating a row. It replaces a camel-alias receipt that was a non-discriminating duplicate of the readiness path"
+    },
+    {
+      "id": "quorum-concentration-target-reads-declared-policy",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^quorum-concentration-target-reads-declared-policy\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "reverting this decoder was invisible until the fixture used DISCRIMINATING inputs: the previous plain Number(row?.replica_count) read inherits through the prototype chain and ignores the camel alias, and both change the concentration verdict. Mutation-verified: reverting it reds this scenario"
+    },
+    {
+      "id": "routed-consumers-reject-unusable-policy-at-the-decision",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^routed-consumers-reject-unusable-policy-at-the-decision\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "importing the decoder is not coverage. Replica recovery, managed split, managed merge, existing-table reconciliation, routing metadata and durable rejoin each previously coerced strings, floored non-integrals, or read snake-only; this drives the DECISION and requires an unusable policy to be declined rather than reinterpreted, including the camel-only row a snake-only reader restored unconditionally"
+    },
+    {
+      "id": "message-group-policy-comes-from-its-own-schema",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^message-group-policy-comes-from-its-own-schema\" test/bootstrap/replication-target-consumers.test.js",
+      "detail": "one cross-table authority leak must not be replaced by a shared default: a MESSAGE_GROUPS row was being seeded from the PARTITIONS schema default, leaving the message-group declaration read by nothing while its rows followed another table's policy — and replica recovery decodes those rows for repair. Each table now tracks its OWN declaration, and subsequent desired-RF decisions read the persisted message-group policy"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/bootstrap/replication-target-authority.test.js",
+      "detail": "repeated resolution of the full policy matrix produces one identical projection, so no receipt passes by evaluation order"
+    }
+  ]
+}
