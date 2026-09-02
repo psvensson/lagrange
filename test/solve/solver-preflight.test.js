@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+
+import {git, gitRaw, initializeGitFixtureRoot, writeFile}
+  from './git-fixture-helpers.js';
 
 import {preflightReport, renderPreflightReport}
   from '../../scripts/solve/preflight.js';
@@ -38,7 +40,6 @@ const VERIFICATION_SCHEMA_VERSION = 2;
 const AGGREGATE_SCOPE = 'aggregate';
 const VERIFIER_APPROVAL = 'verifier-approval';
 const VERIFIER_EVIDENCE = 'subagent:preflight-verifier';
-const TEXT_ENCODING = 'utf8';
 const GIT_DIFF_ARGUMENTS = Object.freeze([
   'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--',
 ]);
@@ -73,31 +74,8 @@ const SEAL_GENERATOR_SOURCE = [
   '',
 ].join('\n');
 
-function gitRaw(root, args) {
-  return execFileSync('git', args, {
-    cwd: root,
-    encoding: TEXT_ENCODING,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
-
-function git(root, args) {
-  return gitRaw(root, args).trim();
-}
-
-function writeFile(root, relative, content) {
-  const file = path.join(root, relative);
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  fs.writeFileSync(file, content);
-}
-
 function fixture(t, contractVersion = VERIFICATION_SCHEMA_VERSION) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
-  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  git(root, ['init']);
-  git(root, ['config', 'user.email', 'solver@example.com']);
-  git(root, ['config', 'user.name', 'Solver']);
-  git(root, ['config', 'commit.gpgsign', 'false']);
+  const root = initializeGitFixtureRoot(t, TMP_PREFIX);
   writeFile(root, SOURCE_A, SOURCE_A_BASE);
   writeFile(root, SOURCE_B, SOURCE_B_BASE);
   writeFile(root, SEAL_GENERATOR, SEAL_GENERATOR_SOURCE);

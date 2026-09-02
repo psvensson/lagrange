@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+
+import {git, gitRaw, initializeGitFixtureRoot, writeFile}
+  from './git-fixture-helpers.js';
 
 import {runReattemptCommand} from '../../scripts/solve/reattempt.js';
 import {runStep} from '../../scripts/solve/step.js';
@@ -29,37 +30,13 @@ const ORACLE_GREEN = {metric: 0, target: 0};
 const ORACLE_OPEN = {metric: 2, target: 0};
 const MODEL_NOT_APPLICABLE = 'workflow-machinery change, no runtime model';
 const MODEL_NOT_APPLICABLE_OVERRIDE = 'different reason on the replacement';
-const TEXT_ENCODING = 'utf8';
 const GIT_DIFF_ARGUMENTS = Object.freeze([
   'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--',
 ]);
 const EVENT_ATTEMPT = 'attempt';
 
-function gitRaw(root, args) {
-  return execFileSync('git', args, {
-    cwd: root,
-    encoding: TEXT_ENCODING,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
-
-function git(root, args) {
-  return gitRaw(root, args).trim();
-}
-
-function writeFile(root, relative, content) {
-  const file = path.join(root, relative);
-  fs.mkdirSync(path.dirname(file), {recursive: true});
-  fs.writeFileSync(file, content);
-}
-
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
-  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  git(root, ['init']);
-  git(root, ['config', 'user.email', 'solver@example.com']);
-  git(root, ['config', 'user.name', 'Solver']);
-  git(root, ['config', 'commit.gpgsign', 'false']);
+  const root = initializeGitFixtureRoot(t, TMP_PREFIX);
   writeFile(root, SOURCE_A, SOURCE_A_BASE);
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'base']);

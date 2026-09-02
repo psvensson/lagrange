@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2528403,
-        "sha256": "20b9a2a8267dedfbe9c7cc61409b06b50be30d5a9d89f1bc683ce4b2922cd24c"
+        "bytes": 2528757,
+        "sha256": "e0f9afe8daad71bcaf9d9043751fd81d5dee154253b9704e1f930ced4fb29eaf"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "e5b879e1df8e4a7c20011865c5f1e13b8f75d5aeaf453629a5a4a8cec69aecda"
+        "sha256": "fe4234827f1f23aaeec219df8febc934212e40faf27f011675b6574ffbea4c65"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "d3dfcaada6d0be40ae8a43deb154dcda38218b85077c20eac382151a30f23205"
+    "inputDigest": "f62cf444dacd2bd4bfc9c89b2e8b7aca1491cbc36fdccfb00d4c45feff7a0a2e"
   },
   "reconciliation": {
     "complexity": {
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "e5b879e1df8e4a7c20011865c5f1e13b8f75d5aeaf453629a5a4a8cec69aecda"
+          "sha256": "fe4234827f1f23aaeec219df8febc934212e40faf27f011675b6574ffbea4c65"
         },
-        "cloneGroups": 811,
-        "duplicatedLines": 31092,
-        "sourceCloneTouches": 1622,
-        "sourceDuplicatedLineTouches": 62184,
-        "nonzeroSourceCount": 510,
+        "cloneGroups": 809,
+        "duplicatedLines": 31052,
+        "sourceCloneTouches": 1618,
+        "sourceDuplicatedLineTouches": 62104,
+        "nonzeroSourceCount": 507,
         "touchMultiplicity": 2
       }
     ],
@@ -166,35 +166,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2528403,
-        "sha256": "20b9a2a8267dedfbe9c7cc61409b06b50be30d5a9d89f1bc683ce4b2922cd24c"
+        "bytes": 2528757,
+        "sha256": "e0f9afe8daad71bcaf9d9043751fd81d5dee154253b9704e1f930ced4fb29eaf"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "6e1ad448072045922f60871422ae472d077308698fd431fab2d9d5ac29414e37",
-      "moduleCount": 5096,
-      "edgeCount": 22796,
+      "sourceDigest": "f74fd2de87eec541b1fb640578b2315a209dea3ba1aac6eb2cbbfc96c7a88528",
+      "moduleCount": 5097,
+      "edgeCount": 22800,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2675,
-    "assignedSignalCount": 2675,
-    "uniqueAssignmentCount": 2675,
-    "digest": "47949291037c469990d22af422722b381f5e153062dd531e79afa150b07fe9be"
+    "sourceSignalCount": 2672,
+    "assignedSignalCount": 2672,
+    "uniqueAssignmentCount": 2672,
+    "digest": "be3c291f28c529b6e392837474aa64cf9170c501e1dc334962b88ce40141703c"
   },
   "signalCounts": {
     "cognitive": 180,
     "complexity": 1824,
-    "duplication": 583,
+    "duplication": 580,
     "fileSize": 49,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1372,
+    "filesWithDebt": 1369,
     "rankedBoundaryCount": 123,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 102,
@@ -1735,34 +1735,6 @@
       ]
     },
     {
-      "key": "area:test/solve",
-      "owner": null,
-      "boundary": "test/solve",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/solve"
-      ],
-      "fileCount": 5,
-      "signalCount": 5,
-      "complexity": 0,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 351,
-      "cloneTouches": 13,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 46,
-      "score": 35.1,
-      "topPaths": [
-        "test/solve/evidence.test.js",
-        "test/solve/solver-reattempt.test.js",
-        "test/solve/attempt.test.js",
-        "test/solve/solver-land-generated-output-coverage.test.js",
-        "test/solve/solver-preflight.test.js"
-      ]
-    },
-    {
       "key": "area:test/cli",
       "owner": null,
       "boundary": "test/cli",
@@ -1921,6 +1893,31 @@
         "src/live-query/live-query-startup-wiring.js",
         "src/live-query/live-query-group.js",
         "src/live-query/live-query-service.js"
+      ]
+    },
+    {
+      "key": "area:test/solve",
+      "owner": null,
+      "boundary": "test/solve",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/solve"
+      ],
+      "fileCount": 2,
+      "signalCount": 2,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 271,
+      "cloneTouches": 9,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 16,
+      "score": 27.1,
+      "topPaths": [
+        "test/solve/evidence.test.js",
+        "test/solve/attempt.test.js"
       ]
     },
     {
