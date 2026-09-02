@@ -13,6 +13,8 @@ import {
 } from './checks/change-selection-constants.js';
 
 const ZERO_SHA = '0'.repeat(40);
+const PIPE_STDIO = 'pipe';
+const INHERIT_STDIO = 'inherit';
 
 // --- Stage feedback + loud failure (operator request 2026-09-02) --------
 // The publisher announces each stage with elapsed time on stderr, and a
@@ -131,6 +133,13 @@ function checked(run, command, args, options = {}) {
     env: options.env || process.env,
     input: options.input,
     encoding: 'utf8',
+    // Stream long-running child output (the gate's own [pre-push] stage
+    // lines) straight to the operator instead of buffering it into the
+    // captured result - a 30-minute silent gate is not a user experience
+    // (operator report 2026-09-02). stdin stays a pipe for `input`.
+    ...(options.streamOutput === true ?
+      {stdio: [PIPE_STDIO, INHERIT_STDIO, INHERIT_STDIO]} :
+      {}),
   });
   if (result.error) throw result.error;
   if (result.status !== 0 && options.allowFailure !== true) {
@@ -282,13 +291,16 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
     cwd: worktree,
     env: gateEnv,
     input: refLine,
+    streamOutput: true,
   });
   assertWorkspaceDependencyLinks(dependencyLinks);
   for (const dependencyLink of dependencyLinks) fs.unlinkSync(dependencyLink.link);
   const gateStatus = git(run, worktree, [
     STATUS_COMMAND, PORCELAIN_ARGUMENT,
   ]);
-  if (gateStatus) throw new Error(DIRTY_GATE_ERROR);
+  if (gateStatus) {
+    throw new Error(`${DIRTY_GATE_ERROR}${NEWLINE}${gateStatus}`);
+  }
   linkWorkspaceDependencies(root, worktree);
   return gateEnv;
 }

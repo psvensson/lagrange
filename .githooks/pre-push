@@ -180,6 +180,19 @@ else
   # corpus on an already-hot machine (session thermal policy: hold at
   # CPU >=75C / NVMe Sensor 2 >=78C). Waits up to 10 minutes, then
   # aborts; fail-open where lm-sensors is absent (CI runners).
+  # Short stages are done; before paying for the long corpus, prove none of
+  # them mutated tracked content - inside the publisher's exact-HEAD worktree
+  # a mutation is a hard failure NOW, not after 30 more minutes (operator
+  # ordering principle 2026-09-02: short checks up front, long runs last).
+  if [ -n "${LAGRANGE_WORKSPACE_INJECTIONS:-}" ]; then
+    stage "worktree cleanliness after the short stages"
+    GATE_DIRTY="$(git status --porcelain)"
+    if [ -n "${GATE_DIRTY}" ]; then
+      echo "pre-push: a short stage mutated tracked content:" >&2
+      echo "${GATE_DIRTY}" >&2
+      exit 1
+    fi
+  fi
   stage "thermal headroom gate"
   node scripts/checks/wait-for-thermal-headroom.js
   echo "pre-push: static checks green — running the post-push test corpus (long)"

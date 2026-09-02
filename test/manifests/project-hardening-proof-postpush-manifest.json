@@ -23,7 +23,9 @@
         "test/compatibility/pgwire-client-compat.test.js"
       ],
       "timeoutMs": 600000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/focused-contracts.json"
@@ -32,9 +34,14 @@
     {
       "id": "static-analysis-postpush",
       "executable": "npm",
-      "argv": ["run", "test:static:postpush"],
+      "argv": [
+        "run",
+        "test:static:postpush"
+      ],
       "timeoutMs": 1800000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/static-analysis-postpush.json"
@@ -43,9 +50,14 @@
     {
       "id": "model-contracts",
       "executable": "npm",
-      "argv": ["run", "model:contracts"],
+      "argv": [
+        "run",
+        "model:contracts"
+      ],
       "timeoutMs": 1800000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/model-contracts.json"
@@ -57,11 +69,14 @@
       "argv": [
         "scripts/generate-global-owner-debt-inventory.js",
         "--refresh",
+        "--refresh-import-graph-only",
         "--output",
         "test-output/analysis/owner-debt-live-inventory.json"
       ],
       "timeoutMs": 1800000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/owner-debt-report-inputs.json"
@@ -70,9 +85,13 @@
     {
       "id": "golden-capability-guard-scenarios",
       "executable": "node",
-      "argv": ["scripts/checks/run-golden-capability-guard-scenarios.js"],
+      "argv": [
+        "scripts/checks/run-golden-capability-guard-scenarios.js"
+      ],
       "timeoutMs": 600000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/golden-capability-guard-scenarios.json"
@@ -81,9 +100,14 @@
     {
       "id": "fast-tests",
       "executable": "npm",
-      "argv": ["run", "test:fast"],
+      "argv": [
+        "run",
+        "test:fast"
+      ],
       "timeoutMs": 3600000,
-      "acceptableExitCodes": [0],
+      "acceptableExitCodes": [
+        0
+      ],
       "requiredArtifact": {
         "mode": "captured-output",
         "path": "test-output/acceptance/project-hardening-postpush/fast-tests.json"
