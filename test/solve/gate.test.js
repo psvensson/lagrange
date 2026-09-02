@@ -10,6 +10,7 @@ import {
   theoryGateContinuation,
   softFirstWouldDefer,
   decisionContinues,
+  createRunAuthorizations,
 } from '../../scripts/solve/gate.js';
 import {
   CONTINUATION_ALLOWED,
@@ -388,7 +389,8 @@ tap.test('recorded-reason override escape hatch', async (t) => {
     t.end();
   });
 
-  t.test('an override is single-use: a consumed override no longer bypasses', (t) => {
+  t.test('an override is consumed per run: a spent override no longer bypasses ' +
+    'a LATER run', (t) => {
     const root = tmp();
     const log = [
       overrideEvent(CONTINUATION_BLOCKED_THEORY, 'one shot'),
@@ -402,6 +404,77 @@ tap.test('recorded-reason override escape hatch', async (t) => {
     );
     t.equal(decision.disposition, DISPOSITION_EXPLORE,
       're-fires the real guard once the override is spent');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('one override authorizes one full run: a shared runAuthorizations map ' +
+    'lets later gate sites reuse the bypass without a second charge', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'whole run')];
+    const runAuthorizations = createRunAuthorizations();
+    const problems = ['frontier theory required'];
+    const first = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, problems),
+      {log, frontier: FRONTIER, rungIndex: 1, runAuthorizations},
+    );
+    t.equal(first.disposition, DISPOSITION_ADVISORY, 'first site bypasses');
+    t.notOk(first.reusedRunAuthorization, 'first site is the consuming record');
+    // Later site in the SAME run: the log now contains the consuming advisory,
+    // so without the run map this would re-block.
+    const laterLog = readLog(root, QUEST.id);
+    const second = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, problems),
+      {log: [...log, ...laterLog], frontier: FRONTIER, rungIndex: 1, runAuthorizations},
+    );
+    t.equal(second.disposition, DISPOSITION_ADVISORY, 'second site reuses the run authorization');
+    t.equal(second.reusedRunAuthorization, true, 'reuse is marked');
+    t.equal(second.override, 'whole run', 'carries the recorded reason');
+    const recorded = readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.override);
+    t.equal(recorded.length, 1, 'exactly ONE consuming gate-decision is recorded for the run');
+    // A NEW run (fresh map) sees the consumed override and blocks.
+    const nextRun = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, problems),
+      {log: [...log, ...readLog(root, QUEST.id)], frontier: FRONTIER,
+        rungIndex: 1, runAuthorizations: createRunAuthorizations()},
+    );
+    t.equal(nextRun.disposition, DISPOSITION_EXPLORE,
+      'the next run re-fires the real guard (no silent double-charge, no free ride)');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a run authorization does not cover a residual problem introduced ' +
+    'later in the same run', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'narrow run')];
+    const runAuthorizations = createRunAuthorizations();
+    const first = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1, runAuthorizations},
+    );
+    t.equal(first.disposition, DISPOSITION_ADVISORY, 'first site bypasses');
+    const second = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, [
+        'frontier theory required',
+        'system theory required after repeated same-frontier stalls',
+      ]),
+      {log: [...log, ...readLog(root, QUEST.id)], frontier: FRONTIER,
+        rungIndex: 1, runAuthorizations},
+    );
+    t.not(second.disposition, DISPOSITION_ADVISORY,
+      'the residual problem keeps the later site gated');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

@@ -19,6 +19,10 @@ import {
   getSchemaByTableName,
 } from '../system-table-schemas-constants.js';
 import {getPartitionDbPath} from '../../storage/data-directory-manager.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../replication-target-authority.js';
 
 
 const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
@@ -28,14 +32,6 @@ const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
 
 function normalizeJoinMetadataString(value) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function normalizeJoinMetadataInteger(value) {
-  const normalizedValue = Number(value);
-  if (!Number.isInteger(normalizedValue)) {
-    return null;
-  }
-  return normalizedValue;
 }
 
 function readJoinCacheRows(systemTableCache, tableName) {
@@ -137,14 +133,13 @@ function shouldRestoreDurableRejoinPartition({
   partitionRow,
   partitionServiceRows,
 }) {
-  const configuredReplicaCount = normalizeJoinMetadataInteger(
-    partitionRow?.replica_count,
-  );
-  if (!Number.isInteger(configuredReplicaCount) ||
-      configuredReplicaCount <= 0) {
+  // Row decode is owned by the single policy authority; an undeclared policy
+  // keeps this planner's explicit conservative branch (restore).
+  const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+  if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
     return true;
   }
-  if (partitionServiceRows.length <= configuredReplicaCount) {
+  if (partitionServiceRows.length <= desiredTarget.replicationFactor) {
     return true;
   }
   return hasActiveReplicaOperationOwner(systemTableCache, partitionId);

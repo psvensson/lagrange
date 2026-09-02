@@ -13,6 +13,7 @@ import {landingReviewPreflight} from './landing-preflight.js';
 import {prepareCandidateProofInputs} from './landing-preflight.js';
 import {landingRequirementsReceipt} from './landing-requirements.js';
 import {generatedDependencyReceiptInSnapshot} from './generated-dependencies.js';
+import {questContractExcludesCollateral} from './verification.js';
 import {withCandidateSnapshot} from './candidate-snapshot.js';
 import {sealedVerificationTemplates} from './rejection-findings.js';
 import {
@@ -94,7 +95,7 @@ function sourceEpoch(root, aggregate) {
   return {headCommit, candidateBaseCommit: aggregate.baseCommit};
 }
 
-function requiredReviewTemplates(root, quest, state, log) {
+export function requiredReviewTemplates(root, quest, state, log) {
   const catalog = loadTemplateCategories(root);
   const byCategory = new Map();
   const sealed = sealedVerificationTemplates(quest, log);
@@ -179,7 +180,14 @@ function currentReviewManifest(root, quest, state, suppliedLog) {
       generatedDependencies: generatedDependencyReceiptInSnapshot(candidateRoot, {
         ...state.aggregate,
         sourcePaths: state.aggregate.paths,
-      }),
+      }, {collateral: questContractExcludesCollateral(quest)}),
+      // Collateral contract: the reviewed byte set is the candidate paths;
+      // registered generated outputs are landing collateral the landing
+      // regenerates, named here so the verifier knows they are out of the
+      // reviewed set by contract rather than by omission.
+      ...(questContractExcludesCollateral(quest) ? {
+        collateralContract: true,
+      } : {}),
       requiredReviewTemplates: requiredReviewTemplates(
         root, quest, state, suppliedLog || readLog(root, quest.id)),
     };

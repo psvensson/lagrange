@@ -8,13 +8,16 @@ import {
   validateLearnerPromotionProofResponse,
 } from '../raft/learner-promotion-progress.js';
 import {filterSharedRows} from '../cache/shared-row-read.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 
 const {
   ACTIVE_VOTER_ROLES,
   ADD_LIKE_REPLICA_OPERATION_TYPES,
   COLUMN,
   LIFECYCLE_REASON,
-  PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
@@ -687,24 +690,17 @@ class PartitionServiceLearnerPromotionMethods {
       this.systemTableCache &&
       typeof this.systemTableCache.get === PARTITION_SERVICE_TYPE.FUNCTION ?
         this.systemTableCache.get(TABLES.PARTITIONS, this.partitionId) :
-        {};
-    const publishedReplicaCount = Number(
-      partitionRow?.[PARTITION_REPLICA_COUNT_FIELD],
-    );
-    if (
-      Number.isInteger(publishedReplicaCount) &&
-      publishedReplicaCount > 0
-    ) {
-      return publishedReplicaCount;
+        null;
+    // Desired RF is decoded by the single policy authority from the persisted
+    // partitions row. An undeclared policy returns 0 and DEFERS promotion
+    // (fail closed): the removed ladder fell back to this.replicaCount, an
+    // identity-derived count, and then to a restated default, so a promotion
+    // could be admitted against a target no declaration ever stated.
+    const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+      return 0;
     }
-    const configuredReplicaCount = Number(this.replicaCount);
-    if (
-      Number.isInteger(configuredReplicaCount) &&
-      configuredReplicaCount > 0
-    ) {
-      return configuredReplicaCount;
-    }
-    return PARTITION_SERVICE_DEFAULT.DEFAULT_REPLICA_COUNT;
+    return desiredTarget.replicationFactor;
   }
   countActiveVoters() {
     const services = this.getPartitionServiceRowsForPromotion();

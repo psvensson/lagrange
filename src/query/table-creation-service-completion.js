@@ -22,6 +22,8 @@ const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
   EMPTY: ',',
   UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE:
     'Unable to restore missing initial partition metadata for table ',
+  EXISTING_PARTITION_REPLICATION_POLICY_UNDECLARED:
+    'Existing partition row declares no replication policy for table ',
   TABLE_CONSTRAINT: 'table_constraint',
   COLUMN_CONSTRAINT: 'column_constraint',
 });

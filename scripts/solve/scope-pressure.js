@@ -9,11 +9,15 @@ import {
   requiresSourceVerification,
 } from './change-artifact.js';
 import {isRegenerableQuestReport} from './report-retention.js';
+import {isRegisteredGeneratedOutput} from './generated-dependencies.js';
 import {
   projectAttemptBaseCorrections,
 } from './attempt-base-correction-projection.js';
 import {
   attemptBaseCorrectionProofProblem,
+  attemptContractExcludesCollateral,
+  COLLATERAL_VERIFICATION_CONTRACT_VERSION,
+  VERIFICATION_CONTRACT_VERSION,
 } from './verification.js';
 
 const BROAD_OWNER_AREA_LIMIT = 2;
@@ -94,7 +98,10 @@ function attemptInspections(root, quest, log, options = {}) {
       const inspection = {
         ...rawInspection,
         changedPaths: rawInspection.changedPaths.filter((filePath) =>
-          !isVerificationBookkeeping(filePath, quest.id)),
+          !isVerificationBookkeeping(filePath, quest.id) &&
+          !(attemptContractExcludesCollateral(
+            event.verificationContractVersion) &&
+            isRegisteredGeneratedOutput(filePath))),
       };
       return {
         index,
@@ -106,7 +113,9 @@ function attemptInspections(root, quest, log, options = {}) {
           typeof event.changeRefIdentity?.sha256 === 'string' ?
             `sha256:${event.changeRefIdentity.sha256}` :
             null,
-        candidateContract: event.verificationContractVersion === 2,
+        candidateContract: [VERIFICATION_CONTRACT_VERSION,
+          COLLATERAL_VERIFICATION_CONTRACT_VERSION,
+        ].includes(event.verificationContractVersion),
       };
     });
   return projectAttemptBaseCorrections(attempts, log, {

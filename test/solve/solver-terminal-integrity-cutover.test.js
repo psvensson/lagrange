@@ -12,6 +12,7 @@ import {
   EVENT_QUEST_UPGRADED,
   EVENT_SOLVED,
   EVENT_VIOLATION,
+  INTEGRITY_SCOPE_THEORY_GATE,
   OUTCOME_BLOCKED,
   STATUS_EXHAUSTED,
   STATUS_SOLVED,
@@ -279,6 +280,32 @@ tap.test('legacy accepted-after-violation history is explicitly unverifiable', (
     audit.problems.some((item) =>
       /legacy_integrity_unverifiable/iu.test(item.message)),
     'W1-GUARD-LEGACY-HISTORY-UNVERIFIABLE',
+  );
+  t.end();
+});
+
+tap.test('a pre-v2 theory-gate refusal is not legacy integrity history', (t) => {
+  const {root, quest} = setup();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  appendEvent(root, quest.id, {
+    type: EVENT_VIOLATION,
+    scope: INTEGRITY_SCOPE_THEORY_GATE,
+    frontier: 'main',
+    violations: ['model evidence or modelNotApplicable is required at model rung'],
+  });
+  appendEvent(root, quest.id, {
+    type: EVENT_ATTEMPT,
+    frontier: 'main',
+    metricBefore: 1,
+    metricAfter: 0,
+    evidence: 'corrected-retry-evidence.json',
+    changeRef: null,
+  });
+  const audit = auditQuest(root, quest);
+  t.notOk(
+    audit.problems.some((item) =>
+      /legacy_integrity_unverifiable/iu.test(item.message)),
+    'W1-GUARD-THEORY-GATE-REFUSAL-NOT-LEGACY',
   );
   t.end();
 });

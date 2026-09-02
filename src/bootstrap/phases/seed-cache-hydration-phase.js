@@ -36,7 +36,7 @@ import {
 import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
-  INITIAL_REPLICA_IDS,
+  getInitialReplicaIds,
 } from '../system-table-schemas-constants.js';
 import {
   TABLES,
@@ -536,8 +536,7 @@ class SeedCacheHydrationPhase {
   async subscribeToInitialSystemTableCDC() {
     for (const tableName of CACHE_HYDRATION_TABLES) {
       const partitionId = INITIAL_PARTITION_IDS[tableName];
-      const replicaIds =
-        INITIAL_REPLICA_IDS[tableName] || [];
+      const replicaIds = getInitialReplicaIds(tableName) || [];
       if (!partitionId ||
           replicaIds.length === 0) {
         continue;
@@ -625,7 +624,8 @@ class SeedCacheHydrationPhase {
       return true;
     }
 
-    const replicaIds = INITIAL_REPLICA_IDS[tableName];
+    // No `|| []`: it would make the Array.isArray guard below dead.
+    const replicaIds = getInitialReplicaIds(tableName);
     if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
       return false;
     }

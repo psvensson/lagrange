@@ -10,6 +10,10 @@ import {TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
+import {
   TABLE_CREATION_SERVICE_LITERAL,
   resolveTableCreationCompletion,
   resolveTableCreationMutationContractOutcome,
@@ -91,9 +95,16 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
         visibilityState,
       );
     }
-    const replicaCount = Number(
-      existingPartition.replica_count ?? existingPartition.replicaCount,
-    );
+    // Desired RF for the existing partition comes from the single policy
+    // authority; an undeclared policy fails the reconciliation closed instead
+    // of silently provisioning with the creation default.
+    const desiredTarget = resolveDesiredReplicationFactor(existingPartition);
+    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+      throw new Error(
+        TABLE_CREATION_SERVICE_LITERAL.EXISTING_PARTITION_REPLICATION_POLICY_UNDECLARED +
+          String(tableName || tableId),
+      );
+    }
     await options.assertProvisioningOwnership?.();
     const provisioningSummary = await this.provisionInitialPartition({
       tableId,
@@ -101,10 +112,7 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       tableMetadata: existingTableRecord,
       partitionId,
       partitionMetadata: existingPartition,
-      replicaCount:
-        Number.isInteger(replicaCount) && replicaCount > 0 ?
-          replicaCount :
-          this.defaultReplicaCount,
+      replicaCount: desiredTarget.replicationFactor,
       timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
       schemaJobId: options.schemaJobId || null,

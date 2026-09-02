@@ -26,6 +26,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {changedPathsFromDiffContent} from './change-artifact.js';
+import {isRegisteredGeneratedOutput} from './generated-dependencies.js';
 
 const TEMPLATE_DIR_REL = 'docs/steering/verification-templates';
 const INDEX_BASENAME = 'INDEX.md';
@@ -43,6 +44,8 @@ const REMOVED_LINE_PREFIX = '-';
 const ADDED_FILE_HEADER = '+++';
 const REMOVED_FILE_HEADER = '---';
 const TEXT_ENCODING = 'utf8';
+const DIFF_SECTION_HEADER_PREFIX = 'diff --git ';
+const DIFF_SECTION_HEADER_PATTERN = /^diff --git a\/(.+?) b\/(.+)$/u;
 
 const CATEGORY_KEYWORD_RULES = Object.freeze({
   'admission-gating':
@@ -132,11 +135,34 @@ function changedContentLines(diffContent) {
     !line.startsWith(ADDED_FILE_HEADER) && !line.startsWith(REMOVED_FILE_HEADER));
 }
 
+// Registered generated outputs (test-classification shards, the import-graph
+// seal) are machine-written landing collateral: their regenerated content is a
+// census of the WHOLE repository, so its keyword hits describe the repo, not
+// this change. Measured 2026-09-01: a regenerated impact-graph seal added
+// transport-delivery to a review's required templates, and its test/ path
+// fired harness-fidelity — both mechanically, neither about the candidate.
+// Their per-file diff sections are dropped before path AND content matching.
+function withoutGeneratedOutputSections(diffContent) {
+  const lines = String(diffContent || '').split(LINE_SEPARATOR);
+  const kept = [];
+  let dropping = false;
+  for (const line of lines) {
+    if (line.startsWith(DIFF_SECTION_HEADER_PREFIX)) {
+      const match = DIFF_SECTION_HEADER_PATTERN.exec(line);
+      dropping = match !== null && isRegisteredGeneratedOutput(match[2]);
+    }
+    if (!dropping) kept.push(line);
+  }
+  return kept.join(LINE_SEPARATOR);
+}
+
 export function suggestVerificationTemplates(root, diffContent) {
   const byCategory = loadTemplateCategories(root);
   if (byCategory.size === 0) return [];
-  const changedPaths = changedPathsFromDiffContent(diffContent);
-  const haystack = [...changedPaths, ...changedContentLines(diffContent)];
+  const relevantDiff = withoutGeneratedOutputSections(diffContent);
+  const changedPaths = changedPathsFromDiffContent(relevantDiff)
+    .filter((filePath) => !isRegisteredGeneratedOutput(filePath));
+  const haystack = [...changedPaths, ...changedContentLines(relevantDiff)];
   const suggestions = [];
   for (const [category, template] of byCategory) {
     const rule = CATEGORY_KEYWORD_RULES[category];

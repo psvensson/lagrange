@@ -34,9 +34,12 @@ import {
   ManagedSplitWorkflowAbortMethods,
 } from './managed-split-workflow-abort-methods.js';
 import {
-  DEFAULT_QUORUM_REPLICA_COUNT,
   applyManagedSplitTopologyBindings,
 } from './managed-split-workflow-topology-bindings.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 import {
   buildSplitWorkflowOwnerId,
   ManagedSplitWorkflowOwnershipMethods,
@@ -184,10 +187,14 @@ class ManagedSplitWorkflow {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_PRIMARY_KEY_REQUIRED);
     }
 
-    const replicaCount = Number.isInteger(partitionInfo.replica_count) &&
-      partitionInfo.replica_count > 0 ?
-      partitionInfo.replica_count :
-      DEFAULT_QUORUM_REPLICA_COUNT;
+    // Desired RF comes from the single policy authority over the persisted
+    // source-partition row. A split of a partition with no declared policy is
+    // refused: substituting a quorum default here silently restated policy.
+    const desiredTarget = resolveDesiredReplicationFactor(partitionInfo);
+    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_REPLICATION_POLICY_UNDECLARED);
+    }
+    const replicaCount = desiredTarget.replicationFactor;
     const splitBootstrapReplicaCount =
       this.calculateQuorumReplicaCount(replicaCount);
     const criticalSystemPartition =

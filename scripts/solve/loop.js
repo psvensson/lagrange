@@ -18,7 +18,6 @@ const FRONTIER_INTEGRITY_UNRESOLVED =
 const CHANGE_IDENTITY_UNSEALABLE =
   'changeRef artifact is missing a sealable content identity';
 const INTEGRITY_SCOPE_REGRESSION = 'regression';
-const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
 const CLOSURE_INVARIANT_WARNING_PREFIX =
   'WARN Solver closure invariant trigger failed: ';
 
@@ -60,6 +59,7 @@ import {
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_REFLECTION,
   EVENT_EVIDENCE_INGESTED,
+  INTEGRITY_SCOPE_THEORY_GATE,
 } from './constants.js';
 import {
   INTEGRITY_EVENT_SCHEMA_VERSION,
@@ -132,6 +132,7 @@ import {
   theoryGateProblemAuthorizationKey,
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
+  createRunAuthorizations,
 } from './gate.js';
 import {
   REJECTION_ESCALATION_GUIDANCE,
@@ -219,7 +220,7 @@ function finish(root, quest, outcome, evidence, evidenceIdentity = null,
   return {outcome, evidence, state};
 }
 
-function runOneCycle(root, quest, ctx) {
+function runOneCycle(root, quest, ctx, runAuthorizations = null) {
   const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
   if (questDone.done) {
     const log = readLog(root, quest.id);
@@ -279,10 +280,10 @@ function runOneCycle(root, quest, ctx) {
     });
     return {terminal: null};
   }
-  return applyAttempt(root, quest, ctx, pick, before);
+  return applyAttempt(root, quest, ctx, pick, before, runAuthorizations);
 }
 
-function applyAttempt(root, quest, ctx, pick, before) {
+function applyAttempt(root, quest, ctx, pick, before, runAuthorizations = null) {
   const rungIndex = pick.state.rungIndex;
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
@@ -301,7 +302,7 @@ function applyAttempt(root, quest, ctx, pick, before) {
       root,
       quest,
       theoryGateContinuation(readinessProblems),
-      {log, frontier: pick.def.id, rungIndex, softFirst: true},
+      {log, frontier: pick.def.id, rungIndex, softFirst: true, runAuthorizations},
     );
     // Soft-first: an advisory downgrade keeps the cycle running — fall through and run the
     // harness this attempt instead of stopping. A hard gate records the violation and stops.
@@ -339,7 +340,7 @@ function applyAttempt(root, quest, ctx, pick, before) {
       status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
       code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
       problems: [escalationProblem],
-    }, {log, frontier: pick.def.id, rungIndex});
+    }, {log, frontier: pick.def.id, rungIndex, runAuthorizations});
     if (!decisionContinues(decision)) {
       return {
         terminal: decision.outcome,
@@ -383,13 +384,14 @@ function applyAttempt(root, quest, ctx, pick, before) {
   if (result && result.changeRef && inspectChangeRef) {
     const changeInspection = inspectChangeRef(result.changeRef);
     const staticProblems = changeInspection && changeInspection.valid ?
-      staticQualityProblems(root, changeInspection.changedPaths) : [];
+      staticQualityProblems(root, changeInspection.changedPaths,
+        {baseCommit: workspaceBaseCommit}) : [];
     if (staticProblems.length > 0) {
       const decision = resolveGateDecision(root, quest, {
         status: CONTINUATION_BLOCKED_STATIC_QUALITY,
         code: CONTINUATION_BLOCKED_STATIC_QUALITY,
         problems: staticProblems,
-      }, {log, frontier: pick.def.id, rungIndex});
+      }, {log, frontier: pick.def.id, rungIndex, runAuthorizations});
       if (!decisionContinues(decision)) {
         return {
           terminal: decision.outcome,
@@ -1025,6 +1027,10 @@ export function runLoop(root, quest, options = {}) {
 
   const maxCycles = Number.isInteger(options.maxCycles) ? options.maxCycles : 1000;
   for (let cycle = 0; cycle < maxCycles; cycle += 1) {
+    // One recorded override authorizes one full cycle (C4): the pre-attempt
+    // health gate and every admission gate inside runOneCycle share this map,
+    // so the first bypass consumes the override and the rest reuse it.
+    const runAuthorizations = createRunAuthorizations();
     const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
     if (!questDone.done) {
       const executionHealth = analyzeQuestHealth(root, quest, {
@@ -1084,6 +1090,7 @@ export function runLoop(root, quest, options = {}) {
             frontier: executionHealth.frontier,
             rungIndex: executionHealth.rungIndex,
             softFirst: true,
+            runAuthorizations,
           },
         );
         if (!decisionContinues(decision)) {
@@ -1118,7 +1125,7 @@ export function runLoop(root, quest, options = {}) {
       frontier,
       disposition,
       nextCommand,
-    } = runOneCycle(root, quest, ctx);
+    } = runOneCycle(root, quest, ctx, runAuthorizations);
     if (terminal === OUTCOME_SOLVED) {
       const result = finish(
         root,

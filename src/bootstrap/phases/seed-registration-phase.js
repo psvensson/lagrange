@@ -7,6 +7,10 @@
  * The class receives required dependencies via constructor injection.
  */
 
+import {
+  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
+  DECLARED_REPLICA_COUNT_DEFAULT,
+} from '../replication-target-authority.js';
 import {randomUUID} from 'node:crypto';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
@@ -46,7 +50,6 @@ import {
 import {PARTITION_STATE} from '../../partition/partition-constants.js';
 import {
   COLUMN,
-  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
 } from '../../constants/index.js';
@@ -145,7 +148,11 @@ class SeedRegistrationPhase {
     const groupData = {
       group_id: INITIAL_MESSAGE_GROUP_ID,
       group_name: BOOTSTRAP_MESSAGE_GROUP.NAME,
-      replica_count: BOOTSTRAP_MESSAGE_GROUP.REPLICA_COUNT,
+      // The OWNING table's declaration. This was a restated literal 3 in
+      // BOOTSTRAP_MESSAGE_GROUP that agreed with MESSAGE_GROUPS_SCHEMA only
+      // by coincidence, so a change to the schema default would have left
+      // this seeded row behind.
+      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
       policy: JSON.stringify(BOOTSTRAP_MESSAGE_GROUP.POLICY),
       created_at: now,
@@ -393,7 +400,7 @@ class SeedRegistrationPhase {
         partition_key_start: null,
         partition_key_end: null,
         partition_version: 1,
-        replica_count: NUM.THREE,
+        replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
         size_bytes: 0,
         leader_node_id: d.getNodeId(),
         state: PARTITION_STATE.NORMAL,

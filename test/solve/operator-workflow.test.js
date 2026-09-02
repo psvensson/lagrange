@@ -1152,6 +1152,23 @@ tap.test('land preflight skips deleted paths in the silent-catch stage', (t) => 
   t.end();
 });
 
+tap.test('land repairs a dropped intent-to-add for recorded candidate paths', (t) => {
+  const {root, id} = landingFixture();
+  // Measured 2026-09-01: a git reset dropped the intent-to-add for a
+  // recorded candidate path and land refused with "cannot fingerprint
+  // untracked paths", costing a diagnose/repair cycle. The recorded path
+  // set is a quest fact, so land stages intent (git add -N) once, names the
+  // action, and the projection proceeds.
+  git(root, ['rm', '--cached', '-q', '--', 'scripts/demo.js']);
+  const result = landQuestWorkflow(root, {id});
+  t.equal(result.verdict, 'needs-review',
+    'the landing projection proceeds instead of refusing to fingerprint');
+  const status = git(root, ['status', '--porcelain', '--', 'scripts/demo.js']);
+  t.notMatch(status, /^\?\? /mu, 'the recorded path is tracked again');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('land refuses import gaps before minting a review id', (t) => {
   const {root, id} = landingFixture();
   const importer = path.join(root, 'scripts', 'demo.js');

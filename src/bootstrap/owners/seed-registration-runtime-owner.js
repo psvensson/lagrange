@@ -12,6 +12,11 @@ class SeedRegistrationRuntimeOwner {
   }
 
   findLeaderPartition(tableName) {
+    // NOT copied: this list is only iterated here. Defensively spreading it
+    // made the value always a truthy array, which silently made the
+    // assertCritical below unreachable - a table with no declared replica
+    // set stopped raising the critical 'replica set not configured' and
+    // fell through to a leader-missing throw instead.
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
     assertCritical(
       replicaIds,

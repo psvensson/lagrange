@@ -42,6 +42,14 @@ import {
 import {
   ManagedMergeWorkflowPlanMethods,
 } from './managed-merge-workflow-plan-methods.js';
+import {
+  REPLICATION_TARGET_SOURCE,
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
+import {
+  TOPOLOGY_BOUND_METHOD_SPECS,
+  bindTopologyMethod,
+} from './managed-merge-workflow-topology-bindings.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -50,7 +58,6 @@ const LOCAL_STR_MANAGED_MERGE_WORKFLOW = 'managed-merge-workflow';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
 
 const ACTIVE_PARTITION_STATE = 'NORMAL';
-const DEFAULT_QUORUM_REPLICA_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 // Durable ownership lease for merge workflow claims (same rationale as
@@ -59,35 +66,6 @@ const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 const DEFAULT_WORKFLOW_LEASE_MS = 60000;
 const MERGE_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-
-/**
- * Topology-adapter method bindings resolved in constructor order:
- * bound adapter method, then explicit option, then the listed fallback.
- */
-const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
-  {property: 'getPartitionInfo', fallback: () => null},
-  {property: 'getTableInfo', fallback: () => null},
-  {property: 'listTableInfos', fallback: () => []},
-  {property: 'parsePartitionTransition', fallback: () => null},
-  {property: 'isLocalManagedMergeLeader', fallback: () => false},
-  {property: 'resolveActivePartitionVersion', fallback: () => 1},
-  {property: 'resolveProvisionTargetNodeIds', fallback: () => []},
-  {property: 'getRoutablePartitionServiceNodeIds', fallback: () => []},
-  {property: 'isSystemTablePartitionId', fallback: () => false},
-  {
-    property: 'calculateQuorumReplicaCount',
-    fallback: () => DEFAULT_QUORUM_REPLICA_COUNT,
-  },
-  {property: 'createExecutionTimeoutBudget', fallback: null},
-  {property: 'waitForTablePartitionMetadata', fallback: async () => {}},
-  {property: 'probeInitialTablePartitionProvisioning', fallback: null},
-  {property: 'provisionInitialTablePartition', fallback: async () => {}},
-  {property: 'startMergeReplicationOnSourcePartition',
-    fallback: async () => {}},
-  {property: 'listTablePartitionRows', fallback: () => []},
-  {property: 'listPartitionServiceRows', fallback: () => []},
-  {property: 'deliverReplicaRemoval', fallback: async () => null},
-]);
 
 /**
  * Plain option fields resolved in constructor order. Each resolver owns
@@ -149,14 +127,6 @@ const REUSED_SPLIT_PROVISIONING_METHOD_NAMES = Object.freeze([
   'planChildProvisioningTargetNodeIds',
   'resolveChildProvisioningAnchorNodeId',
 ]);
-
-function bindTopologyMethod(topologyAdapter, methodName) {
-  if (!topologyAdapter ||
-      typeof topologyAdapter[methodName] !== LOCAL_STR_FUNCTION) {
-    return null;
-  }
-  return topologyAdapter[methodName].bind(topologyAdapter);
-}
 
 /**
  * First-class managed merge workflow owner.
@@ -303,10 +273,16 @@ class ManagedMergeWorkflow {
     const estimatedBytes = this.estimateMergedBytes(leftInfo, rightInfo);
     this.assertUnderMergeThreshold(estimatedBytes);
 
-    const replicaCount = resolvePositiveInteger(
-      leftInfo.replica_count,
-      DEFAULT_QUORUM_REPLICA_COUNT,
-    );
+    // Desired RF comes from the single policy authority over the persisted
+    // left source-partition row. A merge over partitions with no declared
+    // policy is refused rather than defaulted.
+    const desiredTarget = resolveDesiredReplicationFactor(leftInfo);
+    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
+      throw new Error(
+        MANAGED_MERGE_ERROR_MSG.REPLICATION_POLICY_UNDECLARED,
+      );
+    }
+    const replicaCount = desiredTarget.replicationFactor;
     const mergeBootstrapReplicaCount =
       this.calculateQuorumReplicaCount(replicaCount);
     const sourceRoutableNodeIds = this.normalizeNodeIdList([

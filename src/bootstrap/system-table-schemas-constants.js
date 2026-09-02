@@ -405,7 +405,12 @@ function getInitialPartitionId(tableName) {
  * @return {Array<string>|null} Replica IDs or null if not found.
  */
 function getInitialReplicaIds(tableName) {
-  return INITIAL_REPLICA_IDS[tableName] || null;
+  const declared = INITIAL_REPLICA_IDS[tableName];
+  // A COPY, not the declaration. This array was handed out by reference and
+  // pushed into by replica wiring, so a minted replacement replica mutated the
+  // shared declaration for every later reader. Identities are runtime state;
+  // the declaration is not theirs to change.
+  return Array.isArray(declared) ? [...declared] : null;
 }
 
 export {

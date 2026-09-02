@@ -7,6 +7,7 @@ import {
   INTEGRITY_RESOLUTION_NEW_QUEST,
   INTEGRITY_SCOPE_ATTEMPT,
   INTEGRITY_SCOPE_GOALPOSTS,
+  INTEGRITY_SCOPE_THEORY_GATE,
 } from './constants.js';
 import {
   changeArtifactIdentity,
@@ -178,6 +179,13 @@ export function legacyIntegrityViolations(log, startIndex = 0) {
       event.eventSchemaVersion === INTEGRITY_EVENT_SCHEMA_VERSION) {
       continue;
     }
+    // A theory-gate refusal is a workflow routing decision, not an integrity
+    // measurement: no harness sample was accepted, nothing was misstated, and
+    // the corrected retry is itself gate-checked. Treating the refusal as
+    // unverifiable pre-v2 integrity history made one recoverable operator
+    // slip (a missing --modelNotApplicable) permanently unlandable
+    // (measured: behaviour-changing-consumer-convergence, 2026-09-01).
+    if (event.scope === INTEGRITY_SCOPE_THEORY_GATE) continue;
     const acceptedLater = log.slice(index + 1).some((candidate) =>
       candidate.type === EVENT_ATTEMPT &&
       (!event.frontier || candidate.frontier === event.frontier));

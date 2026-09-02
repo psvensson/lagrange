@@ -39,7 +39,9 @@ import {
   LANDING_UNION_STATUS,
   landingUnionGuard,
   landingUnionGuardError,
+  recordedAttemptUnion,
 } from './landing-union-guard.js';
+import {spawnSync} from 'node:child_process';
 
 const VERDICT_APPROVE = 'approve';
 const VERDICT_REJECT = 'reject';
@@ -62,6 +64,15 @@ const VERDICT_FILE_CONFLICT_PROBLEM =
   '--verifier/--verdict/--fingerprint/--receipt/--finding';
 const STRUCTURED_VERDICT_REQUIRED_PROBLEM =
   'land: this review has required templates; use --review with --verdict-file';
+const GIT_BINARY = 'git';
+const GIT_ENCODING = 'utf8';
+const GIT_STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain', '--']);
+const GIT_INTENT_TO_ADD_ARGUMENTS = Object.freeze(['add', '-N', '--']);
+const GIT_UNTRACKED_STATUS_PREFIX = '?? ';
+const GIT_STATUS_LINE_SEPARATOR = '\n';
+const UNTRACKED_REPAIR_NOTE_PREFIX =
+  'land: staged intent-to-add (git add -N) for recorded untracked paths: ';
+const UNTRACKED_REPAIR_PATH_SEPARATOR = ', ';
 const arrayAt = Function.call.bind(Array.prototype.at);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -240,6 +251,36 @@ function sameAuditProblem(left, right) {
     left?.frontier === right?.frontier;
 }
 
+// A recorded candidate path that is untracked in the worktree (a git reset
+// dropped its intent-to-add; measured 2026-09-01, one full diagnose/repair
+// cycle) makes canonicalSourceDelta refuse to fingerprint. The path set is a
+// recorded quest fact, so staging intent (git add -N — no content enters the
+// index) is a safe repair. Done ONCE here, before the landing projection and
+// nowhere else: canonicalSourceDelta itself stays read-only for its other
+// callers. The action is named on stdout, never silent.
+function stageRecordedUntrackedPaths(root, quest, log) {
+  const union = recordedAttemptUnion(root, quest, log);
+  if (union.length === 0) return;
+  const status = spawnSync(GIT_BINARY, [...GIT_STATUS_ARGUMENTS, ...union],
+    {cwd: root, encoding: GIT_ENCODING});
+  if (status.status !== 0) return;
+  const untracked = [];
+  for (const line of String(status.stdout || '')
+    .split(GIT_STATUS_LINE_SEPARATOR)) {
+    if (stringStartsWith(line, GIT_UNTRACKED_STATUS_PREFIX)) {
+      untracked.push(stringTrim(line.slice(GIT_UNTRACKED_STATUS_PREFIX.length)));
+    }
+  }
+  if (untracked.length === 0) return;
+  const added = spawnSync(GIT_BINARY,
+    [...GIT_INTENT_TO_ADD_ARGUMENTS, ...untracked],
+    {cwd: root, encoding: GIT_ENCODING});
+  if (added.status !== 0) return;
+  process.stdout.write(UNTRACKED_REPAIR_NOTE_PREFIX +
+    arrayJoin(untracked, UNTRACKED_REPAIR_PATH_SEPARATOR) +
+    GIT_STATUS_LINE_SEPARATOR);
+}
+
 function assertApprovalCanCompleteAudit(root, quest, state) {
   const audit = auditQuest(root, quest);
   // An aggregate approval recorded before `land` (the boot.md flow: verify,
@@ -257,9 +298,12 @@ function assertApprovalCanCompleteAudit(root, quest, state) {
     const residual = arrayFilter(audit.problems, (item) =>
       !expected || !sameAuditProblem(item, expected));
     const reported = residual.length > 0 ? residual : audit.problems;
+    // verificationState and auditQuest project the same underlying failure;
+    // report each distinct message once.
+    const messages = [...new Set(arrayMap(reported, (item) => item.message))];
     throw new Error(
       'land: terminal audit has non-verification problems: ' +
-      (arrayJoin(arrayMap(reported, (item) => item.message), '; ') ||
+      (arrayJoin(messages, '; ') ||
         'expected exactly one structured aggregate-approval problem'),
     );
   }
@@ -325,6 +369,7 @@ export function landQuestWorkflow(root, args = {}) {
   if (!arrayIncludes(['solved', 'exhausted'], before.quest.status)) {
     throw new Error('land: Quest must be terminal before recording a landing verdict');
   }
+  stageRecordedUntrackedPaths(root, quest, log);
   const state = verificationState(root, quest, log);
   // Before any branch and before any commit: every dirty path outside solve/
   // must be covered by a recorded attempt. A refused attempt record (for

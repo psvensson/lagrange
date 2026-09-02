@@ -216,22 +216,42 @@ function canonicalReceiptProblem(root, stdout) {
   }
 }
 
+const IMPORT_GRAPH_TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
+const IMPORT_GRAPH_TIMEOUT_RETRY_NOTE =
+  'import-graph verification timed out twice (first and retry) at ';
+const IMPORT_GRAPH_TIMEOUT_UNIT_SUFFIX = ' ms; the producer is not making ' +
+  'progress on this machine — rerun when load drops or raise the timeout';
+
+function importGraphVerifyTimedOut(result) {
+  return result?.error?.code === IMPORT_GRAPH_TIMEOUT_ERROR_CODE;
+}
+
+// `spawn` is injectable for tests only; production callers use spawnSync.
 export function canonicalImportGraphProblem(
-  root, timeout = IMPORT_GRAPH_VERIFY_TIMEOUT_MS) {
+  root, timeout = IMPORT_GRAPH_VERIFY_TIMEOUT_MS, spawn = spawnSync) {
   const requiredProblem = requiredImportGraphProblem(root);
   if (requiredProblem) return requiredProblem;
   const producer = path.join(root, IMPORT_GRAPH_PRODUCER_PATH);
-  const result = spawnSync(
-    process.execPath,
-    [producer, IMPORT_GRAPH_VERIFY_ARGUMENT],
-    {
-      cwd: root,
-      encoding: TEXT_ENCODING,
-      maxBuffer: SPAWN_MAX_BUFFER_BYTES,
-      timeout,
-      killSignal: IMPORT_GRAPH_VERIFY_KILL_SIGNAL,
-    },
-  );
+  const spawnArguments = [producer, IMPORT_GRAPH_VERIFY_ARGUMENT];
+  const spawnOptions = {
+    cwd: root,
+    encoding: TEXT_ENCODING,
+    maxBuffer: SPAWN_MAX_BUFFER_BYTES,
+    timeout,
+    killSignal: IMPORT_GRAPH_VERIFY_KILL_SIGNAL,
+  };
+  let result = spawn(process.execPath, spawnArguments, spawnOptions);
+  // A single ETIMEDOUT on a loaded machine is transient (C7): retry exactly
+  // once, and if the retry also times out report both plainly instead of a
+  // bare kill-signal message. Any non-timeout failure reports immediately.
+  if (importGraphVerifyTimedOut(result)) {
+    result = spawn(process.execPath, spawnArguments, spawnOptions);
+    if (importGraphVerifyTimedOut(result)) {
+      return `${IMPORT_GRAPH_PROBLEM_PREFIX}` +
+        `${IMPORT_GRAPH_TIMEOUT_RETRY_NOTE}${timeout}` +
+        IMPORT_GRAPH_TIMEOUT_UNIT_SUFFIX;
+    }
+  }
   if (result.status !== 0) {
     return `${IMPORT_GRAPH_PROBLEM_PREFIX}` +
       `${result.stderr || result.error?.message}`;

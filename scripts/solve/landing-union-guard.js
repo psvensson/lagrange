@@ -47,7 +47,8 @@ import {
   generatedOutputCoverage,
   isRegisteredGeneratedOutput,
 } from './generated-dependencies.js';
-import {verificationState} from './verification.js';
+import {verificationState, questContractExcludesCollateral}
+  from './verification.js';
 
 export {LANDING_UNCOVERED_SOURCE_PATHS_CODE, LANDING_UNION_STATUS};
 const GIT_BINARY = 'git';
@@ -209,18 +210,39 @@ function uncoveredProblemMessage(uncoveredPaths, generatedOutputs) {
 // when nothing else is uncovered: any other uncovered path blocks the
 // landing regardless, so the (producer-running) regeneration is not spent
 // and every uncovered path is named exactly as before.
+const COLLATERAL_COVERAGE_REASON =
+  'registered generated output regenerated at the landing tree ' +
+  '(collateral verification contract)';
+
 function generatedOutputEntries(root, quest, log, uncoveredPaths) {
   const registered = arrayFilter(uncoveredPaths, isRegisteredGeneratedOutput);
-  if (registered.length === 0 || registered.length !== uncoveredPaths.length) {
+  if (registered.length === 0) return [];
+  // Collateral contract: the landing regenerates registered outputs, so a
+  // dirty registered output is covered even next to other uncovered paths
+  // (which still block on their own).
+  if (questContractExcludesCollateral(quest)) {
+    return arrayMap(registered, (filePath) => ({
+      path: filePath,
+      coverage: GENERATED_OUTPUT_COVERAGE.COLLATERAL,
+      reason: COLLATERAL_COVERAGE_REASON,
+    }));
+  }
+  if (registered.length !== uncoveredPaths.length) {
     return [];
   }
   const aggregate = verificationState(root, quest, log).aggregate;
   return generatedOutputCoverage(root, aggregate, registered);
 }
 
+const COVERED_GENERATED_STATES = Object.freeze([
+  GENERATED_OUTPUT_COVERAGE.FRESH,
+  GENERATED_OUTPUT_COVERAGE.COLLATERAL,
+]);
+
 function freshGeneratedPaths(generatedOutputs) {
   return arrayMap(arrayFilter(generatedOutputs, (entry) =>
-    entry.coverage === GENERATED_OUTPUT_COVERAGE.FRESH), (entry) => entry.path);
+    arrayIncludes(COVERED_GENERATED_STATES, entry.coverage)),
+  (entry) => entry.path);
 }
 
 export function landingUnionGuard(root, quest, log) {

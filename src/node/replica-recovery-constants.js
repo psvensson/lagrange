@@ -7,8 +7,6 @@ const REPLICA_RECOVERY_DEFAULT = Object.freeze({
   CHECK_INTERVAL_MS: TIME_MS.SECOND * NUM.TEN,
   IDLE_BACKOFF_MULTIPLIER: 2,
   MAX_CHECK_INTERVAL_MS: TIME_MS.MINUTE,
-  MIN_PARTITION_REPLICAS: NUM.THREE,
-  MIN_MESSAGE_GROUP_REPLICAS: NUM.THREE,
   RECOVERY_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
 });
 
@@ -19,6 +17,10 @@ const REPLICA_RECOVERY_LOG_MSG = Object.freeze({
   STOPPED_MONITORING: 'Stopped replica recovery monitoring',
   PARTITION_BELOW_MIN: 'Partition replica count below minimum',
   MESSAGE_GROUP_BELOW_MIN: 'Message group replica count below minimum',
+  PARTITION_POLICY_UNDECLARED:
+    'Partition replication policy undeclared; recovery skipped for this row',
+  MESSAGE_GROUP_POLICY_UNDECLARED:
+    'Message group replication policy undeclared; recovery skipped for this row',
   NO_HEALTHY_NODES_PARTITION: 'No healthy nodes available for partition recovery',
   NO_HEALTHY_NODES_MESSAGE_GROUP: 'No healthy nodes available for message group recovery',
   CREATE_PARTITION_REPLICA: 'Creating replacement partition replica',

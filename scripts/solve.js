@@ -15,7 +15,8 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
-  appendGuardOverride, appendReflection, readFindings, readRulesOutFindings}
+  appendGuardOverride, appendReflection, readFindings, readRulesOutFindings,
+  guardOverrideBudgetRemaining}
   from './solve/store.js';
 import {buildSealFreshnessAdvisory} from './solve/seal-freshness.js';
 import {
@@ -34,6 +35,7 @@ import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
 import {
   QUEST_CLASS_PRODUCT,
   QUEST_CLASSES,
+  SAME_GUARD_OVERRIDE_LIMIT,
   SOLVE_DATA_DIR,
 } from './solve/constants.js';
 import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
@@ -46,6 +48,8 @@ import {applyInheritedParentLinks, applySiblingSkeleton}
 import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
+import {runPreflightCommand} from './solve/preflight.js';
+import {runReattemptCommand} from './solve/reattempt.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runParkCommand} from './solve/park.js';
@@ -77,6 +81,7 @@ import {
 import {
   buildVerificationFinding,
   verificationState,
+  COLLATERAL_VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
   VERIFIER_REJECTION_FINDING_KIND,
@@ -99,6 +104,7 @@ const REVIEW_FINGERPRINT_PROBLEM =
 const REVIEW_FINGERPRINT_SEALED = ' (sealed ';
 const REVIEW_FINGERPRINT_NONE = 'none';
 const REVIEW_FINGERPRINT_CLOSE = ')';
+const ATTEMPT_DONE_SUFFIX = ' DONE';
 const REJECTION_REVIEW_REQUIRED_PROBLEM =
   'verifier-rejection requires --review <reviewId> once a review has been ' +
   'minted for this quest, so the fingerprint is checked against the sealed ' +
@@ -182,7 +188,7 @@ function questTemplate(id, statement, questClass) {
   return {
     id,
     authoringContractVersion: QUEST_AUTHORING_CONTRACT_VERSION,
-    verificationContractVersion: VERIFICATION_CONTRACT_VERSION,
+    verificationContractVersion: COLLATERAL_VERIFICATION_CONTRACT_VERSION,
     statement: statement || 'Describe the terminal success condition in one line.',
     priority: 1,
     // class: "product" (default) goals must be MEASURED against a real artifact;
@@ -863,7 +869,8 @@ const OVERRIDE_GUARD_ALIASES = Object.freeze({
 const OVERRIDE_REAUTHORIZED_LINE =
   '(re-authorizes an already-covered scope — no lifetime budget spent)\n';
 const OVERRIDE_CHARGED_LINE =
-  '(authorizes one bypass of the next matching guard; reset by honest progress)\n';
+  '(authorizes one full run past the next matching guard; reset by honest ' +
+  'progress)\n';
 
 // The scope this override authorizes, read from the change artifacts already on
 // record — never from the operator's --reason. A later override whose scope is
@@ -878,6 +885,20 @@ function authorizedScopeSignature(root, quest) {
       pending.scopeCandidate.length > 0) {
       return pending.scopeCandidate;
     }
+    return analyzeScopePressure(root, quest, readLog(root, quest.id),
+      {ignoreBaselines: true}).changedPaths || null;
+  } catch {
+    return null;
+  }
+}
+
+// The scope already on record for this quest: the union of changed paths across
+// recorded attempt artifacts, from the same analyzer the scope guard uses. Every
+// path in it was admitted through the gate once, so a candidate it covers is a
+// re-submission of recorded work, never scope growth. Advisory-derived like the
+// candidate signature: unreadable artifacts record no anchor and charge as before.
+function recordedAttemptScopeSignature(root, quest) {
+  try {
     return analyzeScopePressure(root, quest, readLog(root, quest.id),
       {ignoreBaselines: true}).changedPaths || null;
   } catch {
@@ -911,11 +932,15 @@ function cmdOverride(root, args) {
     problem: typeof args.problem === 'string' ? args.problem : null,
     reason: args.reason,
     scopeSignature: authorizedScopeSignature(root, quest),
+    recordedScope: recordedAttemptScopeSignature(root, quest),
   });
   process.stdout.write(
     `recorded override of ${code} for ${args.frontier} @ ${stamped.ts}\n` +
     (stamped.scopeReauthorization ?
-      OVERRIDE_REAUTHORIZED_LINE : OVERRIDE_CHARGED_LINE));
+      OVERRIDE_REAUTHORIZED_LINE : OVERRIDE_CHARGED_LINE) +
+    `remaining lifetime budget for (${args.frontier}, ${code}): ` +
+    `${guardOverrideBudgetRemaining(root, id, args.frontier, code)} of ` +
+    `${SAME_GUARD_OVERRIDE_LIMIT}\n`);
 }
 
 function cmdReflect(root, args) {
@@ -1019,7 +1044,7 @@ function cmdStep(root, args) {
     `${r.engagementWitness.message}\n` : '';
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
-    `(${moved})${r.done ? ' DONE' : ''}${viol}\n${autoDiffLine}${templateLines}` +
+    `(${moved})${r.done ? ATTEMPT_DONE_SUFFIX : ''}${viol}\n${autoDiffLine}${templateLines}` +
     witnessLine + commitLine(r.commit));
   emitAdvisories(root, quest);
   refreshFrontierBoard(root);
@@ -1130,6 +1155,36 @@ function cmdAttempt(root, args) {
 function cmdAudit(root, args) {
   const output = runAuditCommand(root, args);
   process.stdout.write(output);
+}
+
+// Batch read-only landing diagnostics: every standing refusal in one pass,
+// no log event, no override consumption. Exit 1 when problems stand.
+function cmdPreflight(root, args) {
+  const {output, ok} = runPreflightCommand(root, args, loadQuest);
+  process.stdout.write(output);
+  if (!ok) process.exitCode = 1;
+}
+
+// First-class replacement attempt: regenerates byte-contract dependencies,
+// stages intent for untracked sources, inherits theory/model fields, and
+// records through the unchanged step gates.
+function cmdReattempt(root, args) {
+  const quest = loadQuest(root, args.id || args._[0]);
+  const {result, output} = runReattemptCommand(root, args, loadQuest);
+  process.stdout.write(output);
+  // A terminal result (theory gate, blocked disposition) recorded NO
+  // replacement attempt — measured 2026-09-01: claiming "recorded" over a
+  // theory-gate stop sent the operator to land a candidate that was never
+  // replaced, and the landing re-minted reviews against drifting v2 bytes.
+  if (writeStepTerminal(root, quest, result)) return;
+  const moved = result.progressed ? 'PROGRESS' : 'flat';
+  const violations = result.violations?.length ?
+    ` violations: ${result.violations.join('; ')}` : '';
+  process.stdout.write(
+    `recorded replacement attempt on ${result.frontier}: metric ` +
+    `${result.before} -> ${result.after} (${moved})` +
+    `${result.done ? ATTEMPT_DONE_SUFFIX : ''}${violations}\n` +
+    (result.changeRef ? `changeRef: ${result.changeRef}\n` : ''));
 }
 
 function cmdUpgrade(root, args) {
@@ -1388,6 +1443,8 @@ const COMMANDS = {
   'amend': cmdAmend,
   'inherit-candidate': cmdInheritCandidate,
   'correct-attempt-base': cmdCorrectAttemptBase,
+  'preflight': cmdPreflight,
+  'reattempt': cmdReattempt,
 };
 
 function main() {

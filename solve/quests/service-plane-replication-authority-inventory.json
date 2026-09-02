@@ -1,0 +1,66 @@
+{
+  "id": "service-plane-replication-authority-inventory",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The SERVICE plane has its own replication-factor authority, distinct from the partition and message-group policy the A2 lineage settled, and it is not yet established: enumerate every service-plane replica-count authority, decide for each whether its value is declared policy or an observed cardinality, and prove that no observed cardinality reaches a placement or recovery TARGET.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "src/constants/unified-service-lifecycle.js",
+    "closesCL": [],
+    "parentQuest": "replication-target-authority-a2-contract-v3",
+    "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+    "draftedAtCommit": "3cddfcf65971a3cc131e54483fe433c7bf5a50f7"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/service-plane-replication-authority-inventory.receipt.json",
+      "requiredReceipts": [
+        "PLACEHOLDER-author-the-bar-before-the-first-rung"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-plane-replication-authority-inventory-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/service-plane-replication-authority-inventory.receipt.json",
+          "requiredReceipts": [
+            "PLACEHOLDER-author-the-bar-before-the-first-rung"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "distinct-from-the-partition-authority",
+      "statement": "This is a DIFFERENT authority from the one replication-target-authority-a2-contract-v3 settled. SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT is 'replicaCount', an in-memory runtime-service descriptor field; SD_COL.REPLICA_COUNT is the persisted service_descriptors column. Neither is a partitions or message_groups row, and the A2 decoder does not govern them. Do not re-derive or re-litigate the A2 contract here."
+    },
+    {
+      "id": "lead-rebalancer-target-path",
+      "statement": "LEAD 1, demonstrated by the A2 round-3 verifier as mutation V3-A. A service-descriptor replicaCount written at a bootstrap site (seed-infrastructure-phase.js:259, node-joining-replica-descriptor-coordination.js:124, service-reconciler-planner.js:198, request-binding-service-definition-contract.js:285) is read by runtime-service-policy.js:26 and assigned to policy.targetReplicaCount by unified-rebalancer-policy-scheduler-methods.js:83. A tally written at any of those sites therefore becomes a placement TARGET. The mutation was uncaught by the A2 bar because that bar does not claim to govern the service plane."
+    },
+    {
+      "id": "lead-join-admission-observed-count",
+      "statement": "LEAD 2. bootstrap-join-admission-owner.getMessageGroups() builds a read model in which group.replica_count = group.replicas.length - an OBSERVED identity count reported in the bootstrap response under the same name as the persisted policy column. Verified in the A2 lineage as not currently persisted and consumed only by determineMessageGroupAssignment and BootstrapClusterViewOwner, but it is a live confusion: a joiner reading that field as desired RF would be the defect. Decide whether the field is renamed, typed, or removed."
+    },
+    {
+      "id": "lead-descriptor-field-sites",
+      "statement": "LEAD 3. The SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT and SD_COL.REPLICA_COUNT write sites, including src/service/service-descriptor.js:84, src/wasm-service/wasm-service-models.js:167 and src/bootstrap/system-table-runtime-schema-definitions.js:166. Establish for each whether it carries declared policy or an observation, and give the persisted service_descriptors.replica_count column a single named authority the way PARTITIONS and MESSAGE_GROUPS now have."
+    },
+    {
+      "id": "no-repo-wide-static-universal",
+      "statement": "Do NOT attempt a repo-wide static census of replica_count assignments. The A2 lineage measured that dead: 3282 computed keys in src/ cannot be statically resolved, and resolving keys through discovered alias constants pulls in the name constant, because schema column definitions contain {name: 'replica_count'}, producing 26 false sites. A contract whose meaning depends on analyzer capability rather than product semantics is the wrong kind of contract. Bound this Quest by the service-plane DOMAIN and prove the authority behaviourally at the named consumers instead."
+    }
+  ]
+}

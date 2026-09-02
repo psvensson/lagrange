@@ -101,6 +101,43 @@ tap.test('verification-template-suggest', async (t) => {
     t.end();
   });
 
+  t.test('registered generated outputs never trigger suggestions', (t) => {
+    // A regenerated census file's diff section carries repo-wide keywords and
+    // a test/ path — neither describes the candidate (measured 2026-09-01:
+    // the impact-graph seal mechanically added transport-delivery and
+    // harness-fidelity to a review).
+    const generatedSection = [
+      'diff --git a/test/shards/impact-graph-seal.json ' +
+        'b/test/shards/impact-graph-seal.json',
+      '--- a/test/shards/impact-graph-seal.json',
+      '+++ b/test/shards/impact-graph-seal.json',
+      '@@ -1,2 +1,2 @@',
+      '-  "src/transport/delivery-ack-channel.js": "aaaa",',
+      '+  "src/transport/delivery-ack-channel.js": "bbbb",',
+      '',
+    ].join('\n');
+    t.same(suggestVerificationTemplates(REPO_ROOT, generatedSection), [],
+      'a generated-output-only diff suggests nothing');
+    const mixed = generatedSection +
+      diffFor('src/util/format.js', 'const label = 2;');
+    t.same(suggestVerificationTemplates(REPO_ROOT, mixed), [],
+      'the generated section adds nothing to a keyword-free source change');
+    const shardSection = [
+      'diff --git a/test/shards/primary-classes.json ' +
+        'b/test/shards/primary-classes.json',
+      '--- a/test/shards/primary-classes.json',
+      '+++ b/test/shards/primary-classes.json',
+      '@@ -1 +1 @@',
+      '-"old"',
+      '+"new"',
+      '',
+    ].join('\n');
+    t.notOk(suggestVerificationTemplates(REPO_ROOT, shardSection)
+      .some((s) => s.category === 'harness-fidelity'),
+    'a generated file under test/ does not fire harness-fidelity');
+    t.end();
+  });
+
   t.test('template catalog and keyword rules agree', (t) => {
     t.same(templateCategoryConsistencyProblems(REPO_ROOT), [],
       'every front-matter category has a keyword rule, every keyword rule ' +

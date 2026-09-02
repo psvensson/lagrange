@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "critical-system-placement-distinct-node-invariant-v4",
   "status": "pass",
-  "generatedAt": "2026-08-31T08:43:29.406Z",
+  "generatedAt": "2026-08-31T12:54:26.269Z",
   "receipts": [
     {
       "id": "seed-local-replicas-are-not-converged",

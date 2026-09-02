@@ -648,8 +648,6 @@ test('ReplicaRecoveryService - getStats', async (t) => {
 
   t.equal(stats.nodeId, 'test-node', 'should have nodeId');
   t.ok(stats.checkIntervalMs > 0, 'should have checkIntervalMs');
-  t.equal(stats.minPartitionReplicas, 3, 'should have minPartitionReplicas');
-  t.equal(stats.minMessageGroupReplicas, 3, 'should have minMessageGroupReplicas');
   t.equal(stats.pendingRecoveries, 0, 'should have no pending recoveries');
   t.equal(stats.recoveryCount, 0, 'should have zero recovery count');
   t.equal(stats.isRunning, false, 'should not be running');

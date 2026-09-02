@@ -676,6 +676,16 @@ export function scopeSignatureNeedsReauthorization(
 // budget on 2026-07-24 and parked verified work with nothing left to spend. So an
 // override whose scope signature is covered by an already-authorized one is recorded as
 // a free re-authorization; anything that reaches a NEW path is charged as before.
+//
+// Two anchors prove coverage. Prior override signatures cover a candidate the
+// operator already paid for. `recordedScope` — the union of changed paths across
+// the quest's RECORDED attempt artifacts, computed by the caller from the same
+// scope analyzer the guard itself uses — covers a candidate whose every path was
+// already admitted through the gate once (each recorded attempt passed the guard
+// or consumed an override). Without the second anchor a byte-identical
+// re-submission of reviewed work is charged whenever a file entered the tree
+// between the last override and the attempt snapshot, which is the exact
+// parked-verified-work failure the free path exists to prevent.
 export function appendGuardOverride(root, questId, override) {
   const reason = typeof override.reason === 'string' ?
     stringTrim(override.reason) : '';
@@ -687,12 +697,16 @@ export function appendGuardOverride(root, questId, override) {
   }
   const frontier = override.frontier || null;
   const scopeSignature = scopeSignatureOf(override.scopeSignature);
+  const recordedScope = scopeSignatureOf(override.recordedScope);
   const sameGuard = arrayFilter(readLog(root, questId), (event) =>
     event.type === EVENT_GUARD_OVERRIDE &&
     (event.frontier || null) === frontier &&
     event.code === override.code);
-  const reauthorizes = scopeSignature !== null && arraySome(sameGuard, (event) =>
-    signatureIsCoveredBy(scopeSignature, event.scopeSignature));
+  const reauthorizes = scopeSignature !== null &&
+    (arraySome(sameGuard, (event) =>
+      signatureIsCoveredBy(scopeSignature, event.scopeSignature)) ||
+    (recordedScope !== null &&
+      signatureIsCoveredBy(scopeSignature, recordedScope)));
   const priorSameGuard = arrayFilter(sameGuard,
     (event) => event.scopeReauthorization !== true).length;
   if (!reauthorizes && priorSameGuard >= SAME_GUARD_OVERRIDE_LIMIT) {
@@ -713,6 +727,20 @@ export function appendGuardOverride(root, questId, override) {
     scopeSignature,
     scopeReauthorization: reauthorizes,
   });
+}
+
+// Remaining lifetime override budget for (frontier, code): the limit minus the
+// CHARGED overrides on record (scope re-authorizations are free). Single owner
+// of the budget arithmetic appendGuardOverride enforces above, exported so the
+// override verb can print the balance instead of the operator discovering it
+// by exhausting it.
+export function guardOverrideBudgetRemaining(root, questId, frontier, code) {
+  const charged = arrayFilter(readLog(root, questId), (event) =>
+    event.type === EVENT_GUARD_OVERRIDE &&
+    (event.frontier || null) === (frontier || null) &&
+    event.code === code &&
+    event.scopeReauthorization !== true).length;
+  return SAME_GUARD_OVERRIDE_LIMIT - charged;
 }
 
 // Record a step-back reflection turn (a free-form reframing note). The note may be null

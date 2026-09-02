@@ -58,7 +58,7 @@ class SeedMessageGroupsPhase {
     const logger = d.getLogger();
     const config = d.getConfig();
     const groupId = INITIAL_MESSAGE_GROUP_ID;
-    const replicaIds = INITIAL_MESSAGE_GROUP_REPLICA_IDS;
+    const replicaIds = [...INITIAL_MESSAGE_GROUP_REPLICA_IDS];
     const replicaStaggerDelayMs = config.replicaStaggerDelayMs;
 
     logger.debug(BOOTSTRAP_LOG_MSG.CREATING_MESSAGE_GROUP, {
