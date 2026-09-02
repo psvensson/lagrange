@@ -91,22 +91,34 @@ function buildFormationBarrierStartupAuthorityFields(startupAuthority) {
 // ledger is one critical partition, but formation is only real when the
 // whole critical set has spread. Three-state evidence, never a verdict.
 // Extracted so the log-fields builder keeps its decision count flat.
+const ABSENT_CRITICAL_PLACEMENT_LOG_FIELDS = Object.freeze({
+  criticalPlacementEvidenceState: null,
+  criticalPlacementConverged: false,
+  criticalPlacementPendingPartitionIds: Object.freeze([]),
+  criticalPlacementUnknownPartitionIds: Object.freeze([]),
+  criticalPlacementObservedPartitionCount: 0,
+  criticalPlacementMembershipEpochState: null,
+  criticalPlacementMembershipEpoch: null,
+});
+
 function buildCriticalPlacementLogFields(criticalPlacement) {
+  if (!criticalPlacement) {
+    return ABSENT_CRITICAL_PLACEMENT_LOG_FIELDS;
+  }
+  const membershipEpoch = criticalPlacement.membershipEpoch;
   return {
-    criticalPlacementEvidenceState:
-      criticalPlacement?.evidenceState || null,
-    criticalPlacementConverged:
-      criticalPlacement?.converged === true,
+    criticalPlacementEvidenceState: criticalPlacement.evidenceState || null,
+    criticalPlacementConverged: criticalPlacement.converged === true,
     criticalPlacementPendingPartitionIds:
-      criticalPlacement?.pendingPartitionIds || [],
+      criticalPlacement.pendingPartitionIds || [],
     criticalPlacementUnknownPartitionIds:
-      criticalPlacement?.unknownPartitionIds || [],
+      criticalPlacement.unknownPartitionIds || [],
     criticalPlacementObservedPartitionCount:
-      criticalPlacement?.observedPartitionCount || 0,
+      criticalPlacement.observedPartitionCount || 0,
     criticalPlacementMembershipEpochState:
-      criticalPlacement?.membershipEpoch?.state || null,
+      membershipEpoch ? membershipEpoch.state || null : null,
     criticalPlacementMembershipEpoch:
-      criticalPlacement?.membershipEpoch?.value ?? null,
+      membershipEpoch ? membershipEpoch.value ?? null : null,
   };
 }
 

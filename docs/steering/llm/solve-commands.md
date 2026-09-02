@@ -57,7 +57,9 @@ guardrail command map.
 | `amend` | Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Capped at 2 per quest lifetime; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced. | `node scripts/solve.js amend --id <id> --kind class-correction|oracle-command-correction|statement-strengthen [--class <c>] [--statement "<strengthened>"] [--done-when-args '<json>'] --evidence <finding ref>` |
 | `inherit-candidate` | Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round. | `node scripts/solve.js inherit-candidate --id <child> --from <parent>` |
 | `correct-attempt-base` | Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused. | `node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason "<procedural cause>"` |
+| `preflight` | (undocumented — add an entry to `docs/steering/solve-commands.json`) | `node scripts/solve.js preflight ...` |
+| `reattempt` | (undocumented — add an entry to `docs/steering/solve-commands.json`) | `node scripts/solve.js reattempt ...` |
 
 ---
 
-39 subcommands registered; 39 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+41 subcommands registered; 39 documented, 2 undocumented. Improve coverage in `docs/steering/solve-commands.json`.

@@ -316,6 +316,74 @@ export function latestAttemptAdmissionWasOverridden(log, code, problem) {
   return false;
 }
 
+// The recorded-reason override escape hatch, extracted whole from
+// resolveGateDecision (cognitive-complexity ratchet): honour an unconsumed
+// operator/agent override for an OVERRIDABLE guard, first via the run-scoped
+// authorization (no second charge inside one logical run), then via a fresh
+// recorded override, which is consumed by recording an ADVISORY gate
+// decision. Returns a discriminated result: {applicable: true, decision}
+// carries the advisory to return to the caller; the frozen NOT_APPLICABLE
+// constant falls through to the soft-first / disposition path unchanged.
+const OVERRIDE_ADVISORY_NOT_APPLICABLE = Object.freeze({applicable: false});
+
+function resolveOverrideAdvisoryDecision(root, quest, options) {
+  const {continuation, log, frontier, rungIndex, scopeSignature,
+    runAuthorizations, code, problems} = options;
+  if (!continuationOverridable(continuation)) {
+    return OVERRIDE_ADVISORY_NOT_APPLICABLE;
+  }
+  const held = runAuthorizations ?
+    runAuthorizations.get(runAuthorizationKey(frontier, code)) : null;
+  if (runAuthorizationCovers(held, problems, scopeSignature)) {
+    return {applicable: true, decision: {
+      disposition: DISPOSITION_ADVISORY,
+      code,
+      outcome: OUTCOME_CONTINUE,
+      override: held.reason,
+      problems: [...problems],
+      scopeSignature,
+      nextCommand: null,
+      frontier,
+      rungIndex,
+      reusedRunAuthorization: true,
+    }};
+  }
+  const override = activeOverride(log, frontier, code, problems, scopeSignature);
+  if (!override?.coversAllProblems) {
+    return OVERRIDE_ADVISORY_NOT_APPLICABLE;
+  }
+  if (runAuthorizations) {
+    runAuthorizations.set(runAuthorizationKey(frontier, code), {
+      reason: override.reason,
+      problems: [...override.problems],
+      scopeSignature: override.authorizedScopeSignature,
+    });
+  }
+  appendEvent(root, quest.id, {
+    type: EVENT_GATE_DECISION,
+    frontier,
+    rungIndex,
+    disposition: DISPOSITION_ADVISORY,
+    code,
+    outcome: OUTCOME_CONTINUE,
+    override: override.reason,
+    problems: override.problems,
+    scopeSignature,
+    nextCommand: null,
+  });
+  return {applicable: true, decision: {
+    disposition: DISPOSITION_ADVISORY,
+    code,
+    outcome: OUTCOME_CONTINUE,
+    override: override.reason,
+    problems: override.problems,
+    scopeSignature,
+    nextCommand: null,
+    frontier,
+    rungIndex,
+  }};
+}
+
 // Map a blocked continuation to a recorded, actionable gate decision. Returns null when
 // the continuation is allowed (no gate). The returned object is the single source of
 // truth callers convert into a run/step result.
@@ -351,56 +419,12 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // bend a process heuristic but never sign off on a dishonest move. The override is honoured
   // in BOTH the autonomous and supervised paths — it is an explicit, recorded decision, not a
   // soft-first delay — so it does not depend on context.softFirst.
-  if (continuationOverridable(continuation)) {
-    const held = runAuthorizations ?
-      runAuthorizations.get(runAuthorizationKey(frontier, code)) : null;
-    if (runAuthorizationCovers(held, problems, scopeSignature)) {
-      return {
-        disposition: DISPOSITION_ADVISORY,
-        code,
-        outcome: OUTCOME_CONTINUE,
-        override: held.reason,
-        problems: [...problems],
-        scopeSignature,
-        nextCommand: null,
-        frontier,
-        rungIndex,
-        reusedRunAuthorization: true,
-      };
-    }
-    const override = activeOverride(log, frontier, code, problems, scopeSignature);
-    if (override?.coversAllProblems) {
-      if (runAuthorizations) {
-        runAuthorizations.set(runAuthorizationKey(frontier, code), {
-          reason: override.reason,
-          problems: [...override.problems],
-          scopeSignature: override.authorizedScopeSignature,
-        });
-      }
-      appendEvent(root, quest.id, {
-        type: EVENT_GATE_DECISION,
-        frontier,
-        rungIndex,
-        disposition: DISPOSITION_ADVISORY,
-        code,
-        outcome: OUTCOME_CONTINUE,
-        override: override.reason,
-        problems: override.problems,
-        scopeSignature,
-        nextCommand: null,
-      });
-      return {
-        disposition: DISPOSITION_ADVISORY,
-        code,
-        outcome: OUTCOME_CONTINUE,
-        override: override.reason,
-        problems: override.problems,
-        scopeSignature,
-        nextCommand: null,
-        frontier,
-        rungIndex,
-      };
-    }
+  const overrideAdvisory = resolveOverrideAdvisoryDecision(root, quest, {
+    continuation, log, frontier, rungIndex, scopeSignature,
+    runAuthorizations, code, problems,
+  });
+  if (overrideAdvisory.applicable) {
+    return overrideAdvisory.decision;
   }
 
   // Soft-first / quorum (P5). An inferential theory gate is not hard-escalated on its
