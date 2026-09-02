@@ -1292,7 +1292,8 @@ test('canonical graph verification hard-kills a non-terminating producer', () =>
     const started = Date.now();
     const problem = canonicalImportGraphProblem(rootDirectory, 100);
     assert.ok(Date.now() - started < 1_000);
-    assert.match(problem, /canonical import-graph verification failed.*timedout/isu);
+    assert.match(problem,
+      /canonical import-graph verification failed.*timed out twice/isu);
   });
 });
 

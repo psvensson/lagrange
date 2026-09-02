@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2528757,
-        "sha256": "e7ae37869c49b43a1481746a9a6a519bbd523b097e612a500edb7c93c805577e"
+        "bytes": 2532011,
+        "sha256": "b5afbb985ddc33f4b9c751ace92147916c4e267bb5c7d4ea07ec4da39f2be7a0"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "bbddf35b726836235c7489c98cbad8ee596d813171b2baf9b2de1409d22f078f"
+        "sha256": "3721c7b01f12df8cb92d74d4a3597fa60fc5ba6d4608ae6d450ae796dea1790a"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fe4234827f1f23aaeec219df8febc934212e40faf27f011675b6574ffbea4c65"
+        "sha256": "98e764160e1f1e6f024e8ed2281b76439f77bf653aff321c16ef9bb122e0c498"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "5ef5ca5a7b1fc0163a639afeaba0c10cf5e746fa86fd6529622fc57f2f227261"
+    "inputDigest": "746a6dc1017661388b9ce5f2e4bb6249bf07483b6909cef955a4aac59449a02d"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "bbddf35b726836235c7489c98cbad8ee596d813171b2baf9b2de1409d22f078f"
+          "sha256": "3721c7b01f12df8cb92d74d4a3597fa60fc5ba6d4608ae6d450ae796dea1790a"
         },
         "cloneGroups": 58,
         "duplicatedLines": 1865,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fe4234827f1f23aaeec219df8febc934212e40faf27f011675b6574ffbea4c65"
+          "sha256": "98e764160e1f1e6f024e8ed2281b76439f77bf653aff321c16ef9bb122e0c498"
         },
         "cloneGroups": 809,
         "duplicatedLines": 31052,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2528757,
-        "sha256": "e7ae37869c49b43a1481746a9a6a519bbd523b097e612a500edb7c93c805577e"
+        "bytes": 2532011,
+        "sha256": "b5afbb985ddc33f4b9c751ace92147916c4e267bb5c7d4ea07ec4da39f2be7a0"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "98f398606b3a0af5ddfe7bb5593ca8166e79ab5d15f30ff73d3c3b9dc0962f19",
-      "moduleCount": 5097,
-      "edgeCount": 22800,
+      "sourceDigest": "c466c621b2ad3aa9632b8e1c7800bbbd7aeda9ac71e6517b554e090404f78a10",
+      "moduleCount": 5102,
+      "edgeCount": 22829,
       "unresolvedCount": 34
     }
   },
@@ -246,7 +246,7 @@
       "cloneTouches": 335,
       "cycleGroups": 0,
       "lintExclusions": 15,
-      "importIn": 167,
+      "importIn": 168,
       "importOut": 690,
       "score": 1671.8,
       "topPaths": [
@@ -302,7 +302,7 @@
       "cloneTouches": 6,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 335,
+      "importIn": 337,
       "importOut": 424,
       "score": 681.6,
       "topPaths": [
@@ -442,7 +442,7 @@
       "cloneTouches": 93,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 37,
+      "importIn": 38,
       "importOut": 397,
       "score": 424.2,
       "topPaths": [
@@ -610,7 +610,7 @@
       "cloneTouches": 4,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 103,
+      "importIn": 104,
       "importOut": 55,
       "score": 254.2,
       "topPaths": [
@@ -1226,7 +1226,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 175,
+      "importIn": 176,
       "importOut": 88,
       "score": 72,
       "topPaths": [
@@ -1337,7 +1337,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 560,
+      "importIn": 561,
       "importOut": 43,
       "score": 56,
       "topPaths": [
