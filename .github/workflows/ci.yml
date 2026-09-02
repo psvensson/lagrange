@@ -27,6 +27,7 @@
 # here: its pass rate is variance-bounded and is promoted only through the
 # sealed Wilson-95 rule documented in docs/convergence-donewhen-metric.md.
 name: ci
+run-name: "change-gate: ${{ github.event.head_commit.message || github.ref_name }}"
 
 on:
   push:

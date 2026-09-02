@@ -26,6 +26,7 @@
 # and the whole-system proof already has an explicit home in full-gate.yml and
 # release.yml, both of which run npm run check:release.
 name: repository-health
+run-name: "repo-health: ${{ github.event.head_commit.message || github.ref_name }}"
 
 on:
   push:
