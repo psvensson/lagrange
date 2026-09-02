@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2103,
+    "ordinary": 2104,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2120,
-  "digest": "fnv1a32-f3dc3e5f",
+  "censusSize": 2121,
+  "digest": "fnv1a32-1e47327d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -134,6 +134,7 @@
     "test/bootstrap/control-plane-write-health-owner.test.js": "ordinary",
     "test/bootstrap/create-message-group-phase.test.js": "ordinary",
     "test/bootstrap/create-self-hosted-registration.test.js": "ordinary",
+    "test/bootstrap/critical-placement-authoritative-evidence.test.js": "ordinary",
     "test/bootstrap/critical-placement-classification-control.test.js": "ordinary",
     "test/bootstrap/critical-placement-convergence.test.js": "ordinary",
     "test/bootstrap/debug-meta-table-schemas.test.js": "ordinary",

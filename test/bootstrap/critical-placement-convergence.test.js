@@ -5,12 +5,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  CRITICAL_PLACEMENT_EVIDENCE_STATE,
   CRITICAL_PLACEMENT_REASON,
-  isConvergedPlacementCount,
   isCriticalPlacementPartitionId,
+  resolveAggregatePlacementEvidenceState,
   resolveCriticalPartitionPlacement,
   resolveCriticalPlacementConvergence,
 } from '../../src/bootstrap/critical-placement-convergence.js';
+import {
+  DECLARED_REPLICA_COUNT_DEFAULT,
+  REPLICATION_TARGET_SOURCE,
+} from '../../src/bootstrap/replication-target-authority.js';
 import {
   CRITICAL_SYSTEM_PARTITION_IDS,
 } from '../../src/bootstrap/system-partition-classification.js';
@@ -52,12 +57,33 @@ function spreadRows() {
   ];
 }
 
+// The persisted policy row the seed writes for this partition: the schema
+// creation default, PERSISTED — from then on it is the authoritative policy,
+// which is the only place a requirement may come from.
+function servicesPolicyRow(overrides = {}) {
+  return {
+    partition_id: SERVICES_PARTITION_ID,
+    table_id: SYSTEM_TABLE_NAME.SERVICES,
+    replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
+    ...overrides,
+  };
+}
+
+function criticalPolicyRows() {
+  return [...CRITICAL_SYSTEM_PARTITION_IDS].sort().map((partitionId) => ({
+    partition_id: partitionId,
+    table_id: partitionId.replace(/-p1$/u, ''),
+    replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
+  }));
+}
+
 test('seed-local-replicas-are-not-converged', () => {
   const rows = seedLocalRows();
   assert.equal(rows.length, 3, 'fixture holds the full logical replica count');
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -72,6 +98,7 @@ test('seed-local-replicas-are-not-converged', () => {
 test('distinct-nodes-meeting-required-count-are-converged', () => {
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: spreadRows(),
   });
 
@@ -88,6 +115,7 @@ test('distinct-nodes-meeting-required-count-are-converged', () => {
   // produces over-spread and formation would never be observable as complete.
   const overSpread = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: [
       ...spreadRows(),
       serviceRow(`${SERVICES_PARTITION_ID}-r4`, 'node-4'),
@@ -115,75 +143,71 @@ test('critical-set-is-the-declared-vocabulary', () => {
   assert.equal(isCriticalPlacementPartitionId('user_table-p1'), false);
 });
 
-test('required-count-derives-from-initial-replica-ids', () => {
+test('required-count-derives-from-authoritative-policy', () => {
+  // The requirement is the PERSISTED policy row resolved through the
+  // replication-target authority — not the declared initial replica
+  // identities. An identity count is runtime state: the epic measured a
+  // minted replace-replica identity dragging a length-derived denominator to
+  // 4, and S1 only made the declaration un-mutable. Here the two sources are
+  // forced APART, so an implementation reading either the declaration or a
+  // schema default cannot stay green.
+  const declaredIdentityCount =
+    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length;
+  const divergedRequirement = declaredIdentityCount + 2;
+
   const placement = resolveCriticalPartitionPlacement({
+    partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow({replica_count: divergedRequirement}),
+    serviceRows: spreadRows(),
+  });
+  assert.equal(placement.requiredReplicaCount, divergedRequirement,
+    'required count must come from the persisted policy row');
+  assert.equal(placement.requiredReplicaCountSource,
+    REPLICATION_TARGET_SOURCE.PARTITION_ROW);
+  assert.notEqual(placement.requiredReplicaCount, declaredIdentityCount,
+    'the identity count is forced apart and must not win');
+  assert.equal(placement.tableId, SYSTEM_TABLE_NAME.SERVICES);
+  assert.equal(placement.converged, false,
+    'three holders under a persisted requirement of five is a deficit');
+
+  // NO policy row is an UNREADABLE requirement, which must fail closed to
+  // UNKNOWN — even though the holders would satisfy both the identity count
+  // and the schema creation default.
+  const undeclared = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
     serviceRows: spreadRows(),
   });
-  const declaredCount =
-    getInitialReplicaIds(SYSTEM_TABLE_NAME.SERVICES).length;
-
-  assert.equal(placement.requiredReplicaCount, declaredCount,
-    'required count must come from the declared replica IDs');
-  assert.equal(placement.tableId, SYSTEM_TABLE_NAME.SERVICES);
-
-  // A table with no declared replica IDs has an UNREADABLE requirement, which
-  // must fail closed. The two literal tables are separate — the critical set
-  // derives from SYSTEM_TABLE_NAME, counts from INITIAL_REPLICA_IDS — so a
-  // table added to the first without the second enters with required 0. That
-  // gap is empty today; without this assertion, removing the guard would let
-  // such a partition report CONVERGED as soon as it had any rows.
-  const undeclared = resolveCriticalPartitionPlacement({
-    partitionId: 'undeclared_table-p1',
-    serviceRows: [
-      {service_id: 'svc-u1', service_type: 'partition', node_id: 'node-1',
-        partition_id: 'undeclared_table-p1', replica_id: 'undeclared_table-p1-r1',
-        raft_role: 'leader', status: 'active'},
-      {service_id: 'svc-u2', service_type: 'partition', node_id: 'node-2',
-        partition_id: 'undeclared_table-p1', replica_id: 'undeclared_table-p1-r2',
-        raft_role: 'follower', status: 'active'},
-      {service_id: 'svc-u3', service_type: 'partition', node_id: 'node-3',
-        partition_id: 'undeclared_table-p1', replica_id: 'undeclared_table-p1-r3',
-        raft_role: 'follower', status: 'active'},
-    ],
-  });
-
   assert.equal(undeclared.requiredReplicaCount, 0);
+  assert.equal(undeclared.requiredReplicaCountSource,
+    REPLICATION_TARGET_SOURCE.UNDECLARED);
   assert.equal(undeclared.distinctNodeCount, 3,
     'the rows are real: only the requirement is unreadable');
   assert.equal(undeclared.converged, false,
     'an undeclared requirement must fail closed, never open');
   assert.equal(undeclared.reasonCode,
     CRITICAL_PLACEMENT_REASON.REQUIRED_COUNT_UNKNOWN);
+  assert.equal(undeclared.evidenceState,
+    CRITICAL_PLACEMENT_EVIDENCE_STATE.UNKNOWN,
+    'absent policy is UNKNOWN, never a guessed KNOWN state');
 
-  // One level deeper: INITIAL_REPLICA_IDS is a plain object literal, so an
-  // inherited key resolves. getInitialReplicaIds('constructor') returns a
-  // FUNCTION whose .length is 1 — a replica count borrowed from Object itself.
-  // The count must come from a declared OWN entry, never from whatever the
-  // prototype chain supplies.
-  const inheritedKeyRows = ['node-1', 'node-2', 'node-3'].map(
-    (nodeId, index) => ({
-      service_id: `svc-inherited-${index}`,
-      service_type: 'partition',
-      node_id: nodeId,
-      partition_id: 'constructor-p1',
-      replica_id: `constructor-p1-r${index + 1}`,
-      raft_role: index === 0 ? 'leader' : 'follower',
-      status: 'active',
-    }));
-  const inheritedKey = resolveCriticalPartitionPlacement({
-    partitionId: 'constructor-p1',
-    serviceRows: inheritedKeyRows,
-  });
-
-  assert.equal(inheritedKey.requiredReplicaCount, 0,
-    'an inherited key supplies no declared replica count');
-  assert.equal(inheritedKey.distinctNodeCount, 3,
-    'the rows are real: only the requirement is undeclared');
-  assert.equal(inheritedKey.converged, false,
-    'a requirement borrowed from the prototype chain must never converge');
-  assert.equal(inheritedKey.reasonCode,
-    CRITICAL_PLACEMENT_REASON.REQUIRED_COUNT_UNKNOWN);
+  // A present-but-invalid value is the same unreadable requirement: the
+  // authority's strict decode refuses a string, a zero and a negative, and
+  // no schema default may stand in for what the row failed to declare.
+  for (const invalidValue of ['9', 0, -3, 2.5, null]) {
+    const invalid = resolveCriticalPartitionPlacement({
+      partitionId: SERVICES_PARTITION_ID,
+      partitionRow: servicesPolicyRow({replica_count: invalidValue}),
+      serviceRows: spreadRows(),
+    });
+    assert.equal(invalid.requiredReplicaCount, 0,
+      `${String(invalidValue)} is not a readable requirement`);
+    assert.equal(invalid.evidenceState,
+      CRITICAL_PLACEMENT_EVIDENCE_STATE.UNKNOWN,
+      `${String(invalidValue)} must resolve UNKNOWN`);
+    assert.notEqual(invalid.requiredReplicaCount,
+      DECLARED_REPLICA_COUNT_DEFAULT,
+      'the creation default must never read as a row requirement');
+  }
 });
 
 test('non-serving-service-rows-do-not-count', () => {
@@ -195,6 +219,7 @@ test('non-serving-service-rows-do-not-count', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -207,6 +232,7 @@ test('absent-evidence-is-not-converged', () => {
   for (const rows of [undefined, [], null]) {
     const placement = resolveCriticalPartitionPlacement({
       partitionId: SERVICES_PARTITION_ID,
+      partitionRow: servicesPolicyRow(),
       serviceRows: rows,
     });
     assert.equal(placement.converged, false, 'absence is not satisfaction');
@@ -214,8 +240,14 @@ test('absent-evidence-is-not-converged', () => {
       CRITICAL_PLACEMENT_REASON.EVIDENCE_ABSENT);
   }
 
-  const convergence = resolveCriticalPlacementConvergence({serviceRows: []});
+  const convergence = resolveCriticalPlacementConvergence({
+    serviceRows: [],
+    partitionRows: criticalPolicyRows(),
+  });
   assert.equal(convergence.converged, false);
+  assert.equal(convergence.evidenceState,
+    CRITICAL_PLACEMENT_EVIDENCE_STATE.KNOWN_NOT_CONVERGED,
+    'zero holders under valid policy is a MEASURED deficit for the set');
   assert.ok(convergence.pendingPartitionIds.length > 0);
 
   // The seventh shape class: a NON-CANONICAL container or record. This is the
@@ -294,6 +326,7 @@ test('absent-evidence-is-not-converged', () => {
     assert.doesNotThrow(() => {
       placement = resolveCriticalPartitionPlacement({
         partitionId: SERVICES_PARTITION_ID,
+        partitionRow: servicesPolicyRow(),
         serviceRows,
       });
     }, `${label} must not throw`);
@@ -316,6 +349,7 @@ test('repeated-node-rows-count-once', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -327,10 +361,12 @@ test('repeated-node-rows-count-once', () => {
 test('evaluator-mints-no-readiness-verdict', () => {
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: spreadRows(),
   });
   const convergence = resolveCriticalPlacementConvergence({
     serviceRows: spreadRows(),
+    partitionRows: criticalPolicyRows(),
   });
 
   const forbidden = ['ready', 'active', 'phase', 'verdict', 'status',
@@ -353,9 +389,11 @@ test('evaluator-mints-no-readiness-verdict', () => {
 test('witness-deterministic', () => {
   const forward = resolveCriticalPlacementConvergence({
     serviceRows: spreadRows(),
+    partitionRows: criticalPolicyRows(),
   });
   const reversed = resolveCriticalPlacementConvergence({
     serviceRows: [...spreadRows()].reverse(),
+    partitionRows: [...criticalPolicyRows()].reverse(),
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(forward)),
@@ -364,6 +402,7 @@ test('witness-deterministic', () => {
 
   const repeated = resolveCriticalPlacementConvergence({
     serviceRows: spreadRows(),
+    partitionRows: criticalPolicyRows(),
   });
   assert.deepEqual(JSON.parse(JSON.stringify(forward)),
     JSON.parse(JSON.stringify(repeated)));
@@ -397,6 +436,7 @@ test('foreign-partition-rows-do-not-count', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -417,6 +457,7 @@ test('learner-replicas-are-not-eligible-capacity', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -437,6 +478,7 @@ test('non-partition-service-rows-do-not-count', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -471,6 +513,7 @@ test('set-iteration-is-ambient-hardened', () => {
 
     const placement = resolveCriticalPartitionPlacement({
       partitionId: SERVICES_PARTITION_ID,
+      partitionRow: servicesPolicyRow(),
       serviceRows: seedLocalRows(),
     });
 
@@ -502,6 +545,7 @@ test('malformed-node-id-rows-do-not-count', () => {
 
   const placement = resolveCriticalPartitionPlacement({
     partitionId: SERVICES_PARTITION_ID,
+    partitionRow: servicesPolicyRow(),
     serviceRows: rows,
   });
 
@@ -511,26 +555,41 @@ test('malformed-node-id-rows-do-not-count', () => {
 });
 
 test('empty-critical-set-is-not-converged', () => {
-  // The decision over COUNTS, so the empty case is actually reachable. The
-  // previous form asserted converged === (pending === 0 && partitions > 0),
-  // which restates the implementation: under the live 45-partition set the
-  // second conjunct is always true, so guarded and unguarded right-hand sides
-  // are identical and no data the public API can produce distinguishes them.
-  assert.equal(isConvergedPlacementCount(0, 0), false,
+  // The decision over COUNTS, so the empty and mixed cases are actually
+  // reachable. Under the live 45-partition set the empty guard never fires,
+  // so only this direct probe distinguishes a guarded decision from a bare
+  // pendingCount check.
+  const STATE = CRITICAL_PLACEMENT_EVIDENCE_STATE;
+  assert.equal(resolveAggregatePlacementEvidenceState(0, 0, 0), STATE.UNKNOWN,
     'an empty critical set has no pending partitions, but converges over nothing');
-  assert.equal(isConvergedPlacementCount(0, 45), true);
-  assert.equal(isConvergedPlacementCount(1, 45), false);
-  assert.equal(isConvergedPlacementCount(45, 45), false);
+  assert.equal(resolveAggregatePlacementEvidenceState(0, 0, 45),
+    STATE.KNOWN_CONVERGED);
+  assert.equal(resolveAggregatePlacementEvidenceState(0, 1, 45),
+    STATE.KNOWN_NOT_CONVERGED);
+  assert.equal(resolveAggregatePlacementEvidenceState(0, 45, 45),
+    STATE.KNOWN_NOT_CONVERGED);
+  assert.equal(resolveAggregatePlacementEvidenceState(1, 0, 45), STATE.UNKNOWN,
+    'one unknown partition blocks any KNOWN_CONVERGED claim');
+  assert.equal(resolveAggregatePlacementEvidenceState(1, 1, 45),
+    STATE.KNOWN_NOT_CONVERGED,
+    'a measured deficit is knowledge no unknown neighbour can retract');
+  assert.equal(resolveAggregatePlacementEvidenceState(45, 0, 45),
+    STATE.UNKNOWN);
 
   // The live projection routes its answer through that same decision — but
   // that is established by INSPECTION, not by the assertion below: an inlined
-  // `pendingCount === 0` call site is behaviourally identical for every
-  // reachable input, so nothing here can distinguish them.
+  // call site is behaviourally identical for every reachable input, so
+  // nothing here can distinguish them.
   const convergence = resolveCriticalPlacementConvergence({
     serviceRows: spreadRows(),
+    partitionRows: criticalPolicyRows(),
   });
-  assert.equal(convergence.converged, isConvergedPlacementCount(
-    convergence.pendingPartitionIds.length, convergence.partitions.length));
+  assert.equal(convergence.evidenceState, resolveAggregatePlacementEvidenceState(
+    convergence.unknownPartitionIds.length,
+    convergence.pendingPartitionIds.length,
+    convergence.partitions.length));
+  assert.equal(convergence.converged, convergence.evidenceState ===
+    CRITICAL_PLACEMENT_EVIDENCE_STATE.KNOWN_CONVERGED);
 });
 
 test('whole-set-convergence-is-reachable', () => {
@@ -562,7 +621,10 @@ test('whole-set-convergence-is-reachable', () => {
       });
     });
 
-  const convergence = resolveCriticalPlacementConvergence({serviceRows: rows});
+  const convergence = resolveCriticalPlacementConvergence({
+    serviceRows: rows,
+    partitionRows: criticalPolicyRows(),
+  });
 
   assert.equal(convergence.converged, true,
     'a fully spread critical set must be observable as converged');
@@ -621,7 +683,10 @@ test('per-partition-attribution-is-measured', () => {
     });
   });
 
-  const convergence = resolveCriticalPlacementConvergence({serviceRows: rows});
+  const convergence = resolveCriticalPlacementConvergence({
+    serviceRows: rows,
+    partitionRows: criticalPolicyRows(),
+  });
 
   assert.equal(convergence.converged, false,
     'an under-spread critical partition must block whole-set convergence');

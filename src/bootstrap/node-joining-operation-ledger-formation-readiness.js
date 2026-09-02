@@ -11,6 +11,9 @@ import {
   SYSTEM_TABLE_NAME,
   getInitialReplicaIds,
 } from './system-table-schemas-constants.js';
+import {
+  observeCriticalPlacement,
+} from './critical-placement-formation-observer.js';
 
 const {
   JOINING_DEFAULT,
@@ -84,6 +87,29 @@ function buildFormationBarrierStartupAuthorityFields(startupAuthority) {
  * @param {Object} snapshot
  * @return {Object}
  */
+// The generalized question, reported beside the ledger-local one: the
+// ledger is one critical partition, but formation is only real when the
+// whole critical set has spread. Three-state evidence, never a verdict.
+// Extracted so the log-fields builder keeps its decision count flat.
+function buildCriticalPlacementLogFields(criticalPlacement) {
+  return {
+    criticalPlacementEvidenceState:
+      criticalPlacement?.evidenceState || null,
+    criticalPlacementConverged:
+      criticalPlacement?.converged === true,
+    criticalPlacementPendingPartitionIds:
+      criticalPlacement?.pendingPartitionIds || [],
+    criticalPlacementUnknownPartitionIds:
+      criticalPlacement?.unknownPartitionIds || [],
+    criticalPlacementObservedPartitionCount:
+      criticalPlacement?.observedPartitionCount || 0,
+    criticalPlacementMembershipEpochState:
+      criticalPlacement?.membershipEpoch?.state || null,
+    criticalPlacementMembershipEpoch:
+      criticalPlacement?.membershipEpoch?.value ?? null,
+  };
+}
+
 function buildOperationLedgerFormationBarrierLogFields(snapshot) {
   return {
     partitionId: snapshot.partitionId,
@@ -107,6 +133,7 @@ function buildOperationLedgerFormationBarrierLogFields(snapshot) {
       snapshot.formationReleaseHandoff?.requiredCohort || [],
     formationReleaseHandoffPendingNodeIds:
       snapshot.formationReleaseHandoff?.pendingNodeIds || [],
+    ...buildCriticalPlacementLogFields(snapshot.criticalPlacement),
   };
 }
 
@@ -237,6 +264,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       now,
       partitionId,
       targetReplicaCount,
+      // Observed, never acted on here: making this a release condition would
+      // deadlock formation, because a joiner would wait for spread that only
+      // its own join can supply. The lifecycle owner consumes it instead.
+      criticalPlacement: observeCriticalPlacement({systemTableCache}),
       ...buildFormationBarrierStartupAuthorityFields(startupAuthority),
       candidateNodeIds: Object.freeze(candidateNodeIds),
       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
@@ -409,4 +440,9 @@ class NodeJoiningOperationLedgerFormationReadiness
   }
 }
 
-export {NodeJoiningOperationLedgerFormationReadiness};
+export {
+  NodeJoiningOperationLedgerFormationReadiness,
+  OPERATION_LEDGER_FORMATION_BARRIER_STATE,
+  buildOperationLedgerFormationBarrierLogFields,
+  resolveOperationLedgerFormationBarrierState,
+};

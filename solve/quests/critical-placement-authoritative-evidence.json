@@ -1,0 +1,94 @@
+{
+  "id": "critical-placement-authoritative-evidence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Critical-placement convergence is a three-state authoritative observation: the convergence owner resolves each critical partition's required replication factor exclusively through the replication-target policy authority on that partition's persisted partitions row, distinguishes UNKNOWN (policy evidence absent or malformed, or evidence surfaces unreadable) from KNOWN_NOT_CONVERGED (valid policy, measured distinct-voting-holder deficit) from KNOWN_CONVERGED (valid policy, measured satisfaction), stamps the observation with the membership publication epoch it was computed under so a superseded topology's KNOWN_CONVERGED can never authorize the current one, and is reported by the formation barrier as typed evidence without changing any release decision. Bootstrap expected RF and initial replica-id identity counts cannot supply a requirement and cannot turn UNKNOWN into a KNOWN state. This quest observes; it repairs no placement behaviour and leaves the move-planner target divergence to S6b.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "src/bootstrap/critical-placement-convergence.js",
+    "closesCL": [],
+    "parentQuest": "critical-system-placement-distinct-node-invariant-v4",
+    "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+    "draftedAtCommit": "3bf8ab9a8"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/critical-placement-authoritative-evidence.receipt.json",
+      "requiredReceipts": [
+        "fresh-seed-critical-set-fully-inspected",
+        "seed-concentrated-placement-is-known-not-converged",
+        "spread-placement-is-known-converged",
+        "partial-spread-names-the-pending-partitions",
+        "required-rf-resolves-through-the-policy-authority",
+        "absent-policy-evidence-is-unknown-never-known-not-converged",
+        "one-malformed-policy-keeps-only-that-evidence-unknown",
+        "bootstrap-expected-rf-cannot-turn-unknown-into-known",
+        "unreadable-cache-is-typed-unknown",
+        "stale-topology-evidence-cannot-authorize-current-topology",
+        "observer-mints-no-readiness-state",
+        "barrier-release-is-unchanged-by-the-observation",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "critical-placement-authoritative-evidence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/critical-placement-authoritative-evidence.receipt.json",
+          "requiredReceipts": [
+            "fresh-seed-critical-set-fully-inspected",
+            "seed-concentrated-placement-is-known-not-converged",
+            "spread-placement-is-known-converged",
+            "partial-spread-names-the-pending-partitions",
+            "required-rf-resolves-through-the-policy-authority",
+            "absent-policy-evidence-is-unknown-never-known-not-converged",
+            "one-malformed-policy-keeps-only-that-evidence-unknown",
+            "bootstrap-expected-rf-cannot-turn-unknown-into-known",
+            "unreadable-cache-is-typed-unknown",
+            "stale-topology-evidence-cannot-authorize-current-topology",
+            "observer-mints-no-readiness-state",
+            "barrier-release-is-unchanged-by-the-observation",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "three-state-evidence-mandatory",
+      "statement": "The observation vocabulary is exactly UNKNOWN, KNOWN_NOT_CONVERGED, KNOWN_CONVERGED. Absent or malformed policy evidence is UNKNOWN and never either KNOWN state; a measured deficit under valid policy is KNOWN_NOT_CONVERGED; no boolean surface may collapse UNKNOWN into KNOWN_NOT_CONVERGED. A `converged` boolean may exist only as the strict projection state === KNOWN_CONVERGED."
+    },
+    {
+      "id": "authority-sole-requirement-source",
+      "statement": "The convergence owner's required replica count resolves only through resolveDesiredReplicationFactor on the persisted partitions policy row. getInitialReplicaIds, identity counts, schema creation defaults, table-policy fallbacks, and local literals are forbidden requirement sources in this owner. Where the authority decodes UNDECLARED, the requirement is unknown and the evidence is UNKNOWN."
+    },
+    {
+      "id": "topology-binding-reuses-membership-epoch-owner",
+      "statement": "Evidence is stamped with the membership publication epoch from the existing topology_membership_owner (membership-epoch-contract.js) read from the same system-table cache. No local generation counter is minted. An unavailable epoch leaves the stamp typed unavailable, which the epoch fence resolves to UNKNOWN currency; it does not erase the placement measurement."
+    },
+    {
+      "id": "observation-only-no-placement-repair",
+      "statement": "This Quest changes no placement, move, scheduling, or admission behaviour and gates nothing: the formation barrier's release decision is bit-identical with and without the observation. The move-planner placement-target divergence (policy.targetReplicaCount || policy.replicaCount || NUM.THREE via the table-policy fallback) remains untouched and transferred to S6b."
+    },
+    {
+      "id": "critical-set-vocabulary-not-duplicated",
+      "statement": "The critical partition set comes only from CRITICAL_SYSTEM_PARTITION_IDS in system-partition-classification.js; no test or module restates the critical count as a literal."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic raw node:test witness with one anchored scenario per receipt, and a mutation matrix in which guessing UNKNOWN into a KNOWN state, restoring an identity-count or schema-default requirement source, or dropping the epoch stamp each reds at least one named receipt."
+    }
+  ]
+}

@@ -69,30 +69,26 @@ const RECEIPTS = Object.freeze([
       'no local copy of the critical set that could silently drift',
   }),
   Object.freeze({
-    id: 'required-count-derives-from-initial-replica-ids',
+    id: 'required-count-derives-from-authoritative-policy',
     command: scenarioCommand(
-      '^required-count-derives-from-initial-replica-ids'),
-    detail: 'requiredReplicaCount equals getInitialReplicaIds(table).length ' +
-      'from the declaring module, so no replication-factor literal is ' +
-      'hardcoded in the evaluator and changing the declaration moves the bar. ' +
-      'Also pins the fourth reason code, which was asserted NOWHERE: a table ' +
-      'with no declared replica IDs has an unreadable requirement and must ' +
-      'fail CLOSED — three real rows on three distinct nodes still evaluate ' +
-      'not converged with required_replica_count_unknown. The critical set ' +
-      'derives from SYSTEM_TABLE_NAME while counts come from ' +
-      'INITIAL_REPLICA_IDS, two separate literal tables, so a table added to ' +
-      'the first without the second enters with required 0; that gap is empty ' +
-      'today, and without this assertion deleting the guard turned the ' +
-      'refusal into fail-OPEN at 17/0 green, violating the sealed ' +
-      'fail-closed-typed constraint. Also pins the same question ONE LEVEL ' +
-      'DEEPER: INITIAL_REPLICA_IDS is a plain object literal, so an inherited ' +
-      'key resolves — getInitialReplicaIds(\'constructor\') returns a ' +
-      'FUNCTION whose .length is 1. A partition id of constructor-p1 with ' +
-      'three distinct voters must still refuse, because the count must come ' +
-      'from a declared OWN entry and never from whatever the prototype chain ' +
-      'supplies. Mutation-verified: weakening the array type check to ' +
-      'truthiness borrows a replica count of 1 from Object itself and reports ' +
-      'converged TRUE, and now reds this scenario (was 17/0 green)',
+      '^required-count-derives-from-authoritative-policy'),
+    detail: 'LINEAGE (critical-placement-authoritative-evidence, S3): this ' +
+      'receipt was required-count-derives-from-initial-replica-ids until the ' +
+      'requirement source moved from the declared initial replica identities ' +
+      'to the persisted policy row resolved through the replication-target ' +
+      'authority — an identity count is runtime state, not policy, and the ' +
+      'original source was the drifted-denominator class the epic measured. ' +
+      'The invariant the receipt guards is unchanged and STRONGER: no ' +
+      'replication-factor literal is hardcoded in the evaluator, the ' +
+      'requirement follows the authoritative persisted value even when it ' +
+      'diverges from the identity count (forced apart in the scenario), a ' +
+      'partition with NO policy row has an unreadable requirement and fails ' +
+      'CLOSED to required_replica_count_unknown with UNKNOWN evidence — ' +
+      'three real rows on three distinct nodes still refuse — and every ' +
+      'present-but-invalid value (string, zero, negative, fraction, null) ' +
+      'refuses identically, so neither a schema creation default nor a ' +
+      'borrowed prototype value can stand in for what the row failed to ' +
+      'declare',
   }),
   Object.freeze({
     id: 'non-serving-service-rows-do-not-count',

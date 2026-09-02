@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1863,
     "integration": 73,
-    "bootstrap": 177,
+    "bootstrap": 178,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2120,
-  "digest": "fnv1a32-8a1106cf",
+  "censusSize": 2121,
+  "digest": "fnv1a32-a9dde54b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -135,6 +135,7 @@
     "test/bootstrap/control-plane-write-health-owner.test.js": "bootstrap",
     "test/bootstrap/create-message-group-phase.test.js": "bootstrap",
     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap",
+    "test/bootstrap/critical-placement-authoritative-evidence.test.js": "bootstrap",
     "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap",
     "test/bootstrap/critical-placement-convergence.test.js": "bootstrap",
     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap",
