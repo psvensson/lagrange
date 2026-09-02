@@ -1,0 +1,584 @@
+{
+  "generatedAt": "2026-09-02T11:43:29.710Z",
+  "cluster": {
+    "seed": "550e8400-e29b-41d4-a716-446655440100",
+    "joiners": [
+      "550e8400-e29b-41d4-a716-446655440101",
+      "550e8400-e29b-41d4-a716-446655440102"
+    ]
+  },
+  "baselineObservation": {
+    "evidenceState": "known_not_converged",
+    "reasonCodes": [
+      "projected"
+    ],
+    "observedPartitionCount": 45,
+    "pendingPartitionIds": [
+      "artifact_payload_chunks-p1",
+      "artifact_payloads-p1",
+      "call_activation_leases-p1",
+      "call_cell_reduce_results-p1",
+      "call_cell_reduce_slots-p1",
+      "code-p1",
+      "config-p1",
+      "contexts-p1",
+      "control_plane_publications-p1",
+      "debug_breakpoints-p1",
+      "debug_sessions-p1",
+      "debug_snapshots-p1",
+      "indices-p1",
+      "inter_group_latencies-p1",
+      "latency_groups-p1",
+      "live_queries-p1",
+      "logs-p1",
+      "message_groups-p1",
+      "module_dependency_locks-p1",
+      "module_manifests-p1",
+      "node_endpoints-p1",
+      "nodes-p1",
+      "package_registry_mappings-p1",
+      "package_registry_overrides-p1",
+      "partitions-p1",
+      "replica_operations-p1",
+      "schema_migration_partitions-p1",
+      "schema_migrations-p1",
+      "schema_operations-p1",
+      "service_bindings-p1",
+      "service_definitions-p1",
+      "service_endpoints-p1",
+      "service_install_failures-p1",
+      "service_installations-p1",
+      "service_packages-p1",
+      "service_partition_access-p1",
+      "service_revisions-p1",
+      "service_timers-p1",
+      "services-p1",
+      "sql_transaction_participants-p1",
+      "sql_transactions-p1",
+      "sql_write_operations-p1",
+      "storage_reservations-p1",
+      "tables-p1",
+      "wasm_operations-p1"
+    ],
+    "unknownPartitionIds": [],
+    "membershipEpoch": {
+      "state": "available",
+      "value": 3
+    }
+  },
+  "tracedCriticalPartitionId": "artifact_payload_chunks-p1",
+  "controlPartitionId": null,
+  "controlProvisioning": {
+    "completed": false,
+    "detail": "CREATE TABLE succeeded but no partitions row appeared within 12000ms - ordinary user-plane provisioning is starved before the control lane can even acquire authoritative policy"
+  },
+  "ledger": {
+    "partitionId": "replica_operations-p1",
+    "sampleCount": 151,
+    "firstSample": {
+      "atMs": 0,
+      "placement": {
+        "partitionId": "replica_operations-p1",
+        "evidenceState": "known_converged",
+        "requiredReplicaCount": 3,
+        "requiredReplicaCountSource": "partition_row_replica_count",
+        "distinctNodeCount": 3,
+        "distinctNodeIds": [
+          "550e8400-e29b-41d4-a716-446655440100",
+          "550e8400-e29b-41d4-a716-446655440101",
+          "550e8400-e29b-41d4-a716-446655440102"
+        ],
+        "reasonCode": "converged"
+      },
+      "operations": [
+        {
+          "operation_id": "replace-op-b0b98821c956268ed7774ca615a1662a",
+          "type": "REPLACE",
+          "status": "removed",
+          "workflow_step": "REMOVED",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440101",
+          "created_at": 1788349421456,
+          "completed_at": 1788349441412
+        },
+        {
+          "operation_id": "a143605f-b37f-4b0a-b4df-bd52d659cc0c",
+          "type": "ADD",
+          "status": "active",
+          "workflow_step": "ACTIVE",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440102",
+          "created_at": 1788349441520,
+          "completed_at": 1788349445400
+        },
+        {
+          "operation_id": "058d5692-47b9-44ae-b341-b8faf49cd877",
+          "type": "REMOVE",
+          "status": "removed",
+          "workflow_step": "REMOVED",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "created_at": 1788349446041,
+          "completed_at": 1788349446743
+        }
+      ],
+      "serviceRows": [
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "replica_operations-p1-r1",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "replica_operations-p1-r2",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440101",
+          "replica_id": "replace-replica-804a44382c8f7676e0f5d04aed17f26e",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440102",
+          "replica_id": "replica_operations-p1-r4",
+          "raft_role": "follower",
+          "status": "active"
+        }
+      ]
+    },
+    "lastSample": {
+      "atMs": 89614,
+      "placement": {
+        "partitionId": "replica_operations-p1",
+        "evidenceState": "known_converged",
+        "requiredReplicaCount": 3,
+        "requiredReplicaCountSource": "partition_row_replica_count",
+        "distinctNodeCount": 3,
+        "distinctNodeIds": [
+          "550e8400-e29b-41d4-a716-446655440100",
+          "550e8400-e29b-41d4-a716-446655440101",
+          "550e8400-e29b-41d4-a716-446655440102"
+        ],
+        "reasonCode": "converged"
+      },
+      "operations": [
+        {
+          "operation_id": "replace-op-b0b98821c956268ed7774ca615a1662a",
+          "type": "REPLACE",
+          "status": "removed",
+          "workflow_step": "REMOVED",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440101",
+          "created_at": 1788349421456,
+          "completed_at": 1788349441412
+        },
+        {
+          "operation_id": "a143605f-b37f-4b0a-b4df-bd52d659cc0c",
+          "type": "ADD",
+          "status": "active",
+          "workflow_step": "ACTIVE",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440102",
+          "created_at": 1788349441520,
+          "completed_at": 1788349445400
+        },
+        {
+          "operation_id": "058d5692-47b9-44ae-b341-b8faf49cd877",
+          "type": "REMOVE",
+          "status": "removed",
+          "workflow_step": "REMOVED",
+          "target_node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "created_at": 1788349446041,
+          "completed_at": 1788349446743
+        }
+      ],
+      "serviceRows": [
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "replica_operations-p1-r1",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "replica_operations-p1-r2",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440101",
+          "replica_id": "replace-replica-804a44382c8f7676e0f5d04aed17f26e",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440102",
+          "replica_id": "replica_operations-p1-r4",
+          "raft_role": "follower",
+          "status": "active"
+        }
+      ]
+    },
+    "stages": [
+      {
+        "stage": "authority_known",
+        "reached": true,
+        "firstReachedAtMs": 0,
+        "owner": "src/bootstrap/replication-target-authority.js"
+      },
+      {
+        "stage": "deficit_measured",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "operation_recorded",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/unified-rebalancer-rebalance-loop.js -> src/rebalancer/rebalance-coordinator.js (planning/admission boundary)"
+      },
+      {
+        "stage": "operation_progressed",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+      },
+      {
+        "stage": "replica_appeared",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-lifecycle-manager.js"
+      },
+      {
+        "stage": "voter_on_new_node",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/partition/partition-service-learner-promotion-methods.js"
+      },
+      {
+        "stage": "holders_advanced",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-handler-lifecycle-methods.js (holder metadata commit)"
+      },
+      {
+        "stage": "converged",
+        "reached": true,
+        "firstReachedAtMs": 0,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "stabilized",
+        "reached": true,
+        "firstReachedAtMs": 88380,
+        "owner": "src/bootstrap/critical-placement-convergence.js (across samples)"
+      }
+    ],
+    "firstMissingStage": null,
+    "firstMissingOwner": null
+  },
+  "ledgerHoldTimeline": [
+    {
+      "atMs": 0,
+      "hold": {
+        "holdEngaged": true,
+        "concentratedPartitions": [
+          {
+            "partitionId": "replica_operations-p1",
+            "targetReplicaCount": 3,
+            "totalVoters": 4,
+            "maxVotersOnOneNode": 2,
+            "distinctVoterNodeIds": [
+              "550e8400-e29b-41d4-a716-446655440100",
+              "550e8400-e29b-41d4-a716-446655440101",
+              "550e8400-e29b-41d4-a716-446655440102"
+            ],
+            "feasibleTargetNodeIds": [],
+            "overTarget": true,
+            "spreadActionable": true
+          }
+        ]
+      }
+    }
+  ],
+  "critical": {
+    "partitionId": "artifact_payload_chunks-p1",
+    "sampleCount": 151,
+    "firstSample": {
+      "atMs": 0,
+      "placement": {
+        "partitionId": "artifact_payload_chunks-p1",
+        "evidenceState": "known_not_converged",
+        "requiredReplicaCount": 3,
+        "requiredReplicaCountSource": "partition_row_replica_count",
+        "distinctNodeCount": 1,
+        "distinctNodeIds": [
+          "550e8400-e29b-41d4-a716-446655440100"
+        ],
+        "reasonCode": "insufficient_distinct_nodes"
+      },
+      "operations": [],
+      "serviceRows": [
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r1",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r2",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r3",
+          "raft_role": "follower",
+          "status": "active"
+        }
+      ]
+    },
+    "lastSample": {
+      "atMs": 89614,
+      "placement": {
+        "partitionId": "artifact_payload_chunks-p1",
+        "evidenceState": "known_not_converged",
+        "requiredReplicaCount": 3,
+        "requiredReplicaCountSource": "partition_row_replica_count",
+        "distinctNodeCount": 1,
+        "distinctNodeIds": [
+          "550e8400-e29b-41d4-a716-446655440100"
+        ],
+        "reasonCode": "insufficient_distinct_nodes"
+      },
+      "operations": [],
+      "serviceRows": [
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r1",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r2",
+          "raft_role": "follower",
+          "status": "active"
+        },
+        {
+          "node_id": "550e8400-e29b-41d4-a716-446655440100",
+          "replica_id": "artifact_payload_chunks-p1-r3",
+          "raft_role": "follower",
+          "status": "active"
+        }
+      ]
+    },
+    "stages": [
+      {
+        "stage": "authority_known",
+        "reached": true,
+        "firstReachedAtMs": 0,
+        "owner": "src/bootstrap/replication-target-authority.js"
+      },
+      {
+        "stage": "deficit_measured",
+        "reached": true,
+        "firstReachedAtMs": 0,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "operation_recorded",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/unified-rebalancer-rebalance-loop.js -> src/rebalancer/rebalance-coordinator.js (planning/admission boundary)"
+      },
+      {
+        "stage": "operation_progressed",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+      },
+      {
+        "stage": "replica_appeared",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-lifecycle-manager.js"
+      },
+      {
+        "stage": "voter_on_new_node",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/partition/partition-service-learner-promotion-methods.js"
+      },
+      {
+        "stage": "holders_advanced",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-handler-lifecycle-methods.js (holder metadata commit)"
+      },
+      {
+        "stage": "converged",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "stabilized",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js (across samples)"
+      }
+    ],
+    "firstMissingStage": "operation_recorded",
+    "firstMissingOwner": "src/rebalancer/unified-rebalancer-rebalance-loop.js -> src/rebalancer/rebalance-coordinator.js (planning/admission boundary)"
+  },
+  "control": {
+    "partitionId": null,
+    "sampleCount": 151,
+    "firstSample": {
+      "atMs": 0,
+      "placement": {
+        "partitionId": null,
+        "evidenceState": "unknown",
+        "requiredReplicaCount": 0,
+        "requiredReplicaCountSource": "undeclared",
+        "distinctNodeCount": 0,
+        "distinctNodeIds": [],
+        "reasonCode": "required_replica_count_unknown"
+      },
+      "operations": [],
+      "serviceRows": []
+    },
+    "lastSample": {
+      "atMs": 89614,
+      "placement": {
+        "partitionId": null,
+        "evidenceState": "unknown",
+        "requiredReplicaCount": 0,
+        "requiredReplicaCountSource": "undeclared",
+        "distinctNodeCount": 0,
+        "distinctNodeIds": [],
+        "reasonCode": "required_replica_count_unknown"
+      },
+      "operations": [],
+      "serviceRows": []
+    },
+    "stages": [
+      {
+        "stage": "authority_known",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/replication-target-authority.js"
+      },
+      {
+        "stage": "deficit_measured",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "operation_recorded",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/unified-rebalancer-rebalance-loop.js -> src/rebalancer/rebalance-coordinator.js (planning/admission boundary)"
+      },
+      {
+        "stage": "operation_progressed",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+      },
+      {
+        "stage": "replica_appeared",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-lifecycle-manager.js"
+      },
+      {
+        "stage": "voter_on_new_node",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/partition/partition-service-learner-promotion-methods.js"
+      },
+      {
+        "stage": "holders_advanced",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/node/replica-handler-lifecycle-methods.js (holder metadata commit)"
+      },
+      {
+        "stage": "converged",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js"
+      },
+      {
+        "stage": "stabilized",
+        "reached": false,
+        "firstReachedAtMs": null,
+        "owner": "src/bootstrap/critical-placement-convergence.js (across samples)"
+      }
+    ],
+    "firstMissingStage": "authority_known",
+    "firstMissingOwner": "src/bootstrap/replication-target-authority.js"
+  },
+  "comparison": {
+    "shape": "control_provisioning_stalled",
+    "detail": "the ordinary lane never provisioned its partition, so it stops before authority_known - starved even earlier than the critical lane by the same deferred-admission mechanism"
+  },
+  "partitionServicesDiagnostics": {
+    "keyCount": 135,
+    "keySample": [
+      "artifact_payload_chunks-p1-r1",
+      "artifact_payloads-p1-r1",
+      "call_activation_leases-p1-r1",
+      "call_cell_reduce_results-p1-r1",
+      "call_cell_reduce_slots-p1-r1"
+    ],
+    "tracedReplicaKey": "artifact_payload_chunks-p1-r1",
+    "tracedServicePresent": true,
+    "tracedServiceHasRebalancer": true
+  },
+  "activeProbe": {
+    "ran": true,
+    "success": true,
+    "moves": [
+      {
+        "operation": "replace",
+        "nodeId": "550e8400-e29b-41d4-a716-446655440102",
+        "skipped": true,
+        "reason": "budget_exceeded",
+        "admissionReason": "operation_ledger_quorum_concentrated",
+        "admissionDecisionType": "deferred"
+      }
+    ]
+  },
+  "firstMissingTransitionAnswer": {
+    "finding": "operation_recorded",
+    "owner": "src/rebalancer/unified-rebalancer-rebalance-loop.js -> src/rebalancer/rebalance-coordinator.js (planning/admission boundary)",
+    "detail": "first missing transition enters operation_recorded",
+    "predicate": {
+      "addLikeOperationsRecordedForTracedPartition": false,
+      "sampleCount": 151,
+      "traceBudgetMs": 90000,
+      "holdTimelineStates": 1,
+      "holdEngagedStates": 1,
+      "holdEngagedAtTraceStart": true,
+      "holdEngagedAtTraceEnd": true,
+      "activeProbeOutcome": {
+        "ran": true,
+        "success": true,
+        "moves": [
+          {
+            "operation": "replace",
+            "nodeId": "550e8400-e29b-41d4-a716-446655440102",
+            "skipped": true,
+            "reason": "budget_exceeded",
+            "admissionReason": "operation_ledger_quorum_concentrated",
+            "admissionDecisionType": "deferred"
+          }
+        ]
+      }
+    }
+  }
+}

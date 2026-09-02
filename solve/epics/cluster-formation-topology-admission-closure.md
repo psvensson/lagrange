@@ -54,7 +54,7 @@ converges, and that the fix must be found causally rather than assumed.
     S0.1  strict-own-data adversarial owner contract         prerequisite
     S2    admission owner, observational/unwired             verifying
     S3    formation placement observer, observational        verifying
-    S6a   one-partition causal trace, NO behaviour change
+    S6a   one-partition causal trace, NO behaviour change    critical-placement-causal-trace LANDED 5b4ae82df
     S6b   smallest repair at the first broken link
     S5    initial formation admission contract (min 3 peers)
     S4    authoritative TRAFFIC_READY barrier
