@@ -79,6 +79,15 @@ test(
     logger.initialize({level: 'error'});
 
     const systemTableCache = new SystemTableCache();
+    // The persisted policy row: learner promotion resolves its desired RF
+    // through the replication-target authority and DEFERS on an undeclared
+    // policy, so the fixture carries what production always persists.
+    systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS, CDCOperation.INSERT, {
+        partition_id: 'stable-join-partition',
+        table_id: 'stable_join_table',
+        replica_count: 2,
+      });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       service_id: 'replica-1',
       partition_id: 'stable-join-partition',
@@ -181,16 +190,21 @@ test(
 test(
   'PartitionService - learner promotion resolves leader from canonical metadata when hint is absent',
   async (t) => {
+    const partitionPolicyRow = {
+      partition_id: 'test-partition',
+      leader_node_id: 'node-1',
+      // Persisted policy: the promotion path reads this row through the
+      // replication-target authority and defers on an undeclared policy.
+      replica_count: 3,
+    };
     const mockCache = {
-      get: () => null,
+      get: (tableName, key) =>
+        tableName === TABLES.PARTITIONS && key === 'test-partition' ?
+          partitionPolicyRow :
+          null,
       filter: (tableName, predicate) => {
         if (tableName === TABLES.PARTITIONS) {
-          return [
-            {
-              partition_id: 'test-partition',
-              leader_node_id: 'node-1',
-            },
-          ].filter(predicate);
+          return [partitionPolicyRow].filter(predicate);
         }
         if (tableName === TABLES.SERVICES) {
           const services = [

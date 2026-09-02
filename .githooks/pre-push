@@ -17,12 +17,36 @@
 # this one). See scripts/checks/push-gate-unused-files.js.
 set -euo pipefail
 
+# --- Stage feedback + loud failure (operator request 2026-09-02) ---------
+# Every gate stage announces itself with elapsed time, and any non-zero exit
+# names the stage that failed instead of dying silently mid-gate.
+GATE_STARTED_AT=$(date +%s)
+CURRENT_STAGE="preflight"
+stage() {
+  CURRENT_STAGE="$1"
+  echo "[pre-push +$(( $(date +%s) - GATE_STARTED_AT ))s] >> ${CURRENT_STAGE}"
+}
+report_gate_exit() {
+  status=$?
+  elapsed=$(( $(date +%s) - GATE_STARTED_AT ))
+  if [ "${status}" -ne 0 ]; then
+    echo "" >&2
+    echo "[pre-push +${elapsed}s] XX FAILED in stage: ${CURRENT_STAGE} (exit ${status})" >&2
+    echo "[pre-push] fix the stage above and re-run; nothing was pushed" >&2
+  else
+    echo "[pre-push +${elapsed}s] all stages green"
+  fi
+}
+trap report_gate_exit EXIT
+# -------------------------------------------------------------------------
+
 # Only a push that updates refs/heads/main can compound drift on a red main,
 # so the red-main guard below is scoped to main pushes: an agent pushing a
 # feature branch must not be blocked by main's state (decoupling parallel
 # sessions). Git feeds pre-push one "<local-ref> <local-sha> <remote-ref>
 # <remote-sha>" line per pushed ref on stdin; with no stdin lines (manual
 # hook invocation) the guard fail-closes to checking. The local-sha of the
+stage "reading pushed refs"
 # first pushed ref is also captured so the corpus gates below measure the
 # tree being pushed rather than the working tree (epic item 6).
 PUSHING_MAIN=0
@@ -61,6 +85,7 @@ fi
 
 # A push consisting only of tags whose target commits already sit on
 # origin/main (or tag deletions) introduces NO new tree: everything a tag
+stage "tag-only fast path check"
 # points at was proven when its commit was pushed. Re-running the corpus
 # for the release-tag push added ~15 min and two terminal timeouts on
 # 2026-08-23; skip the gauntlet entirely for that case.
@@ -76,6 +101,7 @@ fi
 # with LAGRANGE_PUSH_ON_RED=1 git push (NOT --no-verify, which would also
 # skip every check below); use it only for a push that fixes CI itself.
 if [ "${PUSHING_MAIN}" = "1" ] && [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
+stage "red-main CI guard (queries GitHub)"
   if command -v gh >/dev/null 2>&1; then
     ci_json="$(timeout 15 gh run list --workflow ci.yml --branch main \
       --status completed --limit 1 --json conclusion,headSha \
@@ -107,6 +133,7 @@ if [ "${PUSHING_MAIN}" = "1" ] && [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
   fi
 fi
 
+stage "unused-files check"
 npm run -s test:unused:push
 # Lint TRACKED files only, honoring the same principle as the unused-files
 # check above: untracked files are never part of a push, so a concurrent
@@ -115,6 +142,7 @@ npm run -s test:unused:push
 # Tracked-but-modified files still gate — their committed versions ship.
 # Cache in this worktree's private git dir, not the (possibly symlink-shared)
 # node_modules/.cache — see the matching note in pre-commit.
+stage "tracked-files lint (eslint, cached; ~30s cold)"
 ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
 git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
   'test/**/*.js' 'test/**/*.mjs' 'test/**/*.cjs' \
@@ -128,13 +156,16 @@ git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
 # in-flight files must neither dilute nor false-fail this push (parallel-
 # session architecture epic, item 6). With a captured pushed sha the exact
 # committed tree is gated; manual invocation gates the working-tree state.
+stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
 if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "0000000000000000000000000000000000000000" ]; then
   node scripts/checks/push-gate-corpus-worktree.js --ref "${PUSHED_SHA}"
 else
   node scripts/checks/push-gate-corpus-worktree.js
 fi
 # Fast-fail ordering: circular-deps (~10s) before unused-exports (~60s).
+stage "circular-dependency check (~10s)"
 node scripts/check-circular-dependencies.js
+stage "unused-exports ratchet (~60s)"
 node scripts/check-unused-exports.js
 
 # Final stage — the long-running post-push test corpus. Everything cheap has
@@ -149,6 +180,7 @@ else
   # corpus on an already-hot machine (session thermal policy: hold at
   # CPU >=75C / NVMe Sensor 2 >=78C). Waits up to 10 minutes, then
   # aborts; fail-open where lm-sensors is absent (CI runners).
+  stage "thermal headroom gate"
   node scripts/checks/wait-for-thermal-headroom.js
   echo "pre-push: static checks green — running the post-push test corpus (long)"
   # Retry-failed-once (same owner policy as the CI lanes, 2026-08-24): a
@@ -156,5 +188,6 @@ else
   # file reruns standalone once, reported never hidden, and a standalone
   # failure stays red (run-test-files.js owns the mechanics and the 5-file
   # breakage cap).
+  stage "post-push test corpus (LONG: ~30-45 min; per-file results stream below)"
   LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi

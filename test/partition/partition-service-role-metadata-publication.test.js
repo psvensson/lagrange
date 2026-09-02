@@ -152,6 +152,7 @@ test('PartitionService - publishes leader state as follower metadata in services
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    replica_count: 3,
     [COLUMN.LEADER_NODE_ID]: 'seed-node',
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -232,6 +233,7 @@ test('PartitionService - publishes candidate role as follower metadata', async (
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    replica_count: 3,
     [COLUMN.LEADER_NODE_ID]: 'seed-node',
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -321,6 +323,7 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
       [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -389,6 +392,7 @@ test(
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
       [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -402,7 +406,7 @@ test(
     });
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: 'stable-join-partition',
-      [COLUMN.REPLICA_COUNT]: 3,
+      replica_count: 3,
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'replica-1',
@@ -549,6 +553,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      replica_count: 3,
       [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
@@ -1046,6 +1051,7 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    replica_count: 3,
     [COLUMN.LEADER_NODE_ID]: 'seed-node',
   });
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
