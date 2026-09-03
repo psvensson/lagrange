@@ -1,6 +1,5 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {buildNodeTrustState} from './node-trust-state.js';
-import {snapshotProjectionReadinessTableVersions} from './projection-readiness-evidence-generation.js';
 const {
   COLUMN,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -443,26 +442,8 @@ const controlPlaneReadinessNodeMethods = {
    * @return {Promise<Object>}
    * @private
    */
-  /**
-   * Snapshot the covering table mutation versions for the projection-readiness
-   * generation bracket. Isolated so the per-node evaluators do not name the
-   * system-table cache alongside their authoritative reads: this version read
-   * is a generation stamp, not a competing truth source (the evaluators observe
-   * through the source-observation owner).
-   * @return {string}
-   * @private
-   */
-  captureProjectionReadinessGenerationVersions() {
-    return snapshotProjectionReadinessTableVersions(this.systemTableCache);
-  },
-
   async evaluateNodeReadiness(nodeId, options = {}) {
     const buildStartedAtMs = this.now();
-    // R6 bracket: capture the covering table mutation versions BEFORE any
-    // observation, so the evidence owner can refuse to memoize a contract built
-    // across a concurrent mutation window (this method awaits mid-observation).
-    const projectionReadinessGenerationVersions =
-      this.captureProjectionReadinessGenerationVersions();
     const observedAt = normalizeIsoTimestamp(buildStartedAtMs);
     const publication = this.getPublicationDiagnostics(observedAt);
     const membershipPublication =
@@ -522,7 +503,6 @@ const controlPlaneReadinessNodeMethods = {
           persistSnapshot,
           observedAt,
           buildStartedAtMs,
-          projectionReadinessGenerationVersions,
           readinessPlanningOwnerBuild:
             options.readinessPlanningOwnerBuild === true,
           readinessPlanningColdBootstrapBuild:
@@ -563,7 +543,6 @@ const controlPlaneReadinessNodeMethods = {
       persistSnapshot,
       observedAt,
       buildStartedAtMs,
-      projectionReadinessGenerationVersions,
       readinessPlanningOwnerBuild:
         options.readinessPlanningOwnerBuild === true,
       readinessPlanningColdBootstrapBuild:
@@ -609,10 +588,6 @@ const controlPlaneReadinessNodeMethods = {
    */
   buildNodeReadinessSyncCurrent(nodeId, options = {}) {
     const buildStartedAtMs = this.now();
-    // This method observes synchronously (no awaits), so this bracket cannot
-    // straddle a mutation; it is threaded for parity with the async path.
-    const projectionReadinessGenerationVersions =
-      this.captureProjectionReadinessGenerationVersions();
     const observedAt = normalizeIsoTimestamp(buildStartedAtMs);
     const nodeRow = this.getNodeRow(nodeId);
     const publication = this.getPublicationDiagnostics(observedAt);
@@ -694,7 +669,6 @@ const controlPlaneReadinessNodeMethods = {
           persistSnapshot,
           observedAt,
           buildStartedAtMs,
-          projectionReadinessGenerationVersions,
           readinessPlanningOwnerBuild:
             options.readinessPlanningOwnerBuild === true,
           readinessPlanningColdBootstrapBuild:
@@ -736,7 +710,6 @@ const controlPlaneReadinessNodeMethods = {
       persistSnapshot,
       observedAt,
       buildStartedAtMs,
-      projectionReadinessGenerationVersions,
       readinessPlanningOwnerBuild:
         options.readinessPlanningOwnerBuild === true,
       readinessPlanningColdBootstrapBuild:

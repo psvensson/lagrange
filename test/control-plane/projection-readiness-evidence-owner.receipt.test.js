@@ -26,7 +26,9 @@ import {
   ProjectionReadinessEvidenceOwner,
 } from '../../src/control-plane/projection-readiness-evidence-owner.js';
 import {
-  PROJECTION_READINESS_GENERATION_TABLES,
+  PROJECTION_READINESS_COVERAGE,
+  PROJECTION_READINESS_PUBLICATION_MEMO_TABLES,
+  PROJECTION_READINESS_SOURCE_FIELD_COVERAGE,
   buildProjectionReadinessGenerationKey,
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
@@ -73,20 +75,29 @@ function buildService(nodeId, cache) {
 
 test('DEP: the generation key covers the mapped dependency classes and the ' +
   'owner elides no observation (authoritative refresh preserved)', (t) => {
-  // Control-plane-derived inputs (incl. the big membershipPublication graph)
-  // are covered by the six mapped table mutation versions.
-  for (const table of [
-    TABLES.NODES, TABLES.SERVICES, TABLES.CONTROL_PLANE_PUBLICATIONS,
-    TABLES.PARTITIONS, TABLES.STORAGE_RESERVATIONS, TABLES.REPLICA_OPERATIONS,
-  ]) {
-    t.ok(PROJECTION_READINESS_GENERATION_TABLES.includes(table),
-      `${table} mutation version is in the covering key`);
-  }
+  // Coverage model (quest projection-readiness-per-node-generation-
+  // granularity-v2 supersedes the v3 six-table version segment): every field
+  // of the owner-path source is CONTENT-covered — including the
+  // membershipPublication graph, digested with a per-frozen-object digest
+  // cache — and the key carries no table version and no planning segment.
+  // The publication table version only stamps the sync diagnostics memo.
+  t.same(PROJECTION_READINESS_SOURCE_FIELD_COVERAGE, {
+    dimensions: PROJECTION_READINESS_COVERAGE.CONTENT,
+    runtimeAuthority: PROJECTION_READINESS_COVERAGE.CONTENT,
+    priorityControlPlaneRecovery: PROJECTION_READINESS_COVERAGE.CONTENT,
+    runtimeServeEligible: PROJECTION_READINESS_COVERAGE.CONTENT,
+    nodeEvidence: PROJECTION_READINESS_COVERAGE.CONTENT,
+    membershipPublication: PROJECTION_READINESS_COVERAGE.CONTENT,
+  }, 'every owner-path source field is content-classified');
+  t.same([...PROJECTION_READINESS_PUBLICATION_MEMO_TABLES],
+    [TABLES.CONTROL_PLANE_PUBLICATIONS],
+    'the publication table version stamps only the sync diagnostics memo');
   // Transport/router (finding A) and SELF lifecycle (finding B) manifest in the
-  // dimensions/runtimeAuthority verdicts; publication mode (finding C) is folded
-  // directly. Each must move the key.
+  // dimensions/runtimeAuthority verdicts and the node's own evidence;
+  // publication mode (finding C) is folded directly. Each must move the key.
   const base = {
-    tableVersions: 'v', planningVersionKey: 'p',
+    membershipPublication: {publicationEpoch: 1, status: 'published'},
+    nodeEvidence: {routerConnectionState: 'connected'},
     dimensions: {clusterMemberHealthy: true}, runtimeAuthority: {routingReady: true},
     priorityControlPlaneRecovery: {active: false}, runtimeServeEligible: true,
     publication: {currentMode: 'grouped'},
@@ -99,12 +110,18 @@ test('DEP: the generation key covers the mapped dependency classes and the ' +
     ...base, runtimeAuthority: {routingReady: false}}),
   'a runtimeAuthority change rotates the key');
   t.not(key, buildProjectionReadinessGenerationKey({
+    ...base, nodeEvidence: {routerConnectionState: 'connecting'}}),
+  'a node-evidence change rotates the key');
+  t.not(key, buildProjectionReadinessGenerationKey({
     ...base, publication: {currentMode: 'repair_only'}}),
   'a publication-mode change rotates the key');
-  t.not(key, buildProjectionReadinessGenerationKey({...base, tableVersions: 'v2'}),
-    'a covered table version change rotates the key');
-  t.not(key, buildProjectionReadinessGenerationKey({...base, planningVersionKey: 'p2'}),
-    'a planning-version change rotates the key');
+  t.not(key, buildProjectionReadinessGenerationKey({
+    ...base, membershipPublication: {publicationEpoch: 2, status: 'published'}}),
+  'a membership-publication content change rotates the key');
+  t.equal(key, buildProjectionReadinessGenerationKey({
+    ...base, membershipPublication: {
+      publicationEpoch: 1, status: 'published', createdAt: 5, updatedAt: 9}}),
+  'membership-publication timestamps alone never rotate the key');
   // Authoritative refresh is not elided: the evidence owner has no observation
   // or query surface — it only reuses/builds a normalized graph it is handed.
   const owner = new ProjectionReadinessEvidenceOwner();

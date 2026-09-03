@@ -794,6 +794,7 @@ function buildProjectionReadinessEvidence(source = {}) {
 }
 
 export {
+  PROJECTION_READINESS_MAX_OWN_DATA_DEPTH,
   buildProjectionReadinessEvidence,
   freezeProjectionReadinessRecord,
   normalizeProjectionReadinessReasonCodes,

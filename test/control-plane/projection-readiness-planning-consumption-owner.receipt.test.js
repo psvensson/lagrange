@@ -278,7 +278,15 @@ test('B4: a readiness generation change is consumed immediately — no stale ' +
   const {service, cache} = buildFixture(nodeId);
   const first = await service.evaluateNodeReadiness(nodeId, {});
   const resolvedFirst = resolveProjectionReadinessStateForEntry({...first});
-  cache.bumpTableMutationVersion(TABLES.NODES);
+  // With the per-node generation model (quest projection-readiness-per-node-
+  // generation-granularity) the authoritative change is the node's own row
+  // changing, not a bare table-version bump.
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode(nodeId),
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: CLOCK_START_MS - 50,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: CLOCK_START_MS + 60000,
+  });
   const second = await service.evaluateNodeReadiness(nodeId, {});
   t.not(second.projectionReadinessContract,
     first.projectionReadinessContract,

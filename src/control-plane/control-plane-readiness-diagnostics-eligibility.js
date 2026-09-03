@@ -2,8 +2,8 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {ControlPlaneReadinessParticipationBase} from './control-plane-readiness-participation-base.js';
 import {installControlPlaneReadinessSnapshotStoreMethods} from './control-plane-readiness-snapshot-store.js';
 import {
-  buildProjectionReadinessGenerationKey,
-  snapshotProjectionReadinessTableVersions,
+  PROJECTION_READINESS_GENERATION_STATE,
+  buildProjectionReadinessGeneration,
 } from './projection-readiness-evidence-generation.js';
 import {ProjectionReadinessEvidenceOwner} from './projection-readiness-evidence-owner.js';
 import {
@@ -346,13 +346,16 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    */
   /**
    * ProjectionReadinessEvidenceOwner seam: reuse the frozen normalized contract
-   * for this node when its authoritative generation is unchanged, otherwise
+   * for this node when its semantic generation is unchanged, otherwise
    * normalize/freeze once. The observation has already happened under the
    * source-observation owner's freshness contract — this only elides the
    * redundant normalize/deep-copy/freeze (profile owners U2/U4). The generation
-   * key is built from the state ACTUALLY observed for this evaluation; a
-   * generation that moves across the (pre-observation → post-build) window is
-   * conservatively not memoized (R6).
+   * is built by the generation owner from the state ACTUALLY observed for this
+   * evaluation — a pure content digest of the node's own semantic inputs
+   * (quest projection-readiness-per-node-generation-granularity-v2), so a
+   * generation can never alias content it did not observe and no
+   * version bracket is needed. A generation the owner cannot prove complete
+   * is built WITHOUT memoizing (DEP-SCOPE fail-closed).
    * @param {Object} context  post-observation evaluation context.
    * @param {Object} source  the assembled contract source (normalize input).
    * @param {Object} verdicts  the small already-computed verdict records used
@@ -374,46 +377,38 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     const owner = this.projectionReadinessEvidenceOwner ||
       (this.projectionReadinessEvidenceOwner =
         new ProjectionReadinessEvidenceOwner());
-    const {versionsBefore, generationKey} =
-      this.computeProjectionReadinessGenerationBracket(context, verdicts);
-    return owner.resolveContract(nodeId, generationKey, build, () =>
-      snapshotProjectionReadinessTableVersions(this.systemTableCache) ===
-      versionsBefore);
+    const generation =
+      this.computeProjectionReadinessGeneration(context, source, verdicts);
+    if (generation.state !== PROJECTION_READINESS_GENERATION_STATE.COMPLETE) {
+      return owner.resolveContractUnowned(generation.reason, build);
+    }
+    return owner.resolveContract(nodeId, generation.key, build);
   }
 
   /**
-   * Compute the R6 version bracket and the DEP-complete generation key from the
-   * observed evaluation context. The bracket prefers the version snapshot
-   * captured before observation (threaded from evaluateNodeReadiness), falling
-   * back to a fresh snapshot for callers that did not observe through it.
+   * Compute the typed semantic generation from the observed evaluation
+   * context: every owner-path source field digested by the generation owner
+   * (an unclassified field makes the generation incomplete).
    * @param {Object} context  post-observation evaluation context.
+   * @param {Object} source  the assembled contract source.
    * @param {Object} verdicts  the already-computed verdict records.
-   * @return {{versionsBefore: string, generationKey: string}}
+   * @return {Object} typed generation.
    * @private
    */
-  computeProjectionReadinessGenerationBracket(context, verdicts) {
-    const versionsBefore =
-      typeof context?.projectionReadinessGenerationVersions === 'string' ?
-        context.projectionReadinessGenerationVersions :
-        snapshotProjectionReadinessTableVersions(this.systemTableCache);
-    const planningVersionKey =
-      typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
-        this.readMembershipPlanningDerivationVersionKey(context?.observedAt) :
-        null;
+  computeProjectionReadinessGeneration(context, source, verdicts) {
     const {
       baseDimensions, priorityControlPlaneRecovery,
       runtimeAuthority, runtimeServeEligible,
     } = verdicts || {};
-    const generationKey = buildProjectionReadinessGenerationKey({
-      tableVersions: versionsBefore,
-      planningVersionKey,
+    return buildProjectionReadinessGeneration({
+      membershipPublication: context?.membershipPublication,
+      nodeEvidence: context?.nodeEvidence,
       dimensions: baseDimensions,
       runtimeAuthority,
       priorityControlPlaneRecovery,
       runtimeServeEligible,
       publication: context?.publication,
-    });
-    return {versionsBefore, generationKey};
+    }, source);
   }
 
   buildDimensionsEvaluation(context) {

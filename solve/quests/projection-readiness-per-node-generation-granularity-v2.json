@@ -1,0 +1,70 @@
+{
+  "id": "projection-readiness-per-node-generation-granularity-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "The ProjectionReadinessEvidenceOwner semantic generation for a node is a pure function of that node's OWN observed semantic inputs S(N) = {dimensions, runtimeAuthority, priorityControlPlaneRecovery, runtimeServeEligible, nodeEvidence, membershipPublication} — every field canonically digested with observation-time fields excluded (membershipPublication via a digest cached per frozen diagnostics object, its top-level createdAt/updatedAt classified observation-time) — and carries NO cluster-wide version segment and NO planning-derivation segment, so an authoritative mutation rotates node N's generation if and only if it changes N's observed semantic inputs. Invariants: (DEP-SCOPE) every field reaching the owner seam is classified with a source-owner justification and the seam fails CLOSED (build without memoizing, counted) for any unclassified field or digest depth overflow; (A1) a mutation proven to affect only node A rotates A while B returns the SAME core reference without normalizing again; (A2) A observes the new semantic result — no stale node-local entry; (A3) a membership-publication content change (epoch/status/ack lists) rotates every node's generation, while a CONTROL_PLANE_PUBLICATIONS write that leaves the membership diagnostics' semantic content unchanged rotates no node; (A4) a mutation affecting a bounded node subset rebuilds exactly that subset; (A5) live transport/lifecycle/publication-mode/repair changes rotate exactly as v2 DEP and v4 established, raw nodeEvidence transport fields included; (A6) a publication change arriving while a graph is being built, or between a cache apply and its deferred listener on the sync path, never publishes old evidence under a newer generation, on the REAL SystemTableCache; (PLANNING) a planning-derivation tick that changes no verdict leaves every core reused by reference and a planning change that flips a verdict still rotates through the digested verdict; (ENGAGEMENT) under production-shaped churn (five nodes, moving clock, writes repeatedly concerning one/some nodes, planning latch live) unaffected nodes' cores actually reuse, and the receipt reds when either the six cluster-wide table versions or the planning segment is restored to the key; (BOUNDED-WORK) builds(N) <= changes to S(N) + 1 initial build — never cluster table writes x node count; (LIVE) on the local docker formation fixture (LAGRANGE_LOOP_GAP_PROFILE=1 npm run demo:movielens, seed node, formation window) owner reuse is >= 50% with builds per sync read <= 0.35, against 8.8% and 0.55 measured before. The generation uses no TTL, clock, evaluation count or object identity as an invalidation signal (a WeakMap digest cache on frozen objects is a pure cache). Scope owns ONLY the generation of the ProjectionReadinessEvidenceOwner and the sync publication-diagnostics memo keying; it does NOT own the planning latch itself, OwnerKeyReconcileQueue cadence, ReadinessPlanningSnapshotOwner loop frequency, trust-state/dispatch caller frequency, candidate-derivation self-cost, storage_reservation_reconcile, or schema admission.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/evidence/projection-readiness-per-node-generation-granularity.effectiveness-measurement.md",
+    "closesCL": [],
+    "parentQuest": "projection-readiness-per-node-generation-granularity",
+    "planDoc": null,
+    "draftedAtCommit": "d072cece0d96c2de6749d0519ce1914dc59bdfe5"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/projection-readiness-per-node-generation-granularity-v2.receipt.json",
+      "requiredReceipts": [
+        "DEP-SCOPE-owner-path-source-fields-pinned-and-classified",
+        "DEP-SCOPE-fail-closed-unclassified-and-overflow-never-memoized",
+        "A1-unrelated-node-reuses-same-core-reference",
+        "A2-affected-node-sees-new-semantic-result",
+        "A3-membership-publication-content-change-rotates-every-node",
+        "A3b-publication-table-write-without-semantic-change-rotates-no-node",
+        "A4-bounded-affected-set-rebuilds-others-reuse",
+        "A5-live-transport-lifecycle-publication-repair-still-rotate",
+        "A6-publication-race-never-publishes-old-evidence-under-new-generation",
+        "PLANNING-segment-redundant-verdict-preserving-tick-reuses-verdict-changing-tick-rotates",
+        "ENGAGEMENT-production-shaped-churn-unaffected-nodes-reuse-red-on-revert",
+        "BOUNDED-WORK-builds-per-node-bounded-by-semantic-input-changes",
+        "LIVE-local-formation-seed-reuse-collapses-builds"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "projection-readiness-per-node-generation-granularity-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/projection-readiness-per-node-generation-granularity-v2.receipt.json",
+          "requiredReceipts": [
+            "DEP-SCOPE-owner-path-source-fields-pinned-and-classified",
+            "DEP-SCOPE-fail-closed-unclassified-and-overflow-never-memoized",
+            "A1-unrelated-node-reuses-same-core-reference",
+            "A2-affected-node-sees-new-semantic-result",
+            "A3-membership-publication-content-change-rotates-every-node",
+            "A3b-publication-table-write-without-semantic-change-rotates-no-node",
+            "A4-bounded-affected-set-rebuilds-others-reuse",
+            "A5-live-transport-lifecycle-publication-repair-still-rotate",
+            "A6-publication-race-never-publishes-old-evidence-under-new-generation",
+            "PLANNING-segment-redundant-verdict-preserving-tick-reuses-verdict-changing-tick-rotates",
+            "ENGAGEMENT-production-shaped-churn-unaffected-nodes-reuse-red-on-revert",
+            "BOUNDED-WORK-builds-per-node-bounded-by-semantic-input-changes",
+            "LIVE-local-formation-seed-reuse-collapses-builds"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

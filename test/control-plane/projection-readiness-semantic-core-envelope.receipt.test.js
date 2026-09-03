@@ -59,6 +59,22 @@ function withMutationVersions(cache) {
   return wrapped;
 }
 
+// An authoritative change to the node's OWN evidence (its NODES row): with the
+// per-node generation model (quest projection-readiness-per-node-generation-
+// granularity) a bare table-version bump that changes no observed content no
+// longer rotates a node's key, so the receipts model "the generation moved"
+// as the real row change it always stood for.
+let heartbeatAdvance = 0;
+function advanceNodeHeartbeat(cache, nodeId) {
+  heartbeatAdvance += 1;
+  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+    ...createActiveNode(nodeId),
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: CLOCK_START_MS - 100 + heartbeatAdvance,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: CLOCK_START_MS + 60000,
+  });
+}
+
 function buildMovingClockFixture(nodeId) {
   const cache = withMutationVersions(createCache({
     nodes: [{
@@ -213,9 +229,13 @@ test('FRESHNESS (integration): a reused core still ships each call\'s own ' +
 
 test('SEMANTIC-KEY: each semantic dependency class rotates the key while ' +
   'observation time is excluded', (t) => {
+  // Quest projection-readiness-per-node-generation-granularity-v2: the key
+  // is fully content-covered — the former table-version and planning
+  // segments are replaced by the node's own evidence and the digested
+  // membership-publication content (both semantic dependency classes).
   const base = {
-    tableVersions: 'v',
-    planningVersionKey: 'p',
+    membershipPublication: {publicationEpoch: 1, status: 'published'},
+    nodeEvidence: {status: 'active', routerConnectionState: 'connected'},
     dimensions: {clusterMemberHealthy: true},
     runtimeAuthority: {routingReady: true},
     priorityControlPlaneRecovery: {active: false, enteredAt: 1000},
@@ -224,8 +244,10 @@ test('SEMANTIC-KEY: each semantic dependency class rotates the key while ' +
   };
   const key = buildProjectionReadinessGenerationKey(base);
   const rotations = [
-    ['covered table version', {...base, tableVersions: 'v2'}],
-    ['planning derivation version', {...base, planningVersionKey: 'p2'}],
+    ['membership-publication content', {...base,
+      membershipPublication: {publicationEpoch: 2, status: 'published'}}],
+    ['node evidence', {...base,
+      nodeEvidence: {status: 'active', routerConnectionState: 'disconnected'}}],
     ['transport/lifecycle dimension',
       {...base, dimensions: {clusterMemberHealthy: false}}],
     ['runtimeAuthority verdict',
@@ -251,7 +273,7 @@ test('SEMANTIC-KEY (integration): an authoritative table change rebuilds ' +
   const {service, cache} = buildMovingClockFixture(nodeId);
   const first = await service.evaluateNodeReadiness(nodeId, {});
   await service.evaluateNodeReadiness(nodeId, {});
-  cache.bumpTableMutationVersion(TABLES.NODES);
+  advanceNodeHeartbeat(cache, nodeId);
   const third = await service.evaluateNodeReadiness(nodeId, {});
   const stats = service.projectionReadinessEvidenceOwner.stats();
   t.equal(stats.normalizeBuildCount, 2,
@@ -335,7 +357,7 @@ test('PERF (integration): under a moving clock, normalize count tracks ' +
   const cachedStartMs = performance.now();
   for (let i = 0; i < PERF_INTEGRATION_EVALUATIONS; i += 1) {
     if (i > 0 && i % PERF_INTEGRATION_GENERATION_STRIDE === 0) {
-      cached.cache.bumpTableMutationVersion(TABLES.NODES);
+      advanceNodeHeartbeat(cached.cache, nodeId);
     }
     await cached.service.evaluateNodeReadiness(nodeId, {});
   }

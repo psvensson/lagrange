@@ -31,8 +31,23 @@
 // lives in the evaluation snapshot ENVELOPE composed downstream
 // (control-plane-readiness-evidence-reasons.js), never inside this owner's
 // reusable core, and a cached core is never mutated to refresh a timestamp.
+//
+// Generation granularity (quest projection-readiness-per-node-generation-
+// granularity-v2): the key is a pure content digest of the node's OWN
+// observed semantic inputs (projection-readiness-evidence-generation.js
+// classifies every seam source field; no cluster-wide version, no planning
+// segment), so a mutation that cannot change node N's core never rotates N's
+// key. Every build is attributed to the key segment that rotated
+// (membershipPublication / nodeEvidence / verdict digests / initial) in both
+// the sync-section tags and `stats()`, so a live profile names the residual
+// rotator. A generation the owner cannot prove complete is never memoized
+// (`resolveContractUnowned`, counted by reason).
 
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+import {
+  PROJECTION_READINESS_GENERATION_SEGMENT,
+  attributeProjectionReadinessGenerationRotation,
+} from './projection-readiness-evidence-generation.js';
 
 // Sync-section attribution (instrumentation-only, projection-readiness
 // re-measurement): per-window counts and time for owner builds vs reuse hits,
@@ -41,10 +56,38 @@ import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 // attributed to other sections).
 const OWNER_SYNC_SECTION = Object.freeze({
   BUILD: 'projection_readiness_owner_build',
+  BUILD_PREFIX: 'projection_readiness_owner_build_',
   REUSE: 'projection_readiness_owner_reuse',
   UNKEYED_BUILD: 'projection_readiness_owner_unkeyed_build',
+  UNOWNED_BUILD_PREFIX: 'projection_readiness_owner_unowned_build_',
   VOLATILE_SKIP: 'projection_readiness_owner_volatile_skip',
 });
+
+// Build cause = the rotated key segment, or the node's first build.
+const OWNER_BUILD_CAUSE_INITIAL = 'initial';
+const OWNER_BUILD_CAUSES = Object.freeze([
+  OWNER_BUILD_CAUSE_INITIAL,
+  ...PROJECTION_READINESS_GENERATION_SEGMENT,
+]);
+// Per-cause build sections nest inside the aggregate BUILD section, so the
+// watchdog site sample ranks each rotator by the normalize time it actually
+// cost while the aggregate stays comparable across profiles.
+const OWNER_BUILD_SECTION_BY_CAUSE = Object.freeze(Object.fromEntries(
+  OWNER_BUILD_CAUSES.map((cause) =>
+    [cause, OWNER_SYNC_SECTION.BUILD_PREFIX + cause]),
+));
+
+function zeroCountByCause() {
+  return Object.fromEntries(OWNER_BUILD_CAUSES.map((cause) => [cause, 0]));
+}
+
+function resolveBuildCause(entry, generationKey) {
+  if (!entry) {
+    return OWNER_BUILD_CAUSE_INITIAL;
+  }
+  return attributeProjectionReadinessGenerationRotation(
+    entry.key, generationKey) || OWNER_BUILD_CAUSE_INITIAL;
+}
 
 class ProjectionReadinessEvidenceOwner {
   constructor() {
@@ -57,6 +100,27 @@ class ProjectionReadinessEvidenceOwner {
     // Builds that observed a generation change mid-build and were therefore
     // not memoized (volatile generation — R6 conservative skip).
     this.volatileSkipCount = 0;
+    // Rotation attribution: builds by the key segment that rotated.
+    this.buildCountByCause = zeroCountByCause();
+    // Fail-closed builds (generation not provably complete), by reason.
+    this.unownedBuildCountByReason = {};
+    // Per-node attribution (BOUNDED-WORK receipts): nodeId -> counters.
+    this.statsByNodeId = new Map();
+  }
+
+  /** @private */
+  nodeCounters(nodeId) {
+    let counters = this.statsByNodeId.get(nodeId);
+    if (!counters) {
+      counters = {
+        buildCount: 0,
+        reuseCount: 0,
+        volatileSkipCount: 0,
+        buildCountByCause: zeroCountByCause(),
+      };
+      this.statsByNodeId.set(nodeId, counters);
+    }
+    return counters;
   }
 
   /**
@@ -69,11 +133,13 @@ class ProjectionReadinessEvidenceOwner {
    *   the frozen contract may be reused by reference.
    * @param {Function} buildContract  Zero-arg synchronous builder that performs
    *   the normalize/freeze and returns the frozen contract.
-   * @param {Function} generationStable  Zero-arg predicate re-evaluated AFTER
-   *   the build; returns true iff the authoritative generation has not moved
-   *   since `generationKey` was captured. A false result means the observation
-   *   window straddled a mutation, so the freshly built contract is returned
-   *   but NOT memoized under a generation it may not match.
+   * @param {Function} [generationStable]  Optional zero-arg predicate
+   *   re-evaluated AFTER the build; returns true iff the generation has not
+   *   moved since `generationKey` was captured. A false result means the
+   *   observation window straddled a mutation, so the freshly built contract
+   *   is returned but NOT memoized under a generation it may not match. The
+   *   production seam passes none since v2 (a content key cannot straddle);
+   *   the owner keeps the R6 discipline for any version-bracketed caller.
    * @return {Object} the frozen normalized contract.
    */
   resolveContract(nodeId, generationKey, buildContract, generationStable) {
@@ -83,23 +149,48 @@ class ProjectionReadinessEvidenceOwner {
       return trackSyncSection(OWNER_SYNC_SECTION.UNKEYED_BUILD, buildContract);
     }
     const entry = this.entryByNodeId.get(nodeId);
+    const counters = this.nodeCounters(nodeId);
     if (entry && entry.key === generationKey) {
       this.reuseHitCount += 1;
+      counters.reuseCount += 1;
       return trackSyncSection(OWNER_SYNC_SECTION.REUSE, () => entry.contract);
     }
-    const contract = trackSyncSection(OWNER_SYNC_SECTION.BUILD, buildContract);
+    const cause = resolveBuildCause(entry, generationKey);
+    const contract = trackSyncSection(OWNER_SYNC_SECTION.BUILD, () =>
+      trackSyncSection(OWNER_BUILD_SECTION_BY_CAUSE[cause], buildContract));
     this.normalizeBuildCount += 1;
+    this.buildCountByCause[cause] += 1;
+    counters.buildCount += 1;
+    counters.buildCountByCause[cause] += 1;
     if (typeof generationStable === 'function' && generationStable() !== true) {
       // The observed generation changed while we built: publishing this graph
       // under `generationKey` could alias a stale contract to a newer
       // generation on the next hit. Skip memoization; a later stable
       // evaluation populates the entry.
       this.volatileSkipCount += 1;
+      counters.volatileSkipCount += 1;
       trackSyncSection(OWNER_SYNC_SECTION.VOLATILE_SKIP, () => null);
       return contract;
     }
     this.entryByNodeId.set(nodeId, {key: generationKey, contract});
     return contract;
+  }
+
+  /**
+   * Build WITHOUT owning the result because the generation is not provably
+   * complete (DEP-SCOPE fail-closed: an unclassified source field, a digest
+   * depth overflow, or an unavailable global revision). Counted by reason so
+   * a live profile shows exactly why reuse did not fire.
+   * @param {string} reason
+   * @param {Function} buildContract
+   * @return {Object} the frozen normalized contract.
+   */
+  resolveContractUnowned(reason, buildContract) {
+    const key = String(reason);
+    this.unownedBuildCountByReason[key] =
+      (this.unownedBuildCountByReason[key] || 0) + 1;
+    return trackSyncSection(
+      OWNER_SYNC_SECTION.UNOWNED_BUILD_PREFIX + key, buildContract);
   }
 
   /**
@@ -128,6 +219,21 @@ class ProjectionReadinessEvidenceOwner {
     return this.entryByNodeId.size;
   }
 
+  /**
+   * Per-node instrumentation counters (BOUNDED-WORK receipts).
+   * @param {string} nodeId
+   * @return {Object}
+   */
+  nodeStats(nodeId) {
+    const counters = this.nodeCounters(nodeId);
+    return {
+      buildCount: counters.buildCount,
+      reuseCount: counters.reuseCount,
+      volatileSkipCount: counters.volatileSkipCount,
+      buildCountByCause: {...counters.buildCountByCause},
+    };
+  }
+
   /** @return {Object} instrumentation counters (R1 / PERF receipts). */
   stats() {
     return {
@@ -135,6 +241,8 @@ class ProjectionReadinessEvidenceOwner {
       reuseHitCount: this.reuseHitCount,
       volatileSkipCount: this.volatileSkipCount,
       ownedNodeCount: this.entryByNodeId.size,
+      buildCountByCause: {...this.buildCountByCause},
+      unownedBuildCountByReason: {...this.unownedBuildCountByReason},
     };
   }
 
@@ -143,6 +251,9 @@ class ProjectionReadinessEvidenceOwner {
     this.normalizeBuildCount = 0;
     this.reuseHitCount = 0;
     this.volatileSkipCount = 0;
+    this.buildCountByCause = zeroCountByCause();
+    this.unownedBuildCountByReason = {};
+    this.statsByNodeId = new Map();
   }
 }
 

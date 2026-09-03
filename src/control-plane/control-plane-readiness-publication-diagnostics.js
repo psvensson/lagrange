@@ -13,6 +13,9 @@ import {
   readMembershipPlanningDerivationVersionKey as
   readPlanningVersionKeyForCache,
 } from './membership-planning-version-key.js';
+import {
+  snapshotProjectionReadinessPublicationMemoStamp,
+} from './projection-readiness-evidence-generation.js';
 
 const {
   MEMBERSHIP_PUBLICATION_READ_LANE,
@@ -69,15 +72,32 @@ class ControlPlaneReadinessPublicationDiagnostics
     // CL-019: this sits on the getNodeReadinessSync hot path (per routing
     // decision, per CDC forward selection). The diagnostics are a pure
     // function of the latest publication row, which changes ~once per epoch
-    // — memoize per change, invalidated by the control_plane_publications
-    // cache-change listener (handleCacheChange). Only the CLUSTER-scope read
-    // is node-independent and memoizable; TARGET_NODE reads recompute.
+    // — memoize per change. Only the CLUSTER-scope read is node-independent
+    // and memoizable; TARGET_NODE reads recompute.
+    //
+    // The memo is keyed on the synchronous CONTROL_PLANE_PUBLICATIONS
+    // mutation version rather than cleared only by the
+    // control_plane_publications cache-change listener: that listener fires on
+    // setImmediate, so a sync readiness build scheduled between a publication
+    // apply and its listener would otherwise observe STALE diagnostics (quest
+    // projection-readiness-per-node-generation-granularity, receipt A6). The
+    // memoized diagnostics object is frozen, so the evidence generation's
+    // per-object digest cache digests it once per version. The listener clear
+    // (handleCacheChange) stays as belt-and-suspenders for caches without a
+    // version surface.
     const memoizableRead =
       resolveMembershipPublicationReadScope(readOptions?.scope) ===
         MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
       typeof this.membershipPublicationService
         ?.getLatestClusterPublicationSync === 'function';
-    if (memoizableRead && this.membershipPublicationDiagnosticsMemo) {
+    // A generation stamp read, not a competing truth source: an absent
+    // version surface yields one constant token, so such fixtures keep the
+    // listener-cleared behavior.
+    const memoStamp = memoizableRead ?
+      snapshotProjectionReadinessPublicationMemoStamp(this.systemTableCache) :
+      null;
+    if (memoizableRead && this.membershipPublicationDiagnosticsMemo &&
+        this.membershipPublicationDiagnosticsMemo.memoStamp === memoStamp) {
       return this.membershipPublicationDiagnosticsMemo.diagnostics;
     }
     const row = this.getLatestMembershipPublicationRowSync(nodeId, readOptions);
@@ -93,7 +113,7 @@ class ControlPlaneReadinessPublicationDiagnostics
       // fallbacks), never gating logic. Freezing them at memo-build time is
       // no staler than today's per-call now(); content staleness is bounded
       // by the publication-change invalidation that clears this memo.
-      this.membershipPublicationDiagnosticsMemo = {diagnostics};
+      this.membershipPublicationDiagnosticsMemo = {memoStamp, diagnostics};
     }
     return diagnostics;
   }
