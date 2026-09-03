@@ -1,0 +1,68 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "projection-readiness-per-node-generation-granularity",
+  "status": "pass",
+  "generatedAt": "2026-09-03T19:22:21.000Z",
+  "receipts": [
+    {
+      "id": "DEP-SCOPE-owner-path-source-fields-pinned-and-classified",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "Instrumenting the owner seam on the production sync path (5 nodes via buildNodeReadinessSyncCurrent) and the async authoritative-refresh path shows the seam source is EXACTLY {dimensions, runtimeAuthority, priorityControlPlaneRecovery, runtimeServeEligible, nodeEvidence, membershipPublication} on every call; the generation owner classifies five as CONTENT (canonically digested per node) and membershipPublication as GLOBAL-VERSION (CONTROL_PLANE_PUBLICATIONS mutation version, the only table version in the key); measured verdict nesting 1/2/5/1/1 against the digest cap 8; segment order global, planning, nodeEvidence, then verdicts. Field-by-field impact map with source-owner justifications: solve/evidence/projection-readiness-per-node-generation-granularity.dep-scope.md."
+    },
+    {
+      "id": "DEP-SCOPE-fail-closed-unclassified-overflow-unavailable-never-memoized",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "buildProjectionReadinessGeneration returns INCOMPLETE {unclassified_source_field | digest_depth_overflow | global_revision_unavailable} for an extra seam field, a verdict nested past the cap, or a missing global revision; integration: a cache without a version surface makes both evaluations unowned (owned=0, reason global_revision_unavailable x2), and a field injected at the seam on the versioned five-node cluster makes all 5 builds unowned (owned=0). A known-global dependency cannot be localized silently: membershipPublication is pinned GLOBAL_VERSION and A3 rebuilds every node on a publication write."
+    },
+    {
+      "id": "A1-unrelated-node-reuses-same-core-reference",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "Five-node real-cache cluster (real SystemTableCache + real MembershipPublicationCoordinator sync read over a real membership publication row), production sync-read path: writes concerning node-1 only (heartbeat row + service row; the SERVICES version pushes every read past the CL-012 stored-snapshot layer to the owner seam) => node-1 rebuilds once, rotation attributed to its node-scoped stamp (nodeEvidence); nodes 0/2/3/4: builds stay 1, each served by reuse, generation key byte-identical, and the returned projectionReadinessContract is the SAME reference (===) as before the write."
+    },
+    {
+      "id": "A2-affected-node-sees-new-semantic-result",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "After the node-1 write its new core carries the new evidence (raw.nodeEvidence.lastHeartbeat == new row value) and is a new reference; a semantic flip (node-1 NODES status -> stopped) rebuilds node-1 again with processAlive=false in both the snapshot dimensions and the owned core's evidence \u2014 no stale node-local entry \u2014 while the other four nodes still hold their original core reference with builds==1."
+    },
+    {
+      "id": "A3-global-publication-change-rotates-every-node",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "A CONTROL_PLANE_PUBLICATIONS write (membership publication epoch 2) rotates every node's generation (attribution 'global'), rebuilds all five, and every new core's raw.membershipPublication.publicationEpoch == 2. Legitimate global invalidation is not optimized away."
+    },
+    {
+      "id": "A4-bounded-affected-set-rebuilds-others-reuse",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "Stopping the control-plane service rows of node-1 and node-3 (verdict change: serveEligible flips) rebuilds exactly node-1 and node-3 (new cores) while node-0/2/4 keep builds==1 and the same core reference \u2014 the affected set is exactly the nodes whose verdicts changed, with no per-table attribution rule needed."
+    },
+    {
+      "id": "A5-live-transport-lifecycle-publication-repair-still-rotate",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "v2 DEP findings A/B/C/E preserved on the five-node cluster: (A) router state CONNECTED->READY for node-2 changes NO readiness dimension yet rotates node-2 only (raw nodeEvidence now digested \u2014 stronger than v4), then DISCONNECTED rotates node-2 again on the node-scoped stamp; (B) a non-running lifecycle state for node-3 rotates node-3 only; (E) a repair record (identity recordedAt) for node-4 rotates node-4 only; (C) a publication-mode flip to repair_only rotates all five by content. In each step every other node reuses."
+    },
+    {
+      "id": "A6-publication-race-never-publishes-old-evidence-under-new-generation",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "On the REAL SystemTableCache (versions bump synchronously, listeners fire on setImmediate): a sync read issued between a publication apply (epoch 2) and its deferred listener bypasses the diagnostics memo (now keyed on the global revision), rebuilds the seed at the new revision (attribution 'global') and its core carries epoch 2; after the listener the same fresh core is reused. Async: an evaluateNodeReadiness whose observation window straddles an epoch-3 apply is built but NOT memoized (per-node volatileSkipCount==1); the next evaluation rebuilds at the settled revision, observes epoch 3, and is then reused by reference. Finding recorded (separate owner, out of scope): the CL-012 stored-snapshot reuse layer has the same deferred-listener window and can serve its stored contract with a fresher top-level membershipPublication until the listener fires."
+    },
+    {
+      "id": "ENGAGEMENT-production-shaped-churn-unaffected-nodes-reuse-red-on-revert",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "12 rounds of formation-shaped churn concerning node-1 (heartbeat + service row per round) with all five nodes read after each round through the production sync path (planning segment held constant \u2014 it is the retained cluster-wide rotator, 250ms-latched on the wall clock in production): 17 builds / 51 reuses over 65 reads (78% reuse); each unaffected node: exactly its initial build, reused on every round, zero node-local rotations, same core reference in every round; node-1: 1+12 builds. Red-on-revert (restoring the six cluster-wide table versions in PROJECTION_READINESS_GENERATION_TABLES, run captured 2026-09-03): 111 assertions fail \u2014 65 builds / 5 reuses over 65 reads (8% reuse, matching the 11% measured in production), 'exactly the initial build across 12 rounds' and 'reused on every round' fail for every unaffected node \u2014 the receipt reds through the intended mechanism."
+    },
+    {
+      "id": "BOUNDED-WORK-builds-per-node-bounded-by-affecting-generation-changes",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/projection-readiness-per-node-generation.receipt.test.js",
+      "detail": "Production wall clock, planning segment NOT pinned: 10 rounds (20 cluster writes concerning node-1) with all five nodes read per round: builds(unaffected N) <= 1 + global changes (distinct latched planning keys observed - 1 + publication writes; 0 here) with zero node-local attributed builds; builds(node-1) <= 1 + global + 10; total 15 builds <= 5 x (1 + 0) + 10 and < 20 writes x 5 nodes (the retired invariant). Under the six-version revert the same run needs 55 builds and every unaffected node shows 11 builds > 1 + 0."
+    }
+  ]
+}
