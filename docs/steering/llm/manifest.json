@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-08-30T05:55:03.955Z",
+  "generatedAt": "2026-09-03T16:12:02.219Z",
   "stats": {
-    "candidateCount": 699,
-    "dedupedRuleCount": 693,
-    "exportedRuleCount": 693,
+    "candidateCount": 703,
+    "dedupedRuleCount": 697,
+    "exportedRuleCount": 697,
     "aliasRuleCount": 4,
-    "masterRuleCount": 689,
-    "emittedMasterRuleCount": 689,
-    "estimatedAllRulesTokens": 32809
+    "masterRuleCount": 693,
+    "emittedMasterRuleCount": 693,
+    "estimatedAllRulesTokens": 33058
   },
   "sources": [
     {
@@ -310,6 +310,15 @@
       "masterRuleCount": 2,
       "aliasRuleCount": 0,
       "emittedMasterRuleCount": 2
+    },
+    {
+      "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 4,
+      "masterRuleCount": 4,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 4
     }
   ],
   "packs": [
@@ -355,16 +364,16 @@
       "name": "testing",
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
-      "ruleCount": 165,
-      "estimatedTokens": 8947,
+      "ruleCount": 169,
+      "estimatedTokens": 9203,
       "domains": [
         "testing"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 165,
+      "masterRuleCount": 169,
       "aliasRuleCount": 1,
-      "indexedRuleCount": 166,
+      "indexedRuleCount": 170,
       "sourceFiles": [
         "operational-ground-truth.md",
         "testing-guidelines/harness.md",
@@ -374,7 +383,8 @@
         "testing-guidelines/proof-ladders.md",
         "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
         "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
-        "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md"
+        "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+        "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md"
       ]
     },
     {

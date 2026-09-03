@@ -205,6 +205,12 @@
       "role": "packed",
       "domain": "governance",
       "priority": 130
+    },
+    {
+      "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+      "role": "packed",
+      "domain": "testing",
+      "priority": 100
     }
   ],
   "outputs": [

@@ -42,5 +42,5 @@ If a domain pack rule looks wrong, fix the underlying source file under `docs/st
 - `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.
 - Domain Markdown packs are generated, selectively loaded, and complete.
 - Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.
-- Source inventory: 33 classified sources; see `manifest.json` and `rules-index.md` for role and provenance.
+- Source inventory: 34 classified sources; see `manifest.json` and `rules-index.md` for role and provenance.
 - Cross-pack duplicates are collapsed via `ruleAliases` in [`../llm-pack.config.json`](../llm-pack.config.json): each alias rule carries `canonical_of: <master-id>` in `rules.json` and is suppressed from per-domain pack emission, so the same rule never appears under multiple IDs in the markdown packs. Master rules keep an `aliases: [...]` array listing the suppressed IDs for traceability.

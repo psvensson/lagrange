@@ -302,16 +302,25 @@
       "masterRuleCount": 2,
       "aliasRuleCount": 0,
       "emittedMasterRuleCount": 2
+    },
+    {
+      "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 4,
+      "masterRuleCount": 4,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 4
     }
   ],
   "stats": {
-    "candidateCount": 699,
-    "dedupedRuleCount": 693,
-    "exportedRuleCount": 693,
+    "candidateCount": 703,
+    "dedupedRuleCount": 697,
+    "exportedRuleCount": 697,
     "aliasRuleCount": 4,
-    "masterRuleCount": 689,
-    "emittedMasterRuleCount": 689,
-    "estimatedAllRulesTokens": 32809
+    "masterRuleCount": 693,
+    "emittedMasterRuleCount": 693,
+    "estimatedAllRulesTokens": 33058
   },
   "rules": [
     {
@@ -8945,6 +8954,22 @@
       ]
     },
     {
+      "id": "TEST-0120",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "\"All semantic tests pass\" MUST NOT be accepted as closure for an optimization; runtime engagement evidence is the acceptance bar.",
+      "score": 196,
+      "sources": [
+        {
+          "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+          "line": 5,
+          "section": "root",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0086",
       "domain": "governance",
       "strength": "must",
@@ -9067,7 +9092,7 @@
       ]
     },
     {
-      "id": "TEST-0120",
+      "id": "TEST-0121",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9086,7 +9111,7 @@
       ]
     },
     {
-      "id": "TEST-0121",
+      "id": "TEST-0122",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9105,7 +9130,7 @@
       ]
     },
     {
-      "id": "TEST-0122",
+      "id": "TEST-0123",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -9121,7 +9146,7 @@
       ]
     },
     {
-      "id": "TEST-0123",
+      "id": "TEST-0124",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9139,7 +9164,7 @@
       ]
     },
     {
-      "id": "TEST-0124",
+      "id": "TEST-0125",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -9155,7 +9180,7 @@
       ]
     },
     {
-      "id": "TEST-0125",
+      "id": "TEST-0126",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9175,7 +9200,7 @@
       ]
     },
     {
-      "id": "TEST-0126",
+      "id": "TEST-0127",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9193,7 +9218,7 @@
       ]
     },
     {
-      "id": "TEST-0127",
+      "id": "TEST-0128",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9212,7 +9237,7 @@
       ]
     },
     {
-      "id": "TEST-0128",
+      "id": "TEST-0129",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9230,7 +9255,7 @@
       ]
     },
     {
-      "id": "TEST-0129",
+      "id": "TEST-0130",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -9246,7 +9271,7 @@
       ]
     },
     {
-      "id": "TEST-0130",
+      "id": "TEST-0131",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9265,7 +9290,7 @@
       ]
     },
     {
-      "id": "TEST-0131",
+      "id": "TEST-0132",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9284,7 +9309,7 @@
       ]
     },
     {
-      "id": "TEST-0132",
+      "id": "TEST-0133",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9304,7 +9329,7 @@
       ]
     },
     {
-      "id": "TEST-0133",
+      "id": "TEST-0134",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9323,7 +9348,7 @@
       ]
     },
     {
-      "id": "TEST-0134",
+      "id": "TEST-0135",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9342,7 +9367,7 @@
       ]
     },
     {
-      "id": "TEST-0135",
+      "id": "TEST-0136",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9361,7 +9386,7 @@
       ]
     },
     {
-      "id": "TEST-0136",
+      "id": "TEST-0137",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9429,7 +9454,7 @@
       ]
     },
     {
-      "id": "TEST-0137",
+      "id": "TEST-0138",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9447,7 +9472,7 @@
       ]
     },
     {
-      "id": "TEST-0138",
+      "id": "TEST-0139",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9465,7 +9490,7 @@
       ]
     },
     {
-      "id": "TEST-0139",
+      "id": "TEST-0140",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9483,7 +9508,7 @@
       ]
     },
     {
-      "id": "TEST-0140",
+      "id": "TEST-0141",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -9499,7 +9524,7 @@
       ]
     },
     {
-      "id": "TEST-0141",
+      "id": "TEST-0142",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9517,7 +9542,7 @@
       ]
     },
     {
-      "id": "TEST-0142",
+      "id": "TEST-0143",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -9533,7 +9558,7 @@
       ]
     },
     {
-      "id": "TEST-0143",
+      "id": "TEST-0144",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9551,7 +9576,7 @@
       ]
     },
     {
-      "id": "TEST-0144",
+      "id": "TEST-0145",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -9569,7 +9594,7 @@
       ]
     },
     {
-      "id": "TEST-0145",
+      "id": "TEST-0146",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10119,7 +10144,7 @@
       ]
     },
     {
-      "id": "TEST-0146",
+      "id": "TEST-0147",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -10137,7 +10162,7 @@
       ]
     },
     {
-      "id": "TEST-0147",
+      "id": "TEST-0148",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -10155,7 +10180,7 @@
       ]
     },
     {
-      "id": "TEST-0148",
+      "id": "TEST-0149",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10171,7 +10196,7 @@
       ]
     },
     {
-      "id": "TEST-0149",
+      "id": "TEST-0150",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -10189,7 +10214,7 @@
       ]
     },
     {
-      "id": "TEST-0150",
+      "id": "TEST-0151",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10471,7 +10496,7 @@
       ]
     },
     {
-      "id": "TEST-0151",
+      "id": "TEST-0152",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10489,7 +10514,7 @@
       ]
     },
     {
-      "id": "TEST-0152",
+      "id": "TEST-0153",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10507,7 +10532,7 @@
       ]
     },
     {
-      "id": "TEST-0153",
+      "id": "TEST-0154",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10558,7 +10583,7 @@
       ]
     },
     {
-      "id": "TEST-0154",
+      "id": "TEST-0155",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10811,7 +10836,23 @@
       ]
     },
     {
-      "id": "TEST-0155",
+      "id": "TEST-0156",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [],
+      "rule": "A performance/optimization quest MUST seal three receipt families, not one.",
+      "score": 178,
+      "sources": [
+        {
+          "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+          "line": 5,
+          "section": "root",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0157",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10859,7 +10900,7 @@
       ]
     },
     {
-      "id": "TEST-0156",
+      "id": "TEST-0158",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10875,7 +10916,7 @@
       ]
     },
     {
-      "id": "TEST-0157",
+      "id": "TEST-0159",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -10893,7 +10934,7 @@
       ]
     },
     {
-      "id": "TEST-0158",
+      "id": "TEST-0160",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10909,7 +10950,7 @@
       ]
     },
     {
-      "id": "TEST-0159",
+      "id": "TEST-0161",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -11041,7 +11082,7 @@
       ]
     },
     {
-      "id": "TEST-0160",
+      "id": "TEST-0162",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -11057,7 +11098,7 @@
       ]
     },
     {
-      "id": "TEST-0161",
+      "id": "TEST-0163",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -11069,6 +11110,40 @@
       "sources": [
         {
           "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+          "line": 5,
+          "section": "root",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0164",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "A soundness receipt alone (the cached/optimized answer is correct) is satisfiable by a vacuous implementation whose mechanism never engages — quest projection-readiness-evidence-amplification-v3 landed exactly that: receipts green under a pinned clock, production reuse 0 per ~10k builds because the memo key digested a per-evaluation timestamp.",
+      "score": 172,
+      "sources": [
+        {
+          "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+          "line": 5,
+          "section": "root",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0165",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Therefore every such quest MUST also seal an ENGAGEMENT receipt — the mechanism demonstrably fires under production-shaped variance (a moving clock, fresh object identities, churning generations), with a red-on-revert proof that disabling the mechanism fails the receipt — and a BOUNDED-WORK receipt — the work count tracks the semantic driver (e.g. builds == semantic generations), never the call count.",
+      "score": 172,
+      "sources": [
+        {
+          "file": "findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
           "line": 5,
           "section": "root",
           "role": "packed"
@@ -11206,7 +11281,7 @@
       ]
     },
     {
-      "id": "TEST-0162",
+      "id": "TEST-0166",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -11222,7 +11297,7 @@
       ]
     },
     {
-      "id": "TEST-0163",
+      "id": "TEST-0167",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -11240,7 +11315,7 @@
       ]
     },
     {
-      "id": "TEST-0164",
+      "id": "TEST-0168",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -11558,7 +11633,7 @@
       ]
     },
     {
-      "id": "TEST-0165",
+      "id": "TEST-0169",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -11576,7 +11651,7 @@
       ]
     },
     {
-      "id": "TEST-0166",
+      "id": "TEST-0170",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -12195,5 +12270,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-08-30T05:55:03.952Z"
+  "generatedAt": "2026-09-03T16:12:02.213Z"
 }
