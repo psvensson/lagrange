@@ -7,7 +7,7 @@
     "bootstrap-membership": 248,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 172,
+    "control-plane": 173,
     "convergence-topology": 76,
     "distributed-harness": 166,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2124,
-  "digest": "fnv1a32-ba8856bc",
+  "censusSize": 2125,
+  "digest": "fnv1a32-9052adad",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -566,6 +566,7 @@
     "test/control-plane/projection-freshness-guard.test.js": "control-plane",
     "test/control-plane/projection-planning-identity-memoization.test.js": "control-plane",
     "test/control-plane/projection-readiness-contract.test.js": "control-plane",
+    "test/control-plane/projection-readiness-evidence-owner.receipt.test.js": "control-plane",
     "test/control-plane/publication-active-gate-handoff-contract.test.js": "control-plane",
     "test/control-plane/publication-owner-stream.test.js": "control-plane",
     "test/control-plane/publication-readiness-churn-liveness.test.js": "control-plane",

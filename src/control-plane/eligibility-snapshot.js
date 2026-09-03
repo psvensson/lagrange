@@ -257,7 +257,7 @@ function freezeRuntimeAuthoritySummary(runtimeAuthority) {
   });
 }
 
-function createEligibilitySnapshot(snapshot = {}) {
+function createEligibilitySnapshot(snapshot = {}, options = {}) {
   const membershipPublication = freezeObject(snapshot.membershipPublication);
   const priorityControlPlaneRecovery = freezeObject(
     snapshot.priorityControlPlaneRecovery,
@@ -266,12 +266,18 @@ function createEligibilitySnapshot(snapshot = {}) {
     typeof snapshot.dimensions === 'object' ?
     Object.freeze({...snapshot.dimensions}) :
     Object.freeze({});
-  const projectionReadinessContract = buildProjectionReadinessContract({
-    publicationBoundaryOutcome: snapshot.publicationBoundaryOutcome,
-    membershipPublication,
-    priorityControlPlaneRecovery,
-    dimensions,
-  });
+  // When the caller already resolved the projection-readiness contract through
+  // ProjectionReadinessEvidenceOwner, reuse it verbatim instead of normalizing
+  // a second, weaker-sourced contract that the caller then discards.
+  const projectionReadinessContract =
+    options.projectionReadinessContract !== undefined ?
+      options.projectionReadinessContract :
+      buildProjectionReadinessContract({
+        publicationBoundaryOutcome: snapshot.publicationBoundaryOutcome,
+        membershipPublication,
+        priorityControlPlaneRecovery,
+        dimensions,
+      });
   return Object.freeze({
     nodeId: snapshot.nodeId || null,
     lifecycleState: snapshot.lifecycleState || null,

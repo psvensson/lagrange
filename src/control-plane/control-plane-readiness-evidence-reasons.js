@@ -370,7 +370,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
         observedAt: context.observedAt,
         dimensions,
         reasons,
-      }),
+      }, {projectionReadinessContract}),
       projectionReadinessContract,
       runtimeAuthority,
       recentTransitions,

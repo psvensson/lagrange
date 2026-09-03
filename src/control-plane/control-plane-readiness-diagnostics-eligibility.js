@@ -2,6 +2,11 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {ControlPlaneReadinessParticipationBase} from './control-plane-readiness-participation-base.js';
 import {installControlPlaneReadinessSnapshotStoreMethods} from './control-plane-readiness-snapshot-store.js';
 import {
+  buildProjectionReadinessGenerationKey,
+  snapshotProjectionReadinessTableVersions,
+} from './projection-readiness-evidence-generation.js';
+import {ProjectionReadinessEvidenceOwner} from './projection-readiness-evidence-owner.js';
+import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
 
@@ -339,6 +344,78 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    * @return {Object}
    * @private
    */
+  /**
+   * ProjectionReadinessEvidenceOwner seam: reuse the frozen normalized contract
+   * for this node when its authoritative generation is unchanged, otherwise
+   * normalize/freeze once. The observation has already happened under the
+   * source-observation owner's freshness contract — this only elides the
+   * redundant normalize/deep-copy/freeze (profile owners U2/U4). The generation
+   * key is built from the state ACTUALLY observed for this evaluation; a
+   * generation that moves across the (pre-observation → post-build) window is
+   * conservatively not memoized (R6).
+   * @param {Object} context  post-observation evaluation context.
+   * @param {Object} source  the assembled contract source (normalize input).
+   * @param {Object} verdicts  the small already-computed verdict records used
+   *   to key the generation (baseDimensions, priorityControlPlaneRecovery,
+   *   runtimeAuthority, runtimeServeEligible).
+   * @return {Object} frozen normalized projection-readiness contract.
+   * @private
+   */
+  resolveNormalizedProjectionReadinessContract(context, source, verdicts) {
+    const build = () => buildProjectionReadinessContract(source);
+    const nodeId = context?.nodeId;
+    // `=== null` is an explicit disable (tests compare against the uncached
+    // path); undefined lazily owns the per-node evidence memo (the service
+    // class is a thin composition shim; the base initializer is at its cap).
+    if (this.projectionReadinessEvidenceOwner === null ||
+        typeof nodeId !== 'string' || nodeId.length === 0) {
+      return build();
+    }
+    const owner = this.projectionReadinessEvidenceOwner ||
+      (this.projectionReadinessEvidenceOwner =
+        new ProjectionReadinessEvidenceOwner());
+    const {versionsBefore, generationKey} =
+      this.computeProjectionReadinessGenerationBracket(context, verdicts);
+    return owner.resolveContract(nodeId, generationKey, build, () =>
+      snapshotProjectionReadinessTableVersions(this.systemTableCache) ===
+      versionsBefore);
+  }
+
+  /**
+   * Compute the R6 version bracket and the DEP-complete generation key from the
+   * observed evaluation context. The bracket prefers the version snapshot
+   * captured before observation (threaded from evaluateNodeReadiness), falling
+   * back to a fresh snapshot for callers that did not observe through it.
+   * @param {Object} context  post-observation evaluation context.
+   * @param {Object} verdicts  the already-computed verdict records.
+   * @return {{versionsBefore: string, generationKey: string}}
+   * @private
+   */
+  computeProjectionReadinessGenerationBracket(context, verdicts) {
+    const versionsBefore =
+      typeof context?.projectionReadinessGenerationVersions === 'string' ?
+        context.projectionReadinessGenerationVersions :
+        snapshotProjectionReadinessTableVersions(this.systemTableCache);
+    const planningVersionKey =
+      typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
+        this.readMembershipPlanningDerivationVersionKey(context?.observedAt) :
+        null;
+    const {
+      baseDimensions, priorityControlPlaneRecovery,
+      runtimeAuthority, runtimeServeEligible,
+    } = verdicts || {};
+    const generationKey = buildProjectionReadinessGenerationKey({
+      tableVersions: versionsBefore,
+      planningVersionKey,
+      dimensions: baseDimensions,
+      runtimeAuthority,
+      priorityControlPlaneRecovery,
+      runtimeServeEligible,
+      publication: context?.publication,
+    });
+    return {versionsBefore, generationKey};
+  }
+
   buildDimensionsEvaluation(context) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
@@ -397,13 +474,19 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     // the kitchen-sink context (raw cache rows, publication diagnostics,
     // lifecycle records) silently collapsed the serve lane into its
     // everything-false degenerate state on the lone seed (round-13).
-    const projectionReadinessContract = buildProjectionReadinessContract({
-      ...pickProjectionReadinessEvidenceSource(context),
-      dimensions: baseDimensions,
-      priorityControlPlaneRecovery,
-      runtimeAuthority,
-      runtimeServeEligible: serveAdmission.eligible,
-    });
+    const projectionReadinessContract =
+      this.resolveNormalizedProjectionReadinessContract(context, {
+        ...pickProjectionReadinessEvidenceSource(context),
+        dimensions: baseDimensions,
+        priorityControlPlaneRecovery,
+        runtimeAuthority,
+        runtimeServeEligible: serveAdmission.eligible,
+      }, {
+        baseDimensions,
+        priorityControlPlaneRecovery,
+        runtimeAuthority,
+        runtimeServeEligible: serveAdmission.eligible,
+      });
 
     return Object.freeze({
       dimensions: Object.freeze({

@@ -1,0 +1,60 @@
+{
+  "id": "projection-readiness-evidence-amplification-v3",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Establish two explicit owners for per-node readiness evidence. SourceObservationOwner retains SOLE authority over source freshness (cache-vs-authoritative read choice, authoritative refresh, row/state reconciliation, freshness guarantees) and is never bypassed or downgraded. ProjectionReadinessEvidenceOwner owns normalization, the immutable frozen evidence graph, and semantic reuse for equivalent observed evidence, keyed per node. For each node N, evidence is obtained through SourceObservationOwner under its existing freshness contract (authoritative-read callers keep authoritative-read semantics); the evidence owner receives the current source evidence plus a cheap live dependency bracket (live transport verdict, SELF lifecycle state, publication diagnostics identity, repair identity) and a DEP-complete semantic key (table mutation versions for NODES, SERVICES, CONTROL_PLANE_PUBLICATIONS, PARTITIONS, STORAGE_RESERVATIONS, REPLICA_OPERATIONS, the planning source/version, and the live bracket); if that key equals the node's already-normalized entry it returns the SAME immutable frozen graph by reference, otherwise it normalizes and freezes exactly once and replaces the node's owned entry. Invariant: same node + semantically unchanged observed evidence => exactly one normalization/freeze; consumer evaluation count never determines normalization count. Normalized graphs are NEVER shared across nodes. On an authoritative call the authoritative observation still occurs; only the redundant normalization/deep-copy/freeze is elided, under a key constructed from the state actually observed (pre- and post-observation bracket) so no stale graph is published under a new generation. This owner does NOT elide authoritative reads, does NOT downgrade authoritative refresh to a cache hit, does NOT add a transport generation counter, does NOT share across nodes, and does NOT touch the frozen critical-placement candidate or fold in the gate/priority-planning (H1/H4) memo. It collapses U2 (normalization deep-copy/freeze) and U4 (attributable allocation/GC), bounded by semantic evidence changes; U3 (source/SQLite observation) is measured and reported SEPARATELY and is explicitly NOT claimed eliminated (residual authoritative-read amplification, if any, is a separate SourceObservationOwner quest; partition-service bootstrap SQLite is a different subsystem). Cache-path source-observation avoidance is an optional Layer 2 pursued only if post-Layer-1 measurement shows it material.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/projection-readiness-evidence-amplification.md",
+    "closesCL": [],
+    "parentQuest": "projection-readiness-evidence-amplification-v2",
+    "planDoc": null,
+    "draftedAtCommit": "494d25881d95069a319e5c98cc9db1e055284a90"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/projection-readiness-evidence-amplification-v3.receipt.json",
+      "requiredReceipts": [
+        "DEP-field-owner-signal-map-authoritative-refresh-preserved",
+        "R1-normalize-build-count-one-per-semantic-generation",
+        "R2-no-cross-node-alias",
+        "R3-semantic-equivalence-uncached-vs-cached-across-node-classes",
+        "R4-every-dependency-class-invalidates-normalized-evidence",
+        "R5-no-caller-local-normalization-authority",
+        "R6-authoritative-race-never-publishes-stale-under-new-key",
+        "PERF-U2-U4-collapse-bounded-by-semantic-change-U3-measured-separately"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "projection-readiness-evidence-amplification-v3-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/projection-readiness-evidence-amplification-v3.receipt.json",
+          "requiredReceipts": [
+            "DEP-field-owner-signal-map-authoritative-refresh-preserved",
+            "R1-normalize-build-count-one-per-semantic-generation",
+            "R2-no-cross-node-alias",
+            "R3-semantic-equivalence-uncached-vs-cached-across-node-classes",
+            "R4-every-dependency-class-invalidates-normalized-evidence",
+            "R5-no-caller-local-normalization-authority",
+            "R6-authoritative-race-never-publishes-stale-under-new-key",
+            "PERF-U2-U4-collapse-bounded-by-semantic-change-U3-measured-separately"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

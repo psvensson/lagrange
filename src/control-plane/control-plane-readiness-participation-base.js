@@ -511,6 +511,7 @@ class ControlPlaneReadinessParticipationBase {
       this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
       this.membershipPublicationPlanningSourceRevision += 1;
       this.membershipPublicationDiagnosticsMemo = null;
+      this.projectionReadinessEvidenceOwner?.invalidateAll();
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
       this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
@@ -519,10 +520,7 @@ class ControlPlaneReadinessParticipationBase {
       this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
     }
     recordChangedReadinessOwnerDependencies(
-      this.readinessPlanningSnapshotOwner,
-      this,
-      previousOwnerDependencies,
-    );
+      this.readinessPlanningSnapshotOwner, this, previousOwnerDependencies);
   }
 
   getReadinessPlanningDiagnostics() {
