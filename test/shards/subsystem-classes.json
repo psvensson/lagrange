@@ -7,7 +7,7 @@
     "bootstrap-membership": 248,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 174,
+    "control-plane": 175,
     "convergence-topology": 76,
     "distributed-harness": 166,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2126,
-  "digest": "fnv1a32-15415b6a",
+  "censusSize": 2127,
+  "digest": "fnv1a32-4c0ba5e1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -567,6 +567,7 @@
     "test/control-plane/projection-planning-identity-memoization.test.js": "control-plane",
     "test/control-plane/projection-readiness-contract.test.js": "control-plane",
     "test/control-plane/projection-readiness-evidence-owner.receipt.test.js": "control-plane",
+    "test/control-plane/projection-readiness-planning-consumption-owner.receipt.test.js": "control-plane",
     "test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js": "control-plane",
     "test/control-plane/publication-active-gate-handoff-contract.test.js": "control-plane",
     "test/control-plane/publication-owner-stream.test.js": "control-plane",

@@ -2,6 +2,9 @@ import {
   PROJECTION_READINESS_SEMANTIC_OWNER,
 } from './projection-readiness-constants.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
+import {
   buildProjectionReadinessDecision,
 } from './projection-readiness-decision.js';
 import {
@@ -22,6 +25,9 @@ const arrayIsArray = Array.isArray;
 const objectDefineProperty = Object.defineProperty;
 const objectFreeze = Object.freeze;
 const stringConstructor = String;
+const WeakSetConstructor = WeakSet;
+const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
+const weakSetHas = Function.call.bind(WeakSet.prototype.has);
 
 function appendProjectionReadinessStateValue(values, value) {
   objectDefineProperty(values, values.length, {
@@ -32,10 +38,21 @@ function appendProjectionReadinessStateValue(values, value) {
   });
 }
 
+// The owner-product registry: every state THIS builder produced. Embedded-core
+// consumption admits ONLY these (independent verification finding, review
+// 56422fa5: duck-typing on a `lanes` key admitted the hand-rolled DEFERRED
+// planning stubs — the null-source stub crashes the projection on its empty
+// lanes, and the completed-source live-veto stub disagrees with its entry's
+// own evidence and flipped a projection admission. Neither is a builder
+// product, so both now take the full-rebuild fallback — the exact pre-repair
+// behavior. A semanticOwner string brand would NOT work: the veto stub copies
+// that string from the contract it wraps).
+const OWNER_BUILT_PROJECTION_STATES = new WeakSetConstructor();
+
 function buildProjectionReadinessState(source = {}) {
   const evidence = buildProjectionReadinessEvidence(source);
   const decision = buildProjectionReadinessDecision(evidence);
-  return objectFreeze({
+  const state = objectFreeze({
     semanticOwner: PROJECTION_READINESS_SEMANTIC_OWNER,
     state: decision.state,
     ready: decision.ready,
@@ -69,6 +86,8 @@ function buildProjectionReadinessState(source = {}) {
     evidence,
     reasonCodes: decision.reasonCodes,
   });
+  weakSetAdd(OWNER_BUILT_PROJECTION_STATES, state);
+  return state;
 }
 
 function buildProjectionReadinessContract(source = {}) {
@@ -85,6 +104,36 @@ function buildProjectionReadinessContract(source = {}) {
 const PROJECTION_READINESS_STATE_BY_ENTRY = new WeakMap();
 const EMPTY_PROJECTION_READINESS_SOURCE = objectFreeze({});
 
+// Quest projection-readiness-planning-consumption-owner: a readiness entry
+// that embeds the owner-built frozen core is consumed THROUGH that core —
+// the single semantic owner's product by reference — never by re-normalizing
+// the entry. Entry-LOCAL planning facts (today exactly the
+// priority-recovery-pending publication overlay,
+// dimensions[CONTROL_PLANE_RECOVERY_ELIGIBLE]=true spliced by
+// buildPublicationPlanningReadinessEntry) compose as a cheap frozen envelope
+// over the core with visible provenance. The envelope deliberately does NOT
+// recompute the decision lanes: the overlay's only lane consumer is the
+// repair-lane blocker, and no planning consumer of this resolved state reads
+// the repair lane or state classification (B1 receipts pin the consumed
+// surface). The full normalization below remains ONLY for genuinely
+// contract-less entries — and doubles as the equivalence oracle in receipts.
+function composePlanningEntryProjectionState(entry, core) {
+  const overlayExtendsRecoveryEligibility =
+    entry.dimensions?.[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ] === true &&
+    core.evidence?.recoveryEligible !== true;
+  if (!overlayExtendsRecoveryEligibility) {
+    return core;
+  }
+  return objectFreeze({
+    ...core,
+    evidence: objectFreeze({...core.evidence, recoveryEligible: true}),
+    readiness: objectFreeze({...core.readiness, recoveryEligible: true}),
+    planningRecoveryEligibleOverride: true,
+  });
+}
+
 function resolveProjectionReadinessStateForEntry(readinessEntry) {
   const source = readinessEntry && typeof readinessEntry === 'object' ?
     readinessEntry :
@@ -92,6 +141,12 @@ function resolveProjectionReadinessStateForEntry(readinessEntry) {
   const memoized = PROJECTION_READINESS_STATE_BY_ENTRY.get(source);
   if (memoized) {
     return memoized;
+  }
+  const embeddedCore = source.projectionReadinessContract;
+  if (weakSetHas(OWNER_BUILT_PROJECTION_STATES, embeddedCore)) {
+    const composed = composePlanningEntryProjectionState(source, embeddedCore);
+    PROJECTION_READINESS_STATE_BY_ENTRY.set(source, composed);
+    return composed;
   }
   const state = trackSyncSection(
     PROJECTION_READINESS_ENTRY_MEMO_MISS_BUILD_SECTION,
