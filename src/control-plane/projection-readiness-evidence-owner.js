@@ -22,7 +22,29 @@
 // Never shared across nodes: the memo is keyed strictly per nodeId, so two
 // nodes whose observed evidence differs are independently owned even at the
 // same table generation (R2).
+//
+// v4 (semantic-core / envelope split): the owned entry is the TIMESTAMP-FREE
+// SEMANTIC CORE of the readiness contract — its generation key digests only
+// semantic dependencies (observation-time fields are excluded by
+// projection-readiness-evidence-generation.js, each embed site classified),
+// so a moving clock alone never rotates it. Per-evaluation observation time
+// lives in the evaluation snapshot ENVELOPE composed downstream
+// (control-plane-readiness-evidence-reasons.js), never inside this owner's
+// reusable core, and a cached core is never mutated to refresh a timestamp.
 
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+// Sync-section attribution (instrumentation-only, projection-readiness
+// re-measurement): per-window counts and time for owner builds vs reuse hits,
+// so a live profile can tell generation-key rotation (builds ~ evaluations,
+// reuse ~ 0) from un-memoized-caller dominance (reuse high, normalize time
+// attributed to other sections).
+const OWNER_SYNC_SECTION = Object.freeze({
+  BUILD: 'projection_readiness_owner_build',
+  REUSE: 'projection_readiness_owner_reuse',
+  UNKEYED_BUILD: 'projection_readiness_owner_unkeyed_build',
+  VOLATILE_SKIP: 'projection_readiness_owner_volatile_skip',
+});
 
 class ProjectionReadinessEvidenceOwner {
   constructor() {
@@ -58,14 +80,14 @@ class ProjectionReadinessEvidenceOwner {
     if (typeof nodeId !== 'string' || nodeId.length === 0 ||
         typeof generationKey !== 'string' || generationKey.length === 0) {
       // No stable identity/key to memoize against: build without owning it.
-      return buildContract();
+      return trackSyncSection(OWNER_SYNC_SECTION.UNKEYED_BUILD, buildContract);
     }
     const entry = this.entryByNodeId.get(nodeId);
     if (entry && entry.key === generationKey) {
       this.reuseHitCount += 1;
-      return entry.contract;
+      return trackSyncSection(OWNER_SYNC_SECTION.REUSE, () => entry.contract);
     }
-    const contract = buildContract();
+    const contract = trackSyncSection(OWNER_SYNC_SECTION.BUILD, buildContract);
     this.normalizeBuildCount += 1;
     if (typeof generationStable === 'function' && generationStable() !== true) {
       // The observed generation changed while we built: publishing this graph
@@ -73,6 +95,7 @@ class ProjectionReadinessEvidenceOwner {
       // generation on the next hit. Skip memoization; a later stable
       // evaluation populates the entry.
       this.volatileSkipCount += 1;
+      trackSyncSection(OWNER_SYNC_SECTION.VOLATILE_SKIP, () => null);
       return contract;
     }
     this.entryByNodeId.set(nodeId, {key: generationKey, contract});

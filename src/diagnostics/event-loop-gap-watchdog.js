@@ -28,7 +28,7 @@ import {SUBSYSTEM} from '../constants/index.js';
 const WATCHDOG_DEFAULT = Object.freeze({
   THRESHOLD_MS: 1000,
   INTERVAL_MS: 250,
-  MAX_REPORTED_SITES: 12,
+  MAX_REPORTED_SITES: 24,
   PROFILE_WINDOW_MS: 30000,
   PROFILE_SAMPLING_INTERVAL_US: 2000,
   PROFILE_TOP_FRAMES: 10,
@@ -45,6 +45,7 @@ const WATCHDOG_LOG_MSG = Object.freeze({
   PROFILE_WINDOW: 'Event loop gap profile window',
   PROFILE_ERROR: 'Event loop gap profiler error',
   MEMORY_SAMPLE: 'Process memory sample',
+  SYNC_SECTION_SAMPLE: 'Sync-section periodic sample',
 });
 
 // CL-030: periodic heap telemetry so an unbounded-growth curve is
@@ -489,6 +490,10 @@ class EventLoopGapWatchdog {
     this.intervalHandle = null;
     this.expectedAtMs = 0;
     this.lastRegistrySnapshot = null;
+    // Instrumentation-only (projection-readiness re-measurement): baseline
+    // for the periodic site-delta sample, kept separate from the gap-report
+    // snapshot so gap attribution windows are unchanged.
+    this.lastPeriodicRegistrySnapshot = null;
     this.lastEluSample = null;
     this.gapCount = 0;
     this.totalGapMs = 0;
@@ -569,6 +574,23 @@ class EventLoopGapWatchdog {
         WATCHDOG_LOG_LEVEL.INFO,
         WATCHDOG_LOG_MSG.MEMORY_SAMPLE,
         buildMemorySampleMb(),
+      );
+      // Instrumentation-only (projection-readiness re-measurement): emit
+      // section counts/time on the same cadence so build-vs-reuse ratios are
+      // visible even in windows with no threshold-exceeding gap.
+      const periodicSnapshot = this.registry.snapshot();
+      const periodicPrevious =
+        this.lastPeriodicRegistrySnapshot || periodicSnapshot;
+      this.lastPeriodicRegistrySnapshot = periodicSnapshot;
+      this.logConsoleOnly(
+        WATCHDOG_LOG_LEVEL.INFO,
+        WATCHDOG_LOG_MSG.SYNC_SECTION_SAMPLE,
+        {
+          siteDeltas: this.computeSiteDeltas(
+            periodicPrevious.sites,
+            periodicSnapshot.sites,
+          ),
+        },
       );
     }
     if (gapMs < this.thresholdMs) {

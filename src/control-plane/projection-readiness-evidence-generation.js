@@ -88,6 +88,29 @@ function canonicalScalarDigest(value, depth) {
   return null;
 }
 
+// Observation-time fields excluded from the SEMANTIC digest (quest
+// projection-readiness-evidence-amplification-v4). The digested verdict
+// records exist to cover live non-table state (v2 DEP findings A/B/C); every
+// table-derived value is already covered by the table-version and
+// planning-version key segments. Each excluded name is classified at every
+// embed site (INV receipt):
+//  - `enteredAt` in the priority-recovery projection is the publication row's
+//    createdAt/updatedAt (table-covered via CONTROL_PLANE_PUBLICATIONS) or,
+//    absent a publication, a per-evaluation clock fallback (observational —
+//    the exact field measured rotating the key every call, GCP 2026-09-03);
+//    in the CDC publication descriptor it is transition-stamped time whose
+//    real transitions also change sibling mode/reason content; in
+//    runtimeAuthority.visibility it is publication-row time (table-covered).
+//  - `observedAt`/`observedAtMs` mean "this evaluation observed at T"
+//    everywhere by repo convention: observation metadata, never semantic.
+// `repair.recordedAt` is deliberately NOT excluded: it is the repair identity
+// (v2 DEP finding E) — two otherwise-identical repairs differ only by it.
+const DIGEST_OBSERVATION_TIME_FIELDS = Object.freeze(new Set([
+  'enteredAt',
+  'observedAt',
+  'observedAtMs',
+]));
+
 function canonicalDigest(value, depth = 0) {
   const scalar = canonicalScalarDigest(value, depth);
   if (scalar !== null) return scalar;
@@ -103,6 +126,7 @@ function canonicalDigest(value, depth = 0) {
   let out = DIGEST_TAG.OBJECT_OPEN;
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index];
+    if (DIGEST_OBSERVATION_TIME_FIELDS.has(key)) continue;
     out += key + DIGEST_TAG.OBJECT_KV_SEPARATOR +
       canonicalDigest(value[key], depth + 1) + DIGEST_TAG.OBJECT_PAIR_SEPARATOR;
   }

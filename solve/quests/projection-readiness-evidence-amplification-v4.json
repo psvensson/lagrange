@@ -1,0 +1,58 @@
+{
+  "id": "projection-readiness-evidence-amplification-v4",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Split the per-node projection-readiness contract into (1) an immutable timestamp-free SEMANTIC CORE owned per node by the evidence owner \u2014 normalized/frozen exactly once per (node, semantic generation), with a generation key that digests ONLY semantic dependencies: table mutation versions, planning version, and transport/lifecycle/publication/repair verdict CONTENT with per-evaluation observation-time fields excluded after an explicit classified inventory \u2014 and (2) a fresh per-evaluation ENVELOPE owned by the evaluation-snapshot layer that carries this call's observation-time metadata. Invariants: same node + unchanged semantic generation across clock-advancing evaluations => exactly one semantic-core normalization and the SAME immutable core reference (ENGAGEMENT \u2014 a mutation that returns observation time to the semantic key must red the receipt); every evaluation still observes through SourceObservationOwner under its existing freshness contract, and its envelope/snapshot carries THAT call's observedAt (FRESHNESS \u2014 reuse never makes a consumer-visible freshness field stale); each actual semantic dependency change rotates the core while a moving clock alone never does (SEMANTIC-KEY); cores remain strictly per-node (no cross-node sharing, preserving the falsified-cluster-share finding); the semantic key never decides whether an authoritative read occurs (SourceObservationOwner authority untouched); no cached core is ever mutated to refresh timestamps \u2014 envelopes are new small objects; consumer-visible contract compatibility is preserved through the owned snapshot/adapter projection, not by consumers understanding the split. Effectiveness is proven by a local engagement profile (order 10k evaluations under tens of semantic generations => tens of core builds, ~99% core reuse, normalize/strict-own-data/allocation costs measurably moved), not by semantic tests alone.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/evidence/projection-readiness-evidence-amplification-v3.effectiveness-measurement.md",
+    "closesCL": [],
+    "parentQuest": "projection-readiness-evidence-amplification-v3",
+    "planDoc": null,
+    "draftedAtCommit": "9c52b925201ae05d21705f628103c07d57f0a83c"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/projection-readiness-evidence-amplification-v4.receipt.json",
+      "requiredReceipts": [
+        "INV-volatile-field-inventory-classified",
+        "ENGAGEMENT-clock-advance-cannot-defeat-semantic-reuse",
+        "FRESHNESS-envelope-carries-current-call-observation-time",
+        "SEMANTIC-KEY-each-dependency-class-rotates-core-clock-held",
+        "R2-no-cross-node-alias-preserved",
+        "SOURCE-FRESHNESS-authority-untouched",
+        "PERF-local-engagement-profile-normalize-and-alloc-moved"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "projection-readiness-evidence-amplification-v4-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/projection-readiness-evidence-amplification-v4.receipt.json",
+          "requiredReceipts": [
+            "INV-volatile-field-inventory-classified",
+            "ENGAGEMENT-clock-advance-cannot-defeat-semantic-reuse",
+            "FRESHNESS-envelope-carries-current-call-observation-time",
+            "SEMANTIC-KEY-each-dependency-class-rotates-core-clock-held",
+            "R2-no-cross-node-alias-preserved",
+            "SOURCE-FRESHNESS-authority-untouched",
+            "PERF-local-engagement-profile-normalize-and-alloc-moved"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

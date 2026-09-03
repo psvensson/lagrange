@@ -1,6 +1,12 @@
 import {
   buildProjectionReadinessState,
 } from '../control-plane/projection-readiness-state.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+// Sync-section attribution (instrumentation-only, projection-readiness
+// re-measurement): full-normalize build path outside the evidence owner.
+const PROJECTION_READINESS_ADMIN_STATE_BUILD_SECTION =
+  'projection_readiness_admin_state_build';
 
 const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
 const LOCAL_STR_REPAIR = 'repair';
@@ -223,7 +229,10 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       if (readiness?.lanes && typeof readiness.lanes === 'object') {
         return readiness;
       }
-      return buildProjectionReadinessState(readiness || {});
+      return trackSyncSection(
+        PROJECTION_READINESS_ADMIN_STATE_BUILD_SECTION,
+        () => buildProjectionReadinessState(readiness || {}),
+      );
     } /**
      * Resolve node IDs that may serve discovery replicas.
      * @param {Array<Object>} nodeRows

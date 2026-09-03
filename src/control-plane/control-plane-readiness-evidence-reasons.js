@@ -1,4 +1,5 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
 
@@ -46,6 +47,9 @@ const {
   createEligibilitySnapshot,
   pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+const PROJECTION_READINESS_REASONS_CONTRACT_BUILD_SECTION =
+  'projection_readiness_reasons_contract_build';
 
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
   'priority_control_plane_recovery_diagnostics_unavailable';
@@ -322,8 +326,15 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
     // whole-source own-data validation — any non-plain value in a
     // never-read context field otherwise fails the whole contract closed
     // (round-13 lone-seed serve-lane collapse).
-    return buildProjectionReadinessContract(
-      pickProjectionReadinessEvidenceSource(context),
+    // Sync-section attribution (instrumentation-only, projection-readiness
+    // re-measurement): this is a full-normalize build path NOT routed
+    // through ProjectionReadinessEvidenceOwner (transition-state and
+    // runtime-authority callers).
+    return trackSyncSection(
+      PROJECTION_READINESS_REASONS_CONTRACT_BUILD_SECTION,
+      () => buildProjectionReadinessContract(
+        pickProjectionReadinessEvidenceSource(context),
+      ),
     );
   }
 
@@ -358,6 +369,15 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
       }) :
       this.getReadinessTransitionHistory(context.nodeId);
 
+    // Per-evaluation ENVELOPE seam (quest
+    // projection-readiness-evidence-amplification-v4): this snapshot is the
+    // owned composition of (a) the immutable semantic-core contract — which
+    // the evidence owner may return by reference across evaluations while
+    // the semantic generation is unchanged — with (b) THIS call's
+    // observation-time metadata (`observedAt`, `buildStartedAtMs`, reasons
+    // stamped with this evaluation's time). Evaluation freshness is read from
+    // the envelope, never from timestamps embedded inside the reusable core;
+    // a cached core is never mutated to refresh a timestamp.
     const snapshot = Object.freeze({
       ...createEligibilitySnapshot({
         nodeId: context.nodeId,

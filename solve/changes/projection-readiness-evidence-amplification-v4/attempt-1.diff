@@ -1,0 +1,644 @@
+diff --git a/src/admin/admin-service-discovery-readiness-context-methods.js b/src/admin/admin-service-discovery-readiness-context-methods.js
+index f532d9f0e19681e1a4d022eb37b8e90a4e217be7..731d8ffff8091666b3f0ce9aaf7a406299621125 100644
+--- a/src/admin/admin-service-discovery-readiness-context-methods.js
++++ b/src/admin/admin-service-discovery-readiness-context-methods.js
+@@ -1,6 +1,12 @@
+ import {
+   buildProjectionReadinessState,
+ } from '../control-plane/projection-readiness-state.js';
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
++
++// Sync-section attribution (instrumentation-only, projection-readiness
++// re-measurement): full-normalize build path outside the evidence owner.
++const PROJECTION_READINESS_ADMIN_STATE_BUILD_SECTION =
++  'projection_readiness_admin_state_build';
+ 
+ const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
+ const LOCAL_STR_REPAIR = 'repair';
+@@ -223,7 +229,10 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+       if (readiness?.lanes && typeof readiness.lanes === 'object') {
+         return readiness;
+       }
+-      return buildProjectionReadinessState(readiness || {});
++      return trackSyncSection(
++        PROJECTION_READINESS_ADMIN_STATE_BUILD_SECTION,
++        () => buildProjectionReadinessState(readiness || {}),
++      );
+     } /**
+      * Resolve node IDs that may serve discovery replicas.
+      * @param {Array<Object>} nodeRows
+diff --git a/src/control-plane/control-plane-readiness-evidence-reasons.js b/src/control-plane/control-plane-readiness-evidence-reasons.js
+index 8c13f7e52284a1b84dcfb9ff6ee8da183c2e9f74..7bf005b989dad64b027d6194c16bd5aafb6dc1f9 100644
+--- a/src/control-plane/control-plane-readiness-evidence-reasons.js
++++ b/src/control-plane/control-plane-readiness-evidence-reasons.js
+@@ -1,4 +1,5 @@
+ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+ import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
+ import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
+ 
+@@ -47,6 +48,9 @@ const {
+   pickProjectionReadinessEvidenceSource,
+ } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+ 
++const PROJECTION_READINESS_REASONS_CONTRACT_BUILD_SECTION =
++  'projection_readiness_reasons_contract_build';
++
+ const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+   'priority_control_plane_recovery_diagnostics_unavailable';
+ 
+@@ -322,8 +326,15 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
+     // whole-source own-data validation — any non-plain value in a
+     // never-read context field otherwise fails the whole contract closed
+     // (round-13 lone-seed serve-lane collapse).
+-    return buildProjectionReadinessContract(
+-      pickProjectionReadinessEvidenceSource(context),
++    // Sync-section attribution (instrumentation-only, projection-readiness
++    // re-measurement): this is a full-normalize build path NOT routed
++    // through ProjectionReadinessEvidenceOwner (transition-state and
++    // runtime-authority callers).
++    return trackSyncSection(
++      PROJECTION_READINESS_REASONS_CONTRACT_BUILD_SECTION,
++      () => buildProjectionReadinessContract(
++        pickProjectionReadinessEvidenceSource(context),
++      ),
+     );
+   }
+ 
+@@ -358,6 +369,15 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
+       }) :
+       this.getReadinessTransitionHistory(context.nodeId);
+ 
++    // Per-evaluation ENVELOPE seam (quest
++    // projection-readiness-evidence-amplification-v4): this snapshot is the
++    // owned composition of (a) the immutable semantic-core contract — which
++    // the evidence owner may return by reference across evaluations while
++    // the semantic generation is unchanged — with (b) THIS call's
++    // observation-time metadata (`observedAt`, `buildStartedAtMs`, reasons
++    // stamped with this evaluation's time). Evaluation freshness is read from
++    // the envelope, never from timestamps embedded inside the reusable core;
++    // a cached core is never mutated to refresh a timestamp.
+     const snapshot = Object.freeze({
+       ...createEligibilitySnapshot({
+         nodeId: context.nodeId,
+diff --git a/src/control-plane/projection-readiness-evidence-generation.js b/src/control-plane/projection-readiness-evidence-generation.js
+index fdf3b4b74ad3ca4a03d1c37657b8c4d428a5de4f..402da2857405bbd4ce4079c21c88d44be117a4ba 100644
+--- a/src/control-plane/projection-readiness-evidence-generation.js
++++ b/src/control-plane/projection-readiness-evidence-generation.js
+@@ -88,6 +88,29 @@ function canonicalScalarDigest(value, depth) {
+   return null;
+ }
+ 
++// Observation-time fields excluded from the SEMANTIC digest (quest
++// projection-readiness-evidence-amplification-v4). The digested verdict
++// records exist to cover live non-table state (v2 DEP findings A/B/C); every
++// table-derived value is already covered by the table-version and
++// planning-version key segments. Each excluded name is classified at every
++// embed site (INV receipt):
++//  - `enteredAt` in the priority-recovery projection is the publication row's
++//    createdAt/updatedAt (table-covered via CONTROL_PLANE_PUBLICATIONS) or,
++//    absent a publication, a per-evaluation clock fallback (observational —
++//    the exact field measured rotating the key every call, GCP 2026-09-03);
++//    in the CDC publication descriptor it is transition-stamped time whose
++//    real transitions also change sibling mode/reason content; in
++//    runtimeAuthority.visibility it is publication-row time (table-covered).
++//  - `observedAt`/`observedAtMs` mean "this evaluation observed at T"
++//    everywhere by repo convention: observation metadata, never semantic.
++// `repair.recordedAt` is deliberately NOT excluded: it is the repair identity
++// (v2 DEP finding E) — two otherwise-identical repairs differ only by it.
++const DIGEST_OBSERVATION_TIME_FIELDS = Object.freeze(new Set([
++  'enteredAt',
++  'observedAt',
++  'observedAtMs',
++]));
++
+ function canonicalDigest(value, depth = 0) {
+   const scalar = canonicalScalarDigest(value, depth);
+   if (scalar !== null) return scalar;
+@@ -103,6 +126,7 @@ function canonicalDigest(value, depth = 0) {
+   let out = DIGEST_TAG.OBJECT_OPEN;
+   for (let index = 0; index < keys.length; index += 1) {
+     const key = keys[index];
++    if (DIGEST_OBSERVATION_TIME_FIELDS.has(key)) continue;
+     out += key + DIGEST_TAG.OBJECT_KV_SEPARATOR +
+       canonicalDigest(value[key], depth + 1) + DIGEST_TAG.OBJECT_PAIR_SEPARATOR;
+   }
+diff --git a/src/control-plane/projection-readiness-evidence-owner.js b/src/control-plane/projection-readiness-evidence-owner.js
+index 6798515f425c6c8ee1af82696462070e2c089834..17366b9d500978f8a84ba3839dbf26f73a918f6b 100644
+--- a/src/control-plane/projection-readiness-evidence-owner.js
++++ b/src/control-plane/projection-readiness-evidence-owner.js
+@@ -22,7 +22,29 @@
+ // Never shared across nodes: the memo is keyed strictly per nodeId, so two
+ // nodes whose observed evidence differs are independently owned even at the
+ // same table generation (R2).
++//
++// v4 (semantic-core / envelope split): the owned entry is the TIMESTAMP-FREE
++// SEMANTIC CORE of the readiness contract — its generation key digests only
++// semantic dependencies (observation-time fields are excluded by
++// projection-readiness-evidence-generation.js, each embed site classified),
++// so a moving clock alone never rotates it. Per-evaluation observation time
++// lives in the evaluation snapshot ENVELOPE composed downstream
++// (control-plane-readiness-evidence-reasons.js), never inside this owner's
++// reusable core, and a cached core is never mutated to refresh a timestamp.
++
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+ 
++// Sync-section attribution (instrumentation-only, projection-readiness
++// re-measurement): per-window counts and time for owner builds vs reuse hits,
++// so a live profile can tell generation-key rotation (builds ~ evaluations,
++// reuse ~ 0) from un-memoized-caller dominance (reuse high, normalize time
++// attributed to other sections).
++const OWNER_SYNC_SECTION = Object.freeze({
++  BUILD: 'projection_readiness_owner_build',
++  REUSE: 'projection_readiness_owner_reuse',
++  UNKEYED_BUILD: 'projection_readiness_owner_unkeyed_build',
++  VOLATILE_SKIP: 'projection_readiness_owner_volatile_skip',
++});
+ 
+ class ProjectionReadinessEvidenceOwner {
+   constructor() {
+@@ -58,14 +80,14 @@ class ProjectionReadinessEvidenceOwner {
+     if (typeof nodeId !== 'string' || nodeId.length === 0 ||
+         typeof generationKey !== 'string' || generationKey.length === 0) {
+       // No stable identity/key to memoize against: build without owning it.
+-      return buildContract();
++      return trackSyncSection(OWNER_SYNC_SECTION.UNKEYED_BUILD, buildContract);
+     }
+     const entry = this.entryByNodeId.get(nodeId);
+     if (entry && entry.key === generationKey) {
+       this.reuseHitCount += 1;
+-      return entry.contract;
++      return trackSyncSection(OWNER_SYNC_SECTION.REUSE, () => entry.contract);
+     }
+-    const contract = buildContract();
++    const contract = trackSyncSection(OWNER_SYNC_SECTION.BUILD, buildContract);
+     this.normalizeBuildCount += 1;
+     if (typeof generationStable === 'function' && generationStable() !== true) {
+       // The observed generation changed while we built: publishing this graph
+@@ -73,6 +95,7 @@ class ProjectionReadinessEvidenceOwner {
+       // generation on the next hit. Skip memoization; a later stable
+       // evaluation populates the entry.
+       this.volatileSkipCount += 1;
++      trackSyncSection(OWNER_SYNC_SECTION.VOLATILE_SKIP, () => null);
+       return contract;
+     }
+     this.entryByNodeId.set(nodeId, {key: generationKey, contract});
+diff --git a/src/control-plane/projection-readiness-state.js b/src/control-plane/projection-readiness-state.js
+index f9fd8ecc5778255f86b39fc8ac9d0e098296cc96..942e116d93eae675d285db1be11e3778ce8382fb 100644
+--- a/src/control-plane/projection-readiness-state.js
++++ b/src/control-plane/projection-readiness-state.js
+@@ -8,6 +8,14 @@ import {
+   buildProjectionReadinessEvidence,
+   pickProjectionReadinessEvidenceSource,
+ } from './projection-readiness-evidence.js';
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
++
++// Sync-section attribution (instrumentation-only, projection-readiness
++// re-measurement): a miss on the entry-identity memo pays the full
++// normalize/freeze; the per-window count vs the owner sections tells whether
++// callers mint fresh readiness entries per read.
++const PROJECTION_READINESS_ENTRY_MEMO_MISS_BUILD_SECTION =
++  'projection_readiness_entry_memo_miss_build';
+ 
+ const ArrayConstructor = Array;
+ const arrayIsArray = Array.isArray;
+@@ -85,7 +93,10 @@ function resolveProjectionReadinessStateForEntry(readinessEntry) {
+   if (memoized) {
+     return memoized;
+   }
+-  const state = buildProjectionReadinessState(source);
++  const state = trackSyncSection(
++    PROJECTION_READINESS_ENTRY_MEMO_MISS_BUILD_SECTION,
++    () => buildProjectionReadinessState(source),
++  );
+   PROJECTION_READINESS_STATE_BY_ENTRY.set(source, state);
+   return state;
+ }
+diff --git a/src/diagnostics/event-loop-gap-watchdog.js b/src/diagnostics/event-loop-gap-watchdog.js
+index 049017cbc82c50383e2adce8f067704650c2bad4..1427f34589b15f49148a8530c2054c870c1ef41e 100644
+--- a/src/diagnostics/event-loop-gap-watchdog.js
++++ b/src/diagnostics/event-loop-gap-watchdog.js
+@@ -28,7 +28,7 @@ import {SUBSYSTEM} from '../constants/index.js';
+ const WATCHDOG_DEFAULT = Object.freeze({
+   THRESHOLD_MS: 1000,
+   INTERVAL_MS: 250,
+-  MAX_REPORTED_SITES: 12,
++  MAX_REPORTED_SITES: 24,
+   PROFILE_WINDOW_MS: 30000,
+   PROFILE_SAMPLING_INTERVAL_US: 2000,
+   PROFILE_TOP_FRAMES: 10,
+@@ -45,6 +45,7 @@ const WATCHDOG_LOG_MSG = Object.freeze({
+   PROFILE_WINDOW: 'Event loop gap profile window',
+   PROFILE_ERROR: 'Event loop gap profiler error',
+   MEMORY_SAMPLE: 'Process memory sample',
++  SYNC_SECTION_SAMPLE: 'Sync-section periodic sample',
+ });
+ 
+ // CL-030: periodic heap telemetry so an unbounded-growth curve is
+@@ -489,6 +490,10 @@ class EventLoopGapWatchdog {
+     this.intervalHandle = null;
+     this.expectedAtMs = 0;
+     this.lastRegistrySnapshot = null;
++    // Instrumentation-only (projection-readiness re-measurement): baseline
++    // for the periodic site-delta sample, kept separate from the gap-report
++    // snapshot so gap attribution windows are unchanged.
++    this.lastPeriodicRegistrySnapshot = null;
+     this.lastEluSample = null;
+     this.gapCount = 0;
+     this.totalGapMs = 0;
+@@ -570,6 +575,23 @@ class EventLoopGapWatchdog {
+         WATCHDOG_LOG_MSG.MEMORY_SAMPLE,
+         buildMemorySampleMb(),
+       );
++      // Instrumentation-only (projection-readiness re-measurement): emit
++      // section counts/time on the same cadence so build-vs-reuse ratios are
++      // visible even in windows with no threshold-exceeding gap.
++      const periodicSnapshot = this.registry.snapshot();
++      const periodicPrevious =
++        this.lastPeriodicRegistrySnapshot || periodicSnapshot;
++      this.lastPeriodicRegistrySnapshot = periodicSnapshot;
++      this.logConsoleOnly(
++        WATCHDOG_LOG_LEVEL.INFO,
++        WATCHDOG_LOG_MSG.SYNC_SECTION_SAMPLE,
++        {
++          siteDeltas: this.computeSiteDeltas(
++            periodicPrevious.sites,
++            periodicSnapshot.sites,
++          ),
++        },
++      );
+     }
+     if (gapMs < this.thresholdMs) {
+       return;
+diff --git a/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js b/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..97f068b72f5a34e6e5b7c5075370e980f010401e
+--- /dev/null
++++ b/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js
+@@ -0,0 +1,366 @@
++// Receipt tests for quest projection-readiness-evidence-amplification-v4:
++// the readiness contract splits into a TIMESTAMP-FREE SEMANTIC CORE (owned,
++// generation-keyed, reused by reference) and a fresh per-evaluation ENVELOPE
++// (the evaluation snapshot carrying this call's observation time). The v3
++// receipts proved soundness under a PINNED clock; production measured reuse
++// ~0 because the generation key digested a per-evaluation clock fallback
++// (priorityControlPlaneRecovery.enteredAt, GCP 2026-09-03). These receipts
++// close that vacuous-engagement hole: a mutation that returns observation
++// time to the semantic key reds ENGAGEMENT and INV below.
++import {performance} from 'node:perf_hooks';
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  createAccountingService,
++  createActiveNode,
++  createCache,
++  createMessageGroupService,
++  createPublicationService,
++} from './control-plane-readiness-service-test-support.js';
++import {
++  COLUMN,
++  STATE,
++  TABLES,
++} from '../../src/constants/index.js';
++import {
++  CONTROL_PLANE_PUBLICATION_MODE,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {
++  ControlPlaneReadinessService,
++} from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  ProjectionReadinessEvidenceOwner,
++} from '../../src/control-plane/projection-readiness-evidence-owner.js';
++import {
++  buildProjectionReadinessGenerationKey,
++} from '../../src/control-plane/projection-readiness-evidence-generation.js';
++
++const CLOCK_START_MS = 350000;
++const CLOCK_STEP_MS = 40;
++const ENGAGEMENT_EVALUATIONS = 50;
++const PERF_UNIT_EVALUATIONS = 10000;
++const PERF_UNIT_GENERATIONS = 20;
++const PERF_INTEGRATION_EVALUATIONS = 200;
++const PERF_INTEGRATION_GENERATION_STRIDE = 20;
++
++function withMutationVersions(cache) {
++  const versionByTable = new Map();
++  const bump = (tableName) => {
++    versionByTable.set(tableName, (versionByTable.get(tableName) || 0) + 1);
++  };
++  const wrapped = Object.create(cache);
++  wrapped.getTableMutationVersion = (tableName) =>
++    versionByTable.get(tableName) || 0;
++  wrapped.applySystemTableChange = (tableName, operation, row) => {
++    const result = cache.applySystemTableChange(tableName, operation, row);
++    bump(tableName);
++    return result;
++  };
++  wrapped.bumpTableMutationVersion = bump;
++  return wrapped;
++}
++
++function buildMovingClockFixture(nodeId) {
++  const cache = withMutationVersions(createCache({
++    nodes: [{
++      ...createActiveNode(nodeId),
++      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
++      [COLUMN.LAST_HEARTBEAT]: CLOCK_START_MS - 100,
++      [COLUMN.READY_LEASE_EXPIRES_AT]: CLOCK_START_MS + 60000,
++    }],
++    services: [createMessageGroupService(nodeId)],
++  }));
++  const clock = {nowMs: CLOCK_START_MS};
++  let publicationReads = 0;
++  const publicationService = createPublicationService({
++    currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
++    reasonCode: null,
++    enteredAt: '2026-03-04T00:00:00.000Z',
++    recentTransitions: [],
++  });
++  const countingPublicationService = {
++    getPublicationModeDiagnostics() {
++      publicationReads += 1;
++      return publicationService.getPublicationModeDiagnostics();
++    },
++  };
++  const service = new ControlPlaneReadinessService({
++    nodeId,
++    systemTableCache: cache,
++    cacheMutationTarget: cache,
++    messageRouter: {getConnectionState: () => STATE.CONNECTED},
++    storageAccountingService: createAccountingService({
++      [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
++    }),
++    cdcGroupPropagationService: countingPublicationService,
++    now: () => (clock.nowMs += CLOCK_STEP_MS),
++  });
++  return {
++    service,
++    cache,
++    clock,
++    readPublicationReadCount: () => publicationReads,
++  };
++}
++
++// ---- INV: observation-time fields are classified out of the semantic key ---
++
++test('INV: observation-time fields never rotate the semantic key; the ' +
++  'repair identity timestamp still does', (t) => {
++  const base = {
++    tableVersions: 'v',
++    planningVersionKey: 'p',
++    dimensions: {clusterMemberHealthy: true},
++    runtimeAuthority: {
++      routingReady: true,
++      visibility: {published: true, enteredAt: 1000},
++      repair: {outcome: 'repaired', recordedAt: '2026-03-04T00:00:01.000Z'},
++    },
++    priorityControlPlaneRecovery: {active: false, enteredAt: 1000},
++    runtimeServeEligible: true,
++    publication: {currentMode: 'grouped', enteredAt: '2026-03-04T00:00:00.000Z'},
++  };
++  const key = buildProjectionReadinessGenerationKey(base);
++  // Observational: the exact production rotator — the priority projection's
++  // per-evaluation enteredAt clock fallback (GCP 2026-09-03 measurement).
++  t.equal(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    priorityControlPlaneRecovery: {active: false, enteredAt: 2000},
++  }), 'priorityRecovery.enteredAt alone never rotates the key');
++  t.equal(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    publication: {currentMode: 'grouped', enteredAt: '2026-03-04T09:00:00.000Z'},
++  }), 'publication.enteredAt alone never rotates the key');
++  t.equal(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    runtimeAuthority: {
++      ...base.runtimeAuthority,
++      visibility: {published: true, enteredAt: 9999},
++    },
++  }), 'runtimeAuthority.visibility.enteredAt alone never rotates the key');
++  t.equal(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    dimensions: {clusterMemberHealthy: true, observedAt: 12345},
++  }), 'an observedAt observation stamp alone never rotates the key');
++  t.equal(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    dimensions: {clusterMemberHealthy: true, observedAtMs: 12345},
++  }), 'an observedAtMs observation stamp alone never rotates the key');
++  // Semantic: the repair identity is carried by recordedAt (v2 DEP finding E)
++  // and MUST keep rotating the key.
++  t.not(key, buildProjectionReadinessGenerationKey({
++    ...base,
++    runtimeAuthority: {
++      ...base.runtimeAuthority,
++      repair: {outcome: 'repaired', recordedAt: '2026-03-04T00:00:09.000Z'},
++    },
++  }), 'repair.recordedAt (repair identity) still rotates the key');
++  t.end();
++});
++
++// ---- ENGAGEMENT: a moving clock cannot defeat semantic reuse ---------------
++
++test('ENGAGEMENT (integration): clock-advancing evaluations of an unchanged ' +
++  'semantic generation build once and reuse the SAME core reference',
++async (t) => {
++  const nodeId = 'seed-node';
++  const {service} = buildMovingClockFixture(nodeId);
++  const cores = [];
++  for (let i = 0; i < ENGAGEMENT_EVALUATIONS; i += 1) {
++    const snapshot = await service.evaluateNodeReadiness(nodeId, {});
++    cores.push(snapshot.projectionReadinessContract);
++  }
++  const stats = service.projectionReadinessEvidenceOwner.stats();
++  t.equal(stats.normalizeBuildCount, 1,
++    `one semantic-core build for ${ENGAGEMENT_EVALUATIONS} clock-advancing ` +
++    'evaluations');
++  t.ok(stats.reuseHitCount >= ENGAGEMENT_EVALUATIONS - 1,
++    'every later evaluation was a reuse hit');
++  for (let i = 1; i < cores.length; i += 1) {
++    if (cores[i] !== cores[0]) {
++      t.fail(`evaluation ${i} returned a different core reference`);
++      break;
++    }
++  }
++  t.equal(cores[cores.length - 1], cores[0],
++    'the semantic core is reused BY REFERENCE across the whole run');
++  t.end();
++});
++
++// ---- FRESHNESS: reuse never staleness the envelope observation time --------
++
++test('FRESHNESS (integration): a reused core still ships each call\'s own ' +
++  'observation time in the envelope', async (t) => {
++  const nodeId = 'seed-node';
++  const {service} = buildMovingClockFixture(nodeId);
++  const first = await service.evaluateNodeReadiness(nodeId, {});
++  const second = await service.evaluateNodeReadiness(nodeId, {});
++  t.equal(second.projectionReadinessContract,
++    first.projectionReadinessContract,
++    'unchanged semantic state: the same immutable core (reference equality)');
++  const firstObservedMs = Date.parse(first.observedAt);
++  const secondObservedMs = Date.parse(second.observedAt);
++  t.ok(Number.isFinite(firstObservedMs) && Number.isFinite(secondObservedMs),
++    'both envelopes carry a parseable observedAt');
++  t.ok(secondObservedMs > firstObservedMs,
++    'the second envelope carries the LATER evaluation time (T2 > T1)');
++  t.ok(Object.isFrozen(first.projectionReadinessContract),
++    'the shared core stays immutable — freshness comes from the envelope, ' +
++    'never from mutating the core');
++  t.end();
++});
++
++// ---- SEMANTIC-KEY: real dependencies still rotate the core -----------------
++
++test('SEMANTIC-KEY: each semantic dependency class rotates the key while ' +
++  'observation time is excluded', (t) => {
++  const base = {
++    tableVersions: 'v',
++    planningVersionKey: 'p',
++    dimensions: {clusterMemberHealthy: true},
++    runtimeAuthority: {routingReady: true},
++    priorityControlPlaneRecovery: {active: false, enteredAt: 1000},
++    runtimeServeEligible: true,
++    publication: {currentMode: 'grouped'},
++  };
++  const key = buildProjectionReadinessGenerationKey(base);
++  const rotations = [
++    ['covered table version', {...base, tableVersions: 'v2'}],
++    ['planning derivation version', {...base, planningVersionKey: 'p2'}],
++    ['transport/lifecycle dimension',
++      {...base, dimensions: {clusterMemberHealthy: false}}],
++    ['runtimeAuthority verdict',
++      {...base, runtimeAuthority: {routingReady: false}}],
++    ['priority-recovery activation', {
++      ...base,
++      priorityControlPlaneRecovery: {active: true, enteredAt: 1000},
++    }],
++    ['runtime serve admission', {...base, runtimeServeEligible: false}],
++    ['publication mode',
++      {...base, publication: {currentMode: 'repair_only'}}],
++  ];
++  for (const [label, mutated] of rotations) {
++    t.not(key, buildProjectionReadinessGenerationKey(mutated),
++      `${label} change rotates the semantic key`);
++  }
++  t.end();
++});
++
++test('SEMANTIC-KEY (integration): an authoritative table change rebuilds ' +
++  'the core under a moving clock', async (t) => {
++  const nodeId = 'seed-node';
++  const {service, cache} = buildMovingClockFixture(nodeId);
++  const first = await service.evaluateNodeReadiness(nodeId, {});
++  await service.evaluateNodeReadiness(nodeId, {});
++  cache.bumpTableMutationVersion(TABLES.NODES);
++  const third = await service.evaluateNodeReadiness(nodeId, {});
++  const stats = service.projectionReadinessEvidenceOwner.stats();
++  t.equal(stats.normalizeBuildCount, 2,
++    'the semantic change forced exactly one rebuild');
++  t.not(third.projectionReadinessContract, first.projectionReadinessContract,
++    'the rebuilt core is a new reference');
++  t.end();
++});
++
++// ---- R2 preserved: cores stay strictly per-node ----------------------------
++
++test('R2 preserved: distinct nodes are never aliased to one semantic core',
++  (t) => {
++    const owner = new ProjectionReadinessEvidenceOwner();
++    const coreA = Object.freeze({node: 'A'});
++    const coreB = Object.freeze({node: 'B'});
++    const outA = owner.resolveContract('node-A', 'gen', () => coreA, () => true);
++    const outB = owner.resolveContract('node-B', 'gen', () => coreB, () => true);
++    t.equal(outA, coreA, 'node-A owns its core');
++    t.equal(outB, coreB, 'node-B owns its core');
++    t.not(outA, outB, 'same generation key string, still no cross-node alias');
++    t.equal(owner.stats().ownedNodeCount, 2, 'two independent owned entries');
++    t.end();
++  });
++
++// ---- SOURCE-FRESHNESS: observation authority is untouched ------------------
++
++test('SOURCE-FRESHNESS: every evaluation still observes through the source ' +
++  'owner even while the core is reused', async (t) => {
++  const nodeId = 'seed-node';
++  const {service, readPublicationReadCount} = buildMovingClockFixture(nodeId);
++  const evaluations = 10;
++  for (let i = 0; i < evaluations; i += 1) {
++    await service.evaluateNodeReadiness(nodeId, {});
++  }
++  const stats = service.projectionReadinessEvidenceOwner.stats();
++  t.equal(stats.normalizeBuildCount, 1, 'one core build across the run');
++  t.ok(readPublicationReadCount() >= evaluations,
++    'the publication owner was observed on EVERY evaluation — reuse elides ' +
++    'only the normalize, never an observation');
++  const owner = new ProjectionReadinessEvidenceOwner();
++  t.equal(typeof owner.observe, 'undefined',
++    'the semantic-core owner has no observe surface');
++  t.equal(typeof owner.readNodeRow, 'undefined',
++    'the semantic-core owner has no read surface');
++  t.end();
++});
++
++// ---- PERF: engagement actually moves the work ------------------------------
++
++test('PERF (unit): 10k evaluations across 20 semantic generations build ' +
++  '20 cores', (t) => {
++  const owner = new ProjectionReadinessEvidenceOwner();
++  let builds = 0;
++  const evaluationsPerGeneration =
++    PERF_UNIT_EVALUATIONS / PERF_UNIT_GENERATIONS;
++  for (let i = 0; i < PERF_UNIT_EVALUATIONS; i += 1) {
++    const generation = Math.floor(i / evaluationsPerGeneration);
++    owner.resolveContract('node-1', `gen-${generation}`, () => {
++      builds += 1;
++      return Object.freeze({generation});
++    }, () => true);
++  }
++  const stats = owner.stats();
++  t.equal(builds, PERF_UNIT_GENERATIONS,
++    'core builds equal semantic generations, not evaluations');
++  t.equal(stats.reuseHitCount,
++    PERF_UNIT_EVALUATIONS - PERF_UNIT_GENERATIONS,
++    'every other evaluation reused the owned core');
++  t.end();
++});
++
++test('PERF (integration): under a moving clock, normalize count tracks ' +
++  'semantic generations and the cached run does less normalize work than ' +
++  'the uncached one', async (t) => {
++  const nodeId = 'seed-node';
++  const generations =
++    PERF_INTEGRATION_EVALUATIONS / PERF_INTEGRATION_GENERATION_STRIDE;
++
++  const cached = buildMovingClockFixture(nodeId);
++  const cachedStartMs = performance.now();
++  for (let i = 0; i < PERF_INTEGRATION_EVALUATIONS; i += 1) {
++    if (i > 0 && i % PERF_INTEGRATION_GENERATION_STRIDE === 0) {
++      cached.cache.bumpTableMutationVersion(TABLES.NODES);
++    }
++    await cached.service.evaluateNodeReadiness(nodeId, {});
++  }
++  const cachedMs = performance.now() - cachedStartMs;
++  const cachedStats = cached.service.projectionReadinessEvidenceOwner.stats();
++
++  const uncached = buildMovingClockFixture(nodeId);
++  uncached.service.projectionReadinessEvidenceOwner = null;
++  const uncachedStartMs = performance.now();
++  for (let i = 0; i < PERF_INTEGRATION_EVALUATIONS; i += 1) {
++    await uncached.service.evaluateNodeReadiness(nodeId, {});
++  }
++  const uncachedMs = performance.now() - uncachedStartMs;
++
++  t.equal(cachedStats.normalizeBuildCount, generations,
++    `${PERF_INTEGRATION_EVALUATIONS} evaluations across ${generations} ` +
++    `generations normalized exactly ${generations} times`);
++  t.equal(cachedStats.reuseHitCount,
++    PERF_INTEGRATION_EVALUATIONS - generations,
++    'all remaining evaluations were reuse hits');
++  // Timing is reported as evidence, never sealed as a threshold: loaded
++  // runners make wall-clock ratios flaky, and the build-count collapse above
++  // is the mechanism that moves the cost.
++  t.pass(`measured wall clock: cached ${Math.round(cachedMs)}ms ` +
++    `(${cachedStats.normalizeBuildCount} normalizes) vs uncached ` +
++    `${Math.round(uncachedMs)}ms (${PERF_INTEGRATION_EVALUATIONS} normalizes)`);
++  t.end();
++});

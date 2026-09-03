@@ -8,6 +8,14 @@ import {
   buildProjectionReadinessEvidence,
   pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-evidence.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+// Sync-section attribution (instrumentation-only, projection-readiness
+// re-measurement): a miss on the entry-identity memo pays the full
+// normalize/freeze; the per-window count vs the owner sections tells whether
+// callers mint fresh readiness entries per read.
+const PROJECTION_READINESS_ENTRY_MEMO_MISS_BUILD_SECTION =
+  'projection_readiness_entry_memo_miss_build';
 
 const ArrayConstructor = Array;
 const arrayIsArray = Array.isArray;
@@ -85,7 +93,10 @@ function resolveProjectionReadinessStateForEntry(readinessEntry) {
   if (memoized) {
     return memoized;
   }
-  const state = buildProjectionReadinessState(source);
+  const state = trackSyncSection(
+    PROJECTION_READINESS_ENTRY_MEMO_MISS_BUILD_SECTION,
+    () => buildProjectionReadinessState(source),
+  );
   PROJECTION_READINESS_STATE_BY_ENTRY.set(source, state);
   return state;
 }
