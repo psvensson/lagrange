@@ -168,5 +168,4 @@ export {
   PROJECTION_READINESS_GENERATION_TABLES,
   buildProjectionReadinessGenerationKey,
   snapshotProjectionReadinessTableVersions,
-  canonicalDigest,
 };

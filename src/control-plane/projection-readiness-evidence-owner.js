@@ -23,7 +23,6 @@
 // nodes whose observed evidence differs are independently owned even at the
 // same table generation (R2).
 
-const PROJECTION_READINESS_EVIDENCE_OWNER_ABSENT_NODE = null;
 
 class ProjectionReadinessEvidenceOwner {
   constructor() {
@@ -126,5 +125,4 @@ class ProjectionReadinessEvidenceOwner {
 
 export {
   ProjectionReadinessEvidenceOwner,
-  PROJECTION_READINESS_EVIDENCE_OWNER_ABSENT_NODE,
 };
