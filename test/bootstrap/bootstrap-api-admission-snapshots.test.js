@@ -18,6 +18,7 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
+  createCanonicalReadinessService,
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
@@ -1210,18 +1211,17 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired only wi
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: mockCache,
-      controlPlaneReadinessService: {
-        getNodeReadinessSync(nodeId) {
-          return nodeId === 'seed-node-1' ? {ready: true} : null;
-        },
-      },
+      controlPlaneReadinessService: createCanonicalReadinessService([
+        'seed-node-1',
+        'other-node',
+      ]),
     });
 
     await api.initialize(0, {listen: false});
 
     const readyNodes = api.getReadyNodes();
 
-    // Should include seed node only because readiness explicitly confirms it.
+    // Both nodes are included because the canonical owner confirms them.
     t.ok(readyNodes.includes('seed-node-1'),
       'should include seed node when readiness explicitly confirms bootstrap readiness');
     t.ok(readyNodes.includes('other-node'),

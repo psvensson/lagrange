@@ -1,0 +1,70 @@
+{
+  "id": "node-liveness-semantic-projection-owner-bootstrap-readiness-fixture-repair",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "The exact landed node-liveness semantic owner passes GitHub CI because bootstrap readiness fixtures supply canonical owner-produced readiness evidence for every node their assertions require, while absent owner evidence never falls back to raw time-derived node fields.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "node-liveness-semantic-projection-owner",
+    "planDoc": "solve/epics/hysteresis-consolidation.md",
+    "draftedAtCommit": "addd77bb719415afb2ff2fbaa01a68a7011750ce"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/node-liveness-semantic-projection-owner-bootstrap-readiness-fixture-repair.receipt.json",
+      "requiredReceipts": [
+        "RED-incomplete-owner-fixtures",
+        "A-B-owner-complete-fixtures",
+        "BOUNDARY-no-raw-readiness-fallback",
+        "NEIGHBORHOOD-bootstrap-control-plane",
+        "CHANGE-selected-proof"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "node-liveness-semantic-projection-owner-bootstrap-readiness-fixture-repair-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/node-liveness-semantic-projection-owner-bootstrap-readiness-fixture-repair.receipt.json",
+          "requiredReceipts": [
+            "RED-incomplete-owner-fixtures",
+            "A-B-owner-complete-fixtures",
+            "BOUNDARY-no-raw-readiness-fallback",
+            "NEIGHBORHOOD-bootstrap-control-plane",
+            "CHANGE-selected-proof"
+          ]
+        }
+      }
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "test-only-owner-boundary-repair",
+      "statement": "Change only test fixtures, tests, and Quest evidence; production source remains byte-identical to addd77bb719415afb2ff2fbaa01a68a7011750ce."
+    },
+    {
+      "id": "no-readiness-fallback",
+      "statement": "Do not loosen canonical active-node projection, restore systemTableCache.getReadyNodes as an authority, or add caller-local time-derived liveness semantics."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "An independent verifier must confirm the A/B evidence, boundary regression, and absence of production-source changes before landing."
+    }
+  ]
+}

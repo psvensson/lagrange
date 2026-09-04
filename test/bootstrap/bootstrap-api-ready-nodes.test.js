@@ -15,6 +15,7 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
+  createCanonicalReadinessService,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
 
@@ -355,11 +356,11 @@ test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibil
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: mockCache,
-      controlPlaneReadinessService: {
-        getNodeReadinessSync(nodeId) {
-          return nodeId === 'seed-node-1' ? {ready: true} : null;
-        },
-      },
+      controlPlaneReadinessService: createCanonicalReadinessService([
+        'seed-node-1',
+        'node-2',
+        'node-3',
+      ]),
     });
 
     await api.initialize(0, {listen: false});
@@ -374,6 +375,69 @@ test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibil
 
     await api.shutdown();
   });
+
+test('BootstrapAPI - getReadyNodes requires owner evidence before raw row ' +
+  'liveness can be admitted', async (t) => {
+  initializeTestEnvironment();
+
+  const candidateNodeId = 'owner-evidence-node';
+  const validLease = Date.now() + 10000;
+  const mockCache = {
+    get: () => null,
+    getAll: (tableName) => {
+      if (tableName === TABLES.NODES) {
+        return [{
+          node_id: candidateNodeId,
+          status: 'active',
+          connection_state: STATE.READY,
+          ready_lease_expires_at: validLease,
+        }];
+      }
+      if (tableName === TABLES.NODE_ENDPOINTS) {
+        return [{
+          endpoint_id: `${candidateNodeId}-ws`,
+          node_id: candidateNodeId,
+          transport_type: TRANSPORT_TYPE.WEBSOCKET,
+          status: ENDPOINT_STATUS.ACTIVE,
+          address: 'ws://owner-evidence-node:8080',
+        }];
+      }
+      return [];
+    },
+    filter: (tableName, predicate) =>
+      mockCache.getAll(tableName).filter(predicate),
+    find: () => null,
+    getReadyNodes: () => [candidateNodeId],
+  };
+  const buildApi = (controlPlaneReadinessService) => new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: mockCache,
+    controlPlaneReadinessService,
+  });
+
+  const missingOwnerEvidenceApi = buildApi(
+    createCanonicalReadinessService([]),
+  );
+  await missingOwnerEvidenceApi.initialize(0, {listen: false});
+  t.same(
+    missingOwnerEvidenceApi.getReadyNodes(),
+    [],
+    'fresh-looking raw row and endpoint do not replace owner evidence',
+  );
+  await missingOwnerEvidenceApi.shutdown();
+
+  const ownerCompleteApi = buildApi(
+    createCanonicalReadinessService([candidateNodeId]),
+  );
+  await ownerCompleteApi.initialize(0, {listen: false});
+  t.same(
+    ownerCompleteApi.getReadyNodes(),
+    [candidateNodeId],
+    'owner evidence lets the normal endpoint and publication rules admit it',
+  );
+  await ownerCompleteApi.shutdown();
+});
 
 
 test('BootstrapAPI - buildSystemTableSnapshots includes node_endpoints', async (t) => {
