@@ -2,6 +2,8 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
   './control-plane-readiness-stored-snapshot-reuse.js';
+import {installControlPlaneReadinessLifecycleMethods} from
+  './control-plane-readiness-lifecycle.js';
 
 const LOCAL_STR_REFRESH = '::refresh=';
 const LOCAL_STR_STALE = '::stale=';
@@ -626,6 +628,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   subscribeToCacheChanges() {
     if (
+      this.isShutDown === true ||
       !this.systemTableCache ||
       typeof this.systemTableCache.onCacheChange !== 'function'
     ) {
@@ -783,6 +786,7 @@ function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
     ),
   );
   installControlPlaneReadinessStoredSnapshotReuseMethods(prototype);
+  installControlPlaneReadinessLifecycleMethods(prototype);
 }
 
 export {installControlPlaneReadinessSnapshotStoreMethods};

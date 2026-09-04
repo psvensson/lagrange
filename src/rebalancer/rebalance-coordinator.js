@@ -184,6 +184,12 @@ class RebalanceCoordinator extends EventEmitter {
       this.unbindTerminalOperationIntentPruner();
       this._boundTerminalOperationIntentPruner = null;
     }
+    // The coordinator is the node-scoped container for the readiness
+    // service the composition owner handed it (quest single-readiness-owner):
+    // the node's shutdown ends that service's lifecycle here, exactly once.
+    if (typeof this.controlPlaneReadinessService?.shutdown === LOCAL_STR_FUNCTION) {
+      this.controlPlaneReadinessService.shutdown();
+    }
 
     let inFlightOperationCount = 0;
     try {

@@ -7,7 +7,7 @@
     "bootstrap-membership": 248,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 176,
+    "control-plane": 177,
     "convergence-topology": 76,
     "distributed-harness": 166,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2128,
-  "digest": "fnv1a32-afb15854",
+  "censusSize": 2129,
+  "digest": "fnv1a32-e11c59ce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -622,6 +622,7 @@
     "test/control-plane/runtime-access-policy-owner.test.js": "control-plane",
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
     "test/control-plane/shared-node-readiness-policy.test.js": "control-plane",
+    "test/control-plane/single-readiness-owner.receipt.test.js": "control-plane",
     "test/control-plane/startup-authority-serve-eligible-spread-satisfied.repro.test.js": "control-plane",
     "test/control-plane/startup-authority-snapshot.test.js": "control-plane",
     "test/control-plane/system-metadata-owner-modules.test.js": "control-plane",

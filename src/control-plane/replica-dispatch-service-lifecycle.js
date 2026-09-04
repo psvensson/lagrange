@@ -91,8 +91,12 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       options.cdcGroupPropagationService ||
       this.rebalanceCoordinator?.cdcGroupPropagationService ||
       null;
+    // Node-owned readiness service: resolve from the coordinator container
+    // before constructing (quest single-readiness-owner); a private instance
+    // exists only for standalone/unit composition without a container.
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
+      this.rebalanceCoordinator?.controlPlaneReadinessService ||
       new ControlPlaneReadinessService({
         nodeId: this.nodeId,
         systemTableCache: this.systemTableCache,
