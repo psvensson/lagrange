@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430394,
-        "sha256": "b1aba2a0d269489190b3865f3fe69562f196d76e0b1044943bd120d369406046"
+        "bytes": 430171,
+        "sha256": "0961ecd095d1effd4879cc5de22ce101b09901b487638065f4209da8aa25f100"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2538339,
-        "sha256": "26eef17e98123514b76955eaeae219c98c4b60108588139dab1159ccf980bbef"
+        "sha256": "adf5bd1bf65bb0bce7b48003616e826dbaf6641174dc4b041caa904f9b267518"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "994709d6bd6d429508d7025ed50fe6c7bd94fd778803c310e4c08f0e71404435"
+    "inputDigest": "b65c46123d8037f27c4d6a1c711a3da3c8991d0b95d6ec50ea39dd8047102040"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430394,
-        "sha256": "b1aba2a0d269489190b3865f3fe69562f196d76e0b1044943bd120d369406046"
+        "bytes": 430171,
+        "sha256": "0961ecd095d1effd4879cc5de22ce101b09901b487638065f4209da8aa25f100"
       },
-      "declaredCount": 1824,
-      "observedCount": 1824,
-      "assignedCount": 1824
+      "declaredCount": 1823,
+      "observedCount": 1823,
+      "assignedCount": 1823
     },
     "cognitive": {
       "identity": {
@@ -167,34 +167,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2538339,
-        "sha256": "26eef17e98123514b76955eaeae219c98c4b60108588139dab1159ccf980bbef"
+        "sha256": "adf5bd1bf65bb0bce7b48003616e826dbaf6641174dc4b041caa904f9b267518"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "1be26d0bcce84c9025c955220d053040742f5c4c620d6aed5e6ce329bb986f37",
+      "sourceDigest": "fbeb5f5eaf52e08b858ad12d3d37556926eb2b11df0e1006f2a379b7c24409c9",
       "moduleCount": 5110,
       "edgeCount": 22889,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2671,
-    "assignedSignalCount": 2671,
-    "uniqueAssignmentCount": 2671,
-    "digest": "a477689ca5d9ac7742e4e67fb21738e566b4e73b7ab7c840c0428ea98e1b7250"
+    "sourceSignalCount": 2670,
+    "assignedSignalCount": 2670,
+    "uniqueAssignmentCount": 2670,
+    "digest": "82dd1a78fcdd78c997597827ea47d7a513bee7d15169f639d34faf53b214cdd4"
   },
   "signalCounts": {
     "cognitive": 179,
-    "complexity": 1824,
+    "complexity": 1823,
     "duplication": 580,
     "fileSize": 49,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1369,
+    "filesWithDebt": 1368,
     "rankedBoundaryCount": 123,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 102,
@@ -349,9 +349,9 @@
       "ownerAreas": [
         "test/control-plane"
       ],
-      "fileCount": 56,
-      "signalCount": 70,
-      "complexity": 25,
+      "fileCount": 55,
+      "signalCount": 69,
+      "complexity": 24,
       "cognitive": 0,
       "oversizedFiles": 0,
       "duplicatedLines": 5549,
@@ -359,8 +359,8 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 70,
-      "importOut": 296,
-      "score": 669.9,
+      "importOut": 286,
+      "score": 665.9,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
         "test/control-plane/membership-publication-coordinator-tail-test-cases.js",
@@ -4049,8 +4049,8 @@
           }
         ],
         "baseline": {
-          "score": 669.9,
-          "complexity": 25,
+          "score": 665.9,
+          "complexity": 24,
           "cognitive": 0,
           "oversizedFiles": 0,
           "duplicatedLines": 5549,

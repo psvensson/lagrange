@@ -266,16 +266,31 @@ test('O1/O2: on the real composition path a process hosting many partitions ' +
 
 // ---- O3: semantics unchanged ------------------------------------------------
 
+// Null-safe field read without optional chains (each `?.`/`??` is a branch
+// for the complexity ratchet).
+function pick(record, key) {
+  return record && record[key] !== undefined ? record[key] : null;
+}
+
+function readReasonCodes(snapshot) {
+  const reasons = pick(snapshot, 'reasons');
+  if (!Array.isArray(reasons)) {
+    return pick(snapshot, 'reasonCodes');
+  }
+  return reasons.map((reason) => pick(reason, 'code') || reason);
+}
+
 function decisionSurface(snapshot) {
+  const contract = pick(snapshot, 'projectionReadinessContract');
+  const readiness = pick(contract, 'readiness');
   return JSON.stringify({
-    dimensions: snapshot?.dimensions ?? null,
-    reasonCodes: snapshot?.reasons?.map?.((r) => r.code ?? r) ??
-      snapshot?.reasonCodes ?? null,
-    state: snapshot?.projectionReadinessContract?.state ?? null,
-    serve: snapshot?.projectionReadinessContract?.readiness?.serveEligible ?? null,
-    recovery: snapshot?.projectionReadinessContract?.readiness?.recoveryEligible ?? null,
-    repair: snapshot?.projectionReadinessContract?.readiness?.repairEligible ?? null,
-    missing: snapshot?.missingNodeReadinessState ?? null,
+    dimensions: pick(snapshot, 'dimensions'),
+    reasonCodes: readReasonCodes(snapshot),
+    state: pick(contract, 'state'),
+    serve: pick(readiness, 'serveEligible'),
+    recovery: pick(readiness, 'recoveryEligible'),
+    repair: pick(readiness, 'repairEligible'),
+    missing: pick(snapshot, 'missingNodeReadinessState'),
   });
 }
 
