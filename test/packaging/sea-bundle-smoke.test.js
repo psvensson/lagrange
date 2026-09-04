@@ -17,6 +17,7 @@ const cliBundle = join(projectRoot, 'dist/admin-cli.bundle.cjs');
 const requestCellWorkerBundle =
   join(projectRoot, 'dist/request-cell-worker.bundle.mjs');
 const mainEntrypoint = join(projectRoot, 'src/index.js');
+const SEA_BUNDLE_SMOKE_TIMEOUT_MS = 120000;
 
 function waitForWorkerStartup(worker) {
   return new Promise((resolve, reject) => {
@@ -54,11 +55,13 @@ function runSpawnedBundle(args, env, timeoutMs = 15000) {
   });
 }
 
-test('SEA bundle smoke test', async (t) => {
+test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) => {
   // The bundle build is CPU-bound and shares the machine with parallel test
   // jobs (and 2-vCPU CI runners): 30s flakes under contention while a real
   // hang still fails fast enough at 120s.
-  const build = await runEntrypoint(buildEntrypoint, {timeoutMs: 120000});
+  const build = await runEntrypoint(buildEntrypoint, {
+    timeoutMs: SEA_BUNDLE_SMOKE_TIMEOUT_MS,
+  });
   t.equal(build.exitCode, 0, 'build script exits cleanly');
   t.equal(fs.existsSync(mainBundle), true, 'main bundle exists after build');
   t.equal(fs.existsSync(cliBundle), true, 'CLI bundle exists after build');
