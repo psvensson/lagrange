@@ -24,9 +24,6 @@ import {
 import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -45,6 +42,7 @@ import {
   createMockMembershipPublicationService,
   createMockMessageRouter,
   createMockPolicyService,
+  createMockReadinessService,
   initializeTestEnvironment,
 } from './unified-rebalancer-test-support.js';
 
@@ -54,73 +52,6 @@ import {
 // Create mock table policy service
 // Create mock message router
 // Create mock rebalance coordinator
-// Create mock readiness service backed by the same cache
-function createMockReadinessService(mockCache) {
-  return {
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = mockCache.get('nodes', nodeId);
-      if (!nodeRow) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .METADATA_PUBLICATION_HEALTHY]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      }
-      const now = Date.now();
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow.status === 'active';
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-            healthy,
-          // Formation-liveness dependency partitions (nodes-p1) fail closed
-          // unless this dimension is explicitly true: only a real
-          // heartbeat-owned current lease makes a node recovery-eligible.
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
-        },
-        reasons: [],
-      };
-    },
-    getNodeReadiness: async (nodeId) => {
-      return createMockReadinessService(mockCache)
-        .getNodeReadinessSync(nodeId);
-    },
-  };
-}
-
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
   const {

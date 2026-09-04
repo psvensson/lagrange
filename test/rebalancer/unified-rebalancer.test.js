@@ -63,6 +63,9 @@ import {
   registerUnifiedRebalancerPlanningGateDecisionsTests,
 } from './unified-rebalancer-planning-gate-decisions-test-cases.js';
 import {
+  createMockReadinessService,
+} from './unified-rebalancer-test-support.js';
+import {
   registerUnifiedRebalancerPriorityFollowupCreationTests,
 } from './unified-rebalancer-priority-followup-creation-test-cases.js';
 import {
@@ -355,70 +358,6 @@ function createEventedMockCoordinator() {
   coordinator.listenerCount = (eventName) =>
     (listenersByEvent.get(eventName) || new Set()).size;
   return coordinator;
-}
-
-// Create mock readiness service backed by the same cache
-function createMockReadinessService(mockCache) {
-  return {
-    getNodeReadinessSync: (nodeId) => {
-      const nodeRow = mockCache.get('nodes', nodeId);
-      if (!nodeRow) {
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-              false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .METADATA_PUBLICATION_HEALTHY]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
-            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
-          },
-          reasons: [],
-        };
-      }
-      const now = Date.now();
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      const leaseValid =
-        Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      const isActive = nodeRow.status === 'active';
-      const healthy = isActive && leaseValid;
-      return {
-        nodeId,
-        dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .METADATA_PUBLICATION_HEALTHY]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
-            healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-            healthy,
-        },
-        reasons: [],
-      };
-    },
-    getNodeReadiness: async (nodeId) => {
-      return createMockReadinessService(mockCache)
-        .getNodeReadinessSync(nodeId);
-    },
-  };
 }
 
 function createMockMembershipPublicationService(

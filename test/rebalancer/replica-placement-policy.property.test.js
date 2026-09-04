@@ -15,6 +15,13 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createTestRebalancer} from './test-helpers.js';
 
+function projectNodesAsReady(nodes) {
+  return Object.fromEntries(nodes.map(({node_id: nodeId}) => [
+    nodeId,
+    Object.freeze({readyNow: true}),
+  ]));
+}
+
 // Initialize test environment
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -80,6 +87,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes: activeNodes},
+            livenessProjectionByNodeId: projectNodesAsReady(activeNodes),
           });
 
           // Calculate target state with no existing replicas
@@ -118,6 +126,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes: activeNodes},
+            livenessProjectionByNodeId: projectNodesAsReady(activeNodes),
           });
 
           const policy = {
@@ -179,6 +188,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes},
+            livenessProjectionByNodeId: projectNodesAsReady(nodes),
           });
 
           // Get available nodes - should filter based on status
@@ -212,6 +222,7 @@ test('Property 3: Replica Placement Policy Compliance', async (t) => {
             entityType: EntityType.PARTITION,
             nodeId: 'node-0',
             cacheData: {nodes},
+            livenessProjectionByNodeId: projectNodesAsReady(nodes),
           });
 
           // Calculate target state and check result

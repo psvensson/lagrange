@@ -57,6 +57,12 @@ function createRepairEligibleReadinessService(nodeIds) {
         {nodeId, dimensions, reasons: []} :
         null;
     },
+    projectNodeLiveness(nodeId) {
+      return Object.freeze({
+        readyNow:
+          nodeIds.includes(nodeId) && nodeId !== EXPIRED_NODE_ID,
+      });
+    },
   };
 }
 

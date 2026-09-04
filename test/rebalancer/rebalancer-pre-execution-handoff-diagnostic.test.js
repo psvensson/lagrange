@@ -80,15 +80,25 @@ function createMockCache(nodes = []) {
   };
 }
 
-function createAlwaysReadyReadinessService() {
+function createExplicitReadinessService() {
   return {
     getNodeReadinessSync(nodeId) {
+      const eligible =
+        nodeId !== PRE_EXECUTION_HANDOFF_TEST.UNREADY_NODE_ID;
       return {
         nodeId,
         dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: eligible,
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: eligible,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: eligible,
         },
+      };
+    },
+    projectNodeLiveness() {
+      return {
+        readyNow: true,
+        leaseSemantics: {state: 'valid'},
       };
     },
   };
@@ -123,7 +133,7 @@ function createRebalancer({infoLogs, mockCoordinator}) {
       isOutboundQueueAvailable: () => true,
     },
     rebalanceCoordinator: mockCoordinator,
-    controlPlaneReadinessService: createAlwaysReadyReadinessService(),
+    controlPlaneReadinessService: createExplicitReadinessService(),
   });
 
   rebalancer.initialize();

@@ -120,8 +120,10 @@ const RATCHET_TARGETS = [
     // no-use-before-define hoisting sweep broke up duplicated tail blocks.
     // 2026-08-29: tightened 810/31075 -> 809/31052 after the incarnation-fence
     // witnesses replaced a duplicated fixture block with one shared helper.
-    baselineCloneGroupCount: 809,
-    baselineDuplicatedLineCount: 31052,
+    // 2026-09-04: tightened 809/31052 -> 800/30745 after consolidating the
+    // rebalancer liveness-projection test owner.
+    baselineCloneGroupCount: 800,
+    baselineDuplicatedLineCount: 30745,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

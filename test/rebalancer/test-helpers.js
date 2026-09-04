@@ -936,11 +936,18 @@ function createTestRebalancer(options = {}) {
     estimateReplicaBytes: () => 1,
   };
   const controlPlaneReadinessService = options.controlPlaneReadinessService ||
-    mockCoordinator.controlPlaneReadinessService ||
+    (options.livenessProjectionByNodeId ?
+      createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+        livenessProjectionByNodeId: options.livenessProjectionByNodeId,
+      }) :
+      mockCoordinator.controlPlaneReadinessService) ||
     createMockControlPlaneReadinessService({
       systemTableCache: mockCache,
       defaultRepairEligible: true,
     });
+  mockCoordinator.controlPlaneReadinessService =
+    controlPlaneReadinessService;
 
   return new UnifiedRebalancer({
     entityId,

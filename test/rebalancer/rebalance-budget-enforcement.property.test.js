@@ -20,6 +20,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   createMockCache,
   createMockCdcService,
+  createMockControlPlaneReadinessService,
   createMockPolicyService,
   createMockMessageRouter,
   createMockCoordinator,
@@ -29,6 +30,9 @@ import {
   REBALANCER_SKIP_REASON,
   REBALANCER_DEFAULT,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const CRITICAL_MULTIPLIER =
   REBALANCER_DEFAULT.UNIFIED.CRITICAL_BUDGET_MULTIPLIER;
@@ -77,6 +81,30 @@ function createBudgetSqlEngine(budget, inFlightCount) {
       return {success: true, rows: []};
     },
   };
+}
+
+function createReadyControlPlaneReadinessService(systemTableCache, nodes) {
+  const readinessByNodeId = Object.fromEntries(nodes.map(({node_id: nodeId}) => [
+    nodeId,
+    {
+      nodeId,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+      },
+    },
+  ]));
+  const livenessProjectionByNodeId = Object.fromEntries(
+    nodes.map(({node_id: nodeId}) => [
+      nodeId,
+      Object.freeze({readyNow: true}),
+    ]),
+  );
+  return createMockControlPlaneReadinessService({
+    systemTableCache,
+    readinessByNodeId,
+    livenessProjectionByNodeId,
+  });
 }
 
 /**
@@ -131,6 +159,11 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
     nodes, services, partitions, tables,
   });
   const sqlEngine = createBudgetSqlEngine(budget, inFlightCount);
+  const controlPlaneReadinessService =
+    createReadyControlPlaneReadinessService(cache, nodes);
+  const rebalanceCoordinator = createMockCoordinator();
+  rebalanceCoordinator.controlPlaneReadinessService =
+    controlPlaneReadinessService;
 
   const rebalancer = new UnifiedRebalancer({
     entityId,
@@ -140,8 +173,9 @@ function createCriticalRebalancer({budget, inFlightCount, neededMoves}) {
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService({partitions, tables}),
     messageRouter: createMockMessageRouter(),
-    rebalanceCoordinator: createMockCoordinator(),
+    rebalanceCoordinator,
     sqlQueryEngine: sqlEngine,
+    controlPlaneReadinessService,
   });
 
   rebalancer.initialize();
@@ -316,23 +350,29 @@ test('Property 11: Rebalance budget enforcement', async (t) => {
         },
       };
 
+      const nodes = [{
+        node_id: 'node-1',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: Date.now() + 60000,
+      }];
+      const systemTableCache = createMockCache({nodes});
+      const controlPlaneReadinessService =
+        createReadyControlPlaneReadinessService(systemTableCache, nodes);
+      const rebalanceCoordinator = createMockCoordinator();
+      rebalanceCoordinator.controlPlaneReadinessService =
+        controlPlaneReadinessService;
       const rebalancer = new UnifiedRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
-        systemTableCache: createMockCache({
-          nodes: [{
-            node_id: 'node-1',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: Date.now() + 60000,
-          }],
-        }),
+        systemTableCache,
         cdcIntegrationService: createMockCdcService(),
         tablePolicyService: createMockPolicyService(),
         messageRouter: createMockMessageRouter(),
-        rebalanceCoordinator: createMockCoordinator(),
+        rebalanceCoordinator,
         sqlQueryEngine: failingSqlEngine,
+        controlPlaneReadinessService,
       });
 
       rebalancer.initialize();

@@ -269,6 +269,10 @@ test(
     const controlPlaneReadinessService =
       createMockControlPlaneReadinessService({
         systemTableCache,
+        livenessProjectionByNodeId: {
+          [TEST_NODE_ID_A]: Object.freeze({readyNow: true}),
+          [TEST_NODE_ID_B]: Object.freeze({readyNow: false}),
+        },
         readinessByNodeId: {
           [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
           [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {
@@ -412,6 +416,11 @@ test(
     const controlPlaneReadinessService =
       createMockControlPlaneReadinessService({
         systemTableCache,
+        livenessProjectionByNodeId: {
+          [TEST_NODE_ID_A]: Object.freeze({readyNow: true}),
+          [TEST_NODE_ID_B]: Object.freeze({readyNow: false}),
+          [TEST_NODE_ID_C]: Object.freeze({readyNow: true}),
+        },
         readinessByNodeId: {
           [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
           [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {
@@ -554,6 +563,11 @@ test(
     const controlPlaneReadinessService =
       createMockControlPlaneReadinessService({
         systemTableCache,
+        livenessProjectionByNodeId: {
+          [TEST_NODE_ID_A]: Object.freeze({readyNow: true}),
+          [TEST_NODE_ID_B]: Object.freeze({readyNow: false}),
+          [TEST_NODE_ID_C]: Object.freeze({readyNow: true}),
+        },
         readinessByNodeId: {
           [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
           [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B, {

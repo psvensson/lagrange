@@ -95,11 +95,32 @@ function buildStallScenario({policyByFetch}) {
       status: ReplicaStatus.ACTIVE,
     });
   }
+  const controlPlaneReadinessService =
+    createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+      livenessProjectionByNodeId: Object.fromEntries(
+        NODE_IDS.map((nodeId) => [
+          nodeId,
+          Object.freeze({readyNow: true}),
+        ]),
+      ),
+      readinessByNodeId: {
+        'node-0': {
+          nodeId: 'node-0',
+          dimensions: Object.fromEntries(
+            Object.values(CONTROL_PLANE_READINESS_DIMENSION)
+              .filter((name) => typeof name === 'string')
+              .map((name) => [name, true]),
+          ),
+        },
+      },
+    });
   const rebalancer = createTestRebalancer({
     entityId: SERVICE_ID,
     entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
     nodeId: 'node-0',
     cacheData: {nodes, services},
+    controlPlaneReadinessService,
   });
   rebalancer.isLeader = true;
   // The coordinator-dependency sync can override the admission service with
@@ -113,23 +134,6 @@ function buildStallScenario({policyByFetch}) {
   // anchored on lastStateChangeTime; the scenario models a long-settled
   // topology, so no stabilization wait applies.
   rebalancer.lastStateChangeTime = 0;
-  // The constructor may swap in the coordinator's readiness service; the
-  // scenario models a locally mutation-ready node, so install a readiness
-  // view with every dimension satisfied after construction.
-  rebalancer.controlPlaneReadinessService =
-    createMockControlPlaneReadinessService({
-      defaultRepairEligible: true,
-      readinessByNodeId: {
-        'node-0': {
-          nodeId: 'node-0',
-          dimensions: Object.fromEntries(
-            Object.values(CONTROL_PLANE_READINESS_DIMENSION)
-              .filter((name) => typeof name === 'string')
-              .map((name) => [name, true]),
-          ),
-        },
-      },
-    });
   const policyFetches = [];
   rebalancer.getPolicy = async () => {
     const policy = policyByFetch(policyFetches.length);

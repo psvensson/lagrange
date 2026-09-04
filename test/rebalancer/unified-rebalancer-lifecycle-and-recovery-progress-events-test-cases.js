@@ -230,6 +230,7 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
           },
         },
         controlPlaneReadinessService: {
+          projectNodeLiveness: () => Object.freeze({readyNow: true}),
           getNodeReadinessSync: () => ({
             dimensions: {
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
