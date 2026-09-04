@@ -198,11 +198,16 @@ function runFixture(declaredMs, expectedSeconds, env) {
     `${JSON.stringify(expectedSeconds)});\n` +
     '  tt.end();\n' +
     '});\n');
-  // Strip any ambient lane-owned TAP_TIMEOUT before applying the case's own
-  // env: CI lanes legitimately export one (release.yml/ci.yml set 120), and
-  // the derivation cases must observe the runner's derived value, not the
-  // lane's. The explicit-caller case supplies its own value via `env`.
-  const {TAP_TIMEOUT: _ambientLaneCap, ...hermeticEnv} = process.env;
+  // Strip any ambient lane-owned TAP_TIMEOUT / TAP_TIMEOUT_FLOOR before
+  // applying the case's own env: CI lanes legitimately export a floor
+  // (release.yml/ci.yml set TAP_TIMEOUT_FLOOR=120), and the derivation
+  // cases must observe the runner's derived value, not the lane's. The
+  // explicit-caller and floor cases supply their own values via `env`.
+  const {
+    TAP_TIMEOUT: _ambientLaneCap,
+    TAP_TIMEOUT_FLOOR: _ambientLaneFloor,
+    ...hermeticEnv
+  } = process.env;
   try {
     execFileSync(process.execPath, [RUNNER, '--jobs=1', fixture], {
       cwd: process.cwd(),
@@ -223,3 +228,19 @@ test('the runner exports the derived cap and honours a lane-owned one', () => {
   assert.throws(() => runFixture(90000, '45', {}), /Command failed/u,
     'the fixture must genuinely observe the cap, not pass unconditionally');
 });
+
+// The CI lanes export TAP_TIMEOUT_FLOOR (ci.yml, release.yml): a minimum for
+// files that declare less, never a cap on a file that declares more. An
+// ambient TAP_TIMEOUT clobbered declarations — critical-replica-placement-
+// causal-trace declares 300s, runs ~150s, and died at 120s on main.
+test('a lane floor raises a smaller declaration and never cuts a larger one',
+  () => {
+    assert.equal(runFixture(90000, '120', {TAP_TIMEOUT_FLOOR: '120'}), true,
+      'a 90000ms declaration under a 120s floor runs at the floor');
+    assert.equal(runFixture(300000, '300', {TAP_TIMEOUT_FLOOR: '120'}), true,
+      'a 300000ms declaration under a 120s floor keeps its 300s budget');
+    assert.throws(
+      () => runFixture(300000, '120', {TAP_TIMEOUT_FLOOR: '120'}),
+      /Command failed/u,
+      'the floor must not be observed as a 120s cap on a 300s declaration');
+  });

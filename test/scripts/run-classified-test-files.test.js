@@ -56,13 +56,14 @@ test('the executor runs classified lanes serially with their owned budgets', () 
   // The exclusive lane advises a floor and never sets TAP_TIMEOUT itself:
   // the runner owns the final value and lifts it to a file's declared
   // budget, so a 480s declaration is never cut to the lane default. The
-  // ambient TAP_TIMEOUT (unset locally, '120' under ci.yml) flows through
-  // every lane unchanged — assert against it, not against a fixed value,
-  // so the test is hermetic under the CI lane's environment.
+  // ambient TAP_TIMEOUT and TAP_TIMEOUT_FLOOR (both unset locally; ci.yml
+  // and release.yml export TAP_TIMEOUT_FLOOR='120') flow through every
+  // lane unchanged — assert against them, not against fixed values, so the
+  // test is hermetic under the CI lane's environment.
   assert.equal(calls[2].tapTimeout, process.env.TAP_TIMEOUT);
   assert.equal(calls[0].tapTimeout, process.env.TAP_TIMEOUT);
   assert.equal(calls[2].tapTimeoutFloor, '120');
-  assert.equal(calls[0].tapTimeoutFloor, undefined);
+  assert.equal(calls[0].tapTimeoutFloor, process.env.TAP_TIMEOUT_FLOOR);
 });
 
 test('the classified plan fails closed on duplicates and unknown paths', () => {

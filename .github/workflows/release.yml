@@ -23,10 +23,12 @@ env:
   # Lane-scoped tap budget: CI VMs are slower than the dev corpus was
   # tuned on, and three release attempts died on single tests crossing
   # tap's 30s default (historical-artifact 33s, services-p1 42s,
-  # verification-handoff 34s) with all content assertions green. The
-  # harness honors an explicit caller TAP_TIMEOUT (run-test-files.js);
-  # the 600s per-file kill still bounds real hangs. Local dev keeps 30s.
-  TAP_TIMEOUT: '120'
+  # verification-handoff 34s) with all content assertions green. A FLOOR,
+  # not a cap: the harness (run-test-files.js) lifts undeclared files to it
+  # and keeps a file's own larger `{timeout}` declaration; an explicit
+  # TAP_TIMEOUT would clobber declarations. The 600s per-file kill still
+  # bounds real hangs. Local dev keeps 30s.
+  TAP_TIMEOUT_FLOOR: '120'
   # Retry-failed-once (owner policy 2026-08-23): a failed file is rerun
   # standalone once by run-test-files.js; a standalone pass is a reported,
   # census-classified intermittent, a standalone fail stays red. Capped at
