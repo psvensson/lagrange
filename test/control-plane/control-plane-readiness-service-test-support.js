@@ -46,7 +46,7 @@ export function projectNodeLivenessForTest(
   }).projection;
 }
 
-export function buildNodeRowFromStoredReadinessSnapshot(stub, nodeId) {
+function buildNodeRowFromStoredReadinessSnapshot(stub, nodeId) {
   const evidence = stub.lastReadinessSnapshotByNodeId
     .get(nodeId)?.nodeEvidence;
   if (!evidence) return null;
