@@ -39,7 +39,10 @@ Read these first:
    activation leases pull compute toward data.
 4. [Process: Replication](process-replication.md) - commit, propagation,
    snapshot recovery, and replica repair.
-5. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
+5. [Live Query Data Plane](live-query-data-plane.md) - target contract for
+   push-backed query observation with no polling for distributed change
+   detection.
+6. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
    movement safety.
 
 For the developer-visible contract, read
@@ -55,6 +58,7 @@ architecture, read
 | How is a table divided? | [Partitioning](process-partitioning.md) |
 | How does a write become durable? | [Replication](process-replication.md) |
 | How are reads and writes routed? | [Request routing](process-request-routing.md) |
+| How should a query result stay current after remote writes? | [Live query data plane](live-query-data-plane.md) |
 | How does one service call fan out and reduce? | [Minimal deployment surface](minimal-deployment-surface.md) and [query runtime](query-runtime.md) |
 | How is missing compute activated on a data host? | [Data affinity](process-data-affinity.md) |
 | What moves after failures, splits, or load changes? | [Rebalancing](process-rebalancing.md) |
@@ -70,6 +74,9 @@ architecture, read
   Bindings.
 - A call currently uses one literal single-table selector, one bounded row batch
   per shard, finite numeric partials, and one reducer.
+- The generic push-backed live-query data plane is an approved Phase 0.3 target,
+  not a current general application-data capability. Existing admin/cache-backed
+  live-query pieces must not be read as proof of that broader contract.
 - Managed OCI container activation is not a public service path.
 - PostgreSQL compatibility is a measured subset, not an arbitrary ORM claim.
 - Node-to-node transport assumes a trusted private network.
@@ -80,6 +87,8 @@ architecture, read
 
 - [Architecture overview](overview.md) - implementation principles and owner
   boundaries.
+- [Live query data plane](live-query-data-plane.md) - target live-observation
+  ownership, CDC reuse, grouping, snapshot/frontier, and no-polling contract.
 - [Runtime lifecycle](runtime-lifecycle.md) - runtime readiness and driver
   ownership.
 - [Control plane](control-plane.md) - durable progression and metadata
