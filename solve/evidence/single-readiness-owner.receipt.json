@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "single-readiness-owner",
+  "status": "pass",
+  "generatedAt": "2026-09-04T06:20:00.000Z",
+  "receipts": [
+    {
+      "id": "O1-exactly-one-readiness-service-construction-on-the-real-composition-path",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "ControlPlaneSetup.create (real) -> real RebalanceCoordinator -> 50 real UnifiedRebalancers with the partition service's exact option set: zero cache listeners added by the 50 rebalancers, one ReadinessPlanningSnapshotOwner instance across all of them, dispatch service on the same instance. Red-on-revert: with src/ stashed the 50 rebalancers add 50 listeners (O1 fails with 67 assertions across O1/O4/O5/O6/ENGAGEMENT/BOUNDED-WORK)."
+    },
+    {
+      "id": "O2-every-partition-rebalancer-consumes-the-same-instance",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "r0..r49.controlPlaneReadinessService === coordinator.controlPlaneReadinessService (referential), ownsControlPlaneReadinessService === false on every consumer, one planning owner identity, ReplicaDispatchService consumes the same instance \u2014 all through the composition path, no stub service injected."
+    },
+    {
+      "id": "O3-semantics-unchanged-across-seed-joiner-transitional-veto-refresh-reuse",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "Two identical compositions on one virtual clock, one hosting 50 consumers and one hosting none: identical completed decision surfaces (dimensions, reason codes, projection contract state/lanes, missing-state) for seed, joiner, transitional (JOINING) membership, planning refresh after an authoritative SERVICES change, completed-snapshot reuse (same frozen object, also via a consumer) and live veto (lease+heartbeat aged out -> rebuilt negative decision, readyNow false). Attaching consumers leaves all 11 node dependencies referentially untouched. Every compared read is a completed decision (never planning_snapshot_refresh_pending). Green on both fixed and unfixed trees (pure soundness receipt). Note: a standalone second same-node instance was rejected as a comparator \u2014 node-own handoff/ack state lives inside the service, so a doppelganger diverges on the seed by construction."
+    },
+    {
+      "id": "O4-one-cache-change-one-readiness-listener-invocation",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "Prototype spy on ControlPlaneReadinessService.prototype.handleCacheChange through the real onCacheChange subscription: one NODES heartbeat update with 50 partitions attached -> exactly 1 invocation process-wide, on the container's service (unfixed tree: 51)."
+    },
+    {
+      "id": "O5-node-owner-shutdown-and-reconstruction-leaves-no-duplicate-listener",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "dispatchService.stop() + coordinator.shutdown() (the seed/join cleanup path): service.isShutDown true, its listener removed from the cache, cacheChangeListener null, planning queue stopped, every node-owner listener gone; a late syncOwnerDependencies({systemTableCache: new cache}) on the dead service does not resubscribe; ControlPlaneSetup.create again constructs a new service exactly once (listener count back to the live count), one cache change -> one invocation on the new service only; second teardown returns to baseline."
+    },
+    {
+      "id": "O6-partition-lifecycle-never-creates-resets-or-destroys-the-node-service",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "30 partition rebalancer create+shutdown cycles (3 rounds x 10): coordinator holds the same service identity, isShutDown not true, same planning owner, listener count unchanged, the completed readiness snapshot object survives every cycle (getNodeReadinessSync returns the identical frozen snapshot)."
+    },
+    {
+      "id": "ENGAGEMENT-formation-fixture-one-planning-owner-zero-unused-rebuilds-red-on-revert",
+      "passed": true,
+      "command": "LAGRANGE_LOOP_GAP_PROFILE=1 npm run demo:movielens (seed node-0, measurement-only probe applied then reverted; scratchpad runs/q1-probe, 2026-09-04T06:00Z) + npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "LIVE formation fixture, seed process: planning owner instances 1 (slice-1: 52), unused-owner rebuilds 0 (57,654 / 51,075), process-wide planning rebuilds 2,743 (59,833 / 53,136, -95%), token captures i.e. cache-change fan-out 4,637 (231,200 / 160,374 => 1x per change), projection-evidence owner builds 2,118 (5,701 / 6,099). Unit engagement: 20 source writes x 50 partitions -> 1 owner instance rebuilt (prototype spy over ReadinessPlanningSnapshotOwner.prototype.reconcile, reachable or not), 0 unused-owner rebuilds, 20 listener invocations (not 1,020). Red-on-revert proven: the unit witness fails 'one planning owner across 50 partitions', 'zero rebuilds by unused owners' and '20 source changes -> 20 invocations (not 1020)' on the unfixed tree."
+    },
+    {
+      "id": "BOUNDED-WORK-planning-rebuilds-independent-of-hosted-partition-count",
+      "passed": true,
+      "command": "LAGRANGE_LOOP_GAP_PROFILE=1 npm run demo:movielens (seed node-0, measurement-only probe applied then reverted; scratchpad runs/q1-probe, 2026-09-04T06:00Z) + npm run test:file -- test/control-plane/single-readiness-owner.receipt.test.js",
+      "detail": "Unit: planning rebuilds and listener invocations under 20 authoritative writes are equal with 1 hosted partition and with 50 (the unfixed tree fails 'cache-change fan-out is independent of partition count'). Live: one owner rebuilds one record per changed node x variant (2,743 rebuilds for 317 floored rotations over ~30 records) with the 50+ hosted partitions adding no planning work; seed event-loop blocked % unchanged (35.4 vs 31.8/35.3) \u2014 the duplicated owners were not the seed's dominant CPU consumer, which stays with the separately owned seed-starvation / storage_reservation_reconcile work. Liveness re-measurement: P1 remains (deferred 63% of reads, node_ready_lease_incomplete 259, settle waits 482) => Outcome B, Quest 2 planning generation granularity next with a fresh DEP-SCOPE."
+    }
+  ]
+}
