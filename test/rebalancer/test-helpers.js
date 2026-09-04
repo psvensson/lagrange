@@ -274,10 +274,17 @@ function createMockControlPlaneReadinessService(options = {}) {
     systemTableCache = null,
     defaultRepairEligible = true,
     readinessByNodeId = {},
+    livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
   } = options;
 
   return {
+    ...(livenessProjectionByNodeId &&
+      typeof livenessProjectionByNodeId === 'object' ? {
+        projectNodeLiveness(nodeId) {
+          return livenessProjectionByNodeId[nodeId] || null;
+        },
+      } : {}),
     getNodeReadinessSync(nodeId) {
       const explicit = readinessByNodeId[nodeId];
       if (explicit) {

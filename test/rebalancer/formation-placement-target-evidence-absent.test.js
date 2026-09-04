@@ -68,7 +68,11 @@ function shutdownPlacementStack(stack) {
   }
 }
 
-function createPlacementStack(partitionId, readinessByNodeId) {
+function createPlacementStack(
+  partitionId,
+  readinessByNodeId,
+  livenessProjectionByNodeId = null,
+) {
   const cache = createMockCache({
     nodes: [
       createNodeRow(SEED_NODE_ID),
@@ -83,6 +87,7 @@ function createPlacementStack(partitionId, readinessByNodeId) {
   const readinessService = createMockControlPlaneReadinessService({
     systemTableCache: cache,
     readinessByNodeId,
+    livenessProjectionByNodeId,
   });
   const coordinator = createTestCoordinator({
     nodeId: SEED_NODE_ID,
@@ -136,6 +141,9 @@ test('an ordinary partition keeps the strict readiness placement filter',
       [SEED_NODE_ID]: eligibleReadiness(SEED_NODE_ID),
       [JOINER_NODE_ID]:
         deniedReadiness(JOINER_NODE_ID, EVIDENCE_ABSENT_CODES),
+    }, {
+      [SEED_NODE_ID]: Object.freeze({readyNow: true}),
+      [JOINER_NODE_ID]: Object.freeze({readyNow: false}),
     });
     t.teardown(() => shutdownPlacementStack(stack));
     const availableNodeIds = stack.rebalancer.getAvailableNodes()
