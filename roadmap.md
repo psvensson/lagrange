@@ -36,12 +36,22 @@ work is to make their useful envelope larger and their evidence easier to trust:
   component limit; and
 - bind every externally visible performance claim to reproducible evidence.
 
-## Next - 0.3 Queryable Core: normal SQL access paths
+## Next - 0.3 Queryable Core: normal SQL access paths and live results
 
 A credible distributed database should not require callers to understand its
 physical partition key before ordinary queries become efficient. Phase 0.3
-makes keys, ordered access paths, and secondary indexes a coherent core
-capability rather than a collection of planner exceptions.
+makes keys, ordered access paths, secondary indexes, and continuing query
+observation coherent core capabilities rather than collections of planner or
+adapter exceptions.
+
+The existing live-query runtime already contains useful grouping and CDC-driven
+pieces, but its generic data-plane contract is not complete. Phase 0.3 promotes
+live queries into a push-backed core primitive: normal `SqlCore` planning owns
+query semantics and partition dependencies, relevant partition CDC drives
+changes, equivalent local interests are coalesced, and the snapshot-to-stream
+boundary is gap-free. Distributed change detection by polling is not an
+acceptable implementation path. The target owner map and migration boundary are
+specified in [Live Query Data Plane](architecture/live-query-data-plane.md).
 
 The milestone includes:
 
@@ -55,9 +65,23 @@ The milestone includes:
 - non-unique global secondary and compound indexes represented as
   system-managed, partitioned, Raft-replicated datasets;
 - resumable backfill, restart-safe lifecycle, durable failure state, and safe
-  fallback to scatter-gather when an index is unavailable or not readable; and
+  fallback to scatter-gather when an index is unavailable or not readable;
 - planner integration and `EXPLAIN DISTRIBUTED` output that show which index was
-  selected, or why an available index was rejected.
+  selected, or why an available index was rejected;
+- generic push-backed live queries over ordinary application tables/queries,
+  routed only to partitions that can affect the result and multiplexed across
+  equivalent node-local consumers;
+- one gap-free initial-snapshot/frontier contract using the existing committed
+  CDC handshake/replay substrate rather than repeated reads; and
+- incremental row deltas where the normal plan can be safely maintained, with
+  event-triggered normal-query re-execution/reset for more complex plans rather
+  than polling.
+
+A Phase 0.3 live query should be able to remain idle with zero repeated data
+reads used to discover change, then receive a remote committed mutation as an
+unsolicited update. Split/merge/leader transitions must update the subscription
+footprint through existing topology owners without exposing physical partitions
+to the consumer.
 
 Global uniqueness is intentionally not part of 0.3. A secondary index in this
 milestone is an access path: losing or rejecting it may make a query slower, but
@@ -81,7 +105,10 @@ The 0.5 developer/operator surface should expose the 0.3 capabilities cleanly:
 index definitions and state should be inspectable through normal SQL/catalog
 surfaces, build/backfill progress and failures should be diagnosable, and the
 getting-started path should demonstrate indexed access without requiring
-cluster-internal knowledge.
+cluster-internal knowledge. Live-query diagnostics should likewise show the
+query identity, current dependency/partition footprint, coalesced consumer
+count, frontier/resume state, and whether maintenance is incremental or
+re-execution based without exposing transport mechanics as application policy.
 
 Backup/restore/PITR, enterprise identity controls, secrets/KMS integration, and
 cross-region durability are separate product areas and must follow their edition
