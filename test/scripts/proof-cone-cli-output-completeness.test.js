@@ -13,7 +13,13 @@ const UTF8 = 'utf8';
 // A pipe holds ~64KB before it blocks; the full census is far larger, which is
 // exactly the boundary these CLIs used to lose data at.
 const PIPE_BUFFER_BYTES = 65536;
-const DIFF_BASE = 'HEAD~1';
+// The empty tree: diffed against HEAD, every tracked file is "changed", so
+// the selector escalates to the full census no matter what HEAD's last commit
+// touched. HEAD~1 only did so by accident — a docs-only HEAD (an epic edit)
+// selects six floor tests, ~283 bytes, and cannot exercise the pipe boundary.
+const DIFF_BASE = spawnSync('git', ['hash-object', '-t', 'tree', '/dev/null'], {
+  cwd: root, encoding: UTF8,
+}).stdout.trim();
 
 function runPiped(script, args) {
   // spawnSync gives the child a PIPE for stdout, which is the condition under
@@ -46,8 +52,8 @@ test('the selector CLI emits the complete census through a pipe', () => {
 
 test('the quest-proof dry run emits the complete selection through a pipe', () => {
   // run-quest-proof selects from a diff base rather than a --full-suite flag;
-  // a whole-tree base escalates to the full census, which is the large payload
-  // this boundary needs.
+  // the empty-tree base makes the change set the whole tree, which escalates
+  // to the full census — the large payload this boundary needs.
   const emitted = runPiped(QUEST_PROOF, ['--dry-run', '--diff-base', DIFF_BASE]);
   const payloadBytes = emitted.join('\n').length;
   assert.ok(payloadBytes > PIPE_BUFFER_BYTES,
