@@ -1,5 +1,7 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {buildNodeTrustState} from './node-trust-state.js';
+import {NODE_LIVENESS_SEMANTIC_STATE} from
+  './node-liveness-semantic-projection-owner.js';
 const {
   COLUMN,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -91,13 +93,8 @@ function resolveProvisioningTrustTransportState(service, nodeId, readiness) {
 }
 
 function isProvisioningTrustHeartbeatStale(readiness) {
-  const heartbeatAgeMs = Number(readiness?.nodeEvidence?.heartbeatAgeMs);
-  const staleHeartbeatLimitMs = Number(
-    readiness?.nodeEvidence?.staleHeartbeatLimitMs,
-  );
-  return Number.isFinite(heartbeatAgeMs) &&
-    Number.isFinite(staleHeartbeatLimitMs) &&
-    heartbeatAgeMs > staleHeartbeatLimitMs;
+  return readiness?.nodeEvidence?.clusterMemberHeartbeatFreshness ===
+    NODE_LIVENESS_SEMANTIC_STATE.STALE;
 }
 
 function isNodeInInstalledMembership(nodeId, membershipPublication) {
@@ -197,6 +194,11 @@ function buildProvisioningNodeTrustState(service, nodeId, context, options) {
     readiness,
     transportState,
   });
+  const liveness = service.nodeLivenessSemanticProjectionOwner
+    ?.recordProvisioningTrustGraceEvidence(nodeId, {
+      eligible: grace.startedAtMs !== null,
+      startedAtMs: grace.startedAtMs,
+    }, context.capturedAtMs);
   return buildNodeTrustState(readiness, {
     observerNodeId: service.nodeId,
     capturedAtMs: context.capturedAtMs,
@@ -210,6 +212,7 @@ function buildProvisioningNodeTrustState(service, nodeId, context, options) {
     },
     graceStartedAtMs: grace.startedAtMs,
     graceLimitMs: service.clusterMemberStaleHeartbeatMaxAgeMs,
+    livenessProjection: liveness,
     selfRuntimeGrace: grace.selfRuntimeGrace,
     activeNodeRow: context.nodeRows.some(
       (row) => isActiveTrustRow(row, nodeId),

@@ -19,6 +19,33 @@ import {
 } from './membership-publication-planning-evidence.js';
 import {MembershipPublicationCoordinatorReads} from './membership-publication-coordinator-reads.js';
 
+function resolvePlanningLivenessContext(coordinator, options, nodeRows) {
+  const recoveryEpochsByNodeId =
+    options.recoveryEpochsByNodeId ||
+    (coordinator.controlPlaneReadinessService &&
+    typeof coordinator.controlPlaneReadinessService
+      .getRecoveryEpochHistoryByNodeId === 'function' ?
+      coordinator.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId() :
+      null);
+  const connectedNodeIds =
+    coordinator.controlPlaneReadinessService?.messageRouter &&
+    typeof coordinator.controlPlaneReadinessService.messageRouter
+      .getConnectedNodes === 'function' ?
+      coordinator.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
+      [];
+  const nowMs = normalizePositiveInteger(options.nowMs, coordinator.now());
+  const nodeLivenessByNodeId = options.nodeLivenessByNodeId ||
+    (typeof coordinator.controlPlaneReadinessService
+      ?.getNodeLivenessProjectionsSync === 'function' ?
+      coordinator.controlPlaneReadinessService.getNodeLivenessProjectionsSync(
+        nodeRows,
+        nowMs,
+      ) :
+      null);
+  return {recoveryEpochsByNodeId, connectedNodeIds, nowMs,
+    nodeLivenessByNodeId};
+}
+
 class MembershipPublicationCoordinatorPlanning extends
   MembershipPublicationCoordinatorReads {
   deriveClusterMembershipCandidateSync(options = {}) {
@@ -100,17 +127,12 @@ class MembershipPublicationCoordinatorPlanning extends
               MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
         }) :
         [];
-    const recoveryEpochsByNodeId =
-      options.recoveryEpochsByNodeId ||
-      (this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === 'function' ?
-        this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId() :
-        null);
-    const connectedNodeIds =
-      this.controlPlaneReadinessService?.messageRouter &&
-      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === 'function' ?
-        this.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
-        [];
+    const {recoveryEpochsByNodeId, connectedNodeIds, nowMs,
+      nodeLivenessByNodeId} = resolvePlanningLivenessContext(
+      this,
+      options,
+      nodeRows,
+    );
     const priorityRecoveryPlanningSnapshot =
       options.deferNestedPriorityRecoveryPlanning === true ?
         null :
@@ -135,11 +157,12 @@ class MembershipPublicationCoordinatorPlanning extends
       readinessEntries,
       recoveryEpochsByNodeId,
       connectedNodeIds,
+      nodeLivenessByNodeId,
       priorityRecoveryPlanningSnapshot,
       publisherNodeId: options.publisherNodeId || this.nodeId,
       localNodeId: this.nodeId,
       localNodeResponsive: true,
-      nowMs: normalizePositiveInteger(options.nowMs, this.now()),
+      nowMs,
     });
   }
 
@@ -187,17 +210,12 @@ class MembershipPublicationCoordinatorPlanning extends
               MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
         }) :
         [];
-    const recoveryEpochsByNodeId =
-      options.recoveryEpochsByNodeId ||
-      (this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId === 'function' ?
-        this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId() :
-        null);
-    const connectedNodeIds =
-      this.controlPlaneReadinessService?.messageRouter &&
-      typeof this.controlPlaneReadinessService.messageRouter.getConnectedNodes === 'function' ?
-        this.controlPlaneReadinessService.messageRouter.getConnectedNodes() :
-        [];
+    const {recoveryEpochsByNodeId, connectedNodeIds, nowMs,
+      nodeLivenessByNodeId} = resolvePlanningLivenessContext(
+      this,
+      options,
+      nodeRows,
+    );
     return buildMembershipPublicationEvidenceSnapshot({
       ...options,
       latestPublicationRow,
@@ -210,11 +228,12 @@ class MembershipPublicationCoordinatorPlanning extends
       readinessEntries,
       recoveryEpochsByNodeId,
       connectedNodeIds,
+      nodeLivenessByNodeId,
       priorityRecoveryPlanningSnapshot: null,
       publisherNodeId: options.publisherNodeId || this.nodeId,
       localNodeId: this.nodeId,
       localNodeResponsive: true,
-      nowMs: normalizePositiveInteger(options.nowMs, this.now()),
+      nowMs,
     });
   }
 }

@@ -22,7 +22,6 @@ const {
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
   getPartitionRowFromCache,
-  isNodeRecordReady,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -77,6 +76,11 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
       evidence.recoveryActive === true,
   }),
 ]);
+
+function isNodeReadyNow(readinessService, nodeId) {
+  if (typeof readinessService?.projectNodeLiveness !== 'function') return false;
+  return readinessService.projectNodeLiveness(nodeId)?.readyNow === true;
+}
 
 class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   getReservedPriorityRecoveryMoveSlots() {
@@ -262,7 +266,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       }
       return readinessDecisionDimension !==
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
-        isNodeRecordReady(node);
+        isNodeReadyNow(this.controlPlaneReadinessService, nodeId);
     });
   }
 
@@ -281,7 +285,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     try {
       const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
         this.nodeId,
-        Date.now(),
       );
       const nodeIds = resolveStartupAuthorityNodeIdSet(startupAuthority);
       return nodeIds.size > 0 ? nodeIds : null;
@@ -442,7 +445,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const publicationNodeId = this.nodeId;
-    const observedAt = Date.now();
+    const observedAt = typeof readinessService.now === 'function' ?
+      readinessService.now() : this.nowFn();
     let planningSnapshot = null;
     if (
       typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
@@ -535,7 +539,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     const publicationNodeId = this.nodeId;
     const observedAt = Number.isFinite(options.observedAt) ?
       Math.floor(options.observedAt) :
-      Date.now();
+      typeof readinessService.now === 'function' ?
+        readinessService.now() : this.nowFn();
 
     let planningSnapshot = null;
     if (

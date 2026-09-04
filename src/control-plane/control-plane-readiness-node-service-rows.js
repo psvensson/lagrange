@@ -1,8 +1,7 @@
 import {ControlPlaneReadinessStartupAuthorityHealth} from './control-plane-readiness-startup-authority-health.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
-import {
-  hasLiveTransportEvidence,
-} from './live-transport-evidence.js';
+import {NODE_LIVENESS_SEMANTIC_STATE} from
+  './node-liveness-semantic-projection-owner.js';
 
 const {
   COLUMN,
@@ -20,10 +19,7 @@ const {
   STATE,
   TABLES,
   compactEligibilitySnapshot,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeRecordReady,
   normalizeLocalQueryTransportEvidence,
-  wasNodeRecordReadyWhenWritten,
 } = SHARED;
 
 class ControlPlaneReadinessNodeServiceRows extends
@@ -353,24 +349,29 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   buildClusterMemberHealthDetails(nodeId, nodeRow) {
-    const now = this.now();
-    const transportState = this.getNodeTransportState(nodeId, nodeRow);
+    const liveness = this.projectNodeLivenessFromRow(
+      nodeId,
+      nodeRow,
+      this.now(),
+    );
     const localQueryTransport = this.getLocalQueryTransportEvidence(nodeId);
-    const lastHeartbeat = Number(nodeRow?.[COLUMN.LAST_HEARTBEAT]);
-    const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
+    const lastHeartbeat = Number(liveness?.heartbeatFreshness?.lastHeartbeatMs);
+    const readyLeaseExpiresAt = Number(liveness?.leaseSemantics?.expiresAtMs);
+    const projectedAtMs = Number(liveness?.projectedAtMs);
     const heartbeatAgeMs = Number.isFinite(lastHeartbeat) ?
-      now - lastHeartbeat :
+      projectedAtMs - lastHeartbeat :
       null;
     const readyLeaseAgeMs = Number.isFinite(readyLeaseExpiresAt) ?
-      now - readyLeaseExpiresAt :
+      projectedAtMs - readyLeaseExpiresAt :
       null;
-    const status = String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase();
+    const status = liveness?.statusSemantics?.state || null;
 
     return Object.freeze({
-      status: status.length > 0 ? status : null,
-      rowConnectionState: transportState.rowState,
-      routerConnectionState: transportState.routerState,
-      transportConnected: transportState.connected,
+      status,
+      rowConnectionState: liveness?.connectionSemantics?.rowState || null,
+      routerConnectionState: liveness?.connectionSemantics?.routerState || null,
+      transportConnected:
+        liveness?.connectionSemantics?.connected === true,
       localQueryTransportState: localQueryTransport?.state || null,
       localQueryTransportReady:
         typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
@@ -392,9 +393,16 @@ class ControlPlaneReadinessNodeServiceRows extends
         null,
       readyLeaseAgeMs:
         Number.isFinite(readyLeaseAgeMs) ? readyLeaseAgeMs : null,
+      readyLeaseExplicitlyCleared:
+        liveness?.leaseSemantics?.explicitlyCleared === true,
       staleHeartbeatLimitMs: this.clusterMemberStaleHeartbeatMaxAgeMs,
-      readyNow: isNodeRecordReady(nodeRow, {now}),
-      readyWhenWritten: wasNodeRecordReadyWhenWritten(nodeRow, {now}),
+      readyNow: liveness?.readyNow === true,
+      readyWhenWritten: liveness?.readyWhenWritten === true,
+      clusterMemberHeartbeatFreshness:
+        liveness?.heartbeatFreshness?.clusterMembership || null,
+      repairHeartbeatFreshness:
+        liveness?.repairFreshness?.state || null,
+      derivationGraceActive: liveness?.derivationGraceActive === true,
     });
   }
 
@@ -462,84 +470,24 @@ class ControlPlaneReadinessNodeServiceRows extends
   }
 
   isRecentHeartbeat(nodeRow) {
-    const lastHeartbeat = Number(nodeRow?.[COLUMN.LAST_HEARTBEAT]);
-    if (!Number.isFinite(lastHeartbeat)) {
-      return false;
-    }
-    return (this.now() - lastHeartbeat) <=
-      this.clusterMemberStaleHeartbeatMaxAgeMs;
+    const nodeId = nodeRow?.[COLUMN.NODE_ID] ?? nodeRow?.node_id;
+    const projection = this.projectNodeLivenessFromRow(
+      nodeId,
+      nodeRow,
+      this.now(),
+    );
+    return projection?.heartbeatFreshness?.clusterMembership ===
+      NODE_LIVENESS_SEMANTIC_STATE.FRESH;
   }
 
   isClusterMemberHealthy(nodeId, nodeRow) {
-    const hasLeaseField = Number.isFinite(
-      Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]),
+    const projection = this.projectNodeLivenessFromRow(
+      nodeId,
+      nodeRow,
+      this.now(),
     );
-    const hasStatusField =
-      typeof nodeRow?.[COLUMN.STATUS] === 'string' &&
-      nodeRow[COLUMN.STATUS].length > 0;
-
-    if (!hasLeaseField && !hasStatusField) {
-      return !!nodeRow;
-    }
-
-    const now = this.now();
-    if (isNodeRecordReady(nodeRow, {now})) {
-      return true;
-    }
-
-    const statusActive =
-      String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase() ===
-      SERVICE_STATUS.ACTIVE;
-
-    if (!statusActive) {
-      return false;
-    }
-
-    if (isNodeReadyLeaseExplicitlyCleared(nodeRow)) {
-      return false;
-    }
-
-    // §1.4.12 self-node fast path: a running node evaluating its own
-    // cluster membership is trivially healthy — it is alive and
-    // executing this check. This is the strongest possible signal,
-    // stronger than any cache lease or transport evidence. Without
-    // this, CDC propagation delays during topology changes (splits,
-    // rebalance) cause the local cache lease to expire before the
-    // heartbeat CDC event propagates back, leading to self-denial
-    // of load-lane admission.
-    if (nodeId === this.nodeId) {
-      return true;
-    }
-
-    if (!this.isNodeTransportConnected(nodeId, nodeRow)) {
-      return false;
-    }
-
-    const connectionState = String(
-      nodeRow?.[COLUMN.CONNECTION_STATE] || '',
-    ).toLowerCase();
-    if (connectionState !== STATE.READY) {
-      return false;
-    }
-
-    if (this.isRecentHeartbeat(nodeRow)) {
-      return true;
-    }
-
-    // §1.4.12 "slow, not dead" remote-peer parity with the lease-sweep grace
-    // (lease-service.js:196-230, CL-007): a transport-connected, connection-ready
-    // remote peer whose INGESTED heartbeat row is stale is a coordinator-side CDC
-    // ingest-lag artifact (observed live: a coordinator with lagging heartbeat
-    // ingestion sees healthy peers as ~195s stale and denies all placement onto
-    // them), not a dead peer. Trust the LIVE router state over the stale cached
-    // heartbeat, mirroring the self-node fast path above. Require the LIVE
-    // routerState (not the cached rowState fallback) so a genuinely disconnected
-    // peer still fails closed — death detection is delegated to the transport
-    // ACK-timeout quarantine (message-router-reconnect-behaviors.js), which tears
-    // the connection down (routerState leaves CONNECTED) for a cleanly-dead peer.
-    return hasLiveTransportEvidence(nodeId, {
-      messageRouter: this.messageRouter,
-    });
+    return projection?.clusterMembershipSemantics?.state ===
+      NODE_LIVENESS_SEMANTIC_STATE.HEALTHY;
   }
 
   static compactSnapshotSummary(snapshot, decisionDimension = null) {

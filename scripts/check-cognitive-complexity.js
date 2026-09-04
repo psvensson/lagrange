@@ -25,7 +25,8 @@ const TARGET_THRESHOLD = 20;
 // DOWN only from here.
 // 2026-07-19: tightened 183 -> 179 (measured; owner-complexity rebalancer
 // planning refactors landed without taking the ratchet down).
-const BASELINE_COUNT = 179;
+// 2026-09-04: tightened 179 -> 177 after liveness predicate extraction.
+const BASELINE_COUNT = 177;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -132,8 +132,11 @@ class HeartbeatService extends EventEmitter {
     this.lastHeartbeatPublicationDecision = null;
     this.heartbeatPublicationDiagnostics = {
       lastAttemptAt: null,
+      lastAttemptAtMs: null,
       lastSuccessAt: null,
+      lastSuccessAtMs: null,
       lastFailureAt: null,
+      lastFailureAtMs: null,
       lastFailureStage: null,
       lastFailureReason: null,
       publicationPath: null,

@@ -316,6 +316,11 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
       options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
         options.readinessByNodeId :
         null,
+    nodeLivenessByNodeId:
+      options.nodeLivenessByNodeId &&
+        typeof options.nodeLivenessByNodeId === 'object' ?
+        options.nodeLivenessByNodeId :
+        null,
     readinessEntries: Array.isArray(options.readinessEntries) ? options.readinessEntries : [],
     recoveryEpochsByNodeId:
       options.recoveryEpochsByNodeId && typeof options.recoveryEpochsByNodeId === 'object' ?

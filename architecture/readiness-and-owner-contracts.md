@@ -24,21 +24,35 @@ authoritative repair path is timing out under load.
 
 ## Cluster Membership Health
 
-These four guards keep `isClusterMemberHealthy` / `serveEligible` from flapping
-to `false` while CDC-driven `SystemTableCache` updates lag behind authoritative
-state during topology changes (partition splits, rebalance). Transport
-disconnection remains the definitive negative signal.
+`NodeLivenessSemanticProjectionOwner` is the single semantic owner for the
+time-dependent node facts that feed `isClusterMemberHealthy`,
+`repairEligible`, membership derivation, and planning. It consumes raw row,
+transport, reporter, and grace evidence at the readiness `TimeSource`'s numeric
+`nowMs` and publishes an immutable projection containing status, connection,
+cluster-membership, lease, heartbeat, repair, transport-grace, provisioning
+trust, and local-reporter semantics.
+
+The owner preserves the existing fact-specific clocks rather than collapsing
+them into one liveness timeout: 60-second derivation grace, 30-second
+cluster-member heartbeat freshness, row-defined ready-lease validity,
+10-second repair freshness, and 15-second transport grace. It exposes the
+earliest future semantic deadline, drives that deadline with one coalesced
+readiness-owned timer, and rotates a per-node generation only when semantic
+content changes. Relevant cache and transport events reproject immediately;
+an overdue consumer read is only a lazy backstop for delayed timer delivery.
+
+The guards below are expressed by that projection. Readiness, membership
+planning, rebalancing, diagnostics, and node-trust views consume the projected
+verdict or generation. They do not compare raw timestamps or use presentation
+ages as a second authority.
 
 ### Transport-reconciled cluster membership
 
-`isClusterMemberHealthy` reconciles stale cache lease/heartbeat data with live
-transport connectivity from the `MessageRouter`. When a node row has an active
-status and the transport layer reports the node as connected, the node is
-considered healthy regardless of cache-side lease expiry. This prevents
-transient `serveEligible=false` during topology changes where CDC-driven
-`SystemTableCache` updates lag behind authoritative state. Transport
-disconnection remains the definitive negative signal: a disconnected node with
-expired lease data is always unhealthy.
+The liveness owner reconciles cache lease/heartbeat evidence with live
+transport connectivity from the `MessageRouter`. When the existing membership
+rules permit transport to rescue lagging cache evidence, every consumer sees
+that same projected verdict. A transport change is an authoritative source
+event and reprojects the affected node without waiting for a NODES write.
 
 ### Lease sweep transport guard
 

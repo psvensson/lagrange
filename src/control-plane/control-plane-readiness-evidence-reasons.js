@@ -2,6 +2,8 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
+import {NODE_LIVENESS_SEMANTIC_STATE} from
+  './node-liveness-semantic-projection-owner.js';
 
 const LOCAL_STR_BOOLEAN = 'boolean';
 
@@ -54,6 +56,24 @@ const PROJECTION_READINESS_REASONS_CONTRACT_BUILD_SECTION =
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
   'priority_control_plane_recovery_diagnostics_unavailable';
 
+function recordPriorityRecoveryTransportGrace(service, context, state) {
+  const nodeId = context.nodeId || service.nodeId;
+  const hasTransportGrace = state?.active === true &&
+    typeof service.shouldAllowTransportBackedRecoveryGrace === 'function' &&
+    service.shouldAllowTransportBackedRecoveryGrace(context);
+  return service.nodeLivenessSemanticProjectionOwner
+    ?.recordTransportGraceEvidence(nodeId, {
+      eligible: hasTransportGrace,
+      startedAtMs: Number(state?.enteredAt),
+    }, service.now());
+}
+
+function hasActivePriorityRecoveryTransportGrace(state, liveness) {
+  return state && typeof state === 'object' && state.active === true &&
+    liveness?.transportSemantics?.graceState ===
+      NODE_LIVENESS_SEMANTIC_STATE.ACTIVE;
+}
+
 class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicationDiagnostics {
   constructor(...args) {
     super(...args);
@@ -86,22 +106,13 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
     if (typeof originalGetState === 'function') {
       this.getPriorityControlPlaneRecoveryState = function(context = {}) {
         const state = originalGetState.call(this, context);
-        if (state && typeof state === 'object' && state.active === true) {
-          const enteredAtMs = Number(state.enteredAt);
-          if (Number.isFinite(enteredAtMs) && enteredAtMs > 0) {
-            const ageMs = this.now() - enteredAtMs;
-            const graceMs = 15000; // 15 seconds soft grace period
-            if (ageMs >= 0 && ageMs <= graceMs) {
-              const hasTransportGrace = typeof this.shouldAllowTransportBackedRecoveryGrace === 'function' &&
-                this.shouldAllowTransportBackedRecoveryGrace(context);
-              if (hasTransportGrace) {
-                return Object.freeze({
-                  ...state,
-                  inGracePeriod: true,
-                });
-              }
-            }
-          }
+        const liveness = recordPriorityRecoveryTransportGrace(
+          this,
+          context,
+          state,
+        );
+        if (hasActivePriorityRecoveryTransportGrace(state, liveness)) {
+          return Object.freeze({...state, inGracePeriod: true});
         }
         return state;
       };

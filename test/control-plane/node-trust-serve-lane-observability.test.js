@@ -40,6 +40,7 @@ function buildReadiness(options = {}) {
       lastHeartbeat: 100,
       heartbeatAgeMs: 400,
       staleHeartbeatLimitMs: 30000,
+      clusterMemberHeartbeatFreshness: 'fresh',
       routerConnectionState: 'connected',
       transportConnected: true,
     },

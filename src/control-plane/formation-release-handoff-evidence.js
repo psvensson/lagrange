@@ -1,5 +1,7 @@
 import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {COLUMN, NODE_STATE, STATE} from '../constants/index.js';
+import {projectNodeLivenessSemantics} from
+  './node-liveness-semantic-projection.js';
 
 const arrayIsArray = Array.isArray;
 const arrayPrototypeIncludes = Function.call.bind(Array.prototype.includes);
@@ -358,13 +360,13 @@ function isConnectedFormationMember(node) {
     );
 }
 function isCurrentReadyMember(node, observedAt) {
-  return node.status === NODE_STATE.ACTIVE &&
-    numberIsFinite(node.readyLeaseExpiresAt) &&
-    node.readyLeaseExpiresAt > observedAt &&
-    (
-      node.connectionState === STATE.CONNECTED ||
-      node.connectionState === STATE.READY
-    );
+  const liveness = projectNodeLivenessSemantics({
+    nodeId: node.nodeId,
+    nodeRow: node,
+    nowMs: observedAt,
+  }).projection;
+  return liveness.readyNow === true &&
+    liveness.connectionSemantics.connected === true;
 }
 function isAuthorityReadyRetainable(evidence) {
   return evidence.state === STARTUP_AUTHORITY_STATE.READY &&

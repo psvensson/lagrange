@@ -31,12 +31,14 @@ import {
 import {
   normalizeNodeIdList,
 } from './active-node-projection-normalizers.js';
+import {
+  projectNodeLivenessSemantics,
+} from './node-liveness-semantic-projection.js';
 
 const LOCAL_STR_PUBLISHED_MEMBERSHIP = 'published_membership';
 const LOCAL_STR_UNPUBLISHED = 'unpublished';
 const LOCAL_STR_PROJECTED = 'projected';
 
-const ACTIVE_NODE_HEARTBEAT_GRACE_MS = 60000;
 const MEMBERSHIP_FREEZE_DEFAULT = Object.freeze({
   MIN_PUBLISHED_NODE_COUNT: 3,
   MIN_SUSPECTED_NODE_COUNT: 2,
@@ -55,39 +57,25 @@ const PROJECTION_AUTHORITY_SOURCE = Object.freeze({
   RUNTIME_AUTHORITY_ESTABLISHING: 'runtime_authority_establishing',
 });
 
-function resolveReadyLeaseExpiresAtMs(row) {
-  const readyLeaseExpiresAt = Number(
-    row?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
-      row?.ready_lease_expires_at ??
-      row?.readyLeaseExpiresAt,
+function resolveNodeLivenessProjection(nodeRow, options = {}) {
+  const nodeId = String(
+    nodeRow?.[COLUMN.NODE_ID] ?? nodeRow?.node_id ?? '',
   );
-  return Number.isFinite(readyLeaseExpiresAt) ?
-    readyLeaseExpiresAt :
-    null;
-}
-
-function resolveLastHeartbeatMs(row) {
-  const lastHeartbeat = Number(
-    row?.last_heartbeat ??
-      row?.lastHeartbeat,
-  );
-  return Number.isFinite(lastHeartbeat) ?
-    lastHeartbeat :
-    null;
+  const ownedProjection = options.nodeLivenessByNodeId?.[nodeId];
+  if (ownedProjection && typeof ownedProjection === 'object') {
+    return ownedProjection;
+  }
+  if (!Number.isFinite(options.nowMs)) return null;
+  return projectNodeLivenessSemantics({
+    nodeId,
+    nodeRow,
+    nowMs: options.nowMs,
+  }).projection;
 }
 
 function hasFreshReadyLeaseOrHeartbeat(nodeRow, options = {}) {
-  const nowMs = Number.isFinite(options.nowMs) ?
-    options.nowMs :
-    Date.now();
-  const readyLeaseExpiresAtMs = resolveReadyLeaseExpiresAtMs(nodeRow);
-  if (Number.isFinite(readyLeaseExpiresAtMs) &&
-      readyLeaseExpiresAtMs > nowMs) {
-    return true;
-  }
-  const lastHeartbeatMs = resolveLastHeartbeatMs(nodeRow);
-  return Number.isFinite(lastHeartbeatMs) &&
-    lastHeartbeatMs > nowMs - ACTIVE_NODE_HEARTBEAT_GRACE_MS;
+  return resolveNodeLivenessProjection(nodeRow, options)
+    ?.derivationGraceActive === true;
 }
 
 function isProjectionLivenessConnectionState(connectionState) {
@@ -100,9 +88,10 @@ function hasFreshProjectionLiveness(nodeRow, options = {}) {
   if (!normalizedNode.nodeId) {
     return false;
   }
+  const liveness = resolveNodeLivenessProjection(nodeRow, options);
   return isProjectionLivenessConnectionState(
     normalizedNode.connectionState,
-  ) && hasFreshReadyLeaseOrHeartbeat(nodeRow, options);
+  ) && liveness?.derivationGraceActive === true;
 }
 
 function buildReadinessByNodeId(options = {}) {
@@ -405,13 +394,11 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
   ) {
     return false;
   }
-  const nowMs = Number.isFinite(options.nowMs) ?
-    options.nowMs :
-    Date.now();
+  const liveness = resolveNodeLivenessProjection(nodeRow, options);
   const hasReadyConnection = normalizedNode.connectionState ===
     String(STATE.READY).toLowerCase();
   const hasFreshLiveness = hasReadyConnection &&
-    hasFreshReadyLeaseOrHeartbeat(nodeRow, {nowMs});
+    liveness?.derivationGraceActive === true;
   if (normalizedNode.status !==
       String(SERVICE_STATUS.ACTIVE).toLowerCase() &&
       !hasFreshLiveness) {

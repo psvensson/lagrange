@@ -7,7 +7,7 @@
     "bootstrap-membership": 248,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 177,
+    "control-plane": 178,
     "convergence-topology": 76,
     "distributed-harness": 166,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2129,
-  "digest": "fnv1a32-e11c59ce",
+  "censusSize": 2130,
+  "digest": "fnv1a32-78046456",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -541,6 +541,7 @@
     "test/control-plane/movielens-phantom-predicate-repro.test.js": "control-plane",
     "test/control-plane/no-inline-live-transport-copy.guard.test.js": "control-plane",
     "test/control-plane/node-incarnation-fence.test.js": "control-plane",
+    "test/control-plane/node-liveness-semantic-projection-owner.test.js": "control-plane",
     "test/control-plane/node-trust-serve-lane-observability.test.js": "control-plane",
     "test/control-plane/node-trust-state.test.js": "control-plane",
     "test/control-plane/operational-probes-not-routed.guard.test.js": "control-plane",

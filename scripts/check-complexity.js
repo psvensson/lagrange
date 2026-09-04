@@ -36,7 +36,8 @@ const TARGET_THRESHOLD = 12;
 // 2026-08-29: tightened 1824 -> 1823 after the release-branch ratchet repair
 // (active-gate evidence probes, formation-barrier snapshot projection,
 // formation-release contract identity, coordinator move request decoration).
-const BASELINE_COUNT = 1823;
+// 2026-09-04: tightened 1823 -> 1822 after liveness predicate extraction.
+const BASELINE_COUNT = 1822;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

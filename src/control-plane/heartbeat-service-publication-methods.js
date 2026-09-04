@@ -564,11 +564,13 @@ class HeartbeatServicePublicationMethods {
    * @param {string} stage - Failure stage.
    * @param {string} errorMessage - Error message.
    * @private
-   */ recordFailure(stage, errorMessage) {
+  */ recordFailure(stage, errorMessage) {
     this.heartbeatConsecutiveFailures++;
+    const failedAtMs = this.now();
     this.heartbeatPublicationDiagnostics.lastFailureAt = normalizeHeartbeatPublicationTimestamp(
-      this.now(),
+      failedAtMs,
     );
+    this.heartbeatPublicationDiagnostics.lastFailureAtMs = failedAtMs;
     this.heartbeatPublicationDiagnostics.lastFailureStage = stage;
     this.heartbeatPublicationDiagnostics.lastFailureReason = errorMessage;
     this.heartbeatPublicationDiagnostics.consecutiveFailures = this.heartbeatConsecutiveFailures;

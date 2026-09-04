@@ -9,6 +9,10 @@ import {
   NODE_TRUST_STATE,
   buildNodeTrustState,
 } from '../../src/control-plane/node-trust-state.js';
+import {
+  NODE_LIVENESS_SEMANTIC_STATE,
+  projectNodeLivenessSemantics,
+} from '../../src/control-plane/node-liveness-semantic-projection.js';
 
 const NODE_ID = 'node-a';
 
@@ -24,6 +28,12 @@ function buildPublication(nodeIds = [NODE_ID], publicationEpoch = 7) {
 
 function buildReadiness(options = {}) {
   const capturedAtMs = options.capturedAtMs ?? 1000;
+  const heartbeatAgeMs = Object.hasOwn(options, 'heartbeatAgeMs') ?
+    options.heartbeatAgeMs : 900;
+  const staleHeartbeatLimitMs = Object.hasOwn(
+    options,
+    'staleHeartbeatLimitMs',
+  ) ? options.staleHeartbeatLimitMs : 500;
   return {
     nodeId: options.nodeId || NODE_ID,
     observedAt: new Date(capturedAtMs).toISOString(),
@@ -33,16 +43,15 @@ function buildReadiness(options = {}) {
         options.membershipPublication,
     nodeEvidence: {
       status: options.status === undefined ? 'active' : options.status,
-      lastHeartbeat: 100,
-      heartbeatAgeMs: Object.hasOwn(options, 'heartbeatAgeMs') ?
-        options.heartbeatAgeMs :
-        900,
-      staleHeartbeatLimitMs: Object.hasOwn(
-        options,
-        'staleHeartbeatLimitMs',
-      ) ?
-        options.staleHeartbeatLimitMs :
-        500,
+      lastHeartbeat: Number.isFinite(heartbeatAgeMs) ?
+        capturedAtMs - heartbeatAgeMs : null,
+      heartbeatAgeMs,
+      staleHeartbeatLimitMs,
+      clusterMemberHeartbeatFreshness:
+        Number.isFinite(heartbeatAgeMs) &&
+        Number.isFinite(staleHeartbeatLimitMs) ?
+          heartbeatAgeMs < staleHeartbeatLimitMs ? 'fresh' : 'stale' :
+          'unknown',
       readyLeaseExpiresAt: 1200,
       routerConnectionState: options.routerConnectionState ?? 'connected',
       transportConnected: options.transportConnected !== false,
@@ -62,6 +71,29 @@ function buildReadiness(options = {}) {
 }
 
 function buildTrust(readiness, options = {}) {
+  const capturedAtMs = options.capturedAtMs ?? 1000;
+  const heartbeatAgeMs = readiness?.nodeEvidence?.heartbeatAgeMs;
+  const staleHeartbeatLimitMs =
+    readiness?.nodeEvidence?.staleHeartbeatLimitMs;
+  const lastHeartbeatMs = Number.isFinite(heartbeatAgeMs) ?
+    capturedAtMs - heartbeatAgeMs : null;
+  const baseLiveness = projectNodeLivenessSemantics({
+    nodeRow: {last_heartbeat: lastHeartbeatMs},
+    nowMs: capturedAtMs,
+    thresholds: {clusterMemberStaleHeartbeatMs: staleHeartbeatLimitMs},
+  }).projection;
+  const livenessProjection = projectNodeLivenessSemantics({
+    nodeRow: {last_heartbeat: lastHeartbeatMs},
+    nowMs: capturedAtMs,
+    provisioningTrustGraceEligible:
+      options.selfRuntimeGrace === true ||
+      baseLiveness.heartbeatFreshness.clusterMembership ===
+        NODE_LIVENESS_SEMANTIC_STATE.STALE,
+    provisioningTrustGraceStartedAtMs:
+      Object.hasOwn(options, 'graceStartedAtMs') ?
+        options.graceStartedAtMs : 1000,
+    thresholds: {clusterMemberStaleHeartbeatMs: staleHeartbeatLimitMs},
+  }).projection;
   return buildNodeTrustState(readiness, {
     observerNodeId: 'observer-a',
     cacheWatermark: {
@@ -73,9 +105,10 @@ function buildTrust(readiness, options = {}) {
     },
     transport: {
       state: 'connected',
-      observedAtMs: options.capturedAtMs ?? 1000,
+      observedAtMs: capturedAtMs,
     },
     graceStartedAtMs: 1000,
+    livenessProjection,
     ...options,
   });
 }
@@ -171,8 +204,8 @@ test('W7 trust: unknown owner evidence fails closed', (t) => {
 });
 
 test('W7 trust: null grace timestamps never normalize to epoch zero', (t) => {
-  const trust = buildTrust(buildReadiness({capturedAtMs: 1}), {
-    capturedAtMs: 1,
+  const trust = buildTrust(buildReadiness({capturedAtMs: 1000}), {
+    capturedAtMs: 1000,
     graceStartedAtMs: null,
   });
 
@@ -207,7 +240,14 @@ function createTrustViewFixture() {
   const cache = {
     getAll(tableName) {
       if (tableName === 'nodes') {
-        return [{node_id: NODE_ID}];
+        return [{
+          node_id: NODE_ID,
+          status: readiness.nodeEvidence.status,
+          connection_state: readiness.nodeEvidence.routerConnectionState,
+          last_heartbeat: readiness.nodeEvidence.lastHeartbeat,
+          ready_lease_expires_at:
+            readiness.nodeEvidence.readyLeaseExpiresAt,
+        }];
       }
       if (tableName === 'services') {
         return [{service_id: 'mg-a', node_id: NODE_ID}];
@@ -223,6 +263,7 @@ function createTrustViewFixture() {
   };
   const service = new ControlPlaneReadinessService({
     nodeId: 'observer-a',
+    clusterMemberStaleHeartbeatMaxAgeMs: 500,
     systemTableCache: cache,
     messageRouter: {
       getConnectionState() {

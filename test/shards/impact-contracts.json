@@ -142,8 +142,12 @@
       ]
     },
     "readiness-versioned-planning-liveness": {
-      "description": "Complete-token readiness freshness, macrotask-bounded planning, and non-recursive readiness-internal owner reads form one convergence contract.",
+      "description": "Node-liveness semantic projection, complete-token readiness freshness, macrotask-bounded planning, and non-recursive readiness-internal owner reads form one convergence contract.",
       "owners": [
+        "src/control-plane/node-liveness-semantic-projection.js",
+        "src/control-plane/node-liveness-semantic-projection-owner.js",
+        "src/control-plane/control-plane-readiness-node-liveness-methods.js",
+        "src/control-plane/control-plane-readiness-owner-dependencies.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/control-plane/authoritative-node-evidence-reconciler.js",
         "src/control-plane/control-plane-readiness-participation-base.js",
@@ -158,6 +162,7 @@
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
       ],
       "tests": [
+        "test/control-plane/node-liveness-semantic-projection-owner.test.js",
         "test/control-plane/publication-readiness-churn-liveness.test.js",
         "test/control-plane/control-plane-read-authority-token.test.js",
         "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
@@ -311,6 +316,9 @@
         {
           "id": "semantic-token-freshness",
           "owners": [
+            "src/control-plane/node-liveness-semantic-projection.js",
+            "src/control-plane/node-liveness-semantic-projection-owner.js",
+            "src/control-plane/control-plane-readiness-node-liveness-methods.js",
             "src/control-plane/readiness-planning-snapshot-owner.js",
             "src/control-plane/control-plane-readiness-service-node-methods.js",
             "src/control-plane/control-plane-readiness-snapshot-store.js",

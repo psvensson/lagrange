@@ -24,6 +24,8 @@ function createVetoService(overrides = {}) {
   };
   return {
     clusterMemberStaleHeartbeatMaxAgeMs: 30000,
+    livenessGeneration: 1,
+    livenessSignature: 'lease-valid',
     heartbeatService: {
       getHeartbeatPublicationDiagnostics: () => heartbeatDiagnostics,
       lastHeartbeatPublicationDecision: {
@@ -50,6 +52,12 @@ function createVetoService(overrides = {}) {
       rowState: 'ready',
       routerState: 'connected',
     }),
+    getNodeLivenessSemanticIdentity() {
+      return {
+        generation: this.livenessGeneration,
+        semanticSignature: this.livenessSignature,
+      };
+    },
     getNodeRow: () => null,
     heartbeatDiagnostics,
   };
@@ -115,15 +123,10 @@ test('the positive-decision live veto still trips on semantic transitions ' +
   service.heartbeatDiagnostics.lastFailureStage = null;
   service.heartbeatDiagnostics.lastFailureReason = null;
 
-  const expiredLease = capturePositiveDecisionLiveVeto(
-    service,
-    OWNER_KEY,
-    {nodeEvidence: {readyLeaseExpiresAt: VETO_NOW_MS - 1,
-      lastHeartbeat: VETO_NOW_MS - 1000}},
-    VETO_NOW_MS - 500,
-    VETO_NOW_MS,
-  );
+  service.livenessGeneration += 1;
+  service.livenessSignature = 'lease-expired';
+  const expiredLease = captureVeto(service);
   t.not(expiredLease, before,
-    'an expired ready lease still vetoes the positive decision');
+    'an owner-projected ready-lease expiry still vetoes the positive decision');
   t.end();
 });

@@ -9,9 +9,9 @@ import {ProjectionReadinessEvidenceOwner} from './projection-readiness-evidence-
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
+import {NODE_LIVENESS_SEMANTIC_STATE} from
+  './node-liveness-semantic-projection.js';
 
-const LOCAL_STR_NODE_STATE_REPORTER = 'node_state_reporter';
-const LOCAL_STR_ATTEMPT_TIMEOUT = 'attempt_timeout';
 const LOCAL_STR_CONTROLPLANEREADINESSSERVICE_MISSING_CDC = 'ControlPlaneReadinessService missing CDC publication owner';
 const LOCAL_STR_PUBLICATION_OWNER_UNAVAILABLE = 'publication_owner_unavailable';
 
@@ -27,7 +27,6 @@ const {
   STATE,
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
-  normalizeDiagnosticTimestampMs,
   pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
@@ -181,39 +180,10 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    * @private
    */
   hasFreshLocalReporterSuccess(nodeId) {
-    if (nodeId !== this.nodeId) {
-      return false;
-    }
-
-    const diagnostics = this.getHeartbeatPublicationDiagnostics();
-    if (!diagnostics || diagnostics.publicationPath !== LOCAL_STR_NODE_STATE_REPORTER) {
-      return false;
-    }
-
-    const lastSuccessAtMs = normalizeDiagnosticTimestampMs(
-      diagnostics.lastSuccessAt,
-    );
-    if (!Number.isFinite(lastSuccessAtMs)) {
-      return false;
-    }
-
-    const lastFailureAtMs = normalizeDiagnosticTimestampMs(
-      diagnostics.lastFailureAt,
-    );
-    if (
-      Number(diagnostics.consecutiveFailures) > 0 ||
-      (Number.isFinite(lastFailureAtMs) && lastFailureAtMs > lastSuccessAtMs)
-    ) {
-      return this.shouldGraceTimedOutLocalReporterFailure({
-        diagnostics,
-        lastSuccessAtMs,
-        lastFailureAtMs,
-      });
-    }
-
-    return (
-      this.now() - lastSuccessAtMs <= this.clusterMemberStaleHeartbeatMaxAgeMs
-    );
+    return nodeId === this.nodeId &&
+      this.projectNodeLiveness(nodeId, this.now())
+        ?.localReporterSemantics?.state ===
+          NODE_LIVENESS_SEMANTIC_STATE.FRESH;
   }
 
   /**
@@ -229,32 +199,10 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
    * @private
    */
   shouldGraceTimedOutLocalReporterFailure(context = {}) {
-    const diagnostics = context?.diagnostics || {};
-    const lastSuccessAtMs = Number(context?.lastSuccessAtMs);
-    const lastFailureAtMs = Number(context?.lastFailureAtMs);
-    if (!Number.isFinite(lastSuccessAtMs)) {
-      return false;
-    }
-
-    if (
-      this.now() - lastSuccessAtMs >
-      this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs
-    ) {
-      return false;
-    }
-
-    if (
-      !Number.isFinite(lastFailureAtMs) ||
-      lastFailureAtMs <= lastSuccessAtMs
-    ) {
-      return false;
-    }
-
-    if (String(diagnostics?.lastFailureStage || '') !== LOCAL_STR_ATTEMPT_TIMEOUT) {
-      return false;
-    }
-
-    return Number(diagnostics?.consecutiveFailures) <= 1;
+    const nodeId = context.nodeId || this.nodeId;
+    return this.projectNodeLiveness(nodeId, this.now())
+      ?.localReporterSemantics?.timeoutGraceState ===
+        NODE_LIVENESS_SEMANTIC_STATE.ACTIVE;
   }
 
   /**

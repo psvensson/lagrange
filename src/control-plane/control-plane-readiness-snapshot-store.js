@@ -1,4 +1,8 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {
+  isStoredNodeLivenessCurrent,
+  recordNodeLivenessSourceChange,
+} from './control-plane-readiness-node-liveness-methods.js';
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
   './control-plane-readiness-stored-snapshot-reuse.js';
@@ -105,23 +109,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return false;
     }
 
-    const readyLeaseExpiresAt = Number(
-      snapshot?.nodeEvidence?.readyLeaseExpiresAt,
-    );
-    if (Number.isFinite(readyLeaseExpiresAt) && readyLeaseExpiresAt <= now) {
-      return false;
-    }
-
-    // CL-019: a silently-dead node produces no row change and no cache-change
-    // marker, but the rebuild path flips cluster-member health once the
-    // heartbeat ages past clusterMemberStaleHeartbeatMaxAgeMs (the same
-    // constant isRecentHeartbeat uses). Reuse must expire at that same
-    // instant, not up to a full capture-age window later.
-    const lastHeartbeat = Number(snapshot?.nodeEvidence?.lastHeartbeat);
-    if (
-      Number.isFinite(lastHeartbeat) &&
-      now - lastHeartbeat > this.clusterMemberStaleHeartbeatMaxAgeMs
-    ) {
+    if (!isStoredNodeLivenessCurrent(this, snapshot, now)) {
       return false;
     }
 
@@ -647,6 +635,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   handleCacheChange(tableName, record) {
+    recordNodeLivenessSourceChange(this, tableName, record);
     this.readinessPlanningSnapshotOwner?.recordTableChange(tableName, record);
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||

@@ -60,8 +60,7 @@ const READINESS_PLANNING_DEPENDENCY_REGISTRY = objectFreeze({
   ]),
   positiveDecisionLiveVetoes: objectFreeze([
     'snapshotCaptureAge',
-    'readyLeaseExpiry',
-    'heartbeatExpiry',
+    'nodeLivenessSemanticIdentity',
     'localQueryTransportDrift',
     'currentNodeTransportHealth',
     'nodeLifecycleState',

@@ -326,6 +326,8 @@ function advanceMemoryTrendState(memoryUsagePercent, timestamp, options = {}) {
 
 function recordHeartbeatPublicationAttempt(options = {}) {
   options.diagnostics.lastAttemptAt = normalizeHeartbeatPublicationTimestamp(options.startedAtMs);
+  options.diagnostics.lastAttemptAtMs = Number.isFinite(options.startedAtMs) ?
+    options.startedAtMs : null;
   options.diagnostics.consecutiveFailures = options.heartbeatConsecutiveFailures;
 }
 
@@ -371,6 +373,8 @@ function recordHeartbeatPublicationSuccess(options = {}) {
   recordHeartbeatPublicationTarget(options);
   options.heartbeatPublicationDiagnostics.lastSuccessAt =
     normalizeHeartbeatPublicationTimestamp(options.now);
+  options.heartbeatPublicationDiagnostics.lastSuccessAtMs =
+    Number.isFinite(options.now) ? options.now : null;
   options.heartbeatPublicationDiagnostics.consecutiveFailures =
     options.heartbeatConsecutiveFailures;
 }

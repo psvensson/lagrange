@@ -49,6 +49,7 @@ const REBALANCE_OPERATION_FIELD = Object.freeze({
   STEPS_HISTORY_SNAKE: 'steps_history',
   TARGET_NODE_ID_CAMEL: 'targetNodeId',
 });
+const VALID_NODE_LEASE_STATE = 'valid';
 
 const TERMINAL_CREATE_TARGET_BLOCKING_STATUSES = new Set([
   ReplicaStatus.FAILED,
@@ -223,8 +224,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       if (nodeRow.status !== SERVICE_STATUS.ACTIVE) {
         return READINESS_SKIP_DETAIL.STATUS_NOT_ACTIVE;
       }
-      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
-      if (!Number.isFinite(leaseExpiry) || leaseExpiry <= Date.now()) {
+      if (this.controlPlaneReadinessService.projectNodeLiveness?.(nodeId)
+        ?.leaseSemantics?.state !== VALID_NODE_LEASE_STATE) {
         return READINESS_SKIP_DETAIL.LEASE_EXPIRED;
       }
       return READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE;

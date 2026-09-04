@@ -35,12 +35,14 @@ const {
   CONTROL_PLANE_READINESS_DIMENSION,
   NodeStatus,
   isNodeReadyLeaseExplicitlyCleared,
-  isNodeRecordReady,
 } = SHARED.UNIFIED_REBALANCER_SHARED;
 const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
   TARGET_NODES: 'targetNodes',
   TARGET_NODE_ID_SNAKE: 'target_node_id',
 });
+const isNodeReadyFromLiveness = (rebalancer, nodeId) =>
+  rebalancer.controlPlaneReadinessService?.projectNodeLiveness(nodeId)
+    ?.readyNow === true;
 const PRIORITY_RECOVERY_SERIAL_WAIT_FIELDS = Object.freeze([
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS,
@@ -72,7 +74,6 @@ function readFollowUpOperationTargetNodeId(operation) {
     PRIORITY_RECOVERY_FOLLOW_UP_FIELD.TARGET_NODE_ID,
   );
 }
-
 function buildPriorityRecoveryMoveFields({
   cure,
   partitionId,
@@ -469,7 +470,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     if (this.isPriorityRecoveryFollowUpTargetRecoveryEligible(nodeId)) {
       return false;
     }
-    const nodeReady = isNodeRecordReady(nodeRow, {now: Date.now()});
+    const nodeReady = isNodeReadyFromLiveness(this, nodeId);
     const readyLeaseExplicitlyCleared =
       isNodeReadyLeaseExplicitlyCleared(nodeRow, {
         requireActiveStatus: false,
@@ -794,6 +795,5 @@ function normalizeAdmissionBlockingReasonCodes(outcome) {
     )
     .filter((reason) => reason.length > 0);
 }
-
 applyUnifiedRebalancerFollowUpAugmentationMethods(UnifiedRebalancerFollowUpMove);
 export {UnifiedRebalancerFollowUpMove};

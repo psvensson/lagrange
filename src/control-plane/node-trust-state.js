@@ -1,4 +1,6 @@
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {NODE_LIVENESS_SEMANTIC_STATE} from
+  './node-liveness-semantic-projection.js';
 
 const NODE_TRUST_STATE = Object.freeze({
   SERVE: 'serve',
@@ -159,7 +161,24 @@ function buildTransportEvidence(readiness, options, capturedAtMs) {
   return Object.freeze({state, observedAtMs});
 }
 
-function buildFreshnessEvidence(readiness, options, capturedAtMs) {
+function resolveTrustHeartbeatState(nodeEvidence, liveness) {
+  if (liveness?.heartbeatFreshness?.clusterMembership) {
+    return liveness.heartbeatFreshness.clusterMembership;
+  }
+  return nodeEvidence.clusterMemberHeartbeatFreshness ||
+    NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN;
+}
+
+function resolveProvisioningTrustGrace(liveness) {
+  const semantics = liveness?.provisioningTrustSemantics;
+  if (!semantics) return {active: false, untilMs: null};
+  return {
+    active: semantics.graceState === NODE_LIVENESS_SEMANTIC_STATE.ACTIVE,
+    untilMs: semantics.graceDeadlineAtMs ?? null,
+  };
+}
+
+function buildFreshnessEvidence(readiness, options) {
   const nodeEvidence = readiness?.nodeEvidence || {};
   const heartbeatAgeMs = normalizeFiniteNumber(nodeEvidence.heartbeatAgeMs);
   const staleHeartbeatLimitMs = normalizeFiniteNumber(
@@ -168,37 +187,19 @@ function buildFreshnessEvidence(readiness, options, capturedAtMs) {
       options.graceLimitMs,
     ),
   );
-  const graceStartedAtMs = normalizeTimestampMs(options.graceStartedAtMs);
-  const graceUntilMs = [
-    Number.isFinite(graceStartedAtMs),
-    Number.isFinite(staleHeartbeatLimitMs),
-  ].every(Boolean) ?
-    graceStartedAtMs + staleHeartbeatLimitMs :
-    null;
-  const heartbeatKnown = [
-    Number.isFinite(heartbeatAgeMs),
-    Number.isFinite(staleHeartbeatLimitMs),
-  ].every(Boolean);
-  const heartbeatFresh = [
-    heartbeatKnown,
-    heartbeatAgeMs <= staleHeartbeatLimitMs,
-  ].every(Boolean);
-  const graceEligible = options.selfRuntimeGrace === true || [
-    heartbeatKnown,
-    !heartbeatFresh,
-  ].every(Boolean);
-  const graceActive = [
-    graceEligible,
-    Number.isFinite(capturedAtMs),
-    Number.isFinite(graceUntilMs),
-    capturedAtMs < graceUntilMs,
-  ].every(Boolean);
+  const liveness = options.livenessProjection || null;
+  const heartbeatState = resolveTrustHeartbeatState(nodeEvidence, liveness);
+  const heartbeatKnown = heartbeatState !==
+    NODE_LIVENESS_SEMANTIC_STATE.UNKNOWN;
+  const heartbeatFresh = heartbeatState ===
+    NODE_LIVENESS_SEMANTIC_STATE.FRESH;
+  const grace = resolveProvisioningTrustGrace(liveness);
   let state = NODE_TRUST_EVIDENCE_STATE.EXPIRED;
   if (!heartbeatKnown && options.selfRuntimeGrace !== true) {
     state = NODE_TRUST_EVIDENCE_STATE.UNKNOWN;
   } else if (heartbeatFresh) {
     state = NODE_TRUST_EVIDENCE_STATE.FRESH;
-  } else if (graceActive) {
+  } else if (grace.active) {
     state = NODE_TRUST_EVIDENCE_STATE.GRACE;
   }
   return Object.freeze({
@@ -207,7 +208,7 @@ function buildFreshnessEvidence(readiness, options, capturedAtMs) {
     staleHeartbeatLimitMs: Number.isFinite(staleHeartbeatLimitMs) ?
       staleHeartbeatLimitMs :
       null,
-    graceUntilMs,
+    graceUntilMs: grace.untilMs,
   });
 }
 
@@ -378,7 +379,7 @@ function buildNodeTrustState(readiness, options = {}) {
   const membership = buildMembershipEvidence(readiness);
   const cacheWatermark = buildCacheWatermark(options.cacheWatermark);
   const transport = buildTransportEvidence(readiness, options, capturedAtMs);
-  const freshness = buildFreshnessEvidence(readiness, options, capturedAtMs);
+  const freshness = buildFreshnessEvidence(readiness, options);
   const readinessRevision = buildReadinessRevision(readiness);
   const processAlive =
     dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true;

@@ -8,6 +8,10 @@ import {OperationLane} from '../workflow/operation-lane.js';
 import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from './control-plane-cache-reconcile-constants.js';
+import {
+  NODE_LIVENESS_SEMANTIC_STATE,
+  NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT,
+} from './node-liveness-semantic-projection.js';
 
 const LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED = 'Maximum call stack size exceeded';
 
@@ -28,7 +32,8 @@ const DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS = 15000;
 // burst while keeping force-fresh responsiveness far below the normal cooldown.
 const DEFAULT_REPAIR_BYPASS_FLOOR_MS = 1000;
 const DEFAULT_REPAIR_QUERY_TIMEOUT_MS = 1500;
-const DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS = 30000;
+const DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS =
+  NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.repairStaleHeartbeatMs;
 const REPAIR_STAGE = Object.freeze({
   SCHEDULED: 'scheduled',
   COOLDOWN_SKIPPED: 'cooldown_skipped',
@@ -195,6 +200,10 @@ class AuthoritativeNodeEvidenceReconciler {
       typeof options.isClusterMemberHealthy === 'function' ?
         options.isClusterMemberHealthy :
         () => false;
+    this.getNodeLivenessProjection =
+      typeof options.getNodeLivenessProjection === 'function' ?
+        options.getNodeLivenessProjection :
+        () => null;
     this.hasRoutableService =
       typeof options.hasRoutableService === 'function' ?
         options.hasRoutableService :
@@ -337,11 +346,11 @@ class AuthoritativeNodeEvidenceReconciler {
     return true;
   }
 
-  shouldRepairStaleHeartbeat(nodeEvidence) {
-    const heartbeatAgeMs = Number(nodeEvidence?.heartbeatAgeMs);
-    return Number.isFinite(heartbeatAgeMs) &&
-      heartbeatAgeMs >
-        this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs;
+  shouldRepairStaleHeartbeat(nodeId, nodeEvidence) {
+    const projection = this.getNodeLivenessProjection(nodeId) ||
+      nodeEvidence?.nodeLivenessSemanticProjection;
+    return projection?.repairFreshness?.state ===
+      NODE_LIVENESS_SEMANTIC_STATE.STALE;
   }
 
   shouldRepairNodeEvidence(context = {}, options = {}) {
@@ -382,7 +391,7 @@ class AuthoritativeNodeEvidenceReconciler {
     const hasFreshLocalReporterSuccess =
       this.hasFreshLocalReporterSuccess(nodeId);
     const nodeEvidence = this.buildNodeEvidence(nodeId, nodeRow);
-    if (this.shouldRepairStaleHeartbeat(nodeEvidence)) {
+    if (this.shouldRepairStaleHeartbeat(nodeId, nodeEvidence)) {
       return !hasFreshLocalReporterSuccess;
     }
 

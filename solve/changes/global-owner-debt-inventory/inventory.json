@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430171,
-        "sha256": "0961ecd095d1effd4879cc5de22ce101b09901b487638065f4209da8aa25f100"
+        "bytes": 429889,
+        "sha256": "cb81e34ef2f3ff19b1b63ef3abe85e14bd65a745b24964ad754767e6001a2a1c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 40861,
-        "sha256": "4c6b2fd55150344a8da3aff1a58f19209bee2f6dcc8c4d30907b1ea5a0f6e05f"
+        "bytes": 40400,
+        "sha256": "abef03327622525bb5eb9cf4617cd6fcb6a1500b97f62beb4a37f1bd6aa15719"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2538339,
-        "sha256": "bee1943c23bdba2e567610eb447e0f33341bcfedfe7c045a961e7bdc44c97955"
+        "bytes": 2541319,
+        "sha256": "f4137f79dfe6aea2b64eee63920a34e5c934e68f0c5d78b8514952d3c35b4697"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "621382a9ddee67f7d0c802e0e63f8e0c72a7412bb431ff02df7f932e47043b16"
+        "sha256": "c99b87110deea586202d8e5b9c43ff98a82a8e4e9c4ea2e9f8896306a59b01a0"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,12 +39,12 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "783e20476d90791fcfcefe43796e0660baf1bed8ee0a2f8b274461639020c4a7"
+        "sha256": "32ea288a7af2f0d3f87b9bd5509356e0633709ddf5d6355d98529d830167f460"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
         "bytes": 8425,
-        "sha256": "f26aac60e686f443a6a89ac653087b8f1b8e23335f8b6b0b93c3f3560329a209"
+        "sha256": "78c01631a29adf0dd09037c94669359ec3503c90a54145e30d61326668ff016e"
       },
       {
         "path": "eslint.config.js",
@@ -62,45 +62,45 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "392e1e6bf060719a262536cf7f4041787ada1465edb6e795ae1765e3c48b80ff"
+    "inputDigest": "6ded6fc8175f240702db40484a36343d9f5ca7f9b166bc909fed6116fdafb8c4"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 430171,
-        "sha256": "0961ecd095d1effd4879cc5de22ce101b09901b487638065f4209da8aa25f100"
+        "bytes": 429889,
+        "sha256": "cb81e34ef2f3ff19b1b63ef3abe85e14bd65a745b24964ad754767e6001a2a1c"
       },
-      "declaredCount": 1823,
-      "observedCount": 1823,
-      "assignedCount": 1823
+      "declaredCount": 1822,
+      "observedCount": 1822,
+      "assignedCount": 1822
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 40861,
-        "sha256": "4c6b2fd55150344a8da3aff1a58f19209bee2f6dcc8c4d30907b1ea5a0f6e05f"
+        "bytes": 40400,
+        "sha256": "abef03327622525bb5eb9cf4617cd6fcb6a1500b97f62beb4a37f1bd6aa15719"
       },
-      "declaredCount": 179,
-      "observedCount": 179,
-      "assignedCount": 179
+      "declaredCount": 177,
+      "observedCount": 177,
+      "assignedCount": 177
     },
     "fileSize": {
       "authority": {
         "path": "scripts/check-file-size-thresholds.js",
         "bytes": 8425,
-        "sha256": "f26aac60e686f443a6a89ac653087b8f1b8e23335f8b6b0b93c3f3560329a209"
+        "sha256": "78c01631a29adf0dd09037c94669359ec3503c90a54145e30d61326668ff016e"
       },
       "thresholds": {
         "source": 800,
         "test": 1500
       },
       "baselines": {
-        "source": 28,
+        "source": 27,
         "test": 21
       },
-      "observedCount": 49,
-      "assignedCount": 49
+      "observedCount": 48,
+      "assignedCount": 48
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "621382a9ddee67f7d0c802e0e63f8e0c72a7412bb431ff02df7f932e47043b16"
+          "sha256": "c99b87110deea586202d8e5b9c43ff98a82a8e4e9c4ea2e9f8896306a59b01a0"
         },
         "cloneGroups": 58,
         "duplicatedLines": 1865,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "783e20476d90791fcfcefe43796e0660baf1bed8ee0a2f8b274461639020c4a7"
+          "sha256": "32ea288a7af2f0d3f87b9bd5509356e0633709ddf5d6355d98529d830167f460"
         },
         "cloneGroups": 809,
         "duplicatedLines": 31052,
@@ -166,35 +166,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2538339,
-        "sha256": "bee1943c23bdba2e567610eb447e0f33341bcfedfe7c045a961e7bdc44c97955"
+        "bytes": 2541319,
+        "sha256": "f4137f79dfe6aea2b64eee63920a34e5c934e68f0c5d78b8514952d3c35b4697"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "fb81b873af4713d03fefb2df43a2a2745c966f84db38e855f5fe3b1c3f14612c",
-      "moduleCount": 5110,
-      "edgeCount": 22889,
+      "sourceDigest": "354b169cf4f571def07d30234244cfaa2fb45904ebfacf426866c62101de46ea",
+      "moduleCount": 5115,
+      "edgeCount": 22915,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2670,
-    "assignedSignalCount": 2670,
-    "uniqueAssignmentCount": 2670,
-    "digest": "82dd1a78fcdd78c997597827ea47d7a513bee7d15169f639d34faf53b214cdd4"
+    "sourceSignalCount": 2666,
+    "assignedSignalCount": 2666,
+    "uniqueAssignmentCount": 2666,
+    "digest": "9eb39d6d2a80764a88bb8dba66a57201cb7ba9a72c2a6057f0ce6727d631ee51"
   },
   "signalCounts": {
-    "cognitive": 179,
-    "complexity": 1823,
+    "cognitive": 177,
+    "complexity": 1822,
     "duplication": 580,
-    "fileSize": 49,
+    "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1368,
+    "filesWithDebt": 1369,
     "rankedBoundaryCount": 123,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 102,
@@ -266,23 +266,23 @@
         "src/control-plane"
       ],
       "fileCount": 91,
-      "signalCount": 259,
-      "complexity": 210,
-      "cognitive": 39,
-      "oversizedFiles": 4,
+      "signalCount": 255,
+      "complexity": 208,
+      "cognitive": 38,
+      "oversizedFiles": 3,
       "duplicatedLines": 203,
       "cloneTouches": 6,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 637,
-      "importOut": 397,
-      "score": 1220.3,
+      "importOut": 405,
+      "score": 1192.3,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
-        "src/control-plane/active-node-projection.js",
         "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
         "src/control-plane/invariant-engine.js",
-        "src/control-plane/active-node-publication-snapshots.js"
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-mutation-readiness.js"
       ]
     },
     {
@@ -349,9 +349,9 @@
       "ownerAreas": [
         "test/control-plane"
       ],
-      "fileCount": 55,
-      "signalCount": 69,
-      "complexity": 24,
+      "fileCount": 56,
+      "signalCount": 70,
+      "complexity": 25,
       "cognitive": 0,
       "oversizedFiles": 0,
       "duplicatedLines": 5549,
@@ -359,8 +359,8 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 70,
-      "importOut": 286,
-      "score": 665.9,
+      "importOut": 291,
+      "score": 669.9,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
         "test/control-plane/membership-publication-coordinator-tail-test-cases.js",
@@ -1266,33 +1266,6 @@
       ]
     },
     {
-      "key": "semantic:membership_publication_owner/membership_publication_coordination",
-      "owner": "membership_publication_owner",
-      "boundary": "membership_publication_coordination",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/control-plane"
-      ],
-      "fileCount": 4,
-      "signalCount": 14,
-      "complexity": 11,
-      "cognitive": 2,
-      "oversizedFiles": 1,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 20,
-      "importOut": 48,
-      "score": 72,
-      "topPaths": [
-        "src/control-plane/membership-publication-coordinator-reconcile.js",
-        "src/control-plane/membership-publication-coordinator-persist.js",
-        "src/control-plane/membership-publication-coordinator-planning.js",
-        "src/control-plane/membership-publication-coordinator-reads.js"
-      ]
-    },
-    {
       "key": "semantic:priority_recovery_owner/priority_recovery_snapshot_projection",
       "owner": "priority_recovery_owner",
       "boundary": "priority_recovery_snapshot_projection",
@@ -1318,6 +1291,33 @@
         "src/control-plane/priority-recovery-snapshot-active-gate.js",
         "src/control-plane/priority-recovery-snapshot-rebalancer.js",
         "src/control-plane/priority-recovery-snapshot-closure.js"
+      ]
+    },
+    {
+      "key": "semantic:membership_publication_owner/membership_publication_coordination",
+      "owner": "membership_publication_owner",
+      "boundary": "membership_publication_coordination",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/control-plane"
+      ],
+      "fileCount": 4,
+      "signalCount": 13,
+      "complexity": 11,
+      "cognitive": 1,
+      "oversizedFiles": 1,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 20,
+      "importOut": 48,
+      "score": 64,
+      "topPaths": [
+        "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "src/control-plane/membership-publication-coordinator-persist.js",
+        "src/control-plane/membership-publication-coordinator-reads.js",
+        "src/control-plane/membership-publication-coordinator-planning.js"
       ]
     },
     {
@@ -2068,7 +2068,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 11,
-      "importOut": 27,
+      "importOut": 28,
       "score": 20,
       "topPaths": [
         "src/control-plane/control-plane-readiness-service-node-methods.js",
@@ -3559,51 +3559,6 @@
       },
       {
         "lane": "m2",
-        "questId": "owner-complexity-membership-publication-owner-membership-publication-coordination",
-        "owner": "membership_publication_owner",
-        "boundary": "membership_publication_coordination",
-        "exactScenarioCommand": "node scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
-        "pathscope": [
-          "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
-          "solve/quests/owner-complexity-membership-publication-owner-membership-publication-coordination.json",
-          "src/control-plane/membership-publication-coordinator-persist.js",
-          "src/control-plane/membership-publication-coordinator-planning.js",
-          "src/control-plane/membership-publication-coordinator-reads.js",
-          "src/control-plane/membership-publication-coordinator-reconcile.js",
-          "test/control-plane/cl-033-epoch-probe-node-scope.test.js",
-          "test/control-plane/membership-publication-deferred-catchup.test.js",
-          "test/control-plane/membership-publication-epoch-status-probe.test.js",
-          "test/control-plane/membership-publication-leader-driven-gate.test.js",
-          "test/control-plane/membership-swim-coordinator-divergence.test.js",
-          "test/control-plane/owner-membership-driver.test.js",
-          "test/control-plane/publications-catchup-leader-pinned-read.test.js",
-          "test/control-plane/readiness-planning-publication-version-key.test.js"
-        ],
-        "ownerAreas": [
-          "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
-          "solve/quests",
-          "src/control-plane",
-          "test/control-plane"
-        ],
-        "engagementPaths": [
-          "src/control-plane/membership-publication-coordinator-reconcile.js",
-          "src/control-plane/membership-publication-coordinator-persist.js",
-          "src/control-plane/membership-publication-coordinator-planning.js",
-          "src/control-plane/membership-publication-coordinator-reads.js"
-        ],
-        "engagementTargets": [],
-        "baseline": {
-          "score": 72,
-          "complexity": 11,
-          "cognitive": 2,
-          "oversizedFiles": 1,
-          "duplicatedLines": 0,
-          "lintExclusions": 0
-        },
-        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
-      },
-      {
-        "lane": "m2",
         "questId": "owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection",
         "owner": "priority_recovery_owner",
         "boundary": "priority_recovery_snapshot_projection",
@@ -3639,6 +3594,51 @@
           "complexity": 15,
           "cognitive": 1,
           "oversizedFiles": 0,
+          "duplicatedLines": 0,
+          "lintExclusions": 0
+        },
+        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+      },
+      {
+        "lane": "m2",
+        "questId": "owner-complexity-membership-publication-owner-membership-publication-coordination",
+        "owner": "membership_publication_owner",
+        "boundary": "membership_publication_coordination",
+        "exactScenarioCommand": "node scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
+        "pathscope": [
+          "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
+          "solve/quests/owner-complexity-membership-publication-owner-membership-publication-coordination.json",
+          "src/control-plane/membership-publication-coordinator-persist.js",
+          "src/control-plane/membership-publication-coordinator-planning.js",
+          "src/control-plane/membership-publication-coordinator-reads.js",
+          "src/control-plane/membership-publication-coordinator-reconcile.js",
+          "test/control-plane/cl-033-epoch-probe-node-scope.test.js",
+          "test/control-plane/membership-publication-deferred-catchup.test.js",
+          "test/control-plane/membership-publication-epoch-status-probe.test.js",
+          "test/control-plane/membership-publication-leader-driven-gate.test.js",
+          "test/control-plane/membership-swim-coordinator-divergence.test.js",
+          "test/control-plane/owner-membership-driver.test.js",
+          "test/control-plane/publications-catchup-leader-pinned-read.test.js",
+          "test/control-plane/readiness-planning-publication-version-key.test.js"
+        ],
+        "ownerAreas": [
+          "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
+          "solve/quests",
+          "src/control-plane",
+          "test/control-plane"
+        ],
+        "engagementPaths": [
+          "src/control-plane/membership-publication-coordinator-reconcile.js",
+          "src/control-plane/membership-publication-coordinator-persist.js",
+          "src/control-plane/membership-publication-coordinator-reads.js",
+          "src/control-plane/membership-publication-coordinator-planning.js"
+        ],
+        "engagementTargets": [],
+        "baseline": {
+          "score": 64,
+          "complexity": 11,
+          "cognitive": 1,
+          "oversizedFiles": 1,
           "duplicatedLines": 0,
           "lintExclusions": 0
         },
@@ -4049,8 +4049,8 @@
           }
         ],
         "baseline": {
-          "score": 665.9,
-          "complexity": 24,
+          "score": 669.9,
+          "complexity": 25,
           "cognitive": 0,
           "oversizedFiles": 0,
           "duplicatedLines": 5549,

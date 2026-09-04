@@ -1,5 +1,13 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness-service-node-methods.js';
+import {
+  createNodeLivenessSemanticProjectionOwner,
+  installControlPlaneReadinessNodeLivenessMethods,
+} from './control-plane-readiness-node-liveness-methods.js';
+import {
+  recordChangedReadinessOwnerDependencies,
+  syncNullableOwnerDependency,
+} from './control-plane-readiness-owner-dependencies.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {ReadinessPlanningSnapshotOwner} from
   './readiness-planning-snapshot-owner.js';
@@ -23,7 +31,6 @@ const LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW =
 const LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER =
   'localClusterIncarnationFenceProvider';
 const numberIsFinite = Number.isFinite;
-const objectEntries = Object.entries;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 
@@ -54,29 +61,6 @@ const {
   resolveParticipationDecisionDimension,
   shouldAllowLocalExecutionForParticipation,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
-
-function recordChangedReadinessOwnerDependencies(
-  readinessPlanningSnapshotOwner,
-  service,
-  previousOwnerDependencies,
-) {
-  for (const [ownerName, previousOwner] of objectEntries(
-    previousOwnerDependencies,
-  )) {
-    if (previousOwner === service[ownerName]) {
-      continue;
-    }
-    readinessPlanningSnapshotOwner?.recordOwnerDependencyReplacement(
-      ownerName,
-    );
-  }
-}
-
-function syncNullableOwnerDependency(service, options, ownerName) {
-  if (objectHasOwn(options, ownerName)) {
-    service[ownerName] = options[ownerName] || null;
-  }
-}
 
 class ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
@@ -302,6 +286,9 @@ class ControlPlaneReadinessParticipationBase {
           this.recordReadinessPlanningRecoveryEpochChange(),
         logger: this.logger,
       });
+    this.nodeLivenessSemanticProjectionOwner =
+      createNodeLivenessSemanticProjectionOwner(this, options);
+    this.refreshNodeLivenessSourceSubscriptions();
     this.authoritativeNodeEvidenceReconciler =
       options.authoritativeNodeEvidenceReconciler ||
       new AuthoritativeNodeEvidenceReconciler({
@@ -326,6 +313,8 @@ class ControlPlaneReadinessParticipationBase {
           this.hasFreshLocalReporterSuccess(nodeId),
         buildNodeEvidence: (nodeId, nodeRow) =>
           this.buildNodeEvidence(nodeId, nodeRow),
+        getNodeLivenessProjection: (nodeId) =>
+          this.projectNodeLiveness(nodeId, this.now()),
         isClusterMemberHealthy: (nodeId, nodeRow) =>
           this.isClusterMemberHealthy(nodeId, nodeRow),
         hasRoutableService: (serviceRows) =>
@@ -517,6 +506,7 @@ class ControlPlaneReadinessParticipationBase {
       this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
       this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
       this.subscribeToCacheChanges();
+      this.nodeLivenessSemanticProjectionOwner?.recordAllSourceChanges();
       this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
     }
     recordChangedReadinessOwnerDependencies(
@@ -542,6 +532,7 @@ class ControlPlaneReadinessParticipationBase {
 
   shutdownReadinessPlanningOwner() {
     this.formationReleaseHandoffPublicationCoordinator?.shutdown();
+    this.shutdownNodeLivenessSemanticProjectionOwner();
     this.readinessPlanningSnapshotOwner?.shutdown();
   }
 
@@ -791,6 +782,9 @@ class ControlPlaneReadinessParticipationBase {
 }
 
 installControlPlaneReadinessNodeMethods(
+  ControlPlaneReadinessParticipationBase.prototype,
+);
+installControlPlaneReadinessNodeLivenessMethods(
   ControlPlaneReadinessParticipationBase.prototype,
 );
 

@@ -121,7 +121,7 @@ async (t) => {
   t.end();
 });
 
-test('ControlPlaneReadinessService getAllNodeReadiness retains fresh stored readiness for service-visible nodes whose node row lags cache',
+test('ControlPlaneReadinessService getAllNodeReadiness invalidates stored readiness when a node row disappears',
   async (t) => {
     const now = 360000;
     const cache = createCache({
@@ -206,8 +206,8 @@ test('ControlPlaneReadinessService getAllNodeReadiness retains fresh stored read
     );
     t.equal(
       readinessByNodeId['node-lagged'].dimensions.clusterMemberHealthy,
-      true,
-      'bulk readiness should reuse the fresh stored snapshot for the lagged node',
+      false,
+      'node deletion advances liveness semantics instead of preserving health',
     );
   });
 
@@ -451,6 +451,7 @@ async (t) => {
         return {
           lastAttemptAt: new Date(now - 400).toISOString(),
           lastSuccessAt: new Date(now - 400).toISOString(),
+          lastSuccessAtMs: now - 400,
           lastFailureAt: null,
           lastFailureStage: null,
           lastFailureReason: null,
@@ -551,7 +552,9 @@ async (t) => {
         return {
           lastAttemptAt: new Date(now - 1000).toISOString(),
           lastSuccessAt: new Date(now - 4000).toISOString(),
+          lastSuccessAtMs: now - 4000,
           lastFailureAt: new Date(now - 1000).toISOString(),
+          lastFailureAtMs: now - 1000,
           lastFailureStage: 'attempt_timeout',
           lastFailureReason: 'Heartbeat attempt timed out after 6000ms',
           publicationPath: 'node_state_reporter',
@@ -634,6 +637,7 @@ async (t) => {
         return {
           lastAttemptAt: new Date(now - 250).toISOString(),
           lastSuccessAt: new Date(now - 250).toISOString(),
+          lastSuccessAtMs: now - 250,
           publicationPath: 'node_state_reporter',
           targetAddress: 'seed-node/message-group/mg-1-r1',
           targetNodeId: 'seed-node',
@@ -1016,8 +1020,8 @@ async (t) => {
   t.end();
 });
 
-test('ControlPlaneReadinessService can reuse last-known-good readiness on ' +
-  'cache invalidation while refreshing in the background',
+test('ControlPlaneReadinessService rejects last-known-good readiness after a ' +
+  'semantic liveness change while refreshing in the background',
 async (t) => {
   const now = 520000;
   const cache = createCache({
@@ -1086,12 +1090,12 @@ async (t) => {
   );
 
   t.equal(first.dimensions.clusterMemberHealthy, true);
-  t.equal(second.dimensions.clusterMemberHealthy, true);
+  t.equal(second.dimensions.clusterMemberHealthy, false);
   t.equal(third.dimensions.clusterMemberHealthy, false);
-  t.equal(
+  t.not(
     first,
     second,
-    'load-lane callers may reuse the cached readiness snapshot during refresh',
+    'the liveness identity vetoes stale-positive reuse immediately',
   );
   t.not(
     second,

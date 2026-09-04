@@ -58,10 +58,6 @@ function hasLiveEvidenceExpired(now, evidenceAt, maxAgeMs) {
     now - evidenceAt > maxAgeMs;
 }
 
-function hasLeaseExpired(now, readyLeaseExpiresAt) {
-  return numberIsFinite(readyLeaseExpiresAt) && readyLeaseExpiresAt <= now;
-}
-
 function captureLifecycleState(service) {
   try {
     return typeof service?.nodeLifecycleStateMachine?.getState === 'function' ?
@@ -162,6 +158,21 @@ function capturePositiveDecisionPublicationGuard(service, ownerKey) {
   ]);
 }
 
+function captureNodeLivenessSemanticIdentity(service, ownerKey, now) {
+  if (typeof service?.getNodeLivenessSemanticIdentity !== 'function') {
+    return CAPTURE_UNAVAILABLE;
+  }
+  try {
+    const identity = service.getNodeLivenessSemanticIdentity(ownerKey, now);
+    return encodeSignatureValues([
+      identity?.generation,
+      identity?.semanticSignature,
+    ]);
+  } catch {
+    return CAPTURE_UNAVAILABLE;
+  }
+}
+
 function capturePositiveDecisionLiveVeto(
   service,
   ownerKey,
@@ -172,19 +183,12 @@ function capturePositiveDecisionLiveVeto(
   const maxAgeMs = numberConstructor(
     service?.clusterMemberStaleHeartbeatMaxAgeMs,
   );
-  const readyLeaseExpiresAt = numberConstructor(
-    snapshot?.nodeEvidence?.readyLeaseExpiresAt,
-  );
-  const lastHeartbeat = numberConstructor(
-    snapshot?.nodeEvidence?.lastHeartbeat,
-  );
   const localTransportDrift =
     typeof service?.hasStoredSnapshotLocalQueryTransportDrift === 'function' &&
     service.hasStoredSnapshotLocalQueryTransportDrift(ownerKey, snapshot);
   return encodeSignatureValues([
     hasLiveEvidenceExpired(now, capturedAtMs, maxAgeMs),
-    hasLeaseExpired(now, readyLeaseExpiresAt),
-    hasLiveEvidenceExpired(now, lastHeartbeat, maxAgeMs),
+    captureNodeLivenessSemanticIdentity(service, ownerKey, now),
     localTransportDrift,
     capturePositiveDecisionPublicationGuard(service, ownerKey),
   ]);

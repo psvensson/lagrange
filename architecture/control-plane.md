@@ -63,6 +63,38 @@ no consumer may infer readiness from elapsed time or from a missing row:
 | Durable publication | `reconcileActiveGateMembershipPublication` validates owner/epoch fences, drains the queue, and confirms row visibility |
 | Projection | Readiness and admin projections expose the durable publication state and typed residual reason |
 
+### Node-Liveness Semantic Projection
+
+`NodeLivenessSemanticProjectionOwner`, hosted by
+`ControlPlaneReadinessService`, owns the current meaning of every
+time-dependent node fact used by readiness and membership planning. The pure
+projection in `src/control-plane/node-liveness-semantic-projection.js` consumes
+one numeric `nowMs` from the readiness `TimeSource`; callers do not compare raw
+heartbeat, lease, repair, or grace timestamps themselves. Diagnostic ages and
+ISO timestamps are rendered only after the semantic projection is decided.
+
+The projection keeps distinct facts distinct. Cluster-member heartbeat
+freshness uses 30 seconds, active-node derivation grace uses 60 seconds,
+authoritative repair freshness uses 10 seconds, and transport grace uses 15
+seconds. Ready-lease validity uses the deadline written in the node row. These
+dimensions produce one immutable per-node projection and the minimum future
+`nextSemanticChangeAtMs` at which any current verdict can change.
+
+The hosted owner reprojects on relevant cache and transport-owner changes and
+uses the readiness service's timeout seam to maintain one coalesced, unref'd
+timer for the earliest known transition across all nodes. Passage of time may
+therefore rotate a node's semantic generation without a table write. A raw
+timestamp write that moves a future deadline but preserves all verdicts does
+not rotate that generation. Reads that observe an overdue deadline first
+reproject through the same owner, which is the delayed-event-loop backstop.
+Shutdown clears the timer and transport subscriptions.
+
+`active-node-projection.js` remains a membership-policy consumer. It consumes
+the owned liveness projections supplied by readiness planning and does not own
+liveness thresholds or timers. The planning snapshot owner may consume the
+per-node liveness identity for invalidation, but it may not reconstruct these
+facts from raw rows or schedule their transitions.
+
 Publication deferral uses the active-gate handoff contract. Its next action is
 typed as proceed, retry, wait for owner recovery, or stop. A retryable residual
 must retain an enabled queue or wake action; a silent no-change return is not a

@@ -65,6 +65,16 @@ const PING_TIMEOUT_MS = 500;
  */
 function createMockReadinessService(systemTableCache) {
   return {
+    projectNodeLiveness: (nodeId) => {
+      const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
+      const leaseExpiry = Number(nodeRow?.ready_lease_expires_at);
+      return {
+        leaseSemantics: {
+          state: Number.isFinite(leaseExpiry) && leaseExpiry > Date.now() ?
+            'valid' : 'expired',
+        },
+      };
+    },
     getNodeReadinessSync: (nodeId) => {
       const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
       if (!nodeRow) {
