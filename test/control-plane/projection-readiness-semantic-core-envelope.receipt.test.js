@@ -35,7 +35,9 @@ import {
 } from '../../src/control-plane/projection-readiness-evidence-generation.js';
 
 const CLOCK_START_MS = 350000;
-const CLOCK_STEP_MS = 40;
+// Keep observation time moving without crossing a node-liveness semantic
+// deadline; time-only liveness transitions have their own owner receipts.
+const CLOCK_STEP_MS = 1;
 const ENGAGEMENT_EVALUATIONS = 50;
 const PERF_UNIT_EVALUATIONS = 10000;
 const PERF_UNIT_GENERATIONS = 20;

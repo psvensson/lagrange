@@ -144,6 +144,7 @@
     "readiness-versioned-planning-liveness": {
       "description": "Node-liveness semantic projection, complete-token readiness freshness, macrotask-bounded planning, and non-recursive readiness-internal owner reads form one convergence contract.",
       "owners": [
+        "src/bootstrap/shared/control-plane-setup.js",
         "src/control-plane/node-liveness-semantic-projection.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/control-plane-readiness-node-liveness-methods.js",
@@ -162,6 +163,7 @@
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
       ],
       "tests": [
+        "test/control-plane/single-readiness-owner.receipt.test.js",
         "test/control-plane/node-liveness-semantic-projection-owner.test.js",
         "test/control-plane/publication-readiness-churn-liveness.test.js",
         "test/control-plane/control-plane-read-authority-token.test.js",
@@ -316,6 +318,7 @@
         {
           "id": "semantic-token-freshness",
           "owners": [
+            "src/bootstrap/shared/control-plane-setup.js",
             "src/control-plane/node-liveness-semantic-projection.js",
             "src/control-plane/node-liveness-semantic-projection-owner.js",
             "src/control-plane/control-plane-readiness-node-liveness-methods.js",
@@ -334,6 +337,7 @@
       ],
       "contract": "readiness-versioned-planning-liveness",
       "witnessTests": [
+        "test/control-plane/single-readiness-owner.receipt.test.js",
         "test/control-plane/publication-readiness-churn-liveness.test.js",
         "test/rebalancer/startup-authority-available-node-contract.test.js",
         "test/workflow/owner-key-reconcile-queue.test.js"

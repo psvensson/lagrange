@@ -1,0 +1,404 @@
+diff --git a/src/bootstrap/shared/control-plane-setup.js b/src/bootstrap/shared/control-plane-setup.js
+index 9394fcff081bc4b160dfbe596a996fedd6bac7cb..2e6e8be4677d347214d578e462c9d487ce87588b 100644
+--- a/src/bootstrap/shared/control-plane-setup.js
++++ b/src/bootstrap/shared/control-plane-setup.js
+@@ -432,6 +432,7 @@ class ControlPlaneSetup {
+         systemTableCache,
+         cdcIntegrationService,
+         controlPlaneReadinessService,
++        now: controlPlaneReadinessService.now,
+         membershipSwimRuntime,
+         replicaOperationRepository:
+           rebalanceCoordinator?.repository || null,
+diff --git a/test/control-plane/canonical-readiness-consumption.test.js b/test/control-plane/canonical-readiness-consumption.test.js
+index 10a00cd296e3f8802495e6de9ac0f538b0c9e4ab..f9341d0189785cf3e78a562e11ced8c2785ba3f4 100644
+--- a/test/control-plane/canonical-readiness-consumption.test.js
++++ b/test/control-plane/canonical-readiness-consumption.test.js
+@@ -62,6 +62,11 @@ function buildReadiness(nodeId, ready) {
+  */
+ function createControlledReadinessService(readinessMap, calls = null) {
+   return {
++    projectNodeLiveness: (nodeId) => ({
++      readyNow: readinessMap.get(nodeId)?.dimensions?.[
++        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
++      ] === true,
++    }),
+     getNodeReadinessSync: (nodeId, options = {}) => {
+       if (Array.isArray(calls)) {
+         calls.push({kind: 'sync', nodeId, options});
+diff --git a/test/control-plane/heartbeat-memory-trend.test.js b/test/control-plane/heartbeat-memory-trend.test.js
+index 70cd9d4f5812a9a88997c2368073647424ce3680..f4d938f9c190323fddd921fe5aaf7f3e49daba1d 100644
+--- a/test/control-plane/heartbeat-memory-trend.test.js
++++ b/test/control-plane/heartbeat-memory-trend.test.js
+@@ -745,8 +745,12 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
+       service.getHeartbeatPublicationDiagnostics(),
+       {
+         lastAttemptAt: null,
++        lastAttemptAtMs: null,
+         lastSuccessAt: service.getHeartbeatPublicationDiagnostics().lastSuccessAt,
++        lastSuccessAtMs:
++          service.getHeartbeatPublicationDiagnostics().lastSuccessAtMs,
+         lastFailureAt: null,
++        lastFailureAtMs: null,
+         lastFailureStage: null,
+         lastFailureReason: null,
+         publicationPath: 'node_state_reporter',
+diff --git a/test/control-plane/no-inline-live-transport-copy.guard.test.js b/test/control-plane/no-inline-live-transport-copy.guard.test.js
+index 6fd3aba66ef06d29be63aec12a0f6a5a7d798357..2e8be50cc12c50b834b69323e7be67e4c5a6d413 100644
+--- a/test/control-plane/no-inline-live-transport-copy.guard.test.js
++++ b/test/control-plane/no-inline-live-transport-copy.guard.test.js
+@@ -4,7 +4,7 @@
+  * LIVE transport/connection-state comparison (`getConnectionState(...) ===
+  * CONNECTED`, incl. transport-ONLY inline checks) OR by reading the CDC-lagged
+  * `connection_state` cache column, WITHOUT routing that decision through the
+- * shared `hasLiveTransportEvidence` atom.
++ * shared transport atom or NodeLivenessSemanticProjectionOwner.
+  *
+  * Why the cache-column clause is KEPT: a new standalone cached-column transport
+  * veto is the exact MODE-A mistake (`a79b3728`) — `isClusterMemberHealthy` once
+@@ -17,13 +17,13 @@
+  * Discrimination mechanism (maintainable):
+  *   1. Each candidate gate line is flagged by a transport/connection regex.
+  *   2. A line is EXEMPT iff it is routed through the atom (contains
+- *      `hasLiveTransportEvidence`) OR it matches an explicit, per-file allowlist
++ *      through a canonical liveness owner) OR it matches an explicit, per-file allowlist
+  *      pattern anchored to a distinctive code substring (not a raw line number,
+  *      so a NEW inline copy with different text is NOT covered).
+  *   3. An allowlist entry is honoured ONLY if that file ALSO contains at least
+- *      one `hasLiveTransportEvidence(` call — this is the "cached conjunct allowed
+- *      only where it co-exists with an atom-routed live term" rule. Strip the
+- *      atom call and the preserved cached gate becomes a standalone veto =
++ *      one canonical owner call — this is the "cached conjunct allowed only
++ *      where it co-exists with an owner-routed live term" rule. Strip the
++ *      owner call and the preserved cached gate becomes a standalone veto =
+  *      violation.
+  *
+  * Anything flagged and not exempt is a violation → the guard fails. A new bare
+@@ -191,7 +191,8 @@ const ALLOWLIST = {
+   'src/control-plane/lease-service.js': [],
+ };
+ 
+-const ATOM_CALL_RE = /hasLiveTransportEvidence\s*\(/;
++const LIVENESS_OWNER_CALL_RE =
++  /(?:hasLiveTransportEvidence|projectNodeLivenessFromRow)\s*\(/;
+ 
+ /**
+  * Strip a line comment (everything from `//`) and skip pure comment/JSDoc lines,
+@@ -223,7 +224,7 @@ function codeOf(line) {
+  */
+ function findInlineTransportGateViolations(relPath, source) {
+   const allowEntries = ALLOWLIST[relPath] || [];
+-  const fileRoutesThroughAtom = ATOM_CALL_RE.test(source);
++  const fileRoutesThroughOwner = LIVENESS_OWNER_CALL_RE.test(source);
+   const lines = source.split('\n');
+   const violations = [];
+ 
+@@ -247,7 +248,7 @@ function findInlineTransportGateViolations(relPath, source) {
+       return;
+     }
+     // Routed through the atom on this very line → exempt.
+-    if (ATOM_CALL_RE.test(code)) {
++    if (LIVENESS_OWNER_CALL_RE.test(code)) {
+       return;
+     }
+ 
+@@ -276,7 +277,7 @@ function findInlineTransportGateViolations(relPath, source) {
+     // Exempt only if the file co-exists with an atom-routed live term AND this
+     // line matches an explicit allowlist pattern.
+     const allowed =
+-      fileRoutesThroughAtom &&
++      fileRoutesThroughOwner &&
+       allowEntries.some((e) => e.pattern.test(code));
+     if (!allowed) {
+       violations.push({line: i + 1, text: code.trim(), detector});
+@@ -287,7 +288,7 @@ function findInlineTransportGateViolations(relPath, source) {
+ }
+ 
+ test('static guard: every eligibility module routes its live-transport gate ' +
+-  'through hasLiveTransportEvidence (R2.6)', async (t) => {
++  'through a canonical liveness owner (R2.6)', async (t) => {
+   for (const relPath of SCAN_SET) {
+     const source = readFileSync(join(REPO_ROOT, relPath), 'utf8');
+     const violations = findInlineTransportGateViolations(relPath, source);
+@@ -299,8 +300,8 @@ test('static guard: every eligibility module routes its live-transport gate ' +
+     );
+     // Every in-scope eligibility module must actually route through the atom.
+     t.ok(
+-      ATOM_CALL_RE.test(source),
+-      relPath + ': routes an eligibility decision through the atom',
++      LIVENESS_OWNER_CALL_RE.test(source),
++      relPath + ': routes an eligibility decision through a liveness owner',
+     );
+   }
+ });
+diff --git a/test/control-plane/projection-readiness-per-node-generation.receipt.test.js b/test/control-plane/projection-readiness-per-node-generation.receipt.test.js
+index 41dfe35ed671eed0d15fd919972cadbb62698fa9..7f03751caae4d02e5cd0f28f902dfa1cf7c51e00 100644
+--- a/test/control-plane/projection-readiness-per-node-generation.receipt.test.js
++++ b/test/control-plane/projection-readiness-per-node-generation.receipt.test.js
+@@ -61,7 +61,9 @@ import {
+ } from '../../src/control-plane/projection-readiness-evidence-generation.js';
+ 
+ const CLOCK_START_MS = 350000;
+-const CLOCK_STEP_MS = 40;
++// Keep observation time moving without crossing a node-liveness semantic
++// deadline; this suite isolates mutation-driven planning generation scope.
++const CLOCK_STEP_MS = 1;
+ const LEASE_HORIZON_MS = 60000;
+ const NODE_COUNT = 5;
+ const NODE_IDS = Object.freeze(
+diff --git a/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js b/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js
+index 3d3b0a08c325a34de6fbb1bdd7d31883abb51202..fbb2f688fe0e5616c99029fabe0474ee1ab886b5 100644
+--- a/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js
++++ b/test/control-plane/projection-readiness-semantic-core-envelope.receipt.test.js
+@@ -35,7 +35,9 @@ import {
+ } from '../../src/control-plane/projection-readiness-evidence-generation.js';
+ 
+ const CLOCK_START_MS = 350000;
+-const CLOCK_STEP_MS = 40;
++// Keep observation time moving without crossing a node-liveness semantic
++// deadline; time-only liveness transitions have their own owner receipts.
++const CLOCK_STEP_MS = 1;
+ const ENGAGEMENT_EVALUATIONS = 50;
+ const PERF_UNIT_EVALUATIONS = 10000;
+ const PERF_UNIT_GENERATIONS = 20;
+diff --git a/test/control-plane/readiness-per-change-reuse.test.js b/test/control-plane/readiness-per-change-reuse.test.js
+index 055791f8c784130a68b6565ccc6c67b85a9cf69b..3e07530259b8c6964565ddae2e58f90b4908aba3 100644
+--- a/test/control-plane/readiness-per-change-reuse.test.js
++++ b/test/control-plane/readiness-per-change-reuse.test.js
+@@ -40,11 +40,57 @@ import {
+ import {
+   ControlPlaneReadinessEvidenceReasons,
+ } from '../../src/control-plane/control-plane-readiness-evidence-reasons.js';
++import {
++  projectNodeLivenessSemantics,
++} from '../../src/control-plane/node-liveness-semantic-projection.js';
+ 
+ const NODE_ID = 'node-1';
+ const STALE_HEARTBEAT_MAX_AGE_MS = 30_000;
+ const BASE_NOW_MS = 1_760_000_000_000;
+ 
++function buildLivenessSourceEvidence(nodeIdOrRow, candidateRow = null) {
++  const nodeRow = candidateRow && typeof candidateRow === 'object' ?
++    candidateRow : nodeIdOrRow || {};
++  const normalizedRow = {status: 'active', ...nodeRow};
++  const rowConnectionState = normalizedRow.connection_state || null;
++  return {
++    nodeRow: normalizedRow,
++    rowConnectionState,
++    routerConnectionState: null,
++    routerTransportConnected: false,
++    transportConnected:
++      rowConnectionState === 'connected' || rowConnectionState === 'ready',
++  };
++}
++
++function projectLiveness(nodeId, evidence, nowMs) {
++  return projectNodeLivenessSemantics({
++    ...evidence,
++    localNodeId: 'other-node',
++    nodeId,
++    nowMs,
++    thresholds: {
++      clusterMemberStaleHeartbeatMs: STALE_HEARTBEAT_MAX_AGE_MS,
++    },
++  }).projection;
++}
++
++function buildNodeRowFromStoredSnapshot(stub, nodeId) {
++  const evidence = stub.lastReadinessSnapshotByNodeId
++    .get(nodeId)?.nodeEvidence;
++  if (!evidence) return null;
++  const row = {
++    node_id: nodeId,
++    status: evidence.status,
++    connection_state: evidence.rowConnectionState,
++    last_heartbeat: evidence.lastHeartbeat,
++  };
++  if (Number.isFinite(evidence.readyLeaseExpiresAt)) {
++    row.ready_lease_expires_at = evidence.readyLeaseExpiresAt;
++  }
++  return row;
++}
++
+ function createStoreStub({nowMs = BASE_NOW_MS} = {}) {
+   const state = {nowMs};
+   const stub = {
+@@ -57,6 +103,15 @@ function createStoreStub({nowMs = BASE_NOW_MS} = {}) {
+     membershipPublicationDiagnosticsMemo: null,
+     currentRecoveryEpochByNodeId: new Map(),
+     recoveryEpochHistoryByNodeId: new Map(),
++    nodeLivenessSemanticProjectionOwner: {
++      projectNodeLivenessFromEvidence: projectLiveness,
++      recordAllSourceChanges() {},
++      recordNodeSourceChange() {},
++    },
++    buildNodeLivenessSourceEvidence: buildLivenessSourceEvidence,
++    getNodeRow(nodeId) {
++      return buildNodeRowFromStoredSnapshot(this, nodeId);
++    },
+     getReadinessTransitionHistory: () => Object.freeze([]),
+     recordRecoveryEpochObservation: () => {},
+   };
+@@ -70,16 +125,39 @@ function buildStoredSnapshot({
+   publication = Object.freeze({status: 'PUBLISHED'}),
+   membershipPublication = Object.freeze({publicationEpoch: 4}),
+ } = {}) {
++  const nodeRow = {
++    node_id: NODE_ID,
++    status: 'active',
++    connection_state: 'ready',
++    last_heartbeat: lastHeartbeat,
++  };
++  if (Number.isFinite(readyLeaseExpiresAt)) {
++    nodeRow.ready_lease_expires_at = readyLeaseExpiresAt;
++  }
++  const liveness = projectLiveness(
++    NODE_ID,
++    buildLivenessSourceEvidence(nodeRow),
++    BASE_NOW_MS,
++  );
+   return Object.freeze({
+     nodeId: NODE_ID,
+-    dimensions: Object.freeze({serveEligible: true}),
++    dimensions: Object.freeze({
++      serveEligible: true,
++      clusterMemberHealthy: liveness.clusterMembershipSemantics.healthy,
++    }),
+     reasons: Object.freeze([]),
+     publication,
+     membershipPublication,
+     nodeEvidence: Object.freeze({
++      status: 'active',
+       lastHeartbeat,
+       readyLeaseExpiresAt,
+       rowConnectionState: 'ready',
++      readyNow: liveness.readyNow,
++      clusterMemberHeartbeatFreshness:
++        liveness.heartbeatFreshness.clusterMembership,
++      repairHeartbeatFreshness: liveness.repairFreshness.state,
++      derivationGraceActive: liveness.derivationGraceActive,
+     }),
+   });
+ }
+diff --git a/test/control-plane/readiness-snapshot-services-version-arbitration.test.js b/test/control-plane/readiness-snapshot-services-version-arbitration.test.js
+index 93e95cbce763c191f6904cad10d210ed79d80361..321629b0aec5f331755559b195b122c7445db96d 100644
+--- a/test/control-plane/readiness-snapshot-services-version-arbitration.test.js
++++ b/test/control-plane/readiness-snapshot-services-version-arbitration.test.js
+@@ -19,11 +19,54 @@ import {
+   installControlPlaneReadinessSnapshotStoreMethods,
+ } from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
+ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {
++  projectNodeLivenessSemantics,
++} from '../../src/control-plane/node-liveness-semantic-projection.js';
+ 
+ const NODE_ID = 'node-1';
+ const BASE_NOW_MS = 1_760_000_000_000;
+ const STALE_HEARTBEAT_MAX_AGE_MS = 30_000;
+ 
++function buildLivenessSourceEvidence(nodeIdOrRow, candidateRow = null) {
++  const nodeRow = candidateRow && typeof candidateRow === 'object' ?
++    candidateRow : nodeIdOrRow || {};
++  const normalizedRow = {status: 'active', ...nodeRow};
++  const rowConnectionState = normalizedRow.connection_state || null;
++  return {
++    nodeRow: normalizedRow,
++    rowConnectionState,
++    routerConnectionState: null,
++    routerTransportConnected: false,
++    transportConnected:
++      rowConnectionState === 'connected' || rowConnectionState === 'ready',
++  };
++}
++
++function projectLiveness(nodeId, evidence, nowMs) {
++  return projectNodeLivenessSemantics({
++    ...evidence,
++    localNodeId: 'other-node',
++    nodeId,
++    nowMs,
++    thresholds: {
++      clusterMemberStaleHeartbeatMs: STALE_HEARTBEAT_MAX_AGE_MS,
++    },
++  }).projection;
++}
++
++function buildNodeRowFromStoredSnapshot(stub, nodeId) {
++  const evidence = stub.lastReadinessSnapshotByNodeId
++    .get(nodeId)?.nodeEvidence;
++  if (!evidence) return null;
++  return {
++    node_id: nodeId,
++    status: evidence.status,
++    connection_state: evidence.rowConnectionState,
++    last_heartbeat: evidence.lastHeartbeat,
++    ready_lease_expires_at: evidence.readyLeaseExpiresAt,
++  };
++}
++
+ function createStoreStub({systemTableCache = null, nowMs = BASE_NOW_MS} = {}) {
+   const state = {nowMs};
+   const stub = {
+@@ -37,6 +80,15 @@ function createStoreStub({systemTableCache = null, nowMs = BASE_NOW_MS} = {}) {
+     membershipPublicationDiagnosticsMemo: null,
+     currentRecoveryEpochByNodeId: new Map(),
+     recoveryEpochHistoryByNodeId: new Map(),
++    nodeLivenessSemanticProjectionOwner: {
++      projectNodeLivenessFromEvidence: projectLiveness,
++      recordAllSourceChanges() {},
++      recordNodeSourceChange() {},
++    },
++    buildNodeLivenessSourceEvidence: buildLivenessSourceEvidence,
++    getNodeRow(nodeId) {
++      return buildNodeRowFromStoredSnapshot(this, nodeId);
++    },
+     getReadinessTransitionHistory: () => Object.freeze([]),
+     recordRecoveryEpochObservation: () => {},
+   };
+@@ -45,16 +97,30 @@ function createStoreStub({systemTableCache = null, nowMs = BASE_NOW_MS} = {}) {
+ }
+ 
+ function buildStoredSnapshot({lastHeartbeat, readyLeaseExpiresAt}) {
++  const liveness = projectLiveness(
++    NODE_ID,
++    buildLivenessSourceEvidence(nodeRowAt(lastHeartbeat, readyLeaseExpiresAt)),
++    BASE_NOW_MS,
++  );
+   return Object.freeze({
+     nodeId: NODE_ID,
+-    dimensions: Object.freeze({repairEligible: false}),
++    dimensions: Object.freeze({
++      repairEligible: false,
++      clusterMemberHealthy: liveness.clusterMembershipSemantics.healthy,
++    }),
+     reasons: Object.freeze([]),
+     publication: Object.freeze({status: 'PUBLISHED'}),
+     membershipPublication: Object.freeze({publicationEpoch: 4}),
+     nodeEvidence: Object.freeze({
++      status: 'active',
+       lastHeartbeat,
+       readyLeaseExpiresAt,
+       rowConnectionState: 'ready',
++      readyNow: liveness.readyNow,
++      clusterMemberHeartbeatFreshness:
++        liveness.heartbeatFreshness.clusterMembership,
++      repairHeartbeatFreshness: liveness.repairFreshness.state,
++      derivationGraceActive: liveness.derivationGraceActive,
+     }),
+   });
+ }
+diff --git a/test/control-plane/single-readiness-owner.receipt.test.js b/test/control-plane/single-readiness-owner.receipt.test.js
+index 199fbd3c4002f22cc3eb23dc5c132301c7f79a1f..226296d35876862f122945f61d2bbfe9bf21986a 100644
+--- a/test/control-plane/single-readiness-owner.receipt.test.js
++++ b/test/control-plane/single-readiness-owner.receipt.test.js
+@@ -312,6 +312,10 @@ async (t) => {
+   const serviceB = setupB.rebalanceCoordinator.controlPlaneReadinessService;
+   serviceA.timeSource = clock;
+   serviceB.timeSource = clock;
++  t.equal(setupA.membershipPublicationService.now(), serviceA.now(),
++    'composition gives membership planning the readiness semantic clock');
++  t.equal(setupB.membershipPublicationService.now(), serviceB.now(),
++    'the clock edge is identical in the control composition');
+   const dependencyNames = [
+     'systemTableCache', 'cacheMutationTarget', 'messageRouter',
+     'cdcIntegrationService', 'cdcGroupPropagationService', 'nodesOwner',

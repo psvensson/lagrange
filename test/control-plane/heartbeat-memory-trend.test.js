@@ -745,8 +745,12 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
       service.getHeartbeatPublicationDiagnostics(),
       {
         lastAttemptAt: null,
+        lastAttemptAtMs: null,
         lastSuccessAt: service.getHeartbeatPublicationDiagnostics().lastSuccessAt,
+        lastSuccessAtMs:
+          service.getHeartbeatPublicationDiagnostics().lastSuccessAtMs,
         lastFailureAt: null,
+        lastFailureAtMs: null,
         lastFailureStage: null,
         lastFailureReason: null,
         publicationPath: 'node_state_reporter',

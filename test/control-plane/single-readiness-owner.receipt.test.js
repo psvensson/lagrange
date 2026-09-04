@@ -312,6 +312,10 @@ async (t) => {
   const serviceB = setupB.rebalanceCoordinator.controlPlaneReadinessService;
   serviceA.timeSource = clock;
   serviceB.timeSource = clock;
+  t.equal(setupA.membershipPublicationService.now(), serviceA.now(),
+    'composition gives membership planning the readiness semantic clock');
+  t.equal(setupB.membershipPublicationService.now(), serviceB.now(),
+    'the clock edge is identical in the control composition');
   const dependencyNames = [
     'systemTableCache', 'cacheMutationTarget', 'messageRouter',
     'cdcIntegrationService', 'cdcGroupPropagationService', 'nodesOwner',

@@ -35,33 +35,33 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  installControlPlaneReadinessSnapshotStoreMethods,
-} from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
-import {
   ControlPlaneReadinessEvidenceReasons,
 } from '../../src/control-plane/control-plane-readiness-evidence-reasons.js';
+import {
+  buildNodeLivenessTestEvidence,
+  createReadinessSnapshotStoreTestStub,
+  projectNodeLivenessForTest,
+} from './control-plane-readiness-service-test-support.js';
 
 const NODE_ID = 'node-1';
 const STALE_HEARTBEAT_MAX_AGE_MS = 30_000;
 const BASE_NOW_MS = 1_760_000_000_000;
 
+function projectLiveness(nodeId, evidence, nowMs) {
+  return projectNodeLivenessForTest(
+    nodeId,
+    evidence,
+    nowMs,
+    STALE_HEARTBEAT_MAX_AGE_MS,
+  );
+}
+
 function createStoreStub({nowMs = BASE_NOW_MS} = {}) {
-  const state = {nowMs};
-  const stub = {
-    now: () => state.nowMs,
-    clusterMemberStaleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
-    lastReadinessSnapshotByNodeId: new Map(),
-    lastReadinessSnapshotAtMsByNodeId: new Map(),
-    lastReadinessSnapshotInvalidatedAtMsByNodeId: new Map(),
-    lastReadinessSnapshotClusterInvalidatedAtMs: 0,
-    membershipPublicationDiagnosticsMemo: null,
-    currentRecoveryEpochByNodeId: new Map(),
-    recoveryEpochHistoryByNodeId: new Map(),
-    getReadinessTransitionHistory: () => Object.freeze([]),
-    recordRecoveryEpochObservation: () => {},
-  };
-  installControlPlaneReadinessSnapshotStoreMethods(stub);
-  return {stub, state};
+  return createReadinessSnapshotStoreTestStub({
+    nowMs,
+    staleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
+    projectNodeLiveness: projectLiveness,
+  });
 }
 
 function buildStoredSnapshot({
@@ -70,16 +70,39 @@ function buildStoredSnapshot({
   publication = Object.freeze({status: 'PUBLISHED'}),
   membershipPublication = Object.freeze({publicationEpoch: 4}),
 } = {}) {
+  const nodeRow = {
+    node_id: NODE_ID,
+    status: 'active',
+    connection_state: 'ready',
+    last_heartbeat: lastHeartbeat,
+  };
+  if (Number.isFinite(readyLeaseExpiresAt)) {
+    nodeRow.ready_lease_expires_at = readyLeaseExpiresAt;
+  }
+  const liveness = projectLiveness(
+    NODE_ID,
+    buildNodeLivenessTestEvidence(nodeRow),
+    BASE_NOW_MS,
+  );
   return Object.freeze({
     nodeId: NODE_ID,
-    dimensions: Object.freeze({serveEligible: true}),
+    dimensions: Object.freeze({
+      serveEligible: true,
+      clusterMemberHealthy: liveness.clusterMembershipSemantics.healthy,
+    }),
     reasons: Object.freeze([]),
     publication,
     membershipPublication,
     nodeEvidence: Object.freeze({
+      status: 'active',
       lastHeartbeat,
       readyLeaseExpiresAt,
       rowConnectionState: 'ready',
+      readyNow: liveness.readyNow,
+      clusterMemberHeartbeatFreshness:
+        liveness.heartbeatFreshness.clusterMembership,
+      repairHeartbeatFreshness: liveness.repairFreshness.state,
+      derivationGraceActive: liveness.derivationGraceActive,
     }),
   });
 }

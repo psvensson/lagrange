@@ -62,6 +62,16 @@ function buildReadiness(nodeId, ready) {
  */
 function createControlledReadinessService(readinessMap, calls = null) {
   return {
+    projectNodeLiveness: (nodeId) => {
+      if (Array.isArray(calls)) {
+        calls.push({kind: 'liveness', nodeId});
+      }
+      return {
+        readyNow: readinessMap.get(nodeId)?.dimensions?.[
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+        ] === true,
+      };
+    },
     getNodeReadinessSync: (nodeId, options = {}) => {
       if (Array.isArray(calls)) {
         calls.push({kind: 'sync', nodeId, options});
@@ -316,11 +326,20 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           ids.includes(unreadyNodeId),
           'unready node should be excluded',
         );
+        const decisionCalls = readinessCalls.filter((call) =>
+          call.kind !== 'liveness');
+        const livenessCalls = readinessCalls.filter((call) =>
+          call.kind === 'liveness');
         t.ok(
-          readinessCalls.every((call) =>
+          decisionCalls.length > 0 && decisionCalls.every((call) =>
             call.options?.decisionDimension ===
               CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE),
           'steady-state rebalancer availability should record repairEligible decisions',
+        );
+        t.same(
+          livenessCalls.map((call) => call.nodeId),
+          [readyNodeId],
+          'steady-state availability projects liveness before admitting the ready candidate',
         );
       });
 

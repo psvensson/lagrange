@@ -432,6 +432,7 @@ class ControlPlaneSetup {
         systemTableCache,
         cdcIntegrationService,
         controlPlaneReadinessService,
+        now: controlPlaneReadinessService.now,
         membershipSwimRuntime,
         replicaOperationRepository:
           rebalanceCoordinator?.repository || null,

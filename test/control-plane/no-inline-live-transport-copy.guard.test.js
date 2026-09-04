@@ -4,7 +4,7 @@
  * LIVE transport/connection-state comparison (`getConnectionState(...) ===
  * CONNECTED`, incl. transport-ONLY inline checks) OR by reading the CDC-lagged
  * `connection_state` cache column, WITHOUT routing that decision through the
- * shared `hasLiveTransportEvidence` atom.
+ * shared transport atom or NodeLivenessSemanticProjectionOwner.
  *
  * Why the cache-column clause is KEPT: a new standalone cached-column transport
  * veto is the exact MODE-A mistake (`a79b3728`) — `isClusterMemberHealthy` once
@@ -17,13 +17,13 @@
  * Discrimination mechanism (maintainable):
  *   1. Each candidate gate line is flagged by a transport/connection regex.
  *   2. A line is EXEMPT iff it is routed through the atom (contains
- *      `hasLiveTransportEvidence`) OR it matches an explicit, per-file allowlist
+ *      through a canonical liveness owner) OR it matches an explicit, per-file allowlist
  *      pattern anchored to a distinctive code substring (not a raw line number,
  *      so a NEW inline copy with different text is NOT covered).
  *   3. An allowlist entry is honoured ONLY if that file ALSO contains at least
- *      one `hasLiveTransportEvidence(` call — this is the "cached conjunct allowed
- *      only where it co-exists with an atom-routed live term" rule. Strip the
- *      atom call and the preserved cached gate becomes a standalone veto =
+ *      one canonical owner call — this is the "cached conjunct allowed only
+ *      where it co-exists with an owner-routed live term" rule. Strip the
+ *      owner call and the preserved cached gate becomes a standalone veto =
  *      violation.
  *
  * Anything flagged and not exempt is a violation → the guard fails. A new bare
@@ -191,7 +191,8 @@ const ALLOWLIST = {
   'src/control-plane/lease-service.js': [],
 };
 
-const ATOM_CALL_RE = /hasLiveTransportEvidence\s*\(/;
+const LIVENESS_OWNER_CALL_RE =
+  /(?:hasLiveTransportEvidence|projectNodeLivenessFromRow)\s*\(/;
 
 /**
  * Strip a line comment (everything from `//`) and skip pure comment/JSDoc lines,
@@ -223,7 +224,7 @@ function codeOf(line) {
  */
 function findInlineTransportGateViolations(relPath, source) {
   const allowEntries = ALLOWLIST[relPath] || [];
-  const fileRoutesThroughAtom = ATOM_CALL_RE.test(source);
+  const fileRoutesThroughOwner = LIVENESS_OWNER_CALL_RE.test(source);
   const lines = source.split('\n');
   const violations = [];
 
@@ -247,7 +248,7 @@ function findInlineTransportGateViolations(relPath, source) {
       return;
     }
     // Routed through the atom on this very line → exempt.
-    if (ATOM_CALL_RE.test(code)) {
+    if (LIVENESS_OWNER_CALL_RE.test(code)) {
       return;
     }
 
@@ -276,7 +277,7 @@ function findInlineTransportGateViolations(relPath, source) {
     // Exempt only if the file co-exists with an atom-routed live term AND this
     // line matches an explicit allowlist pattern.
     const allowed =
-      fileRoutesThroughAtom &&
+      fileRoutesThroughOwner &&
       allowEntries.some((e) => e.pattern.test(code));
     if (!allowed) {
       violations.push({line: i + 1, text: code.trim(), detector});
@@ -287,7 +288,7 @@ function findInlineTransportGateViolations(relPath, source) {
 }
 
 test('static guard: every eligibility module routes its live-transport gate ' +
-  'through hasLiveTransportEvidence (R2.6)', async (t) => {
+  'through a canonical liveness owner (R2.6)', async (t) => {
   for (const relPath of SCAN_SET) {
     const source = readFileSync(join(REPO_ROOT, relPath), 'utf8');
     const violations = findInlineTransportGateViolations(relPath, source);
@@ -299,8 +300,8 @@ test('static guard: every eligibility module routes its live-transport gate ' +
     );
     // Every in-scope eligibility module must actually route through the atom.
     t.ok(
-      ATOM_CALL_RE.test(source),
-      relPath + ': routes an eligibility decision through the atom',
+      LIVENESS_OWNER_CALL_RE.test(source),
+      relPath + ': routes an eligibility decision through a liveness owner',
     );
   }
 });

@@ -4,6 +4,97 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {
+  projectNodeLivenessSemantics,
+} from '../../src/control-plane/node-liveness-semantic-projection.js';
+import {
+  installControlPlaneReadinessSnapshotStoreMethods,
+} from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
+
+export function buildNodeLivenessTestEvidence(
+  nodeIdOrRow,
+  candidateRow = null,
+) {
+  const nodeRow = candidateRow && typeof candidateRow === 'object' ?
+    candidateRow : nodeIdOrRow || {};
+  const normalizedRow = {status: 'active', ...nodeRow};
+  const rowConnectionState = normalizedRow.connection_state || null;
+  return {
+    nodeRow: normalizedRow,
+    rowConnectionState,
+    routerConnectionState: null,
+    routerTransportConnected: false,
+    transportConnected:
+      rowConnectionState === 'connected' || rowConnectionState === 'ready',
+  };
+}
+
+export function projectNodeLivenessForTest(
+  nodeId,
+  evidence,
+  nowMs,
+  staleHeartbeatMaxAgeMs,
+) {
+  return projectNodeLivenessSemantics({
+    ...evidence,
+    localNodeId: 'other-node',
+    nodeId,
+    nowMs,
+    thresholds: {
+      clusterMemberStaleHeartbeatMs: staleHeartbeatMaxAgeMs,
+    },
+  }).projection;
+}
+
+export function buildNodeRowFromStoredReadinessSnapshot(stub, nodeId) {
+  const evidence = stub.lastReadinessSnapshotByNodeId
+    .get(nodeId)?.nodeEvidence;
+  if (!evidence) return null;
+  const row = {
+    node_id: nodeId,
+    status: evidence.status,
+    connection_state: evidence.rowConnectionState,
+    last_heartbeat: evidence.lastHeartbeat,
+  };
+  if (Number.isFinite(evidence.readyLeaseExpiresAt)) {
+    row.ready_lease_expires_at = evidence.readyLeaseExpiresAt;
+  }
+  return row;
+}
+
+export function createReadinessSnapshotStoreTestStub({
+  nowMs,
+  staleHeartbeatMaxAgeMs,
+  projectNodeLiveness,
+  systemTableCache,
+}) {
+  const state = {nowMs};
+  const stub = {
+    now: () => state.nowMs,
+    clusterMemberStaleHeartbeatMaxAgeMs: staleHeartbeatMaxAgeMs,
+    ...(systemTableCache === undefined ? {} : {systemTableCache}),
+    lastReadinessSnapshotByNodeId: new Map(),
+    lastReadinessSnapshotAtMsByNodeId: new Map(),
+    lastReadinessSnapshotInvalidatedAtMsByNodeId: new Map(),
+    lastReadinessSnapshotClusterInvalidatedAtMs: 0,
+    membershipPublicationDiagnosticsMemo: null,
+    currentRecoveryEpochByNodeId: new Map(),
+    recoveryEpochHistoryByNodeId: new Map(),
+    nodeLivenessSemanticProjectionOwner: {
+      projectNodeLivenessFromEvidence: projectNodeLiveness,
+      recordAllSourceChanges() {},
+      recordNodeSourceChange() {},
+    },
+    buildNodeLivenessSourceEvidence: buildNodeLivenessTestEvidence,
+    getNodeRow(nodeId) {
+      return buildNodeRowFromStoredReadinessSnapshot(this, nodeId);
+    },
+    getReadinessTransitionHistory: () => Object.freeze([]),
+    recordRecoveryEpochObservation: () => {},
+  };
+  installControlPlaneReadinessSnapshotStoreMethods(stub);
+  return {stub, state};
+}
 
 export function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));

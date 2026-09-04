@@ -15,46 +15,62 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  installControlPlaneReadinessSnapshotStoreMethods,
-} from '../../src/control-plane/control-plane-readiness-snapshot-store.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  buildNodeLivenessTestEvidence,
+  createReadinessSnapshotStoreTestStub,
+  projectNodeLivenessForTest,
+} from './control-plane-readiness-service-test-support.js';
 
 const NODE_ID = 'node-1';
 const BASE_NOW_MS = 1_760_000_000_000;
 const STALE_HEARTBEAT_MAX_AGE_MS = 30_000;
 
+function projectLiveness(nodeId, evidence, nowMs) {
+  return projectNodeLivenessForTest(
+    nodeId,
+    evidence,
+    nowMs,
+    STALE_HEARTBEAT_MAX_AGE_MS,
+  );
+}
+
 function createStoreStub({systemTableCache = null, nowMs = BASE_NOW_MS} = {}) {
-  const state = {nowMs};
-  const stub = {
-    now: () => state.nowMs,
-    clusterMemberStaleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
+  return createReadinessSnapshotStoreTestStub({
+    nowMs,
+    staleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
+    projectNodeLiveness: projectLiveness,
     systemTableCache,
-    lastReadinessSnapshotByNodeId: new Map(),
-    lastReadinessSnapshotAtMsByNodeId: new Map(),
-    lastReadinessSnapshotInvalidatedAtMsByNodeId: new Map(),
-    lastReadinessSnapshotClusterInvalidatedAtMs: 0,
-    membershipPublicationDiagnosticsMemo: null,
-    currentRecoveryEpochByNodeId: new Map(),
-    recoveryEpochHistoryByNodeId: new Map(),
-    getReadinessTransitionHistory: () => Object.freeze([]),
-    recordRecoveryEpochObservation: () => {},
-  };
-  installControlPlaneReadinessSnapshotStoreMethods(stub);
-  return {stub, state};
+  });
 }
 
 function buildStoredSnapshot({lastHeartbeat, readyLeaseExpiresAt}) {
+  const liveness = projectLiveness(
+    NODE_ID,
+    buildNodeLivenessTestEvidence(
+      nodeRowAt(lastHeartbeat, readyLeaseExpiresAt),
+    ),
+    BASE_NOW_MS,
+  );
   return Object.freeze({
     nodeId: NODE_ID,
-    dimensions: Object.freeze({repairEligible: false}),
+    dimensions: Object.freeze({
+      repairEligible: false,
+      clusterMemberHealthy: liveness.clusterMembershipSemantics.healthy,
+    }),
     reasons: Object.freeze([]),
     publication: Object.freeze({status: 'PUBLISHED'}),
     membershipPublication: Object.freeze({publicationEpoch: 4}),
     nodeEvidence: Object.freeze({
+      status: 'active',
       lastHeartbeat,
       readyLeaseExpiresAt,
       rowConnectionState: 'ready',
+      readyNow: liveness.readyNow,
+      clusterMemberHeartbeatFreshness:
+        liveness.heartbeatFreshness.clusterMembership,
+      repairHeartbeatFreshness: liveness.repairFreshness.state,
+      derivationGraceActive: liveness.derivationGraceActive,
     }),
   });
 }
