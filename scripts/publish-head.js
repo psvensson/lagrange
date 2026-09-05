@@ -102,6 +102,16 @@ const PORCELAIN_ARGUMENT = '--porcelain';
 const DIRTY_GATE_ERROR =
   'publish: pre-push gate mutated the exact-HEAD worktree';
 const MISSING_VALUE_ERROR = 'publish: option requires a value: ';
+const ALLOW_MISSING_DATA_ARGUMENT = '--allow-missing-data';
+const DATA_DIRECTORY = 'data';
+const DATA_ABSENT_ERROR_PREFIX = 'publish: data/ is absent in ';
+const DATA_ABSENT_ERROR_SUFFIX =
+  '; symlink it from the main checkout (ln -s <main>/data data) or run the ' +
+  `MovieLens fetch, or pass ${ALLOW_MISSING_DATA_ARGUMENT}`;
+const LINK_NOTICE_PREFIX = 'publish: linking ';
+const LINK_NOTICE_ARROW = ' -> ';
+const LINK_NOTICE_ABSENT = '(absent)';
+const LINK_NOTICE_SEPARATOR = ', ';
 // A fresh `git worktree` carries no gitignored content, so the gate would miss
 // both the workspace installation and the digest-pinned MovieLens dataset that
 // CI fetches before its own gate. Expose each read-only tree for the gate run
@@ -219,6 +229,23 @@ function receiptPath(run, root, head) {
   const common = git(run, root, ['rev-parse', '--git-common-dir']);
   const commonDir = path.resolve(root, common);
   return path.join(commonDir, RECEIPT_DIRECTORY, `${head}.json`);
+}
+
+// Fail fast, before the worktree exists: a fresh quest worktree has no
+// gitignored data/ (populated by the MovieLens fetch), and the gate only
+// discovered that ~15 minutes in when the dataset tests went red. The notice
+// names every link the gate will make so the caller can see what it reads.
+function assertWorkspaceDependencySources(root, args, log) {
+  const notice = GATE_WORKSPACE_DIRECTORIES.map((directory) => {
+    const source = path.join(root, directory);
+    return `${directory}${LINK_NOTICE_ARROW}` +
+      (fs.existsSync(source) ? source : LINK_NOTICE_ABSENT);
+  }).join(LINK_NOTICE_SEPARATOR);
+  log(`${LINK_NOTICE_PREFIX}${notice}${NEWLINE}`);
+  if (!fs.existsSync(path.join(root, DATA_DIRECTORY)) &&
+    args.allowMissingData !== true) {
+    throw new Error(`${DATA_ABSENT_ERROR_PREFIX}${root}${DATA_ABSENT_ERROR_SUFFIX}`);
+  }
 }
 
 function linkWorkspaceDependencies(root, worktree) {
@@ -353,6 +380,8 @@ export function publishExactHead(root, args = {}, options = {}) {
     remoteSha: remoteBefore,
   });
   assertFastForward(run, root, remoteBefore, head);
+  assertWorkspaceDependencySources(root, args,
+    options.log || ((line) => process.stdout.write(line)));
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);
 
   const parent = path.join(root, 'test-output', 'publish-worktrees');
@@ -411,6 +440,7 @@ function parseArgs(argv) {
     else if (token === FIXES_RED_ARGUMENT) {
       parsed.fixesRed = valueAfter(index++, token);
     } else if (token === REASON_ARGUMENT) parsed.reason = valueAfter(index++, token);
+    else if (token === ALLOW_MISSING_DATA_ARGUMENT) parsed.allowMissingData = true;
     else throw new Error(`publish: unknown argument ${token}`);
   }
   return parsed;

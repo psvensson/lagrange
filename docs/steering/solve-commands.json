@@ -10,7 +10,7 @@
   },
   "land": {
     "summary": "For source work, freeze one immutable review envelope containing the exact candidate/aggregate, source epoch, staged landing evidence, additive template checklist, generated-dependency receipts, and deterministic proof plan. A later structured verdict is drift-checked and ingested; approval passes through the audit-gated scope-safe commit, rejection never commits, and no path pushes.",
-    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verdict-file <workspace-receipt.json>] [--json]"
+    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verdict-file <workspace-receipt.json>] [--verifier <id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> --finding \"<category>: <defect>\" ... --observation \"<category>: <remark>\" ...] [--json]"
   },
   "decompose-rejection": {
     "summary": "Discharge a slice of a standing candidate rejection with fresh independently approved coverage: the current quest's exactly approved candidate, or a successor quest's candidate receipt that still matches current bytes at an acceptable base. Records an append-only rejection-decomposition event; the standing obligation shrinks to the uncovered remainder, so split scope stays dischargeable.",
@@ -78,7 +78,7 @@
   },
   "finding": {
     "summary": "Record durable knowledge in the append-only Quest log. Exact verifier approvals and rejections bind subagent evidence to a content fingerprint; recording either verdict never commits.",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
+    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>] [--finding \"<category>: <defect>\" ... --observation \"<category>: <remark>\" ...]"
   },
   "promote-finding": {
     "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",
@@ -145,7 +145,7 @@
     "usage": "node scripts/solve.js park --id <id> [--frontier <f>] --reason \"<why no honest remaining move exists>\""
   },
   "amend": {
-    "summary": "Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Capped at 2 per quest lifetime; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced.",
+    "summary": "Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Corrections are capped at 2 per quest lifetime; the monotone kinds (verification-bar-expansion, receipt-bar-strengthen) carry their own cap of 4 and never spend a correction; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced.",
     "usage": "node scripts/solve.js amend --id <id> --kind class-correction|oracle-command-correction|statement-strengthen [--class <c>] [--statement \"<strengthened>\"] [--done-when-args '<json>'] --evidence <finding ref>"
   },
   "inherit-candidate": {
@@ -155,5 +155,21 @@
   "correct-attempt-base": {
     "summary": "Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused.",
     "usage": "node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason \"<procedural cause>\""
+  },
+  "preflight": {
+    "summary": "Batch, read-only landing diagnostics for one quest: audit, landing-union, untracked intent, generated outputs, file-size, and required review templates in one pass; writes no log event and consumes no override. `--full` adds the publish-gate statics (duplication, unused exports, cycles, aggregate and cognitive complexity) that no earlier Solver stage runs.",
+    "usage": "node scripts/solve.js preflight --id <id> [--full]"
+  },
+  "reattempt": {
+    "summary": "First-class replacement attempt after a rejection: regenerates byte-contract dependencies, stages intent for untracked sources, inherits theory/model fields, and records through the unchanged step gates. A terminal result (theory gate, blocked disposition) records no attempt and says so.",
+    "usage": "node scripts/solve.js reattempt --id <id> --summary \"<what changed>\" [--changeRef diff:<path>]"
+  },
+  "scaffold-harness": {
+    "summary": "Write the deterministic evidence-harness skeleton scripts/quest-evidence-<id>.js for a test-receipt quest (one fail-closed receipt placeholder per required id, intent-added with git add -N). Never overwrites and seals nothing; `start` runs it automatically when the harness is absent.",
+    "usage": "node scripts/solve.js scaffold-harness --id <id>"
+  },
+  "rebase-epoch": {
+    "summary": "Record a source-epoch boundary at HEAD instead of resealing after main drifted behind the epoch base: the retired epoch's attempts stay visible but never count as verification, one covering attempt at the new base is demanded over every path the retired epoch reviewed, and a standing rejection transfers to the live-base coverage rule. Refuses a pending step, a --to that is not HEAD, a HEAD that origin/main does not contain, and an empty range; never runs git write operations.",
+    "usage": "node scripts/solve.js rebase-epoch --id <id> --to <commit> --reason \"<why the epoch must move>\""
   }
 }

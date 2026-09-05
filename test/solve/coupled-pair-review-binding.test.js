@@ -35,7 +35,7 @@ const LEGACY_ID_ASSERTION = 'the replacement does not reuse the legacy id';
 const APPROVAL_LOG_ASSERTION =
   'registry drift is rejected before an approval enters the durable log';
 const LEGACY_SCHEMA_VERSION = 1;
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 
 function requestReview(t) {

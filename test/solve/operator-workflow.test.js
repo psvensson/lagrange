@@ -579,6 +579,15 @@ tap.test('land rejects drift and records rejection without committing', (t) => {
     receipt: 'review:facade-rejection',
   }), /a rejection requires/u,
   'a rejection without a categorized finding list is refused');
+  t.throws(() => landQuestWorkflow(root, {
+    id,
+    verifier: 'facade-reviewer',
+    verdict: 'reject',
+    fingerprint,
+    receipt: 'review:facade-rejection',
+    observation: 'naming: the comparison helper name could be shorter',
+  }), /at least one defect finding/u,
+  'a rejection carrying only observations is refused');
   const rejected = landQuestWorkflow(root, {
     id,
     verifier: 'facade-reviewer',
@@ -595,6 +604,11 @@ tap.test('land rejects drift and records rejection without committing', (t) => {
   t.equal(rejected.next.quest.status, 'open',
     'the categorized rejection itself reopens the Quest');
   t.equal(rejected.next.action.code, 'replace-rejected-attempt');
+  const recorded = readLog(root, id).find((event) =>
+    event.kind === 'verifier-rejection');
+  t.same(recorded.verification.findings, [{category: 'correctness',
+    summary: 'the rejected candidate omitted paired comparison',
+    severity: 'defect'}], 'a --finding is recorded as a defect');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
@@ -627,6 +641,19 @@ tap.test('one continue summary begins and captures a rejected replacement', (t) 
   t.equal(readLog(root, id).filter((event) => event.type === 'attempt').length, 2);
   t.not(buildNextProjection(root, id).verification.candidateFingerprint,
     rejectedFingerprint, 'the one-call replacement has new exact bytes');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('a mint after a rejection freezes the review delta', (t) => {
+  const {root, id} = landingFixture();
+  const first = landQuestWorkflow(root, {id});
+  t.equal(first.review.manifest.schemaVersion, 4);
+  t.match(first.review.manifest.candidate.pathDigests['scripts/demo.js'],
+    /^sha256:[0-9a-f]{64}$/u, 'the manifest freezes one digest per path');
+  t.equal(first.review.manifest.reviewDelta, undefined,
+    'a first mint answers no rejection');
+  t.equal(first.review.delta, null);
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
@@ -730,7 +757,7 @@ tap.test('land binds the additive template bar and ingests one structured verdic
     } finally {
       Reflect.defineProperty(Map.prototype, 'values', valuesDescriptor);
     }
-    t.equal(requested.review.manifest.schemaVersion, 3);
+    t.equal(requested.review.manifest.schemaVersion, 4);
     t.same(requested.review.manifest.requiredReviewTemplates.map(
       (entry) => entry.category), ['adversarial-js-intrinsics']);
     t.equal(requested.review.manifest.sourceEpoch.headCommit,

@@ -69,6 +69,28 @@ const UNGATED_AMENDMENT_KINDS = Object.freeze([
 // (park + `solve new --from`) stays the answer, same shape as the
 // SAME_GUARD_OVERRIDE_LIMIT rule for guards that keep firing.
 export const QUEST_AMENDMENT_LIMIT = 2;
+// Monotone kinds only ever make the quest harder (a wider sealed bar, a
+// stronger receipt requirement), so the drift argument does not apply; they
+// carry their own, separate lifetime cap and never spend a correction.
+export const MONOTONE_AMENDMENT_KINDS = Object.freeze([
+  AMENDMENT_KIND_BAR_EXPANSION,
+  AMENDMENT_KIND_RECEIPT_BAR,
+]);
+const LOCAL_NUM_MONOTONE_AMENDMENT_LIMIT = 4;
+const LOCAL_STR_MONOTONE_LABEL = 'monotone amendment(s)';
+const LOCAL_STR_CORRECTION_LABEL = 'amendment(s)';
+export const MONOTONE_AMENDMENT_LIMIT = LOCAL_NUM_MONOTONE_AMENDMENT_LIMIT;
+
+function amendmentBudget(kind, amendments) {
+  const monotone = MONOTONE_AMENDMENT_KINDS.includes(kind);
+  const counted = amendments.filter((amendment) =>
+    MONOTONE_AMENDMENT_KINDS.includes(amendment.amendmentKind) === monotone);
+  return {
+    counted,
+    limit: monotone ? MONOTONE_AMENDMENT_LIMIT : QUEST_AMENDMENT_LIMIT,
+    label: monotone ? LOCAL_STR_MONOTONE_LABEL : LOCAL_STR_CORRECTION_LABEL,
+  };
+}
 
 export function questAmendments(log) {
   return log.filter((event) => event.type === EVENT_QUEST_AMENDED &&
@@ -394,10 +416,11 @@ export function runAmendCommand(root, args) {
       'amend: quest is not sealed yet — edit the draft file directly');
   }
   const amendments = questAmendments(log);
-  if (amendments.length >= QUEST_AMENDMENT_LIMIT) {
+  const budget = amendmentBudget(String(args.kind || ''), amendments);
+  if (budget.counted.length >= budget.limit) {
     throw new Error(
-      `amend: refused — ${amendments.length} amendment(s) already recorded ` +
-      `(limit ${QUEST_AMENDMENT_LIMIT}). A quest that keeps needing ` +
+      `amend: refused — ${budget.counted.length} ${budget.label} already ` +
+      `recorded (limit ${budget.limit}). A quest that keeps needing ` +
       'correction is mis-scoped: park it and author a successor with ' +
       '`solve new --from`.');
   }
@@ -438,5 +461,5 @@ export function runAmendCommand(root, args) {
     evidence,
   });
   return `amended ${questId} (${amendment.amendmentKind}, ` +
-    `${amendments.length + 1}/${QUEST_AMENDMENT_LIMIT}) at ${stamped.ts}`;
+    `${budget.counted.length + 1}/${budget.limit}) at ${stamped.ts}`;
 }

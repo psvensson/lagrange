@@ -49,12 +49,15 @@ import {
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
   createRunAuthorizations,
+  commitRunAuthorizations,
 } from './gate.js';
 import {staticQualityProblems} from './static-gate.js';
 import {
   CONTINUATION_BLOCKED_REJECTION_ESCALATION,
   CONTINUATION_BLOCKED_SCOPE,
   CONTINUATION_BLOCKED_STATIC_QUALITY,
+  CONTINUATION_BLOCKED_THEORY,
+  continuationOverridable,
   unrecordedEvidenceContinuation,
 } from './continuation.js';
 import {
@@ -74,6 +77,10 @@ import {
 } from './pending-step.js';
 
 const STATIC_PROBLEM_SEPARATOR = '\n';
+const BLOCKED_GATE_SEPARATOR = '\n';
+const OVERRIDE_HINT_SEPARATOR = '\n  override: ';
+const COMMIT_BLOCKED_PREFIX = 'commit blocked by ';
+const COMMIT_BLOCKED_INFIX = ' gate(s):\n';
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
 
@@ -248,6 +255,9 @@ function stepBegin(root, quest, options = {}) {
       log,
       frontier: pick.def.id,
       rungIndex: pick.state.rungIndex,
+      // A begin+commit pair run as one operator action shares one run map,
+      // so a bypass here is charged only when the pair records its attempt.
+      runAuthorizations: sharedRunAuthorizations(options),
     });
   if (gateDecision && !decisionContinues(gateDecision)) {
     return gateDecisionToStepResult(gateDecision);
@@ -391,12 +401,107 @@ function assertScopeAdmission(
   }
 }
 
+// The run map an operator action threads through a begin+commit pair; a
+// standalone step keeps its own.
+function sharedRunAuthorizations(options) {
+  return options.runAuthorizations instanceof Map ?
+    options.runAuthorizations : null;
+}
+
+// One-pass admission: every commit gate is evaluated and recorded before the
+// commit decides, so the operator learns every block from one run instead of
+// one block per run (v3 spent two runs and two overrides that way). A lone
+// theory block keeps its step-result shape; any other block, or several
+// blocks at once, throws one error naming each gate and its override command.
+function blockedGateDescription(quest, frontierId, blocked) {
+  return blocked.map((entry) => {
+    const problems = entry.problems.join(STATIC_PROBLEM_SEPARATOR);
+    const override = continuationOverridable({status: entry.code, code: entry.code}) ?
+      `${OVERRIDE_HINT_SEPARATOR}node scripts/solve.js override --id ${quest.id} ` +
+        `--frontier ${frontierId} --code ${entry.code} --reason "<why>"` : '';
+    return `${entry.code}: ${problems}${override}`;
+  }).join(BLOCKED_GATE_SEPARATOR);
+}
+
+function throwForBlockedGates(quest, pending, blocked) {
+  if (blocked.length === 1 && blocked[0].result) return blocked[0].result;
+  const error = new Error(
+    `${COMMIT_BLOCKED_PREFIX}${blocked.length}${COMMIT_BLOCKED_INFIX}` +
+    blockedGateDescription(quest, pending.frontier, blocked));
+  const scoped = blocked.find((entry) => entry.error);
+  if (scoped) {
+    error.scopePaths = scoped.error.scopePaths;
+    error.scopeSplitPlan = scoped.error.scopeSplitPlan;
+  }
+  throw error;
+}
+
+function scopeGateBlock(root, quest, log, pending, changeInspection,
+  sourceBaseCommit, runAuthorizations) {
+  try {
+    assertScopeAdmission(
+      root, quest, log, pending, changeInspection, sourceBaseCommit,
+      runAuthorizations);
+    return null;
+  } catch (error) {
+    if (!Array.isArray(error.scopePaths)) throw error;
+    return {code: CONTINUATION_BLOCKED_SCOPE, problems: [error.message], error};
+  }
+}
+
+function escalationGateBlock(root, quest, log, pending, runAuthorizations) {
+  const rejectedFingerprints =
+    candidateRejectionFingerprintsSinceApproval(log, pending.frontier);
+  if (rejectedFingerprints.size < REJECTION_ESCALATION_LIMIT) return null;
+  const escalationProblem =
+    `candidate rejection escalation: ${rejectedFingerprints.size} distinct ` +
+    `rejected candidates on ${pending.frontier} with no intervening approval; ` +
+    REJECTION_ESCALATION_GUIDANCE;
+  const decision = resolveGateDecision(root, quest, {
+    status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+    code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+    problems: [escalationProblem],
+  }, {
+    log,
+    frontier: pending.frontier,
+    rungIndex: pending.rungIndex,
+    runAuthorizations,
+  });
+  return decisionContinues(decision) ? null : {
+    code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+    problems: [escalationProblem],
+  };
+}
+
+function staticGateBlock(root, quest, log, pending, changeInspection,
+  sourceBaseCommit, runAuthorizations) {
+  const staticProblems = staticQualityProblems(
+    root, changeInspection.changedPaths, {baseCommit: sourceBaseCommit});
+  if (staticProblems.length === 0) return null;
+  const decision = resolveGateDecision(root, quest, {
+    status: CONTINUATION_BLOCKED_STATIC_QUALITY,
+    code: CONTINUATION_BLOCKED_STATIC_QUALITY,
+    problems: staticProblems,
+  }, {
+    log,
+    frontier: pending.frontier,
+    rungIndex: pending.rungIndex,
+    runAuthorizations,
+  });
+  return decisionContinues(decision) ? null : {
+    code: CONTINUATION_BLOCKED_STATIC_QUALITY,
+    problems: staticProblems,
+  };
+}
+
 function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
   // One recorded override authorizes this whole supervised commit (C4): every
-  // admission gate below shares this map.
-  const runAuthorizations = createRunAuthorizations();
+  // admission gate below shares this map, and the bypasses it holds are
+  // charged only when this commit records its attempt.
+  const runAuthorizations =
+    sharedRunAuthorizations(options) || createRunAuthorizations();
   const changeInspection = ctx.honestyCtx.inspectChangeRef(changeRef);
   if (!changeInspection.valid) {
     throw new Error(
@@ -425,49 +530,17 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     root, changeRef, changeInspection, {questId: quest.id});
   if (!admission.ok) throw new Error(admission.problem);
 
-  assertScopeAdmission(
-    root, quest, log, pending, changeInspection, sourceBaseCommit,
-    runAuthorizations);
-  // Same admission pair as the attempt wrapper (see attempt.js): repeated
-  // failed rejection rounds gate toward reframing, and machine-checkable
-  // lint/guideline findings never earn a verifier round. Both are
-  // recorded-reason overridable.
-  const rejectedFingerprints =
-    candidateRejectionFingerprintsSinceApproval(log, pending.frontier);
-  if (rejectedFingerprints.size >= REJECTION_ESCALATION_LIMIT) {
-    const escalationProblem =
-      `candidate rejection escalation: ${rejectedFingerprints.size} distinct ` +
-      `rejected candidates on ${pending.frontier} with no intervening approval; ` +
-      REJECTION_ESCALATION_GUIDANCE;
-    const decision = resolveGateDecision(root, quest, {
-      status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
-      code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
-      problems: [escalationProblem],
-    }, {
-      log,
-      frontier: pending.frontier,
-      rungIndex: pending.rungIndex,
-      runAuthorizations,
-    });
-    if (!decisionContinues(decision)) throw new Error(escalationProblem);
-  }
-  const staticProblems = staticQualityProblems(
-    root, changeInspection.changedPaths, {baseCommit: sourceBaseCommit});
-  if (staticProblems.length > 0) {
-    const decision = resolveGateDecision(root, quest, {
-      status: CONTINUATION_BLOCKED_STATIC_QUALITY,
-      code: CONTINUATION_BLOCKED_STATIC_QUALITY,
-      problems: staticProblems,
-    }, {
-      log,
-      frontier: pending.frontier,
-      rungIndex: pending.rungIndex,
-      runAuthorizations,
-    });
-    if (!decisionContinues(decision)) {
-      throw new Error(staticProblems.join(STATIC_PROBLEM_SEPARATOR));
-    }
-  }
+  // Same admission set as the attempt wrapper (see attempt.js): scope
+  // pressure, repeated failed rejection rounds, and machine-checkable
+  // lint/guideline findings. All recorded-reason overridable; all evaluated
+  // before any of them stops the commit.
+  const blocked = [
+    scopeGateBlock(root, quest, log, pending, changeInspection,
+      sourceBaseCommit, runAuthorizations),
+    escalationGateBlock(root, quest, log, pending, runAuthorizations),
+    staticGateBlock(root, quest, log, pending, changeInspection,
+      sourceBaseCommit, runAuthorizations),
+  ].filter(Boolean);
   const state = projectState(quest, log);
   const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);
   const frontierState = state.frontiers.find((frontier) =>
@@ -489,7 +562,11 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   });
   const gateResult = theoryGateResult(
     root, quest, log, readinessProblems, pick, runAuthorizations);
-  if (gateResult) return gateResult;
+  if (gateResult) {
+    blocked.push({code: CONTINUATION_BLOCKED_THEORY,
+      problems: gateResult.problems || [], result: gateResult});
+  }
+  if (blocked.length > 0) return throwForBlockedGates(quest, pending, blocked);
 
   // Advisory only (never blocks): a source-changing commit under an effective
   // theory should carry a precondition/engagement witness finding, per the
@@ -502,6 +579,9 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     theoryRef: resolveAttemptTheoryRef(state, def.id, options.theoryRef),
   });
 
+  // The bypasses this run held are charged now, immediately before the
+  // attempt they authorized is recorded.
+  commitRunAuthorizations(root, quest.id, runAuthorizations);
   const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, {
     changeRef,
     summary: options.summary || null,

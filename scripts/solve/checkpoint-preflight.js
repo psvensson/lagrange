@@ -241,6 +241,13 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
     // reads clean-by-omission. Reproducibility is opt-in (`checkpoint --dry-run
     // --probe-reproducibility`) because the scan is expensive; when measured it
     // reports the candidate count and never a substitute base.
+    // Retired-epoch attempts: reported like dead-base attempts, never counted.
+    retiredAttempts: (state.retiredAttempts || []).map((attempt) => ({
+      changeRef: attempt.event.changeRef || null,
+      fingerprint: attempt.fingerprint,
+      baseCommit: attempt.event.workspaceBaseCommit || null,
+      countsAsVerification: false,
+    })),
     baseUnreachableAttempts: (state.baseUnreachableAttempts || []).map((entry) => ({
       changeRef: entry.attempt.event.changeRef || null,
       fingerprint: entry.attempt.fingerprint,
@@ -348,6 +355,11 @@ export function checkpointVerificationPreflightLines(preflight) {
     'approved uncheckpointed receipt',
     preflight.approvedUncheckpointedReceipts,
   );
+  for (const entry of preflight.retiredAttempts || []) {
+    lines.push(
+      `retired by rebase-epoch: ${entry.changeRef || MISSING_CHANGE_REF} ` +
+      `base ${entry.baseCommit} — never counted as verification`);
+  }
   for (const entry of preflight.baseUnreachableAttempts || []) {
     lines.push(
       `${BASE_UNREACHABLE_CODE}: ${entry.changeRef || MISSING_CHANGE_REF} ` +

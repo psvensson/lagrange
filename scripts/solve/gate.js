@@ -150,8 +150,32 @@ function signatureCovers(candidate, authorized) {
 // The map never outlives its run, so the recorded-consumption semantics of
 // activeOverride (reset on honest progress, SAME_GUARD_OVERRIDE_LIMIT budget)
 // are unchanged across runs.
+// Consumption is transactional with the run's outcome: a gate site that
+// bypasses under a run map DEFERS its consuming ADVISORY record here, and the
+// run owner flushes the deferred records immediately before it records the
+// attempt they authorized. A run that stops at a later gate never flushes, so
+// the override it would have spent stays active for the corrected run; the
+// blocking gate-decision itself is still recorded, so the audit trail keeps
+// every stop. Legacy callers without a run map keep immediate consumption.
+const PENDING_RUN_CONSUMPTIONS = new WeakMap();
+
 export function createRunAuthorizations() {
-  return new Map();
+  const authorizations = new Map();
+  PENDING_RUN_CONSUMPTIONS.set(authorizations, []);
+  return authorizations;
+}
+
+function pendingRunConsumptions(runAuthorizations) {
+  return runAuthorizations ?
+    PENDING_RUN_CONSUMPTIONS.get(runAuthorizations) || null : null;
+}
+
+export function commitRunAuthorizations(root, questId, runAuthorizations) {
+  const pending = pendingRunConsumptions(runAuthorizations);
+  if (!pending) return 0;
+  const flushed = pending.splice(0, pending.length);
+  for (const event of flushed) appendEvent(root, questId, event);
+  return flushed.length;
 }
 
 const RUN_AUTHORIZATION_KEY_SEPARATOR = '|';
@@ -167,11 +191,34 @@ function runAuthorizationKey(frontierId, code) {
 // re-phrased problem falls through to the real guard.
 function runAuthorizationCovers(held, problems, scopeSignature) {
   if (!held) return false;
+  // The begin-phase health signal and the commit-phase validation word the
+  // same missing-theory condition differently ("frontier theory required"
+  // versus "... at rung 2"); the family key joins only equivalent gate
+  // families, so a genuinely new problem still falls through to the guard.
+  // A problem-targeted override never widens through the family join: every
+  // later problem must still carry the recorded substring.
+  const authorizedKeys = new Set(held.problems.map(
+    theoryGateProblemAuthorizationKey));
   const everyProblemAuthorized = (problems || []).every((problem) =>
-    held.problems.includes(problem));
+    held.problem ? String(problem).includes(held.problem) :
+      held.problems.includes(problem) ||
+      authorizedKeys.has(theoryGateProblemAuthorizationKey(problem)));
   if (!everyProblemAuthorized) return false;
   if (!scopeSignature || !held.scopeSignature) return true;
   return signatureCovers(scopeSignature, held.scopeSignature);
+}
+
+// A later site of the same run may word an authorized problem differently;
+// the held authorization and its still-pending consuming record adopt the
+// new wording so both stay the single source of what the run bypassed.
+function extendRunAuthorization(held, problems) {
+  for (const problem of problems || []) {
+    if (held.problems.includes(problem)) continue;
+    held.problems.push(problem);
+    if (held.record && !held.record.problems.includes(problem)) {
+      held.record.problems.push(problem);
+    }
+  }
 }
 
 function activeOverride(log, frontierId, code, problems = [], scopeSignature = null) {
@@ -200,6 +247,7 @@ function activeOverride(log, frontierId, code, problems = [], scopeSignature = n
       [...problems];
     return {
       reason: active.reason,
+      problem: active.problem || null,
       problems: authorizedProblems,
       coversAllProblems: authorizedProblems.length === problems.length,
       authorizedScopeSignature: active.scopeSignature || null,
@@ -335,6 +383,10 @@ function resolveOverrideAdvisoryDecision(root, quest, options) {
   const held = runAuthorizations ?
     runAuthorizations.get(runAuthorizationKey(frontier, code)) : null;
   if (runAuthorizationCovers(held, problems, scopeSignature)) {
+    // The single consuming record names every phrasing it authorized across
+    // the run, so the attempt's own gate re-check (finalizeAttempt) matches
+    // the commit-phase wording as well as the begin-phase wording.
+    extendRunAuthorization(held, problems);
     return {applicable: true, decision: {
       disposition: DISPOSITION_ADVISORY,
       code,
@@ -348,18 +400,16 @@ function resolveOverrideAdvisoryDecision(root, quest, options) {
       reusedRunAuthorization: true,
     }};
   }
-  const override = activeOverride(log, frontier, code, problems, scopeSignature);
+  // Deferred consumptions of this run count as spent for the run's own later
+  // sites, so a residual problem cannot ride the same override twice.
+  const pending = pendingRunConsumptions(runAuthorizations);
+  const effectiveLog = pending && pending.length > 0 ? [...log, ...pending] : log;
+  const override = activeOverride(
+    effectiveLog, frontier, code, problems, scopeSignature);
   if (!override?.coversAllProblems) {
     return OVERRIDE_ADVISORY_NOT_APPLICABLE;
   }
-  if (runAuthorizations) {
-    runAuthorizations.set(runAuthorizationKey(frontier, code), {
-      reason: override.reason,
-      problems: [...override.problems],
-      scopeSignature: override.authorizedScopeSignature,
-    });
-  }
-  appendEvent(root, quest.id, {
+  const consumingRecord = {
     type: EVENT_GATE_DECISION,
     frontier,
     rungIndex,
@@ -367,10 +417,24 @@ function resolveOverrideAdvisoryDecision(root, quest, options) {
     code,
     outcome: OUTCOME_CONTINUE,
     override: override.reason,
-    problems: override.problems,
+    problems: [...override.problems],
     scopeSignature,
     nextCommand: null,
-  });
+  };
+  if (runAuthorizations) {
+    runAuthorizations.set(runAuthorizationKey(frontier, code), {
+      reason: override.reason,
+      problem: override.problem || null,
+      problems: [...override.problems],
+      scopeSignature: override.authorizedScopeSignature,
+      record: pending ? consumingRecord : null,
+    });
+  }
+  if (pending) {
+    pending.push(consumingRecord);
+  } else {
+    appendEvent(root, quest.id, consumingRecord);
+  }
   return {applicable: true, decision: {
     disposition: DISPOSITION_ADVISORY,
     code,

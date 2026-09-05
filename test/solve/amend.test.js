@@ -137,6 +137,45 @@ tap.test('solve amend', async (t) => {
     t.end();
   });
 
+  t.test('monotone amendments carry their own cap and never spend a correction',
+    (t) => {
+      const root = tmp();
+      const quest = sealed(root);
+      const templateDir = path.join(root, 'docs/steering/verification-templates');
+      fs.mkdirSync(templateDir, {recursive: true});
+      for (const slug of ['bar-a', 'bar-b', 'bar-c', 'bar-d', 'bar-e']) {
+        fs.writeFileSync(path.join(templateDir, `${slug}.md`),
+          `---\ncategories: [${slug}]\n---\n`);
+      }
+      appendEvent(root, quest.id, {type: 'finding', kind: 'verifier-rejection',
+        claim: 'first', evidence: 'subagent:v1'});
+      runAmendCommand(root, {id: quest.id, kind: 'statement-strengthen',
+        statement: 'The process contract holds. A.', evidence: 'subagent:v1'});
+      runAmendCommand(root, {id: quest.id, kind: 'statement-strengthen',
+        statement: 'The process contract holds. A. B.', evidence: 'subagent:v1'});
+      // Both corrections are spent; a bar expansion is still admitted.
+      t.match(runAmendCommand(root, {id: quest.id,
+        kind: 'verification-bar-expansion', template: 'bar-a',
+        evidence: 'subagent:v1'}), /1\/4\)/u, 'the monotone cap counts apart');
+      for (const slug of ['bar-b', 'bar-c', 'bar-d']) {
+        runAmendCommand(root, {id: quest.id,
+          kind: 'verification-bar-expansion', template: slug,
+          evidence: 'subagent:v1'});
+      }
+      t.throws(() => runAmendCommand(root, {id: quest.id,
+        kind: 'verification-bar-expansion', template: 'bar-e',
+        evidence: 'subagent:v1'}), /4 monotone amendment\(s\).*limit 4/su,
+      'the fifth monotone amendment is refused');
+      t.throws(() => runAmendCommand(root, {id: quest.id,
+        kind: 'statement-strengthen',
+        statement: 'The process contract holds. A. B. C.',
+        evidence: 'subagent:v1'}), /2 amendment\(s\).*limit 2/su,
+      'monotone amendments did not refund a correction');
+      t.equal(questAmendments(readLog(root, quest.id)).length, 6);
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
   t.test('oracle-command-correction changes args only; doneWhen probe stays immutable',
     (t) => {
       const root = tmp();

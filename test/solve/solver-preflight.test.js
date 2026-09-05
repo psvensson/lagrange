@@ -155,6 +155,27 @@ test('preflight-clean-candidate-is-green: an approved candidate with no ' +
   assert.equal(report.problemCount, 0);
 });
 
+test('preflight-full-adds-publish-statics: without --full the publish ' +
+  'statics section only notes the opt-in; with --full it runs and reports ' +
+  'the ratchets the publish gate enforces', (t) => {
+  const fx = approvedCandidate(t);
+  const cheap = sectionByName(preflightReport(fx.root, fx.quest),
+    'publish-static');
+  assert.deepEqual(cheap.problems, []);
+  assert.ok(cheap.notes.some((note) => note.includes('--full')),
+    'the cheap run names the opt-in');
+  // A failing ratchet script in the fixture tree is reported under --full.
+  writeFile(fx.root, 'scripts/check-duplication.js',
+    'console.log("duplicated lines exceed the baseline");\nprocess.exit(1);\n');
+  writeFile(fx.root, 'scripts/check-unused-exports.js', 'process.exit(0);\n');
+  const full = sectionByName(preflightReport(fx.root, fx.quest, {full: true}),
+    'publish-static');
+  assert.equal(full.problems.length, 1, JSON.stringify(full));
+  assert.match(full.problems[0], /duplication ratchet failed/u);
+  assert.match(full.problems[0], /exceed the baseline/u);
+  assert.deepEqual(full.notes, []);
+});
+
 test('preflight-reports-every-problem-in-one-pass: an uncovered path, a ' +
   'hand-staled generated output and an untracked source file are all ' +
   'named by one invocation, and no log event is appended', (t) => {

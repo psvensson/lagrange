@@ -1,0 +1,89 @@
+{
+  "id": "solver-streamlining-2026-09",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "The Solver workflow implements the verified streamlining specification: the attempt capture excludes and names another quest's bookkeeping and scope refusals name their paths; the stall theory gate excludes verifier-demanded replacement attempts; one recorded override covers one logical run and is charged only when that run records its attempt, with every blocked commit gate reported in one pass; findings carry a fail-closed severity and monotone amendments have their own cap; the seal gate adds the silent-catch, decision-boundary, and complexity admissions and preflight --full runs the publish statics; the publish gate fails fast on a missing data/ link; the landing import-graph verify waits for load headroom; review manifests freeze the delta of a rejected round; receipts may name a TAP subtest with a zero-test guard and new can scaffold the harness; and an epoch re-pin records a covering obligation instead of a reseal.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/solver-streamlining-spec.md",
+    "draftedAtCommit": "0ecb498630a03f9cd1cace17621e3686d8db86f8"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-streamlining-2026-09.receipt.json",
+      "requiredReceipts": [
+        "P5-foreign-quest-bookkeeping-excluded-and-named",
+        "P8-stall-gate-excludes-verifier-demanded-replacements",
+        "P7a-override-charged-only-by-the-recording-run",
+        "P7a-gate-deferred-consumption",
+        "P4-finding-severity-fail-closed",
+        "P4-verdict-file-severity",
+        "P4b-monotone-amendment-cap",
+        "P4-land-observations",
+        "P3-complexity-admission",
+        "P3-seal-gate-checkers",
+        "P3-preflight-full-publish-statics",
+        "P7c-publish-data-fail-fast",
+        "P7b-load-headroom-before-import-graph-verify",
+        "P7b-landing-preflight-consults-the-load-gate",
+        "P6a-subtest-receipts-fail-closed",
+        "P6b-harness-scaffold",
+        "P2-rebase-epoch",
+        "CLI-smoke-unchanged"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-streamlining-2026-09-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/solver-streamlining-2026-09.receipt.json",
+          "requiredReceipts": [
+            "P5-foreign-quest-bookkeeping-excluded-and-named",
+            "P8-stall-gate-excludes-verifier-demanded-replacements",
+            "P7a-override-charged-only-by-the-recording-run",
+            "P7a-gate-deferred-consumption",
+            "P4-finding-severity-fail-closed",
+            "P4-verdict-file-severity",
+            "P4b-monotone-amendment-cap",
+            "P4-land-observations",
+            "P3-complexity-admission",
+            "P3-seal-gate-checkers",
+            "P3-preflight-full-publish-statics",
+            "P7c-publish-data-fail-fast",
+            "P7b-load-headroom-before-import-graph-verify",
+            "P7b-landing-preflight-consults-the-load-gate",
+            "P6a-subtest-receipts-fail-closed",
+            "P6b-harness-scaffold",
+            "P2-rebase-epoch",
+            "CLI-smoke-unchanged"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-guardrail-weakening",
+      "statement": "No honesty or integrity invariant is weakened: overrides still cover only overridable guards, a rejection still needs a defect, the sealed probe and metrics stay immutable, and every new checker only adds refusals."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "harness-fidelity",
+    "retry-loops"
+  ]
+}

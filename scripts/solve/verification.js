@@ -10,6 +10,7 @@ import {
   EVENT_ATTEMPT,
   EVENT_FINDING,
   EVENT_REJECTION_DECOMPOSITION,
+  EVENT_EPOCH_REBASED,
 } from './constants.js';
 import {
   changeArtifactIdentity,
@@ -271,8 +272,45 @@ export function sourceVerificationFingerprint(root, quest, event) {
     formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
 }
 
+// The recorded epoch boundary: attempts recorded before the latest
+// `epoch-rebased` event belong to a retired epoch. They stay in the
+// projection for visibility and for the rejections that still bind them,
+// but never anchor a candidate or aggregate and never count as verification.
+export function latestEpochRebaseIndex(log) {
+  let latest = -1;
+  for (let index = 0; index < (log || []).length; index += 1) {
+    if (log[index].type === EVENT_EPOCH_REBASED) latest = index;
+  }
+  return latest;
+}
+
+export function latestEpochRebase(log) {
+  const index = latestEpochRebaseIndex(log);
+  return index >= 0 ? log[index] : null;
+}
+
+function retiredPathsUnion(log) {
+  const union = [];
+  for (let index = 0; index < (log || []).length; index += 1) {
+    const event = log[index];
+    if (event.type !== EVENT_EPOCH_REBASED) continue;
+    const paths = arrayIsArray(event.retiredPaths) ? event.retiredPaths : [];
+    for (let pathIndex = 0; pathIndex < paths.length; pathIndex += 1) {
+      if (!arrayIncludes(union, paths[pathIndex])) arrayPush(union, paths[pathIndex]);
+    }
+  }
+  return arraySort(union);
+}
+
+export function baseRetiredByEpochRebase(log, baseCommit) {
+  if (!baseCommit) return false;
+  return arraySome(log || [], (event) =>
+    event.type === EVENT_EPOCH_REBASED && event.fromBase === baseCommit);
+}
+
 function rawSourceChangingAttempts(root, quest, log, options = {}) {
   const startIndex = options.startIndex || 0;
+  const rebaseIndex = latestEpochRebaseIndex(log);
   const attempts = [];
   for (let index = 0; index < log.length; index += 1) {
     const event = log[index];
@@ -302,6 +340,7 @@ function rawSourceChangingAttempts(root, quest, log, options = {}) {
           COLLATERAL_VERIFICATION_CONTRACT_VERSION],
         event.verificationContractVersion,
       ),
+      retired: index < rebaseIndex,
     });
   }
   return attempts;
@@ -455,9 +494,12 @@ export function findApprovedRejectionReplacement(
   // at a REACHABLE base whose paths cover every rejected source path and which
   // carries its own later exact approval. The verifier reviews current bytes
   // over each rejected path, which is what the base equality guaranteed.
-  const rejectedBaseUnreachable = Boolean(options.root) &&
+  // A retired epoch is the same case as a dead base: the exact delta cannot
+  // be re-anchored, so the rejection transfers to the live-base coverage rule.
+  const rejectedBaseUnreachable = rejectedAttempt.retired === true ||
+    (Boolean(options.root) &&
     baseRecordedButUnreachable(
-      options.root, rejectedAttempt.event.workspaceBaseCommit);
+      options.root, rejectedAttempt.event.workspaceBaseCommit));
   for (let index = 0; index < attempts.length; index += 1) {
     const candidate = attempts[index];
     const baseAcceptable = rejectedBaseUnreachable ?
@@ -618,7 +660,8 @@ function commitRangeFingerprint(root, selected) {
 }
 
 export function aggregateSourceFingerprint(root, attempts) {
-  const contracted = arrayFilter(attempts, (attempt) => attempt.contracted);
+  const contracted = arrayFilter(attempts,
+    (attempt) => attempt.contracted && attempt.retired !== true);
   if (contracted.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: [], baseCommit: null};
   }
@@ -770,7 +813,7 @@ function buildLandingCandidate(root, quest, attempts) {
   // ancestry is unknowable, so they are kept for coverage rather than filtered
   // by a probe that cannot answer.
   const selected = arrayFilter(attempts, (attempt) =>
-    attempt.candidateContract &&
+    attempt.candidateContract && attempt.retired !== true &&
     (baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit) ||
       attemptIsAfterCheckpoint(root, attempt, checkpointCommit)));
   if (selected.length === 0) {
@@ -846,7 +889,8 @@ function buildLandingCandidate(root, quest, attempts) {
 // advance HEAD. This makes the candidate's one-base invariant constructive
 // instead of a terminal surprise.
 export function activeSourceEpoch(root, quest, log) {
-  const attempts = sourceChangingAttempts(root, quest, log);
+  const attempts = arrayFilter(sourceChangingAttempts(root, quest, log),
+    (attempt) => attempt.retired !== true);
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const selected = [];
   for (let index = 0; index < attempts.length; index += 1) {
@@ -887,6 +931,14 @@ export function sourceEpochCommittedDriftPaths(root, epoch, extraPaths = []) {
   );
 }
 
+const LOCAL_STR_RETIRED_REJECTION =
+  ' and its source epoch was retired by rebase-epoch; requires a later ' +
+  'same-frontier source attempt at the rebased base covering every rejected ' +
+  'source path plus its own later exact approval';
+const LOCAL_STR_EPOCH_REBASE_OBLIGATION =
+  'epoch rebase requires a covering attempt at ';
+const LOCAL_STR_EPOCH_REBASE_OVER = ' over: ';
+
 export function sourceEpochDriftProblem(driftPaths) {
   return SOURCE_EPOCH_DRIFT_PREFIX +
     arrayJoin(driftPaths, SOURCE_EPOCH_PATH_SEPARATOR) +
@@ -913,7 +965,31 @@ function validCandidateReceipt(receipt, fingerprint) {
     receipt.firstAttemptIndex <= receipt.lastAttemptIndex;
 }
 
-function candidateVerificationState(root, log, candidate) {
+// The rejection scan starts at the earliest candidate-contract attempt of
+// the CURRENT checkpoint epoch (dead-base attempts included). A
+// rebase-epoch retires attempts but never closes the checkpoint epoch, so
+// an attempt retired inside the current epoch is still after the checkpoint
+// and keeps its standing rejection in the window (it transfers to live-base
+// coverage, never discharged by the boundary); a rejection discharged before
+// a Solver checkpoint stays discharged, whatever is rebased later — the
+// `retired` mark is log-global and must not reopen a closed epoch.
+function earliestCandidateAttemptIndex(root, quest, attempts, candidate) {
+  const checkpointCommit = latestCheckpointCommit(root, quest.id);
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
+    if (!attempt.candidateContract) continue;
+    if (baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit) ||
+      attemptIsAfterCheckpoint(root, attempt, checkpointCommit)) {
+      return attempt.index;
+    }
+  }
+  // Nothing of the current epoch is on record yet: scan nothing, so a
+  // rejection discharged in a closed epoch can never be read again.
+  return candidate.firstAttemptIndex ?? Number.MAX_SAFE_INTEGER;
+}
+
+function candidateVerificationState(root, log, candidate,
+  scanFromIndex = candidate.firstAttemptIndex) {
   if (!candidate.ok) {
     const anchor = arrayAt(candidate.attempts, -1);
     return {
@@ -930,12 +1006,12 @@ function candidateVerificationState(root, log, candidate) {
       }],
     };
   }
-  if (!candidate.fingerprint) {
-    return {approval: null, rejection: null, unresolvedRejection: null, problems: []};
-  }
+  // An empty live candidate (every attempt retired by rebase-epoch) still
+  // scans: a standing candidate rejection binds until a covering candidate
+  // discharges it, so it must surface even when nothing is live yet.
   let approval = null;
   let rejection = null;
-  const tail = arraySlice(log, candidate.firstAttemptIndex + 1);
+  const tail = arraySlice(log, scanFromIndex + 1);
   for (let index = 0; index < tail.length; index += 1) {
     const event = tail[index];
     const receipt = candidateReceiptOf(event);
@@ -948,6 +1024,9 @@ function candidateVerificationState(root, log, candidate) {
   }
   let unresolvedRejection = null;
   const problems = [];
+  if (!candidate.fingerprint && !rejection) {
+    return {approval: null, rejection: null, unresolvedRejection: null, problems: []};
+  }
   if (rejection) {
     const problem = candidateRejectionProblem(root, candidate, rejection, log);
     if (problem) {
@@ -1011,7 +1090,8 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
   const replacementPaths = capturedSet(arrayFilter(candidate.paths || [],
     (filePath) => !isVerificationBookkeeping(filePath, null)));
   const rejectedBaseDead = baseRecordedButUnreachable(
-    root, rejection.receipt.baseCommit);
+    root, rejection.receipt.baseCommit) ||
+    baseRetiredByEpochRebase(log, rejection.receipt.baseCommit);
   const baseAcceptable = rejectedBaseDead ?
     baseCommitReachable(root, candidate.baseCommit) :
     candidate.baseCommit === rejection.receipt.baseCommit;
@@ -1049,22 +1129,27 @@ function candidateRejectionProblem(root, candidate, rejection, log = []) {
 function unresolvedRejectionEntry(root, attempt, rejection) {
   const deadBase = baseRecordedButUnreachable(
     root, attempt.event.workspaceBaseCommit);
+  const retired = attempt.retired === true;
   return {
     problem: attemptProblem(
       attempt,
-      deadBase ?
-        `was explicitly rejected at ${attempt.fingerprint} and its recorded ` +
+      retired ?
+        `was explicitly rejected at ${attempt.fingerprint}` +
+          LOCAL_STR_RETIRED_REJECTION :
+        deadBase ?
+          `was explicitly rejected at ${attempt.fingerprint} and its recorded ` +
           `base is ${BASE_UNREACHABLE_CODE}; requires a later same-frontier ` +
           'source attempt at a reachable base covering every rejected ' +
           'source path plus its own later exact approval' :
-        `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
+          `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
           LOCAL_STR_OWNED_017 +
           LOCAL_STR_OWNED_018,
     ),
     entry: {
       attempt,
       rejection: rejection.rejection.event,
-      baseUnreachable: deadBase,
+      baseUnreachable: deadBase || retired,
+      retired,
     },
   };
 }
@@ -1123,6 +1208,9 @@ export function verificationState(root, quest, log, options = {}) {
       arrayPush(unresolvedRejectedAttempts, unresolved.entry);
       continue;
     }
+    // A retired attempt owes no approval of its own: its content is
+    // re-reviewed by the covering attempt the epoch rebase demands.
+    if (attempt.retired === true) continue;
     const approval = laterApproval(
       log, attempt, VERIFICATION_SCOPE.ATTEMPT, attempt.fingerprint);
     if (!approval) {
@@ -1135,10 +1223,33 @@ export function verificationState(root, quest, log, options = {}) {
   }
 
   const candidate = buildLandingCandidate(root, quest, attempts);
-  const candidateState = candidateVerificationState(root, log, candidate);
+  const candidateState = candidateVerificationState(root, log, candidate,
+    earliestCandidateAttemptIndex(root, quest, attempts, candidate));
   appendAll(attemptProblems, candidateState.problems);
-
   const aggregate = aggregateSourceFingerprint(root, attempts);
+  // A rebased epoch stands as an obligation until the live epoch's review
+  // union covers every path the retired epoch reviewed: nothing the retired
+  // attempts changed leaves review, it is re-reviewed at the rebased base.
+  // Every rebase on record contributes its retired paths: a second rebase
+  // cannot drop what the first one still owed.
+  const rebase = latestEpochRebase(log);
+  const livePathSet = capturedSet(aggregate.paths || []);
+  const epochRebase = rebase ? {
+    event: rebase,
+    missingPaths: arrayFilter(retiredPathsUnion(log),
+      (filePath) => !setHas(livePathSet, filePath)),
+  } : null;
+  if (epochRebase && epochRebase.missingPaths.length > 0) {
+    arrayPush(attemptProblems, {
+      message: `${LOCAL_STR_EPOCH_REBASE_OBLIGATION}${rebase.toBase}` +
+        `${LOCAL_STR_EPOCH_REBASE_OVER}` +
+        arrayJoin(epochRebase.missingPaths, SOURCE_EPOCH_PATH_SEPARATOR),
+      ts: rebase.ts || null,
+      frontier: null,
+    });
+  }
+  const retiredAttempts = arrayFilter(attempts,
+    (attempt) => attempt.retired === true);
   const reversedAttempts = arrayReverse(arraySlice(attempts));
   const latestContracted = arrayFind(
     reversedAttempts, (attempt) => attempt.contracted);
@@ -1182,6 +1293,8 @@ export function verificationState(root, quest, log, options = {}) {
     resolvedRejectedAttempts,
     unresolvedRejectedAttempts,
     baseUnreachableAttempts,
+    retiredAttempts,
+    epochRebase,
     candidate,
     candidateApproval: candidateState.approval,
     candidateRejection: candidateState.rejection,
@@ -1410,7 +1523,8 @@ export function buildVerificationFinding(args) {
       throw new Error(REJECTION_FINDINGS_REQUIRED_PROBLEM);
     }
     rejectionFindings = arrayMap(findings,
-      ({category, summary}) => ({category, summary}));
+      ({category, summary, severity}) => ({category, summary,
+        ...(severity === undefined ? {} : {severity})}));
   }
   const schemaVersion = args.verificationSchemaVersion ||
     (scope === VERIFICATION_SCOPE.CANDIDATE ?

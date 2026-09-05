@@ -132,7 +132,16 @@ their availability does not add required routine steps.
 The first source-changing attempt after a Solver checkpoint owns one source
 epoch base. Every later attempt retains that base even when unrelated commits
 advance `HEAD`. Before another attempt is appended, the Solver refuses if an
-intervening commit changed any reviewed path. While a worktree holds an
+intervening commit changed any reviewed path. When main has landed such a
+commit, `solve rebase-epoch --id <id> --to HEAD --reason "<why>"` records the
+boundary instead of a reseal: the retired epoch's attempts stay reported but
+never count as verification, one covering attempt at the new base is demanded
+over every path the retired epoch reviewed, and a standing rejection
+transfers to the live-base coverage rule exactly as a dead base does; scope
+authorizations, out-of-bar slugs, and the amendment budget continue in the
+same log. The verb refuses a pending step, a `--to` other than `HEAD`, a
+`HEAD` that `origin/main` does not contain, and an empty range, and never
+runs a git write. While a worktree holds an
 active Quest lease, the pre-commit gate likewise requires a short-lived,
 index-bound authorization issued only by Solver checkpoint or land. This makes
 the one-common-base landing rule true during construction instead of discovering
@@ -448,6 +457,12 @@ changing it is a reviewed code and guardrail change, and a guard MUST NOT be
 disabled to make proof pass. Detectors fire only on real recorded events and
 never touch the sealed `doneWhen`.
 
+- **Stall count excludes verifier-demanded replacements**: the system-theory
+  stall gate counts flat attempts on a frontier, but attempts recorded while a
+  candidate rejection stands (after a `verifier-rejection` finding, before the
+  next approval or a discharging decomposition) are corrective work the
+  verifier demanded, not stalls; the rejection-escalation gate owns repeated
+  rounds.
 - **Oscillation detection**: returning the frontier to a previously-abandoned
   blocker (owner / boundary / dominantReason) is classified `oscillating`, never
   theory support, and is treated as a stall that climbs the ladder. Surfaced as
@@ -710,6 +725,16 @@ The canonical diff does not silently omit new files. Mark an intended untracked
 path with `git add -N <path>` before capture; verification otherwise refuses the
 untracked path rather than approving an incomplete delta.
 
+A `test-receipt` harness receipt normally names a whole test file; a receipt
+may instead name exactly one test of a `node:test` file with an anchored
+`testNamePattern` (`^...$`), which the runtime runs in-process and records
+verbatim. The zero-test rule is fail-closed: a pattern that selects no test,
+more than one test (unless the receipt sets `allowMultiple`), or a failing
+test flips the receipt red — a typo can never go green. `solve start` (and
+`solve scaffold-harness`) writes a `scripts/quest-evidence-<id>.js` skeleton
+with one receipt per required id when a `test-receipt` quest has none, and
+lint warns while one is missing.
+
 Commit SHAs are useful in release notes, pull requests, or human audit trails,
 but they are not Solver truth. A SHA says where code landed; it does not prove
 which measured attempt moved the metric. The Solver therefore does not accept
@@ -813,7 +838,23 @@ defect is never waived), and repeating it requires widening the sealed bar
 first with `solve amend --kind verification-bar-expansion --template <slug>
 --evidence <verifier reference>`. Requirements discovered at verification time
 move into the declaration instead of extending an unbounded rejection
-sequence.
+sequence. A remark that is not a defect is recorded beside the findings as an
+observation (`--observation "<category>: <summary>"`, or `severity:
+"observation"` in a verdict file): it is kept verbatim on the finding event,
+may use any slug, and never enters the bar accounting. The rule is
+fail-closed: a rejection must carry at least one defect finding, so a defect
+cannot hide as an observation without the round being an approval.
+
+When a mint answers a standing candidate rejection whose review manifest is
+on record, the new manifest carries `reviewDelta`: per-path digests compared
+against the rejected manifest, the paths that changed and the paths that did
+not, the diff restricted to the changed paths
+(`solve/state/reviews/<prior>-to-<fingerprint>.delta.diff`), and the template
+categories that diff mechanically hits; each required template is annotated
+`deltaRelevance: delta | unchanged`. The bar is unchanged: the verifier still
+completes every required category. For a category the delta does not hit it
+may scope inspection to the delta plus the prior verdict's evidence, and must
+say so in that item's evidence file.
 
 A rejection is fail-closed and cannot be reversed by approving the rejected
 bytes later. It is resolved when a later source attempt produces a
@@ -842,12 +883,19 @@ attempts (recorded-reason override available): iterate no further under an
 unsealed bar — decompose the standing rejection or author a successor quest
 that seals `verificationTemplates` (measured 2026-07-27: a quest burned 14
 rejection rounds where its sealed-bar successor landed in 2 attempts). The
-supervised sealing paths also run a changed-path static gate (ESLint plus the
-literal-guideline audit) before sealing, so machine-checkable violations
-never spend a verifier round. Out-of-bar markers are append-only evidence,
+supervised sealing paths also run a changed-path static gate before sealing
+(ESLint, the literal-guideline, ambient-intrinsics, silent-catch, and
+decision-boundary audits, and the file-size and complexity admissions that
+block only a file or function the attempt itself pushes over its threshold),
+so machine-checkable violations never spend a verifier round; `solve
+preflight --id <id> --full` adds the whole-repo publish statics (duplication,
+unused exports, cycles, aggregate complexity) before the verifier round. Out-of-bar markers are append-only evidence,
 not a loophole: each distinct slug passes once, every use is durably
 recorded, and a repeat needs the bar-expansion amendment — which requires the
-category to be a catalogued verification template.
+category to be a catalogued verification template. Monotone amendments
+(`verification-bar-expansion`, `receipt-bar-strengthen`) only make the quest
+harder, so they carry their own lifetime cap of four and never spend one of
+the two corrections.
 
 An attempt whose recorded `workspaceBaseCommit` is a well-formed commit id that
 no longer resolves — an unpushed local commit discarded with its working copy —
@@ -1150,7 +1198,11 @@ Semantics:
 - An override authorizes **exactly one** subsequent bypass of the named guard on
   that frontier. The gate records an `ADVISORY` decision tagged with the reason
   and continues; the next time the same condition recurs, the guard applies
-  again unless a fresh override is recorded.
+  again unless a fresh override is recorded. The override is consumed when the
+  run it authorized records its attempt: a run that bypasses one gate and then
+  stops at a later gate leaves it unconsumed (the blocking decision is still
+  recorded), and the supervised commit reports every blocked gate of one run
+  together, each with its `override` command.
 - Overrides are **reset by honest progress**: the consumed/recorded accounting is
   measured since `lastProgressIndex`, mirroring `EXPLORE_BUDGET` and
   `GUARD_QUORUM`. Real movement clears the slate.

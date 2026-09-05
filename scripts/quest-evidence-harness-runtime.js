@@ -23,6 +23,26 @@ const EXIT_FAILED = 1;
 const SHELL_EXECUTABLE = '/bin/sh';
 const SHELL_COMMAND_FLAG = '-c';
 const DEFAULT_SHELL_TIMEOUT_MS = 600_000;
+const TEST_NAME_PATTERN_FLAG = '--test-name-pattern';
+// Forced: a harness run from inside node:test inherits NODE_TEST_CONTEXT and
+// the nested runner would otherwise emit the binary v8 reporter, not TAP.
+const TEST_REPORTER_ARGUMENT = '--test-reporter=tap';
+const NODE_TEST_CONTEXT_ENV = 'NODE_TEST_CONTEXT';
+const TAP_TESTS_LINE = /^# tests (\d+)$/mu;
+const TAP_FAIL_LINE = /^# fail (\d+)$/mu;
+const TAP_SKIPPED_LINE = /^# skipped (\d+)$/mu;
+const TAP_TODO_LINE = /^# todo (\d+)$/mu;
+const SKIPPED_OR_TODO_FAILURE =
+  'the selected test was skipped or marked todo (never counts as proof)';
+const ANCHORED_PATTERN = /^\^.*\$$/u;
+const UNANCHORED_PATTERN_ERROR_PREFIX =
+  'subtest receipt testNamePattern must be anchored ^...$: ';
+const ZERO_TESTS_FAILURE = 'the pattern selected zero tests';
+const TESTS_FAILED_SUFFIX = ' test(s) failed';
+const PASSED_REASON = 'passed';
+const MULTIPLE_TESTS_FAILURE_PREFIX = 'the pattern selected ';
+const MULTIPLE_TESTS_FAILURE_SUFFIX =
+  ' tests; anchor it to one or set allowMultiple';
 const OUTPUT_FLAG = '--output';
 const OUTPUT_FLAG_ASSIGNMENT_PREFIX = `${OUTPUT_FLAG}=`;
 const ARGV_COMMAND_OFFSET = 2;
@@ -71,6 +91,80 @@ function runReceipt(receipt) {
   }
 }
 
+// A subtest receipt runs exactly one named test of a node:test file
+// in-process (`node --test-name-pattern=... <file>`, no `--test`): the
+// `--test` runner counts the FILE as one passing test when the pattern
+// selects nothing, so only the in-process summary is honest about zero
+// selected tests. It bypasses the classified lanes (unit/witness files that
+// import node:test only). The honesty hole this closes: a pattern matching
+// nothing exits 0, so a typo would go green. The TAP summary is parsed and
+// the receipt fails on zero selected tests (and on more than one unless the
+// receipt sets allowMultiple), on any failing test, and on a non-zero exit.
+function subtestCommand(receipt) {
+  return `${process.execPath} ${TEST_REPORTER_ARGUMENT} ` +
+    `${TEST_NAME_PATTERN_FLAG}=${JSON.stringify(receipt.testNamePattern)} ` +
+    receipt.testFile;
+}
+
+// The TAP summary verdict: {passed, reason}. A summary that selected zero
+// tests, more than one (unless allowed), or any failing test is a failure
+// with a named reason; a clean summary is a pass with an empty reason.
+function classifySubtestSummary(receipt, stdout) {
+  const count = (pattern) => Number.parseInt((pattern.exec(stdout) || [])[1], 10);
+  const tests = count(TAP_TESTS_LINE);
+  const failed = count(TAP_FAIL_LINE);
+  const zeroSelected = !Number.isInteger(tests) || tests === 0;
+  const tooMany = tests > 1 && receipt.allowMultiple !== true;
+  const anyFailed = !Number.isInteger(failed) || failed > 0;
+  // A skipped or todo test ran nothing: the classified runner fails closed
+  // on those, and this lane must not be weaker than it.
+  const skippedOrTodo = count(TAP_SKIPPED_LINE) > 0 || count(TAP_TODO_LINE) > 0;
+  const reason = zeroSelected ? ZERO_TESTS_FAILURE :
+    tooMany ? `${MULTIPLE_TESTS_FAILURE_PREFIX}${tests}${MULTIPLE_TESTS_FAILURE_SUFFIX}` :
+      anyFailed ? `${failed}${TESTS_FAILED_SUFFIX}` :
+        skippedOrTodo ? SKIPPED_OR_TODO_FAILURE : PASSED_REASON;
+  return {passed: reason === PASSED_REASON, reason};
+}
+
+function runSubtestProcess(receipt) {
+  try {
+    const env = {...process.env};
+    delete env[NODE_TEST_CONTEXT_ENV];
+    const stdout = execFileSync(process.execPath, [
+      TEST_REPORTER_ARGUMENT,
+      `${TEST_NAME_PATTERN_FLAG}=${receipt.testNamePattern}`,
+      receipt.testFile,
+    ], {stdio: CHILD_STDIO_PIPE, encoding: UTF8_ENCODING, env});
+    return {stdout, exited: true, reason: PASSED_REASON};
+  } catch (error) {
+    return {
+      stdout: String(error?.stdout || ''),
+      exited: false,
+      reason: String(error?.stderr || error?.message || error),
+    };
+  }
+}
+
+function runSubtestReceipt(receipt) {
+  const command = subtestCommand(receipt);
+  if (!ANCHORED_PATTERN.test(String(receipt.testNamePattern))) {
+    throw new Error(
+      `${UNANCHORED_PATTERN_ERROR_PREFIX}${receipt.testNamePattern}`);
+  }
+  const run = runSubtestProcess(receipt);
+  const summary = classifySubtestSummary(receipt, run.stdout);
+  if (run.exited && summary.passed) {
+    return {id: receipt.id, passed: true, command, detail: receipt.detail};
+  }
+  return {
+    id: receipt.id,
+    passed: false,
+    command,
+    detail: receipt.detail,
+    failure: summary.passed ? run.reason : summary.reason,
+  };
+}
+
 // A shell receipt re-runs one recorded proof command verbatim (used when
 // the proof is not a focused test file — e.g. an example runner that must
 // exit naturally). A hang is a failure: the timeout kills the child and
@@ -109,7 +203,9 @@ function runShellReceipt(receipt) {
  * @param {Array<Object>} options.receipts frozen receipt declarations
  *   ({id, testFile, detail}); a receipt with a verbatim `command`
  *   string instead of `testFile` re-runs that shell command (with a
- *   timeout, so a hang is a failure) instead of a focused test file
+ *   timeout, so a hang is a failure) instead of a focused test file; a
+ *   receipt with `testNamePattern` (anchored ^...$) runs exactly one named
+ *   test of `testFile` through node:test and fails on zero selected tests
  * @return {void} exits non-zero when any receipt command fails
  */
 function runQuestEvidenceHarness(options) {
@@ -117,10 +213,13 @@ function runQuestEvidenceHarness(options) {
     options.outputFile,
     process.argv.slice(ARGV_COMMAND_OFFSET),
   );
-  const receipts = options.receipts.map((receipt) =>
-    typeof receipt.command === 'string' ?
-      runShellReceipt(receipt) :
-      runReceipt(receipt));
+  const receipts = options.receipts.map((receipt) => {
+    if (typeof receipt.command === 'string') return runShellReceipt(receipt);
+    if (typeof receipt.testNamePattern === 'string') {
+      return runSubtestReceipt(receipt);
+    }
+    return runReceipt(receipt);
+  });
   const status = receipts.every((r) => r.passed) ?
     STATUS_PASS :
     STATUS_FAIL;

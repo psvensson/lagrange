@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
@@ -121,6 +122,7 @@ const LOCAL_STR_PROBLEM_WORKFLOW_SCOPE =
   'workflow changes must be recorded in a workflow/Quest tooling Quest';
 const LOCAL_STR_PROBLEM_RUNTIME_SCOPE =
   'runtime changes must be recorded in a runtime Quest';
+const SCOPE_PROBLEM_PATH_SEPARATOR = ', ';
 const DIFF_PREFIX = 'diff:';
 const COMMIT_STORAGE_KIND = 'commit';
 const DIFF_EXTENSION = '.diff';
@@ -143,6 +145,9 @@ const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
   'state',
 ]);
 const SOLVE_EVIDENCE_SUBTREE = 'evidence';
+const SOLVE_QUESTS_SUBTREE = 'quests';
+const QUEST_FILE_SUFFIX = '.json';
+const OWNER_SUFFIX_SEPARATOR = '.';
 const SOLVE_EVIDENCE_PREFIX = `${SOLVE_DATA_DIR}/${SOLVE_EVIDENCE_SUBTREE}/`;
 const EVIDENCE_RECEIPT_SUFFIX = '.receipt.json';
 const PATH_SEPARATOR = '/';
@@ -420,6 +425,61 @@ export function isForeignQuestEvidence(filePath, questId) {
   return owner !== null && owner !== String(questId);
 }
 
+// Every declared quest id: solve/quests/<id>.json. Owner resolution below
+// matches a path against these ids (longest match), so a quest id that itself
+// contains dots (release-0.2-verification) or is a prefix of another id
+// (readiness-planning-generation-granularity vs -v2) resolves exactly.
+function declaredQuestIds(root) {
+  const questsDir = path.join(root, SOLVE_DATA_DIR, SOLVE_QUESTS_SUBTREE);
+  let entries;
+  try {
+    entries = fs.readdirSync(questsDir);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name.endsWith(QUEST_FILE_SUFFIX))
+    .map((name) => name.slice(0, name.length - QUEST_FILE_SUFFIX.length))
+    .filter((id) => id.length > 0)
+    .sort((left, right) => right.length - left.length);
+}
+
+// The declared quest that owns a solve/ bookkeeping path: solve/<subtree>/
+// <id>[.<suffix>|/...] for the bookkeeping subtrees (quests, log, evidence,
+// oracle, changes, artifacts). Null for shared planning documents
+// (solve/epics, solve/specs), for a name that is no declared quest id, or
+// for an ambiguous form — an unknown owner is never treated as foreign.
+export function bookkeepingOwnerQuestId(root, filePath) {
+  const normalized = normalizeSlash(filePath);
+  const prefix = `${SOLVE_DATA_DIR}/`;
+  if (!normalized.startsWith(prefix)) return null;
+  const rest = normalized.slice(prefix.length);
+  const separator = rest.indexOf(PATH_SEPARATOR);
+  if (separator === -1) return null;
+  const subtree = rest.slice(0, separator);
+  if (!SOLVE_BOOKKEEPING_SUBTREES.includes(subtree)) return null;
+  const name = rest.slice(separator + 1);
+  const ids = declaredQuestIds(root);
+  for (let index = 0; index < ids.length; index += 1) {
+    const id = ids[index];
+    if (!name.startsWith(id)) continue;
+    const next = name.charAt(id.length);
+    if (next === '' || next === OWNER_SUFFIX_SEPARATOR ||
+        next === PATH_SEPARATOR) return id;
+  }
+  return null;
+}
+
+// Another declared quest's bookkeeping (its quest file, log, evidence,
+// oracle, attempt diffs, artifacts) is never this quest's change. The
+// attempt capture excludes it, names it, and leaves it dirty in the tree.
+export function isForeignQuestBookkeeping(root, filePath, questId) {
+  if (typeof questId !== 'string' || questId.length === 0) return false;
+  if (isForeignQuestEvidence(filePath, questId)) return true;
+  const owner = bookkeepingOwnerQuestId(root, filePath);
+  return owner !== null && owner !== String(questId);
+}
+
 export function classifyPath(filePath) {
   const normalized = normalizeSlash(filePath);
   // Epic / planning memos under solve/ are decision documents, not Solver
@@ -571,6 +631,17 @@ function inspectCommitChangeArtifact(root, quest, changeRef, commitRef) {
   };
 }
 
+// A scope refusal names the paths that carried the offending scope, so the
+// operator sees which file to move or restore instead of guessing.
+function scopeProblemNamingPaths(problem, changedPaths, scope) {
+  const offending = changedPaths.filter((filePath) =>
+    classifyPath(filePath) === scope);
+  return offending.length === 0 ?
+    problem :
+    `${problem}: ${offending.join(SCOPE_PROBLEM_PATH_SEPARATOR)}`;
+}
+
+
 export function inspectChangeArtifact(root, quest, changeRef) {
   const commitRef = parseCommitChangeRef(changeRef);
   if (commitRef) {
@@ -616,11 +687,19 @@ export function inspectChangeArtifact(root, quest, changeRef) {
   }
   if (questScope !== QUEST_SCOPE_WORKFLOW &&
     categories.includes(QUEST_SCOPE_WORKFLOW)) {
-    problems.push(LOCAL_STR_PROBLEM_WORKFLOW_SCOPE);
+    problems.push(scopeProblemNamingPaths(
+      LOCAL_STR_PROBLEM_WORKFLOW_SCOPE,
+      scopeChangedPaths,
+      QUEST_SCOPE_WORKFLOW,
+    ));
   }
   if (questScope === QUEST_SCOPE_WORKFLOW &&
     categories.includes(QUEST_SCOPE_RUNTIME)) {
-    problems.push(LOCAL_STR_PROBLEM_RUNTIME_SCOPE);
+    problems.push(scopeProblemNamingPaths(
+      LOCAL_STR_PROBLEM_RUNTIME_SCOPE,
+      scopeChangedPaths,
+      QUEST_SCOPE_RUNTIME,
+    ));
   }
 
   return {

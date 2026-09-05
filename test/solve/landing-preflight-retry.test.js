@@ -20,6 +20,7 @@ const REQUIRED_INPUTS = [
   'test/shards/impact-graph-seal.json',
 ];
 const TIMEOUT_MS = 1234;
+const NO_LOAD_GATE = () => ({waitedMs: 0, load: 0, skipped: true});
 
 function fixtureRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-retry-'));
@@ -44,12 +45,28 @@ function spawnScript(results, calls) {
   };
 }
 
+tap.test('the load gate is consulted once, before the first spawn', (t) => {
+  const root = fixtureRoot();
+  const calls = [];
+  const gateCalls = [];
+  const spawn = spawnScript([{status: 0, stdout: '{}', stderr: ''}], calls);
+  const loadGate = () => {
+    gateCalls.push(calls.length);
+    return {waitedMs: 0, load: 1, skipped: false};
+  };
+  canonicalImportGraphProblem(root, TIMEOUT_MS, spawn, loadGate);
+  t.same(gateCalls, [0], 'the gate ran exactly once and saw no spawn yet');
+  t.equal(calls.length, 1, 'the verify spawned after the gate');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('a second timeout reports both timeouts after exactly one retry', (t) => {
   const root = fixtureRoot();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
   const calls = [];
   const spawn = spawnScript([timedOutResult(), timedOutResult()], calls);
-  const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn);
+  const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn, NO_LOAD_GATE);
   t.equal(calls.length, 2, 'the verify is retried exactly once');
   t.match(problem, /timed out twice/u, 'both timeouts are reported');
   t.match(problem, /1234/u, 'the timeout budget is named');
@@ -65,7 +82,7 @@ tap.test('a transient timeout followed by a real failure reports the failure',
       timedOutResult(),
       {status: 1, signal: null, stdout: '', stderr: 'seal digest mismatch'},
     ], calls);
-    const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn);
+    const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn, NO_LOAD_GATE);
     t.equal(calls.length, 2, 'the retry ran');
     t.match(problem, /seal digest mismatch/u,
       'the retry outcome is reported verbatim');
@@ -79,7 +96,7 @@ tap.test('a non-timeout failure is never retried', (t) => {
   const spawn = spawnScript([
     {status: 1, signal: null, stdout: '', stderr: 'graph is stale'},
   ], calls);
-  const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn);
+  const problem = canonicalImportGraphProblem(root, TIMEOUT_MS, spawn, NO_LOAD_GATE);
   t.equal(calls.length, 1, 'no retry for a deterministic failure');
   t.match(problem, /graph is stale/u);
   t.end();

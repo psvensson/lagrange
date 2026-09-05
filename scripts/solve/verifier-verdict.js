@@ -47,6 +47,13 @@ const REQUIRED_VERDICT_FIELDS = Object.freeze([
   'completedTemplateItems', 'findings', 'externalReceiptRef',
 ]);
 const REQUIRED_FINDING_FIELDS = Object.freeze(['category', 'summary']);
+const SEVERITY_FIELD = 'severity';
+const OPTIONAL_FINDING_FIELDS = Object.freeze([SEVERITY_FIELD]);
+const FINDING_SEVERITY_DEFECT = 'defect';
+const FINDING_SEVERITIES = Object.freeze([FINDING_SEVERITY_DEFECT, 'observation']);
+const REJECTION_DEFECT_PROBLEM =
+  'land: a reject verdict requires at least one defect finding; findings ' +
+  'that are all observations describe an approval';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const objectHasOwn = Object.hasOwn;
@@ -183,23 +190,49 @@ function validateTemplateItems(root, value, requiredTemplates) {
   return completed;
 }
 
+function validSeverity(finding) {
+  return !objectHasOwn(finding, SEVERITY_FIELD) ||
+    arrayIncludes(FINDING_SEVERITIES, finding.severity);
+}
+
+// One finding, normalized: exactly category + summary (+ optional severity),
+// a slug category, a concrete summary. Throws the shape problem otherwise.
+function normalizeFinding(finding) {
+  if (!ownKeysExactly(finding, REQUIRED_FINDING_FIELDS,
+    OPTIONAL_FINDING_FIELDS) ||
+    !regExpTest(CATEGORY_PATTERN, String(finding.category || '')) ||
+    typeof finding.summary !== 'string' ||
+    stringTrim(finding.summary).length < MINIMUM_FINDING_SUMMARY_LENGTH ||
+    !validSeverity(finding)) {
+    throw new Error(FINDING_SHAPE_PROBLEM);
+  }
+  return {category: finding.category,
+    summary: stringTrim(finding.summary),
+    ...(objectHasOwn(finding, SEVERITY_FIELD) ?
+      {severity: finding.severity} : {})};
+}
+
+function isDefectFinding(finding) {
+  return finding.severity === undefined ||
+    finding.severity === FINDING_SEVERITY_DEFECT;
+}
+
+// A rejection needs findings, and at least one of them a defect: a defect
+// cannot hide as an observation, because a rejection whose findings are all
+// observations is refused outright.
+function assertRejectionFindings(findings, verdict) {
+  if (verdict !== VERDICT_REJECT) return;
+  if (findings.length === 0) throw new Error(REJECTION_FINDINGS_PROBLEM);
+  if (!findings.some(isDefectFinding)) throw new Error(REJECTION_DEFECT_PROBLEM);
+}
+
 function validateFindings(value, verdict) {
   if (!isDenseDataArray(value)) throw new Error(FINDINGS_ARRAY_PROBLEM);
   const findings = [];
   for (let index = 0; index < value.length; index += 1) {
-    const finding = value[index];
-    if (!ownKeysExactly(finding, REQUIRED_FINDING_FIELDS) ||
-      !regExpTest(CATEGORY_PATTERN, String(finding.category || '')) ||
-      typeof finding.summary !== 'string' ||
-      stringTrim(finding.summary).length < MINIMUM_FINDING_SUMMARY_LENGTH) {
-      throw new Error(FINDING_SHAPE_PROBLEM);
-    }
-    arrayPush(findings, {category: finding.category,
-      summary: stringTrim(finding.summary)});
+    arrayPush(findings, normalizeFinding(value[index]));
   }
-  if (verdict === VERDICT_REJECT && findings.length === 0) {
-    throw new Error(REJECTION_FINDINGS_PROBLEM);
-  }
+  assertRejectionFindings(findings, verdict);
   return findings;
 }
 

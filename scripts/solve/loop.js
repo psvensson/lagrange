@@ -133,6 +133,7 @@ import {
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
   createRunAuthorizations,
+  commitRunAuthorizations,
 } from './gate.js';
 import {
   REJECTION_ESCALATION_GUIDANCE,
@@ -404,6 +405,9 @@ function applyAttempt(root, quest, ctx, pick, before, runAuthorizations = null) 
       }
     }
   }
+  // The cycle's held bypasses are charged only now, before the attempt they
+  // authorized is recorded; a cycle that stopped earlier charged nothing.
+  commitRunAuthorizations(root, quest.id, runAuthorizations);
   finalizeAttempt(root, quest, ctx, pick, before, {
     ...result,
     workspaceBaseCommit,

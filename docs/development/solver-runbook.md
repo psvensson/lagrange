@@ -54,7 +54,11 @@ npm run publish
 It runs the pre-push gate against the exact committed `HEAD` in a clean temporary
 worktree, checks that the gate did not mutate tracked content, pushes without
 force, verifies the remote SHA, prints the CI URL when available, and stores a
-HEAD-bound receipt below the Git common directory.
+HEAD-bound receipt below the Git common directory. The gate reads the caller
+worktree's `node_modules` and gitignored `data/` through symlinks; publish
+prints `publish: linking node_modules -> ..., data -> ...` first and fails fast
+when `data/` is absent (a fresh quest worktree: `ln -s <main>/data data`, run
+the MovieLens fetch, or pass `--allow-missing-data` deliberately).
 
 If the exact push repairs the current red main, attribute that exception:
 
@@ -111,7 +115,11 @@ node scripts/solve.js new --id my-quest \
 node scripts/solve.js lint --id my-quest
 ```
 
-Useful authoring flags are `--class product|process`, `--plan-doc`,
+A `test-receipt` draft gets its evidence harness skeleton
+(`scripts/quest-evidence-<id>.js`, one placeholder per required receipt id)
+from `solve start`, or explicitly from `solve scaffold-harness --id <id>`;
+fill each placeholder's test file or anchored test name before the receipts
+can pass. Useful authoring flags are `--class product|process`, `--plan-doc`,
 `--parent-quest`, `--roadmap-row`, `--spec-ref`, repeatable `--closes-cl`, and
 `--inherit-rulesout-from`. New drafts carry `authoringContractVersion: 1` and
 `links.draftedAtCommit`. They are sealed only when the first execution command
@@ -165,6 +173,20 @@ node scripts/solve.js checkpoint --id my-quest --dry-run --reason milestone
 node scripts/solve.js next --id my-quest --json
 ```
 
+When `continue` refuses with "source epoch changed reviewed path(s) in an
+intervening commit" and the intervening commits are already on `origin/main`,
+rebase or merge the branch, then record the boundary with
+`node scripts/solve.js rebase-epoch --id my-quest --to HEAD --reason "<why>"`
+and follow `next`: it demands one covering attempt at the new base over the
+retired epoch's paths. Reseal (park + `new --from`) only when the quest's
+statement or bar must change.
+
+Before requesting the verifier round on a terminal candidate, run
+`node scripts/solve.js preflight --id my-quest --full`: the default preflight
+is cheap and read-only; `--full` adds the publish-gate statics (duplication,
+unused exports, cycles, aggregate complexity) that no earlier Solver stage
+runs, so a ratchet miss costs one edit instead of a gate run.
+
 The dry run must say the candidate will be checkpoint-landable after one exact
 approval. Give its common-base/current-union dossier and applicable templates to
 an independent verifier, then record the exact candidate verdict:
@@ -186,14 +208,22 @@ Routine work skips this section entirely and goes straight to terminal review.
 
 ## Foreign Dirty Files And Commits Under A Lease
 
-The attempt capture sweeps the working tree, so files another Quest dirtied
-must never be left in place when an attempt is recorded: restore another
-Quest's regenerated receipt or the frontier board with
-`git checkout -- <path>` before `continue --summary`. Never set aside a Quest's
-own `solve/log/` file by checking it out — the log is append-only and the
-events are lost. Record the attempt before committing anything else while a
-step is pending; a commit between begin-step and record-attempt moves the
-attempt base away from the step pin and the candidate becomes unlandable.
+The attempt capture sweeps the working tree. Another declared Quest's
+bookkeeping (its quest file, evidence receipt, dep-scope note, oracle, or
+attempt diffs under its own `solve/` id) is excluded from the capture
+automatically and named on stdout
+(`auto-diff: excluded another quest's bookkeeping from the attempt: ...`);
+it stays dirty in the tree, untouched. The owner is resolved against the
+declared ids under `solve/quests/`, so an undeclared name is never treated
+as foreign and stays inside the attempt. Shared planning documents
+(`solve/epics/`, `solve/specs/`) have no owner: a shared spec edit still
+refuses a product Quest and the refusal names the path. Restore such a
+shared file with `git checkout -- <path>` before `continue --summary`. Never
+set aside a Quest's own `solve/log/` file by checking it out — the log is
+append-only and the events are lost. Record the attempt before committing
+anything else while a step is pending; a commit between begin-step and
+record-attempt moves the attempt base away from the step pin and the
+candidate becomes unlandable.
 
 While this worktree holds a Quest lease the pre-commit hook refuses any
 source-changing commit that the Quest has not authorized
@@ -229,6 +259,12 @@ node scripts/solve.js handoff --id my-quest --commit
 Terminal handoff requires the terminal state, aggregate approval when
 applicable, a passing full audit, and scope-pressure admission. The dry run
 lists both included and excluded dirty paths. No Solver command pushes.
+
+The landing preflight's import-graph verify (~22 s idle, 30 s budget, one
+retry) waits for one-minute load headroom before it spawns (`load-gate:` lines
+on stderr; skip with `LAGRANGE_SKIP_LOAD_GATE=1`); a machine that stays loaded
+still runs the verify and reports the timeout with the
+`LAGRANGE_IMPORT_GRAPH_VERIFY_TIMEOUT_MS` knob.
 
 ## Autonomous Mode
 

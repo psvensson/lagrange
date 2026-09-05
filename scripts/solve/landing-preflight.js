@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {importClosureGaps} from './import-closure.js';
+import {waitForLoadHeadroomSync} from '../checks/wait-for-load-headroom.js';
 import {staticQualityProblems} from './static-gate.js';
 import {
   assertRunnableProofSelection,
@@ -45,7 +46,19 @@ const IMPORT_GRAPH_PRODUCER_PATH =
   'scripts/generate-global-owner-debt-inventory.js';
 const IMPORT_GRAPH_VERIFY_ARGUMENT = '--verify-import-graph';
 const IMPORT_GRAPH_REFRESH_ARGUMENT = '--refresh-import-graph-only';
-const IMPORT_GRAPH_VERIFY_TIMEOUT_MS = 30_000;
+// Default 30 s (measured ~22 s idle); LAGRANGE_IMPORT_GRAPH_VERIFY_TIMEOUT_MS
+// raises it on a machine known to be slow.
+const IMPORT_GRAPH_VERIFY_TIMEOUT_ENV = 'LAGRANGE_IMPORT_GRAPH_VERIFY_TIMEOUT_MS';
+const IMPORT_GRAPH_VERIFY_DEFAULT_TIMEOUT_MS = 30_000;
+function resolveImportGraphVerifyTimeout(env = process.env) {
+  const configured = Number.parseInt(env[IMPORT_GRAPH_VERIFY_TIMEOUT_ENV], 10);
+  return Number.isInteger(configured) && configured > 0 ?
+    configured : IMPORT_GRAPH_VERIFY_DEFAULT_TIMEOUT_MS;
+}
+const IMPORT_GRAPH_VERIFY_TIMEOUT_MS = resolveImportGraphVerifyTimeout();
+const IMPORT_GRAPH_TIMEOUT_HINT =
+  ' (measured ~22 s idle; the landing waited for load headroom first - ' +
+  `raise ${IMPORT_GRAPH_VERIFY_TIMEOUT_ENV} or retry when the machine is quiet)`;
 const IMPORT_GRAPH_VERIFY_KILL_SIGNAL = 'SIGKILL';
 const IMPORT_GRAPH_REFRESH_TIMEOUT_MS = 30_000;
 const CANONICAL_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
@@ -228,9 +241,13 @@ function importGraphVerifyTimedOut(result) {
 
 // `spawn` is injectable for tests only; production callers use spawnSync.
 export function canonicalImportGraphProblem(
-  root, timeout = IMPORT_GRAPH_VERIFY_TIMEOUT_MS, spawn = spawnSync) {
+  root, timeout = IMPORT_GRAPH_VERIFY_TIMEOUT_MS, spawn = spawnSync,
+  loadGate = waitForLoadHeadroomSync) {
   const requiredProblem = requiredImportGraphProblem(root);
   if (requiredProblem) return requiredProblem;
+  // Stage the verify behind load headroom: the 30 s budget was sized for an
+  // idle machine, and a timeout under load reads like a producer defect.
+  loadGate();
   const producer = path.join(root, IMPORT_GRAPH_PRODUCER_PATH);
   const spawnArguments = [producer, IMPORT_GRAPH_VERIFY_ARGUMENT];
   const spawnOptions = {
@@ -249,7 +266,7 @@ export function canonicalImportGraphProblem(
     if (importGraphVerifyTimedOut(result)) {
       return `${IMPORT_GRAPH_PROBLEM_PREFIX}` +
         `${IMPORT_GRAPH_TIMEOUT_RETRY_NOTE}${timeout}` +
-        IMPORT_GRAPH_TIMEOUT_UNIT_SUFFIX;
+        IMPORT_GRAPH_TIMEOUT_UNIT_SUFFIX + IMPORT_GRAPH_TIMEOUT_HINT;
     }
   }
   if (result.status !== 0) {
@@ -276,6 +293,8 @@ export function prepareCandidateProofInputs(candidateRoot, ambientRoot = null) {
   copyAmbientProofInput(ambientRoot, candidateRoot, IMPORT_GRAPH_PATH);
   copyAmbientProofInput(ambientRoot, candidateRoot, IMPORT_GRAPH_SEAL_PATH);
   const producer = path.join(candidateRoot, IMPORT_GRAPH_PRODUCER_PATH);
+  // The refresh shares the verify's 30 s budget and the same load sensitivity.
+  waitForLoadHeadroomSync();
   const result = spawnSync(process.execPath, [
     producer, IMPORT_GRAPH_REFRESH_ARGUMENT,
   ], {

@@ -363,6 +363,7 @@ tap.test('solve CLI smoke (P2)', async (t) => {
       findings: [{
         category: 'correctness',
         summary: 'paired values were not compared before publication',
+        severity: 'defect',
       }],
     });
     fs.rmSync(root, {recursive: true, force: true});

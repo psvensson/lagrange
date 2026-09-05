@@ -49,6 +49,8 @@ import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
 import {runPreflightCommand} from './solve/preflight.js';
+import {scaffoldQuestHarness} from './solve/harness-scaffold.js';
+import {runRebaseEpochCommand} from './solve/epoch-rebase.js';
 import {runReattemptCommand} from './solve/reattempt.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
@@ -87,9 +89,11 @@ import {
   VERIFIER_REJECTION_FINDING_KIND,
 } from './solve/verification.js';
 import {
+  FINDING_SEVERITY_OBSERVATION,
   parseRejectionFindings,
   rejectionFindingBarProblem,
   REJECTION_FINDING_USAGE,
+  requireDefectFinding,
 } from './solve/rejection-findings.js';
 import {recordRejectionDecomposition} from './solve/rejection-decomposition.js';
 import {
@@ -104,6 +108,14 @@ const REVIEW_FINGERPRINT_PROBLEM =
 const REVIEW_FINGERPRINT_SEALED = ' (sealed ';
 const REVIEW_FINGERPRINT_NONE = 'none';
 const REVIEW_FINGERPRINT_CLOSE = ')';
+const PREFLIGHT_FULL_HINT_PREFIX = 'preflight: node scripts/solve.js preflight --id ';
+const SCAFFOLD_NOTICE_PREFIX = 'scaffolded evidence harness: ';
+const SCAFFOLD_ID_REQUIRED = 'scaffold-harness: --id <questId> is required';
+const SCAFFOLD_SKIPPED_PREFIX =
+  'scaffold-harness: nothing written (not a test-receipt quest, or the ' +
+  'harness already exists): ';
+const PREFLIGHT_FULL_HINT_SUFFIX =
+  ' --full  # publish statics before the verifier round';
 const ATTEMPT_DONE_SUFFIX = ' DONE';
 const REJECTION_REVIEW_REQUIRED_PROBLEM =
   'verifier-rejection requires --review <reviewId> once a review has been ' +
@@ -371,7 +383,17 @@ function renderFacadeResult(command, result) {
       `no (${result.commit?.skipped || 'unknown'})`}`);
   }
   if (result.review?.id) lines.push(`review: ${result.review.id}`);
-  if (result.review?.file) lines.push(`review-manifest: ${result.review.file}`);
+  if (result.review?.file) {
+    lines.push(`review-manifest: ${result.review.file}`);
+    if (result.review.delta) lines.push(result.review.delta);
+    // A minted review is the moment before the verifier round: name the
+    // publish-statics preflight so a ratchet miss costs one edit, not a round.
+    const questId = result.next?.action?.payload?.questId || null;
+    if (questId) {
+      lines.push(
+        `${PREFLIGHT_FULL_HINT_PREFIX}${questId}${PREFLIGHT_FULL_HINT_SUFFIX}`);
+    }
+  }
   if (result.lint?.status) lines.push(`lint: ${result.lint.status}`);
   if (next) {
     lines.push(`next [${next.code || 'unstructured'}]: ${next.value || '(none)'}`);
@@ -424,7 +446,29 @@ function cmdStart(root, args) {
     }
     cmdNew(root, {...args, id, quiet: true});
   }
+  // A test-receipt quest without its harness gets the skeleton here, before
+  // the first execution command seals it: never overwrites, never seals.
+  const scaffold = scaffoldQuestHarness(root, loadQuest(root, id));
+  if (scaffold.created) {
+    process.stdout.write(`${SCAFFOLD_NOTICE_PREFIX}${scaffold.path}\n`);
+  }
   writeFacadeResult('start', args, startQuestWorkflow(root, {...args, id, doctor}));
+}
+
+function cmdRebaseEpoch(root, args) {
+  const id = args.id || args._[0];
+  if (id) enforceQuestLease(root, id);
+  process.stdout.write(`${runRebaseEpochCommand(root, args)}\n`);
+  refreshFrontierBoard(root);
+}
+
+function cmdScaffoldHarness(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error(SCAFFOLD_ID_REQUIRED);
+  const scaffold = scaffoldQuestHarness(root, loadQuest(root, id));
+  process.stdout.write(scaffold.created ?
+    `${SCAFFOLD_NOTICE_PREFIX}${scaffold.path}\n` :
+    `${SCAFFOLD_SKIPPED_PREFIX}${scaffold.path}\n`);
 }
 
 function cmdContinue(root, args) {
@@ -656,13 +700,18 @@ function cmdFinding(root, args) {
   // A rejection must carry its category-complete finding list durably; a
   // pointer-only claim satisfies every downstream consumer mechanically while
   // carrying zero content (measured 2026-07-27).
-  const rejectionFindings = kind === VERIFIER_REJECTION_FINDING_KIND ?
-    parseRejectionFindings(args.finding) : [];
+  const rejectionFindings = kind === VERIFIER_REJECTION_FINDING_KIND ? [
+    ...parseRejectionFindings(args.finding),
+    ...parseRejectionFindings(args.observation,
+      {severity: FINDING_SEVERITY_OBSERVATION}),
+  ] : [];
   if (kind === VERIFIER_REJECTION_FINDING_KIND) {
     if (rejectionFindings.length === 0) {
       throw new Error(
         `finding: verifier-rejection requires ${REJECTION_FINDING_USAGE}`);
     }
+    const defectProblem = requireDefectFinding(rejectionFindings);
+    if (defectProblem) throw new Error(`finding: ${defectProblem}`);
     const barProblem = rejectionFindingBarProblem(
       quest, readLog(root, id), rejectionFindings);
     if (barProblem) throw new Error(`finding: ${barProblem}`);
@@ -1444,6 +1493,8 @@ const COMMANDS = {
   'inherit-candidate': cmdInheritCandidate,
   'correct-attempt-base': cmdCorrectAttemptBase,
   'preflight': cmdPreflight,
+  'scaffold-harness': cmdScaffoldHarness,
+  'rebase-epoch': cmdRebaseEpoch,
   'reattempt': cmdReattempt,
 };
 

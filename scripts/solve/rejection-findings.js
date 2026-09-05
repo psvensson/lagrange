@@ -23,9 +23,16 @@ import {
   applyAmendments,
   questAmendments,
 } from './amend.js';
-import {EVENT_FINDING, EVENT_QUEST_DECLARED} from './constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_FINDING,
+  EVENT_QUEST_DECLARED,
+  EVENT_REJECTION_DECOMPOSITION,
+} from './constants.js';
 
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
+const CANDIDATE_VERIFICATION_SCOPES = Object.freeze(['candidate', 'both']);
 const CATEGORY_SEPARATOR = ':';
 const CATEGORY_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
 // Below this, a "summary" is a token, not a finding — the same floor the
@@ -34,6 +41,15 @@ const MIN_SUMMARY_LENGTH = 12;
 const LOCAL_STR_OWNED_001 = 'out-of-bar:';
 const PATH_SEPARATOR = ', ';
 const CATEGORY_PLACEHOLDER = '<category>';
+const SEVERITY_DEFECT = 'defect';
+const SEVERITY_OBSERVATION = 'observation';
+const FINDING_SEVERITIES = Object.freeze([SEVERITY_DEFECT, SEVERITY_OBSERVATION]);
+const LOCAL_STR_OWNED_003 =
+  '--observation "<category>: <what was noticed>" (repeatable; recorded ' +
+  'verbatim, never counted toward the sealed bar)';
+const ALL_OBSERVATIONS_PROBLEM =
+  'a rejection must carry at least one defect finding; a round whose ' +
+  'findings are all observations is an approval, not a rejection';
 const REPEAT_REQUIRES_EXPANSION =
   'once; a repeat requires expanding the sealed bar: ';
 const EXPANSION_EVIDENCE_SUFFIX =
@@ -50,13 +66,17 @@ const LOCAL_STR_OWNED_002 =
   'a kebab-case slug, out-of-bar:<slug> for a category outside the sealed bar)';
 export const OUT_OF_BAR_PREFIX = LOCAL_STR_OWNED_001;
 export const REJECTION_FINDING_USAGE = LOCAL_STR_OWNED_002;
+export const FINDING_SEVERITY_DEFECT = SEVERITY_DEFECT;
+export const FINDING_SEVERITY_OBSERVATION = SEVERITY_OBSERVATION;
+export const REJECTION_ALL_OBSERVATIONS_PROBLEM = ALL_OBSERVATIONS_PROBLEM;
+export const OBSERVATION_FINDING_USAGE = LOCAL_STR_OWNED_003;
 
 function normalizeRawFindings(raw) {
   if (raw === undefined || raw === null || raw === true) return [];
   return Array.isArray(raw) ? raw : [raw];
 }
 
-function parseOneRejectionFinding(value) {
+function parseOneRejectionFinding(value, severity = SEVERITY_DEFECT) {
   const text = String(value || '');
   // The out-of-bar marker contains the separator character, so the
   // category/summary split searches after it.
@@ -75,14 +95,65 @@ function parseOneRejectionFinding(value) {
       `${REJECTION_FINDING_USAGE}, with a summary of at least ` +
       `${MIN_SUMMARY_LENGTH} characters`);
   }
-  return {category, summary};
+  return {category, summary, severity};
 }
 
-// `--finding` values -> [{category, summary}]. Throws on any malformed entry;
-// an empty list is returned (not an error) so callers own the "at least one"
-// rule with their own command name in the message.
-export function parseRejectionFindings(raw) {
-  return normalizeRawFindings(raw).map(parseOneRejectionFinding);
+// Attempt indices recorded while a candidate rejection stood on the frontier:
+// after a verifier-rejection finding and before the next approval or a
+// decomposition that discharges every remaining path. A verifier demanded
+// those attempts, so a stall detector must not read them as the Solver
+// shuffling the same blocker; the escalation gate owns repeated rounds.
+export function attemptIndicesUnderStandingRejection(log, frontierId) {
+  const indices = new Set();
+  let standing = false;
+  (log || []).forEach((event, index) => {
+    if (event.frontier !== frontierId) return;
+    if (event.type === EVENT_REJECTION_DECOMPOSITION &&
+      Array.isArray(event.remainingPaths) &&
+      event.remainingPaths.length === 0) {
+      standing = false;
+      return;
+    }
+    if (event.type === EVENT_FINDING && event.verification) {
+      if (event.kind === VERIFIER_APPROVAL_FINDING_KIND) standing = false;
+      if (event.kind === VERIFIER_REJECTION_FINDING_KIND &&
+        CANDIDATE_VERIFICATION_SCOPES.includes(event.verification.scope)) {
+        standing = true;
+      }
+      return;
+    }
+    if (event.type === EVENT_ATTEMPT && standing) indices.add(index);
+  });
+  return indices;
+}
+
+// `--finding` values -> [{category, summary, severity}]. Throws on any
+// malformed entry; an empty list is returned (not an error) so callers own
+// the "at least one" rule with their own command name in the message.
+// `--observation` values parse the same way with severity `observation`: a
+// remark the verifier wants on the record that is NOT a defect. Observations
+// never enter the sealed-bar accounting, and a rejection must still carry a
+// defect (requireDefectFinding), so a defect cannot hide as an observation.
+export function parseRejectionFindings(raw, options = {}) {
+  const severity = options.severity || SEVERITY_DEFECT;
+  if (!FINDING_SEVERITIES.includes(severity)) {
+    throw new Error(`finding severity "${severity}" is not one of ` +
+      FINDING_SEVERITIES.join(PATH_SEPARATOR));
+  }
+  return normalizeRawFindings(raw).map((value) =>
+    parseOneRejectionFinding(value, severity));
+}
+
+// Fail closed: only an explicit `observation` is not a defect; an absent or
+// unrecognised severity counts as a defect and enters the bar accounting.
+export function isDefectFinding(finding) {
+  return Boolean(finding) && finding.severity !== SEVERITY_OBSERVATION;
+}
+
+// Null when at least one finding is a defect; otherwise the fail-closed
+// problem. Callers prefix their own command name.
+export function requireDefectFinding(findings) {
+  return (findings || []).some(isDefectFinding) ? null : ALL_OBSERVATIONS_PROBLEM;
 }
 
 // The effective sealed bar: declaration ⊕ bar-expansion amendments. Reads the
@@ -106,6 +177,7 @@ function priorOutOfBarCategories(log) {
     const findings = event.verification?.findings;
     if (!Array.isArray(findings)) continue;
     for (const finding of findings) {
+      if (!isDefectFinding(finding)) continue;
       const category = String(finding?.category || '');
       if (category.startsWith(OUT_OF_BAR_PREFIX)) {
         seen.add(category.slice(OUT_OF_BAR_PREFIX.length));
@@ -123,6 +195,7 @@ export function rejectionFindingBarProblem(quest, log, findings) {
   if (bar.size === 0) return null;
   const priorOutOfBar = priorOutOfBarCategories(log);
   for (const finding of findings) {
+    if (!isDefectFinding(finding)) continue;
     const category = String(finding.category || '');
     if (bar.has(category)) continue;
     if (!category.startsWith(OUT_OF_BAR_PREFIX)) {

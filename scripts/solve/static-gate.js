@@ -21,6 +21,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {fileSizeAdmissionProblems} from './file-size-admission.js';
+import {complexityAdmissionProblems} from './complexity-admission.js';
 
 // Only trees the repository's lint configuration actually covers (`lint` and
 // `lint:scripts`); gating an unlinted tree would manufacture false blocks.
@@ -29,11 +30,17 @@ const ESLINT_BIN_SEGMENTS = ['node_modules', 'eslint', 'bin', 'eslint.js'];
 const LITERALS_CHECK_SEGMENTS = ['scripts', 'check-guideline-literals.js'];
 const AMBIENT_INTRINSICS_CHECK_SEGMENTS =
   ['scripts', 'check-guideline-ambient-intrinsics.js'];
+const SILENT_CATCH_CHECK_SEGMENTS =
+  ['scripts', 'check-guideline-silent-catch.js'];
+const DECISION_BOUNDARIES_CHECK_SEGMENTS =
+  ['scripts', 'check-guideline-decision-boundaries.js'];
 const OUTPUT_LINE_LIMIT = 20;
 const SPAWN_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const ESLINT_LABEL = 'eslint';
 const LITERALS_LABEL = 'literal-guideline audit';
 const AMBIENT_INTRINSICS_LABEL = 'ambient-intrinsics audit';
+const SILENT_CATCH_LABEL = 'silent-catch audit';
+const DECISION_BOUNDARIES_LABEL = 'decision-boundaries audit';
 const LINE_SEPARATOR = '\n';
 const ESLINT_ARGUMENTS = Object.freeze(
   ['--no-warn-ignored', '--no-error-on-unmatched-pattern']);
@@ -88,6 +95,10 @@ export function staticQualityProblems(root, changedPaths, options = {}) {
     // without one (no admission base to compare against) skip it.
     ...(options.baseCommit ?
       fileSizeAdmissionProblems(root, options.baseCommit, jsPaths) : []),
+    // The attempt-time projection of the publish-gate complexity ratchets:
+    // only a function the candidate pushes over its threshold blocks.
+    ...(options.baseCommit ?
+      complexityAdmissionProblems(root, options.baseCommit, jsPaths) : []),
     ...runChecker(
       root,
       ESLINT_LABEL,
@@ -108,6 +119,23 @@ export function staticQualityProblems(root, changedPaths, options = {}) {
       root,
       AMBIENT_INTRINSICS_LABEL,
       path.join(root, ...AMBIENT_INTRINSICS_CHECK_SEGMENTS),
+      [],
+      jsPaths,
+    ),
+    // The two pre-commit checkers that first bit at landing (rounds 5 and 6
+    // of one quest on 2026-09-05); both accept a file list and their
+    // baselines, so a changed-path run reports only new violations.
+    ...runChecker(
+      root,
+      SILENT_CATCH_LABEL,
+      path.join(root, ...SILENT_CATCH_CHECK_SEGMENTS),
+      [],
+      jsPaths,
+    ),
+    ...runChecker(
+      root,
+      DECISION_BOUNDARIES_LABEL,
+      path.join(root, ...DECISION_BOUNDARIES_CHECK_SEGMENTS),
       [],
       jsPaths,
     ),

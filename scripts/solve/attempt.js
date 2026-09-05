@@ -30,6 +30,7 @@ import {
   decisionContinues,
   candidateRejectionFingerprintsSinceApproval,
   createRunAuthorizations,
+  commitRunAuthorizations,
 } from './gate.js';
 import {staticQualityProblems} from './static-gate.js';
 import {
@@ -275,6 +276,9 @@ export function runAttemptCommand(root, args) {
       changedPathCount: (changeInspection.changedPaths || []).length,
     },
   };
+  // Charge the bypasses this run held only now, before the attempt they
+  // authorized is recorded.
+  commitRunAuthorizations(root, quest.id, runAuthorizations);
   const outcome = finalizeAttempt(root, quest, ctx, pick, before, attemptResult);
 
   // 5. Ingest evidence automatically

@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {questHarnessMissing, questHarnessPath} from './harness-scaffold.js';
 
 import {loadQuest} from './store.js';
 import {questClass} from './closure-kind.js';
@@ -17,6 +18,9 @@ import {
 } from './constants.js';
 
 const LOCAL_STR_OWNED_001 = 'statement must be a concrete terminal result predicate';
+const HARNESS_MISSING_PREFIX = 'no evidence harness at ';
+const HARNESS_MISSING_SUFFIX =
+  '; run solve scaffold-harness (or solve start) to write the skeleton';
 const LOCAL_STR_OWNED_002 = '|';
 const LOCAL_STR_OWNED_003 = 'constraints must be an array';
 const LOCAL_STR_OWNED_004 = 'every constraint requires non-empty id and statement strings';
@@ -187,11 +191,22 @@ function authoringWarnings(quest) {
   return warnings;
 }
 
+// A test-receipt quest without its evidence harness cannot regenerate its
+// receipt; `solve start` scaffolds one, so this stays a warning, not an error.
+function harnessWarnings(quest, options) {
+  if (!options?.root || !questHarnessMissing(options.root, quest)) return [];
+  return [`${HARNESS_MISSING_PREFIX}${questHarnessPath(quest.id)}` +
+    HARNESS_MISSING_SUFFIX];
+}
+
 export function lintQuest(quest, options = {}) {
   const version = quest?.authoringContractVersion;
   const legacy = version === undefined;
   const errors = legacy ? [] : authoringErrors(quest, options);
-  const warnings = authoringWarnings(quest);
+  const warnings = [
+    ...authoringWarnings(quest),
+    ...(legacy ? [] : harnessWarnings(quest, options)),
+  ];
   return {
     questId: quest?.id || null,
     authoringContractVersion: legacy ? null : version,

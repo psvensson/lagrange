@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  FINDING_SEVERITY_OBSERVATION,
   parseRejectionFindings,
   rejectionFindingBarProblem,
+  requireDefectFinding,
   sealedVerificationTemplates,
   OUT_OF_BAR_PREFIX,
 } from '../../scripts/solve/rejection-findings.js';
@@ -51,16 +53,35 @@ tap.test('parseRejectionFindings parses and fails closed', (t) => {
   t.same(parseRejectionFindings(undefined), []);
   t.same(
     parseRejectionFindings('correctness: totals were collapsed by pollution'),
-    [{category: 'correctness', summary: 'totals were collapsed by pollution'}]);
+    [{category: 'correctness', summary: 'totals were collapsed by pollution',
+      severity: 'defect'}]);
   t.same(parseRejectionFindings([
     'adversarial-js-intrinsics: inherited toJSON changed the digest output',
     'out-of-bar:dimensional-consistency: zero lookups still charged one lookup',
   ]), [
     {category: 'adversarial-js-intrinsics',
-      summary: 'inherited toJSON changed the digest output'},
+      summary: 'inherited toJSON changed the digest output',
+      severity: 'defect'},
     {category: `${OUT_OF_BAR_PREFIX}dimensional-consistency`,
-      summary: 'zero lookups still charged one lookup'},
+      summary: 'zero lookups still charged one lookup',
+      severity: 'defect'},
   ]);
+  t.same(parseRejectionFindings('naming: the helper name is longer than needed',
+    {severity: FINDING_SEVERITY_OBSERVATION}),
+  [{category: 'naming', summary: 'the helper name is longer than needed',
+    severity: FINDING_SEVERITY_OBSERVATION}],
+  '--observation parses with the observation severity');
+  t.throws(() => parseRejectionFindings('naming: long enough summary here',
+    {severity: 'remark'}), /severity "remark"/u);
+  t.equal(requireDefectFinding([
+    {category: 'naming', summary: 'remark', severity: FINDING_SEVERITY_OBSERVATION},
+    {category: 'correctness', summary: 'a defect', severity: 'defect'},
+  ]), null, 'one defect satisfies the fail-closed rule');
+  t.match(requireDefectFinding([
+    {category: 'naming', summary: 'remark', severity: FINDING_SEVERITY_OBSERVATION},
+  ]), /at least one defect finding/u, 'all observations is not a rejection');
+  t.equal(requireDefectFinding([{category: 'legacy', summary: 'no severity'}]),
+    null, 'a legacy finding without severity is a defect');
   t.throws(() => parseRejectionFindings('no separator here'), /not usable/u);
   t.throws(() => parseRejectionFindings('correctness: short'), /not usable/u);
   t.throws(() => parseRejectionFindings('Bad Category: long enough summary'),
@@ -116,6 +137,18 @@ tap.test('bar problems: in-bar passes, out-of-bar passes once, repeat refused', 
   t.equal(rejectionFindingBarProblem(QUEST, expandedLog, [
     {category: 'dimensional-consistency', summary: 'still mischarged after fix'},
   ]), null, 'the expanded bar admits the category directly');
+  const observed = {category: 'dimensional-consistency',
+    summary: 'zero lookups mischarged', severity: FINDING_SEVERITY_OBSERVATION};
+  t.equal(rejectionFindingBarProblem(QUEST, log, [
+    {category: 'adversarial-js-intrinsics', summary: 'polluted Array iterator'},
+    observed,
+  ]), null, 'an observation may use any slug without the out-of-bar prefix');
+  t.equal(rejectionFindingBarProblem(QUEST, declaredLog([
+    rejectionEvent([observed]),
+  ]), [
+    {category: `${OUT_OF_BAR_PREFIX}dimensional-consistency`,
+      summary: 'now a real defect'},
+  ]), null, 'a prior observation never counts as the one out-of-bar record');
   const unsealed = {...QUEST, verificationTemplates: undefined};
   t.equal(rejectionFindingBarProblem(unsealed, [], [
     {category: 'anything-goes', summary: 'free-form category without a bar'},

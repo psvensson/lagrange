@@ -13,6 +13,13 @@ import {
   landingRequirementsReceipt,
 } from '../../scripts/solve/landing-requirements.js';
 import {loadVerifierVerdict} from '../../scripts/solve/verifier-verdict.js';
+import {
+  candidatePathDigests,
+  computeReviewPathDelta,
+  reviewDeltaFor,
+  reviewDeltaSummary,
+  reviewIdFor,
+} from '../../scripts/solve/review-request.js';
 
 function tmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -196,6 +203,74 @@ tap.test('sealed landing evidence declares identity before it exists and binds b
     t.end();
   });
 
+tap.test('review delta is a pure digest comparison that names unchanged paths', (t) => {
+  const prior = {'src/a.js': 'sha256:aa', 'src/b.js': 'sha256:bb'};
+  t.same(computeReviewPathDelta(prior,
+    {'src/a.js': 'sha256:aa', 'src/b.js': 'sha256:b2', 'src/c.js': 'sha256:cc'}),
+  {changedPaths: ['src/b.js', 'src/c.js'], unchangedPaths: ['src/a.js']},
+  'an equal digest is unchanged; a new or different one is changed');
+  t.same(computeReviewPathDelta(null, {'src/a.js': 'sha256:aa'}),
+    {changedPaths: ['src/a.js'], unchangedPaths: []},
+    'no prior digests means everything changed');
+  t.end();
+});
+
+tap.test('review delta freezes per-path digests, names unchanged paths, and ' +
+  'writes the delta diff once', (t) => {
+  const root = tmp('review-delta-');
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const git = (args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
+  git(['init', '-q']);
+  git(['config', 'user.email', 'solver@example.com']);
+  git(['config', 'user.name', 'Solver']);
+  git(['config', 'commit.gpgsign', 'false']);
+  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'src', 'a.js'), 'export const a = 1;\n');
+  fs.writeFileSync(path.join(root, 'src', 'b.js'), 'export const b = 1;\n');
+  git(['add', '-A']);
+  git(['commit', '-q', '-m', 'base']);
+  const baseCommit = git(['rev-parse', 'HEAD']);
+  const paths = ['src/a.js', 'src/b.js'];
+  fs.writeFileSync(path.join(root, 'src', 'a.js'), 'export const a = 2;\n');
+  fs.writeFileSync(path.join(root, 'src', 'b.js'), 'export const b = 2;\n');
+  const priorDigests = candidatePathDigests(root, {baseCommit, paths});
+  t.match(priorDigests['src/a.js'], /^sha256:[0-9a-f]{64}$/u);
+  // The rejected round's manifest, on record with its digests.
+  const priorManifest = {schemaVersion: 4, questId: 'delta-quest',
+    candidate: {fingerprint: `sha256:${'a'.repeat(64)}`, baseCommit, paths,
+      pathDigests: priorDigests}};
+  const priorReviewId = reviewIdFor(priorManifest);
+  fs.mkdirSync(path.join(root, 'solve', 'state', 'reviews'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'solve', 'state', 'reviews',
+    `${priorReviewId}.json`), `${JSON.stringify({id: priorReviewId,
+    createdAt: 'now', manifest: priorManifest})}\n`);
+  const log = [{type: 'finding', kind: 'verifier-rejection',
+    verification: {scope: 'candidate', fingerprint: priorManifest.candidate.fingerprint,
+      reviewEnvelope: {reviewId: priorReviewId},
+      findings: [{category: 'correctness', summary: 'b was wrong', severity: 'defect'}]}}];
+  // Only b changes since the rejected round.
+  fs.writeFileSync(path.join(root, 'src', 'b.js'), 'export const b = 3;\n');
+  const currentDigests = candidatePathDigests(root, {baseCommit, paths});
+  t.equal(currentDigests['src/a.js'], priorDigests['src/a.js'], 'a is unchanged');
+  t.not(currentDigests['src/b.js'], priorDigests['src/b.js'], 'b changed');
+  const candidate = {baseCommit, paths, fingerprint: `sha256:${'b'.repeat(64)}`};
+  const delta = reviewDeltaFor(root, log, candidate, currentDigests);
+  t.equal(delta.priorReviewId, priorReviewId);
+  t.equal(delta.priorCandidateFingerprint, priorManifest.candidate.fingerprint);
+  t.same(delta.priorRejectionFindingCategories, ['correctness']);
+  t.same(delta.changedPaths, ['src/b.js']);
+  t.same(delta.unchangedPaths, ['src/a.js']);
+  const deltaDiff = fs.readFileSync(path.join(root, delta.deltaDiffPath), 'utf8');
+  t.match(deltaDiff, /\+export const b = 3;/u);
+  t.notMatch(deltaDiff, /src\/a\.js/u, 'the delta diff carries only b');
+  t.ok(Array.isArray(delta.deltaTemplateHits));
+  t.match(reviewDeltaSummary(delta),
+    /^review delta: 1 changed \/ 1 unchanged paths since review-/u);
+  t.equal(reviewDeltaFor(root, [], candidate, currentDigests), null,
+    'no standing rejection, no delta');
+  t.end();
+});
+
 tap.test('verdict ingestion refuses links, excess fields, and missing evidence', (t) => {
   const root = tmp('verdict-boundary-');
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
@@ -224,6 +299,25 @@ tap.test('verdict ingestion refuses links, excess fields, and missing evidence',
   t.throws(() => loadVerifierVerdict(root, 'verdict.json', review),
     /failed solver-verifier-verdict\/1 validation/iu,
     'review-owned fingerprint cannot be injected by the verdict');
+  const observation = {category: 'naming', severity: 'observation',
+    summary: 'the helper name could be shorter'};
+  const defect = {category: 'harness-fidelity', severity: 'defect',
+    summary: 'the seal check is skipped on the second path'};
+  fs.writeFileSync(path.join(root, 'verdict.json'), JSON.stringify(
+    {...value, verdict: 'reject', findings: [observation, defect]}));
+  t.same(loadVerifierVerdict(root, 'verdict.json', review).findings,
+    [observation, defect], 'severity is accepted and carried verbatim');
+  fs.writeFileSync(path.join(root, 'verdict.json'), JSON.stringify(
+    {...value, verdict: 'reject', findings: [observation]}));
+  t.throws(() => loadVerifierVerdict(root, 'verdict.json', review),
+    /at least one defect finding/iu,
+    'a reject verdict whose findings are all observations is refused');
+  fs.writeFileSync(path.join(root, 'verdict.json'), JSON.stringify(
+    {...value, verdict: 'reject',
+      findings: [{...defect, severity: 'remark'}]}));
+  t.throws(() => loadVerifierVerdict(root, 'verdict.json', review),
+    /findings require category and a concrete summary/iu,
+    'an unknown severity fails the finding shape');
   fs.rmSync(path.join(root, 'verdict.json'));
   fs.symlinkSync('evidence.txt', path.join(root, 'verdict.json'));
   t.throws(() => loadVerifierVerdict(root, 'verdict.json', review),

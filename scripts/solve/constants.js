@@ -67,6 +67,9 @@ export const EVENT_REFLECTION = 'reflection';
 // Append-only; the rejection stays reported until the union of recorded
 // coverage plus the current candidate reaches every rejected path.
 export const EVENT_REJECTION_DECOMPOSITION = 'rejection-decomposition';
+// rebase-epoch: the recorded boundary that retires a source epoch whose base
+// drifted behind origin/main; retired attempts never count as verification.
+export const EVENT_EPOCH_REBASED = 'epoch-rebased';
 // After this many distinct rejected candidate fingerprints on one frontier
 // with no intervening approval, further attempts are gated: reframe
 // (successor quest / decomposition) instead of iterating under an unsealed

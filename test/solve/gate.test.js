@@ -11,6 +11,7 @@ import {
   softFirstWouldDefer,
   decisionContinues,
   createRunAuthorizations,
+  commitRunAuthorizations,
 } from '../../scripts/solve/gate.js';
 import {
   CONTINUATION_ALLOWED,
@@ -434,9 +435,16 @@ tap.test('recorded-reason override escape hatch', async (t) => {
     t.equal(second.disposition, DISPOSITION_ADVISORY, 'second site reuses the run authorization');
     t.equal(second.reusedRunAuthorization, true, 'reuse is marked');
     t.equal(second.override, 'whole run', 'carries the recorded reason');
+    t.equal(readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.override).length, 0,
+    'the consuming record is deferred until the run records its attempt');
+    t.equal(commitRunAuthorizations(root, QUEST.id, runAuthorizations), 1,
+      'the run owner flushes one consuming record');
     const recorded = readLog(root, QUEST.id).filter((e) =>
       e.type === EVENT_GATE_DECISION && e.override);
     t.equal(recorded.length, 1, 'exactly ONE consuming gate-decision is recorded for the run');
+    t.equal(commitRunAuthorizations(root, QUEST.id, runAuthorizations), 0,
+      'a second flush charges nothing');
     // A NEW run (fresh map) sees the consumed override and blocks.
     const nextRun = resolveGateDecision(
       root,
@@ -447,6 +455,79 @@ tap.test('recorded-reason override escape hatch', async (t) => {
     );
     t.equal(nextRun.disposition, DISPOSITION_EXPLORE,
       'the next run re-fires the real guard (no silent double-charge, no free ride)');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('deferred consumption is not charged when the run aborts: a run ' +
+    'that bypasses one gate and stops at a later one leaves the override ' +
+    'active', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'aborted run')];
+    const problems = ['frontier theory required'];
+    const aborted = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, problems),
+      {log, frontier: FRONTIER, rungIndex: 1,
+        runAuthorizations: createRunAuthorizations()},
+    );
+    t.equal(aborted.disposition, DISPOSITION_ADVISORY, 'the run bypasses');
+    // The run stops here (a later gate blocked it) and never flushes.
+    t.equal(readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.override).length, 0,
+    'nothing was charged');
+    const corrected = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, problems),
+      {log: [...log, ...readLog(root, QUEST.id)], frontier: FRONTIER,
+        rungIndex: 1, runAuthorizations: createRunAuthorizations()},
+    );
+    t.equal(corrected.disposition, DISPOSITION_ADVISORY,
+      'the corrected run still bypasses under the same override');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a problem-targeted override is not widened by the family join ' +
+    'at a later site of the same run', (t) => {
+    const root = tmp();
+    const log = [{
+      type: EVENT_GUARD_OVERRIDE, frontier: FRONTIER,
+      code: CONTINUATION_BLOCKED_THEORY, problem: 'for demo-main',
+      reason: 'targeted',
+    }];
+    const runAuthorizations = createRunAuthorizations();
+    const first = resolveGateDecision(root, QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY,
+        ['frontier theory required for demo-main']),
+      {log, frontier: FRONTIER, rungIndex: 1, runAuthorizations});
+    t.equal(first.disposition, DISPOSITION_ADVISORY, 'the targeted site bypasses');
+    const later = resolveGateDecision(root, QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY,
+        ['frontier theory required at rung 2']),
+      {log: [...log, ...readLog(root, QUEST.id)], frontier: FRONTIER,
+        rungIndex: 1, runAuthorizations});
+    t.not(later.disposition, DISPOSITION_ADVISORY,
+      'a same-family problem without the substring stays gated');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a legacy caller without a run map still consumes immediately', (t) => {
+    const root = tmp();
+    const log = [overrideEvent(CONTINUATION_BLOCKED_THEORY, 'legacy')];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY);
+    t.equal(readLog(root, QUEST.id).filter((e) =>
+      e.type === EVENT_GATE_DECISION && e.override).length, 1,
+    'the consuming record is written at once');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

@@ -36,8 +36,35 @@ function fixture(hookBody = 'cat >/dev/null\nexit 0') {
   git(root, ['push', '-u', 'origin', 'main']);
   fs.writeFileSync(path.join(root, 'tracked.txt'), 'two\n');
   git(root, ['commit', '-am', 'publish exact head']);
+  // The gitignored dataset tree the gate links; its absence is a fail-fast.
+  fs.mkdirSync(path.join(root, 'data'));
   return {parent, root, remote};
 }
+
+tap.test('publish fails fast when data/ is absent and names the links', (t) => {
+  const {parent, root, remote} = fixture();
+  const before = git(remote, ['rev-parse', 'refs/heads/main']);
+  fs.rmSync(path.join(root, 'data'), {recursive: true, force: true});
+  const lines = [];
+  const log = (line) => lines.push(line);
+  t.throws(() => publishExactHead(root, {}, {queryCi: false, log}),
+    /publish: data\/ is absent in .*--allow-missing-data/u,
+    'a fresh worktree without the dataset stops before the gate');
+  t.match(lines.join(''),
+    /publish: linking node_modules -> \(absent\), data -> \(absent\)/u,
+    'the notice names every link the gate would make');
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), before,
+    'nothing was pushed');
+  t.equal(fs.existsSync(path.join(root, 'test-output', 'publish-worktrees')),
+    false, 'no gate worktree was created');
+  lines.length = 0;
+  publishExactHead(root, {allowMissingData: true}, {queryCi: false, log});
+  t.match(lines.join(''), /data -> \(absent\)/u);
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']),
+    git(root, ['rev-parse', 'HEAD']), '--allow-missing-data publishes');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
 
 tap.test('publish validates runner and red-main attribution without mutation', (t) => {
   t.equal(validatePublishRequest({

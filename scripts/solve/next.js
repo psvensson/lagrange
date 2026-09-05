@@ -253,6 +253,22 @@ function nextAction({questId, state, pending, gateStop, blocker,
       payload: {questId, phase},
     });
   }
+  // A rebased epoch demands one covering attempt at the rebased base before
+  // anything else can land; the payload names the base and the paths.
+  if (verification.epochRebase?.missingPaths?.length > 0) {
+    const phase = pending ? 'commit' : 'begin';
+    return typedNextAction(pending ?
+      pendingCommitCommand(questId, pending) :
+      continueCommand(questId), {
+      code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
+      payload: {
+        questId,
+        phase,
+        bases: [verification.epochRebase.event.toBase],
+        requiredPaths: verification.epochRebase.missingPaths,
+      },
+    });
+  }
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
     return terminalQuestAction(questId, verification, audit);
   }

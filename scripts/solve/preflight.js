@@ -14,6 +14,10 @@
 // the landing machinery has no standing refusal, not that every staged
 // byte passes the commit hook.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+
 import {auditQuest} from './audit.js';
 import {readLog} from './store.js';
 import {untrackedSourcePaths} from './auto-diff.js';
@@ -39,6 +43,25 @@ const SECTION_UNTRACKED = 'untracked-intent';
 const SECTION_GENERATED = 'generated-outputs';
 const SECTION_FILE_SIZE = 'file-size';
 const SECTION_TEMPLATES = 'review-templates';
+const SECTION_PUBLISH_STATIC = 'publish-static';
+const FULL_FLAG = 'full';
+const PUBLISH_STATIC_SKIPPED_NOTE =
+  'publish statics not run: pass --full to run the duplication, unused-export, ' +
+  'circular-dependency, and complexity ratchets the publish gate enforces';
+const PUBLISH_STATIC_OUTPUT_LINE_LIMIT = 12;
+const PUBLISH_STATIC_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const PUBLISH_STATIC_CHECKS = Object.freeze([
+  Object.freeze({label: 'duplication ratchet',
+    segments: ['scripts', 'check-duplication.js']}),
+  Object.freeze({label: 'unused-export ratchet',
+    segments: ['scripts', 'check-unused-exports.js']}),
+  Object.freeze({label: 'circular-dependency ratchet',
+    segments: ['scripts', 'check-circular-dependencies.js']}),
+  Object.freeze({label: 'complexity ratchet',
+    segments: ['scripts', 'check-complexity.js']}),
+  Object.freeze({label: 'cognitive complexity ratchet',
+    segments: ['scripts', 'check-cognitive-complexity.js']}),
+]);
 const HEAD_BASE = 'HEAD';
 const LINE_SEPARATOR = '\n';
 const SECTION_PROBLEM_SUFFIX = ' problem(s)';
@@ -100,6 +123,30 @@ function generatedOutputProblemMessages(root, quest, log) {
   return {problems, notes: []};
 }
 
+// The publish-gate statics no Solver stage runs before the push (measured
+// 2026-09-04/05: complexity, duplication, and unused-export misses each cost
+// a 13-25 minute gate run). Whole-repo and slow (~2 min), so opt-in.
+function publishStaticProblemMessages(root) {
+  const problems = [];
+  for (const check of PUBLISH_STATIC_CHECKS) {
+    const script = path.join(root, ...check.segments);
+    if (!fs.existsSync(script)) continue;
+    const result = spawnSync(process.execPath, [script], {cwd: root,
+      encoding: 'utf8', maxBuffer: PUBLISH_STATIC_MAX_BUFFER_BYTES});
+    if (result.error) {
+      problems.push(`${check.label} could not run: ${result.error.message}`);
+      continue;
+    }
+    if (result.status === 0) continue;
+    const lines = `${result.stdout || ''}${LINE_SEPARATOR}${result.stderr || ''}`
+      .split(LINE_SEPARATOR).map((line) => line.trimEnd()).filter(Boolean);
+    const shown = lines.slice(-PUBLISH_STATIC_OUTPUT_LINE_LIMIT);
+    problems.push(`${check.label} failed:${LINE_SEPARATOR}` +
+      shown.join(LINE_SEPARATOR));
+  }
+  return problems;
+}
+
 function fileSizeProblemMessages(root) {
   const dirty = workingSourceDelta(root).paths;
   if (dirty.length === 0) return [];
@@ -119,9 +166,12 @@ function templateNotes(root, quest, log) {
       TEMPLATE_SOURCE_CLOSE);
 }
 
-export function preflightReport(root, quest) {
+export function preflightReport(root, quest, options = {}) {
   const log = readLog(root, quest.id);
   const generated = generatedOutputProblemMessages(root, quest, log);
+  const publishStatic = options.full ?
+    {problems: publishStaticProblemMessages(root), notes: []} :
+    {problems: [], notes: [PUBLISH_STATIC_SKIPPED_NOTE]};
   const sections = [
     {name: SECTION_AUDIT, problems: auditProblemMessages(root, quest),
       notes: []},
@@ -135,6 +185,8 @@ export function preflightReport(root, quest) {
       notes: []},
     {name: SECTION_TEMPLATES, problems: [],
       notes: templateNotes(root, quest, log)},
+    {name: SECTION_PUBLISH_STATIC, problems: publishStatic.problems,
+      notes: publishStatic.notes},
   ];
   const problemCount = sections
     .reduce((count, section) => count + section.problems.length, 0);
@@ -172,6 +224,6 @@ export function runPreflightCommand(root, args, loadQuest) {
   const id = args.id || args._[0];
   if (!id) throw new Error(PREFLIGHT_ID_REQUIRED);
   const quest = loadQuest(root, id);
-  const report = preflightReport(root, quest);
+  const report = preflightReport(root, quest, {full: args[FULL_FLAG] === true});
   return {output: renderPreflightReport(quest, report), ok: report.ok};
 }

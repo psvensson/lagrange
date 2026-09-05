@@ -34,6 +34,7 @@ import {
 import {
   activeSourceEpoch,
   baseRecordedButUnreachable,
+  baseRetiredByEpochRebase,
   resolveWorkspaceBaseCommit,
   verificationState,
 } from './verification.js';
@@ -89,23 +90,29 @@ function resolveHeadPin(root) {
 
 // Begin-time pin: a replacement is pinned to the rejected attempt's base so
 // the rejection stays binding, else the active epoch base, else HEAD.
+// The base a standing rejection on this frontier pins a replacement to:
+// the candidate rejection's receipt base, else the rejected attempt's base.
+function standingRejectionBase(verification, frontierId) {
+  const candidateRejection = verification.unresolvedCandidateRejection;
+  if (candidateRejection?.event?.frontier === frontierId &&
+    candidateRejection.receipt?.baseCommit) {
+    return candidateRejection.receipt.baseCommit;
+  }
+  const unresolvedRejection = verification.unresolvedRejectedAttempts
+    .find(({attempt}) => attempt.event.frontier === frontierId);
+  return unresolvedRejection?.attempt.event.workspaceBaseCommit || null;
+}
+
 export function resolveStepBaseCommit(root, quest, log, frontierId) {
   const verification = verificationState(root, quest, log);
-  const unresolvedRejection = verification
-    .unresolvedRejectedAttempts
-    .find(({attempt}) => attempt.event.frontier === frontierId);
-  const candidateRejection = verification.unresolvedCandidateRejection;
-  const rejectedBase = (
-    candidateRejection?.event?.frontier === frontierId ?
-      candidateRejection.receipt?.baseCommit :
-      null
-  ) || unresolvedRejection?.attempt.event.workspaceBaseCommit;
-  // Pinning to a base that no longer resolves would refuse the replacement
-  // before it could be recorded. The live-base coverage rule in
-  // findApprovedRejectionReplacement accepts a reachable-base replacement for
-  // exactly this case, so the pin falls back to HEAD only when the recorded
-  // base is a well-formed commit id that cannot resolve.
-  if (rejectedBase && baseRecordedButUnreachable(root, rejectedBase)) {
+  const rejectedBase = standingRejectionBase(verification, frontierId);
+  // Pinning to a base that no longer resolves — or one a rebase-epoch
+  // retired — would refuse the replacement before it could be recorded. The
+  // live-base coverage rule in findApprovedRejectionReplacement accepts a
+  // reachable-base replacement for exactly this case, so the pin falls back
+  // to HEAD then.
+  if (rejectedBase && (baseRecordedButUnreachable(root, rejectedBase) ||
+    baseRetiredByEpochRebase(log, rejectedBase))) {
     return resolveHeadPin(root);
   }
   const epoch = activeSourceEpoch(root, quest, log);

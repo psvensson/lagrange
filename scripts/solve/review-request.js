@@ -13,7 +13,10 @@ import {landingReviewPreflight} from './landing-preflight.js';
 import {prepareCandidateProofInputs} from './landing-preflight.js';
 import {landingRequirementsReceipt} from './landing-requirements.js';
 import {generatedDependencyReceiptInSnapshot} from './generated-dependencies.js';
-import {questContractExcludesCollateral} from './verification.js';
+import {
+  canonicalSourceDelta,
+  questContractExcludesCollateral,
+} from './verification.js';
 import {withCandidateSnapshot} from './candidate-snapshot.js';
 import {sealedVerificationTemplates} from './rejection-findings.js';
 import {
@@ -24,7 +27,27 @@ import {readLog} from './store.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
-const SCHEMA_VERSION = 3;
+// Schema 4: candidate.pathDigests and reviewDelta (the machine-frozen delta
+// of a rejected round, so a re-verification round reads two paths, not 49).
+const SCHEMA_VERSION = 4;
+const DELTA_DIFF_SUFFIX = '.delta.diff';
+const DELTA_ID_SEPARATOR = '-to-';
+const DELTA_FINGERPRINT_SHORT_LENGTH = 12;
+const SHA256_ALGORITHM = 'sha256';
+const SHA256_PREFIX = 'sha256:';
+const HEX_ENCODING = 'hex';
+const DELTA_RELEVANCE_DELTA = 'delta';
+const DELTA_RELEVANCE_UNCHANGED = 'unchanged';
+const VERIFIER_REJECTION_KIND = 'verifier-rejection';
+const FINDING_EVENT_TYPE = 'finding';
+const REVIEW_FILE_EXTENSION = '.json';
+const DELTA_LIST_SEPARATOR = ', ';
+const VERIFIER_APPROVAL_KIND = 'verifier-approval';
+const CANDIDATE_SCOPES = Object.freeze(['candidate', 'both']);
+const GIT_DIFF_ARGUMENTS = Object.freeze(
+  ['diff', '--binary', '--full-index', '--no-ext-diff']);
+const PATH_SEPARATOR_ARGUMENT = '--';
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 const TEXT_ENCODING = 'utf8';
 const MISSING_CANDIDATE_FINGERPRINT = 'missing candidate fingerprint';
@@ -64,6 +87,157 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 
 function sortedCopy(values) {
   return arraySort(arraySlice(values || []));
+}
+
+// One digest per candidate path over the same canonical diff the fingerprint
+// hashes, so a later mint can name exactly which paths changed since a
+// rejected round without comparing candidate bytes.
+export function candidatePathDigests(root, candidate) {
+  const digests = {};
+  const paths = sortedCopy(candidate.paths);
+  for (let index = 0; index < paths.length; index += 1) {
+    const result = spawnSync('git', [
+      ...GIT_DIFF_ARGUMENTS, candidate.baseCommit, PATH_SEPARATOR_ARGUMENT,
+      paths[index],
+    ], {cwd: root, encoding: TEXT_ENCODING, maxBuffer: GIT_MAX_BUFFER_BYTES});
+    if (result.status !== 0) continue;
+    digests[paths[index]] = SHA256_PREFIX + crypto
+      .createHash(SHA256_ALGORITHM)
+      .update(String(result.stdout || ''))
+      .digest(HEX_ENCODING);
+  }
+  return digests;
+}
+
+// Pure: which candidate paths changed since the prior manifest's digests.
+export function computeReviewPathDelta(priorDigests, currentDigests) {
+  const changedPaths = [];
+  const unchangedPaths = [];
+  const paths = sortedCopy(Object.keys(currentDigests || {}));
+  for (let index = 0; index < paths.length; index += 1) {
+    const filePath = paths[index];
+    if (priorDigests && priorDigests[filePath] === currentDigests[filePath]) {
+      arrayPush(unchangedPaths, filePath);
+    } else {
+      arrayPush(changedPaths, filePath);
+    }
+  }
+  return {changedPaths, unchangedPaths};
+}
+
+// The standing candidate rejection this mint answers: the latest
+// verifier-rejection since the last approval, resolved to its review manifest
+// through the recorded review envelope or, failing that, the manifest whose
+// candidate fingerprint the rejection named.
+function standingCandidateRejection(log) {
+  let rejection = null;
+  for (let index = 0; index < (log || []).length; index += 1) {
+    const event = log[index];
+    if (event.type !== FINDING_EVENT_TYPE || !event.verification) continue;
+    if (event.kind === VERIFIER_APPROVAL_KIND) rejection = null;
+    if (event.kind === VERIFIER_REJECTION_KIND &&
+      arrayIncludes(CANDIDATE_SCOPES, event.verification.scope)) {
+      rejection = event;
+    }
+  }
+  return rejection;
+}
+
+// The review ids a rejection may refer to: its recorded envelope, else every
+// manifest on record (an older rejection recorded without --review).
+function candidateReviewIds(root, rejection) {
+  const envelopeId = rejection.verification.reviewEnvelope?.reviewId || null;
+  if (envelopeId) return [envelopeId];
+  const directory = path.join(root, REVIEW_DIRECTORY);
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory)
+    .map((name) => name.replace(REVIEW_FILE_EXTENSION, ''))
+    .filter((reviewId) => regExpTest(REVIEW_ID_PATTERN, reviewId));
+}
+
+function loadReviewRequestOrNull(root, reviewId) {
+  try {
+    return loadReviewRequest(root, reviewId);
+  } catch {
+    return null;
+  }
+}
+
+function priorRejectedReview(root, log) {
+  const rejection = standingCandidateRejection(log);
+  if (!rejection) return null;
+  const reviewIds = candidateReviewIds(root, rejection);
+  for (let index = 0; index < reviewIds.length; index += 1) {
+    const request = loadReviewRequestOrNull(root, reviewIds[index]);
+    if (request?.manifest.candidate?.fingerprint ===
+      rejection.verification.fingerprint) {
+      return {reviewId: reviewIds[index], manifest: request.manifest,
+        findingCategories: sortedCopy((rejection.verification.findings || [])
+          .map((finding) => finding.category))};
+    }
+  }
+  return null;
+}
+
+function deltaDiffRelativePath(priorReviewId, candidate) {
+  const short = stringSlice(String(candidate.fingerprint || '')
+    .replace(SHA256_PREFIX, ''), 0, DELTA_FINGERPRINT_SHORT_LENGTH);
+  return path.posix.join(REVIEW_DIRECTORY,
+    `${priorReviewId}${DELTA_ID_SEPARATOR}${short}${DELTA_DIFF_SUFFIX}`);
+}
+
+// The frozen delta of a rejected round: per-path digest comparison against
+// the prior manifest, the diff restricted to the changed paths (written once,
+// content-addressed by prior review and candidate fingerprint), and the
+// template categories that diff mechanically hits. Informational: the
+// verifier still completes every required category.
+export function reviewDeltaFor(root, log, candidate, pathDigests) {
+  const prior = priorRejectedReview(root, log);
+  if (!prior || !prior.manifest.candidate?.pathDigests) return null;
+  const {changedPaths, unchangedPaths} = computeReviewPathDelta(
+    prior.manifest.candidate.pathDigests, pathDigests);
+  const delta = changedPaths.length > 0 ?
+    canonicalSourceDelta(root, candidate.baseCommit, changedPaths) : null;
+  const deltaContent = delta?.ok ? delta.content || '' : '';
+  const deltaDiffPath = deltaDiffRelativePath(prior.reviewId, candidate);
+  const absolute = path.join(root, deltaDiffPath);
+  if (!fs.existsSync(absolute)) {
+    fs.mkdirSync(path.dirname(absolute), {recursive: true});
+    fs.writeFileSync(absolute, deltaContent, TEXT_ENCODING);
+  }
+  const deltaTemplateHits = sortedCopy(
+    suggestVerificationTemplates(root, deltaContent)
+      .map((suggestion) => suggestion.category));
+  return {
+    priorReviewId: prior.reviewId,
+    priorCandidateFingerprint: prior.manifest.candidate.fingerprint,
+    priorRejectionFindingCategories: prior.findingCategories,
+    changedPaths,
+    unchangedPaths,
+    deltaDiffPath,
+    deltaTemplateHits,
+  };
+}
+
+function annotateDeltaRelevance(templates, reviewDelta) {
+  if (!reviewDelta) return templates;
+  const hit = new Set([
+    ...reviewDelta.deltaTemplateHits,
+    ...reviewDelta.priorRejectionFindingCategories,
+  ]);
+  return templates.map((template) => ({
+    ...template,
+    deltaRelevance: hit.has(template.category) ?
+      DELTA_RELEVANCE_DELTA : DELTA_RELEVANCE_UNCHANGED,
+  }));
+}
+
+export function reviewDeltaSummary(reviewDelta) {
+  if (!reviewDelta) return null;
+  return `review delta: ${reviewDelta.changedPaths.length} changed / ` +
+    `${reviewDelta.unchangedPaths.length} unchanged paths since ` +
+    `${reviewDelta.priorReviewId}; templates hit by the delta: ` +
+    `[${reviewDelta.deltaTemplateHits.join(DELTA_LIST_SEPARATOR)}]`;
 }
 
 function receipt(projection) {
@@ -169,12 +343,16 @@ function currentReviewManifest(root, quest, state, suppliedLog) {
     sourcePaths: state.aggregate.paths,
   }, (candidateRoot) => {
     prepareCandidateProofInputs(candidateRoot, root);
+    const log = suppliedLog || readLog(root, quest.id);
+    const pathDigests = candidatePathDigests(root, state.candidate);
+    const reviewDelta = reviewDeltaFor(root, log, state.candidate, pathDigests);
     const base = {
       schemaVersion: SCHEMA_VERSION,
       questId: quest.id,
       coupledPairRegistryDigest: coupledPairRegistryDigest(root),
-      candidate: receipt(state.candidate),
+      candidate: {...receipt(state.candidate), pathDigests},
       aggregate,
+      ...(reviewDelta ? {reviewDelta} : {}),
       sourceEpoch: sourceEpoch(root, aggregate),
       landingRequirements: landingRequirementsReceipt(root, quest),
       generatedDependencies: generatedDependencyReceiptInSnapshot(candidateRoot, {
@@ -188,8 +366,8 @@ function currentReviewManifest(root, quest, state, suppliedLog) {
       ...(questContractExcludesCollateral(quest) ? {
         collateralContract: true,
       } : {}),
-      requiredReviewTemplates: requiredReviewTemplates(
-        root, quest, state, suppliedLog || readLog(root, quest.id)),
+      requiredReviewTemplates: annotateDeltaRelevance(
+        requiredReviewTemplates(root, quest, state, log), reviewDelta),
     };
     const preflight = landingReviewPreflight(root, base, {candidateRoot});
     return {manifest: {...base, proofPlan: stablePreflightReceipt(preflight)},
@@ -230,7 +408,8 @@ export function createReviewRequest(root, quest, state, log) {
       if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
   }
-  return {id, manifest, file: path.relative(root, file), preflight};
+  return {id, manifest, file: path.relative(root, file), preflight,
+    delta: reviewDeltaSummary(manifest.reviewDelta || null)};
 }
 
 export function loadReviewRequest(root, reviewId) {

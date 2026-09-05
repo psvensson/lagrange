@@ -17,6 +17,7 @@ import {
   NEXT_ACTION_CODE,
 } from './next-action.js';
 import {runStep} from './step.js';
+import {createRunAuthorizations} from './gate.js';
 import {
   buildVerificationFinding,
   VERIFICATION_CONTRACT_VERSION,
@@ -24,8 +25,10 @@ import {
   verificationState,
 } from './verification.js';
 import {
+  FINDING_SEVERITY_OBSERVATION,
   parseRejectionFindings,
   rejectionFindingBarProblem,
+  requireDefectFinding,
   REJECTION_FINDING_USAGE,
 } from './rejection-findings.js';
 import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
@@ -139,12 +142,17 @@ function executeStructuredContinuation(root, quest, action, args) {
     const phase = action.payload.phase;
     if (phase === 'begin') {
       if (args.changeRef || args[AUTO_DIFF_ARGUMENT] || args.summary) {
-        const begin = runStep(root, quest);
+        // One operator action, one logical run: the begin-phase health gate
+        // and every commit gate share this map, so one recorded override
+        // covers the pair and is charged only when the pair records.
+        const runAuthorizations = createRunAuthorizations();
+        const begin = runStep(root, quest, {runAuthorizations});
         return {
           executed: true,
           operation: REPLACE_REJECTED_OPERATION,
           begin,
-          result: runStep(root, quest, explicitCommitOptions(args)),
+          result: runStep(root, quest,
+            {...explicitCommitOptions(args), runAuthorizations}),
         };
       }
       return {
@@ -450,12 +458,18 @@ export function landQuestWorkflow(root, args = {}) {
   // `theory option --from-rejection`, and any later post-mortem all read this
   // event, and a pointer satisfies them mechanically with zero content.
   const rejectionFindings = verdict === VERDICT_REJECT ?
-    (structuredVerdict?.findings || parseRejectionFindings(args.finding)) : [];
+    (structuredVerdict?.findings || [
+      ...parseRejectionFindings(args.finding),
+      ...parseRejectionFindings(args.observation,
+        {severity: FINDING_SEVERITY_OBSERVATION}),
+    ]) : [];
   if (verdict === VERDICT_REJECT) {
     if (rejectionFindings.length === 0) {
       throw new Error(
         `land: a rejection requires ${REJECTION_FINDING_USAGE}`);
     }
+    const defectProblem = requireDefectFinding(rejectionFindings);
+    if (defectProblem) throw new Error(`land: ${defectProblem}`);
     const barProblem = rejectionFindingBarProblem(quest, log, rejectionFindings);
     if (barProblem) throw new Error(`land: ${barProblem}`);
   }

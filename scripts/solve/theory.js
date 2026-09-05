@@ -54,6 +54,7 @@ import {
   continuationIsAllowed,
 } from './continuation.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
+import {attemptIndicesUnderStandingRejection} from './rejection-findings.js';
 
 const FLAG_ID = 'id';
 const FLAG_THEORY = 'theory';
@@ -169,11 +170,17 @@ function activeSystemTheoryExists(state) {
     SELECTABLE_THEORY_STATUSES.includes(theory.status));
 }
 
+// A replacement of a rejected candidate on an already-solved frontier moves
+// the metric 0 -> 0 and can never "progress"; it is corrective work a
+// verifier demanded, not a stall, so attempts recorded under a standing
+// rejection are left out of the stall count.
 function noProgressAttemptCount(log, frontierId) {
-  return log.filter((event) =>
+  const underRejection = attemptIndicesUnderStandingRejection(log, frontierId);
+  return log.filter((event, index) =>
     event.type === 'attempt' &&
     event.frontier === frontierId &&
     event.investigative !== true &&
+    !underRejection.has(index) &&
     (event.metricBefore === null ||
       event.metricAfter === null ||
       event.metricAfter >= event.metricBefore)).length;
@@ -539,6 +546,8 @@ function cmdSystem(root, args) {
 const REJECTION_PREFILL_FLAG = 'from-rejection';
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
 const REJECTION_CLAIM_EXCERPT = 140;
+const FINDING_SEVERITY_DEFECT = 'defect';
+const REJECTION_FINDING_JOIN = '; ';
 
 function latestVerifierRejection(log, ref) {
   const rejections = log.filter((event) =>
@@ -553,8 +562,22 @@ function latestVerifierRejection(log, ref) {
     String(event.claim || '').includes(needle)) || null;
 }
 
+// The prefill reads the defect findings only: an observation is a remark,
+// not the cause the corrective theory answers.
+function rejectionDefectClaim(finding) {
+  const findings = finding.verification?.findings;
+  if (!Array.isArray(findings)) return normalizeText(finding.claim);
+  const defects = findings.filter((entry) => entry &&
+    (entry.severity === undefined || entry.severity === FINDING_SEVERITY_DEFECT));
+  if (defects.length === 0 || defects.length === findings.length) {
+    return normalizeText(finding.claim);
+  }
+  return defects.map((entry) => `${entry.category}: ${entry.summary}`)
+    .join(REJECTION_FINDING_JOIN);
+}
+
 function rejectionPrefill(finding) {
-  const claim = normalizeText(finding.claim) ||
+  const claim = rejectionDefectClaim(finding) ||
     'the recorded verifier rejection';
   const excerpt = claim.length > REJECTION_CLAIM_EXCERPT ?
     `${claim.slice(0, REJECTION_CLAIM_EXCERPT)}…` : claim;

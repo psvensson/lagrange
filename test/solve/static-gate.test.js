@@ -10,7 +10,8 @@ const FAILING_CHECKER =
   'console.log("src/x.js 1:1 error something machine-checkable");\n' +
   'process.exit(1);\n';
 
-function fixture({eslint, literals}) {
+function fixture({eslint, literals, silentCatch = null,
+  decisionBoundaries = null}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'static-gate-'));
   fs.mkdirSync(path.join(root, 'src'), {recursive: true});
   fs.writeFileSync(path.join(root, 'src/x.js'), 'export const x = 1;\n');
@@ -24,8 +25,29 @@ function fixture({eslint, literals}) {
     fs.writeFileSync(
       path.join(root, 'scripts/check-guideline-literals.js'), literals);
   }
+  for (const [name, checker] of [
+    ['check-guideline-silent-catch.js', silentCatch],
+    ['check-guideline-decision-boundaries.js', decisionBoundaries],
+  ]) {
+    if (checker === null) continue;
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'scripts', name), checker);
+  }
   return root;
 }
+
+tap.test('silent-catch and decision-boundary checkers block with bounded ' +
+  'output over the changed paths', (t) => {
+  const root = fixture({eslint: PASSING_CHECKER, literals: PASSING_CHECKER,
+    silentCatch: FAILING_CHECKER, decisionBoundaries: FAILING_CHECKER});
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const problems = staticQualityProblems(root, ['src/x.js']);
+  t.equal(problems.length, 2);
+  t.match(problems[0], /static-quality silent-catch audit failed/u);
+  t.match(problems[1], /static-quality decision-boundaries audit failed/u);
+  t.match(problems[1], /machine-checkable/u);
+  t.end();
+});
 
 tap.test('unlinted or missing paths never gate', (t) => {
   const root = fixture({eslint: FAILING_CHECKER, literals: FAILING_CHECKER});
