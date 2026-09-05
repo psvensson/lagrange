@@ -66,15 +66,16 @@ import {
 // 5s of virtual time = 344.8/s.
 const PRE_CHANGE_HEAVY_BUILDS = 1724;
 // Measured after giving the canonical planning snapshot one VERIFIED identity
-// owner: 1218 heavy planning builds = 243.6/s. Each remaining build is either
+// owner plus Q2 semantic source classification: 585 heavy planning builds =
+// 117/s. Each remaining build is either
 // the first projection of genuinely new content, or the one verification
 // rebuild that makes a snapshot canonical.
-const AFTER_HEAVY_BUILDS = 1218;
+const AFTER_HEAVY_BUILDS = 585;
 // The publication recovery gate snapshot was the largest instrumented site on
-// the failing seed (586/s). It must not regress: measured 4118 -> 3612 builds
-// over the same sequence.
+// the failing seed (586/s). It must not regress: measured 4118 -> 3184 builds
+// over the same sequence after frozen observation gates gained identity reuse.
 const PRE_CHANGE_GATE_BUILDS = 4118;
-const AFTER_GATE_BUILDS = 3612;
+const AFTER_GATE_BUILDS = 3184;
 // The publications winner read is the one live read the planning memo version
 // key performs. The identity owner adds none: it reuses the floored source
 // generation the normalizer already computed.
@@ -82,9 +83,9 @@ const PUBLICATION_WINNER_READ_BOUND = 824;
 const BURST_CALL_COUNT = 40;
 const OWNER_NODE_ID = 'node-0';
 const FLOOR_WINDOW_MS = 250;
-// One version-key-forced rebuild, plus the one verification that makes the
-// fresh projection canonical for the sub-builders that re-normalise it.
-const VERSION_KEY_ADVANCE_BUILDS = 2;
+// One source-owner-forced rebuild, the publication merge, and the verification
+// that makes the fresh projection canonical for re-normalising sub-builders.
+const VERSION_KEY_ADVANCE_BUILDS = 3;
 const READINESS_PLANNING_MAX_CONCURRENCY = 1;
 const READINESS_PLANNING_MAX_ITEMS_PER_DRAIN = 1;
 const AUDIT_CALL_COUNT = 200;
@@ -126,7 +127,7 @@ const SHAPE_SPACE_SIZE = SHAPE_STATUSES.length * SHAPE_EPOCHS.length *
 const SHAPE_SPACE_DIVERGENT = 15235;
 const PRECONDITION_UNSOUND_SHAPES = 3405;
 
-function createService({clock, cache, publicationRows = null}) {
+function createService({clock, cache}) {
   const readiness = new ControlPlaneReadinessService({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
@@ -149,12 +150,6 @@ function createService({clock, cache, publicationRows = null}) {
     controlPlaneReadinessService: readiness,
     now: () => clock.value,
   });
-  if (publicationRows) {
-    // A publication winner presented WITHOUT a system-table write: the probe
-    // path the planning memo version key exists to catch.
-    coordinator.getLatestMembershipPublicationEpochStatusForNodeSync = () =>
-      publicationRows.winner;
-  }
   readiness.syncOwnerDependencies({membershipPublicationService: coordinator});
   const builds = [];
   const build = readiness.buildTrackedPriorityRecoveryPlanningProjection;
@@ -165,10 +160,10 @@ function createService({clock, cache, publicationRows = null}) {
   return {readiness, coordinator, builds};
 }
 
-function createFixture({publicationRows = null} = {}) {
+function createFixture() {
   const clock = {value: T0};
   const cache = createFormationShapedCache(T0);
-  return {clock, cache, ...createService({clock, cache, publicationRows})};
+  return {clock, cache, ...createService({clock, cache})};
 }
 
 // The canonical planning snapshot every producer re-normalises.
@@ -268,16 +263,10 @@ test('renormalisation-fixed-point-holds-across-the-whole-rig', () => {
 });
 
 test('version-key-change-mints-one-fresh-identity', () => {
-  // A publication winner that advances WITHOUT a system-table write: the
-  // floored source generation cannot see it, so the node-scoped planning memo's
-  // live publication component must force exactly one rebuild and a fresh
-  // identity. This is the guarantee the identity owner must not absorb.
-  const winner = {value: {publicationEpoch: 2, status: 'PUBLISHED'}};
-  const {readiness, clock, builds} = createFixture({
-    publicationRows: {get winner() {
-      return winner.value;
-    }},
-  });
+  // Drive the canonical publication owner boundary. Q2 removes the competing
+  // live winner probe, so a winner change without its source-owner event is no
+  // longer a supported second authority.
+  const {readiness, cache, clock, builds} = createFixture();
   const first = readiness.getPriorityRecoveryPlanningAnswerSync(
     OWNER_NODE_ID, clock.value);
   const buildsAfterFirst = builds.length;
@@ -287,15 +276,20 @@ test('version-key-change-mints-one-fresh-identity', () => {
     'a stable version key serves one planning answer identity');
   assert.equal(builds.length, buildsAfterFirst,
     'the stable-key repeat rebuilds nothing');
-  winner.value = {publicationEpoch: 3, status: 'PUBLISHED'};
+  cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+    publication_id: 'pub-1',
+    publication_kind: 'cluster_membership',
+    publication_epoch: 3,
+    status: 'PUBLISHED',
+  });
   const advanced = readiness.getPriorityRecoveryPlanningAnswerSync(
     OWNER_NODE_ID, clock.value);
   assert.notEqual(advanced, first,
-    'a publication advance with no table write mints a FRESH identity');
+    'an owner-observed publication advance mints a FRESH identity');
   assert.equal(builds.length,
     buildsAfterFirst + VERSION_KEY_ADVANCE_BUILDS,
-    'the publication advance costs the one version-key-forced rebuild plus ' +
-      'the one verification that makes the fresh projection canonical');
+    'the publication advance costs the owner-forced rebuild, merge, and ' +
+      'canonical verification exactly once each');
   const buildsAfterAdvance = builds.length;
   assert.equal(
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, clock.value),
@@ -306,9 +300,8 @@ test('version-key-change-mints-one-fresh-identity', () => {
 });
 
 test('derived-identity-is-generation-gated', () => {
-  // A DERIVED entry hands back a different object than the caller passed in, so
-  // its reuse carries the floored source generation exactly as it did before
-  // this owner existed.
+  // A DERIVED entry hands back a different object than the caller passed in,
+  // so its reuse carries the node-typed semantic PlanningIdentity.
   const {readiness, cache, clock, builds} = createFixture();
   const raw = Object.freeze({targetNodeId: OWNER_NODE_ID});
   const first = readiness.buildPriorityRecoveryPlanningProjection(
@@ -327,19 +320,18 @@ test('derived-identity-is-generation-gated', () => {
   assert.equal(
     readiness.buildPriorityRecoveryPlanningProjection(raw, clock.value),
     first,
-    'the shipped 250ms refresh floor, not a new cadence, bounds that reuse');
+    'passage through the retired floor does not rotate semantic currency');
   assert.equal(builds.length, buildsAfterFirst,
-    'still no rebuild inside the floor window');
-  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-    [COLUMN.NODE_ID]: 'node-1',
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.LAST_HEARTBEAT]: clock.value,
+    'still no rebuild while semantic inputs are stable');
+  cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+    [COLUMN.SERVICE_ID]: 'service-0',
+    [COLUMN.NODE_ID]: OWNER_NODE_ID,
+    [COLUMN.ADDRESS]: 'node-0/partition/priority-partition-v2',
   });
-  clock.value += FLOOR_WINDOW_MS + 1;
   assert.notEqual(
     readiness.buildPriorityRecoveryPlanningProjection(raw, clock.value),
     first,
-    'the next floored generation re-derives rather than reusing');
+    'a node-local service semantic change re-derives rather than reusing');
   assert.equal(builds.length, buildsAfterFirst + 1,
     'the generation change re-derived exactly once');
 });
@@ -381,10 +373,7 @@ test('identity-observable-preserved', () => {
   // production-composition owner: a stable publication row keeps the memoized
   // answer despite a candidate proposing the next epoch, and a genuine
   // publication-row advance still rebuilds immediately.
-  const winner = {value: {publicationEpoch: 3, status: 'PUBLISHED'}};
-  const {readiness, clock, coordinator} = createFixture();
-  coordinator.getLatestMembershipPublicationEpochStatusForNodeSync = () =>
-    winner.value;
+  const {readiness, cache, clock, coordinator} = createFixture();
   coordinator.deriveClusterMembershipCandidateSync = () => ({
     publicationEpoch: 4,
     status: 'OPEN',
@@ -397,7 +386,12 @@ test('identity-observable-preserved', () => {
     first,
     'a stable publication row keeps the memoized answer despite the ' +
       'next-epoch candidate');
-  winner.value = {publicationEpoch: 4, status: 'PUBLISHED'};
+  cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE', {
+    publication_id: 'pub-1',
+    publication_kind: 'cluster_membership',
+    publication_epoch: 4,
+    status: 'PUBLISHED',
+  });
   assert.notEqual(
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, clock.value),
     first,
@@ -484,13 +478,16 @@ test('budgets-and-cadence-unchanged', () => {
     'the one-heavy-item-per-macrotask drain budget is untouched');
   assert.equal(typeof queue.scheduleDrainFn, 'function',
     'the macrotask-class scheduler is still the drain arm');
-  // The identity owner reuses the SHIPPED floored generation. Its 250ms refresh
-  // floor, not a new cadence, is what bounds derived reuse.
-  assert.equal(
-    readiness.readMembershipPublicationPlanningMemoVersionKey(
-      OWNER_NODE_ID, clock.value).sourceGeneration,
-    readiness.readPlanningProjectionSourceGeneration(clock.value),
-    'the identity owner and the planning memos read ONE generation component');
+  const versionKey = readiness.readMembershipPublicationPlanningMemoVersionKey(
+    OWNER_NODE_ID,
+    clock.value,
+  );
+  assert.equal(versionKey.sourceGeneration, null,
+    'typed semantic currency retires the scalar floor from memo admission');
+  assert.deepEqual(
+    versionKey.planningIdentity,
+    readiness.readPlanningProjectionIdentity(OWNER_NODE_ID, clock.value),
+    'the identity owner and planning memos share one node-typed currency');
 });
 
 test('formation-shaped-build-rate-after-identity-owner', () => {

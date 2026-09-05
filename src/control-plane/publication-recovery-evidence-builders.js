@@ -23,6 +23,66 @@ import {
 import {
   buildCanonicalPublicationConvergenceGate,
 } from './publication-recovery-convergence-gate-builder.js';
+import {types} from 'node:util';
+
+const DESCRIPTOR_VALUE_FIELD = 'value';
+const observationPublicationGateByFrozenIdentity = new WeakMap();
+const recursivelyImmutableByIdentity = new WeakMap();
+const arrayIsArray = Array.isArray;
+const canonicalArrayPrototype = Array.prototype;
+const canonicalObjectPrototype = Object.prototype;
+const isProxy = types.isProxy.bind(types);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectHasOwn = Object.hasOwn;
+const objectIsFrozen = Object.isFrozen;
+const reflectOwnKeys = Reflect.ownKeys;
+const SetConstructor = Set;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setHas = Function.call.bind(Set.prototype.has);
+
+function isOwnDataContainer(value) {
+  const prototype = objectGetPrototypeOf(value);
+  return prototype === canonicalObjectPrototype || prototype === null ||
+    (arrayIsArray(value) && prototype === canonicalArrayPrototype);
+}
+
+function readOwnDataDescriptors(value) {
+  try {
+    return reflectOwnKeys(value).map(
+      (key) => objectGetOwnPropertyDescriptor(value, key),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function hasRecursivelyImmutableDescriptors(descriptors, seen) {
+  for (let index = 0; index < descriptors.length; index += 1) {
+    const descriptor = descriptors[index];
+    if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD) ||
+        !isRecursivelyImmutableOwnData(descriptor.value, seen)) return false;
+  }
+  return true;
+}
+
+function isRecursivelyImmutableOwnData(value, seen = new SetConstructor()) {
+  if (value === null || typeof value !== 'object') {
+    return typeof value !== 'function';
+  }
+  if (recursivelyImmutableByIdentity.get(value) === true) return true;
+  if (isProxy(value) || !objectIsFrozen(value) || !isOwnDataContainer(value)) {
+    return false;
+  }
+  if (setHas(seen, value)) return true;
+  setAdd(seen, value);
+  const descriptors = readOwnDataDescriptors(value);
+  if (!descriptors || !hasRecursivelyImmutableDescriptors(descriptors, seen)) {
+    return false;
+  }
+  recursivelyImmutableByIdentity.set(value, true);
+  return true;
+}
 
 function buildCanonicalPriorityRecoveryObservation(options = {}) {
   const publicationConvergence = isRecord(options.publicationConvergence) ?
@@ -156,10 +216,7 @@ function buildCanonicalPriorityRecoveryObservation(options = {}) {
     normalizedDerivedPriorityRecoveryObservation;
 }
 
-function buildObservationPublicationGate(priorityRecoveryObservation = null) {
-  if (!isRecord(priorityRecoveryObservation)) {
-    return null;
-  }
+function buildObservationPublicationGateUncached(priorityRecoveryObservation) {
   return buildPublicationRecoveryGateSnapshot({
     publicationEpoch: priorityRecoveryObservation.publicationEpoch ?? null,
     publicationStatus: priorityRecoveryObservation.publicationStatus ?? null,
@@ -184,6 +241,39 @@ function buildObservationPublicationGate(priorityRecoveryObservation = null) {
     pressureRetryAfterMs: priorityRecoveryObservation.pressureRetryAfterMs,
     pressureReasonCodes: priorityRecoveryObservation.pressureReasonCodes,
   });
+}
+
+function cacheObservationPublicationGate(
+  priorityRecoveryObservation,
+  cacheable,
+  gate,
+) {
+  if (cacheable && gate) {
+    observationPublicationGateByFrozenIdentity.set(
+      priorityRecoveryObservation,
+      gate,
+    );
+  }
+}
+
+function buildObservationPublicationGate(priorityRecoveryObservation = null) {
+  if (!isRecord(priorityRecoveryObservation)) {
+    return null;
+  }
+  const cacheable = isRecursivelyImmutableOwnData(priorityRecoveryObservation);
+  const cached = cacheable ? observationPublicationGateByFrozenIdentity.get(
+    priorityRecoveryObservation,
+  ) : null;
+  if (cached) return cached;
+  const gate = buildObservationPublicationGateUncached(
+    priorityRecoveryObservation,
+  );
+  cacheObservationPublicationGate(
+    priorityRecoveryObservation,
+    cacheable,
+    gate,
+  );
+  return gate;
 }
 
 function samePublicationGateState(leftObservationGate = null, rightObservationGate = null) {

@@ -108,8 +108,8 @@ test('per-entry projection readiness state resolves to one frozen build ' +
   t.end();
 });
 
-test('the planning answer serves one projection identity per floored ' +
-  'generation under write churn', async (t) => {
+test('the planning answer fails closed while an observed source revision is ' +
+  'unclassified', async (t) => {
   const cache = createVersionedTableCache();
   const readiness = new ControlPlaneReadinessService({
     nodeId: OWNER_NODE_ID,
@@ -127,12 +127,35 @@ test('the planning answer serves one projection identity per floored ' +
   readiness.membershipPublicationPlanningSourceRevision += 1;
   const second =
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1100);
-  t.equal(second, first,
-    'a write within the floor window serves the same projection identity');
+  t.not(second, first,
+    'an unclassified write cannot reuse the pre-write projection identity');
+  // While the write stays unclassified the planning identity is saturated:
+  // snapshot admission stays fail closed (the identity itself never reads as
+  // current), but the projection memo falls back to the floored table-version
+  // key, so a second read at the SAME table versions shares the projection
+  // instead of re-deriving it (a per-read rebuild under formation write
+  // bursts starved the seed: 98% memo misses, 45s CPU per join).
+  t.equal(
+    readiness.readPlanningProjectionIdentity(OWNER_NODE_ID)?.saturated,
+    true,
+    'the planning identity stays saturated while the write is unclassified',
+  );
+  t.equal(
+    readiness.readCurrentPlanningProjectionIdentity(OWNER_NODE_ID),
+    null,
+    'a saturated identity is not a memo currency',
+  );
   const third =
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1400);
-  t.not(third, first,
-    'the next window observes the write with a fresh projection');
+  t.equal(third, second,
+    'reads at unchanged table versions share the projection while unclassified');
+  cache.bump('nodes');
+  readiness.membershipPublicationPlanningSourceRevision += 1;
+  // Past the floored key's latch window the moved table version is visible.
+  const fourth =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 2400);
+  t.not(fourth, third,
+    'a further write still forces a fresh projection (floored key moved)');
   t.end();
 });
 
@@ -167,26 +190,28 @@ test('the planning answer projection keeps one identity per input snapshot ' +
 test('the planning answer memo survives a candidate that proposes the next ' +
   'publication epoch', async (t) => {
   const cache = createVersionedTableCache();
+  const createMembershipOwner = (latestRow) => ({
+    // The derived candidate proposes the NEXT epoch by construction while
+    // the owner row still shows the current one.
+    deriveClusterMembershipCandidateSync() {
+      return {
+        publicationEpoch: 4,
+        status: 'OPEN',
+        publishedActiveNodeIds: [OWNER_NODE_ID],
+      };
+    },
+    getLatestMembershipPublicationEpochStatusForNodeSync() {
+      return latestRow;
+    },
+  });
   const readiness = new ControlPlaneReadinessService({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
     now: () => 1000,
-    membershipPublicationService: {
-      // The derived candidate proposes the NEXT epoch by construction while
-      // the live row still shows the current one — the memo freshness probe
-      // must compare row-vs-row, never row-vs-candidate.
-      deriveClusterMembershipCandidateSync() {
-        return {
-          publicationEpoch: 4,
-          status: 'OPEN',
-          publishedActiveNodeIds: [OWNER_NODE_ID],
-        };
-      },
-      latestRow: {publicationEpoch: 3, status: 'PUBLISHED'},
-      getLatestMembershipPublicationEpochStatusForNodeSync() {
-        return this.latestRow;
-      },
-    },
+    membershipPublicationService: createMembershipOwner({
+      publicationEpoch: 3,
+      status: 'PUBLISHED',
+    }),
   });
   const first =
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1000);
@@ -195,12 +220,16 @@ test('the planning answer memo survives a candidate that proposes the next ' +
   t.equal(second, first,
     'a stable publication row keeps the memoized answer despite the ' +
       'next-epoch candidate');
-  readiness.membershipPublicationService.latestRow =
-    {publicationEpoch: 4, status: 'PUBLISHED'};
+  readiness.syncOwnerDependencies({
+    membershipPublicationService: createMembershipOwner({
+      publicationEpoch: 4,
+      status: 'PUBLISHED',
+    }),
+  });
   const third =
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1150);
   t.not(third, first,
-    'a genuine publication-row advance still rebuilds immediately');
+    'an owner-observed publication advance rebuilds immediately');
   t.end();
 });
 

@@ -684,7 +684,16 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         systemTableCache,
       });
 
-      const readiness = readinessService.getNodeReadinessSync('node-1');
+      let readiness = readinessService.getNodeReadinessSync('node-1');
+      const planningOwner = readinessService.readinessPlanningSnapshotOwner;
+      for (let tick = 0; tick < 50; tick += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+        if (planningOwner.queue.pending.size === 0 &&
+            planningOwner.queue.inFlight.size === 0) {
+          break;
+        }
+      }
+      readiness = readinessService.getNodeReadinessSync('node-1');
 
       t.equal(
         readiness?.nodeId,

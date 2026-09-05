@@ -190,6 +190,10 @@ class RebalanceCoordinator extends EventEmitter {
     if (typeof this.controlPlaneReadinessService?.shutdown === LOCAL_STR_FUNCTION) {
       this.controlPlaneReadinessService.shutdown();
     }
+    if (typeof this.storageAccountingService
+      ?.shutdownCapacitySemanticProjection === LOCAL_STR_FUNCTION) {
+      this.storageAccountingService.shutdownCapacitySemanticProjection();
+    }
 
     let inFlightOperationCount = 0;
     try {

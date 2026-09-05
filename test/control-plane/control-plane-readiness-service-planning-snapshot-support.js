@@ -351,20 +351,21 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
         satisfied: false,
       },
     };
+    const createMembershipPublicationService = () => ({
+      getLatestPublicationForNodeSync(targetNodeId) {
+        if (targetNodeId !== nodeId) {
+          return null;
+        }
+        return publicationRow;
+      },
+      getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+        return targetNodeId === nodeId ? publicationRow : null;
+      },
+    });
     const readinessService = new ControlPlaneReadinessService({
       nodeId: 'seed-node',
       systemTableCache: createCache(),
-      membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== nodeId) {
-            return null;
-          }
-          return publicationRow;
-        },
-        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
-          return targetNodeId === nodeId ? publicationRow : null;
-        },
-      },
+      membershipPublicationService: createMembershipPublicationService(),
       now: () => now,
     });
 
@@ -385,6 +386,9 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
       createdAt: 1600,
       publishedActiveNodeIds: [nodeId],
     };
+    readinessService.syncOwnerDependencies({
+      membershipPublicationService: createMembershipPublicationService(),
+    });
     now = 1600;
 
     const retainedAnswer =
@@ -426,6 +430,9 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
       createdAt: 1700,
       publishedActiveNodeIds: [nodeId],
     };
+    readinessService.syncOwnerDependencies({
+      membershipPublicationService: createMembershipPublicationService(),
+    });
     now += DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS + 1;
 
     const expiredAnswer = readinessService.getPriorityRecoveryPlanningAnswerSync(
@@ -476,32 +483,33 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
       publishedActiveNodeIds: [TARGET_NODE_ID],
       priorityPartitionSummary: SETTLED_PRIORITY_PARTITION_SUMMARY,
     };
+    const createMembershipPublicationService = () => ({
+      getLatestPublicationForNodeSync(targetNodeId) {
+        if (targetNodeId !== TARGET_NODE_ID) {
+          return null;
+        }
+        return publicationRow;
+      },
+      getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+        return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
+      },
+      async deriveClusterMembershipCandidate(options = {}) {
+        if (options.publisherNodeId !== TARGET_NODE_ID) {
+          return null;
+        }
+        return {
+          publicationEpoch: ACTIVE_PUBLICATION_EPOCH,
+          publicationStatus: ACK_PENDING_STATUS,
+          priorityPartitionSummary: ACTIVE_PRIORITY_PARTITION_SUMMARY,
+          priorityRecoveryReasonCodes: ACTIVE_REASON_CODES,
+          priorityRecoveryActive: true,
+        };
+      },
+    });
     const readinessService = new ControlPlaneReadinessService({
       nodeId: LOCAL_NODE_ID,
       systemTableCache: createCache(),
-      membershipPublicationService: {
-        getLatestPublicationForNodeSync(targetNodeId) {
-          if (targetNodeId !== TARGET_NODE_ID) {
-            return null;
-          }
-          return publicationRow;
-        },
-        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
-          return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
-        },
-        async deriveClusterMembershipCandidate(options = {}) {
-          if (options.publisherNodeId !== TARGET_NODE_ID) {
-            return null;
-          }
-          return {
-            publicationEpoch: ACTIVE_PUBLICATION_EPOCH,
-            publicationStatus: ACK_PENDING_STATUS,
-            priorityPartitionSummary: ACTIVE_PRIORITY_PARTITION_SUMMARY,
-            priorityRecoveryReasonCodes: ACTIVE_REASON_CODES,
-            priorityRecoveryActive: true,
-          };
-        },
-      },
+      membershipPublicationService: createMembershipPublicationService(),
       now: () => now,
     });
 
@@ -571,6 +579,9 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
       publishedActiveNodeIds: [TARGET_NODE_ID],
       priorityPartitionSummary: SETTLED_PRIORITY_PARTITION_SUMMARY,
     };
+    readinessService.syncOwnerDependencies({
+      membershipPublicationService: createMembershipPublicationService(),
+    });
 
     const settledAnswer =
       readinessService.getPriorityRecoveryPlanningAnswerSync(

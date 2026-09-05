@@ -245,8 +245,8 @@ test('the shared planning version key floors generation refreshes to one ' +
   t.end();
 });
 
-test('the sync membership-planning derivation inherits the version-key ' +
-  'floor under write churn', async (t) => {
+test('the sync membership-planning derivation refuses the version-key floor ' +
+  'while a source revision is unclassified', async (t) => {
   const cache = createVersionedCacheStub();
   let derivations = 0;
   const readiness = new ControlPlaneReadinessService({
@@ -270,11 +270,27 @@ test('the sync membership-planning derivation inherits the version-key ' +
   t.equal(derivations, 1, 'the first read derives');
   cache.bump('nodes');
   readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1100);
-  t.equal(derivations, 1,
-    'a write within the floor window keeps serving the latched derivation');
+  t.equal(derivations, 2,
+    'an unclassified write bypasses the pre-write derivation immediately');
+  // While the write stays unclassified the planning identity is saturated and
+  // is not a memo currency: the derivation memo falls back to the floored
+  // table-version key, so a read at unchanged table versions shares the
+  // post-write derivation instead of deriving again (a per-read rebuild under
+  // formation write bursts starved the seed). Snapshot admission itself stays
+  // fail closed on the saturated identity.
   readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1400);
   t.equal(derivations, 2,
-    'the next window derives against the written generation');
+    'reads at unchanged table versions share the derivation while unclassified');
+  t.equal(
+    readiness.readCurrentPlanningProjectionIdentity(SWEEP_NODE_ID),
+    null,
+    'the saturated identity is not served as memo currency',
+  );
+  cache.bump('nodes');
+  // Past the floored key's latch window the moved table version is visible.
+  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 2400);
+  t.equal(derivations, 3,
+    'a further write still forces a fresh derivation (floored key moved)');
   t.end();
 });
 

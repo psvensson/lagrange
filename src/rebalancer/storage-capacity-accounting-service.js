@@ -20,6 +20,10 @@ import {
   isTerminalReplicaOperationRecord,
 } from './replica-operation-progress.js';
 import {
+  STORAGE_CAPACITY_NOW_MS_ERROR,
+  StorageCapacitySemanticProjectionOwner,
+} from './storage-capacity-semantic-projection-owner.js';
+import {
   PRESSURE_STATE,
   RESERVATION_STATUS,
   STORAGE_CAPACITY_CONFIG_KEY,
@@ -35,6 +39,35 @@ const STORAGE_ACCOUNTING_SQL = Object.freeze({
   [TABLES.STORAGE_RESERVATIONS]: 'SELECT * FROM storage_reservations',
   [TABLES.REPLICA_OPERATIONS]: 'SELECT * FROM replica_operations',
 });
+
+function isFutureCapacityDeadline(value, nowMs) {
+  return Number.isSafeInteger(value) && value > nowMs;
+}
+
+function isLiveReservationOperation(operationId, liveOperationIds) {
+  return Boolean(operationId && liveOperationIds?.has(operationId));
+}
+
+function hasPositiveEstimatedBytes(reservation) {
+  const estimatedBytes = Number(reservation?.[COLUMN.ESTIMATED_BYTES]);
+  return Number.isFinite(estimatedBytes) && estimatedBytes > 0;
+}
+
+function readFutureCapacityReservationExpiry(
+  reservation,
+  nodeId,
+  liveOperationIds,
+  nowMs,
+) {
+  if (reservation?.[COLUMN.TARGET_NODE_ID] !== nodeId) return null;
+  const status = reservation?.[COLUMN.STATUS] || RESERVATION_STATUS.ACTIVE;
+  if (status !== RESERVATION_STATUS.ACTIVE) return null;
+  const expiresAt = Number(reservation?.[COLUMN.EXPIRES_AT]);
+  if (!isFutureCapacityDeadline(expiresAt, nowMs)) return null;
+  const operationId = reservation?.[COLUMN.OPERATION_ID];
+  if (isLiveReservationOperation(operationId, liveOperationIds)) return null;
+  return hasPositiveEstimatedBytes(reservation) ? expiresAt : null;
+}
 
 class StorageCapacityAccountingService {
   /**
@@ -59,6 +92,14 @@ class StorageCapacityAccountingService {
       loggingService.forSubsystem(STORAGE_CAPACITY_SUBSYSTEM) : console;
 
     this.refreshConfig();
+    this.capacitySemanticProjectionOwner =
+      new StorageCapacitySemanticProjectionOwner({
+        service: this,
+        timeSource: options.timeSource,
+        now: options.now,
+        setTimeoutFn: options.setTimeoutFn,
+        clearTimeoutFn: options.clearTimeoutFn,
+      });
   }
 
   /**
@@ -82,6 +123,7 @@ class StorageCapacityAccountingService {
 
     this.refreshConfig();
     this.ensureDataSource();
+    this.capacitySemanticProjectionOwner?.recordSourceReplacement();
   }
 
   /**
@@ -232,6 +274,7 @@ class StorageCapacityAccountingService {
     const reservedBytesByNode = this.calculateReservedBytes(
       reservations,
       liveOperationIds,
+      this.readCapacitySemanticNowMs(),
     );
 
     return nodes.map((node) => {
@@ -269,6 +312,7 @@ class StorageCapacityAccountingService {
     const reservedBytesByNode = this.calculateReservedBytes(
       reservations,
       liveOperationIds,
+      this.readCapacitySemanticNowMs(),
     );
     const usedBytes = usedBytesByNode.get(nodeId) || 0;
     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
@@ -276,7 +320,10 @@ class StorageCapacityAccountingService {
     return this.buildSnapshot(node, usedBytes, reservedBytes);
   }
 
-  getCapacitySnapshotForNodeSync(nodeId) {
+  getCapacitySnapshotForNodeSync(
+    nodeId,
+    nowMs = this.readCapacitySemanticNowMs(),
+  ) {
     if (!nodeId) {
       return null;
     }
@@ -298,6 +345,7 @@ class StorageCapacityAccountingService {
     const reservedBytesByNode = this.calculateReservedBytes(
       reservations,
       liveOperationIds,
+      nowMs,
     );
     const usedBytes = usedBytesByNode.get(nodeId) || 0;
     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
@@ -392,9 +440,12 @@ class StorageCapacityAccountingService {
    * @return {Map<string, number>}
    * @private
    */
-  calculateReservedBytes(reservations, liveOperationIds) {
+  calculateReservedBytes(
+    reservations,
+    liveOperationIds,
+    nowMs = this.readCapacitySemanticNowMs(),
+  ) {
     const reservedByNode = new Map();
-    const now = Date.now();
 
     for (const reservation of reservations) {
       const status = reservation?.[COLUMN.STATUS] || RESERVATION_STATUS.ACTIVE;
@@ -408,7 +459,7 @@ class StorageCapacityAccountingService {
         operationId && liveOperationIds && liveOperationIds.has(operationId),
       );
       if (
-        Number.isFinite(expiresAt) && expiresAt <= now && !operationLive
+        Number.isFinite(expiresAt) && expiresAt <= nowMs && !operationLive
       ) {
         continue;
       }
@@ -433,6 +484,85 @@ class StorageCapacityAccountingService {
     }
 
     return reservedByNode;
+  }
+
+  readCapacitySemanticNowMs() {
+    const value = this.capacitySemanticProjectionOwner?.now?.();
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(STORAGE_CAPACITY_NOW_MS_ERROR);
+    }
+    return value;
+  }
+
+  buildCapacitySemanticProjection(nodeId, nowMs) {
+    const capacity = this.getCapacitySnapshotForNodeSync(nodeId, nowMs);
+    const reservations = this.getSystemTableRowsSync(
+      TABLES.STORAGE_RESERVATIONS,
+    );
+    const operations = this.getSystemTableRowsSync(TABLES.REPLICA_OPERATIONS);
+    const liveOperationIds = this.buildLiveOperationIds(operations);
+    return Object.freeze({
+      capacity: capacity ? Object.freeze({...capacity}) : null,
+      nextSemanticChangeAtMs: this.findNextCapacityChangeAtMs(
+        nodeId,
+        reservations,
+        liveOperationIds,
+        nowMs,
+      ),
+      nodeId,
+      projectedAtMs: nowMs,
+    });
+  }
+
+  findNextCapacityChangeAtMs(
+    nodeId,
+    reservations,
+    liveOperationIds,
+    nowMs,
+  ) {
+    let earliest = null;
+    for (const reservation of reservations || []) {
+      const expiresAt = readFutureCapacityReservationExpiry(
+        reservation,
+        nodeId,
+        liveOperationIds,
+        nowMs,
+      );
+      if (expiresAt === null) continue;
+      if (earliest === null || expiresAt < earliest) earliest = expiresAt;
+    }
+    return earliest;
+  }
+
+  getCapacitySemanticIdentity(nodeId, nowMs = this.readCapacitySemanticNowMs()) {
+    return this.capacitySemanticProjectionOwner.getIdentity(nodeId, nowMs);
+  }
+
+  subscribeCapacitySemanticChanges(listener) {
+    return this.capacitySemanticProjectionOwner.subscribe(listener);
+  }
+
+  recordCapacitySourceChange(
+    tableName,
+    operation,
+    record,
+    nowMs = this.readCapacitySemanticNowMs(),
+  ) {
+    if (!Object.hasOwn(STORAGE_ACCOUNTING_SQL, tableName)) return;
+    this.capacitySemanticProjectionOwner.recordSourceChange(
+      tableName,
+      operation,
+      record,
+      nowMs,
+    );
+  }
+
+  configureCapacitySemanticProjection(options = {}) {
+    this.capacitySemanticProjectionOwner.configure(options);
+  }
+
+  shutdownCapacitySemanticProjection() {
+    this.capacitySemanticProjectionOwner.shutdown();
   }
 
   /**

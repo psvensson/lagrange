@@ -1,5 +1,8 @@
 import {TABLES} from '../constants/index.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
+import {planningIdentitiesEqual} from
+  './readiness-planning-semantic-generation.js';
+import {types} from 'node:util';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayJoin = Function.call.bind(Array.prototype.join);
@@ -12,13 +15,17 @@ const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
 const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
 const objectFreeze = Object.freeze;
+const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const objectKeys = Object.keys;
+const reflectApply = Reflect.apply;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setForEach = Function.call.bind(Set.prototype.forEach);
 const setHas = Function.call.bind(Set.prototype.has);
 const SetConstructor = Set;
+const canonicalSetPrototype = Set.prototype;
+const isProxy = types.isProxy.bind(types);
 const stringConstructor = String;
 
 const READINESS_PLANNING_TABLES = objectFreeze([
@@ -30,12 +37,13 @@ const READINESS_PLANNING_TABLES = objectFreeze([
   TABLES.STORAGE_RESERVATIONS,
   TABLES.CONTROL_PLANE_PUBLICATIONS,
 ]);
+const STORAGE_ACCOUNTING_OWNER_DEPENDENCY = 'storageAccountingService';
 const READINESS_PLANNING_OWNER_DEPENDENCIES = objectFreeze([
   'nodesOwner',
   'servicesOwner',
   'messageRouter',
   'nodeLifecycleStateMachine',
-  'storageAccountingService',
+  STORAGE_ACCOUNTING_OWNER_DEPENDENCY,
   'cdcIntegrationService',
   'cacheMutationTarget',
   'cdcGroupPropagationService',
@@ -46,6 +54,11 @@ const READINESS_PLANNING_OWNER_DEPENDENCIES = objectFreeze([
 ]);
 const READINESS_PLANNING_DEPENDENCY_REGISTRY = objectFreeze({
   versionedInputs: objectFreeze([
+    'globalPlanningGeneration',
+    'byNodePlanningGeneration',
+    'classifiedSourceRevisions',
+    'nodeLivenessSemanticIdentity',
+    'storageCapacitySemanticIdentity',
     'cacheGeneration',
     'membershipOwnerGeneration',
     ...READINESS_PLANNING_OWNER_DEPENDENCIES.map(
@@ -55,6 +68,7 @@ const READINESS_PLANNING_DEPENDENCY_REGISTRY = objectFreeze({
     'readinessSnapshotGeneration',
     'recoveryEpochRevision',
     'transportTopologyGeneration',
+    'transportTopologyValid',
     'generationSaturated',
     'perOwnerBuildOptionsKey',
   ]),
@@ -82,12 +96,14 @@ const NODE_TABLE_STABLE_TOKEN_FIELDS = objectFreeze([
   'readinessSnapshotGeneration',
   'recoveryEpochRevision',
   'transportTopologyGeneration',
+  'transportTopologyValid',
   'generationSaturated',
 ]);
 const AUTHORITATIVE_STABLE_TOKEN_FIELDS = objectFreeze([
   'cacheGeneration',
   'membershipOwnerGeneration',
   'transportTopologyGeneration',
+  'transportTopologyValid',
   'generationSaturated',
 ]);
 const READINESS_PLANNING_RETRY_AFTER_MS = 1000;
@@ -162,6 +178,12 @@ function getReadinessBuildFailureReason() {
 }
 
 function shouldResetReadinessBuildAttempts(previousContext, nextContext) {
+  if (previousContext?.planningIdentity || nextContext?.planningIdentity) {
+    return !planningIdentitiesEqual(
+      previousContext?.planningIdentity,
+      nextContext?.planningIdentity,
+    );
+  }
   return previousContext?.token?.tokenKey !== nextContext?.token?.tokenKey;
 }
 
@@ -208,6 +230,7 @@ function freezeToken(state) {
   appendArrayValue(tokenParts, state.readinessSnapshotGeneration);
   appendArrayValue(tokenParts, state.recoveryEpochRevision);
   appendArrayValue(tokenParts, state.transportTopologyGeneration);
+  appendArrayValue(tokenParts, state.transportTopologyValid !== false);
   appendArrayValue(tokenParts, state.generationSaturated);
   return freezeTokenRecord({
     cacheGeneration: state.cacheGeneration,
@@ -219,6 +242,7 @@ function freezeToken(state) {
     readinessSnapshotGeneration: state.readinessSnapshotGeneration,
     recoveryEpochRevision: state.recoveryEpochRevision,
     transportTopologyGeneration: state.transportTopologyGeneration,
+    transportTopologyValid: state.transportTopologyValid !== false,
     generationSaturated: state.generationSaturated,
     tokenKey: encodeSignatureValues(tokenParts),
   });
@@ -274,30 +298,42 @@ function canRebaseStoredSnapshot(previous, current) {
 }
 
 function readConnectedNodeFingerprint(messageRouter) {
-  if (typeof messageRouter?.getConnectedNodes !== 'function') return '';
   try {
-    const connected = messageRouter.getConnectedNodes();
+    const readConnectedNodes = messageRouter?.getConnectedNodes;
+    if (typeof readConnectedNodes !== 'function') {
+      return objectFreeze({fingerprint: '', valid: true});
+    }
+    const connected = reflectApply(readConnectedNodes, messageRouter, []);
     const copiedArray = copyDenseOwnDataArray(connected);
     const nodeIds = [];
+    const uniqueNodeIds = new SetConstructor();
     if (copiedArray !== null) {
       for (let index = 0; index < copiedArray.length; index++) {
-        if (typeof copiedArray[index] !== 'string') return '';
-        appendArrayValue(nodeIds, copiedArray[index]);
+        if (typeof copiedArray[index] !== 'string') throw new TypeError();
+        setAdd(uniqueNodeIds, copiedArray[index]);
       }
-    } else {
+    } else if (!isProxy(connected) &&
+        objectGetPrototypeOf(connected) === canonicalSetPrototype) {
       setForEach(connected, (nodeId) => {
         if (typeof nodeId !== 'string') throw new TypeError();
-        appendArrayValue(nodeIds, nodeId);
+        setAdd(uniqueNodeIds, nodeId);
       });
+    } else {
+      throw new TypeError();
     }
+    setForEach(uniqueNodeIds, (nodeId) => appendArrayValue(nodeIds, nodeId));
     arraySort(nodeIds);
-    return encodeSignatureValues(nodeIds);
+    return objectFreeze({
+      fingerprint: encodeSignatureValues(nodeIds),
+      valid: true,
+    });
   } catch {
-    return '';
+    return objectFreeze({fingerprint: null, valid: false});
   }
 }
 
 export {
+  STORAGE_ACCOUNTING_OWNER_DEPENDENCY,
   READINESS_PLANNING_DEPENDENCY_REGISTRY,
   READINESS_PLANNING_OWNER_DEPENDENCIES,
   READINESS_PLANNING_REASON,

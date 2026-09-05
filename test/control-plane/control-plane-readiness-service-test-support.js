@@ -226,3 +226,15 @@ export function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {
     [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
   };
 }
+
+export const READINESS_CHURN_NOW_MS = 1_780_000_000_000;
+export const READINESS_CHURN_NODE_COUNT = 5;
+
+export function createReadinessChurnCache() {
+  return createCache({
+    nodes: Array.from(
+      {length: READINESS_CHURN_NODE_COUNT},
+      (_, index) => createActiveNode(`node-${index}`),
+    ),
+  });
+}

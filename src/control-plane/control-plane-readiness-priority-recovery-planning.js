@@ -4,6 +4,8 @@ import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
+import {planningIdentitiesEqual} from
+  './readiness-planning-semantic-generation.js';
 
 const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
   'priority_recovery_planning_projection_build';
@@ -12,6 +14,14 @@ const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
 // difference deeper than this reads as "not equal", so the bound can only
 // DECLINE a canonical identity, never grant one.
 const PLANNING_PROJECTION_EQUALITY_MAX_DEPTH = 12;
+
+function planningCurrencyEquals(left, right) {
+  if ((left && typeof left === 'object') ||
+      (right && typeof right === 'object')) {
+    return planningIdentitiesEqual(left, right);
+  }
+  return left === right;
+}
 
 // Reference-first structural equality for planning-projection content.
 //
@@ -131,13 +141,10 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     if (!this.planningAnswerMemoByInputSnapshot) {
       this.planningAnswerMemoByInputSnapshot = new WeakMap();
     }
-    const generation =
-      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
-        this.readPlanningProjectionSourceGeneration(
-          observedAt ??
-            (typeof this.now === 'function' ? this.now() : undefined),
-        ) :
-        null;
+    const generation = this.readPlanningProjectionGenerationForCall(
+      observedAt,
+      nodeId,
+    );
     // The answer also depends on the retained active snapshot, which other
     // paths (the async best-effort flow) mutate between calls — key on its
     // identity at entry so a fresher retained witness always re-merges.
@@ -184,7 +191,7 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     const cached = byNode ? byNode.get(nodeId) : undefined;
     if (
       cached &&
-      cached.generation === generation &&
+      planningCurrencyEquals(cached.generation, generation) &&
       cached.retainedAtEntry === retainedAtEntry
     ) {
       return cached;
@@ -658,7 +665,10 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
         planningSnapshot,
       );
     }
-    const generation = this.readPlanningProjectionGenerationForCall(observedAt);
+    const generation = this.readPlanningProjectionGenerationForCall(
+      observedAt,
+      planningSnapshot.nodeId || planningSnapshot.publisherNodeId || this.nodeId,
+    );
     if (generation === null) {
       return this.buildTrackedPriorityRecoveryPlanningProjection(
         planningSnapshot,
@@ -686,13 +696,22 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
   // caller clocks corrupts the latch ordering. Null when the composed owner
   // exposes no generation surface or the cache cannot version its tables:
   // identity reuse then disables and every call rebuilds, as it did before.
-  readPlanningProjectionGenerationForCall(observedAt) {
+  readPlanningProjectionGenerationForCall(observedAt, nodeId = this.nodeId) {
+    const currentIdentity =
+      typeof this.readCurrentPlanningProjectionIdentity === 'function' &&
+      typeof nodeId === 'string' ?
+        this.readCurrentPlanningProjectionIdentity(nodeId) :
+        null;
+    if (currentIdentity) {
+      return currentIdentity;
+    }
+    const observedAtMs = normalizeDiagnosticTimestampMs(observedAt) ??
+      (typeof this.now === 'function' ? this.now() : null);
     if (typeof this.readPlanningProjectionSourceGeneration !== 'function') {
       return null;
     }
     return this.readPlanningProjectionSourceGeneration(
-      observedAt ??
-        (typeof this.now === 'function' ? this.now() : undefined),
+      observedAtMs,
     );
   }
 
@@ -737,7 +756,8 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     if (cached.projection === null) {
       return planningSnapshot;
     }
-    return cached.generation === generation ? cached.projection : null;
+    return planningCurrencyEquals(cached.generation, generation) ?
+      cached.projection : null;
   }
 
   // Install this call's identity entry, and grant a canonical identity ONLY

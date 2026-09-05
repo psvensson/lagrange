@@ -300,12 +300,16 @@ class SystemTableCache {
           key,
         });
         this.lastAppliedAtMsByTableName.set(tableName, Date.now());
-        this.bumpTableMutationVersion(tableName);
+        const tableMutationRevision =
+          this.bumpTableMutationVersion(tableName);
         this.notifyListeners(
           tableName,
           CDC_OPERATIONS.DELETE,
           this.deepClone(evicted),
-          {causeId: normalizeCauseId(null)},
+          Object.freeze({
+            causeId: normalizeCauseId(null),
+            tableMutationRevision,
+          }),
         );
       }
     }
@@ -537,12 +541,12 @@ class SystemTableCache {
       });
       this.lastAppliedAtMsByTableName.set(tableName, Date.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
-      this.bumpTableMutationVersion(tableName);
+      const tableMutationRevision = this.bumpTableMutationVersion(tableName);
       this.notifyListeners(
         tableName,
         operation,
         this.deepClone(recordForNotification),
-        {causeId},
+        Object.freeze({causeId, tableMutationRevision}),
       );
     }
   }

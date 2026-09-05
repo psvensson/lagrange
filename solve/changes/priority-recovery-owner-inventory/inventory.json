@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "0558bc54169ba99aa01a3244bfe068cea88fdf22c0284bf1f3a6dc726e4d1033"
+    "sourceSha256": "cd48e92de3a22277739752d73d9620f2db82750046f30b363c189e1a65370ddf"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 65,
     "publicExportCount": 740,
-    "importEdgeCount": 305,
+    "importEdgeCount": 307,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
     "largestStronglyConnectedComponent": 1,
@@ -2020,6 +2020,16 @@
       "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "specifier": "./control-plane-readiness-planning-shared.js",
       "to": "src/control-plane/control-plane-readiness-planning-shared.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "./readiness-planning-semantic-generation.js",
+      "to": "src/control-plane/readiness-planning-semantic-generation.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,
@@ -4125,6 +4135,16 @@
       "targetLayer": "owner_decision",
       "crossLayer": true,
       "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/control-plane/publication-recovery-evidence-builders.js",
+      "specifier": "util",
+      "to": "util",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/control-plane/publication-recovery-evidence-normalizers.js",

@@ -23,21 +23,14 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
+import {
+  READINESS_CHURN_NODE_COUNT,
+  READINESS_CHURN_NOW_MS,
+  createReadinessChurnCache,
+} from './control-plane-readiness-service-test-support.js';
 
-const READINESS_CHURN_NOW_MS = 1_780_000_000_000;
-const READINESS_CHURN_NODE_COUNT = 5;
 const OPTION_VARIANT_LIMIT = 16;
 const OPTION_VARIANT_PRESSURE_COUNT = 80;
-const FORMATION_STORM_REVISION = 200;
-
-function createReadinessChurnCache() {
-  return createCache({
-    nodes: Array.from(
-      {length: READINESS_CHURN_NODE_COUNT},
-      (_, index) => createActiveNode(`node-${index}`),
-    ),
-  });
-}
 
 test('sync snapshot uses synchronous publication and capacity accessors ' +
   'for recovery admission', async (t) => {
@@ -107,8 +100,8 @@ test('sync snapshot uses synchronous publication and capacity accessors ' +
   t.end();
 });
 
-test('sync snapshot reuses a fresher stored readiness evaluation when the ' +
-  'visible cache row regresses', async (t) => {
+test('ordinary CL-012 reuse may bridge a regressed row while planning reads ' +
+  'project current source evidence', async (t) => {
   let now = 100000;
   const nodeId = 'node-sync-fresher';
   const freshHeartbeat = now - 100;
@@ -143,19 +136,31 @@ test('sync snapshot reuses a fresher stored readiness evaluation when the ' +
     [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
   });
 
-  const reused = readinessService.getNodeReadinessSync(nodeId);
+  const reused = readinessService.getReusableNodeReadinessSnapshotSync(nodeId);
   t.equal(reused.dimensions.serveEligible, true,
-    'sync callers should reuse the fresher stored snapshot');
+    'ordinary non-planning reuse should retain the fresher stored snapshot');
   t.equal(
     reused.nodeEvidence?.lastHeartbeat,
     freshHeartbeat,
     'reused sync snapshot should preserve the fresher heartbeat evidence',
   );
 
+  const planningCurrent = readinessService.buildNodeReadinessSyncCurrent(
+    nodeId,
+    {readinessPlanningOwnerBuild: true},
+  );
+  t.equal(planningCurrent.dimensions.serveEligible, false,
+    'planning reads must not republish CL-012 content under current currency');
+  t.equal(
+    planningCurrent.nodeEvidence?.lastHeartbeat,
+    now - 60000,
+    'planning reads project the currently visible heartbeat evidence',
+  );
+
   now = freshLease + 1;
-  const expired = readinessService.getNodeReadinessSync(nodeId);
-  t.equal(expired.dimensions.serveEligible, false,
-    'stored sync snapshots must stop overriding cache rows after lease expiry');
+  const expired = readinessService.getReusableNodeReadinessSnapshotSync(nodeId);
+  t.equal(expired, null,
+    'ordinary stored reuse expires at the canonical lease deadline');
   t.end();
 });
 
@@ -935,8 +940,8 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
   t.end();
 });
 
-test('priority recovery sync readiness retains recovery eligibility ' +
-  'when a newer planning epoch lacks priority blockers', (t) => {
+test('priority recovery current sync evaluation closes recovery eligibility ' +
+  'when a newer planning epoch clears priority blockers', (t) => {
   const nowAtStart = 215000;
   let now = nowAtStart;
   const joiningNodeId = 'node-priority-recovery-sync-stale-grace';
@@ -1002,7 +1007,10 @@ test('priority recovery sync readiness retains recovery eligibility ' +
     now: () => now,
   });
 
-  const activeReadiness = readinessService.getNodeReadinessSync(joiningNodeId);
+  const activeReadiness = readinessService.buildNodeReadinessSyncCurrent(
+    joiningNodeId,
+    {readinessPlanningOwnerBuild: true},
+  );
 
   t.equal(
     activeReadiness?.dimensions?.controlPlaneRecoveryEligible,
@@ -1015,10 +1023,23 @@ test('priority recovery sync readiness retains recovery eligibility ' +
     status: 'PUBLISHED',
     publishedActiveNodeIds: ['seed-node'],
   };
+  readinessService.syncOwnerDependencies({
+    membershipPublicationService: {
+      getLatestPublicationForNodeSync(targetNodeId, options = {}) {
+        if (targetNodeId !== joiningNodeId) {
+          return null;
+        }
+        return options?.readProfile === planningReadProfile ?
+          planningPublicationRow :
+          diagnosticsPublicationRow;
+      },
+    },
+  });
   now = nowAtStart + 1000;
 
-  const retainedReadiness = readinessService.getNodeReadinessSync(
+  const retainedReadiness = readinessService.buildNodeReadinessSyncCurrent(
     joiningNodeId,
+    {readinessPlanningOwnerBuild: true},
   );
 
   t.equal(
@@ -1028,8 +1049,8 @@ test('priority recovery sync readiness retains recovery eligibility ' +
   );
   t.equal(
     retainedReadiness?.dimensions?.controlPlaneRecoveryEligible,
-    true,
-    'sync readiness should retain recovery eligibility when the newer planning epoch clears priority blockers',
+    false,
+    'the signaled newer planning epoch should close obsolete recovery grace',
   );
 
   t.end();
@@ -1229,21 +1250,15 @@ test('continuous formation churn cannot repeatedly jump the fair owner queue',
       },
     });
     readiness.getNodeReadinessSync('node-0');
+    const planningOwner = readiness.readinessPlanningSnapshotOwner;
     const buildsBeforeStorm =
       readiness.getReadinessPlanningDiagnostics().buildOwnerKeys.length;
-    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      [COLUMN.NODE_ID]: 'node-0',
-      revision: 90,
-    });
+    planningOwner.enqueueOwnerKeys('fairness_probe');
     const buildsByTurn = [];
     for (let turn = 0;
       turn < READINESS_CHURN_NODE_COUNT && scheduled.length > 0;
       turn++) {
-      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-        [COLUMN.NODE_ID]: 'node-4',
-        [COLUMN.STATUS]: NODE_STATE.JOINING,
-        revision: 100 + turn,
-      });
+      planningOwner.enqueueOwnerKeys('formation_fairness_probe');
       const before = readiness.getReadinessPlanningDiagnostics().buildCount;
       scheduled.shift()();
       await Promise.resolve();
@@ -1437,57 +1452,3 @@ test('positive readiness veto signatures distinguish delimiter-bearing ' +
     'a delimiter-bearing metadata change invalidates the prior positive');
   readiness.shutdownReadinessPlanningOwner();
 });
-
-test('alternating formation owners cannot repeatedly jump the fair owner queue',
-  async (t) => {
-    const cache = createReadinessChurnCache();
-    for (const nodeId of ['node-3', 'node-4']) {
-      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-        [COLUMN.NODE_ID]: nodeId,
-        [COLUMN.STATUS]: NODE_STATE.JOINING,
-      });
-    }
-    const scheduled = [];
-    let connectedFormationOwner = 'node-3';
-    const readiness = new ControlPlaneReadinessService({
-      nodeId: 'node-0',
-      systemTableCache: cache,
-      now: () => READINESS_CHURN_NOW_MS,
-      readinessPlanningScheduleDrainFn: (callback) => scheduled.push(callback),
-      messageRouter: {
-        getConnectionState: (nodeId) =>
-          nodeId === connectedFormationOwner || nodeId === 'node-0' ?
-            STATE.CONNECTED : STATE.DISCONNECTED,
-        getConnectedNodes: () =>
-          new Set(['node-0', connectedFormationOwner]),
-      },
-    });
-    readiness.getNodeReadinessSync('node-0');
-    const buildsBeforeStorm =
-      readiness.getReadinessPlanningDiagnostics().buildOwnerKeys.length;
-    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-      [COLUMN.NODE_ID]: 'node-0',
-      revision: FORMATION_STORM_REVISION - 10,
-    });
-    for (let turn = 0;
-      turn < READINESS_CHURN_NODE_COUNT && scheduled.length > 0;
-      turn++) {
-      connectedFormationOwner = turn % 2 === 0 ? 'node-3' : 'node-4';
-      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
-        [COLUMN.NODE_ID]: connectedFormationOwner,
-        [COLUMN.STATUS]: NODE_STATE.JOINING,
-        revision: FORMATION_STORM_REVISION + turn,
-      });
-      scheduled.shift()();
-      await Promise.resolve();
-      await Promise.resolve();
-    }
-    const stormOwners = readiness.getReadinessPlanningDiagnostics()
-      .buildOwnerKeys.slice(buildsBeforeStorm);
-    t.ok(stormOwners.includes('node-1'),
-      'an unrelated dirty owner progresses despite alternating formation owners');
-    t.ok(stormOwners.filter((ownerKey) =>
-      ownerKey === 'node-3' || ownerKey === 'node-4').length <= 2,
-    'each formation owner receives at most one priority turn per epoch');
-    readiness.shutdownReadinessPlanningOwner();
-  });

@@ -5,10 +5,8 @@ import {
   READINESS_PLANNING_OWNER_DEPENDENCIES,
   READINESS_PLANNING_REASON,
   READINESS_PLANNING_TABLES,
-  TOKEN_STATUS,
   appendArrayValue,
   buildQueueOwnerKey,
-  canRebaseStoredSnapshot,
   defaultMacrotaskScheduler,
   freezeToken,
   getReadinessBuildFailureReason,
@@ -19,9 +17,9 @@ import {
   shouldResetReadinessBuildAttempts,
 } from './readiness-planning-version-contract.js';
 import {
-  buildDeferredSnapshot,
-  capturePositiveDecisionLiveVeto,
-  capturePositiveDecisionPublicationGuard,
+  ReadinessPlanningSemanticGenerationTracker,
+} from './readiness-planning-semantic-generation.js';
+import {
   defineRecordValue,
 } from './readiness-planning-publication-contract.js';
 import {
@@ -33,6 +31,8 @@ import {
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
 import {ReadinessPlanningDiagnosticRetention} from
   './readiness-planning-diagnostic-retention.js';
+import {installReadinessPlanningSemanticCurrencyMethods} from './readiness-planning-semantic-currency-methods.js';
+import {installReadinessPlanningCompletionAdmissionMethods} from './readiness-planning-completion-admission-methods.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -63,39 +63,94 @@ const READINESS_PLANNING_MAX_OPTION_VARIANTS_PER_OWNER = 16;
 function initializeBuildVariantState(owner) {
   owner.completedSnapshotsByOwnerAndBuildKey = new MapConstructor();
   owner.buildOptionsByOwnerAndBuildKey = new MapConstructor();
+  owner.barrierBlockedOptionsByOwnerAndBuildKey = new MapConstructor();
+}
+
+function initializeGenerationState(owner) {
+  owner.tableRevisions = objectCreate(null);
+  for (let index = 0; index < READINESS_PLANNING_TABLES.length; index++) {
+    defineRecordValue(owner.tableRevisions, READINESS_PLANNING_TABLES[index], 0);
+  }
+  owner.cacheGeneration = 1;
+  owner.membershipOwnerGeneration = 1;
+  owner.ownerDependencyGenerations = objectCreate(null);
+  for (let index = 0;
+    index < READINESS_PLANNING_OWNER_DEPENDENCIES.length;
+    index++) {
+    defineRecordValue(
+      owner.ownerDependencyGenerations,
+      READINESS_PLANNING_OWNER_DEPENDENCIES[index],
+      1,
+    );
+  }
+  owner.readinessSnapshotGeneration = 0;
+  owner.recoveryEpochRevision = 0;
+  owner.transportTopologyGeneration = 0;
+  owner.generationSaturated = false;
+}
+
+function supportsCapacitySemanticPlanning(service) {
+  return typeof service?.storageAccountingService
+    ?.subscribeCapacitySemanticChanges === 'function' &&
+    typeof service?.storageAccountingService
+      ?.getCapacitySemanticIdentity === 'function';
+}
+
+function initializeSemanticPlanningState(owner) {
+  owner.transportTopologyProjection = readConnectedNodeFingerprint(
+    owner.service?.messageRouter,
+  );
+  owner.transportTopologyValid = owner.transportTopologyProjection.valid;
+  owner.pendingLazyGlobalImpact = false;
+  owner.semanticGenerationTracker =
+    new ReadinessPlanningSemanticGenerationTracker();
+  owner.semanticGenerationTracker.initializeSourceRevisionTracking(
+    owner.service?.systemTableCache,
+  );
+  owner.semanticPlanningEnabled =
+    typeof owner.service?.nodeLivenessSemanticProjectionOwner?.subscribe ===
+      'function';
+  owner.capacitySemanticPlanningEnabled = supportsCapacitySemanticPlanning(
+    owner.service,
+  );
+}
+
+function createPlanningQueue(owner, options) {
+  return new OwnerKeyReconcileQueue({
+    name: READINESS_PLANNING_QUEUE_NAME,
+    maxConcurrency: 1,
+    maxItemsPerDrain: 1,
+    scheduleDrainFn: typeof options.scheduleDrainFn === 'function' ?
+      options.scheduleDrainFn : defaultMacrotaskScheduler,
+    now: owner.now,
+    setTimeoutFn: owner.service?.setTimeoutFn,
+    clearTimeoutFn: owner.service?.clearTimeoutFn,
+    reconcileFn: (_queueOwnerKey, _reasons, context) =>
+      owner.reconcile(context?.ownerKey, context),
+    retryPolicy: {
+      isRetryableError: isReadinessBuildFailureRetryable,
+      getRetryAfterMs: getReadinessBuildRetryAfterMs,
+      getFailureReason: getReadinessBuildFailureReason,
+      shouldResetAttempts: shouldResetReadinessBuildAttempts,
+      maxAttempts: READINESS_PLANNING_MAX_RETRY_ATTEMPTS,
+    },
+  });
+}
+
+function subscribeNodeLivenessChanges(owner) {
+  const livenessOwner = owner.service?.nodeLivenessSemanticProjectionOwner;
+  if (typeof livenessOwner?.subscribe !== 'function') return () => {};
+  return livenessOwner.subscribe(
+    (change) => owner.recordNodeLivenessChange(change),
+  );
 }
 
 class ReadinessPlanningSnapshotOwner {
   constructor(options = {}) {
     this.service = options.service;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
-    this.tableRevisions = objectCreate(null);
-    for (let index = 0; index < READINESS_PLANNING_TABLES.length; index++) {
-      defineRecordValue(
-        this.tableRevisions,
-        READINESS_PLANNING_TABLES[index],
-        0,
-      );
-    }
-    this.cacheGeneration = 1;
-    this.membershipOwnerGeneration = 1;
-    this.ownerDependencyGenerations = objectCreate(null);
-    for (let index = 0;
-      index < READINESS_PLANNING_OWNER_DEPENDENCIES.length;
-      index++) {
-      defineRecordValue(
-        this.ownerDependencyGenerations,
-        READINESS_PLANNING_OWNER_DEPENDENCIES[index],
-        1,
-      );
-    }
-    this.readinessSnapshotGeneration = 0;
-    this.recoveryEpochRevision = 0;
-    this.transportTopologyGeneration = 0;
-    this.generationSaturated = false;
-    this.transportTopologyFingerprint = readConnectedNodeFingerprint(
-      this.service?.messageRouter,
-    );
+    initializeGenerationState(this);
+    initializeSemanticPlanningState(this);
     this.completedSnapshotsByOwnerKey = new MapConstructor();
     initializeBuildVariantState(this);
     this.logicalOwnerKeyByQueueOwnerKey = new MapConstructor();
@@ -104,44 +159,36 @@ class ReadinessPlanningSnapshotOwner {
     this.diagnosticRetention = new ReadinessPlanningDiagnosticRetention();
     this.snapshotListeners = new SetConstructor();
     this.snapshotListenerFailureCount = 0;
+    this.feedbackSignatureByNodeId = new MapConstructor();
     // Lazily baselined on the first enqueue: an eager read here performs a
     // full-table cache scan at service construction, which the async
     // owner-path contract forbids before any planning consumer exists.
     this.formationEpochKey = null;
     this.prioritizedFormationOwnerKeys = new SetConstructor();
-    this.queue = new OwnerKeyReconcileQueue({
-      name: READINESS_PLANNING_QUEUE_NAME,
-      maxConcurrency: 1,
-      maxItemsPerDrain: 1,
-      scheduleDrainFn:
-        typeof options.scheduleDrainFn === 'function' ?
-          options.scheduleDrainFn :
-          defaultMacrotaskScheduler,
-      now: this.now,
-      setTimeoutFn: this.service?.setTimeoutFn,
-      clearTimeoutFn: this.service?.clearTimeoutFn,
-      reconcileFn: (_queueOwnerKey, _reasons, context) =>
-        this.reconcile(context?.ownerKey, context),
-      retryPolicy: {
-        isRetryableError: isReadinessBuildFailureRetryable,
-        getRetryAfterMs: getReadinessBuildRetryAfterMs,
-        getFailureReason: getReadinessBuildFailureReason,
-        shouldResetAttempts: shouldResetReadinessBuildAttempts,
-        maxAttempts: READINESS_PLANNING_MAX_RETRY_ATTEMPTS,
-      },
-    });
+    this.queue = createPlanningQueue(this, options);
+    this.stopped = false;
+    this.sourceChangeTransactionDepth = 0;
+    this.nodeLivenessUnsubscribe = subscribeNodeLivenessChanges(this);
+    this.capacityUnsubscribe = () => {};
+    this.refreshCapacitySemanticSubscription();
   }
 
   captureToken() {
-    const fingerprint = readConnectedNodeFingerprint(
+    if (this.stopped) return freezeToken(this);
+    const projection = readConnectedNodeFingerprint(
       this.service?.messageRouter,
     );
-    if (fingerprint !== this.transportTopologyFingerprint) {
-      this.transportTopologyFingerprint = fingerprint;
+    if (projection.valid !== this.transportTopologyProjection.valid ||
+        projection.fingerprint !==
+          this.transportTopologyProjection.fingerprint) {
+      this.transportTopologyProjection = projection;
+      this.transportTopologyValid = projection.valid;
       this.transportTopologyGeneration = nextSemanticGeneration(
         this,
         this.transportTopologyGeneration,
       );
+      const impact = this.semanticGenerationTracker.recordGlobalChange();
+      this.pendingLazyGlobalImpact = impact.semanticChanged === true;
     }
     return freezeToken(this);
   }
@@ -181,7 +228,17 @@ class ReadinessPlanningSnapshotOwner {
     this.rememberBuildOptions(ownerKey, buildOptionsKey, options);
     const queueOwnerKey = buildQueueOwnerKey(ownerKey, buildOptionsKey);
     mapSet(this.logicalOwnerKeyByQueueOwnerKey, queueOwnerKey, ownerKey);
-    this.queue.enqueue(queueOwnerKey, reason, {ownerKey, options, token});
+    this.queue.enqueue(queueOwnerKey, reason, {
+      ownerKey,
+      options,
+      // Enqueue is an invalidation bookkeeping path, not an admission read.
+      // The semantic event has already rotated the tracker, so capture its
+      // current identity without forcing all-node P/C lazy projection here.
+      planningIdentity: this.semanticGenerationTracker.captureIdentity(
+        ownerKey,
+      ),
+      token,
+    });
     return queueOwnerKey;
   }
 
@@ -263,6 +320,9 @@ class ReadinessPlanningSnapshotOwner {
     for (let index = 0; index < rows.length; index++) {
       appendUniqueOwnerKey(readOwnerKey(rows[index]));
     }
+    mapForEach(this.buildOptionsByOwnerAndBuildKey, (_variants, ownerKey) => {
+      appendUniqueOwnerKey(ownerKey);
+    });
     if (ownerKeys.length === 0 && typeof this.service?.nodeId === 'string') {
       appendUniqueOwnerKey(this.service.nodeId);
     }
@@ -280,40 +340,57 @@ class ReadinessPlanningSnapshotOwner {
     return prioritizedOwnerKeys;
   }
 
-  enqueueOwnerKeys(reason, record = null) {
-    const token = this.captureToken();
-    // One shared frozen node-row read serves the owner list and both
-    // formation keys below; per-callee re-reads amplified full-table reads
-    // several times per enqueue on the live seed.
-    const sharedNodeRows = readSharedNodeRows(this.service);
-    const ownerKeys = this.listOwnerKeys(record, sharedNodeRows);
-    for (let index = 0; index < ownerKeys.length; index++) {
-      const ownerKey = ownerKeys[index];
-      const optionsByBuildKey = mapGet(
-        this.buildOptionsByOwnerAndBuildKey,
-        ownerKey,
-      );
-      const variants = [];
-      if (optionsByBuildKey) {
-        mapForEach(optionsByBuildKey, (options) => {
-          appendArrayValue(variants, options);
-        });
-      }
-      const defaultOptions = {};
-      const defaultBuildOptionsKey = this.captureBuildOptionsKey(
-        ownerKey,
-        defaultOptions,
-      );
-      if (!optionsByBuildKey ||
+  readSharedNodeRowsForEnqueue() {
+    const ownerBackedWithoutVersionedCache = Boolean(
+      this.service?.nodesOwner &&
+      typeof this.service?.systemTableCache?.getTableMutationVersion !==
+        'function',
+    );
+    return ownerBackedWithoutVersionedCache ? [] :
+      readSharedNodeRows(this.service);
+  }
+
+  readOwnerBuildVariants(ownerKey) {
+    const optionsByBuildKey = mapGet(
+      this.buildOptionsByOwnerAndBuildKey,
+      ownerKey,
+    );
+    const variants = [];
+    if (optionsByBuildKey) {
+      mapForEach(optionsByBuildKey, (options) => {
+        appendArrayValue(variants, options);
+      });
+    }
+    const defaultOptions = {};
+    const defaultBuildOptionsKey = this.captureBuildOptionsKey(
+      ownerKey,
+      defaultOptions,
+    );
+    if (!optionsByBuildKey ||
         !mapHas(optionsByBuildKey, defaultBuildOptionsKey)) {
-        appendArrayValue(variants, defaultOptions);
-      }
-      for (let variantIndex = 0;
-        variantIndex < variants.length;
-        variantIndex++) {
-        this.enqueueBuild(ownerKey, reason, variants[variantIndex], token);
+      appendArrayValue(variants, defaultOptions);
+    }
+    return variants;
+  }
+
+  enqueueOwnerVariants(
+    ownerKey,
+    reason,
+    token,
+    excludedQueueOwnerKey,
+  ) {
+    const variants = this.readOwnerBuildVariants(ownerKey);
+    for (let index = 0; index < variants.length; index += 1) {
+      const options = variants[index];
+      const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
+      if (buildQueueOwnerKey(ownerKey, buildOptionsKey) !==
+          excludedQueueOwnerKey) {
+        this.enqueueBuild(ownerKey, reason, options, token);
       }
     }
+  }
+
+  promoteFormationOwner(sharedNodeRows) {
     const formationOwnerKey =
       readFormationBootstrapOwnerKey(this.service, sharedNodeRows);
     const formationEpochKey =
@@ -322,19 +399,31 @@ class ReadinessPlanningSnapshotOwner {
       this.formationEpochKey = formationEpochKey;
       setClear(this.prioritizedFormationOwnerKeys);
     }
-    if (
-      formationOwnerKey &&
-      !setHas(this.prioritizedFormationOwnerKeys, formationOwnerKey)
-    ) {
-      const buildOptionsKey = this.captureBuildOptionsKey(
-        formationOwnerKey,
-        {},
+    if (!formationOwnerKey ||
+        setHas(this.prioritizedFormationOwnerKeys, formationOwnerKey)) return;
+    const buildOptionsKey = this.captureBuildOptionsKey(formationOwnerKey, {});
+    this.queue.promotePending(
+      buildQueueOwnerKey(formationOwnerKey, buildOptionsKey),
+    );
+    setAdd(this.prioritizedFormationOwnerKeys, formationOwnerKey);
+  }
+
+  enqueueOwnerKeys(reason, record = null, excludedQueueOwnerKey = null) {
+    const token = this.captureToken();
+    // One shared frozen node-row read serves the owner list and both
+    // formation keys below; per-callee re-reads amplified full-table reads
+    // several times per enqueue on the live seed.
+    const sharedNodeRows = this.readSharedNodeRowsForEnqueue();
+    const ownerKeys = this.listOwnerKeys(record, sharedNodeRows);
+    for (let index = 0; index < ownerKeys.length; index++) {
+      this.enqueueOwnerVariants(
+        ownerKeys[index],
+        reason,
+        token,
+        excludedQueueOwnerKey,
       );
-      this.queue.promotePending(
-        buildQueueOwnerKey(formationOwnerKey, buildOptionsKey),
-      );
-      setAdd(this.prioritizedFormationOwnerKeys, formationOwnerKey);
     }
+    this.promoteFormationOwner(sharedNodeRows);
   }
 
   requestRefresh(ownerKey, options = {}) {
@@ -348,206 +437,93 @@ class ReadinessPlanningSnapshotOwner {
     );
   }
 
-  recordTableChange(tableName, record = null) {
-    if (!arrayIncludes(READINESS_PLANNING_TABLES, tableName)) {
-      return;
-    }
-    this.tableRevisions[tableName] = nextSemanticGeneration(
-      this,
-      this.tableRevisions[tableName],
+  flushLazyGlobalImpact(excludedQueueOwnerKey = null) {
+    if (!this.pendingLazyGlobalImpact || this.stopped) return;
+    this.pendingLazyGlobalImpact = false;
+    this.enqueueOwnerKeys(
+      READINESS_PLANNING_REASON.SOURCE_CHANGED,
+      null,
+      excludedQueueOwnerKey,
     );
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED, record);
   }
 
-  recordCacheReplacement() {
-    this.cacheGeneration = nextSemanticGeneration(this, this.cacheGeneration);
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
-  }
-
-  recordMembershipOwnerReplacement() {
-    this.membershipOwnerGeneration = nextSemanticGeneration(
-      this,
-      this.membershipOwnerGeneration,
-    );
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
-  }
-
-  recordOwnerDependencyReplacement(ownerName) {
-    if (!arrayIncludes(READINESS_PLANNING_OWNER_DEPENDENCIES, ownerName)) {
-      return;
-    }
-    this.ownerDependencyGenerations[ownerName] = nextSemanticGeneration(
-      this,
-      this.ownerDependencyGenerations[ownerName],
-    );
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
-  }
-
-  recordReadinessSnapshotChange(ownerKey = null) {
-    this.readinessSnapshotGeneration = nextSemanticGeneration(
-      this,
-      this.readinessSnapshotGeneration,
-    );
-    if (ownerKey) {
-      this.requestSourceRefresh(ownerKey);
-      return;
-    }
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
-  }
-
-  recordRecoveryEpochChange(ownerKey = null) {
-    this.recoveryEpochRevision = nextSemanticGeneration(
-      this,
-      this.recoveryEpochRevision,
-    );
-    if (ownerKey) {
-      this.requestSourceRefresh(ownerKey);
-      return;
-    }
-    this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
-  }
-
-  requestSourceRefresh(ownerKey) {
-    this.enqueueBuild(ownerKey, READINESS_PLANNING_REASON.SOURCE_CHANGED, {});
-  }
-
-  isCompletedSnapshotLive(ownerKey, completed) {
-    const snapshot = completed?.snapshot;
-    if (!snapshot) {
-      return false;
-    }
-    return completed.positiveDecisionLiveVeto ===
-      this.capturePositiveDecisionLiveVeto(
-        ownerKey,
-        snapshot,
-        completed.completedAtMs,
-      );
-  }
-
-  capturePositiveDecisionLiveVeto(ownerKey, snapshot, capturedAtMs) {
-    return capturePositiveDecisionLiveVeto(
-      this.service,
+  enqueueAffectedOwnerKey(ownerKey, reason) {
+    const optionsByBuildKey = mapGet(
+      this.buildOptionsByOwnerAndBuildKey,
       ownerKey,
-      snapshot,
-      capturedAtMs,
-      this.now(),
     );
-  }
-
-  capturePublicationGuard(ownerKey) {
-    return capturePositiveDecisionPublicationGuard(this.service, ownerKey);
-  }
-
-  canConsumeInitialBootstrap(ownerKey) {
-    // Short-circuit before the node-table scan: once the initial bootstrap
-    // is consumed the answer is unconditionally false, and this sits on the
-    // readSync miss path where the scan ran on every read.
-    if (this.initialBootstrapConsumed) {
-      return false;
+    if (!optionsByBuildKey) {
+      this.enqueueBuild(ownerKey, reason, {});
+      return;
     }
-    const formationOwnerKey = readFormationBootstrapOwnerKey(this.service);
-    return !formationOwnerKey || formationOwnerKey === ownerKey;
-  }
-
-  // The floored planning generation from the service (null when the service
-  // or its cache cannot version tables — sealed stubs keep exact token
-  // semantics). Every source-table write reaches this key within one 250ms
-  // latch window, the same bound every planning-layer memo below already
-  // accepts; token-only inputs (transport fingerprint, owner-dependency
-  // generations) stay exact via the token comparison and the per-read
-  // live-veto check.
-  readCompletedSourceGeneration() {
-    return typeof this.service?.readPlanningProjectionSourceGeneration ===
-      'function' ?
-      this.service.readPlanningProjectionSourceGeneration(this.now()) :
-      null;
-  }
-
-  matchesCompletedSourceGeneration(completed) {
-    return completed.sourceGeneration !== null &&
-      completed.sourceGeneration !== undefined &&
-      completed.sourceGeneration === this.readCompletedSourceGeneration();
-  }
-
-  isNodeRowStillPresent(ownerKey) {
-    if (typeof this.service?.getNodeRow !== 'function') {
-      return true;
-    }
-    const nodeRow = this.service.getNodeRow(ownerKey);
-    return nodeRow !== null && nodeRow !== undefined;
-  }
-
-  // Serve admission for an ALREADY-completed build. Two bounds decide it, and
-  // the completed record's token STATUS is not one of them.
-  //
-  // Exact-token reuse requires the build to have landed current: nothing moved
-  // between its capture and its publication, so the stored token still names
-  // the live source vector.
-  //
-  // Floored reuse admits a build whose exact token has rotated, bounded by the
-  // 250ms floored planning generation stamped at completion and by the
-  // positive-decision live veto. It was introduced for reads that arrive after
-  // a current build (live: every readiness evaluation rebuilt its snapshot
-  // plus a full projection-evidence normalization — the 31.4% inclusive
-  // residual in the archived profiled run 20-55-51-160Z), and it is the same
-  // admission a build stamped STALE needs: `tokenStatus` records only THAT the
-  // source token advanced while the build was in flight, never that the built
-  // content is unfit. The build read live cache state, and its
-  // `sourceGeneration` is stamped at completion, so a STALE build carries
-  // exactly the staleness class a CURRENT build carries when it is reused
-  // across the same floored generation window — the same bound, the same veto,
-  // no widening.
-  //
-  // Refusing STALE outright turned a token-rotation race into an UNBOUNDED
-  // denial. Under sustained source churn no build ever lands current, so every
-  // reader received the all-false deferred contract whose sole reason is
-  // PLANNING_SNAPSHOT_REFRESH_PENDING, for as long as the churn lasted:
-  // measured on GCP run 2026-08-31T00-12-47 as 88s in which a live user-table
-  // partition's raft leader was denied in 23 of 23 routing samples with all
-  // three replica service rows present and active, and the INSERT retried to
-  // its deadline and failed with PARTITION_SERVICE_NOT_FOUND. An owner that
-  // cannot land a current build has an answer that is stale within a bounded
-  // window, not an answer of "definitively not ready".
-  canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
-    return !token.generationSaturated &&
-      completed.buildOptionsKey === buildOptionsKey &&
-      ((completed.tokenStatus === TOKEN_STATUS.CURRENT &&
-        this.tokensEqual(completed.capturedToken, token)) ||
-        this.matchesCompletedSourceGeneration(completed)) &&
-      this.isCompletedSnapshotLive(ownerKey, completed);
-  }
-
-  // Live profiling of the archived run
-  // run-2026-08-15T16-36-59-912Z-profiled-manual measured every deferred
-  // read minting a fresh frozen evidence graph, so the identity-keyed
-  // retention in projection-readiness-evidence could never hit for
-  // evidence-absent joiners (9x per-build cost against a same-identity
-  // read). The deferred snapshot is a pure derivation of (source snapshot,
-  // token generation, ownerKey); any source change rotates the token key
-  // and rebuilds.
-  buildMemoizedDeferredSnapshot(snapshot, token, ownerKey) {
-    if (!this.deferredSnapshotMemoByOwnerKey) {
-      this.deferredSnapshotMemoByOwnerKey = new Map();
-    }
-    const entry = this.deferredSnapshotMemoByOwnerKey.get(ownerKey);
-    if (entry && entry.sourceSnapshot === snapshot &&
-      entry.tokenKey === token?.tokenKey) {
-      return entry.deferred;
-    }
-    const deferred = buildDeferredSnapshot(snapshot, token, ownerKey);
-    this.deferredSnapshotMemoByOwnerKey.set(ownerKey, {
-      sourceSnapshot: snapshot,
-      tokenKey: token?.tokenKey,
-      deferred,
+    const variants = [];
+    mapForEach(optionsByBuildKey, (options) => {
+      appendArrayValue(variants, options);
     });
-    return deferred;
+    for (let index = 0; index < variants.length; index += 1) {
+      this.enqueueBuild(ownerKey, reason, variants[index]);
+    }
+  }
+
+  applyPlanningImpact(impact) {
+    if (this.stopped || !impact?.semanticChanged) return;
+    if (this.sourceChangeTransactionDepth > 0) return;
+    if (impact.globalChanged) {
+      this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED);
+      return;
+    }
+    for (let index = 0; index < impact.affectedNodeIds.length; index += 1) {
+      this.enqueueAffectedOwnerKey(
+        impact.affectedNodeIds[index],
+        READINESS_PLANNING_REASON.SOURCE_CHANGED,
+      );
+    }
+  }
+
+  beginCacheChangeTransaction() {
+    if (this.stopped) return;
+    this.sourceChangeTransactionDepth++;
+    this.semanticGenerationTracker.beginTransaction();
+  }
+
+  commitCacheChangeTransaction() {
+    if (this.sourceChangeTransactionDepth === 0) return;
+    this.sourceChangeTransactionDepth--;
+    const impact = this.semanticGenerationTracker.commitTransaction();
+    if (this.sourceChangeTransactionDepth === 0 && impact) {
+      this.applyPlanningImpact(impact);
+      if (!this.hasUnclassifiedSourceChange()) {
+        this.wakeBarrierBlockedVariants();
+      }
+    }
   }
 
   readSync(ownerKey, options, buildSnapshot) {
-    const currentToken = this.captureToken();
+    const currentSource = this.captureCurrentPlanningSource(ownerKey);
+    const currentToken = currentSource.token;
     const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
+    const currentQueueOwnerKey = buildQueueOwnerKey(ownerKey, buildOptionsKey);
     this.rememberBuildOptions(ownerKey, buildOptionsKey, options);
     const completed = this.readCompleted(ownerKey, buildOptionsKey);
+    if (!this.hasUnclassifiedSourceChange(currentSource.observation)) {
+      this.wakeBarrierBlockedVariants(currentQueueOwnerKey);
+    }
+    this.flushLazyGlobalImpact(currentQueueOwnerKey);
+    if (currentToken.transportTopologyValid === false ||
+        this.hasUnclassifiedSourceChange(currentSource.observation)) {
+      this.rememberBarrierBlockedBuild(ownerKey, buildOptionsKey, options);
+      this.enqueueBuild(
+        ownerKey,
+        READINESS_PLANNING_REASON.SOURCE_CHANGED,
+        options,
+        currentToken,
+      );
+      return this.buildMemoizedDeferredSnapshot(
+        completed?.snapshot || null,
+        currentToken,
+        ownerKey,
+      );
+    }
     if (!completed) {
       if (this.canConsumeInitialBootstrap(ownerKey)) {
         this.initialBootstrapConsumed = true;
@@ -561,6 +537,8 @@ class ReadinessPlanningSnapshotOwner {
           false,
           options,
           publicationGuard,
+          currentSource.identity,
+          currentSource,
         );
       }
       this.enqueueBuild(
@@ -579,33 +557,6 @@ class ReadinessPlanningSnapshotOwner {
     )) {
       return completed.snapshot;
     }
-    // A node-table-only token advance may rebase stored evidence forward,
-    // but only while the node row still exists: a DELETE is a real removal,
-    // not lag, and rebasing the old positive snapshot current would let a
-    // deleted node keep serving. A removed node falls through to the
-    // fail-closed LIVE_VETO replan.
-    if (
-      this.isNodeRowStillPresent(ownerKey) &&
-      canRebaseStoredSnapshot(completed.capturedToken, currentToken) &&
-      completed.buildOptionsKey === buildOptionsKey &&
-      typeof this.service?.getReusableNodeReadinessSnapshotSync === 'function'
-    ) {
-      const publicationGuard = this.capturePublicationGuard(ownerKey);
-      const reusable = this.service.getReusableNodeReadinessSnapshotSync(
-        ownerKey,
-      );
-      if (reusable) {
-        return this.publishCompleted(
-          ownerKey,
-          reusable,
-          currentToken,
-          buildOptionsKey,
-          false,
-          options,
-          publicationGuard,
-        );
-      }
-    }
     this.enqueueBuild(
       ownerKey,
       READINESS_PLANNING_REASON.LIVE_VETO,
@@ -619,78 +570,43 @@ class ReadinessPlanningSnapshotOwner {
     );
   }
 
-  publishCompleted(
-    ownerKey,
-    snapshot,
-    capturedToken,
-    buildOptionsKey,
-    notifyListeners = false,
-    buildOptions = {},
-    buildStartedPublicationGuard = null,
-  ) {
-    const currentToken = this.captureToken();
-    const tokenCurrent = !currentToken.generationSaturated &&
-      this.tokensEqual(capturedToken, currentToken);
-    const currentPublicationGuard = this.capturePublicationGuard(ownerKey);
-    const publicationGuardCurrent = buildStartedPublicationGuard === null ||
-      buildStartedPublicationGuard === currentPublicationGuard;
-    const current = tokenCurrent && publicationGuardCurrent;
-    const completedAtMs = this.now();
-    const completed = Object.freeze({
-      snapshot,
-      capturedToken,
+  prepareReconcileSource(ownerKey, options) {
+    const capturedSource = this.captureCurrentPlanningSource(ownerKey);
+    const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
+    this.rememberBuildOptions(ownerKey, buildOptionsKey, options);
+    const currentQueueOwnerKey = buildQueueOwnerKey(ownerKey, buildOptionsKey);
+    const sourceUnclassified = this.hasUnclassifiedSourceChange(
+      capturedSource.observation,
+    );
+    if (!sourceUnclassified) {
+      this.wakeBarrierBlockedVariants(currentQueueOwnerKey);
+    }
+    this.flushLazyGlobalImpact(currentQueueOwnerKey);
+    const blocked = capturedSource.token.transportTopologyValid === false ||
+      sourceUnclassified;
+    if (blocked) {
+      this.rememberBarrierBlockedBuild(ownerKey, buildOptionsKey, options);
+    }
+    return objectFreeze({
+      blocked,
       buildOptionsKey,
-      sourceGeneration: this.readCompletedSourceGeneration(),
-      tokenStatus: current ? TOKEN_STATUS.CURRENT : TOKEN_STATUS.STALE,
-      completedAtMs,
-      positiveDecisionLiveVeto: this.capturePositiveDecisionLiveVeto(
-        ownerKey,
-        snapshot,
-        completedAtMs,
-      ),
+      capturedSource,
     });
-    this.rememberCompleted(ownerKey, buildOptionsKey, completed);
-    if (!current) {
-      // Freshness pursuit is unchanged: the stale stamp stands, the diagnostic
-      // stays observable, and a replacement build is queued immediately.
-      this.enqueueBuild(
-        ownerKey,
-        tokenCurrent ?
-          READINESS_PLANNING_REASON.LIVE_VETO :
-          READINESS_PLANNING_REASON.TOKEN_ADVANCED_DURING_BUILD,
-        buildOptions,
-        currentToken,
-      );
-      // The caller still gets the honest answer this build produced whenever
-      // it clears the same serve admission every stored snapshot clears. Only
-      // an admission failure — a saturated generation, a rotated floored
-      // generation, or a moved live veto — yields the deferred contract, which
-      // is then evidence-absence rather than an unbounded denial.
-      return this.canReuseCompletedSnapshot(
-        ownerKey,
-        completed,
-        currentToken,
-        buildOptionsKey,
-      ) ?
-        snapshot :
-        this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
-    }
-    if (notifyListeners) {
-      this.notifySnapshotPublished(ownerKey, snapshot, capturedToken);
-    }
-    return snapshot;
   }
 
   reconcile(ownerKey, context = {}) {
-    const capturedToken = this.captureToken();
-    const buildOptionsKey = this.captureBuildOptionsKey(
-      ownerKey,
-      context?.options,
-    );
+    const options = context?.options || {};
+    const prepared = this.prepareReconcileSource(ownerKey, options);
+    const {buildOptionsKey, capturedSource} = prepared;
+    const capturedToken = capturedSource.token;
+    const capturedPlanningIdentity = capturedSource.identity;
+    if (prepared.blocked) {
+      return this.buildMemoizedDeferredSnapshot(null, capturedToken, ownerKey);
+    }
     const startedAt = this.now();
     const publicationGuard = this.capturePublicationGuard(ownerKey);
     const snapshot = this.service.buildNodeReadinessSyncCurrent(ownerKey, {
-      ...(context?.options || {}),
+      ...options,
       readinessPlanningOwnerBuild: true,
     });
     this.buildCount++;
@@ -701,10 +617,13 @@ class ReadinessPlanningSnapshotOwner {
       capturedToken,
       buildOptionsKey,
       true,
-      context?.options,
+      options,
       publicationGuard,
+      capturedPlanningIdentity,
+      capturedSource,
     );
     const completed = this.readCompleted(ownerKey, buildOptionsKey);
+    if (!completed || completed.snapshot !== snapshot) return result;
     const completedWithDuration = objectFreeze({
       ...completed,
       buildDurationMs: mathMax(0, this.now() - startedAt),
@@ -729,6 +648,7 @@ class ReadinessPlanningSnapshotOwner {
     });
     return objectFreeze({
       currentToken: this.captureToken(),
+      ...this.semanticGenerationTracker.getDiagnostics(),
       completedOwnerKeys: objectFreeze(completedOwnerKeys),
       pendingOwnerKeys: objectFreeze(arrayMap(
         copyDenseOwnDataArray(queue.pendingKeys),
@@ -764,11 +684,16 @@ class ReadinessPlanningSnapshotOwner {
   }
 
   shutdown() {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.nodeLivenessUnsubscribe();
+    this.capacityUnsubscribe();
     this.queue.shutdown();
     setClear(this.snapshotListeners);
     mapClear(this.completedSnapshotsByOwnerKey);
     mapClear(this.completedSnapshotsByOwnerAndBuildKey);
     mapClear(this.buildOptionsByOwnerAndBuildKey);
+    mapClear(this.barrierBlockedOptionsByOwnerAndBuildKey);
     mapClear(this.logicalOwnerKeyByQueueOwnerKey);
     if (this.deferredSnapshotMemoByOwnerKey) {
       mapClear(this.deferredSnapshotMemoByOwnerKey);
@@ -777,6 +702,10 @@ class ReadinessPlanningSnapshotOwner {
     this.diagnosticRetention.clear();
   }
 }
+
+installReadinessPlanningCompletionAdmissionMethods(ReadinessPlanningSnapshotOwner.prototype);
+
+installReadinessPlanningSemanticCurrencyMethods(ReadinessPlanningSnapshotOwner.prototype);
 
 export {
   READINESS_PLANNING_DEPENDENCY_REGISTRY,

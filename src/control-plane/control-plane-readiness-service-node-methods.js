@@ -512,12 +512,15 @@ const controlPlaneReadinessNodeMethods = {
             options.readinessPlanningColdBootstrapBuild === true,
         });
       }
-      const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
-        nodeId,
-        null,
-        publication,
-        membershipPublication,
-      );
+      const planningBuild = options.readinessPlanningOwnerBuild === true ||
+        options.readinessPlanningColdBootstrapBuild === true;
+      const fresherStoredSnapshot = planningBuild ? null :
+        this.getFresherStoredReadinessSnapshot(
+          nodeId,
+          null,
+          publication,
+          membershipPublication,
+        );
       if (fresherStoredSnapshot) {
         return fresherStoredSnapshot;
       }
@@ -605,7 +608,10 @@ const controlPlaneReadinessNodeMethods = {
     const usesDirectPublicationPlanning =
       options.membershipPublicationPlanningSource ===
         MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW;
-    const fresherStoredSnapshot = !usesDirectPublicationPlanning ?
+    const planningBuild = options.readinessPlanningOwnerBuild === true ||
+      options.readinessPlanningColdBootstrapBuild === true;
+    const fresherStoredSnapshot = !usesDirectPublicationPlanning &&
+      !planningBuild ?
       this.getFresherStoredReadinessSnapshot(
         nodeId,
         nodeRow,

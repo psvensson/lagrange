@@ -103,10 +103,12 @@ class SystemTableCacheObservationMethods {
 
   /** @private */
   bumpTableMutationVersion(tableName) {
+    const next = (this.mutationVersionByTableName.get(tableName) || 0) + 1;
     this.mutationVersionByTableName.set(
       tableName,
-      (this.mutationVersionByTableName.get(tableName) || 0) + 1,
+      next,
     );
+    return next;
   }
 
   /**

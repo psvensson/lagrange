@@ -13,6 +13,7 @@ import {ReadinessPlanningSnapshotOwner} from
   './readiness-planning-snapshot-owner.js';
 import {FormationReleaseHandoffClosureOwner} from './formation-release-handoff-closure-owner.js';
 import {FormationReleaseHandoffPublicationCoordinator} from './formation-release-handoff-publication-coordinator.js';
+import {installControlPlaneReadinessPlanningOwnerDelegateMethods} from './control-plane-readiness-planning-owner-delegate-methods.js';
 const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
@@ -339,6 +340,7 @@ class ControlPlaneReadinessParticipationBase {
         authoritativeReadinessRepairStaleHeartbeatMaxAgeMs:
           this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
       });
+    this.configureStorageCapacitySemanticProjection();
     this.readinessPlanningSnapshotOwner =
       options.readinessPlanningSnapshotOwner ||
       new ReadinessPlanningSnapshotOwner({
@@ -404,6 +406,19 @@ class ControlPlaneReadinessParticipationBase {
       options,
       LOCAL_STR_CACHEMUTATIONTARGET,
     );
+    const storageAccountingServiceProvided = objectHasOwn(
+      options,
+      LOCAL_STR_STORAGEACCOUNTINGSERVICE,
+    );
+    const replacementStorageAccountingService =
+      storageAccountingServiceProvided ?
+        options[LOCAL_STR_STORAGEACCOUNTINGSERVICE] || null :
+        this.storageAccountingService;
+    if (replacementStorageAccountingService !==
+        this.storageAccountingService) {
+      this.readinessPlanningSnapshotOwner
+        ?.prepareCapacitySemanticOwnerReplacement();
+    }
 
     if (systemTableCacheProvided) {
       this.systemTableCache = options.systemTableCache || null;
@@ -509,31 +524,9 @@ class ControlPlaneReadinessParticipationBase {
       this.nodeLivenessSemanticProjectionOwner?.recordAllSourceChanges();
       this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
     }
+    this.configureStorageCapacitySemanticProjection();
     recordChangedReadinessOwnerDependencies(
       this.readinessPlanningSnapshotOwner, this, previousOwnerDependencies);
-  }
-
-  getReadinessPlanningDiagnostics() {
-    return this.readinessPlanningSnapshotOwner?.getDiagnostics() || null;
-  }
-
-  subscribeReadinessPlanningSnapshots(listener) {
-    return this.readinessPlanningSnapshotOwner?.subscribe(listener) ||
-      (() => {});
-  }
-
-  recordReadinessPlanningSnapshotChange(nodeId) {
-    this.readinessPlanningSnapshotOwner?.recordReadinessSnapshotChange(nodeId);
-  }
-
-  recordReadinessPlanningRecoveryEpochChange(nodeId) {
-    this.readinessPlanningSnapshotOwner?.recordRecoveryEpochChange(nodeId);
-  }
-
-  shutdownReadinessPlanningOwner() {
-    this.formationReleaseHandoffPublicationCoordinator?.shutdown();
-    this.shutdownNodeLivenessSemanticProjectionOwner();
-    this.readinessPlanningSnapshotOwner?.shutdown();
   }
 
   /**
@@ -780,6 +773,10 @@ class ControlPlaneReadinessParticipationBase {
    * @private
    */
 }
+
+installControlPlaneReadinessPlanningOwnerDelegateMethods(
+  ControlPlaneReadinessParticipationBase.prototype,
+);
 
 installControlPlaneReadinessNodeMethods(
   ControlPlaneReadinessParticipationBase.prototype,

@@ -16,8 +16,6 @@ import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from
-  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   TEST_CONFIG,
   cleanupTestEnvironment,
@@ -28,6 +26,12 @@ import {
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {
+  createAlwaysReadyControlPlaneReadinessService,
+  createMockStorageAccountingService,
+  createMockStorageAdmissionService,
+  createMockStoragePressureBehavior,
+} from './rebalancer-integration-doubles.js';
 
 const TEST_TIMEOUT_MS = 120000;
 const READY_TIMEOUT_MS = 12000;
@@ -172,35 +176,6 @@ function findRebalancedBaselinePartitions(rows, baselinePartitionIds, seedNodeId
     }
   }
   return rebalancedPartitionIds;
-}
-
-function createAlwaysReadyControlPlaneReadinessService() {
-  return {
-    getNodeReadinessSync: () => ({
-      dimensions: {
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-      },
-    }),
-  };
-}
-
-function createMockStorageAdmissionService() {
-  return {
-    checkAdd: async () => ({decision: 'allow'}),
-    checkReplace: async () => ({decision: 'allow'}),
-  };
-}
-
-function createMockStorageAccountingService() {
-  return {
-    estimateReplicaBytes: () => 1,
-  };
-}
-
-function createMockStoragePressureBehavior() {
-  return {
-    shouldAllowMove: async () => ({decision: 'allow'}),
-  };
 }
 
 function createMockSqlQueryEngine() {

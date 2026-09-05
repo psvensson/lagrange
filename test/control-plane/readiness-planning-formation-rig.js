@@ -98,9 +98,13 @@ function createFormationShapedCache(nowMs) {
       } else {
         rows?.set(key, Object.freeze({...rows?.get(key), ...row}));
       }
-      versions.set(table, (versions.get(table) || 0) + 1);
+      const tableMutationRevision = (versions.get(table) || 0) + 1;
+      versions.set(table, tableMutationRevision);
       for (const listener of listeners) {
-        listener(table, operation, row, null);
+        listener(table, operation, row, Object.freeze({
+          causeId: null,
+          tableMutationRevision,
+        }));
       }
     },
     onCacheChange: (listener) => listeners.add(listener),
@@ -196,21 +200,34 @@ function driveFormationShapedChurn() {
       clock += RATE_STEP_MS;
       if (call % RATE_WRITE_EVERY === 0) {
         writeRevision += 1;
-        cache.applySystemTableChange(
-          churnTables[writeRevision % churnTables.length],
-          'UPDATE',
-          {
-            revision: writeRevision,
-            updated_at: clock,
+        const tableName = churnTables[writeRevision % churnTables.length];
+        const identityByTable = {
+          [TABLES.NODES]: {
             node_id: `node-${writeRevision % NODE_COUNT}`,
+          },
+          [TABLES.NODE_ENDPOINTS]: {
             endpoint_id: 'endpoint-0',
+            node_id: 'node-0',
+          },
+          [TABLES.SERVICES]: {
             service_id: 'service-0',
-            partition_id: PARTITION_ID,
+            node_id: 'node-0',
+          },
+          [TABLES.PARTITIONS]: {partition_id: PARTITION_ID},
+          [TABLES.REPLICA_OPERATIONS]: {
             operation_id: 'operation-0',
+            partition_id: PARTITION_ID,
+          },
+          [TABLES.CONTROL_PLANE_PUBLICATIONS]: {
             publication_id: 'publication-aux',
             publication_kind: 'other',
           },
-        );
+        };
+        cache.applySystemTableChange(tableName, 'UPDATE', {
+          ...identityByTable[tableName],
+          revision: writeRevision,
+          updated_at: clock,
+        });
       }
       readiness.buildNodeReadinessSyncCurrent(
         `node-${call % NODE_COUNT}`,

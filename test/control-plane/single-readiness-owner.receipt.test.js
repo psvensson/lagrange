@@ -24,6 +24,7 @@ import {
 import {
   COLUMN,
   NODE_STATE,
+  SERVICE_STATUS,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
@@ -200,10 +201,10 @@ function spyCacheChangeInvocations() {
   const proto = ControlPlaneReadinessService.prototype;
   const original = proto.handleCacheChange;
   const calls = {count: 0, services: new Set()};
-  proto.handleCacheChange = function(tableName, record) {
+  proto.handleCacheChange = function(tableName, operation, record, metadata) {
     calls.count += 1;
     calls.services.add(this);
-    return original.call(this, tableName, record);
+    return original.call(this, tableName, operation, record, metadata);
   };
   return {calls, restore: () => {
     proto.handleCacheChange = original;
@@ -528,8 +529,9 @@ async function planningWorkUnderChurn(partitionCount) {
     for (let write = 1; write <= CHURN_WRITES; write += 1) {
       cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
         ...createMessageGroupService(JOINER),
+        [COLUMN.STATUS]: write % 2 === 0 ?
+          SERVICE_STATUS.ACTIVE : SERVICE_STATUS.STOPPED,
         updated_at: CLOCK_START_MS + write,
-        load_hint: write,
       });
       await flushListeners();
       service.getNodeReadinessSync(SEED, {});

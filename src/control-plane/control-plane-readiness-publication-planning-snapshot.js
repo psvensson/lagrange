@@ -4,6 +4,8 @@ import {readPublishedMembershipEpoch} from './published-membership-epoch-reading
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
+import {planningIdentitiesEqual} from
+  './readiness-planning-semantic-generation.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -309,11 +311,27 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   // veto's strength: a moved (epoch, status) yields a different key and is
   // never served from the memo, and an unmoved one yields an equal key.
   readMembershipPublicationPlanningMemoVersionKey(nodeId, observedAt) {
+    const planningIdentity =
+      typeof this.readPlanningProjectionMemoIdentity === 'function' ?
+        this.readPlanningProjectionMemoIdentity(nodeId, observedAt) : null;
     return Object.freeze({
-      sourceGeneration: this.readPlanningProjectionSourceGeneration(observedAt),
-      publicationComponent:
+      planningIdentity,
+      sourceGeneration: planningIdentity ? null :
+        this.readPlanningProjectionSourceGeneration(observedAt),
+      publicationComponent: planningIdentity ? null :
         this.buildMembershipPublicationPlanningMemoKeyComponent(nodeId),
     });
+  }
+
+  // The planning identity keys this memo only while current; a saturated
+  // identity yields null so the key falls back to the floored generation plus
+  // the publication component (see readCurrentPlanningProjectionIdentity).
+  readPlanningProjectionMemoIdentity(nodeId, _observedAt) {
+    if (typeof this.readCurrentPlanningProjectionIdentity !== 'function') {
+      return null;
+    }
+    return typeof nodeId === 'string' ?
+      this.readCurrentPlanningProjectionIdentity(nodeId) : null;
   }
 
   // Key equality, cheap component first. The generation component is a string
@@ -325,10 +343,17 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     cachedVersionKey,
     nodeId,
     sourceGeneration,
+    planningIdentity = null,
   ) {
-    return cachedVersionKey.sourceGeneration === sourceGeneration &&
+    const currencyMatches = planningIdentity ?
+      planningIdentitiesEqual(
+        cachedVersionKey.planningIdentity,
+        planningIdentity,
+      ) :
+      cachedVersionKey.sourceGeneration === sourceGeneration;
+    return currencyMatches && (planningIdentity !== null ||
       cachedVersionKey.publicationComponent ===
-        this.buildMembershipPublicationPlanningMemoKeyComponent(nodeId);
+        this.buildMembershipPublicationPlanningMemoKeyComponent(nodeId));
   }
 
   // Keyed on the shared floored planning generation (the same key the
@@ -356,7 +381,10 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
-    const sourceGeneration =
+    const planningIdentity =
+      typeof this.readPlanningProjectionMemoIdentity === 'function' ?
+        this.readPlanningProjectionMemoIdentity(memoKey, observedAt) : null;
+    const sourceGeneration = planningIdentity ? null :
       this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
       const cached = memo.get(memoKey);
@@ -371,6 +399,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
           cached.versionKey,
           memoKey,
           sourceGeneration,
+          planningIdentity,
         )
       ) {
         return cached.projection;

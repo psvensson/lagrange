@@ -87,6 +87,17 @@ function createCache(overrides = {}) {
   };
 }
 
+async function drainReadinessPlanning(service) {
+  const owner = service.readinessPlanningSnapshotOwner;
+  for (let tick = 0; tick < 50; tick += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    if (owner.queue.pending.size === 0 && owner.queue.inFlight.size === 0) {
+      return;
+    }
+  }
+  throw new Error('readiness planning owner did not drain');
+}
+
 test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitive system partition availability', async (t) => {
   initEnv();
   const cache = createCache();
@@ -303,7 +314,11 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     },
     nowMs: NOW_MS,
   };
-  const readinessEntries = nodeRows.map((nodeRow) =>
+  let readinessEntries = nodeRows.map((nodeRow) =>
+    readinessService.getNodeReadinessSync(nodeRow.node_id),
+  );
+  await drainReadinessPlanning(readinessService);
+  readinessEntries = nodeRows.map((nodeRow) =>
     readinessService.getNodeReadinessSync(nodeRow.node_id),
   );
   const joiningReadiness = readinessEntries.find(
@@ -327,7 +342,14 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     ...candidateOptions,
     readinessEntries,
   });
-  cache.notify(TABLES.NODES, joiningReadyNode);
+  readinessService.syncOwnerDependencies({
+    membershipPublicationService: {
+      deriveClusterMembershipCandidateSync() {
+        return planningCandidate;
+      },
+    },
+  });
+  await drainReadinessPlanning(readinessService);
   t.same(
     planningCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
     ['node-2'],
@@ -417,7 +439,14 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     readinessEntries: withdrawnReadinessEntries,
   });
   readinessNowMs += 1;
-  cache.notify(TABLES.NODES, joiningReadyNode);
+  readinessService.syncOwnerDependencies({
+    membershipPublicationService: {
+      deriveClusterMembershipCandidateSync() {
+        return planningCandidate;
+      },
+    },
+  });
+  await drainReadinessPlanning(readinessService);
   t.same(
     planningCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
     [],

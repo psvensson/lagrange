@@ -34,6 +34,25 @@ import {
   initializeAtomicClaimTestEnvironment as initEnv,
 } from './replica-dispatch-atomic-claim-test-support.js';
 
+function createObservableCache({get, getAll}) {
+  const listeners = new Set();
+  return {
+    get,
+    getAll,
+    onCacheChange(listener) {
+      listeners.add(listener);
+    },
+    offCacheChange(listener) {
+      return listeners.delete(listener);
+    },
+    publishChange(tableName, operation, record) {
+      for (const listener of listeners) {
+        listener(tableName, operation, record);
+      }
+    },
+  };
+}
+
 test(
   'ReplicaDispatchService dispatches a pending operation once across triggers',
   async (t) => {
@@ -700,6 +719,25 @@ test(
 
     let executeCount = 0;
     let routerConnectionState = STATE.DISCONNECTED;
+    const systemTableCache = createObservableCache({
+      get: (tableName, key) => {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          return nodeStore.get(key) || null;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            key === operationRow.operation_id) {
+          return operationRow;
+        }
+        return null;
+      },
+      getAll: (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
+          return [operationRow];
+        }
+        return [];
+      },
+    });
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -727,6 +765,11 @@ test(
               };
             }
             Object.assign(existing, updateData || {});
+            systemTableCache.publishChange(
+              SYSTEM_TABLE_NAME.NODES,
+              'UPDATE',
+              existing,
+            );
             return {
               success: true,
               partitionResult: {
@@ -758,25 +801,7 @@ test(
           };
         },
       },
-      systemTableCache: {
-        get: (tableName, key) => {
-          if (tableName === SYSTEM_TABLE_NAME.NODES) {
-            return nodeStore.get(key) || null;
-          }
-          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-              key === operationRow.operation_id) {
-            return operationRow;
-          }
-          return null;
-        },
-        getAll: (tableName) => {
-          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-              operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
-            return [operationRow];
-          }
-          return [];
-        },
-      },
+      systemTableCache,
       rebalanceCoordinator: {
         cdcGroupPropagationService: {
           getPublicationModeDiagnostics: () => ({
@@ -1018,6 +1043,25 @@ test(
     // set, transport also becomes connected. Per §1.4.12 transport
     // connectivity is the strongest evidence of node health.
     let node2TransportConnected = false;
+    const systemTableCache = createObservableCache({
+      get: (tableName, key) => {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          return nodeStore.get(key) || null;
+        }
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            key === operationRow.operation_id) {
+          return operationRow;
+        }
+        return null;
+      },
+      getAll: (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
+          return [operationRow];
+        }
+        return [];
+      },
+    });
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -1077,25 +1121,7 @@ test(
           };
         },
       },
-      systemTableCache: {
-        get: (tableName, key) => {
-          if (tableName === SYSTEM_TABLE_NAME.NODES) {
-            return nodeStore.get(key) || null;
-          }
-          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-              key === operationRow.operation_id) {
-            return operationRow;
-          }
-          return null;
-        },
-        getAll: (tableName) => {
-          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-              operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
-            return [operationRow];
-          }
-          return [];
-        },
-      },
+      systemTableCache,
       rebalanceCoordinator: {
         cdcGroupPropagationService: {
           getPublicationModeDiagnostics: () => ({
@@ -1139,6 +1165,11 @@ test(
       };
       nodeStore.set('node-2', readyNodeRow);
       node2TransportConnected = true;
+      systemTableCache.publishChange(
+        SYSTEM_TABLE_NAME.NODES,
+        'UPDATE',
+        readyNodeRow,
+      );
 
       await service.handleCdcApplied(leaderMessageGroup, {
         tableName: SYSTEM_TABLE_NAME.NODES,
@@ -1324,7 +1355,13 @@ test(
       nodeStore.set('node-2', readyNodeRow);
 
       cacheListener(SYSTEM_TABLE_NAME.NODES, 'UPDATE', readyNodeRow);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      // The cache-change retry lands after the readiness planning barrier
+      // closes (a macrotask hop, not a fixed delay): wait for the observable
+      // with a bounded budget instead of a fixed sleep.
+      const retryDeadline = Date.now() + 2000;
+      while (executeCount === 0 && Date.now() < retryDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
 
       t.equal(
         executeCount,

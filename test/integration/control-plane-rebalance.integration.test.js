@@ -295,7 +295,9 @@ test('Control plane dispatch integration', async (t) => {
       );
       t.ok(
         progressedBeyondSending,
-        `operation should advance beyond SENDING after dispatch (got ${updatedOperation?.workflow_step})`,
+        'operation should advance beyond SENDING after dispatch ' +
+          `(got ${updatedOperation?.workflow_step}: ` +
+          `${updatedOperation?.error_message || 'no error message'})`,
       );
 
       // Restore original router methods before cleanup; the control-plane

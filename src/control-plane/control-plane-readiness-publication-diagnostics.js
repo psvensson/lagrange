@@ -16,6 +16,8 @@ import {
 import {
   snapshotProjectionReadinessPublicationMemoStamp,
 } from './projection-readiness-evidence-generation.js';
+import {planningIdentitiesEqual} from
+  './readiness-planning-semantic-generation.js';
 
 const {
   MEMBERSHIP_PUBLICATION_READ_LANE,
@@ -25,6 +27,14 @@ const {
   resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+function planningMemoCurrencyEquals(left, right) {
+  if ((left && typeof left === 'object') ||
+      (right && typeof right === 'object')) {
+    return planningIdentitiesEqual(left, right);
+  }
+  return left === right;
+}
 
 // Named empty-state for the memoized async candidate derivation: the
 // service produced no usable candidate, so the caller must fall through to
@@ -169,8 +179,8 @@ class ControlPlaneReadinessPublicationDiagnostics
       typeof service.deriveClusterMembershipCandidate === 'function'
     ) {
       const publisherNodeId = nodeId || this.nodeId;
-      const versionKey = readPlanningVersionKeyForCache(
-        this.systemTableCache,
+      const versionKey = this.readMembershipPlanningDerivationMemoCurrency(
+        publisherNodeId,
         observedAt,
       );
       // Per-publisher slots: the live seed alternates planning reads across
@@ -186,7 +196,10 @@ class ControlPlaneReadinessPublicationDiagnostics
           publisherNodeId,
         );
       let derivation;
-      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+      if (versionKey !== null && memo && planningMemoCurrencyEquals(
+        memo.versionKey,
+        versionKey,
+      )) {
         derivation = memo.promise;
       } else {
         derivation = (async () => {
@@ -249,6 +262,16 @@ class ControlPlaneReadinessPublicationDiagnostics
     return readPlanningVersionKeyForCache(this.systemTableCache, observedAt);
   }
 
+  readMembershipPlanningDerivationMemoCurrency(nodeId, observedAt) {
+    const currentIdentity =
+      typeof this.readCurrentPlanningProjectionIdentity === 'function' &&
+      typeof nodeId === 'string' ?
+        this.readCurrentPlanningProjectionIdentity(nodeId) :
+        null;
+    return currentIdentity ??
+      this.readMembershipPlanningDerivationVersionKey(observedAt);
+  }
+
   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
     const service = this.membershipPublicationService;
     if (
@@ -256,8 +279,10 @@ class ControlPlaneReadinessPublicationDiagnostics
       typeof service.deriveClusterMembershipCandidateSync === 'function'
     ) {
       const publisherNodeId = nodeId || this.nodeId;
-      const versionKey =
-        this.readMembershipPlanningDerivationVersionKey(observedAt);
+      const versionKey = this.readMembershipPlanningDerivationMemoCurrency(
+        publisherNodeId,
+        observedAt,
+      );
       if (!this.membershipPlanningSnapshotSyncMemoByPublisher) {
         this.membershipPlanningSnapshotSyncMemoByPublisher = new Map();
       }
@@ -265,7 +290,10 @@ class ControlPlaneReadinessPublicationDiagnostics
         this.membershipPlanningSnapshotSyncMemoByPublisher.get(
           publisherNodeId,
         );
-      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+      if (versionKey !== null && memo && planningMemoCurrencyEquals(
+        memo.versionKey,
+        versionKey,
+      )) {
         return memo.snapshot;
       }
       const candidate = service.deriveClusterMembershipCandidateSync({

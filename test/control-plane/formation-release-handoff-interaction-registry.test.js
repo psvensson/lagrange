@@ -30,9 +30,6 @@ const UTF8_ENCODING = 'utf8';
 const AUDIT_SCRIPT = 'scripts/checks/impact-contract-registry.js';
 const NODE_EXECUTABLE = 'node';
 const GIT_EXECUTABLE = 'git';
-const GIT_SRC_DELTA_ARGUMENTS = Object.freeze([
-  'diff', '--name-only', 'HEAD', '--', 'src',
-]);
 const AUDIT_PASS_PREFIX = 'impact-contracts: PASS (';
 const EXIT_OK = 0;
 const EMPTY_STRING = '';
@@ -56,6 +53,9 @@ const JOINER_OWNERS = Object.freeze([
   'src/bootstrap/node-joining-operation-ledger-formation-readiness.js',
 ]);
 const CONTRACT_OWNERS = Object.freeze([...SEED_OWNERS, ...JOINER_OWNERS]);
+const GIT_OWNER_DELTA_ARGUMENTS = Object.freeze([
+  'diff', '--name-only', 'HEAD', '--', ...CONTRACT_OWNERS,
+]);
 const WITNESS_TESTS = Object.freeze([
   'test/control-plane/formation-release-handoff-closure.test.js',
   'test/control-plane/formation-release-handoff-consumer-parity.test.js',
@@ -182,9 +182,9 @@ test('impact-contracts-audit-passes: the registry audit exits 0, prints ' +
   );
 });
 
-test('no-owner-semantics-change: the candidate carries no src/ delta against ' +
-  'HEAD, so no formation-release owner semantics changed', () => {
-  const delta = execFileSync(GIT_EXECUTABLE, GIT_SRC_DELTA_ARGUMENTS, {
+test('no-owner-semantics-change: the candidate carries no formation-release ' +
+  'owner delta against HEAD', () => {
+  const delta = execFileSync(GIT_EXECUTABLE, GIT_OWNER_DELTA_ARGUMENTS, {
     cwd: REPOSITORY_ROOT,
     encoding: UTF8_ENCODING,
   }).trim();

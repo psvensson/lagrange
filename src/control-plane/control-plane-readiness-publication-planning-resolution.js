@@ -444,7 +444,10 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
     // churn and made this memo miss per call, minting fresh merge identities;
     // the publication component keeps the freshness the removed live veto
     // enforced, without a probe-forced miss on the hit path.
-    const sourceGeneration =
+    const planningIdentity =
+      typeof this.readPlanningProjectionMemoIdentity === 'function' ?
+        this.readPlanningProjectionMemoIdentity(memoKey, observedAt) : null;
+    const sourceGeneration = planningIdentity ? null :
       this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
       const cached = memo.get(memoKey);
@@ -459,6 +462,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
           cached.versionKey,
           memoKey,
           sourceGeneration,
+          planningIdentity,
         )
       ) {
         return cached.projection;

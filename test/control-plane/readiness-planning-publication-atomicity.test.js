@@ -10,6 +10,10 @@ import {
 import {
   buildProjectionReadinessState,
 } from '../../src/control-plane/projection-readiness-state.js';
+import {
+  buildServeReadyProjectionReadinessContract,
+  buildServeReadyRuntimeAuthority,
+} from './readiness-planning-positive-snapshot-fixtures.js';
 
 const NOW_MS = 10_000;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
@@ -70,37 +74,8 @@ function buildPositiveSnapshot(ownerKey) {
       transportConnected: true,
       localQueryTransportReady: true,
     }),
-    runtimeAuthority: Object.freeze({
-      ready: true,
-      authorityAvailable: true,
-      writeEligible: true,
-      recoveryEligible: true,
-      repairEligible: true,
-      publication: Object.freeze({healthy: true}),
-      visibility: Object.freeze({published: true}),
-      provisioning: Object.freeze({eligible: true}),
-    }),
-    projectionReadinessContract: Object.freeze({
-      state: 'serve_ready',
-      ready: true,
-      serveReady: true,
-      recoveryOpen: false,
-      lanes: Object.freeze({
-        serve: Object.freeze({ready: true}),
-        repair: Object.freeze({ready: true}),
-        internal: Object.freeze({ready: true}),
-        operator: Object.freeze({ready: true}),
-      }),
-      publication: Object.freeze({ready: true}),
-      readiness: Object.freeze({
-        internalReady: true,
-        repairEligible: true,
-        recoveryEligible: true,
-        serveEligible: true,
-        runtimeServeEligible: true,
-        operatorReady: true,
-      }),
-    }),
+    runtimeAuthority: buildServeReadyRuntimeAuthority(),
+    projectionReadinessContract: buildServeReadyProjectionReadinessContract(),
   });
 }
 

@@ -3,22 +3,23 @@ import {
   isStoredNodeLivenessCurrent,
   recordNodeLivenessSourceChange,
 } from './control-plane-readiness-node-liveness-methods.js';
-import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
   './control-plane-readiness-stored-snapshot-reuse.js';
 import {installControlPlaneReadinessLifecycleMethods} from
   './control-plane-readiness-lifecycle.js';
+import {readOwnDataValue} from './readiness-planning-version-contract.js';
+import {installControlPlaneReadinessRecoveryEpochSummaryMethods} from
+  './control-plane-readiness-recovery-epoch-summary-methods.js';
 
+const READINESS_PLANNING_SOURCE_OBSERVER_LOG_LEVEL = 'warn';
+const READINESS_PLANNING_SOURCE_OBSERVER_FAILED_MSG =
+  'Readiness planning source observer failed';
 const LOCAL_STR_REFRESH = '::refresh=';
 const LOCAL_STR_STALE = '::stale=';
 const LOCAL_STR_PLANNING = '::planning=';
 const LOCAL_STR_REQUIRE_FRESH = '::requireFresh=';
 const LOCAL_STR_BACKGROUND = '::background=';
 const LOCAL_STR_DIMENSION = '::dimension=';
-const LOCAL_STR_ONE = '1';
-const LOCAL_STR_ZERO = '0';
-const LOCAL_STR_SIGNATURE_FIELD_SEPARATOR = '|';
-const LOCAL_STR_SIGNATURE_LIST_SEPARATOR = ',';
 const stringConstructor = String;
 
 function isPlanningOwnerProducedSnapshot(options = {}) {
@@ -29,9 +30,7 @@ function isPlanningOwnerProducedSnapshot(options = {}) {
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
-  PROJECTION_READINESS_CONTRACT_STATE,
   TABLES,
-  normalizeIsoTimestamp,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const controlPlaneReadinessSnapshotStoreMethods = {
@@ -395,196 +394,6 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   },
 
   /**
-   * Resolve recovery-open state from a raw snapshot without building the
-   * epoch summary. Must match buildRecoveryEpochSummary's recoveryActive.
-   * @param {Object|null} snapshot
-   * @return {boolean}
-   * @private
-   */
-  isRecoverySnapshotActive(snapshot) {
-    const projectionReadinessContract =
-      snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === 'object' ?
-        snapshot.projectionReadinessContract :
-        null;
-    return projectionReadinessContract?.recoveryOpen !== false;
-  },
-
-  /**
-   * Cheap semantic-change signature for recovery epoch observations. Covers
-   * exactly the semantic fields of buildRecoveryEpochSummary and excludes
-   * observation timestamps so identical consecutive states compare equal.
-   * @param {string} nodeId
-   * @param {Object|null} snapshot
-   * @return {string}
-   * @private
-   */
-  buildRecoveryEpochSignature(nodeId, snapshot) {
-    const dimensions =
-      snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
-        snapshot.dimensions :
-        {};
-    const projectionReadinessContract =
-      snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === 'object' ?
-        snapshot.projectionReadinessContract :
-        null;
-    const reasonCodes = Array.isArray(snapshot?.reasons) ?
-      snapshot.reasons
-        .map((reason) => stringConstructor(reason?.code || ''))
-        .filter(Boolean)
-        .join(LOCAL_STR_SIGNATURE_LIST_SEPARATOR) :
-      '';
-    const priorityReasonCodes = Array.isArray(
-      projectionReadinessContract?.priorityRecovery?.reasonCodes,
-    ) ?
-      projectionReadinessContract.priorityRecovery.reasonCodes.join(
-        LOCAL_STR_SIGNATURE_LIST_SEPARATOR,
-      ) :
-      '';
-    // Sign every owner-produced dimension directly. Several dimensions are
-    // currently derivable from signed reasons, but keeping the semantic vector
-    // complete prevents a future derivation change from becoming a stale-positive
-    // token hole.
-    const dimensionBits = Object.values(CONTROL_PLANE_READINESS_DIMENSION)
-      .map((dimension) =>
-        dimensions[dimension] === true ? LOCAL_STR_ONE : LOCAL_STR_ZERO,
-      )
-      .join('');
-    return [
-      nodeId,
-      snapshot?.lifecycleState || '',
-      dimensionBits,
-      projectionReadinessContract?.state ||
-        PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
-      projectionReadinessContract?.priorityRecovery?.active === true ?
-        LOCAL_STR_ONE :
-        LOCAL_STR_ZERO,
-      priorityReasonCodes,
-      reasonCodes,
-      projectionReadinessContract?.recoveryOpen !== false ?
-        LOCAL_STR_ONE :
-        LOCAL_STR_ZERO,
-    ].join(LOCAL_STR_SIGNATURE_FIELD_SEPARATOR);
-  },
-
-  /**
-   * @param {string} nodeId
-   * @param {Object|null} snapshot
-   * @param {number} observedAtMs
-   * @return {Object}
-   * @private
-   */
-  buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs) {
-    const dimensions =
-      snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
-        snapshot.dimensions :
-        {};
-    const reasonCodes = Array.isArray(snapshot?.reasons) ?
-      [
-        ...new Set(
-          snapshot.reasons
-            .map((reason) => stringConstructor(reason?.code || ''))
-            .filter(Boolean),
-        ),
-      ] :
-      [];
-    const projectionReadinessContract =
-      snapshot?.projectionReadinessContract &&
-      typeof snapshot.projectionReadinessContract === 'object' ?
-        snapshot.projectionReadinessContract :
-        null;
-    return Object.freeze({
-      nodeId,
-      observedAt: snapshot?.observedAt || normalizeIsoTimestamp(observedAtMs),
-      observedAtMs,
-      lifecycleState: snapshot?.lifecycleState || null,
-      processAlive:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true,
-      clusterMemberHealthy:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] ===
-        true,
-      controlPlaneWritable:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] ===
-        true,
-      controlPlanePublished:
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
-        ] === true,
-      controlPlaneRecoveryEligible:
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-        ] === true,
-      repairEligible:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
-      serveEligible:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
-      // CL-031(d): epoch events carry the bounded contract SUMMARY — the
-      // full contract embed made each event ~300KB (gate 220403Z measured
-      // 10MB events arrays); the scalar dimensions below already capture
-      // the decision-relevant state.
-      projectionReadinessContract:
-        summarizeProjectionReadinessContractForHistory(
-          projectionReadinessContract,
-        ),
-      projectionReadinessState:
-        projectionReadinessContract?.state ||
-        PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
-      priorityControlPlaneRecoveryActive:
-        projectionReadinessContract?.priorityRecovery?.active === true,
-      priorityControlPlaneRecoveryReasonCodes:
-        Array.isArray(
-          projectionReadinessContract?.priorityRecovery?.reasonCodes,
-        ) ?
-          Object.freeze([
-            ...projectionReadinessContract.priorityRecovery.reasonCodes,
-          ]) :
-          Object.freeze([]),
-      reasonCodes: Object.freeze(reasonCodes),
-      recoveryActive:
-        projectionReadinessContract?.recoveryOpen !== false,
-    });
-  },
-
-  /**
-   * @return {Object}
-   */
-  getRecoveryEpochHistoryByNodeId() {
-    const entries = {};
-    for (const [
-      nodeId,
-      history,
-    ] of this.recoveryEpochHistoryByNodeId.entries()) {
-      entries[nodeId] = Array.isArray(history) ?
-        history.map((epoch) =>
-          Object.freeze({
-            ...epoch,
-            events: Object.freeze(
-              (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
-                Object.freeze({...event}),
-              ),
-            ),
-          }),
-        ) :
-        [];
-    }
-    for (const [nodeId, epoch] of this.currentRecoveryEpochByNodeId.entries()) {
-      entries[nodeId] = Object.freeze([
-        ...(Array.isArray(entries[nodeId]) ? entries[nodeId] : []),
-        Object.freeze({
-          ...epoch,
-          events: Object.freeze(
-            (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
-              Object.freeze({...event}),
-            ),
-          ),
-        }),
-      ]);
-    }
-    return Object.freeze(entries);
-  },
-
-  /**
    * Build one stable single-flight key for readiness evaluations.
    * @param {string} nodeId
    * @param {Object} [options]
@@ -622,8 +431,8 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     ) {
       return;
     }
-    this.cacheChangeListener = (tableName, _operation, record) => {
-      this.handleCacheChange(tableName, record);
+    this.cacheChangeListener = (tableName, operation, record, metadata) => {
+      this.handleCacheChange(tableName, operation, record, metadata);
     };
     this.systemTableCache.onCacheChange(this.cacheChangeListener);
   },
@@ -631,12 +440,69 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   /**
    * Invalidate cached readiness snapshots affected by one cache change.
    * @param {string} tableName
+   * @param {string|null} operation
    * @param {Object|null} record
+   * @param {Object|null} metadata
    * @private
    */
-  handleCacheChange(tableName, record) {
-    recordNodeLivenessSourceChange(this, tableName, record);
-    this.readinessPlanningSnapshotOwner?.recordTableChange(tableName, record);
+  handleCacheChange(tableName, operation, record = null, metadata = null) {
+    if (record === null && operation && typeof operation === 'object') {
+      record = operation;
+      operation = null;
+    }
+    let firstPlanningSourceError = null;
+    let semanticSourceOwnerFailed = false;
+    const capturePlanningSourceError = (error) => {
+      firstPlanningSourceError = firstPlanningSourceError || error;
+    };
+    this.readinessPlanningSnapshotOwner?.beginCacheChangeTransaction();
+    try {
+      try {
+        recordNodeLivenessSourceChange(this, tableName, record);
+      } catch (error) {
+        semanticSourceOwnerFailed = true;
+        capturePlanningSourceError(error);
+      }
+      try {
+        this.storageAccountingService?.recordCapacitySourceChange?.(
+          tableName,
+          operation,
+          record,
+          this.now(),
+        );
+      } catch (error) {
+        semanticSourceOwnerFailed = true;
+        capturePlanningSourceError(error);
+      }
+      try {
+        const sourceRevision = readOwnDataValue(
+          metadata,
+          'tableMutationRevision',
+        );
+        this.readinessPlanningSnapshotOwner?.recordTableChange(
+          tableName,
+          operation,
+          record,
+          semanticSourceOwnerFailed ? null : sourceRevision,
+        );
+      } catch (error) {
+        capturePlanningSourceError(error);
+      }
+    } finally {
+      try {
+        this.readinessPlanningSnapshotOwner?.commitCacheChangeTransaction();
+      } catch (error) {
+        capturePlanningSourceError(error);
+      }
+    }
+    if (firstPlanningSourceError) {
+      this.reportReadinessPlanningSourceObserverFailure(
+        firstPlanningSourceError,
+        tableName,
+      );
+    } else {
+      this.readinessPlanningSourceObserverFailureStreak = 0;
+    }
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||
       tableName === TABLES.NODES ||
@@ -681,6 +547,33 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @return {boolean}
    * @private
    */
+  // handleCacheChange is a hot path (one call per cache write): a persistent
+  // source-owner fault must not become a per-write log storm. The first
+  // failure of a streak goes through the console-only seam; every further
+  // failure in the streak is counted, never emitted, and the streak resets on
+  // the next clean change.
+  reportReadinessPlanningSourceObserverFailure(error, tableName) {
+    const streak =
+      (this.readinessPlanningSourceObserverFailureStreak ?? 0) + 1;
+    this.readinessPlanningSourceObserverFailureStreak = streak;
+    if (streak > 1) {
+      this.readinessPlanningSourceObserverLogSuppressedCount =
+        (this.readinessPlanningSourceObserverLogSuppressedCount ?? 0) + 1;
+      return;
+    }
+    try {
+      this.logger?.logConsoleOnly?.(
+        READINESS_PLANNING_SOURCE_OBSERVER_LOG_LEVEL,
+        READINESS_PLANNING_SOURCE_OBSERVER_FAILED_MSG,
+        {error: error.message, tableName},
+      );
+    } catch {
+      // The seam itself failed; keep the failure observable as a count.
+      this.readinessPlanningSourceObserverLogSuppressedCount =
+        (this.readinessPlanningSourceObserverLogSuppressedCount ?? 0) + 1;
+    }
+  },
+
   isReadinessSnapshotInvalidated(nodeId, capturedAtMs = null) {
     if (!nodeId) {
       return false;
@@ -775,6 +668,7 @@ function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
     ),
   );
   installControlPlaneReadinessStoredSnapshotReuseMethods(prototype);
+  installControlPlaneReadinessRecoveryEpochSummaryMethods(prototype);
   installControlPlaneReadinessLifecycleMethods(prototype);
 }
 
