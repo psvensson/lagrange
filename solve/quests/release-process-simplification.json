@@ -1,0 +1,43 @@
+{
+  "id": "release-process-simplification",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Releasing is deterministic and cheap: the exit is full corpus green on the exact SHA plus the tag workflow's artifact build and smoke plus an honest changelog; one preflight script replaces the digest-bound row Quests and local receipts; formation health is a machine-readable verdict with a standing trend and a local seed-starvation gate rather than a release gate.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/release-process-simplification.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/release-process-simplification.md",
+    "draftedAtCommit": "103786ef31e228db949a029930e575d574ddac89"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "release-process-simplification",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "release-process-simplification-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "release-process-simplification",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
