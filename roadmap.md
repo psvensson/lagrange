@@ -36,6 +36,48 @@ work is to make their useful envelope larger and their evidence easier to trust:
   component limit; and
 - bind every externally visible performance claim to reproducible evidence.
 
+## After 0.2 - 0.25 Semantic Core Hardening: protect what the core means
+
+Phase 0.2 has repeatedly exposed a particular class of defect: a locally
+reasonable change silently redefines a system-wide fact. Examples include the
+difference between an unbound membership epoch and epoch zero, desired
+replication policy versus current replica identity, time-dependent node
+liveness, replica terminal outcomes, and planning/readiness generations.
+
+Before adding another layer of query and index semantics, Phase 0.25 turns that
+knowledge into structural protection. It does not freeze Lagrange or move the
+whole control plane into a library. It identifies a small high-blast-radius
+semantic nucleus and makes changes to that nucleus visibly different from
+ordinary implementation changes.
+
+The milestone includes:
+
+- a ranked inventory of the highest-risk semantic facts, their authoritative
+  owners, and the owners of interactions between them;
+- a small deterministic semantic-kernel boundary for pure decoding,
+  projection, transition, and fencing logic, with stateful lifecycle remaining
+  in its existing owners;
+- mechanical guards that prevent consumers from independently interpreting
+  protected raw fields once a canonical owner/kernel surface exists;
+- a machine-readable protected-core manifest and content-bound change protocol
+  so an ordinary agent edit cannot silently modify protected semantics or the
+  guard that protects them;
+- differential and mutation proof that extraction preserves existing meaning
+  unless a change explicitly declares that meaning is changing; and
+- boundary-stability evidence used to decide whether a later separately
+  writable package/repository with read-only normal-agent credentials would
+  reduce risk rather than introduce version skew and shadow semantics.
+
+A separate repository is deliberately not an exit requirement for 0.25. The
+boundary should first prove that legitimate semantic changes are rare, narrow,
+and do not usually require atomic edits with stateful owners. Repository-local
+checks are also not described as a security boundary against credentials that
+can rewrite the checks themselves; literal write prevention needs an external
+ruleset or credential boundary.
+
+The architecture and threat model are specified in
+[Protected Semantic Core](architecture/protected-semantic-core.md).
+
 ## Next - 0.3 Queryable Core: normal SQL access paths and live results
 
 A credible distributed database should not require callers to understand its
