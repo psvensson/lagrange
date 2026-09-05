@@ -12,7 +12,7 @@
     "distributed-harness": 166,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 228,
+    "placement-rebalance": 229,
     "query-sql": 157,
     "release-packaging": 10,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2130,
-  "digest": "fnv1a32-78046456",
+  "censusSize": 2131,
+  "digest": "fnv1a32-0ac76b78",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1571,6 +1571,7 @@
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-liveness.test.js": "placement-rebalance",
+    "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-observation-contract.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-repository.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": "placement-rebalance",

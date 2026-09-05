@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1870,
+    "unit": 1871,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2130,
-  "digest": "fnv1a32-6c69ebbc",
+  "censusSize": 2131,
+  "digest": "fnv1a32-e5c55237",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1554,6 +1554,7 @@
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "unit",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "unit",
     "test/rebalancer/replica-operation-liveness.test.js": "unit",
+    "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "unit",
     "test/rebalancer/replica-operation-observation-contract.test.js": "unit",
     "test/rebalancer/replica-operation-repository.test.js": "unit",
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": "unit",

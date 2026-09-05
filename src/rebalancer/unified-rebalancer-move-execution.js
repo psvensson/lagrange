@@ -4,6 +4,9 @@ import {
   canonicalizeRebalancerMove,
 } from './rebalancer-entity-identity.js';
 import {
+  isBoundMembershipPublicationEpoch,
+} from './replica-operation-membership-epoch-binding.js';
+import {
   CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
   hasPriorityRecoveryOperationCreationAuthority,
 } from '../control-plane/control-plane-mutation-readiness.js';
@@ -60,7 +63,7 @@ function buildCoordinatorOperationRequest(move, context, operationType) {
 }
 
 function resolveMoveMembershipPublicationEpoch(rebalancer, move) {
-  return Number.isInteger(move?.membershipPublicationEpoch) ?
+  return isBoundMembershipPublicationEpoch(move?.membershipPublicationEpoch) ?
     move.membershipPublicationEpoch :
     rebalancer.resolvePublishedMembershipPlanningEpoch();
 }
@@ -83,10 +86,7 @@ function applyCoordinatorOperationRequestMutationContext(
 ) {
   const membershipPublicationEpoch =
     resolveMoveMembershipPublicationEpoch(rebalancer, move);
-  if (
-    Number.isInteger(membershipPublicationEpoch) &&
-    membershipPublicationEpoch >= UNIFIED_REBALANCER_LITERAL.ZERO
-  ) {
+  if (isBoundMembershipPublicationEpoch(membershipPublicationEpoch)) {
     operationRequest.membershipPublicationEpoch = membershipPublicationEpoch;
   }
   if (move?.controlPlaneMutationWorkClass) {

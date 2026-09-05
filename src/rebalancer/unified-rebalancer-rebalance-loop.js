@@ -3,6 +3,9 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 import {
   canonicalizeRebalancerMove,
 } from './rebalancer-entity-identity.js';
+import {
+  isBoundMembershipPublicationEpoch,
+} from './replica-operation-membership-epoch-binding.js';
 
 const {
   REBALANCER_EVENT,
@@ -308,8 +311,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       this.prioritizeOperationLedgerQuorumCureMoves(moves);
     const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
       if (
-        !Number.isInteger(planningMembershipPublicationEpoch) ||
-        planningMembershipPublicationEpoch < 0
+        !isBoundMembershipPublicationEpoch(planningMembershipPublicationEpoch)
       ) {
         return move;
       }

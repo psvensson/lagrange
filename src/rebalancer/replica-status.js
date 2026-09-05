@@ -11,6 +11,9 @@ import {WORKFLOW_STEP} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {resolvePartitionTableId} from '../bootstrap/system-partition-classification.js';
 import {
+  isBoundMembershipPublicationEpoch,
+} from './replica-operation-membership-epoch-binding.js';
+import {
   OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
@@ -161,8 +164,7 @@ function createOperation(params) {
   // The planning membership epoch rides the operation record top-level so
   // the dispatch-time epoch gate can fence stale ADD/REPLACE execution
   // (audit finding 7); it is no longer duplicated into stepsHistory.
-  if (Number.isInteger(params.membershipPublicationEpoch) &&
-      params.membershipPublicationEpoch >= 0) {
+  if (isBoundMembershipPublicationEpoch(params.membershipPublicationEpoch)) {
     operation.membershipPublicationEpoch = params.membershipPublicationEpoch;
   }
   return operation;

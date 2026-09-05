@@ -1,6 +1,11 @@
 import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const CREATION_EPOCH_BINDING_SOURCE = 'placement move';
 
 class RebalanceCoordinatorOwnerDelegationMethods {
   /**
@@ -179,10 +184,17 @@ class RebalanceCoordinatorOwnerDelegationMethods {
    * @private
    */
   assertMembershipPublicationEpoch(move) {
-    const requestedEpoch = Number(move?.membershipPublicationEpoch);
-    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
+    const requestedEpochBinding = assertMembershipPublicationEpochBinding(
+      move?.membershipPublicationEpoch,
+      {source: CREATION_EPOCH_BINDING_SOURCE},
+    );
+    if (
+      requestedEpochBinding.state ===
+        MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND
+    ) {
       return;
     }
+    const requestedEpoch = requestedEpochBinding.epoch;
 
     const currentEpoch = this.getCurrentPublishedMembershipEpoch();
     if (!Number.isInteger(currentEpoch)) {

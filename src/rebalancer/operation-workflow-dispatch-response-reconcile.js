@@ -3,6 +3,9 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  isBoundMembershipPublicationEpoch,
+} from './replica-operation-membership-epoch-binding.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
@@ -401,10 +404,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     // Carry the planning epoch into the executor request (audit finding 7)
     // so ADD/REPLACE execution can reject staleness against it.
     if (
-      Number.isInteger(
+      isBoundMembershipPublicationEpoch(
         operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
-      ) &&
-      operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH] >= 0
+      )
     ) {
       request[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH] =
         operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH];

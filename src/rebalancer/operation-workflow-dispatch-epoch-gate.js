@@ -8,6 +8,10 @@
 // dispatching unfenced. The epoch is carried into the executor request so
 // ADD/REPLACE execution can reject staleness downstream as well.
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 
 const {
   OperationType,
@@ -19,6 +23,7 @@ const DISPATCH_EPOCH_UNAVAILABLE_PREFIX =
   'current published membership epoch unreadable at dispatch';
 const STALE_DISPATCH_EPOCH_PREFIX =
   'Stale dispatch for published membership epoch ';
+const DISPATCH_EPOCH_BINDING_SOURCE = 'dispatch candidate';
 
 function isEpochFencedOperationType(operationType) {
   return (
@@ -27,7 +32,15 @@ function isEpochFencedOperationType(operationType) {
   );
 }
 
-function normalizePlanningEpoch(epochValue) {
+/**
+ * Normalize the current published membership epoch reported by the
+ * readiness owner (the other side of the fence; not the operation's
+ * binding).
+ * @param {*} epochValue
+ * @return {number|null}
+ * @private
+ */
+function normalizeCurrentPublishedEpoch(epochValue) {
   if (
     epochValue === null ||
     epochValue === undefined ||
@@ -40,14 +53,20 @@ function normalizePlanningEpoch(epochValue) {
 }
 
 /**
- * Resolve the operation's canonical durable planning membership epoch.
+ * Resolve the operation's canonical planning membership epoch binding via
+ * the single durable decode owner: BOUND carries the epoch, UNBOUND has
+ * nothing to fence, and a malformed record fails closed.
  * @param {Object} operation - Resolved dispatch candidate.
- * @return {number|null}
+ * @return {{state: string, epoch?: number}}
  * @private
  */
-function resolveOperationPlanningEpoch(operation) {
-  return normalizePlanningEpoch(
+function resolveOperationPlanningEpochBinding(operation) {
+  return assertMembershipPublicationEpochBinding(
     operation?.[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
+    {
+      source: DISPATCH_EPOCH_BINDING_SOURCE,
+      operationId: operation?.operationId,
+    },
   );
 }
 
@@ -83,13 +102,17 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
   ) {
     return null;
   }
-  const planningEpoch = resolveOperationPlanningEpoch(operation);
-  if (planningEpoch === null) {
+  const planningEpochBinding = resolveOperationPlanningEpochBinding(operation);
+  if (
+    planningEpochBinding.state ===
+      MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND
+  ) {
     // Direct unbound creates have no planning epoch to fence; creation only
     // admits this absence for non-planner operations.
     return null;
   }
-  const currentEpoch = normalizePlanningEpoch(
+  const planningEpoch = planningEpochBinding.epoch;
+  const currentEpoch = normalizeCurrentPublishedEpoch(
     owner.getCurrentPublishedMembershipEpoch(),
   );
   if (currentEpoch === null) {

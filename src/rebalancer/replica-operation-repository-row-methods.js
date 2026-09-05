@@ -1,8 +1,13 @@
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const DURABLE_ROW_EPOCH_BINDING_SOURCE = 'replica_operations row';
 
 // Sanctioned local-only-truth seed literal for the priority control-plane
 // operation-row analog of CL-016/CL-035. See applyLocalPriorityOperationProgressRow.
@@ -82,14 +87,23 @@ function assignReplicaOperationRepositoryRowMethods(
         errorMessage: row.error_message,
         stepsHistory,
       };
-      const membershipPublicationEpoch = Number(
-        row.membership_publication_epoch,
-      );
+      // Durable planning-epoch binding: SQL NULL / absent column stays
+      // unbound (field omitted), a non-negative integer binds (zero stays
+      // zero), and anything else fails closed at this decode boundary.
+      const membershipPublicationEpochBinding =
+        assertMembershipPublicationEpochBinding(
+          row.membership_publication_epoch,
+          {
+            source: DURABLE_ROW_EPOCH_BINDING_SOURCE,
+            operationId: row.operation_id,
+          },
+        );
       if (
-        Number.isInteger(membershipPublicationEpoch) &&
-        membershipPublicationEpoch >= 0
+        membershipPublicationEpochBinding.state ===
+          MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND
       ) {
-        operation.membershipPublicationEpoch = membershipPublicationEpoch;
+        operation.membershipPublicationEpoch =
+          membershipPublicationEpochBinding.epoch;
       }
       // Durable owner lease (audit findings 5+14): the row's lease_expires_at
       // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
