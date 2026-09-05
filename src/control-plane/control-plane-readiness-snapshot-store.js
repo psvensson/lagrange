@@ -246,11 +246,23 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   // True when the already-stored snapshot carries strictly newer node
   // evidence (a later heartbeat, or the same heartbeat with a later lease)
   // than the snapshot about to replace it.
+  // Only pure heartbeat/lease lag is protected by the persistence guard. A
+  // status or connection transition is a semantic liveness change, never
+  // lag: it replaces the stored evidence at once (the liveness identity
+  // vetoes stale-positive reuse immediately, sealed getall/snapshot-cache
+  // contract).
+  isSameLivenessState(previousSnapshot, snapshot, previous, next) {
+    return previousSnapshot?.nodeEvidence?.status ===
+        snapshot?.nodeEvidence?.status &&
+      previous.connectionState === next.connectionState;
+  },
+
   isStoredSnapshotEvidenceNewer(previousSnapshot, snapshot) {
     const previous = this.buildStoredReadinessSnapshotWatermark(previousSnapshot);
     const next = this.buildStoredReadinessSnapshotWatermark(snapshot);
     if (!previous || !next) return false;
-    if (!Number.isFinite(previous.lastHeartbeat) ||
+    if (!this.isSameLivenessState(previousSnapshot, snapshot, previous, next) ||
+      !Number.isFinite(previous.lastHeartbeat) ||
       !Number.isFinite(next.lastHeartbeat)) return false;
     if (previous.lastHeartbeat !== next.lastHeartbeat) {
       return previous.lastHeartbeat > next.lastHeartbeat;
