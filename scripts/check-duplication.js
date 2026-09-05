@@ -122,8 +122,10 @@ const RATCHET_TARGETS = [
     // witnesses replaced a duplicated fixture block with one shared helper.
     // 2026-09-04: tightened 809/31052 -> 800/30745 after consolidating the
     // rebalancer liveness-projection test owner.
+    // 2026-09-05: tightened 800/30745 -> 800/30731 after Quest 2's integration
+    // double clone moved into one shared rebalancer-integration-doubles helper.
     baselineCloneGroupCount: 800,
-    baselineDuplicatedLineCount: 30745,
+    baselineDuplicatedLineCount: 30731,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
