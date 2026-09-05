@@ -10,14 +10,14 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-08-30
+## [0.2.0] — 2026-09-05
 
 The 0.2 _Stable Core_ release (`RM-0.2-*` rows in
-`docs/steering/agpl-feature-map.md`). Everything below is landed on the
-release branch with Solver-verified evidence. The 0.2 exit criteria are
-tracked by the `release-0-2-*` Quests: three consecutive five-node GCP
-formation certification runs passed on 2026-08-30 (bounded `--runs 3`
-streak, completion 42.8 s / 38.1 s / 35.9 s); topology-safety evidence,
+`docs/steering/agpl-feature-map.md`). Everything below is landed on `main`
+with Solver-verified evidence. The 0.2 exit criteria are tracked by the
+`release-0-2-*` Quests: a bounded three-run five-node GCP formation streak
+passed on 2026-08-30 (completion 42.8 s / 38.1 s / 35.9 s); the full
+five-node MovieLens certification, topology-safety evidence,
 compacted-follower snapshot catch-up and the enforcing memory soak are
 replayed on the frozen release digest before the tag.
 
@@ -84,6 +84,37 @@ replayed on the frozen release digest before the tag.
   reports completion across every generation, and
   `npm run analyze:formation-release-phases -- <report-dir>` prints the
   per-node W → handoff → release → READY timeline.
+- Readiness planning owner: one node process owns exactly one readiness
+  planning owner (the per-partition duplicates are gone), readiness evidence
+  is generated per node and keyed on content rather than on observation
+  time, membership-publication planning consumption has one owner, a
+  completed readiness snapshot is reused across unclassified source changes
+  instead of being rebuilt on every table write, and query routing served
+  through the single owner stays open across the system-table cache's
+  node-table lag window (heartbeat and lease lag are bridged at read time
+  for routed reads only; a STOPPED or DISCONNECTED node row still vetoes
+  stale-positive reuse immediately).
+- Node liveness: every time-dependent node-liveness decision (ready lease,
+  heartbeat staleness, connection state) is projected by one semantic owner.
+- Membership epoch binding: a `replica_operations` row whose membership
+  publication epoch is SQL NULL rehydrates as UNBOUND through one decode
+  owner (it used to decode as epoch 0 and fail the dispatch epoch gate), and
+  the current published epoch reads as unreadable rather than 0 before the
+  first PUBLISHED publication.
+- Critical placement: convergence is driven from authoritative owner
+  evidence, the critical system-partition distinct-node invariant is defined
+  and proved, the desired replication factor has one authority contract,
+  every behaviour-changing desired-placement consumer converges, and a
+  causal-trace tool names the first broken transition in a live formation.
+- Release and CI tooling: the publisher streams its gate stage by stage and
+  fails the mutation check early, the two `main` workflows carry distinct
+  run names, `TAP_TIMEOUT_FLOOR` is a lane floor that never caps a declared
+  test budget, and the MovieLens dataset fetch has a digest-pinned fallback.
+- Solver tooling (internal): `preflight`, `reattempt` and `rebase-epoch`
+  verbs, a verifier-rejection repair amendment path, one override per
+  logical run with a visible budget, observation-severity findings, new-code
+  complexity admission scoped to each ratchet's trees, review delta
+  manifests, in-process subtest receipts, and a harness scaffold.
 
 ### Changed
 - Topology-operation safety: removing a FAILED or SYNCING replica succeeds
@@ -107,12 +138,27 @@ replayed on the frozen release digest before the tag.
   another Quest's regenerated evidence is excluded from a capture, registered
   generated outputs are covered at landing when byte-identical to a fresh
   regeneration, and the evidence harness runtime accepts `--output`.
+- Readiness planning under formation load: the planning snapshot owner no
+  longer defers unboundedly on token status alone, the canonical readiness
+  identity owner recognises its own normalised output, memo freshness is
+  keyed on the publication version, and a snapshot lane still in flight at
+  its deadline is classified as blindness rather than as an inactive cluster.
+- Managed split of a user table under write load resumes its persisted plan
+  instead of re-planning, a distributed write that fails on a participant
+  surfaces the first failed participant in the admin envelope, and a joiner
+  whose services cache missed a late row converges through the routing
+  table.
 
 ### Fixed
 - The formation-release GCP analyzer classifies a generation revoked by a
   valid disconnect after the authority began draining as teardown-truncated
   rather than stranded, and the reverted-control verdict reads the analyzer's
   real invariants.
+- The three-node seed rebalance integration lane no longer sleeps its
+  discovery window through convergence, and a closed-log commit race no
+  longer raises a false "no durable progress" at teardown.
+- `npm pack` output stays parseable: the hooks installer's prepare-lifecycle
+  diagnostic moved to stderr.
 
 ## [0.1.1] — 2026-08-22
 
