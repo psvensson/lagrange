@@ -7,7 +7,7 @@
     "bootstrap-membership": 248,
     "cdc-metadata": 54,
     "cli-tooling": 96,
-    "control-plane": 178,
+    "control-plane": 179,
     "convergence-topology": 76,
     "distributed-harness": 166,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2131,
-  "digest": "fnv1a32-0ac76b78",
+  "censusSize": 2132,
+  "digest": "fnv1a32-2d30a491",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -493,6 +493,7 @@
     "test/control-plane/control-plane-readiness-service.test.js": "control-plane",
     "test/control-plane/control-plane-snapshot-owner.test.js": "control-plane",
     "test/control-plane/control-plane-system-table-gateway.test.js": "control-plane",
+    "test/control-plane/current-membership-epoch-null-unreadable.test.js": "control-plane",
     "test/control-plane/deployment-binding-owner.test.js": "control-plane",
     "test/control-plane/dispatch-handler-verification.property.test.js": "control-plane",
     "test/control-plane/dual-path-closure.test.js": "control-plane",

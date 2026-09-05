@@ -62,11 +62,15 @@ function createNoopSqlQueryEngine(onInsert) {
  * after creation so a persisted binding can be dispatched against a later
  * epoch. `sqlQueryEngine` defaults to an in-memory no-op engine that only
  * counts operation inserts; `systemTableCache` defaults to an empty cache.
+ * `readCurrentPublishedEpoch`, when given, replaces the epoch double so a
+ * suite can route the read through the real readiness owner while node
+ * readiness admission stays permissive.
  */
 function createEpochCoordinator({
   currentEpoch,
   sqlQueryEngine = null,
   systemTableCache = createMockCache(),
+  readCurrentPublishedEpoch = null,
 }) {
   let persistedRows = 0;
   let publishedEpoch = currentEpoch;
@@ -80,8 +84,10 @@ function createEpochCoordinator({
     systemTableCache,
     cdcIntegrationService: {async waitForCacheUpdate() {}},
     controlPlaneReadinessService: {
-      getCurrentPublishedMembershipEpochSync() {
-        return publishedEpoch;
+      getCurrentPublishedMembershipEpochSync(nodeId, observedAt) {
+        return readCurrentPublishedEpoch ?
+          readCurrentPublishedEpoch(nodeId, observedAt) :
+          publishedEpoch;
       },
       getNodeReadinessSync(nodeId) {
         return {nodeId, dimensions: {repairEligible: true}};

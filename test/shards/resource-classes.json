@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2114,
+    "ordinary": 2115,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2131,
-  "digest": "fnv1a32-8e7874a3",
+  "censusSize": 2132,
+  "digest": "fnv1a32-63b1da54",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -475,6 +475,7 @@
     "test/control-plane/control-plane-readiness-service.test.js": "ordinary",
     "test/control-plane/control-plane-snapshot-owner.test.js": "ordinary",
     "test/control-plane/control-plane-system-table-gateway.test.js": "ordinary",
+    "test/control-plane/current-membership-epoch-null-unreadable.test.js": "ordinary",
     "test/control-plane/deployment-binding-owner.test.js": "ordinary",
     "test/control-plane/dispatch-handler-verification.property.test.js": "ordinary",
     "test/control-plane/dual-path-closure.test.js": "ordinary",

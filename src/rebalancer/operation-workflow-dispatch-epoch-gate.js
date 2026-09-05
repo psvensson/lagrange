@@ -9,6 +9,9 @@
 // ADD/REPLACE execution can reject staleness downstream as well.
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  readPublishedMembershipEpoch,
+} from '../control-plane/published-membership-epoch-reading.js';
+import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
@@ -30,26 +33,6 @@ function isEpochFencedOperationType(operationType) {
     operationType === OperationType.ADD ||
     operationType === OperationType.REPLACE
   );
-}
-
-/**
- * Normalize the current published membership epoch reported by the
- * readiness owner (the other side of the fence; not the operation's
- * binding).
- * @param {*} epochValue
- * @return {number|null}
- * @private
- */
-function normalizeCurrentPublishedEpoch(epochValue) {
-  if (
-    epochValue === null ||
-    epochValue === undefined ||
-    epochValue === ''
-  ) {
-    return null;
-  }
-  const epoch = Number(epochValue);
-  return Number.isInteger(epoch) && epoch >= 0 ? epoch : null;
 }
 
 /**
@@ -112,7 +95,7 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
     return null;
   }
   const planningEpoch = planningEpochBinding.epoch;
-  const currentEpoch = normalizeCurrentPublishedEpoch(
+  const currentEpoch = readPublishedMembershipEpoch(
     owner.getCurrentPublishedMembershipEpoch(),
   );
   if (currentEpoch === null) {

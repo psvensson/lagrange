@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "current-membership-epoch-null-unreadable",
+  "status": "pass",
+  "generatedAt": "2026-09-05T06:09:26.880Z",
+  "receipts": [
+    {
+      "id": "C1-establishing-publication-unreadable",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "the real ControlPlaneReadinessService reports the current published membership epoch as unreadable (null), never 0, while the latest publication is ESTABLISHING (planning answer publishedPlanningEpoch null); red-on-revert: Number(null) in getCurrentPublishedMembershipEpochSync"
+    },
+    {
+      "id": "C2-published-epoch-preserved",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "a PUBLISHED epoch 0, 1, or 3 reads as exactly that epoch; the reader decode table pins null/undefined -> unreadable, non-negative integer -> epoch, every other representation -> unreadable"
+    },
+    {
+      "id": "C3-absent-publication-unreadable",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "no publication row reads as unreadable"
+    },
+    {
+      "id": "C4-planner-reads-unreadable-not-zero",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "the real UnifiedRebalancer planning read over the real readiness owner yields null while establishing (so moves stay unstamped) and the published epoch once PUBLISHED"
+    },
+    {
+      "id": "C5-creation-fence-defers-not-stale",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "the real RebalanceCoordinator creation fence, reading the real readiness owner while establishing, defers an epoch-bound move as MEMBERSHIP_EPOCH_UNAVAILABLE and persists nothing, instead of rejecting it as a stale plan against a fabricated epoch 0"
+    },
+    {
+      "id": "C6-dispatch-fence-defers-not-stale",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "the real dispatch epoch gate, reading the real readiness owner while establishing, defers an epoch-bound ADD as DEFERRED_RETRY_PENDING with no delivery and no stale failure"
+    },
+    {
+      "id": "C7-single-reader-inventory",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "detail": "every src file touching the current-epoch surface is classified; the two decoding readers import the single reader module and no src file reinterprets the surface with Number/parseInt/Math"
+    },
+    {
+      "id": "readiness-planning-suite-green",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+      "detail": "the registered readiness planning witness suite stays green"
+    },
+    {
+      "id": "epoch-fence-suite-green",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/assignment-epoch-fencing.test.js",
+      "detail": "the pre-existing assignment-epoch-fencing suite stays green"
+    }
+  ]
+}

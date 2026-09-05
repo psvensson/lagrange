@@ -1,5 +1,6 @@
 import {ControlPlaneReadinessPriorityRecoveryPlanning} from './control-plane-readiness-priority-recovery-planning.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {readPublishedMembershipEpoch} from './published-membership-epoch-reading.js';
 import {
   PRIORITY_RECOVERY_PLANNING_PROJECTION,
 } from './control-plane-readiness-constants.js';
@@ -527,16 +528,11 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       nodeId,
       observedAt,
     );
-    const publishedPlanningEpoch = Number(
+    // A planning answer without a PUBLISHED epoch (publication absent or
+    // still establishing) is unreadable, never epoch 0.
+    return readPublishedMembershipEpoch(
       planningSnapshot?.publishedPlanningEpoch,
     );
-    if (
-      Number.isInteger(publishedPlanningEpoch) &&
-      publishedPlanningEpoch >= 0
-    ) {
-      return publishedPlanningEpoch;
-    }
-    return null;
   }
 
   buildMembershipPublicationDiagnostics(row, observedAt) {
@@ -545,7 +541,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       return null;
     }
 
-    const publicationEpoch = Number(
+    const publicationEpoch = readPublishedMembershipEpoch(
       row.publicationEpoch ?? row.publication_epoch,
     );
     const sourceSnapshotVersion = Number(
@@ -558,9 +554,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       row.updatedAt ?? row.updated_at ?? createdAt,
     );
     return Object.freeze({
-      publicationEpoch: Number.isFinite(publicationEpoch) ?
-        publicationEpoch :
-        protocolSnapshot.publicationEpoch,
+      publicationEpoch: publicationEpoch ?? protocolSnapshot.publicationEpoch,
       sourceSnapshotVersion: Number.isFinite(sourceSnapshotVersion) ?
         sourceSnapshotVersion :
         protocolSnapshot.sourceSnapshotVersion,
