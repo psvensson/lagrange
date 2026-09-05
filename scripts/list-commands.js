@@ -261,16 +261,16 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
         description: 'Run non-bootstrap, non-integration TAP tests.',
       }),
       Object.freeze({
-        command: 'npm run release:gate:receipt -- <name> -- <command...>',
-        description: 'Run one local release gate and record its real exit code, HEAD sha, clean-tree state, source fingerprint and version as a gate receipt.',
+        command: 'npm run release:preflight',
+        description: 'Evaluate the five release-exit checks (clean release content, HEAD is origin/main, ci gate green on the exact sha, versions and changelog agree, tag absent) and print the exact tag commands; never tags.',
       }),
       Object.freeze({
-        command: 'npm run release:gate:remote-receipt -- --sha <sha>',
-        description: 'Record the GitHub gate job conclusion for one exact sha, attributed to its workflow file, as a receipt (fact only, no verdict).',
+        command: 'npm run check:formation',
+        description: 'Local seed-starvation gate: form five local nodes through schema admission and fail unless the formation verdict is PASS within the seed event-loop budget.',
       }),
       Object.freeze({
-        command: 'npm run release:verify:scenarios -- [--soak-report <path>] [--receipt-dir <dir>]',
-        description: 'Derive the release-0-2-verification-v3 frontier scenarios and aggregate fail-closed from the soak report and recorded receipts, bound to HEAD, src fingerprint and 0.2.0.',
+        command: 'npm run health:formation -- [--gcp] [--summary]',
+        description: 'Record one formation-verdict trend record from a formation-only run (local or GCP) or print the recent trend and pass rate.',
       }),
       Object.freeze({
         command: 'npm run distributed:all',

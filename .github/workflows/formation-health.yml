@@ -1,0 +1,100 @@
+# Formation health — a standing signal, never a release gate.
+#
+# Runs the MovieLens demo's formation-only phase with one node per GCP VM,
+# derives the formation verdict (seed event-loop gaps inside the formation
+# window, ready-lease waits, critical spread, schema admission) and appends
+# one record to the formation trend. The report and trend are uploaded as
+# artifacts; `npm run health:formation -- --summary` renders the local trend.
+# Scheduled nightly and runnable on demand. The GCP runner VM is woken keylessly
+# exactly as release.yml does; the demo provisions its five hosts through the
+# harness's GCP provider with the runner's own credentials.
+name: formation-health
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formation-health
+  cancel-in-progress: false
+
+env:
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
+
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          skip_install: false
+
+      - name: Start the runner VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner \
+            --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  health:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # The trend file lives under gitignored data/ on the persistent
+          # runner; checkout's default clean would wipe it every night.
+          clean: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
+
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      - name: Formation health run (one node per GCP VM)
+        # The step's exit code is the formation verdict, so a red formation
+        # is a red run; the evidence upload below runs regardless.
+        run: npm run health:formation -- --gcp
+
+      - name: Upload formation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: formation-health-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            test-output/reports/movielens-lagrange-formation-only-live-*.report.json
+            data/formation-health/trend.ndjson
+            data/examples/service-data-affinity-demo/node-*.log

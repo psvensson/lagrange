@@ -144,6 +144,18 @@ consistent. Parked or EXHAUSTED prerequisites remain blockers, never waivers.
 
 ## Decision log
 
+- 2026-09-05 — Superseded. G1–G6 and the release exit above are replaced by
+  `RELEASE.md`: the release exit is deterministic (full corpus green on the
+  exact SHA, the `v*` tag workflow's artifact build and smoke, an honest
+  changelog), evaluated by `npm run release:preflight`; five-node formation is
+  a standing measured signal (`npm run health:formation`, the
+  `formation-health` workflow, `npm run check:formation` locally), never a
+  gate. The final-head certification run on 103786ef3 failed with
+  `seed_event_loop_starved` (the measured numbers are in the CHANGELOG's
+  Unreleased paragraph and the run's report under `test-output/reports/`);
+  the four digest-bound row Quests stay as history and are not replayed. See
+  `solve/epics/release-process-simplification.md`.
+
 - 2026-08-13 — Put topology before five-node certification; required current
   snapshot replay; made soak enforcement a prerequisite; moved release metadata
   before exact-candidate verification; and added channel preflight plus one

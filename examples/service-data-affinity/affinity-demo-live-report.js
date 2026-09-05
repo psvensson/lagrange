@@ -4,6 +4,10 @@ import {buildAffinityDemoReportError} from './affinity-demo-report-error.js';
 
 const REPORT_DIR = 'test-output/reports';
 const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
+// A formation-only run (cluster formation and schema admission, nothing
+// after) reports under its own scenario so the Solver's consecutive-run
+// reading of the full certification scenario never mixes the two.
+const FORMATION_ONLY_SCENARIO = 'movielens-lagrange-formation-only-live';
 const NOT_OBSERVED_ADMISSION = Object.freeze({
   admitted: false,
   state: 'not_observed',
@@ -15,6 +19,8 @@ function firstObservedValue(...values) {
 
 function buildReportDetail(result, error, phaseEvidence, hostScheduling) {
   return {
+    formation: phaseEvidence.formation || null,
+    formationVerdict: phaseEvidence.formationVerdict || null,
     result: firstObservedValue(result, phaseEvidence.result),
     schemaAdmission: firstObservedValue(
       result?.schemaAdmission,
@@ -75,6 +81,8 @@ function buildAffinityDemoLiveReport({
   // hot): converging despite adverse scheduling is stronger evidence, not
   // weaker, and the harvested numbers stay in detail for attribution.
   const hostScheduling = phaseEvidence?.hostScheduling || null;
+  const scenario = phaseEvidence?.formationOnly ?
+    FORMATION_ONLY_SCENARIO : LIVE_SCENARIO;
   const {current, passed} = buildReportOutcome(
     result,
     error,
@@ -82,14 +90,15 @@ function buildAffinityDemoLiveReport({
   );
   return {
     timestamp,
-    scenario: LIVE_SCENARIO,
+    scenario,
     producer: 'service-data-affinity-demo',
     fidelity: 'live',
     summary: buildReportSummary(passed),
     optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
+    formationVerdict: phaseEvidence?.formationVerdict || null,
     standardSummary: {
       scenarios: [{
-        scenario: LIVE_SCENARIO,
+        scenario,
         passed,
         current,
         detail: buildReportDetail(
@@ -120,7 +129,7 @@ async function writeAffinityDemoLiveReport(
   const fileStamp = report.timestamp.replace(/[:.]/g, '-');
   const reportPath = resolve(
     REPORT_DIR,
-    `${LIVE_SCENARIO}-${fileStamp}.report.json`,
+    `${report.scenario}-${fileStamp}.report.json`,
   );
   await writeFile(reportPath, JSON.stringify(report, null, 2));
   console.log(`Live demo report: ${reportPath}`);
@@ -128,6 +137,7 @@ async function writeAffinityDemoLiveReport(
 }
 
 export {
+  FORMATION_ONLY_SCENARIO,
   LIVE_SCENARIO,
   buildAffinityDemoLiveReport,
   writeAffinityDemoLiveReport,

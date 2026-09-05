@@ -18,42 +18,59 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | --- | --- | --- |
 | PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
 | Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
+| Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
 | Manual | `.github/workflows/full-gate.yml` | `npm run check:release` — the whole system, on demand. No longer nightly: a scheduled whole-system proof is a standing veto, and an unchanged tree cannot grow new behavioural debt. |
 | Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
 
+## Release exit
+
+A head may be tagged when, and only when, five checks hold. `npm run
+release:preflight` evaluates them and prints the two commands that perform
+the release; it never tags.
+
+1. The release content is clean (porcelain status outside `solve/`).
+2. HEAD is exactly `origin/main`.
+3. The full corpus is green on the exact SHA: the `ci` workflow's `gate` job
+   concluded success for that commit.
+4. Every version literal agrees (`package.json`, the root package in
+   `package-lock.json`, `CLI_VERSION`, `ENTRYPOINT_VERSION`, Helm chart
+   `version` and `appVersion`) and `CHANGELOG.md` carries a non-empty, dated
+   section for the version.
+5. No tag exists for the version yet.
+
+Everything after the tag is proven by `release.yml` on the tagged SHA (the
+full pre-release proof, the SEA binaries, the Docker image and its smoke
+test, the Helm chart, the npm package, the GitHub Release). The tag workflow
+is the only artifact publisher; nothing it proves is re-run locally. Five-node
+formation timing is a measured number quoted in the notes from the formation
+health trend (below), never a gate. Decided 2026-09-05 after the 0.2 program
+(`solve/epics/release-0-2.md`) had coupled the tag to a live convergence
+result the shipped bytes had not met since 2026-08-30.
+
 ## Cutting a release
 
-1. **Land all release content on `main`** and let `ci.yml` go green.
-2. **Bump the version.** Edit `package.json` (and the `version` fields of the
-   root package in `package-lock.json`), plus `version` and `appVersion` in
-   `charts/lagrange-node/Chart.yaml`. The user-facing `--version` literals in
-   `src/cli/cli-constants.js` and `src/constants/entrypoint.js` must match; the
-   guard in `test/release/version-single-source.test.js` enforces this (kept as
-   literals, not a `package.json` read, so the SEA binary — which has no
-   `package.json` on disk — still reports the right version).
-3. **Update `CHANGELOG.md`.** Move `[Unreleased]` items under a new
-   `[x.y.z] — YYYY-MM-DD` heading and refresh the compare/tag links. Keep the
-   _Known limitations_ section honest about convergence (see below). This is
-   not optional bookkeeping: the section is the source of the release-page
-   notes and Docker Hub release history, and `release.yml` fails in seconds if
-   the tagged version has no non-empty section
-   (`npm run release:notes -- --mode check --version x.y.z` runs the same
-   gate locally; `test/scripts/release-notes.test.js` also pins it to
-   `package.json`'s version in `test:fast`).
-4. **Verify on a clean checkout** (the release Quest's `doneWhen`):
+Landing velocity is several commits a day, so releases are small and frequent
+instead of frozen. A patch release for one fix follows the same steps.
+
+1. **Keep notes under `[Unreleased]`** as work lands; `test:fast` refuses an
+   empty `[Unreleased]` while `package.json`'s version is uncut.
+2. **Cut the version in one commit.** Re-head the `[Unreleased]` items as
+   `## [x.y.z] — YYYY-MM-DD` with today's date and refresh the compare/tag
+   links; bump `package.json` and the root package in `package-lock.json`,
+   `version` and `appVersion` in `charts/lagrange-node/Chart.yaml`, and the
+   `--version` literals in `src/cli/cli-constants.js` and
+   `src/constants/entrypoint.js` (kept as literals so the SEA binary, which
+   has no `package.json` on disk, reports the right version; the guard in
+   `test/release/version-single-source.test.js` enforces agreement); quote
+   the current `npm run health:formation -- --summary` line in the notes.
+   Keep the _Known limitations_ section honest about convergence (below).
+3. **Land it through the ordinary publish gate** (`npm run publish`) and wait
+   for `ci / gate` on that SHA.
+4. **Preflight, then tag:**
    ```sh
-   npm ci
-   npm run check:release                 # the whole system
-   npm run package:npm                   # pack + clean install/import/CLI smoke
-   docker build -t lagrange:rc .         # image builds
-   docker run --rm -p 8080:8080 lagrange:rc &   # boots, opens 8080/8081/8082
-   npm run build:all && ./dist/<binary> --version   # SEA runs, prints version
-   helm template charts/lagrange-node    # chart renders
-   ```
-5. **Tag and push:**
-   ```sh
-   git tag -a v0.1.0 -m "Lagrange 0.1.0 (alpha)"
-   git push origin v0.1.0
+   npm run release:preflight
+   git tag -a vx.y.z -m "lagrange-server x.y.z" <sha>
+   git push origin vx.y.z
    ```
    `release.yml` builds and publishes every artifact from the tagged tree.
    The workflow serializes all releases and refuses to publish an older tag
@@ -63,8 +80,10 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    `gitHead`; a rerun skips npm only when both match, and fails closed on a
    foreign package, immutable-version content conflict, or commit conflict. A
    rerun of the current tag replaces existing GitHub release assets and notes,
-   then publishes any draft left by an interrupted first attempt.
-6. **Docker Hub overview updates itself.**
+   then publishes any draft left by an interrupted first attempt. A
+   partial-channel failure is repaired forward with a new patch version; a
+   tag is never moved.
+5. **Docker Hub overview updates itself.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
    section (from `CHANGELOG.md`) and PATCHes it to the repository description
@@ -75,63 +94,36 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
 
-## 0.2 verification receipts
+## Per-head proof, once
 
-The `release-0-2-verification-v3` Quest closes on scenario reports that
-`npm run release:verify:scenarios` derives from recorded facts, never from
-self-report. The honest sequence, run on the frozen candidate HEAD with a clean
-worktree (every receipt is bound to that HEAD sha, the `src/` fingerprint, and
-the `0.2.0` version in `package.json`, `CLI_VERSION`, `ENTRYPOINT_VERSION`, and
-the chart):
+Each landed head is proven in full exactly once: the pre-push hook runs the
+full test corpus before the push and `ci.yml` runs the impact cone after it.
+`npm run check:release` (the corpus plus the project-hardening acceptance)
+runs only inside `release.yml` on the tagged SHA, and on demand through
+`full-gate.yml`. Release-time re-runs of the corpus, local gate receipts and
+digest-bound release row Quests were removed on 2026-09-05.
 
-1. **Memory soak.** Produce the enforcing soak report on the candidate (epic
-   G4); the producer reads the newest
-   `test-output/reports/release-0-2-memory-soak*.report.json` (or
-   `--soak-report <path>`) and passes only if the scenario passed, every node
-   reports `analyzed: true` with at least 30 samples, no `insufficient-*`
-   reason and no leak, and the report's `metadata.srcFingerprint` equals the
-   current fingerprint (`fingerprint_missing` / `fingerprint_mismatch`
-   otherwise). "Newest" is by the report's own `timestamp` field (mtime
-   fallback), never by filename.
-2. **Local gates.** Record each required gate through the only honest writer,
-   which runs the command and stores its real exit code:
-   ```sh
-   npm run release:gate:receipt -- test-gate -- npm run test:gate
-   npm run release:gate:receipt -- test-ci -- npm run test:ci
-   npm run release:gate:receipt -- release-workflow-contracts -- \
-     npm run test:file -- test/release/project-hardening-contracts.test.js \
-       test/scripts/release-notes.test.js
-   npm run release:gate:receipt -- package-npm -- npm run package:npm
-   npm run release:gate:receipt -- build-all -- npm run build:all
-   npm run release:gate:receipt -- docker-smoke -- sh -c \
-     'docker build -t lagrange:rc . && \
-      test "$(docker run --rm lagrange:rc src/index.js --version)" = "lagrange v0.2.0"'
-   npm run release:gate:receipt -- helm-package -- \
-     helm package charts/lagrange-node --destination dist/
-   ```
-   Receipts land in `test-output/reports/release-gate-receipts/<name>.json`.
-   The recorded integer `exitCode` is the only success fact (no `passed`
-   field exists or is honoured); a missing receipt, a missing or non-zero
-   exit code, a receipt recorded on another HEAD, fingerprint, or version,
-   or on a dirty tree (`treeClean` / `treeCleanAtFinish` from
-   `git status --porcelain` excluding `solve/`) fails
-   `release-0-2-verification-v3-local-artifacts` with the typed reason naming
-   the receipt.
-3. **Remote exact-SHA gate.** After `npm run publish`, record the GitHub
-   `ci / gate` conclusion for the exact sha:
-   ```sh
-   npm run release:gate:remote-receipt -- --sha "$(git rev-parse HEAD)"
-   ```
-   The helper lists the workflow runs for the sha and their jobs, records
-   every job named `gate` under its own workflow file, and selects the newest
-   completed one; the scenario requires that job to belong to
-   `.github/workflows/ci.yml` (`remote_workflow_mismatch` if `full-gate.yml`
-   was what last ran) with conclusion `success` for the exact HEAD. An absent
-   receipt is `remote_receipt_missing` (FAIL, never skipped).
-4. **Derive the scenarios.** `npm run release:verify:scenarios` writes the
-   three frontier reports and the aggregate under `test-output/reports/`,
-   each carrying the provenance (HEAD, fingerprint, version sources, soak
-   report sha256, receipt paths); the aggregate passes iff all three pass.
+## Formation health
+
+Five-node cold formation is a standing signal, not a release gate.
+
+- `npm run check:formation` runs the MovieLens demo's formation-only phase
+  with five local node processes and fails unless the formation verdict is
+  PASS and the seed's unexplained event-loop blocked time inside the
+  formation window stays within the hardware-relative budget
+  (`LAGRANGE_TEST_MACHINE_FACTOR`). Run it before landing a control-plane
+  change (readiness, rebalancer, membership, raft, transport).
+- `npm run health:formation -- --gcp` runs the same phase with one node per
+  GCP VM and appends one record to `data/formation-health/trend.ndjson`;
+  `npm run health:formation -- --summary` prints the recent records and the
+  pass rate. The scheduled `formation-health.yml` workflow runs it nightly on
+  the GCP runner and uploads the report, the trend and the node logs.
+- Every live demo report carries `formationVerdict`: the seed's event-loop
+  gaps inside the formation window with the hottest tagged sites, the
+  ready-lease settle waits and their unready sets, the last observed
+  critical spread gap and in-flight count, the schema-admission end state
+  and an ordered causal chain. A red run explains itself without log
+  forensics.
 
 ## Convergence: what the release does and does not promise
 

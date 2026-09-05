@@ -10,16 +10,24 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-09-05
+The 0.2 _Stable Core_ work (`RM-0.2-*` rows in
+`docs/steering/agpl-feature-map.md`), landed on `main` with Solver-verified
+evidence and not yet tagged. The release process changed on 2026-09-05
+(`RELEASE.md`): a tag proves what is deterministic about its bytes (full
+corpus green on the exact SHA, artifacts built and smoke-tested by the tag
+workflow, an honest changelog), and five-node formation is a measured
+standing signal rather than a release gate.
 
-The 0.2 _Stable Core_ release (`RM-0.2-*` rows in
-`docs/steering/agpl-feature-map.md`). Everything below is landed on `main`
-with Solver-verified evidence. The 0.2 exit criteria are tracked by the
-`release-0-2-*` Quests: a bounded three-run five-node GCP formation streak
-passed on 2026-08-30 (completion 42.8 s / 38.1 s / 35.9 s); the full
-five-node MovieLens certification, topology-safety evidence,
-compacted-follower snapshot catch-up and the enforcing memory soak are
-replayed on the frozen release digest before the tag.
+Formation health on 103786ef3 (2026-09-05, one node per GCP VM): the
+five-node MovieLens formation FAILED with `seed_event_loop_starved` — the
+seed's event loop was blocked for 49.8 s unexplained inside a 135 s
+formation window, the critical-topology settling blocker read
+`node_ready_lease_incomplete` 521 times with all five nodes unready in most
+samples, the critical system-partition spread gap stayed at 6 with no
+operation in flight, and schema admission ended in `control_plane_pressure`.
+A bounded three-run five-node GCP formation-only streak last passed on
+2026-08-30 (completion 42.8 s / 38.1 s / 35.9 s); the last full MovieLens
+pass on GCP was 2026-08-30.
 
 ### Added
 - Five-node cold formation: an operation-ledger formation barrier with a
@@ -110,6 +118,15 @@ replayed on the frozen release digest before the tag.
   fails the mutation check early, the two `main` workflows carry distinct
   run names, `TAP_TIMEOUT_FLOOR` is a lane floor that never caps a declared
   test budget, and the MovieLens dataset fetch has a digest-pinned fallback.
+- Release process: `npm run release:preflight` evaluates the release-exit
+  facts and prints the exact tag commands; `npm run check:formation` is the
+  local seed-starvation gate (five local node processes through schema
+  admission, seed event-loop budget); `npm run health:formation` appends one
+  formation-verdict record per run to a trend and the scheduled
+  `formation-health` workflow runs it nightly on GCP; every live demo report
+  carries a machine-readable `formationVerdict` with its causal chain. The
+  digest-bound release row Quests, the seven local gate receipts and the
+  release verification scenario producer were removed (`RELEASE.md`).
 - Solver tooling (internal): `preflight`, `reattempt` and `rebase-epoch`
   verbs, a verifier-rejection repair amendment path, one override per
   logical run with a visible budget, observation-severity findings, new-code
@@ -264,7 +281,6 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0

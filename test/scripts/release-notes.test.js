@@ -2,7 +2,8 @@
  * Unit + wiring tests: per-release notes renderer (scripts/release-notes.js).
  *
  * release.yml uses this script as the fail-fast release gate (tag must have a
- * non-empty CHANGELOG section matching package.json's version) and as the
+ * non-empty CHANGELOG section matching package.json's version, or non-empty
+ * [Unreleased] notes while that version is not yet cut) and as the
  * renderer for both the GitHub release-page body and the Docker Hub
  * repository description. The wiring tests pin the real repo files (the
  * committed CHANGELOG.md parses; docs/dockerhub-overview.md carries the
@@ -193,8 +194,25 @@ test('wiring: the real CHANGELOG.md and dockerhub-overview.md satisfy the releas
   const packageVersion = JSON.parse(
     readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'),
   ).version;
-  const section = extractChangelogSection(changelog, packageVersion);
-  t.ok(section.body.length > 0, `CHANGELOG has a non-empty [${packageVersion}] section`);
+  // The dated section for package.json's version is cut when the version is
+  // released (RELEASE.md); until then the notes accumulate under
+  // [Unreleased], which must not be empty while the version is uncut.
+  const released = extractReleasedSections(changelog)
+    .find((section) => section.version === packageVersion);
+  if (released) {
+    t.ok(released.body.length > 0, `CHANGELOG has a non-empty [${packageVersion}] section`);
+  } else {
+    const unreleased = /## \[Unreleased\]\n([\s\S]*?)\n## \[/u.exec(changelog);
+    t.ok(
+      unreleased && unreleased[1].trim().length > 0,
+      `CHANGELOG keeps non-empty [Unreleased] notes until [${packageVersion}] is cut`,
+    );
+    t.throws(
+      () => extractChangelogSection(changelog, packageVersion),
+      /Move the \[Unreleased\] items/u,
+      'the tag-time gate still refuses to release an uncut version',
+    );
+  }
 
   const template = readFileSync(join(REPO_ROOT, 'docs/dockerhub-overview.md'), 'utf8');
   const rendered = renderDockerhubOverview({

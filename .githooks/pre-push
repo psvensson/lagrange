@@ -5,10 +5,12 @@
 # then — only once everything static is green — the long-running post-push
 # test corpus (test:gate:postpush) as the final stage. This hook is the only
 # per-push run of the static checks: the remote per-push CI gate deliberately
-# skips them and only the nightly full-gate workflow re-runs them remotely,
-# so drift must be caught BEFORE it lands on the remote (core.md Must-Not
-# #20). The test stage runs the same corpus CI runs after the push, so a
-# push that passes this hook should not turn main red.
+# skips them and only the on-demand full-gate workflow (workflow_dispatch;
+# there is no scheduled full gate) re-runs them remotely, so drift must be
+# caught BEFORE it lands on the remote (core.md Must-Not #20). This is also
+# the ONE full-corpus run per head: CI runs the impact cone after the push
+# and a release re-proves the tagged sha inside the tag workflow (RELEASE.md),
+# so a push that passes this hook should not turn main red.
 # Bypass with git push --no-verify (emergencies only; skips EVERYTHING).
 # Skip only the test stage with LAGRANGE_PUSH_SKIP_TESTS=1 git push — for
 # when the exact working tree was already gated green this session.

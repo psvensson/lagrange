@@ -71,6 +71,7 @@ import {
 import {
   collectHostSchedulingEvidence,
 } from './host-scheduling-evidence.js';
+import {collectFormationVerdict} from './formation-verdict.js';
 import {
   startGcpAffinityCluster,
 } from './gcp-cluster-provider.js';
@@ -100,6 +101,11 @@ let TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
 let LOAD_TARGET = `${TARGET}?lane=load`;
 const GCP_MODE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP';
 const GCP_MODE_FLAG = '--gcp';
+// Formation-only: form the cluster and wait for schema admission, then stop.
+// The local seed-starvation gate (npm run check:formation) and the formation
+// health trend read the formation verdict from this shorter run.
+const FORMATION_ONLY_ENV = 'LAGRANGE_AFFINITY_DEMO_FORMATION_ONLY';
+const FORMATION_ONLY_FLAG = '--formation-only';
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
 const OBSERVE_INTERVAL_MS = 10000;
@@ -161,6 +167,8 @@ const DEMO_CONSTANTS = Object.freeze({
   BOOTSTRAP_MESSAGE: '[1/5] Bootstrapping the MovieLens schema on the seed...',
   EXPANSION_SUFFIX: 'the existing data...',
   CLUSTER_FORMED_MESSAGE: '      Cluster formed.',
+  FORMATION_ONLY_MESSAGE:
+    '      Formation-only run: stopping after schema admission.',
   PRELOAD_WAIT_MESSAGE:
     '      Waiting for production ratings-load admission...',
   PRELOAD_SUCCESS_PREFIX: '      Ratings load admitted (snapshot=',
@@ -822,6 +830,11 @@ async function archivePreviousRun() {
 
 // Resolve the requested cluster mode: default local node processes, or a
 // GCP-provisioned remote Docker cluster when --gcp / the env opt-in is set.
+function resolveFormationOnly() {
+  return process.argv.includes(FORMATION_ONLY_FLAG) ||
+    process.env[FORMATION_ONLY_ENV] === DEMO_CONSTANTS.ENABLED_VALUE;
+}
+
 function resolveClusterMode() {
   return process.argv.includes(GCP_MODE_FLAG) ||
     process.env[GCP_MODE_ENV] === DEMO_CONSTANTS.ENABLED_VALUE ?
@@ -857,6 +870,10 @@ async function startClusterNodes(mode, nodes, dataRoot) {
 
 async function runAffinityDemo({phaseEvidence = {}} = {}) {
   const mode = resolveClusterMode();
+  const formationOnly = resolveFormationOnly();
+  phaseEvidence.formationOnly = formationOnly;
+  const formation = {clusterStartedAtMs: Date.now(), clusterFormedAtMs: null};
+  phaseEvidence.formation = formation;
   const nodes = [];
   await archivePreviousRun();
   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
@@ -888,6 +905,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       // createCluster already started and formed all nodes.
       await waitForActiveNodesGcp(NODE_COUNT);
     }
+    formation.clusterFormedAtMs = Date.now();
     console.log(DEMO_CONSTANTS.CLUSTER_FORMED_MESSAGE);
     console.log(SCHEMA_ADMISSION_WAIT_MESSAGE);
     const schemaAdmission = await waitForAffinityDemoSchemaAdmission({
@@ -905,6 +923,10 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       SCHEMA_ADMISSION_SUCCESS_PREFIX +
       `(state=${schemaAdmission.snapshot.state}).`,
     );
+    if (formationOnly) {
+      console.log(DEMO_CONSTANTS.FORMATION_ONLY_MESSAGE);
+      return {converged: true, formationOnly: true, schemaAdmission};
+    }
     await createRatingsTableWithRetry({target: TARGET});
     // The authoritative snapshot gate prevents DDL from racing formation
     // recovery. CREATE then owns the sparse ratings policy atomically after
@@ -1066,6 +1088,15 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
         `#${r.rank} movie ${r.group_key} score=` +
         Number(r.agg_value).toFixed(DEMO_CONSTANTS.SCORE_DECIMAL_PLACES)),
     };
+  } catch (error) {
+    // The admission gate's timeout error carries the evidence the wait
+    // collected; the formation verdict must read it exactly as the report
+    // detail does, or a failed run - the case the verdict exists for -
+    // would record no admission state and no spread.
+    if (error?.schemaAdmission && !phaseEvidence.schemaAdmission) {
+      phaseEvidence.schemaAdmission = error.schemaAdmission;
+    }
+    throw error;
   } finally {
     console.log(DEMO_CONSTANTS.STOP_MESSAGE);
     let remoteLogs = null;
@@ -1093,6 +1124,10 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     }
     phaseEvidence.hostScheduling =
       await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
+    phaseEvidence.formationVerdict = await collectFormationVerdict(
+      CLUSTER_DATA_ROOT,
+      {schemaAdmission: phaseEvidence.schemaAdmission, formation},
+    );
   }
 }
 

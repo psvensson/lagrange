@@ -102,6 +102,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## check
 
+- `check:formation` — Local seed-starvation gate: run the formation-only demo with five local node processes and fail unless the formation verdict is PASS and the seed stayed inside its hardware-relative event-loop budget.
 - `check:memory-index` — `node scripts/check-memory-index.js`
 - `check:release` — `npm run test:ci && npm run test:gate`
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
@@ -145,6 +146,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `guard:guideline:constant-names:file` — `node scripts/check-guideline-constant-names.js`
 - `guard:scenario-policy:file` — `node scripts/check-scenario-policy-sql.js`
 - `guard:staged:constant-names` — `node scripts/check-staged-constant-names.js`
+
+## health
+
+- `health:formation` — Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to data/formation-health/trend.ndjson, and print the trend (--summary renders it without running).
 
 ## hooks
 
@@ -195,10 +200,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## release
 
 - `release:digest` — `node scripts/release-content-digest.js`
-- `release:gate:receipt` — Run one local release gate (-- <command...>) and record its real exit code, HEAD sha, porcelain-clean tree, source fingerprint and version as test-output/reports/release-gate-receipts/<name>.json; the only honest writer of local gate receipts.
-- `release:gate:remote-receipt` — Query GitHub (gh api .../actions/runs?head_sha=<sha> and each run's jobs) for the gate job of one exact sha, attributed to its workflow file (ci.yml vs full-gate.yml), and record its conclusion as a receipt; records a fact, never a verdict.
 - `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
-- `release:verify:scenarios` — Derive the release-0-2-verification-v3 memory-soak, local-artifacts and remote-exact-sha scenario reports (plus the aggregate) fail-closed from the newest memory-soak report, the recorded gate receipts and the GitHub ci / gate receipt, provenance-bound to HEAD, the src fingerprint and the 0.2.0 version.
+- `release:preflight` — Evaluate the five release-exit checks for the current checkout (clean release content, HEAD is origin/main, ci gate green on the exact sha, versions and changelog agree, tag absent) and print the exact tag commands; never tags.
 
 ## solve
 
