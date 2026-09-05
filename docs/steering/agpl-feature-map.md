@@ -232,6 +232,52 @@ part of the 0.2 release gate.
 
 ---
 
+## Phase 0.25 — Semantic Core Hardening
+
+*"Semantic changes are explicit, owned, and hard to make accidentally."*
+
+Phase 0.25 turns the semantic fault lines exposed by 0.2 into permanent
+structural protection before 0.3 adds another layer of query/index meaning. It
+protects a small evidence-selected nucleus rather than declaring the entire
+control plane immutable.
+
+Architecture: `architecture/protected-semantic-core.md`.
+Planning epics: `solve/epics/semantic-authority-hardening.md` and
+`solve/epics/protected-core-change-control.md`.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-0.25-sc-authority-inventory | Semantic authority inventory | 🔲 | Rank roughly the highest-risk 10–20 semantic facts by blast radius; record fact vocabulary, authoritative owner, interaction owner, durable/wire form, time/generation owner, legitimate interpretation sites, consumers, duplicate interpreters, and migration difficulty. |
+| RM-0.25-sc-kernel-boundary | Protected semantic kernel pilot | 🔲 | Extract a small representative set of deterministic decoders/projections/transitions/fence decisions into one in-repository semantic boundary. Stateful lifecycle, I/O, timers, retries, subscriptions, and orchestration remain with their owners. Differential parity is required unless a Quest explicitly declares a semantic change. |
+| RM-0.25-sc-interpretation-guards | Protected interpretation and dependency guards | 🔲 | Once a fact has a canonical owner/kernel surface, mechanically reject behavior-changing interpretation of its raw durable/cache fields outside the allowlist and constrain consumers away from owner-private implementations. Transport/copying of raw values remains legal. |
+| RM-0.25-sc-change-control | Content-bound protected-core change control | 🔲 | Machine-readable protected manifest, early typed guard, exact-diff authorization, independent review/receipts, and self-protection of the manifest/verifier root of trust. Reuse existing Solver/review fingerprints rather than creating a parallel governance system. |
+| RM-0.25-sc-boundary-certification | Semantic boundary stability certification | 🔲 | Measure legitimate kernel churn, atomic kernel/owner change frequency, public-surface stability, and attempted bypasses caught; record whether a later separately writable package/repository with read-only normal-agent credentials would reduce risk or create version-skew/shadow-semantics pressure. |
+
+### Phase 0.25 Exit Criteria
+
+- The selected high-blast-radius semantic facts have explicit authoritative
+  owners and interaction owners.
+- A small machine-readable protected set exists; protection follows semantic
+  blast radius rather than file size or complexity.
+- Pilot facts have one canonical semantic implementation, and selected alternate
+  behavior-changing interpretation paths are mechanically rejected.
+- Unauthorized protected edits fail before broad test execution; changing the
+  protection manifest/verifier is itself protected.
+- Extraction parity is demonstrated with differential tests and mutation or
+  red-on-revert controls; meaning-changing work is explicitly declared rather
+  than hidden in refactoring.
+- Time-dependent protected semantics use an explicit clock/deadline owner rather
+  than consumer-local ambient clock interpretation.
+- Boundary-stability evidence produces an explicit decision on stronger
+  external credential/repository isolation. A separate repository is not itself
+  required for 0.25.
+
+Repository-local guards are governance, not a claim that a sufficiently
+privileged credential cannot rewrite the repository. Literal write prevention
+requires an external ruleset, credentials, or repository boundary.
+
+---
+
 ## Phase 0.3 — Queryable Core
 
 *"Ordinary SQL reaches the right data efficiently without physical-partition knowledge."*
