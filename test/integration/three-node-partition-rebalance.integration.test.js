@@ -66,6 +66,7 @@ function createMockMessageRouter() {
  */
 function createAlwaysReadyControlPlaneReadinessService() {
   return {
+    projectNodeLiveness: () => ({readyNow: true}),
     getNodeReadinessSync: () => ({
       dimensions: {
         [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,

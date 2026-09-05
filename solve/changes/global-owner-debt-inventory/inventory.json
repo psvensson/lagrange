@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2545850,
-        "sha256": "0ca06dcc64ed8f94ff393e6e13c1666644a46e0ecb0312f34845440238e09ed4"
+        "sha256": "ced2aa1e9dca8ba32192faeefb300f98ab225b7276860162c92c31db494c7187"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1d21455723c4efaf739a5f5ab59661e596f6c127ad904f3031ce45ff982725f7"
+        "sha256": "2d23f30f133ee756db3182eab454fb308f0e2558551cb1905893b6ef9edce5e9"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "bdb8f03b8ddee7e1c3fe82a80872c06f4a9fe14d9a4595992557143ad1919ced"
+    "inputDigest": "5afc723ccdc8adba74177304943c0fa74eb40fdb3f247390554a47559c477760"
   },
   "reconciliation": {
     "complexity": {
@@ -130,12 +130,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1d21455723c4efaf739a5f5ab59661e596f6c127ad904f3031ce45ff982725f7"
+          "sha256": "2d23f30f133ee756db3182eab454fb308f0e2558551cb1905893b6ef9edce5e9"
         },
         "cloneGroups": 800,
-        "duplicatedLines": 30745,
+        "duplicatedLines": 30740,
         "sourceCloneTouches": 1600,
-        "sourceDuplicatedLineTouches": 61490,
+        "sourceDuplicatedLineTouches": 61480,
         "nonzeroSourceCount": 505,
         "touchMultiplicity": 2
       }
@@ -167,14 +167,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2545850,
-        "sha256": "0ca06dcc64ed8f94ff393e6e13c1666644a46e0ecb0312f34845440238e09ed4"
+        "sha256": "ced2aa1e9dca8ba32192faeefb300f98ab225b7276860162c92c31db494c7187"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "ba7f71f7baeaf658d53d18ee9ef4fe3730afade30b4382f14c05f9ee194e5040",
+      "sourceDigest": "4664d59620367c6353081cd10652af5286dbe4fd1154a31d765794a022fb29c2",
       "moduleCount": 5122,
       "edgeCount": 22961,
       "unresolvedCount": 34
@@ -184,7 +184,7 @@
     "sourceSignalCount": 2664,
     "assignedSignalCount": 2664,
     "uniqueAssignmentCount": 2664,
-    "digest": "56a017e88b6f76f0472fa1075d9837990787bce356b40b5e83f01475bc79566a"
+    "digest": "1082b79b0a8802f6303e8e24e667bd88a312f7c5ed8c80138651a2aca60f0609"
   },
   "signalCounts": {
     "cognitive": 177,
@@ -438,13 +438,13 @@
       "complexity": 25,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 3242,
+      "duplicatedLines": 3232,
       "cloneTouches": 93,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 38,
       "importOut": 397,
-      "score": 424.2,
+      "score": 423.2,
       "topPaths": [
         "test/integration/move-replica-handoff.integration.test.js",
         "test/integration/multi-worker-raft.integration.test.js",
@@ -4197,11 +4197,11 @@
           }
         ],
         "baseline": {
-          "score": 424.2,
+          "score": 423.2,
           "complexity": 25,
           "cognitive": 0,
           "oversizedFiles": 0,
-          "duplicatedLines": 3242,
+          "duplicatedLines": 3232,
           "lintExclusions": 0
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
