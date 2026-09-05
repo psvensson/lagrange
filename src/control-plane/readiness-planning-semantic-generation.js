@@ -289,6 +289,25 @@ class ReadinessPlanningSemanticGenerationTracker {
     return false;
   }
 
+  // True when the only unclassified source change is the nodes table (a
+  // heartbeat or lease advance): the one change the CL-012 stored-reuse
+  // witnesses are built to arbitrate, so a barrier-blocked read may bridge a
+  // completed snapshot through them instead of failing closed.
+  hasNodeTableOnlyUnclassifiedChange(observation) {
+    if (!this.sourceRevisionTrackingActive || !observation ||
+      !this.sourceRevisionBaselineEstablished) return false;
+    let nodesChanged = false;
+    for (let index = 0; index < REVISIONED_SOURCE_TABLES.length; index += 1) {
+      const tableName = REVISIONED_SOURCE_TABLES[index];
+      if (observation[tableName] === this.classifiedSourceRevisions[tableName]) {
+        continue;
+      }
+      if (tableName !== TABLES.NODES) return false;
+      nodesChanged = true;
+    }
+    return nodesChanged;
+  }
+
   classifySourceRevision(tableName, sourceRevision, observation) {
     if (!this.sourceRevisionTrackingActive) {
       return SOURCE_REVISION_STATE.EXACT;

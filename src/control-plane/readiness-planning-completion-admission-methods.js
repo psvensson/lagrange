@@ -8,7 +8,13 @@
  * prototype; the owner keeps queue, read, reconcile, and lifecycle.
  */
 
+import {isStoredNodeLivenessCurrent} from
+  './control-plane-readiness-node-liveness-methods.js';
+import {CONTROL_PLANE_PARTICIPATION_KIND} from
+  './control-plane-readiness-constants.js';
 import {
+  isNodeTableOnlyTokenAdvance,
+  isTokenCurrentExceptNodeTable,
   READINESS_PLANNING_OWNER_DEPENDENCIES,
   READINESS_PLANNING_REASON,
   READINESS_PLANNING_TABLES,
@@ -27,6 +33,8 @@ import {
   readFormationBootstrapOwnerKey,
 } from './readiness-planning-formation-source.js';
 
+const DEFAULT_ROUTED_DIMENSION = 'serveEligible';
+const INITIAL_BOOTSTRAP_RECAPTURE_LIMIT = 1;
 const MapConstructor = Map;
 const mapForEach = Function.call.bind(Map.prototype.forEach);
 const mapGet = Function.call.bind(Map.prototype.get);
@@ -157,6 +165,138 @@ const readinessPlanningCompletionAdmissionMethods = {
     return completed.sourceGeneration !== null &&
       completed.sourceGeneration !== undefined &&
       completed.sourceGeneration === this.readCompletedSourceGeneration();
+  },
+
+  // The sealed CL-012 cache-lag bridge, applied by the planning owner at
+  // read time for QUERY-ROUTING reads only (participationKind ROUTED_READ):
+  // planning reads keep Quest 2's fail-closed, current-evidence semantics,
+  // and no bridged snapshot is ever stored, stamped, or notified. Returns
+  // the snapshot to serve, or null when nothing bridges:
+  // - a lagged row: the service's stored-snapshot reuse witnesses
+  //   (watermark, services version, transport, independent invalidation,
+  //   lease) admit the fresher stored evidence, which is served rebased on
+  //   the current publication diagnostics;
+  // - a fresher row (a heartbeat) whose change is node-table-only — in the
+  //   token (the live-veto site) or still unclassified (the barrier site,
+  //   where the cache's deferred listener has not advanced the token) — and
+  //   whose own liveness projection still matches the completed snapshot's:
+  //   the row does not refute the decision, so the completed snapshot is
+  //   served until the queued build replaces it from current inputs.
+  canBridgeRoutedRead(ownerKey, token, options) {
+    return options?.participationKind ===
+        CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ &&
+      token.transportTopologyValid !== false &&
+      this.isNodeRowStillPresent(ownerKey) &&
+      typeof this.service?.getReusableNodeReadinessSnapshotSync === 'function' &&
+      this.isNodeRowServeAdmissible(ownerKey);
+  },
+
+  // The visible row itself must still admit serving: a heartbeat that
+  // carries saturating cpu, memory, or disk load is a nodes-table change
+  // the liveness witnesses do not see (round-6 rejection), and the rebuilt
+  // answer refuses it, so nothing may bridge it.
+  isNodeRowServeAdmissible(ownerKey) {
+    if (typeof this.service?.isLoadReady !== 'function') return true;
+    return this.service.isLoadReady(this.service.getNodeRow(ownerKey)) === true;
+  },
+
+  bridgeRoutedReadSnapshot(
+    ownerKey, completed, token, buildOptionsKey, observation, options,
+  ) {
+    if (!this.canBridgeRoutedRead(ownerKey, token, options)) return null;
+    // Nothing unclassified beyond the nodes table, BEFORE any evidence is
+    // consulted: the stored-reuse witnesses learn of a publications or
+    // services change only from the cache's deferred listener, so in the
+    // apply-before-listener window neither the stored snapshot nor the
+    // completed record may bridge a change on another table (rounds 2-5).
+    const unclassifiedIsNodesOnly =
+      !this.hasUnclassifiedSourceChange(observation) ||
+      this.hasNodeTableOnlyUnclassifiedChange(observation);
+    if (!unclassifiedIsNodesOnly) return null;
+    const stored = this.service.getReusableNodeReadinessSnapshotSync(ownerKey);
+    if (stored) return stored;
+    if (!completed || completed.buildOptionsKey !== buildOptionsKey) return null;
+    // Either a classified node-table-only advance, or an unclassified
+    // nodes-only change on a completed record whose token is otherwise
+    // current. Strictly the nodes table: the wider rebase predicate also
+    // admits an authoritative-snapshot advance, which carries a services
+    // change without the services-version witness (round-4 rejection).
+    const nodeTableOnlyChange = (
+      isNodeTableOnlyTokenAdvance(completed.capturedToken, token) ||
+      (this.hasNodeTableOnlyUnclassifiedChange(observation) &&
+        isTokenCurrentExceptNodeTable(completed.capturedToken, token)));
+    return nodeTableOnlyChange && isStoredNodeLivenessCurrent(
+      this.service, completed.snapshot, this.now()) ?
+      completed.snapshot : null;
+  },
+
+  // A completed snapshot that is not eligible on the read's own decision
+  // dimension may be a lagged-row projection; only such a read consults
+  // the bridge on the plain reuse path.
+  isCompletedSnapshotEligibleFor(completed, options) {
+    return this.isSnapshotEligibleFor(completed?.snapshot, options);
+  },
+
+  isSnapshotEligibleFor(snapshot, options) {
+    const dimension = options?.decisionDimension || DEFAULT_ROUTED_DIMENSION;
+    return snapshot?.dimensions?.[dimension] === true;
+  },
+
+  // The bootstrap build projects the visible row by contract; a routed read
+  // whose bootstrap answer is ineligible still bridges through the fresher
+  // stored evidence (the async evaluation that stored it saw a fresher row).
+  serveInitialBootstrap(
+    ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+    currentSource,
+  ) {
+    const served = this.consumeInitialBootstrap(
+      ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+      currentSource);
+    if (this.isSnapshotEligibleFor(served, options)) return served;
+    return this.bridgeRoutedReadSnapshot(
+      ownerKey, this.readCompleted(ownerKey, buildOptionsKey), currentToken,
+      buildOptionsKey, currentSource.observation, options) || served;
+  },
+
+  // The one inline build the owner ever performs: the first read of the
+  // formation bootstrap owner, before any completed record exists. The
+  // build's own reads may adopt a source change that was observed but not
+  // yet folded into the planning identity (a lagged cache row the liveness
+  // owner re-baselines on first touch); admission then refuses the
+  // pre-change answer, and without a completed record every read until the
+  // queued macrotask build would fail closed. One bounded re-capture builds
+  // again from the adopted source so the bootstrap admits a current record;
+  // nothing is ever stamped under an identity it did not build from.
+  consumeInitialBootstrap(
+    ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+    currentSource,
+  ) {
+    this.initialBootstrapConsumed = true;
+    let source = currentSource;
+    let token = currentToken;
+    let result = null;
+    for (let attempt = 0; attempt <= INITIAL_BOOTSTRAP_RECAPTURE_LIMIT;
+      attempt += 1) {
+      const publicationGuard = this.capturePublicationGuard(ownerKey);
+      const snapshot = buildSnapshot();
+      result = this.publishCompleted(
+        ownerKey,
+        snapshot,
+        token,
+        buildOptionsKey,
+        false,
+        options,
+        publicationGuard,
+        source.identity,
+        source,
+      );
+      if (this.readCompleted(ownerKey, buildOptionsKey)) break;
+      source = this.captureCurrentPlanningSource(ownerKey);
+      token = source.token;
+      if (token.transportTopologyValid === false ||
+        this.hasUnclassifiedSourceChange(source.observation)) break;
+    }
+    return result;
   },
 
   isNodeRowStillPresent(ownerKey) {

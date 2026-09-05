@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1877,
+    "unit": 1878,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2137,
-  "digest": "fnv1a32-c461b0b0",
+  "censusSize": 2138,
+  "digest": "fnv1a32-b37f6634",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -581,6 +581,7 @@
     "test/control-plane/readiness-planning-semantic-generation.test.js": "unit",
     "test/control-plane/readiness-planning-snapshot-identity-owner.test.js": "unit",
     "test/control-plane/readiness-read-amplification-fast-paths.test.js": "unit",
+    "test/control-plane/readiness-routing-heartbeat-window.test.js": "unit",
     "test/control-plane/readiness-single-contract-build.test.js": "unit",
     "test/control-plane/readiness-snapshot-persistence.test.js": "unit",
     "test/control-plane/readiness-snapshot-services-version-arbitration.test.js": "unit",

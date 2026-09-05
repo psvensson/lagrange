@@ -511,35 +511,16 @@ class ReadinessPlanningSnapshotOwner {
     this.flushLazyGlobalImpact(currentQueueOwnerKey);
     if (currentToken.transportTopologyValid === false ||
         this.hasUnclassifiedSourceChange(currentSource.observation)) {
-      this.rememberBarrierBlockedBuild(ownerKey, buildOptionsKey, options);
-      this.enqueueBuild(
-        ownerKey,
-        READINESS_PLANNING_REASON.SOURCE_CHANGED,
-        options,
-        currentToken,
-      );
-      return this.buildMemoizedDeferredSnapshot(
-        completed?.snapshot || null,
-        currentToken,
-        ownerKey,
-      );
+      return this.serveBarrierBlockedRead({
+        ownerKey, completed, currentToken, buildOptionsKey, options,
+        buildSnapshot, currentSource,
+      });
     }
     if (!completed) {
       if (this.canConsumeInitialBootstrap(ownerKey)) {
-        this.initialBootstrapConsumed = true;
-        const publicationGuard = this.capturePublicationGuard(ownerKey);
-        const snapshot = buildSnapshot();
-        return this.publishCompleted(
-          ownerKey,
-          snapshot,
-          currentToken,
-          buildOptionsKey,
-          false,
-          options,
-          publicationGuard,
-          currentSource.identity,
-          currentSource,
-        );
+        return this.serveInitialBootstrap(
+          ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+          currentSource);
       }
       this.enqueueBuild(
         ownerKey,
@@ -555,7 +536,13 @@ class ReadinessPlanningSnapshotOwner {
       currentToken,
       buildOptionsKey,
     )) {
-      return completed.snapshot;
+      // A current but ineligible completed snapshot may be a lagged-row
+      // projection (planning builds project the visible row by contract);
+      // a routed read bridges it through the fresher stored evidence.
+      return (this.isCompletedSnapshotEligibleFor(completed, options) ? null :
+        this.bridgeRoutedReadSnapshot(ownerKey, completed, currentToken,
+          buildOptionsKey, currentSource.observation, options)) ||
+        completed.snapshot;
     }
     this.enqueueBuild(
       ownerKey,
@@ -563,8 +550,49 @@ class ReadinessPlanningSnapshotOwner {
       options,
       currentToken,
     );
+    // The same routed-read bridge for a classified node-table-only advance
+    // that rotated the planning identity: the replacement build is queued,
+    // and the read is served from evidence the change does not refute.
+    return this.bridgeRoutedReadSnapshot(
+      ownerKey, completed, currentToken, buildOptionsKey,
+      currentSource.observation, options) ||
+      this.buildMemoizedDeferredSnapshot(
+        completed.snapshot,
+        currentToken,
+        ownerKey,
+      );
+  }
+
+  // A read while a source change is unclassified (or transport topology is
+  // invalid): the build is queued behind the barrier and the read fails
+  // closed — except for a query-routing read, which the sealed CL-012
+  // bridge serves from evidence the change does not refute (never
+  // re-stamped under the unclassified identity) until the queued build
+  // replaces it. Without the bridge every heartbeat closed routing to the
+  // node for one macrotask (measured 2026-09-05: the query-routing cache-lag
+  // witnesses failed on the landed owner). A first read with no completed
+  // record still consumes the one-time bootstrap build.
+  serveBarrierBlockedRead(context) {
+    const {ownerKey, completed, currentToken, buildOptionsKey, options,
+      buildSnapshot, currentSource} = context;
+    this.rememberBarrierBlockedBuild(ownerKey, buildOptionsKey, options);
+    this.enqueueBuild(
+      ownerKey,
+      READINESS_PLANNING_REASON.SOURCE_CHANGED,
+      options,
+      currentToken,
+    );
+    const bridged = this.bridgeRoutedReadSnapshot(
+      ownerKey, completed, currentToken, buildOptionsKey,
+      currentSource.observation, options);
+    if (bridged) return bridged;
+    if (!completed && this.canConsumeInitialBootstrap(ownerKey)) {
+      return this.serveInitialBootstrap(
+        ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+        currentSource);
+    }
     return this.buildMemoizedDeferredSnapshot(
-      completed.snapshot,
+      completed?.snapshot || null,
       currentToken,
       ownerKey,
     );

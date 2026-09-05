@@ -243,6 +243,23 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    *   omitted = legacy behavior (stamped at store time).
    * @private
    */
+  // True when the already-stored snapshot carries strictly newer node
+  // evidence (a later heartbeat, or the same heartbeat with a later lease)
+  // than the snapshot about to replace it.
+  isStoredSnapshotEvidenceNewer(previousSnapshot, snapshot) {
+    const previous = this.buildStoredReadinessSnapshotWatermark(previousSnapshot);
+    const next = this.buildStoredReadinessSnapshotWatermark(snapshot);
+    if (!previous || !next) return false;
+    if (!Number.isFinite(previous.lastHeartbeat) ||
+      !Number.isFinite(next.lastHeartbeat)) return false;
+    if (previous.lastHeartbeat !== next.lastHeartbeat) {
+      return previous.lastHeartbeat > next.lastHeartbeat;
+    }
+    return Number.isFinite(previous.readyLeaseExpiresAt) &&
+      Number.isFinite(next.readyLeaseExpiresAt) &&
+      previous.readyLeaseExpiresAt > next.readyLeaseExpiresAt;
+  },
+
   storeReadinessSnapshot(
     nodeId,
     snapshot,
@@ -258,6 +275,14 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         buildStartedAtMs :
         nowMs;
     const previousSnapshot = this.lastReadinessSnapshotByNodeId.get(nodeId);
+    // CL-012: a snapshot built from a lagged row must not replace fresher
+    // stored evidence — the stored slot is the bridge every routing read
+    // relies on until the cache catches up (a planning-evidence build that
+    // projected the lagged row keeps its own completed record; only the
+    // stored reuse candidate is protected).
+    if (this.isStoredSnapshotEvidenceNewer(previousSnapshot, snapshot)) {
+      return;
+    }
     const snapshotChanged = !previousSnapshot ||
       this.buildRecoveryEpochSignature(nodeId, previousSnapshot) !==
         this.buildRecoveryEpochSignature(nodeId, snapshot);

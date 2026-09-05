@@ -270,6 +270,25 @@ function isNodeTableOnlyTokenAdvance(previous, current) {
   });
 }
 
+// True when the current token differs from the previous one on nothing but
+// the nodes table (equal or advanced there; every other table revision and
+// every stable scalar equal). The barrier-site routed bridge needs this: an
+// unclassified heartbeat must not let a completed record that is already
+// stale on another table be served.
+function isTokenCurrentExceptNodeTable(previous, current) {
+  if (!previous || !current) return false;
+  if (!hasStableTokenScalars(
+    previous,
+    current,
+    NODE_TABLE_STABLE_TOKEN_FIELDS,
+  )) return false;
+  return arrayEvery(READINESS_PLANNING_TABLES, (table) => {
+    const before = previous.tableRevisions?.[table];
+    const after = current.tableRevisions?.[table];
+    return table === TABLES.NODES ? after >= before : after === before;
+  });
+}
+
 function isAuthoritativeSnapshotTokenAdvance(previous, current) {
   if (!previous || !current) return false;
   if (!hasStableTokenScalars(
@@ -342,6 +361,8 @@ export {
   appendArrayValue,
   buildQueueOwnerKey,
   canRebaseStoredSnapshot,
+  isNodeTableOnlyTokenAdvance,
+  isTokenCurrentExceptNodeTable,
   defaultMacrotaskScheduler,
   encodeSignatureValues,
   freezeToken,

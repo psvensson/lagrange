@@ -366,6 +366,12 @@ const readinessPlanningSemanticCurrencyMethods = {
     );
   },
 
+  hasNodeTableOnlyUnclassifiedChange(observation) {
+    return this.semanticGenerationTracker.hasNodeTableOnlyUnclassifiedChange(
+      observation,
+    );
+  },
+
   hasUnclassifiedSourceChange(
     observation = this.readCurrentSourceObservation(),
   ) {

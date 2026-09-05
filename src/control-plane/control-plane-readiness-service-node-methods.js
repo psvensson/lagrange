@@ -512,6 +512,10 @@ const controlPlaneReadinessNodeMethods = {
             options.readinessPlanningColdBootstrapBuild === true,
         });
       }
+      // Planning-owner and cold-bootstrap builds project the currently
+      // visible source evidence (Quest 2 contract); the sealed CL-012 bridge
+      // for query routing is applied by the planning owner at read time, for
+      // routed reads only, and never re-stamps a record.
       const planningBuild = options.readinessPlanningOwnerBuild === true ||
         options.readinessPlanningColdBootstrapBuild === true;
       const fresherStoredSnapshot = planningBuild ? null :
