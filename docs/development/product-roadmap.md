@@ -146,6 +146,30 @@ Enterprise
 
 ---
 
+## Phase 0.25 — Semantic Core Hardening
+
+*"Core meaning is explicit and protected before new semantic surface is added."*
+
+### Semantic authority and protection — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Semantic authority inventory | 🔲 | Rank the highest-blast-radius facts and record authoritative owners, interaction owners, representations, clocks/generations, consumers and duplicate interpreters |
+| Protected semantic kernel pilot | 🔲 | Extract a small deterministic set of decoders/projections/transitions/fence decisions; stateful lifecycle remains outside the pure kernel |
+| Protected interpretation/dependency guards | 🔲 | Consumers may transport protected raw values but must not independently reinterpret them once a canonical owner/kernel surface exists |
+| Content-bound protected change control | 🔲 | Exact-diff authorization, independent receipts/review, machine-readable manifest, and self-protected enforcement root |
+| Boundary stability certification | 🔲 | Measure legitimate kernel churn and cross-boundary atomicity before deciding whether later physical/credential separation is safer than an in-repo boundary |
+
+This is deliberately narrower than "move the core into a library." The first
+step is to protect a small evidence-selected semantic nucleus and make semantic
+changes distinct from ordinary implementation changes. A separate repository is
+not a 0.25 exit requirement; it is a later option if the measured boundary is
+stable enough to avoid version skew and shadow reimplementations.
+
+Architecture: [Protected Semantic Core](../../architecture/protected-semantic-core.md).
+
+---
+
 ## Phase 0.3 — Queryable Core
 
 *"Ordinary SQL can reach the right data efficiently without physical-partition knowledge."*
