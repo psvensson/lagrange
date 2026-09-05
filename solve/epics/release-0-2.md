@@ -137,25 +137,13 @@ instead of retrying an unverified tree.
 
 ## Release exit
 
-Release only when the four directly linked Quests are SOLVED, share one frozen
-release-content digest, final-HEAD gates and remote CI are green, publication
-preflight passes, the worktree is clean, and version/changelog/tag identity is
-consistent. Parked or EXHAUSTED prerequisites remain blockers, never waivers.
+Superseded 2026-09-05 by `RELEASE.md` (deterministic exit via `npm run
+release:preflight`; formation is a measured signal, never a gate; the final-head
+run failed `seed_event_loop_starved`, numbers in the CHANGELOG).
 
 ## Decision log
 
-- 2026-09-05 — Superseded. G1–G6 and the release exit above are replaced by
-  `RELEASE.md`: the release exit is deterministic (full corpus green on the
-  exact SHA, the `v*` tag workflow's artifact build and smoke, an honest
-  changelog), evaluated by `npm run release:preflight`; five-node formation is
-  a standing measured signal (`npm run health:formation`, the
-  `formation-health` workflow, `npm run check:formation` locally), never a
-  gate. The final-head certification run on 103786ef3 failed with
-  `seed_event_loop_starved` (the measured numbers are in the CHANGELOG's
-  Unreleased paragraph and the run's report under `test-output/reports/`);
-  the four digest-bound row Quests stay as history and are not replayed. See
-  `solve/epics/release-process-simplification.md`.
-
+- 2026-09-05 — Superseded; see `solve/epics/release-process-simplification.md`.
 - 2026-08-13 — Put topology before five-node certification; required current
   snapshot replay; made soak enforcement a prerequisite; moved release metadata
   before exact-candidate verification; and added channel preflight plus one
