@@ -59,6 +59,10 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-migrate-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   git(root, ['init', '-q']);
+  // The code under test commits through this repository, and a machine
+  // without a global git identity (any CI runner) would otherwise refuse.
+  git(root, ['config', 'user.name', 'lagrange-test']);
+  git(root, ['config', 'user.email', 'lagrange-test@example.com']);
   write(root, `solve/epics/${EPIC_ID}.md`, ['---', 'epicContractVersion: 2', `id: ${EPIC_ID}`,
     'roadmapRow: null', 'graduatesTo: null', '---', '', '# Demo epic', ''].join('\n'));
   write(root, 'solve/epics/README.md', '# epics\n');

@@ -53,6 +53,10 @@ function repo(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quest-log-append-only-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   git(root, ['init', '-q']);
+  // The code under test commits through this repository, and a machine
+  // without a global git identity (any CI runner) would otherwise refuse.
+  git(root, ['config', 'user.name', 'lagrange-test']);
+  git(root, ['config', 'user.email', 'lagrange-test@example.com']);
   write(root, RECORD, JSON.stringify({id: QUEST_ID}));
   write(root, LOG, entry('sealed', {type: 'finding'}) +
     entry('verified', {type: 'verification', verdict: 'approve'}));

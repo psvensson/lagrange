@@ -43,6 +43,10 @@ function repo(t, {metric = 1, legacy = false} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-cmd-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
   git(root, ['init', '-q']);
+  // The code under test commits through this repository, and a machine
+  // without a global git identity (any CI runner) would otherwise refuse.
+  git(root, ['config', 'user.name', 'lagrange-test']);
+  git(root, ['config', 'user.email', 'lagrange-test@example.com']);
   write(root, 'solve/epics/demo-epic.md', ['---', `id: ${EPIC_ID}`, 'status: open',
     'proof: deterministic', legacy ? 'legacy: true' : 'doneWhen:',
     ...(legacy ? [] : ['  probe: oracle', '  args:', `    file: ${ORACLE}`]),

@@ -21,7 +21,10 @@
  * rename is a deletion of the committed path and fails as one.
  *
  * The range comes from the repository's change-selection owner
- * (`resolvedCheckBase`), falling back to the merge base with `origin/main`,
+ * (`resolvedCheckBase`) at the CLI boundary only, falling back to the merge
+ * base with `origin/main` of the repository actually being audited: an
+ * ambient base names a commit in THIS repository and is meaningless for any
+ * other root, so the library never reads it,
  * so this check holds no branch-topology policy of its own. The publisher
  * requires a fast-forward but does not forbid merges inside the range, so a
  * commit is compared against every parent rather than only the first: if two
@@ -60,6 +63,7 @@ const GIT_MERGE_BASE = 'merge-base';
 // has no publication base", both of which are answers, not missing values.
 const NO_EDGES = Object.freeze([]);
 const NO_PUBLICATION_BASE = null;
+const QUIET_STDIO = Object.freeze(['pipe', 'pipe', 'pipe']);
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
@@ -217,8 +221,10 @@ function admittedEdges(root, base) {
 
 function publicationBase(root) {
   try {
+    // A repository with no publication remote is an ordinary case, not an
+    // error to narrate: keep git's own complaint off the console.
     return stringTrim(String(git(root, [GIT_MERGE_BASE, REMOTE_MAIN, HEAD_REV],
-      {encoding: TEXT_ENCODING})));
+      {encoding: TEXT_ENCODING, stdio: QUIET_STDIO})));
   } catch (_error) {
     return NO_PUBLICATION_BASE;
   }
@@ -232,7 +238,7 @@ function publicationBase(root) {
  */
 function questLogOffences(options = {}) {
   const root = options.root || REPO_ROOT;
-  const base = options.base || resolvedCheckBase() || publicationBase(root);
+  const base = options.base || publicationBase(root);
   const offences = arrayFlatMap(admittedEdges(root, base), (edge) =>
     edgeOffences(root, edge.parent, edge.child));
   return [...offences, ...workingTreeOffences(root)];
@@ -244,7 +250,9 @@ function readBase(argv) {
 }
 
 function main(argv) {
-  const offences = questLogOffences({base: readBase(argv)});
+  // The environment supplies the admitted range for this repository only.
+  const base = readBase(argv) || resolvedCheckBase();
+  const offences = questLogOffences(base ? {base} : {});
   if (arrayIncludes(argv, METRIC_FLAG)) {
     process.stdout.write(`${offences.length}${LINE_SEPARATOR}`);
     return offences.length === 0 ? EXIT_OK : EXIT_VIOLATION;

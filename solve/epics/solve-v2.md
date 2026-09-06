@@ -266,6 +266,18 @@ in `solve/quests/quest-log-append-only-exemption/log.ndjson`:
    prose comment or a synthetic fixture path, so this was the only real read
    of a deleted file.
 
+6. `6aea31d38` published, but `change-gate` then failed on it while
+   `repository-health` passed, so main went red. Two environment-dependent
+   defects in the new code, both invisible on a developer machine: the
+   append-only library resolved its range from the ambient
+   `LAGRANGE_CHECK_BASE`, which CI sets to a commit of this repository, so
+   fixture repositories inherited a base they do not contain; and the solver
+   fixtures committed through `land` without a repository identity, which any
+   runner without a global git config refuses. The environment base is now
+   read at the CLI boundary only, where it legitimately applies, and the
+   fixtures configure their own identity. Both are reproduced locally by
+   setting the ambient base and neutralising the global git config.
+
 The lesson recorded for phase 3: this session had been running a subset of
 the static checks, so the ninth v1-layout consumer reached the publish gate
 instead of the local loop, and the tenth reached it because neither the
