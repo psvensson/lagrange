@@ -1,0 +1,48 @@
+{
+  "id": "solve-v2-phase-0",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Phase 0 of solve-v2: the measured inventory (log entry types, solver commands, structured actions, stop types, park kinds, rules cited, scripts reachable from solve.js, weight) and the design note with the v2 schema, exact deletion list, migration plan and proposed history purge are recorded under solve/epics/solve-v2/design.md, the acceptance budget script measures the baseline, and no deletion has happened.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/solve-v2/design.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/solve-v2.md",
+    "draftedAtCommit": "14df53cccde45bd95c0ba3b2042877c6f6c89ee7"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solve-v2-phase-0.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solve-v2-phase-0-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solve-v2-phase-0.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "measure-first",
+      "statement": "Nothing under solve/, scripts/solve/, test/solve/ or docs/steering/ is deleted or rewritten in this phase; the only new script is scripts/checks/solve-v2-budget.js."
+    },
+    {
+      "id": "authorization-stop",
+      "statement": "The phase ends at an Authorization stop: the design note is presented and the operator decides before phase 1."
+    }
+  ]
+}
