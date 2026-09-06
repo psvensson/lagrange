@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "closed-quest-shape-amendment",
+  "statement": "Amendment 4's two-file closed shape is replaced by a minimal-terminal-proof shape. A closed quest holds its canonical record, its append-only log, and exactly those proof artifacts its sealed terminal claim requires; anything else is rejected, and a required artifact may be neither deleted nor modified after closure. Which artifacts a sealed doneWhen requires is answered structurally by the probe owner, never inferred from prose or a filename, so naming a file in text cannot legalize it. Retained proof stays counted in the active footprint.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/closed-quest-shape-amendment/evidence/receipt.json",
+      "requiredReceipts": [
+        "ordinary-closed-quest-holds-only-record-and-log",
+        "sealed-receipt-survives-closure",
+        "sealed-oracle-survives-closure",
+        "unrelated-file-in-a-closed-quest-is-rejected",
+        "unreferenced-proof-shaped-file-is-rejected",
+        "deleting-a-required-artifact-invalidates-closure",
+        "modifying-a-required-artifact-invalidates-closure",
+        "prose-cannot-legalize-an-artifact"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "structural-requirements-only",
+      "statement": "The shape guard compares closed-quest contents against {quest.json, log.ndjson} union the artifacts the probe owner derives from the sealed doneWhen. It never scans prose, never matches filenames, and never holds a list of quest ids."
+    },
+    {
+      "id": "ownership-split",
+      "statement": "The store owns quest layout, sealed acceptance owns what proof is required, the probe owner classifies proof artifacts, the shape guard enforces the composition, and the size accounting counts them. The store never learns which receipts are semantically necessary."
+    },
+    {
+      "id": "no-special-cases",
+      "statement": "solve-v2-phase-2 and quest-log-append-only-exemption must be classified legitimate by the general rule from their existing sealed claims. If any quest id appears in the implementation, the abstraction is wrong."
+    },
+    {
+      "id": "published-boundaries-immutable",
+      "statement": "Phase 2 (d6aeeac14) and the size accounting (7448761b5) are published and immutable. This quest changes the criterion prospectively and retrofits nothing."
+    }
+  ],
+  "sealedAt": "7448761b59a2ec69151390f4e6abbdfc1bfbcd26"
+}

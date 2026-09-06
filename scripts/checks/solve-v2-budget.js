@@ -26,6 +26,7 @@ import {fileURLToPath} from 'node:url';
 import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
 import {verifyMigrationCorpus} from '../solve/migrate-v1.js';
 import {isQuestLogPath} from '../solve/store.js';
+import {closedQuestShapeOffences} from './check-closed-quest-shape.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -34,7 +35,6 @@ const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const stringSplit = Function.call.bind(String.prototype.split);
-const stringTrim = Function.call.bind(String.prototype.trim);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringPadEnd = Function.call.bind(String.prototype.padEnd);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
@@ -64,15 +64,6 @@ const ACTIVE_FOOTPRINT_BUDGET_BYTES = 20 * MEGABYTE;
 // be seen, not to gate.
 const REPORTED_ONLY = '-';
 const SOLVE_FILE_BUDGET_BYTES = MEGABYTE;
-const QUESTS_DIR = 'solve/quests';
-const QUEST_FILE = 'quest.json';
-const QUEST_LOG = 'log.ndjson';
-const QUEST_EVIDENCE_DIR = 'evidence';
-const QUEST_ALLOWED_ENTRIES = Object.freeze([QUEST_FILE, QUEST_LOG, QUEST_EVIDENCE_DIR]);
-const TERMINAL_TYPE = 'terminal';
-const LEGACY_QUEST_TYPE = 'quest';
-const LEGACY_PARK_TYPE = 'park';
-const CLOSED_STATUSES = Object.freeze(['solved', 'exhausted', 'superseded']);
 const SOLVER_LINE_BUDGET = 6000;
 const SOLVER_TEST_LINE_BUDGET = 6000;
 const STEERING_LINE_BUDGET = 3000;
@@ -193,41 +184,12 @@ function alwaysLoadLines() {
 // Amendment 4: a v2 quest directory holds exactly quest.json + log.ndjson,
 // plus evidence/ while open. Before phase 2 every legacy quest file counts
 // as off shape, which is the honest baseline.
-// A quest is closed once its log carries a terminal entry (v2 `terminal`
-// with solved/exhausted/superseded, or the v1 `quest`/`park` events it
-// classifies from); a closed quest may not keep evidence/.
-function questIsClosed(logFile) {
-  if (!fs.existsSync(logFile)) return false;
-  const lines = arrayFilter(
-    stringSplit(fs.readFileSync(logFile, TEXT_ENCODING), LINE_SEPARATOR),
-    (line) => stringTrim(line) !== '');
-  let closed = false;
-  for (const line of lines) {
-    let entry;
-    try {
-      entry = JSON.parse(line);
-    } catch (_error) {
-      continue;
-    }
-    const terminalShaped = entry.type === TERMINAL_TYPE || entry.type === LEGACY_QUEST_TYPE;
-    if (terminalShaped && arrayIncludes(CLOSED_STATUSES, entry.status)) closed = true;
-    if (entry.type === LEGACY_PARK_TYPE) closed = true;
-  }
-  return closed;
-}
-
+// Quest-directory shape is owned by scripts/checks/check-closed-quest-shape.js:
+// an open quest is working state, and a closed one holds its record, its log
+// and exactly the proof its sealed claim requires. This row counts what that
+// owner reports rather than restating the rule.
 function questDirectoriesOffShape() {
-  const absolute = path.join(REPO_ROOT, QUESTS_DIR);
-  if (!fs.existsSync(absolute)) return [];
-  return arrayFilter(fs.readdirSync(absolute, {withFileTypes: true}), (entry) => {
-    if (!entry.isDirectory()) return true;
-    const dir = path.join(absolute, entry.name);
-    const names = fs.readdirSync(dir);
-    const hasEvidence = arrayIncludes(names, QUEST_EVIDENCE_DIR);
-    return !arrayIncludes(names, QUEST_FILE) || !arrayIncludes(names, QUEST_LOG) ||
-      arraySome(names, (name) => !arrayIncludes(QUEST_ALLOWED_ENTRIES, name)) ||
-      (hasEvidence && questIsClosed(path.join(dir, QUEST_LOG)));
-  });
+  return closedQuestShapeOffences();
 }
 
 // The pre-commit guard's allowlist (one pre-v2 text log kept verbatim) is

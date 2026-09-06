@@ -23,6 +23,7 @@ const NUMBER_LINE = /^-?\d+(?:\.\d+)?$/u;
 // scripts/checks and is always run with the current node binary.
 const NODE_TOKEN = 'node';
 const TARGET_ZERO = 0;
+const NO_ARTIFACTS = Object.freeze([]);
 
 // A live report whose harness, not the system under test, failed is a
 // non-measuring sample: it counts neither for nor against a streak.
@@ -268,6 +269,31 @@ function measureScript(root, args) {
   };
 }
 
+// Which repository paths a sealed doneWhen designates as proof artifacts.
+// The probe owner answers this because it owns how each kind is measured: a
+// consumer must never infer a requirement from a filename or from prose. A
+// scenario-harness reads live reports and a script runs a checker, so neither
+// designates an artifact the quest itself retains.
+const PROBE_ARTIFACTS = Object.freeze({
+  [PROBE.TEST_RECEIPT]: (args) => [args.file],
+  [PROBE.ORACLE]: (args) => [args.file],
+  [PROBE.SCENARIO_HARNESS]: () => NO_ARTIFACTS,
+  [PROBE.SCRIPT]: () => NO_ARTIFACTS,
+});
+
+/**
+ * The proof artifacts a sealed `doneWhen` requires, as repository-relative
+ * paths. Empty for a probe that retains nothing.
+ * @param {{probe: string, args: Object}} doneWhen
+ * @return {string[]}
+ */
+function requiredProofArtifacts(doneWhen) {
+  const artifacts = PROBE_ARTIFACTS[doneWhen?.probe];
+  if (!artifacts) return NO_ARTIFACTS;
+  return artifacts(doneWhen.args || {})
+    .filter((file) => typeof file === 'string' && file.length > 0);
+}
+
 const PROBE_MEASURES = Object.freeze({
   [PROBE.TEST_RECEIPT]: measureTestReceipt,
   [PROBE.SCENARIO_HARNESS]: measureScenarioHarness,
@@ -289,5 +315,5 @@ function measure(root, doneWhen) {
 
 export {
   NON_MEASURING_VERDICT_REASONS, REASON as PROBE_REASON, measure,
-  reportSampleIsNonMeasuring, scenarioHarnessProbe,
+  reportSampleIsNonMeasuring, requiredProofArtifacts, scenarioHarnessProbe,
 };

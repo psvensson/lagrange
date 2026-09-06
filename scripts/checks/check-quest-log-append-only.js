@@ -38,53 +38,31 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {isQuestLogPath} from '../solve/store.js';
 import {resolvedCheckBase} from './changed-paths.js';
+import {
+  HEAD_REV, NO_EDGES, admittedEdges, baseFromArgv, changedPathsBetween,
+  publicationBase, readBlobs, reportRecordOffences, trackedAt,
+} from './quest-record-transitions.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const GIT_BINARY = 'git';
-const TEXT_ENCODING = 'utf8';
-const NUL = '\0';
-const LINE_SEPARATOR = '\n';
-const MAX_BUFFER_BYTES = 512 * 1024 * 1024;
-const HEAD_REV = 'HEAD';
-const BASE_FLAG = '--base';
-const REMOTE_MAIN = 'origin/main';
 const WORKING_TREE = 'working tree';
-const RENAME_OFF = '--no-renames';
 const STATUS_DELETED = 'D';
 const STATUS_ADDED = 'A';
-const SHA_SEPARATOR = ' ';
-const GIT_MERGE_BASE = 'merge-base';
 // Named empty states: "this range admits no transition" and "this repository
 // has no publication base", both of which are answers, not missing values.
-const NO_EDGES = Object.freeze([]);
-const NO_PUBLICATION_BASE = null;
-const QUIET_STDIO = Object.freeze(['pipe', 'pipe', 'pipe']);
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
-const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
-const arraySlice = Function.call.bind(Array.prototype.slice);
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const bufferEquals = Function.call.bind(Buffer.prototype.equals);
 // Buffer.indexOf, not String.indexOf: `cursor` is a byte offset into the
 // batch stream, and a log holding any non-ASCII byte would put a character
 // offset out of step with it.
-const bufferIndexOf = Function.call.bind(Buffer.prototype.indexOf);
 const bufferSubarray = Function.call.bind(Buffer.prototype.subarray);
-const stringEndsWith = Function.call.bind(String.prototype.endsWith);
-const stringSplit = Function.call.bind(String.prototype.split);
-const stringTrim = Function.call.bind(String.prototype.trim);
-const METRIC_FLAG = '--metric';
-const EXIT_OK = 0;
-const EXIT_VIOLATION = 1;
 const ARGV_OFFSET = 2;
-const BATCH_MISSING = 'missing';
 const OFFENCE = Object.freeze({
   DELETED: 'the committed log is gone',
   TRUNCATED: 'the log is shorter than its committed history',
@@ -96,54 +74,15 @@ const REMEDIATION = 'A quest log is append-only durable memory and the one ' +
   'file the live-surface guards exempt as history. Append a correcting entry ' +
   'instead of editing a recorded one.';
 
-function git(root, args, options = {}) {
-  return execFileSync(GIT_BINARY, args, {cwd: root,
-    maxBuffer: MAX_BUFFER_BYTES, ...options});
-}
-
 // Every canonical quest log tracked at a commit.
 function committedQuestLogs(root, rev) {
-  const listed = String(git(root, ['ls-tree', '-r', '-z', '--name-only', rev],
-    {encoding: TEXT_ENCODING}));
-  return arrayFilter(stringSplit(listed, NUL), (file) => file && isQuestLogPath(file));
+  return trackedAt(root, rev, isQuestLogPath);
 }
 
-// One `git cat-file --batch` pass over `<rev>:<path>` requests: each answer is
-// `<sha> blob <size>\n` then the bytes, or a `missing` header.
-function readBlobs(root, requests) {
-  const contents = new Map();
-  if (requests.length === 0) return contents;
-  const output = git(root, ['cat-file', '--batch'],
-    {input: arrayMap(requests, (request) => request.rev).join(LINE_SEPARATOR)});
-  let cursor = 0;
-  for (const request of requests) {
-    const headerEnd = bufferIndexOf(output, LINE_SEPARATOR, cursor);
-    const header = output.toString(TEXT_ENCODING, cursor, headerEnd);
-    if (stringEndsWith(header, BATCH_MISSING)) {
-      cursor = headerEnd + 1;
-      continue;
-    }
-    const size = Number(stringSplit(header, SHA_SEPARATOR)[2]);
-    const start = headerEnd + 1;
-    contents.set(request.key, bufferSubarray(output, start, start + size));
-    cursor = start + size + 1;
-  }
-  return contents;
-}
-
-// Canonical quest logs a commit changed relative to its parent, by status.
-// Renames are reported as a delete plus an add, which is what the invariant
-// means: the committed path must keep its bytes.
+// Canonical quest logs a commit changed relative to its parent.
 function changedQuestLogs(root, parent, child) {
-  const listed = String(git(root, ['diff-tree', '-r', '-z', '--no-commit-id',
-    '--name-status', RENAME_OFF, parent, child], {encoding: TEXT_ENCODING}));
-  const fields = arrayFilter(stringSplit(listed, NUL), Boolean);
-  const changed = [];
-  for (let index = 0; index + 1 < fields.length; index += 2) {
-    const [status, file] = [fields[index], fields[index + 1]];
-    if (isQuestLogPath(file)) changed.push({status, path: file});
-  }
-  return changed;
+  return arrayFilter(changedPathsBetween(root, parent, child),
+    (entry) => isQuestLogPath(entry.path));
 }
 
 function prefixOffence(before, after) {
@@ -204,32 +143,6 @@ function workingTreeOffences(root) {
   return offences;
 }
 
-// Every parent -> child transition admitted for review, oldest first. A
-// merge contributes one transition per parent. Without a base every commit
-// reachable from HEAD is admitted, which is what a repository with no
-// publication remote wants.
-function admittedEdges(root, base) {
-  const range = base ? `${base}..${HEAD_REV}` : HEAD_REV;
-  const listed = stringTrim(String(git(root,
-    ['rev-list', '--reverse', '--parents', range], {encoding: TEXT_ENCODING})));
-  if (listed === '') return NO_EDGES;
-  const rows = arrayMap(stringSplit(listed, LINE_SEPARATOR),
-    (line) => stringSplit(line, SHA_SEPARATOR));
-  return arrayFlatMap(rows, (shas) =>
-    arrayMap(arraySlice(shas, 1), (parent) => ({parent, child: shas[0]})));
-}
-
-function publicationBase(root) {
-  try {
-    // A repository with no publication remote is an ordinary case, not an
-    // error to narrate: keep git's own complaint off the console.
-    return stringTrim(String(git(root, [GIT_MERGE_BASE, REMOTE_MAIN, HEAD_REV],
-      {encoding: TEXT_ENCODING, stdio: QUIET_STDIO})));
-  } catch (_error) {
-    return NO_PUBLICATION_BASE;
-  }
-}
-
 /**
  * Every quest log whose committed history was not preserved append-only,
  * across each admitted commit transition and finally in the working tree.
@@ -244,30 +157,11 @@ function questLogOffences(options = {}) {
   return [...offences, ...workingTreeOffences(root)];
 }
 
-function readBase(argv) {
-  const index = arrayIndexOf(argv, BASE_FLAG);
-  return index === -1 ? null : argv[index + 1];
-}
-
 function main(argv) {
   // The environment supplies the admitted range for this repository only.
-  const base = readBase(argv) || resolvedCheckBase();
-  const offences = questLogOffences(base ? {base} : {});
-  if (arrayIncludes(argv, METRIC_FLAG)) {
-    process.stdout.write(`${offences.length}${LINE_SEPARATOR}`);
-    return offences.length === 0 ? EXIT_OK : EXIT_VIOLATION;
-  }
-  if (offences.length === 0) {
-    process.stdout.write(`${CLEAN_MESSAGE}${LINE_SEPARATOR}`);
-    return EXIT_OK;
-  }
-  process.stderr.write(`${OFFENCE_HEADER}${LINE_SEPARATOR}`);
-  for (const offence of offences) {
-    process.stderr.write(
-      `  ${offence.path} at ${offence.at}: ${offence.reason}${LINE_SEPARATOR}`);
-  }
-  process.stderr.write(`${LINE_SEPARATOR}${REMEDIATION}${LINE_SEPARATOR}`);
-  return EXIT_VIOLATION;
+  const base = baseFromArgv(argv) || resolvedCheckBase();
+  return reportRecordOffences({argv, offences: questLogOffences(base ? {base} : {}),
+    cleanMessage: CLEAN_MESSAGE, header: OFFENCE_HEADER, remediation: REMEDIATION});
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

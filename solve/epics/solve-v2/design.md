@@ -380,6 +380,35 @@ blobs once they are out of the tree.
 - `scripts/checks/solve-v2-budget.js` is committed in phase 0 so the
   baseline row is reproducible; it is the only script phase 0 adds.
 
+### 7.5b Amendment 4 revised (2026-09-06, after phase 2 published)
+
+Amendment 4 said a closed quest keeps exactly `quest.json` + `log.ndjson`.
+That confused minimal storage shape with reproducible terminal proof: a quest
+whose sealed `doneWhen` cites a receipt or an oracle cannot delete that file
+without making its own terminal claim unverifiable. Two quests landed under
+the original rule and immediately exhibited the problem, which is what
+motivated the revision: `solve-v2-phase-2` retains its oracle and
+`quest-log-append-only-exemption` its receipt.
+
+Revised: a closed quest contains exactly its canonical record, its
+append-only log, and the proof artifacts its sealed terminal claim requires;
+those artifacts may be neither deleted nor modified after closure; anything
+else is refused. Which artifacts a sealed claim requires is derived
+structurally from the sealed `doneWhen` by the probe owner, so prose or a
+filename grants nothing. Retained proof stays counted in the active
+footprint.
+
+Ownership: the store owns quest layout; sealed acceptance owns what proof is
+required; the probe owner classifies the artifacts
+(`requiredProofArtifacts`); `scripts/checks/check-closed-quest-shape.js`
+enforces the composition and the post-closure immutability; the size
+accounting counts them. The store never learns which receipts are
+semantically necessary, and no quest id appears in the implementation.
+
+The two motivating quests are regression fixtures rather than special cases:
+they predate the amendment and are admitted by the general rule from their
+own sealed claims. Phase 2 is not retrofitted.
+
 ### 7.6 The size gate measures two different things
 
 The v1 logs that phase 2 copies verbatim total 27.3 MB (825 files at the

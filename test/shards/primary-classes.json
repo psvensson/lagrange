@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1795,
+    "unit": 1796,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2055,
-  "digest": "fnv1a32-1e24074b",
+  "censusSize": 2056,
+  "digest": "fnv1a32-1db6a98b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1774,6 +1774,7 @@
     "test/scripts/check-staged-constant-names.test.js": "unit",
     "test/scripts/check-subsystem.test.js": "unit",
     "test/scripts/check-unified-system-metadata-gateway.test.js": "unit",
+    "test/scripts/closed-quest-shape.test.js": "unit",
     "test/scripts/closure-ledger-state.test.js": "unit",
     "test/scripts/compare-latest-baseline-runs.test.js": "unit",
     "test/scripts/complexity-ratchet-closure.test.js": "unit",

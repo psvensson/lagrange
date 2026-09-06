@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "closed-quest-shape-amendment",
+  "status": "pass",
+  "generatedAt": "2026-09-06T14:39:33.071Z",
+  "receipts": [
+    {
+      "id": "ordinary-closed-quest-holds-only-record-and-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an ordinary closed quest holds only its record and log$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "a quest whose sealed claim needs no artifact keeps exactly its record and its log"
+    },
+    {
+      "id": "sealed-receipt-survives-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a sealed receipt survives closure$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "a sealed test-receipt claim keeps the receipt it cites, so the terminal proof stays reproducible after closure"
+    },
+    {
+      "id": "sealed-oracle-survives-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a sealed oracle survives closure$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "a sealed oracle claim keeps the oracle it cites, for the same reason"
+    },
+    {
+      "id": "unrelated-file-in-a-closed-quest-is-rejected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unrelated file in a closed quest is rejected$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "an incidental file is rejected: closure is not a licence to accumulate"
+    },
+    {
+      "id": "unreferenced-proof-shaped-file-is-rejected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unreferenced proof-shaped file is rejected$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "a file that merely looks like proof, but that no sealed claim requires, is rejected"
+    },
+    {
+      "id": "deleting-a-required-artifact-invalidates-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^deleting a required artifact invalidates closure$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "removing the artifact the terminal claim rests on breaks the closure rather than tidying it"
+    },
+    {
+      "id": "modifying-a-required-artifact-invalidates-closure",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^modifying a required artifact after closure invalidates closure$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "rewriting retained proof breaks the closure too, so the amendment cannot make deletion illegal while leaving mutation free"
+    },
+    {
+      "id": "prose-cannot-legalize-an-artifact",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^prose naming an artifact cannot legalize it$\" test/scripts/closed-quest-shape.test.js",
+      "detail": "naming a filename in the log or the record grants it nothing: the requirement is derived structurally from the sealed doneWhen by the probe owner"
+    }
+  ]
+}
