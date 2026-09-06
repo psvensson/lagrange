@@ -63,9 +63,37 @@ replaced by the quest-directory shape row.
 | `npm run check` and CI green at every commit | yes | measured per phase |
 | phase-4 walkthrough finding with timings | present | — |
 
+## Phase 1 report (2026-09-06)
+
+| Metric | Before | After phase 1 |
+| --- | --- | --- |
+| solve/ on disk | 324.9 MB | 115.7 MB (gate for this phase: binaries only; 20 MB is due at the end of phase 2) |
+| tarballs tracked under solve/ | 33 | 0 |
+| files > 1 MB under solve/ | 16 | 0 (one allowlisted text log, 2.3 MB, kept verbatim) |
+| pre-commit binary guard | absent | `scripts/checks/check-solve-binary-guard.js` in `.githooks/pre-commit` |
+| generated files committed | `FRONTIER.generated.md` | none (gitignored; v1 still regenerates it locally until phase 2) |
+| evidence store | none | GitHub pre-release `solve-evidence`: 38 assets, each recorded on its quest as a `finding kind: evidence` with sha256, size and URL after re-download and re-hash |
+| history purge | proposed | deferred; `git clone --filter=blob:none` documented in the solver runbook |
+
+Tag `pre-solve-v2` marks 14df53ccc, the last head before the refactor.
+
+Judgment calls: (1) the one text log over 1 MB
+(`solve/log/rolling-restart-core-stability.ndjson`) stays verbatim under an
+explicit allowlist shared by the guard and the budget script, because
+truncating it would rewrite findings; (2) the first upload run used
+`<quest>--<basename>` names, which let sibling bundles clobber each other; it
+was stopped, its assets deleted, every file re-uploaded under
+`<quest>--<path under solve/ with __>`, and each affected quest carries a
+`decision` finding marking the 25 earlier records superseded (that finding
+says the valid records "follow" it; they were written just before it); (3)
+the spec tarball under `solve/specs/raft-logic-migration/` and the two
+content-addressed artifact diffs have no quest log, so their records sit on
+`solve-v2-phase-1` naming the original path.
+
 ## Concepts removed (running list)
 
-Appended per phase: phase 0 removes nothing.
+Phase 0: nothing. Phase 1: committed binaries and tracked generated
+projections.
 
 ## Decision log
 

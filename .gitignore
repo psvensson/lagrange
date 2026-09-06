@@ -77,3 +77,7 @@ city.toml
 # Editor/tool workspace droppings
 .antigravitycli/
 .codex
+
+# Solver generated projections are printed on demand (solve-v2 phase 1)
+solve/FRONTIER.generated.md
+solve/OVERVIEW.generated.md

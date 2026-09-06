@@ -1,0 +1,52 @@
+{
+  "id": "solve-v2-phase-1",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Phase 1 of solve-v2 (weight): the pre-solve-v2 tag marks the last pre-refactor head, every tarball and every file over 1 MB under solve/ is uploaded to the solve-evidence GitHub pre-release with a verified sha256 and recorded on its quest, none remains tracked, the pre-commit binary guard refuses any new one, generated files are no longer committed, the runbook documents partial clones, and the history purge is documented as deferred.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/solve-v2/design.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/solve-v2.md",
+    "draftedAtCommit": "849b6ff6a953e5f7752ffcb0884d68f31aedcc47"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solve-v2-phase-1.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solve-v2-phase-1-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solve-v2-phase-1.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "phase-1-gate",
+      "statement": "Gate: no tarball tracked under solve/, no file over 1 MB under solve/ except the one allowlisted text log, the pre-commit binary guard in place; the 20 MB target belongs to phase 2."
+    },
+    {
+      "id": "no-history-rewrite",
+      "statement": "No git history is rewritten; the purge stays documented as deferred (design note section 5)."
+    },
+    {
+      "id": "verified-uploads-only",
+      "statement": "Every evidence record is written only after the asset was downloaded again and re-hashed to the local file."
+    }
+  ]
+}
