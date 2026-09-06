@@ -252,9 +252,26 @@ in `solve/quests/quest-log-append-only-exemption/log.ndjson`:
    static gate, which makes the immutability the exemption rests on a fact
    instead of a convention.
 
+5. The publish of `55e6f4184` then reached the full test corpus and refused
+   there. A distributed-harness test pins four files by digest to prove a
+   sealed A/B still binds the current live vehicle, and one of them lived
+   under `solve/changes/<quest>/`, which the collapse archived. The runner was
+   restored byte-identically into the live vehicle's own tree
+   (`test/distributed/harness/`) and the pin repointed: its sha256 is
+   unchanged, so the seal still binds exactly the script that produced the
+   sealed result, and no assertion was dropped or digest re-sealed. The
+   script's own internal paths still name the pre-cutover layout, which its
+   owner re-points when the A/B is next re-run. Checked first as a class: of
+   the `solve/changes/` references left in the tree, every other one is a
+   prose comment or a synthetic fixture path, so this was the only real read
+   of a deleted file.
+
 The lesson recorded for phase 3: this session had been running a subset of
 the static checks, so the ninth v1-layout consumer reached the publish gate
-instead of the local loop. `npm run test:static` is the discovery surface.
+instead of the local loop, and the tenth reached it because neither the
+selected change proof nor `test:static` runs the full corpus. The three
+discovery surfaces are `npm run test:static`, `npm run test:fast` and the
+publish gate itself; the first two are cheap enough to run before a landing.
 
 ## Concepts removed (running list)
 

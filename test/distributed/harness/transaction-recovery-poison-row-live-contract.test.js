@@ -40,9 +40,14 @@ const SEALED_LIVE_AB_VEHICLE = Object.freeze({
       'transaction-recovery-poison-row-live.js',
     sha256: 'a111a8db98f11385274a9c363060213e1c62e0d6a3a50c7ffc4954eb6d138497',
   }),
+  // The runner moved with the solve-v2 cutover, which deleted
+  // solve/changes/<quest>/. Its bytes are unchanged, so the sealed identity
+  // below still binds exactly the script that produced the sealed A/B; the
+  // script's own internal paths still name the pre-cutover layout, which its
+  // owner re-points when the A/B is next re-run.
   runner: Object.freeze({
-    path: 'solve/changes/transaction-recovery-poison-row-invariant/' +
-      'live-ab/run-sample.sh',
+    path: 'test/distributed/harness/' +
+      'transaction-recovery-poison-row-live-ab-run-sample.sh',
     sha256: '5a0a2a92eeefea2c2e1a74f77c4b05c39f5be8695527b5acfbfe11fe2fbba3af',
   }),
 });
