@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "post-rebalance-diagnostics-routed",
-  "evidence": "test/diagnostics/topology-convergence-graph.test.js; test/diagnostics/failure-class-taxonomy.test.js; test/diagnostics/stop-condition-decision.test.js; test/diagnostics/causal-graph-builder.test.js; node scripts/analyze-topology-convergence.js test-output/reports/stat-gate-20260630T020210Z-run15.report.json => firstFrontierEdgeId=top_failure_reasons, firstFrontierState=blocked, postRebalancePrimaryBlocker=operation_drain_open; node scripts/analyze-causal-model.js test-output/reports/stat-gate-20260630T020210Z-run15.report.json => outcome=continue_local_fix, dominantFailureClass=post_rebalance_closure_blocked; Maxwell verifier 019f16cf-655c-7690-8fce-dd979516dbeb no blockers after decision-table re-check"
-}

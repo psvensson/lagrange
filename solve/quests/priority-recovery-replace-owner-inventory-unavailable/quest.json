@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-recovery-replace-owner-inventory-unavailable",
+  "statement": "A priority-recovery follow-up count-neutral REPLACE reaches operation creation when the authoritative SERVICES owner is transiently unavailable only under a typed recovery-cure contract: the priority-recovery owner declares the relocation cure, the actual cache contains the named live voter source, authoritative operation visibility is usable with no conflicting in-flight operation, the target node is vacant, and replica inventory has no anomaly. Generic ADDs, ordinary REPLACEs, unavailable operation visibility, missing or non-live sources, occupied targets, and anomalous inventories remain fail-closed. This closes the fresh managed-merge live first invariant where the owner reported needs_operation/create_recovery_operation but priority control-plane REPLACEs were repeatedly rejected as replica_inventory_unusable. Prove the real planner-to-coordinator seam red on current head and green on the fix for three consecutive deterministic runs, without timeout increases, ledger-interlock weakening, managed-merge changes, or cache-as-authority fallback.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-recovery-replace-owner-inventory-unavailable",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "fresh-live-evidence-first-invariant",
+      "statement": "Use the retained fresh five-node managed-merge run as attribution evidence only: the analyzer named rebalancer_leader/operation_scheduling/needs_operation/create_recovery_operation and the full logs showed the attempted priority REPLACEs rejected as replica_inventory_unusable. Discovery and proof remain deterministic; do not iterate the live harness to discover the fix."
+    },
+    {
+      "id": "typed-recovery-contract-only",
+      "statement": "Any owner-unavailable exception must be carried from the priority-recovery cure owner through the real move-execution boundary and revalidated at coordinator admission against a named actual source, vacant target, usable authoritative operation visibility, and anomaly-free inventory. Partition class or REPLACE type alone is insufficient."
+    },
+    {
+      "id": "preserve-fail-closed-and-ledger-boundaries",
+      "statement": "Preserve fail-closed behavior for generic ADD, ordinary REPLACE, unavailable or deferred operation visibility, missing/non-voter/non-live source, occupied target, and anomalous inventory. Do not broaden the existing concentrated-ledger exception, weaken the operation-ledger interlock, raise a timeout/budget, or change managed-partition-merge source."
+    }
+  ],
+  "sealedAt": "a20051440f9ef5460646ea30a622bdfd89feb9d0",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/quests/managed-partition-merge-live-validation.json",
+      "closesCL": [],
+      "parentQuest": "managed-partition-merge-live-validation",
+      "planDoc": null,
+      "draftedAtCommit": "a20051440f9ef5460646ea30a622bdfd89feb9d0"
+    },
+    "frontiers": [
+      {
+        "id": "priority-recovery-replace-owner-inventory-unavailable-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-recovery-replace-owner-inventory-unavailable",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

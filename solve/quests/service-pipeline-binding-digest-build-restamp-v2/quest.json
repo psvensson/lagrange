@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-pipeline-binding-digest-build-restamp-v2",
+  "statement": "The CLI service pipeline's build stage finalizes the generated binding records it deploys: after stampArtifactDescriptor writes the real artifact descriptor into manifest.json, runBuild restamps every generated binding target's manifest_digest in bindings.json to the canonical sha256 digest of the stamped normalized manifest via the deployment-record generator's single digest-and-serialization owner (restampDeploymentBindings), so the public generate->build->deploy path produces CREATE BINDING statements whose pinned digest equals the ServiceInstallCatalogOwner's stored manifestDigest for a genuinely built wasm component. Verified at HEAD df0461143: runGenerate always digests the placeholderArtifact() manifest, runBuild stamped only manifest.json, runDeploy substitutes only package_id, so CREATE BINDING deterministically failed PACKAGE_STATE_CORRUPT on the CLI path (live witness public-path-multinode-baseline-20260811T090119Z; restamp-digest equality with the stored catalog row proven empirically). Deterministic guard: generator unit test proves digest + byte-canonical rewrite; the real-componentize pipeline test proves the built tree pins the stamped digest, red-on-revert. The binding contract's digest pinning (minimal-deployment-binding-v0-declaration) is not weakened. Supersedes service-pipeline-binding-digest-build-restamp (unlandable: evidence-less first commit-step recorded a new-quest-only integrity violation).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-pipeline-binding-digest-build-restamp-v2",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "df046114387f14f07f190b3e26dd507c284f4a02",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+      "closesCL": [],
+      "parentQuest": "service-pipeline-binding-digest-build-restamp",
+      "planDoc": null,
+      "draftedAtCommit": "df046114387f14f07f190b3e26dd507c284f4a02"
+    },
+    "frontiers": [
+      {
+        "id": "service-pipeline-binding-digest-build-restamp-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-pipeline-binding-digest-build-restamp-v2",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

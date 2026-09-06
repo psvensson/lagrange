@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-capture-foreign-evidence-exclusion",
+  "statement": "The attempt auto-capture in scripts/solve/step.js no longer sweeps another Quest's regenerated solve/evidence receipts into this Quest's recorded change: evidence whose owner quest id is read from its path (solve/evidence/<id>.receipt.json or solve/evidence/<id>/) and differs from the capturing Quest is excluded, evidence of uncertain ownership and the Quest's own evidence stay captured exactly as before, and a product Quest is no longer refused with \"workflow changes must be recorded in a workflow Quest\" because a foreign receipt was dirty; scripts/quest-evidence-harness-runtime.js gains --output <path> so a receipt can be regenerated to a scratch path without dirtying solve/evidence (default output and receipt bytes unchanged, generatedAt kept in evidence identity). Proven deterministically on the real capture path: red on HEAD, green after.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-capture-foreign-evidence-exclusion.receipt.json",
+      "requiredReceipts": [
+        "foreign-receipt-excluded-from-auto-capture",
+        "product-quest-not-refused-by-foreign-receipt",
+        "foreign-receipt-only-change-captures-nothing",
+        "harness-output-option-writes-to-scratch",
+        "own-receipt-still-captured-unchanged",
+        "harness-default-output-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-landing-owner",
+      "statement": "The Solver landing/attempt owner under scripts/solve remains the single authority; no duplicated predicate is introduced elsewhere."
+    },
+    {
+      "id": "ownership-from-path",
+      "statement": "Auto-capture excludes evidence owned by another quest id only when ownership is read from the path (solve/evidence/<id>.receipt.json or solve/evidence/<id>/); uncertain ownership stays inside the sealed artifact and the quest's own evidence is captured exactly as before."
+    },
+    {
+      "id": "evidence-identity-unchanged",
+      "statement": "Evidence identity keeps generatedAt; the harness runtime's default output path and receipt bytes are unchanged, and --output fails closed on a missing value."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic replay of the recorded operator sequence through the real Solver modules on a temporary repository fixture, red on HEAD and green after, with controls that must stay green."
+    }
+  ],
+  "sealedAt": "2485b138ea72b064f43eec435c21e86720f8b3dc",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+      "closesCL": [],
+      "parentQuest": "solver-land-recorded-attempt-union-guard",
+      "planDoc": "docs/steering/roadmap.md",
+      "draftedAtCommit": "1e80189aa"
+    },
+    "frontiers": [
+      {
+        "id": "solver-capture-foreign-evidence-exclusion-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/solver-capture-foreign-evidence-exclusion.receipt.json",
+            "requiredReceipts": [
+              "foreign-receipt-excluded-from-auto-capture",
+              "product-quest-not-refused-by-foreign-receipt",
+              "foreign-receipt-only-change-captures-nothing",
+              "harness-output-option-writes-to-scratch",
+              "own-receipt-still-captured-unchanged",
+              "harness-default-output-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

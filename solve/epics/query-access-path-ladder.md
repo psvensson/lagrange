@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: query-access-path-ladder
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: global-secondary-indexes
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Query access path ladder

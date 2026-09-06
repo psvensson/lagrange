@@ -1,0 +1,63 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-efficiency-negative-controls-claim-disposition",
+  "statement": "The comparative negative-control inspection and live report publish one deterministic machine-readable no-claim disposition that is admitted only for a complete five-cell matrix with zero measuring cells, five explicit non-measuring cells, absent candidate engagement, and successful alternative control oracles.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-negative-controls",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "disposition-is-derived",
+      "statement": "The disposition must be derived from admitted evidence and must never make invalid, incomplete, measuring, or claim-eligible evidence appear non-measuring."
+    },
+    {
+      "id": "no-claim-fidelity-preserved",
+      "statement": "Retain the complete five-cell live matrix, exact owner joins, intrinsic-independent oracle evaluation, cleanup, durable replay, fresh-process replay, zero fabricated comparative effects, and five passing PostgreSQL alternative oracles."
+    }
+  ],
+  "sealedAt": "fcdce66a549a51411eca5a92b8f90df8f2bffc2c",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "verificationTemplates": [
+      "admission-gating",
+      "adversarial-js-intrinsics",
+      "harness-fidelity",
+      "recovery-replay"
+    ],
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#C5",
+      "closesCL": [],
+      "parentQuest": "comparative-efficiency-negative-controls",
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "fcdce66a549a51411eca5a92b8f90df8f2bffc2c"
+    },
+    "frontiers": [
+      {
+        "id": "comparative-efficiency-negative-controls-claim-disposition-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "comparative-efficiency-negative-controls",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

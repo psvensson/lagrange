@@ -1,0 +1,101 @@
+{
+  "schema": "solve-quest/2",
+  "id": "oci-container-driver-live-activation-engine-translation",
+  "statement": "A normal digest-pinned OCI installation traverses shipped seed and join composition to an authenticated Docker host agent, which pulls, creates, starts, inspects, stops, and removes the exact fully labelled real container; security, receipt/fence, identity, and configuration failures are typed fail-closed, no managed resource remains, and realContainerActivation is true only after live engagement proof. (frontier oci-container-driver-live-activation-engine-translation)",
+  "epic": "service-portability-ladder",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "oci-host-agent-engine-translation",
+      "reportDir": "test-output/reports/oci-container-driver-live-activation",
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Independently verify every exact source attempt before checkpoint and the terminal aggregate content before handoff; record fingerprint-bound Solver findings with evidence subagent:<id>."
+    },
+    {
+      "id": "c0-contract-is-authoritative",
+      "statement": "Implement architecture/oci-runtime-host-contract.md without weakening or bypassing its closed protocol, admission, identity, receipt, fence, enrollment, provider, and construction rules. If implementation evidence falsifies that sealed decision, stop and author a decision successor before changing the contract or substituting a weaker mechanism."
+    },
+    {
+      "id": "c1-only-operation-boundary",
+      "statement": "This Quest owns only authenticated pull, create, start, inspect, stop, and remove plus the installed-revision owner handoff and C1 receipt/fence recovery. Probe, logs, endpoint publication, health readiness, kill/replacement orchestration, managed-instance/node restart recovery, image-presence accounting, placement, workload credentials, OCI callbacks, Kubernetes, containerd, and CRI remain out of scope."
+    },
+    {
+      "id": "owner-route-and-no-fallback",
+      "statement": "The measured route begins with a normal digest-pinned catalog installation, crosses one narrow immutable catalog activation projection and ServiceInstallationReconciler handoff into the node-local ServiceReconciler, RuntimeServiceAdapter, ServiceRuntimeLifecycle, RuntimeDriverRegistry, and provider-injected OciContainerDriver, then reaches one host agent. SQL, CLI, catalog, installation reconciliation, tests, and demos may not call the registry, driver, provider, or agent directly; missing or invalid provider configuration fails closed without simulation, auto-detection, or fallback."
+    },
+    {
+      "id": "single-operation-and-resource-identity",
+      "statement": "The exact resource mapping is: clusterIncarnation is the required cluster-provisioning identity configured identically in node client and enrolled agent; nodeId is the local canonical node identity; serviceId is serviceDefinitionId/entityId; revisionId is the immutable catalog revisionId; and instanceId is replicaId. All five propagate through the immutable activation projection, desired descriptor, ServiceLifecycleManager, RuntimeServiceAdapter, ServiceRuntimeLifecycle, driver, provider request, labels, and receipt. No layer substitutes replicaId for serviceId, drops revision or cluster identity, or treats a container name as authority."
+    },
+    {
+      "id": "deterministic-operation-identity",
+      "statement": "RuntimeServiceHandler's durable create/remove operationId is the parent ownerOperationId and is propagated instead of replaced by nested lifecycle journals. Direct owner health/status work must receive its own durable ServiceLifecycleManager operationId. Each host operation gets a distinct stable id `oci-v1:` plus lowercase SHA-256 of the RFC-8785 bytes of exactly `{ownerOperationId,operation,identity}`; pull, create, start, inspect, stop, and remove therefore never reuse an id across different intents, and every redrive of the same owner operation reproduces the same ids."
+    },
+    {
+      "id": "exact-lifecycle-operation-mapping",
+      "statement": "The mapping is fixed: runtime prepare performs pull, verifies the returned digest, then create; runtime start performs start then authoritative inspect; C1 health/status performs inspect only and is not a C2 probe; generic stop performs stop and leaves a restartable stopped container; node removal gains an explicit remove lifecycle/adapter/driver method invoked only after stop settles, and that method performs remove and proves absence. Removal may not be silently bundled into every stop."
+    },
+    {
+      "id": "ambiguous-owner-state",
+      "statement": "Provider rejected results become typed definitive lifecycle failure; retryable_failure remains non-terminal/retryable under the same durable owner operation; ambiguous with fenceState none projects a durable UNKNOWN lifecycle/replica state and AMBIGUOUS operation outcome that only the same owner operation may re-drive; ambiguous with mutation_unresolved projects durable FENCED and cannot be cleared by a runtime request. No ambiguous result may project ACTIVE, STOPPED, REMOVED, definitive absence, or generic FAILED."
+    },
+    {
+      "id": "one-runtime-config-contract",
+      "statement": "One shared OCI runtime-config contract is the only normalizer used by manifest/catalog projection, lifecycle descriptor, driver, client, and agent. It accepts only the C0 entrypoint, args, environment, ports, and resources grammar, rejects host networking and legacy or unknown fields recursively, and defines runtimeConfigDigest as `sha256:` plus the lowercase SHA-256 of RFC-8785 canonical bytes of the exact normalized config object with omitted optionals absent. The catalog activation projection carries artifactRef, artifactDigest, normalized config, and that digest without surrendering artifact authority."
+    },
+    {
+      "id": "engine-authority-and-closed-translation",
+      "statement": "Only the Docker Compose host agent receives Docker Engine authority. Nodes and managed workloads receive no Docker socket or raw Engine API. The production agent exposes only the six C1 operations, enforces the recursively closed request/result grammar and boot-owned network/resource policy, writes all immutable identity and create-provenance labels itself, and resolves the complete labelled identity before every observation or mutation. Production source must not import the distributed-harness Docker provider."
+    },
+    {
+      "id": "artifact-and-digest-authority",
+      "statement": "Activation consumes only the artifact owner's immutable remote registry reference and verified sha256 digest. Pull must inspect and return the immutable local image digest; the driver rejects any mismatch before create. Filesystem/local-layout input, tag-only input, request-carried credentials, and caller-supplied Engine configuration are rejected."
+    },
+    {
+      "id": "authenticated-bounded-admission",
+      "statement": "The node client and agent implement the exact version-1 UDS framing, RFC 8785 canonicalization, HMAC request and response binding, size/deadline limits, constant-time verification, durable bounded nonce replay transaction and permanent saturated-key latch, bounded sockets/queues/dispatch, exact operation and intent identity, and no autonomous client retry loop. Authentication, replay, malformed nested payload, late/mismatched response, and capacity attacks must produce only the sealed typed fail-closed outcomes without secret or raw Engine leakage."
+    },
+    {
+      "id": "durable-receipt-fence-enrollment",
+      "statement": "Before Engine mutation, the exclusive resource gate, fsynced accepted receipt, mutation_unresolved fence, pre-inspection, fresh post-await deadline check, and exact non-dispatch/dispatch branch table must hold. Same-process settlement is the only runtime fence-clear path; restart preserves quarantine. Production enrollment uses a socketless initializer plus pinned TPM 2.0 tools against a provisioned NV monotonic counter exposed as /dev/tpmrm0 and follows the C0 append-log/retirement rules exactly. Injected counters may prove deterministic transitions but cannot satisfy the live claim; absent device, tool, counter, or matching enrolled state fails closed before dispatch."
+    },
+    {
+      "id": "production-provider-configuration",
+      "statement": "The production root constructs exactly one provider client from explicit cluster incarnation, agent id, UDS path, node key id, and read-only key-file configuration, and passes that same object through the selected seed or join startup path into createRuntimeStartupWiring. Missing or malformed OCI configuration does not prevent non-OCI node startup, but every OCI lifecycle request returns a typed provider-unavailable failure; no environment auto-detection, direct Docker fallback, or mutable enable flag exists. The live fixture uses an isolated registry and no registry credential; optional production credentials remain agent-owned references."
+    },
+    {
+      "id": "bounded-pathscope",
+      "statement": "Source scope is limited to the OCI runtime client/driver/agent and focused helpers under src/runtime, the immutable activation projection and catalog-to-node-lifecycle handoff under src/control-plane/owners, src/service, and src/bootstrap, seed/join option plumbing in src/index.js, package dependency manifests and Dockerfile, one shipped Docker Compose host-agent topology, C1 capability/docs alignment, and focused unit/integration/live scenario runners and fixtures. Any unrelated owner or architecture change requires a recorded split before editing."
+    },
+    {
+      "id": "deterministic-first-live-terminal",
+      "statement": "Each frontier has a focused deterministic red-on-current-code test through production collaborators before implementation, including malformed/unknown nested fields, duplicate raw JSON keys, Unicode scalar validation, HMAC/request/response identity attacks, replay/saturation, every receipt/fence fsync and Engine-await crash point, corrupt/rolled-back ledger and TPM state, digest mismatch, partial/tampered/multiple labels, and missing provider configuration. The terminal runner uses fresh run-owned Docker resources, an isolated registry digest, and real /dev/tpmrm0 enrollment; engages shipped seed and join composition rather than direct construction; proves pull/create/start/inspect/stop/remove plus zero residual managed containers and no node/workload Docker socket; records exact container/image/label/provider/receipt/source witnesses; and is red when production binding, authentication, digest comparison, or label enforcement is reverted. Three distinct measuring live passes are required."
+    },
+    {
+      "id": "capability-claim-gate",
+      "statement": "docs/service-portability-capabilities.json remains realContainerActivation=false until the exact live terminal evidence passes. The flip to true and removal of the mutable OCI feature gate plus _prepared/_running simulation occur only in the same terminal aggregate; no temporary production feature flag survives."
+    }
+  ],
+  "sealedAt": "6649c9223f945c2ae07787a4256816313e3d5d4f",
+  "legacy": {
+    "parentQuest": "oci-container-driver-live-activation",
+    "frontier": {
+      "id": "oci-container-driver-live-activation-engine-translation",
+      "priority": 3,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "oci-host-agent-engine-translation",
+          "reportDir": "test-output/reports/oci-container-driver-live-activation",
+          "metric": "priority"
+        }
+      }
+    },
+    "migratedBy": "solve-v2 migration"
+  }
+}

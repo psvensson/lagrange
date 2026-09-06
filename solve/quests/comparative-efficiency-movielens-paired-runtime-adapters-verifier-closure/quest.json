@@ -1,0 +1,113 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-efficiency-movielens-paired-runtime-adapters-verifier-closure",
+  "statement": "The same-base replacement of the MovieLens paired-runtime adapter seam receives category-complete independent approval after proving all standing verifier findings closed: fixed-SLO cost selection covers every repeated block, PostgreSQL execution is bound to the sealed query manifest, legacy and hostile replay remain compatible, network and storage observations are quantitative and fail closed, forced teardown is bounded, and exact live artifacts retain at least 25 percent scaling headroom with durable and fresh-process replay.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-movielens-paired-runtime-adapters",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-measured-cell-admission",
+      "statement": "Do not seal this Quest until comparative-efficiency-measured-cell-admission is terminal; also consume the terminal C2, C3, C4, and C7 contracts without weakening them."
+    },
+    {
+      "id": "reuse-capacity-and-resource-owners",
+      "statement": "Extend and drive the existing C3 open-loop blocked-pair protocol and C4 whole-topology evidence owner; do not implement workload-local engagement, semantic, operation-count, load-generator-headroom, capacity-statistics, resource-accounting, cost-math, matrix-identity, or claim-projection schemas."
+    },
+    {
+      "id": "c3-heterogeneous-observation-owner",
+      "statement": "C3 owns one heterogeneous live-observation interface and canonical operation receipt shape for offered, emitted, dispatched, correct, rejected, timed-out, errored, and queue-overflow counts, p50/p95/p99 samples, adapter identity, exact observation coordinate/window, and quantitative load-generator headroom. Each operation receipt carries the digest and identity of a C2-owned semantic-parity receipt; C2 alone defines and validates parity content and its oracle, while C3 only joins that immutable receipt. Lagrange and PostgreSQL plug into the C3 interface without reinterpreting either owner."
+    },
+    {
+      "id": "public-candidate-path",
+      "statement": "The Lagrange side must invoke the installed authenticated request Binding and WASM Cell through the public request path used by C7; internal native_js execution, direct handler calls, and smoke-only shortcuts are ineligible."
+    },
+    {
+      "id": "paired-semantic-and-durability-parity",
+      "statement": "Both adapters must consume the same sealed dataset and grouped-reduce operation, satisfy the same result, ordering, error, transaction, and durability oracle, and count only correct SLO-eligible operations."
+    },
+    {
+      "id": "owner-derived-live-engagement",
+      "statement": "Derive engagement from immutable owner observables joined to the exact measured-run coordinate: authenticated Lagrange request IDs must resolve to the installed Binding/WASM digest and invocation journal, while PostgreSQL request IDs must resolve to executed-query/server/row receipts. Each side/load C3 operation receipt and its C2 semantic digest must join to its own distinct C4 window identity and exact time bounds; a paired block groups those windows but never merges them. Caller booleans are ineligible."
+    },
+    {
+      "id": "quantitative-headroom",
+      "statement": "The representative pair must seal and satisfy quantitative headroom thresholds for measurement infrastructure outside the provisioned system-under-test boundary: the external open-loop emitter, client queues, observers, shared host capacity, and unassigned network/storage paths. An inventoried Lagrange or PostgreSQL component may saturate at the capacity/failing point and must record the bottleneck; reject only when an unaccounted load-generator, observer, host, or shared-path ceiling constrains the result. Fixture-only, empty, one-sided, or top-load-censored-as-exact runs cannot close the Quest."
+    },
+    {
+      "id": "c4-owned-whole-topology-observers",
+      "statement": "Extend C4-owned process/container/cgroup, storage, and network observers to inventory and meter every Lagrange data node, control-plane service, durable store, proxy/coordinator, required monitor, PostgreSQL server/replica, and client component. Reject unmetered components, unmatched windows, and zero or symmetrically-excluded placeholders without an explicit eligible exclusion."
+    },
+    {
+      "id": "durable-replay-and-cleanup",
+      "statement": "Retain immutable raw operation, semantic, topology, process/container/cgroup, storage, network, clock-alignment, and source-revision artifacts sufficient for fresh-process replay, and verify teardown of every created process, container, network, store, and temporary artifact."
+    },
+    {
+      "id": "red-for-right-reason",
+      "statement": "The pre-change directed proof must fail because the heterogeneous Lagrange capacity/resource observation adapter is absent while the public C7 operation succeeds, not because of a missing fixture method, setup failure, empty workload, timeout before engagement, or PostgreSQL-only shortcut."
+    },
+    {
+      "id": "adapter-proof-is-not-a-campaign-claim",
+      "statement": "This Quest closes on one representative measuring pair that proves the adapter seam; it must not publish a matrix-wide efficiency, cost, or scale claim, and P0 must not be described as P1-P3 certification."
+    }
+  ],
+  "sealedAt": "41d61890f98bf8b7b8e95f67bba323003ff000be",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#M2",
+      "closesCL": [],
+      "parentQuest": "comparative-efficiency-movielens-paired-runtime-adapters",
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "41d61890f98bf8b7b8e95f67bba323003ff000be"
+    },
+    "frontiers": [
+      {
+        "id": "comparative-efficiency-movielens-paired-runtime-adapters-verifier-closure-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "comparative-efficiency-movielens-heterogeneous-capacity-observation",
+            "metric": "priority"
+          }
+        }
+      },
+      {
+        "id": "comparative-efficiency-movielens-paired-runtime-adapters-verifier-closure-c4-observation",
+        "priority": 2,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "comparative-efficiency-movielens-paired-resource-observation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "adversarial-js-intrinsics",
+      "harness-fidelity",
+      "concurrency-serialization",
+      "recovery-replay",
+      "formation-circularity",
+      "sweep-timer"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

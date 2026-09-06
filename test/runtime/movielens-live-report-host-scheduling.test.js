@@ -17,7 +17,7 @@ import {
   LIVE_SCENARIO,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
 import {reportSampleIsNonMeasuring}
-  from '../../scripts/solve/probes/scenario-harness.js';
+  from '../../scripts/solve/probes.js';
 
 const TIMESTAMP = '2026-07-20T09:00:00.000Z';
 

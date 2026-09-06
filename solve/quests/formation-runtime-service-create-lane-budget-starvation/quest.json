@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-runtime-service-create-lane-budget-starvation",
+  "statement": "A deployed runtime-service's replica-count-increase ADD moves actually create active replicas during post-formation on the 5-node MovieLens demo, so svc-movielens-topn reaches its target replica_count and the demo convergence watch sees replicas>0 (currently replicas=0 the entire 300s watch → STALL). ROOT (run-30 forensics, after the logs.message poison fix 56ebbedb let the demo first reach [4/4]): the runtime-service rebalancer HOLDS leadership the whole watch and executes type=add reason=increase_replica_count moves 6x on cadence (19:23:35/19:25:12/19:27:20, 2 per cycle) but NO replica-create ever lands (zero downstream replica-create logs for the service; 6x interleaved 'Rebalancing move skipped reason=budget_exceeded') EVEN THOUGH 32 control-plane moves COMPLETE during the same watch — the shared move budget is NOT permanently saturated, it has free windows the service create cannot exploit. The runtime-service ADD competes in the shared move budget against concurrent control-plane formation churn (260x operation_ledger_self_move_in_flight, 56x quorum_concentrated) and never wins a create slot / is admission-rejected before dispatching its replica_operations create. SCOPE: make the executed service ADD produce an active replica within available budget windows (fair-share / priority / admission fix at the create-dispatch lane). NOT the projection gap (runtime-replica-state-projection — replicas are never CREATED here, not created-and-invisible); NOT host oversubscription (20 cores, load 4.28); NOT a synchronous event-loop blocker (gaps rare 0.68% wall + descheduled ELU 0.21); NOT the over-target accounting transient (formation-ledger-over-target-accounting-drain-phase-replace-blind-spot). doneWhen = scenario-harness reproduces replicas>0 (service create lands under concurrent control-plane churn) 3x consecutive.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-runtime-service-create-lane-budget-starvation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "ab15e03e48ef4d6555ba7ca8e770015f543aa06c",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "formation-runtime-service-create-lane-budget-starvation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "formation-runtime-service-create-lane-budget-starvation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,15 @@
 ---
 id: release-process-simplification
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: active
 graduatesTo: null
+quests:
+  - release-process-simplification-v2
+  - release-process-simplification
+authorizes: []
+legacyStatus: active
 ---
 
 # Release process simplification

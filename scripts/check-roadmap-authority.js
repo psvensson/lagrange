@@ -5,7 +5,6 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-import {loadAllQuests} from './solve/portfolio.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXIT_SUCCESS = 0;
@@ -18,7 +17,7 @@ const STEERING_CONFIG_PATH = 'docs/steering/llm-pack.config.json';
 const ROADMAP_POLICY_PATH = 'docs/steering/roadmap.md';
 const SYSTEM_GUIDELINES_PATH = 'docs/steering/system-guidelines.md';
 const EDITION_MATRIX_PATH = 'edition-matrix.md';
-const OVERVIEW_PATH = 'scripts/solve/overview.js';
+const OVERVIEW_PATH = 'scripts/solve/schema.js';
 const EPICS_PATH = 'solve/epics';
 const SPECS_PATH = 'solve/specs';
 const EPIC_TEMPLATE_PATH = 'solve/epics/_template.md';
@@ -160,20 +159,38 @@ function validatePhaseAlignment(humanRoadmap, featureMap, errors) {
   }
 }
 
+const QUESTS_PATH = 'solve/quests';
+const QUEST_FILE = 'quest.json';
+
+// v2 quests keep their v1 planning links under legacy.links; a v2-authored
+// quest may carry links at the top level.
+function loadQuestLinks(root) {
+  const dir = path.join(root, QUESTS_PATH);
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, {withFileTypes: true})
+    .filter((entry) => entry.isDirectory() &&
+      fs.existsSync(path.join(dir, entry.name, QUEST_FILE)))
+    .map((entry) => {
+      const quest = JSON.parse(fs.readFileSync(
+        path.join(dir, entry.name, QUEST_FILE), TEXT_ENCODING));
+      return {id: quest.id, links: quest.links || quest.legacy?.links || {}};
+    });
+}
+
 function validateQuestLinks(root, featureRows, errors) {
-  for (const quest of loadAllQuests(root)) {
-    const links = quest.links || {};
+  for (const quest of loadQuestLinks(root)) {
+    const links = quest.links;
     const roadmapRow = links.roadmapRow;
     if (roadmapRow !== null && roadmapRow !== undefined &&
         !featureRows.has(roadmapRow)) {
       errors.push(
-        `solve/quests/${quest.id}.json: unresolved roadmapRow ${roadmapRow}`,
+        `${QUESTS_PATH}/${quest.id}/${QUEST_FILE}: unresolved roadmapRow ${roadmapRow}`,
       );
     }
     if (links.planDoc === HUMAN_PLAN_DOC &&
         !HISTORICAL_HUMAN_PLAN_DOC_QUESTS.has(quest.id)) {
       errors.push(
-        `solve/quests/${quest.id}.json: new planDoc must not target ` +
+        `${QUESTS_PATH}/${quest.id}/${QUEST_FILE}: new planDoc must not target ` +
         HUMAN_ROADMAP_PATH,
       );
     }

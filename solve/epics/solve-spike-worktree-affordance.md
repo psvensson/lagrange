@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: solve-spike-worktree-affordance
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: quests
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Solve spike: throwaway-worktree exploration inside a Quest

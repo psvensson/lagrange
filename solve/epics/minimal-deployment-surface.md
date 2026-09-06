@@ -1,8 +1,32 @@
 ---
-epicContractVersion: 2
 id: minimal-deployment-surface
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: RM-2.0-minimal-deployment-surface
 graduatesTo: null
+quests:
+  - call-cell-reduce-coordination-expiry
+  - data-local-call-partition-activation-v2
+  - data-local-call-partition-activation
+  - minimal-deployment-artifact-binding-identity-replacement
+  - minimal-deployment-artifact-binding-identity
+  - minimal-deployment-artifact-export-contract
+  - minimal-deployment-binding-v0-declaration
+  - minimal-deployment-boot-cell-placement-migration
+  - minimal-deployment-boot-cell-placement
+  - minimal-deployment-call-cell-placement
+  - minimal-deployment-change-cell-runtime-activation
+  - minimal-deployment-once-cell-placement
+  - minimal-deployment-pushdown-cell-placement
+  - minimal-deployment-request-cell-routing-shutdown-fence
+  - minimal-deployment-request-cell-routing
+  - minimal-deployment-request-cell-runtime-readiness-migration
+  - minimal-deployment-request-cell-runtime-readiness
+  - minimal-deployment-system-owned-cell-replication
+  - minimal-deployment-time-cell-placement
+authorizes: []
+legacyStatus: null
 ---
 
 # Minimal deployment surface: artifacts, bindings, cells

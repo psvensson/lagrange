@@ -1,0 +1,81 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-release-handoff-closure-v3",
+  "statement": "Five-node startup keeps one versioned, incarnation-bound formation-release handoff authority from the first whole-plane priority-spread-satisfied observation until every captured JOINING cohort member has published a current READY lease, so non-monotone spread-gap reopening cannot strand joiners and the unchanged 60-second GCP certification plus 120-second internal barrier both close without weakening safety. Third seal (v3): v1 and v2 are frozen superseded history, each carrying an unresolvable new-quest-only attempt-integrity violation from operator-ordering (attempt recorded before measuring evidence). The exact candidate is preserved at solve/changes/formation-release-handoff-closure-v2/attempt-1.diff (sha256 1a5d29909a903312aa916808038d7340e94165d0ad3e21d142f06fb9c16afd61). This v3 follows begin → real GCP evidence → record exact diff.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-release-handoff-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-owner-history-first",
+      "statement": "Treat the failure as systemic until the producer, startup-authority, rebalancer cure, join barrier, stable-window, READY-lease publication, harness, recovery, and terminal-consumer cone plus its history are explicit; preserve a single owner per subsystem and interaction."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-formation-release-owner",
+      "statement": "Add exactly one subordinate formation-release handoff-closure owner under the existing startup-authority/recovery interaction; rebalancer, join readiness, publication, and the harness contribute evidence or consume its decision but never mint parallel release authority."
+    },
+    {
+      "id": "versioned-incarnation-bound-cohort",
+      "statement": "The closure proof is bound to publication/topology epoch and node boot incarnation, captures the JOINING cohort at the first globally satisfied priority-spread observation, and remains valid only until every member publishes a current READY lease; disconnect, incarnation change, substantive safety failure, or incompatible topology epoch revokes or rotates it fail-closed."
+    },
+    {
+      "id": "global-authority-consumer-parity",
+      "statement": "The join barrier and bootstrap readiness consume the same whole-plane authority answer; target-specific node reads cannot disagree with the seed/global release owner for one generation."
+    },
+    {
+      "id": "non-monotone-model-and-cadence",
+      "statement": "The TLC bug/fixed pair permits spread gaps to reopen and proves stable-window plus READY-publication completion under event cadence; no proof may assume monotone openGaps arithmetic."
+    },
+    {
+      "id": "unchanged-certification-budgets",
+      "statement": "Preserve the operator-owned 60-second five-node GCP certification window, the 120-second internal formation barrier, event-loop budgets, CL-036/remove safety, exact retry limits, and all existing admission floors; do not solve this with sleeps, timeout widening, retries, or readiness weakening."
+    },
+    {
+      "id": "live-gcp-falsifier-and-ab",
+      "statement": "Closure requires fresh exact-source GCP evidence with N>=2 fixed and N>=2 exact aggregate revert runs: fixed must show at least two barrier-held joiners, a real spread-ready then spread-reopened cadence, one retained release generation, every cohort member READY inside 60 seconds, and zero formation timeout; reverted outcomes are recorded fail-honestly."
+    },
+    {
+      "id": "thermal-offload",
+      "statement": "Run only narrow focused deterministic checks locally while monitoring CPU and SSD temperature; run broad, long-running, large, model, and live-cluster validation in GCP."
+    }
+  ],
+  "sealedAt": "43900c6c32349b044f36c3d3e5be172306727592",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "solve/changes/formation-barrier-spread-cure-final-landing/live-ab/round-3/analysis.md",
+      "closesCL": [],
+      "parentQuest": "formation-release-handoff-closure-v2",
+      "planDoc": "docs/steering/roadmap.md",
+      "draftedAtCommit": "43900c6c32349b044f36c3d3e5be172306727592"
+    },
+    "frontiers": [
+      {
+        "id": "formation-release-handoff-closure-v3-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "formation-release-handoff-closure",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

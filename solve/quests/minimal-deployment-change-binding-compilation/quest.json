@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-change-binding-compilation",
+  "statement": "Every immutable change Binding observed through canonical service_bindings change notification is level-triggered by the existing service_definitions planning leader through the same Binding compiler as request into exactly one deterministic, lineage-bound inactive zero-replica desired runtime service whose pinned Artifact target, change operations and tables, export, contexts, capabilities, budgets, and elasticity projection matches the Binding; replay, cache wake, and leadership reacquisition converge without duplicate writes, request Binding behavior remains unchanged, malformed or conflicting durable state fails closed, the legacy programmatic CDCSubscriptionManager declaration and callback/invoke surface and its private constants are absent, and no CDC event subscription or dispatch, service, endpoint, runtime lifecycle, or Cell actual is created.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-change-binding-compilation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "1eacef90c795d6d53d9c189decb3e34a696672ea",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "1eacef90c795d6d53d9c189decb3e34a696672ea"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-change-binding-compilation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-change-binding-compilation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

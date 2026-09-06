@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "step-coverage-single-owner-table",
+  "statement": "Epic self-hosting-circularity-generic-treatment Option 5, second ladder rung (CL-029 lineage). The semantic \"which WORKFLOW_STEP values of which operation type does THIS mechanism cover\" is today re-derived at 52 censused sites across 33 files (24 hand-rolled step-coverage Set/array declarations + 28 per-step branch piles) — the CL-029 defect class: the dispatch-wake preempt set covered {PENDING, SENDING, CREATING} and stopped one step short of target_sync, invisible because every coverage set is enumerated ad hoc at its call site; the deferred-local-progress rows (CREATING, then ACTIVE, then STOPPING) were each a separate incident+fix. SEALED RESULT: step-coverage policy is declared ONCE — the named coverage rows live in the owner family (src/rebalancer/replica-operation-step-policy.js, a sibling of replica-operation-progress.js which keeps the progression/terminal tables), grouped so all rows are reviewable side by side; every censused Set/array declaration moves into the owner as a NAMED row (deliberately-different coverage stays distinct, never silently merged — e.g. the three identical COMPLETION_STEPS copies in the node/message-group/runtime handler constants unify to one row, while mechanism-specific rows keep their own names), and every censused branch pile consumes owner rows/predicates instead of enumerating steps inline (e.g. isPriorityOutcomeDeferredLocalProgressStep becomes a (step -> operation-type set) table row lookup). Behavior preserved exactly (each moved row keeps byte-identical membership; each pile rewrite is truth-table identical on the WORKFLOW_STEP domain); any coverage GAP found during migration is recorded as a finding and fixed only in its own pinned follow-up, never silently. doneWhen: the committed census scripts/check-step-coverage-owner.js --oracle --with-gates writes solve/oracle/step-coverage-single-owner-table.json with metric = counted re-derivations outside the owner family (baseline 52), done only at metric 0 with lint + targeted suites green. NOT in scope: step timeout/budget scalars (a numeric budget policy semantic — its own ladder rung), ReplicaStatus-based coverage sets, the progression/terminal tables themselves (already owned), and hold-engagement/cure-typing (later rungs). Executed as bounded children per owner-area batch (links.parentQuest), checkpoint commit after every attempt.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/step-coverage-single-owner-table.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "e9882b88c0202e11ec45733181476b4397164407",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "e9882b88c0202e11ec45733181476b4397164407"
+    },
+    "frontiers": [
+      {
+        "id": "step-coverage-single-owner-table-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/step-coverage-single-owner-table.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: callback-axis-retirement
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Callback-axis retirement

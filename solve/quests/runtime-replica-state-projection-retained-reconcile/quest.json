@@ -1,0 +1,92 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-replica-state-projection-retained-reconcile",
+  "statement": "Runtime replica lifecycle completion hands desired state to one production-wired retained projection owner without waiting on services-table writes; that owner composes ServicesOwner and the existing owner-key reconcile queue to serialize and coalesce the latest state per replica and retry typed failures, and three consecutive fresh MovieLens runs report priority metric 0.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-projection-owner",
+      "statement": "Compose the existing ServicesOwner mutation boundary and OwnerKeyReconcileQueue retry/serialization primitive. Do not add feature-local retry timers, retry maps, raw SQL, a second services-table writer, direct cache repair, or a lifecycle-state authority outside ServiceRuntimeLifecycle."
+    },
+    {
+      "id": "nonblocking-retained-handoff",
+      "statement": "ServiceRuntimeLifecycle must return from projection submission without awaiting the routed control-plane write or its retry budget. The projection owner must retain accepted work per service replica independently of the source replica-operation deadline and expose accepted, applied, retrying, permanent-failure, and shutdown state through inspectable events or diagnostics."
+    },
+    {
+      "id": "latest-state-serialization",
+      "statement": "At most one services projection executes per service replica at a time. A newer desired transition received while an older transition is in flight or retained for retry replaces the pending context; CREATED must never overwrite ACTIVE or FAILED, ACTIVE must never resurrect STOPPED, and rapid transitions for different service replicas may progress independently."
+    },
+    {
+      "id": "mutation-discipline",
+      "statement": "Preserve TEST-0001 and ARCH-0009: the first non-STOPPED projection creates the canonical identity once only after primary-key UPDATE proves the row absent; later transitions UPDATE by service_id; STOPPED DELETEs; FAILED remains visible. Never use UPSERT, INSERT OR REPLACE, full-row replacement, or observer/cache writes."
+    },
+    {
+      "id": "typed-retry-and-terminal-failure",
+      "statement": "Retry only failures classified by the canonical control-plane error classifier and honor its retryAfterMs. A non-retryable failure must be surfaced once and dropped without a hot loop; a retryable failure remains retained until a newer state supersedes it, it applies, or owner shutdown clears it."
+    },
+    {
+      "id": "shutdown-and-recovery-boundary",
+      "statement": "SQL/runtime shutdown must stop the projection reconcile queue and clear its timers and retained in-memory work. Do not invent disk durability: after process restart, the existing runtime placement/re-drive path remains responsible for resubmitting desired lifecycle state."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change replica-operation deadlines, transition budgets, gateway timeouts, retry constants, rebalancer cadence or concurrency, MovieLens workload, preload size, schema stability or ordinary-release timing, stall/convergence budgets, affinity scoring, live runner ordering, or exact-result predicates."
+    },
+    {
+      "id": "production-path-red-on-revert",
+      "statement": "Before live validation, prove through the production ServiceRuntimeLifecycle-to-SQL projection composition that lifecycle completion is not held by a blocked CREATED write, a later ACTIVE state applies after the retryable CREATED failure without stale replay, STOPPED cannot be resurrected by an older in-flight state, permanent failures do not retry, and the test is red when the retained projection owner wiring is reverted."
+    },
+    {
+      "id": "model-contract-gate",
+      "statement": "Run npm run model:contracts before the live gate and retain architecture/contracts/core-system-logic.md as the model-rung reference."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "Use the unchanged ordered live runner: five formation probes must pass before three measuring MovieLens repetitions; stop on the first red, preserve immutable stopped-state evidence, and do not make an unchanged rerun."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T17:40:35.058Z source-stable run is the witness: replica r2's CREATED projection failed after 30141ms, its source operation exhausted CREATING after 61705ms, ACTIVE projection failed after 35410ms, local activation completed 3819ms after the source operation had already failed, and no r2 services row remained, while schema admission, preload, split, and grouped SQL had already passed."
+    }
+  ],
+  "sealedAt": "0575e2cadbf864da9ca0484ac8f09ec814b97bbb",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "schema-admission-canonical-drain-handoff",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "0575e2cadbf864da9ca0484ac8f09ec814b97bbb"
+    },
+    "frontiers": [
+      {
+        "id": "runtime-replica-state-projection-retained-reconcile-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

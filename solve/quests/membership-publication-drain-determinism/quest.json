@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "membership-publication-drain-determinism",
+  "statement": "A reconciled active node can never remain unpublished without an enabled drain/wake obligation: the membership-publication drain is deterministic and self-rescheduling, proven by a PublicationConvergence model property and a deterministic-drain reschedule regression test for the active-gate reconcile deferral branch.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/membership-publication-drain-determinism.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "narrower-than-integration-quest",
+      "statement": "This Quest proves the drain-determinism invariant only. The 3-consecutive rolling-restart harness pass remains the doneWhen of rolling-restart-core-stability and must not be duplicated here."
+    }
+  ],
+  "sealedAt": "19c0e7a87537889c1e377816e88da59dcf95653e",
+  "legacy": {
+    "priority": 1,
+    "class": "model",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [
+        "CL-001"
+      ],
+      "parentQuest": null,
+      "planDoc": "solve/epics/topology-convergence-hardening.md"
+    },
+    "frontiers": [
+      {
+        "id": "membership-publication-drain-determinism-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/membership-publication-drain-determinism.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

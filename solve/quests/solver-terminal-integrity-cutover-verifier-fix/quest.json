@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-terminal-integrity-cutover-verifier-fix",
+  "statement": "The W1 terminal-integrity cutover blocks terminal emission when any historical integrity violation remains unresolved, requires existent SHA-bound terminal evidence, prevents strict-upgrade laundering of legacy integrity history, and seals accepted changeRef artifacts by content identity with red-on-replacement proof.",
+  "epic": "owner-boundary-hardening-and-unification",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-terminal-integrity-cutover-verifier-fix.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "e5831ff1d876fbe854445f9caefecc6b54e1adae",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W1",
+      "closesCL": [],
+      "parentQuest": "solver-terminal-integrity-cutover",
+      "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+      "sealedAtCommit": "fe2c28f35908eb17b94b45a8403c87bdd362a873"
+    },
+    "frontiers": [
+      {
+        "id": "solver-terminal-integrity-cutover-verifier-fix-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solver-terminal-integrity-cutover-verifier-fix.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

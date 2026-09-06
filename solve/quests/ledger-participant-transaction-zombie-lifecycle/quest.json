@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "ledger-participant-transaction-zombie-lifecycle",
+  "statement": "An ACTIVE distributed-transaction participant hold on a raft partition never outlives its legal window, and healing it never destroys committed raft entries: in run-23 a participant-level BEGIN IMMEDIATE on the operation-ledger leader (tx-303af027:REMOVED:attempt1, delivered 08:02:59.119) was orphaned when the 2PC coordinator committed with an EMPTY participant set (executeParticipantStage silently skips missing participants, durable-workflow-coordinator.js:409-413, after recoverFromSystemTables replaced the live in-memory transaction with a cache-derived copy whose participants Map was rebuilt from CDC-lagging rows, distributed-transaction-recovery.js:431-496) — the open transaction then absorbed every later write on the connection (sessionless writes silently adopted via resolveActiveTransactionSessionId(null), partition-service-transaction-session-methods.js:26-37) making the whole ledger non-durable in silence. The fix bounds the ACTIVE participant hold (extend the existing prepared-state sweep, enforcePreparedStateHoldTimeouts / partition-service-transaction-base.js:272-313, to ACTIVE transactions at the same 60s legal-hold bound) with the heal GATED ON ROLE: a FOLLOWER (or post-step-down replica) rolls back crash-equivalently; a LEADER must NEVER bare-ROLLBACK (it re-mints acked indices and followers truncate committed entries without a committedIndex guard — the leadership-fitness quest's demotion is the prerequisite); plus the enabling-defect guards: 2PC never commits against an empty participant set it previously enlisted, recovery never replaces a live in-memory transaction's participant registry with a staler cache view, the rollback catch path never skips db.exec(ROLLBACK) while deleting bookkeeping (transaction-base.js:638-651), and sessionless absorption into a foreign transaction is removed or made explicit. Proven FIRST by deterministic in-process reproductions (abandoned participant BEGIN swept within the bound on a follower; leader defers to demotion; empty-set-commit and recovery-clobber guards red-on-revert), then by the live affinity demo.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "ledger-participant-transaction-zombie-lifecycle",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-order",
+      "statement": "DEPENDS ON formation-ledger-leader-local-persistence-wedge landing first: the leader-side heal is demotion-then-rollback; the role gate in this quest is only safe once the demotion path exists and re-asserts unfitness. Evidence base: solve/changes/formation-ledger-leader-local-persistence-wedge/ (freeze mechanism, vet with rollback-truncation physics, run-23 archives). HIGH-STAKES side finding recorded there: legitimate leader rollbacks destroy acked raft entries TODAY — treat any interim leader-rollback path found during implementation as a stop-and-verify moment."
+    }
+  ],
+  "sealedAt": "4ed40dc8f65b42f5077b539333ecadc1cf01f0f8",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "movielens-affinity-placement-demo",
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "ledger-participant-transaction-zombie-lifecycle-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "ledger-participant-transaction-zombie-lifecycle",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

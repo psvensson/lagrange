@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stale-untracked check: possibly-finished work left uncommitted by an earlier
-// session. Incident class: a completed, tested tool (scripts/solve/park.js + its
+// session. Incident class: a completed, tested tool (a retired v1 solver module + its
 // test) sat untracked overnight in the shared tree — the commit-on-completion
 // posture depends on end-of-session attention, which is exactly when it fails.
 // Quest attempts are auto-committed by the step machinery; this covers the gap

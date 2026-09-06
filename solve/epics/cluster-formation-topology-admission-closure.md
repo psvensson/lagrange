@@ -1,8 +1,27 @@
 ---
-epicContractVersion: 2
 id: cluster-formation-topology-admission-closure
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.2-five-node-convergence
 graduatesTo: null
+quests:
+  - behaviour-changing-consumer-convergence
+  - critical-placement-authoritative-evidence
+  - critical-placement-causal-trace
+  - critical-system-placement-distinct-node-invariant-v2
+  - critical-system-placement-distinct-node-invariant-v3
+  - critical-system-placement-distinct-node-invariant-v4
+  - critical-system-placement-distinct-node-invariant
+  - replication-policy-authority-substrate
+  - replication-target-authority-a2-contract-v2
+  - replication-target-authority-a2-contract-v3
+  - replication-target-authority-a2-contract
+  - replication-target-authority-v2
+  - replication-target-authority
+  - solver-rejection-repair-amendment-path
+authorizes: []
+legacyStatus: null
 ---
 
 # 0.2 Cluster Formation And Topology Admission Closure
@@ -147,3 +166,7 @@ desired RF. Only then does S4 become authoritative, and only then is S9 run.
 - Every hostile input shape collapses to `EVIDENCE_ABSENT`, so an operator
   cannot distinguish "formation has not started" from "the row set was refused".
   Needs a wider reason vocabulary.
+
+## Drafts carried by the solve-v2 migration
+
+- service-plane-replication-authority-inventory (RM-0.2-five-node-convergence): The SERVICE plane has its own replication-factor authority, distinct from the partition and message-group policy the A2 lineage settled, and it is not yet established: enumerate every service-plane replica-count authority, decide for each whether its value is declared policy or an observed cardinality, and prove that no observed cardinality reaches a placement or recovery TARGET.

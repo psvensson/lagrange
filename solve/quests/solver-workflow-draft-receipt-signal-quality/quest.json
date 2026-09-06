@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-workflow-draft-receipt-signal-quality",
+  "statement": "The Solver distinguishes undeclared Quest drafts from active open work in portfolio projections; a flat attempt that reuses the exact same non-empty evidence fingerprint is recorded as a receipt-only source revision that holds its rung and does not advance supervisor durable progress, while fresh flat evidence still climbs; and evidence ingestion records one structured evidence event without a mirrored synthetic finding, preserving terminal projection, blocker movement, and explicit findings.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-workflow-draft-receipt-signal-quality.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "backward-compatible-event-log",
+      "statement": "Do not rewrite historical logs or introduce a new store-level Quest status; new classifications must project safely over legacy events."
+    },
+    {
+      "id": "finite-ladder-preserved",
+      "statement": "Only flat attempts with equal non-empty before/after evidence fingerprints may hold as receipt-only; fresh flat evidence, missing identities, and honesty or convergence violations must preserve existing climb or gate behavior."
+    },
+    {
+      "id": "explicit-findings-preserved",
+      "statement": "Removing the generated ingestion summary must not remove explicit findings, structured evidence fields, theory results, blocker movement, or terminal reopening behavior."
+    }
+  ],
+  "sealedAt": "956a31abf8e74e58ac3d51c985660f51b9d59e4a",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "956a31abf8e74e58ac3d51c985660f51b9d59e4a"
+    },
+    "frontiers": [
+      {
+        "id": "solver-workflow-draft-receipt-signal-quality-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solver-workflow-draft-receipt-signal-quality.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

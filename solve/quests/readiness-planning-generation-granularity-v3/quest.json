@@ -1,0 +1,168 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-planning-generation-granularity-v3",
+  "statement": "Every completed readiness-planning record is admitted only when its immutable planning identity matches the complete semantic dependency projection for its node and build-options variant. Semantic no-ops preserve reusable records; node-local changes invalidate only dependent records; changes to shared membership, topology, owner replacement, transport, cached feedback, or other cluster-wide inputs invalidate every dependent record; and time-only liveness and reservation transitions advance through their owning semantic projections without row writes. Deterministic receipts prove forced-current-build equivalence, finite feedback convergence, queue, retry, and shutdown bounds, production engagement, and no duplicated liveness or capacity clock semantics.",
+  "epic": "hysteresis-consolidation",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-planning-generation-granularity-v3.receipt.json",
+      "requiredReceipts": [
+        "DEP-complete-semantic-source-to-generation-map",
+        "Q2-heartbeat-semantic-noop-preserves-planning-currency",
+        "Q2-node-local-change-preserves-unrelated-variants",
+        "Q2-liveness-change-classifies-local-and-shared-membership-impact",
+        "Q2-cluster-global-change-rotates-global-generation",
+        "Q2-storage-reservation-write-and-time-expiry-are-current",
+        "Q2-token-only-inputs-are-current",
+        "Q2-cached-readiness-feedback-converges-once",
+        "Q2-deferred-cache-notification-fails-closed-until-classified",
+        "Q2-stored-snapshot-layer-cannot-launder-stale-content",
+        "Q2-build-transaction-cannot-launder-reentrant-source-change",
+        "Q2-planning-identity-releases-only-new-generation-retry-exhaustion",
+        "Q2-invalid-inputs-cannot-alias-valid-planning-currency",
+        "SOUNDNESS-all-variant-reuse-matches-forced-current-build",
+        "ENGAGEMENT-production-owner-and-real-cache-seams-consume-currency",
+        "BOUNDED-WORK-macrotask-builds-and-owner-shutdown-are-bounded",
+        "memo-currency-saturated-identity-falls-back-to-floored-key"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "liveness-owner-is-consumed-not-recreated",
+      "statement": "Planning consumes NodeLivenessSemanticProjectionOwner identities and events and must not calculate heartbeat freshness, lease validity, repair age, transport grace, or any liveness threshold."
+    },
+    {
+      "id": "time-semantics-stay-with-source-owners",
+      "statement": "The liveness owner retains the liveness timer; storage-capacity time semantics use the readiness TimeSource and are projected and scheduled by the storage-capacity owner with one unref'ed earliest-deadline timer. Planning owns no semantic-expiry timer."
+    },
+    {
+      "id": "shared-membership-dependency-is-explicit",
+      "statement": "A liveness or row change is node-local only when the canonical shared membership-planning projection is unchanged; changes to any all-node membership input rotate the global identity."
+    },
+    {
+      "id": "shared-membership-predicates-have-one-implementation",
+      "statement": "Planning classification imports or extracts the canonical active-node endpoint, active-service fallback, publication-winner, and membership projections; it may not restate their status, address, transport, or winner rules."
+    },
+    {
+      "id": "all-memo-layers-use-semantic-identity",
+      "statement": "Every readiness and membership-planning memo that can feed a completed record is invalidated or keyed by the same complete semantic identity; planning-owner/cold-bootstrap builds bypass CL-012 and planning admission cannot rebase from CL-012, so inner stale snapshots cannot be stamped current."
+    },
+    {
+      "id": "deferred-notification-is-fail-closed",
+      "statement": "Each cache event carries its immutable apply-time table revision; unclassified revisions block read admission, cold bootstrap, queued reconcile start, and publication, with blocked variants woken exactly once when the ordered barrier closes even on semantic no-op."
+    },
+    {
+      "id": "planning-identity-is-node-typed",
+      "statement": "The production seam is readPlanningProjectionIdentity(nodeId, observedAtMs), with canonical structural equality over global and that node's generations; no node-less scalar generation API or caller-local/default clock may erase per-node currency."
+    },
+    {
+      "id": "feedback-and-retry-converge",
+      "statement": "Cached-readiness and recovery feedback rotate at most once per changed semantic output, stamp the producer with the post-feedback identity, and release exhausted retries only when the planning identity changes."
+    },
+    {
+      "id": "build-transaction-rejects-unowned-source-drift",
+      "statement": "A build may publish under a post-build identity only when start-to-end movement is exactly its one owned feedback transition; any reentrant P, capacity, cache, transport, or owner change discards the result and requeues."
+    },
+    {
+      "id": "variants-and-queue-contract-preserved",
+      "statement": "Completed records remain keyed by nodeId and build-options variant; maxConcurrency 1, maxItemsPerDrain 1, retry budgets, the frozen planning_snapshot_refresh_pending contract, positive-decision live veto, and settling-gate consumption remain intact."
+    },
+    {
+      "id": "capacity-owner-rebind-and-shutdown-are-explicit",
+      "statement": "Storage owner replacement disposes the old planning subscription, configures and baselines the new owner before rotating currency, and production container shutdown disposes planning first then clears the capacity owner's timer and listeners."
+    },
+    {
+      "id": "capacity-deadline-scheduler-is-hardened",
+      "statement": "Capacity deadlines use one revision-fenced timer, rearm in finally, project every co-due node, contain observer failures with ordered reentrant delivery, safely unref, and rearm on live-operation changes even when capacity bytes are unchanged."
+    },
+    {
+      "id": "production-cache-operation-is-preserved",
+      "statement": "The production cache listener carries INSERT, UPDATE, DELETE, and the immutable apply-time table revision into semantic classification; no test-only recordTableChange signature may substitute for the real seam."
+    },
+    {
+      "id": "protected-pair-registry-stays-complete",
+      "statement": "Any new owner path is registered in readiness-versioned-planning-liveness and readiness-freshness-macrotask-bound with a paired freshness and one-build-per-macrotask witness."
+    },
+    {
+      "id": "hostile-inputs-fail-closed",
+      "statement": "Generation inputs use own data properties with pinned primitive types, canonical frozen dense collections, saturation-safe counters, hardened intrinsics, and fail closed for proxies, accessors, inherited values, or malformed records."
+    },
+    {
+      "id": "post-landing-measurement-is-separate",
+      "statement": "Quest closure proves deterministic mechanism and production engagement; Slice-1 liveness measurement and the GCP baseline run only after this Quest lands and publishes."
+    },
+    {
+      "id": "saturated-identity-is-not-memo-currency",
+      "statement": "A saturated planning identity blocks snapshot admission but is never served as memo currency: memo layers fall back to the floored table-version key while saturated, and planningIdentitiesEqual never equates saturated identities."
+    },
+    {
+      "id": "per-event-classification-is-linear",
+      "statement": "The shadow table classifier performs one direct projection build per cache event and answers priority-partition membership from a per-build index, never by rescanning partition rows per row."
+    }
+  ],
+  "sealedAt": "0ecb498630a03f9cd1cace17621e3686d8db86f8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 3,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/evidence/readiness-planning-generation-granularity-v3.dep-scope.md",
+      "closesCL": [],
+      "parentQuest": "readiness-planning-generation-granularity-v2",
+      "planDoc": "solve/epics/hysteresis-consolidation.md",
+      "draftedAtCommit": "0ecb498630a03f9cd1cace17621e3686d8db86f8"
+    },
+    "frontiers": [
+      {
+        "id": "readiness-planning-generation-granularity-v3-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/readiness-planning-generation-granularity-v3.receipt.json",
+            "requiredReceipts": [
+              "DEP-complete-semantic-source-to-generation-map",
+              "Q2-heartbeat-semantic-noop-preserves-planning-currency",
+              "Q2-node-local-change-preserves-unrelated-variants",
+              "Q2-liveness-change-classifies-local-and-shared-membership-impact",
+              "Q2-cluster-global-change-rotates-global-generation",
+              "Q2-storage-reservation-write-and-time-expiry-are-current",
+              "Q2-token-only-inputs-are-current",
+              "Q2-cached-readiness-feedback-converges-once",
+              "Q2-deferred-cache-notification-fails-closed-until-classified",
+              "Q2-stored-snapshot-layer-cannot-launder-stale-content",
+              "Q2-build-transaction-cannot-launder-reentrant-source-change",
+              "Q2-planning-identity-releases-only-new-generation-retry-exhaustion",
+              "Q2-invalid-inputs-cannot-alias-valid-planning-currency",
+              "SOUNDNESS-all-variant-reuse-matches-forced-current-build",
+              "ENGAGEMENT-production-owner-and-real-cache-seams-consume-currency",
+              "BOUNDED-WORK-macrotask-builds-and-owner-shutdown-are-bounded",
+              "memo-currency-saturated-identity-falls-back-to-floored-key"
+            ]
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "adversarial-js-intrinsics",
+      "concurrency-serialization",
+      "formation-circularity",
+      "harness-fidelity",
+      "owner-interaction",
+      "retry-loops",
+      "sweep-timer",
+      "recovery-replay",
+      "transport-delivery"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

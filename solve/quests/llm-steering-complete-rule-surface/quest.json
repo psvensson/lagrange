@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "llm-steering-complete-rule-surface",
+  "statement": "Every binding steering rule is present in its selectively loaded complete domain pack or assigned an explicit non-pack source role.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "llm-steering-complete-rule-surface",
+      "consecutive": 3,
+      "metric": "priority",
+      "reportDir": "test-output/reports/llm-steering-usability"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "026790e072707c7d16c704dd6affd468f31de98f",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/llm-steering-usability-hardening/requirements.md#owner-contracts",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/specs/llm-steering-usability-hardening/requirements.md",
+      "sealedAtCommit": "61db0086afaa1e9f4e4aafea000efd3a934f5d08"
+    },
+    "frontiers": [
+      {
+        "id": "llm-steering-complete-rule-surface-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "llm-steering-complete-rule-surface",
+            "metric": "priority",
+            "reportDir": "test-output/reports/llm-steering-usability"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

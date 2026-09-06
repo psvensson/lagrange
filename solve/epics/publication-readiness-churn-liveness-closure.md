@@ -1,8 +1,23 @@
 ---
 id: publication-readiness-churn-liveness-closure
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.2-five-node-convergence
-status: proposed
 graduatesTo: null
+quests:
+  - five-node-gcp-formation-certification-90s
+  - formation-grace-parallel-start-hardening
+  - formation-ledger-spread-voter-ready-readiness-closure
+  - lone-seed-formation-admission-livelock-closure
+  - projection-readiness-deep-own-data-closure
+  - projection-readiness-producer-copy-closure
+  - readiness-evaluation-generation-floor-closure-v2
+  - readiness-formation-liveness-circularity-closure
+  - readiness-planning-read-amplification-closure
+  - schema-provisioning-collision-retry-closure
+authorizes: []
+legacyStatus: proposed
 ---
 
 # Plan: close readiness churn starvation as a coupled contract
@@ -359,3 +374,7 @@ Any negative or unproven answer blocks the live GCP gate.
 - no logging-per-call instrumentation; and
 - no claim that the separate publication UPSERT warning is causal without new
   evidence.
+
+## Drafts carried by the solve-v2 migration
+
+- publication-readiness-churn-liveness-closure (RM-0.2-five-node-convergence): Production-shaped readiness churn converges through one versioned planning owner under the sealed contract. Complete-token validation prevents stale-positive decisions. Readiness-internal reads remain recursion-free. Global heavy builds stay at one per macrotask. Three consecutive source-bound natural five-node GCP MovieLens runs reach ACTIVE 5/5 within 60 seconds. Publication coverage is 5/5. Every named frame and seed gap is at most 3000ms.

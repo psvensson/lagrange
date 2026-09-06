@@ -1,8 +1,15 @@
 ---
 id: operation-dispatch-completion-continuity
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: resolved
 graduatesTo: membership-lifecycle-placement-hard-cutover
+quests:
+  - operation-dispatch-completion-owner-cutover
+  - operation-dispatch-completion-owner-tooling
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Epic: Operation dispatch completion continuity

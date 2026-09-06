@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-migration-node-create",
+  "statement": "Bounded Option-5 rung-5 node-create migration with owner-boundary extraction: extract the priority create-status and local-seed methods from oversized replica-handler-create-methods.js into semantically named replica-handler-create-status-methods.js behind the existing ReplicaHandler composition seam, and migrate the two censused node-create decisions to classifySystemPartition(...).priorityControlPlane. Behavior remains truth-table identical, both resulting source files stay at or below 800 lines, and existing public composition remains stable. doneWhen: solve/oracle/partition-class-ladder-migration-node-create.json reports metric at most 99, ownerCheck passed, and all gates green. NOT in scope: other node decisions, other owner areas, partition parsing, predicate removal, numeric budgets, timing, retry, admission, formation, or behavior changes.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-node-create.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "121ce035e076aa530d8cf800fac13a21e41a9232",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-single-owner-table",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "121ce035e076aa530d8cf800fac13a21e41a9232"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-migration-node-create-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-migration-node-create.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

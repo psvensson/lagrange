@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-node-runtime-readiness-evidence-tooling",
+  "statement": "Mechanical Option-5 rung-5 node runtime/readiness evidence checkpoint: persist the committed analyzer views after migration 308b4363 using an explicit two-oracle workflow patch. The parent oracle records metric 101, target 0, done false; the bounded node oracle records metric 101, target 101, done true; both record ownerCheck passed and all gates green. No source, test, specification, analyzer, package, migration, target, or behavior changes.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-node-runtime-readiness.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "308b4363da6207173d4a23ef7d31047cdb59104c",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-migration-node-runtime-readiness",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "308b4363da6207173d4a23ef7d31047cdb59104c"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-node-runtime-readiness-evidence-tooling-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-migration-node-runtime-readiness.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

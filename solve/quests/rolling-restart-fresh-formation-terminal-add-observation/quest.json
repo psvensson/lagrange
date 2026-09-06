@@ -1,0 +1,88 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-fresh-formation-terminal-add-observation",
+  "statement": "After the existing owner has durably completed a priority ADD, entity-scoped priority-recovery observation cannot downgrade that operation to an older CREATING row; it preserves terminal authority or explicitly defers, allowing the existing surplus REMOVE and fresh-formation ready-lease paths to converge.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart-fresh-formation-terminal-add-observation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-real-owner-first",
+      "statement": "Before changing production code, reproduce the exact terminal-ADD downgrade through the real ReplicaOperationRepository and control-plane gateway authority contract: confirm the terminal transition, make the later owner-RPC path unavailable while an older SQL CREATING row is visible, and show the entity observation re-admits CREATING on current HEAD. The fixed discriminator must preserve terminal state or return a typed deferred observation, and it must be proven red on revert."
+    },
+    {
+      "id": "existing-mechanism-reuse",
+      "statement": "Reuse the existing owner-RPC authority modes, owner-persisted transition witness, terminal-transition repair, complete_priority_recovery_drain action, priority planner, and surplus-remove safety path. Do not add an operation owner, cache, watermark store, timer, retry loop, readiness path, or formation path."
+    },
+    {
+      "id": "terminal-observation-monotonicity",
+      "statement": "Once the owning persistence path has confirmed a terminal operation version, a later entity-scoped observation used for recovery planning must not expose an older nonterminal version as authoritative. Owner unavailability, empty reads, conflicting identity, or uncertain authority must defer fail-closed rather than infer terminality, absence, or safe removal."
+    },
+    {
+      "id": "surplus-drain-preservation",
+      "statement": "Preserve the current priority ADD completion semantics and existing surplus REMOVE safety checks. The correction must only prevent a stale nonterminal re-entry; it must not force completion, synthesize a REMOVE, bypass voter-ready membership safety, or treat physical replica ACTIVE as durable workflow completion."
+    },
+    {
+      "id": "adjacent-lifecycle-preservation",
+      "statement": "Fresh formation must remain fail-closed on genuinely nonterminal operations and unsafe placement, while the landed durable-rejoin cold-formation exemption remains unchanged. Unknown authority must not release the ready lease, and shutdown/cache-only diagnostics must not reopen remote reads."
+    },
+    {
+      "id": "no-symptom-workarounds",
+      "statement": "Do not widen the 120-second formation or restart budgets, lower workload, weaken canonical membership or ready-lease checks, alter statistical bars, or add planner wakeups to mask the repeated CREATING observation."
+    },
+    {
+      "id": "formal-model-scope",
+      "statement": "Run the existing architecture contract model gate, then extend or add the smallest TLA+ model only if the deterministic discriminator proves a temporal authority/observation transition gap not represented by an adjacent model. Alloy is not required unless the correction changes ownership or membership cardinality rather than temporal read authority."
+    },
+    {
+      "id": "bounded-live-validation",
+      "statement": "After deterministic, adjacent, model, and independent verification closure on one exact clean commit, run at most one unchanged N=1 rolling-restart diagnostic. Do not spend another N=15 certification window in this child Quest; return any later blocker with exact mechanism evidence to the parent."
+    }
+  ],
+  "sealedAt": "463c59169e519d7c001029b6c8d9d5ed2177e4af",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "verificationTemplates": [
+      "admission-gating",
+      "formation-circularity",
+      "recovery-replay",
+      "retry-loops",
+      "harness-fidelity"
+    ],
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-representative-certification",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "463c59169e519d7c001029b6c8d9d5ed2177e4af"
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-fresh-formation-terminal-add-observation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "rolling-restart-fresh-formation-terminal-add-observation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

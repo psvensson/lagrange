@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "transaction-owned-commit-mode-cutover",
+  "statement": "Callers no longer request a single-participant bypass: independent internal writes may use autocommit, active explicit transactions always enlist, and the coordinator freezes the final participant set before selecting one- or two-phase commit.",
+  "epic": "owner-boundary-hardening-and-unification",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "transaction-owned-commit-mode-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "bd53bcc0f2f7f0775295582b044ffb76e07130fd",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W10",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+      "sealedAtCommit": "5f10f3c95c4a6d81f9e9ba06c6fad60a279292e2"
+    },
+    "frontiers": [
+      {
+        "id": "transaction-owned-commit-mode-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "transaction-owned-commit-mode-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

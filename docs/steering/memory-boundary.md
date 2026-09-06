@@ -54,7 +54,7 @@ same "truth" drifts into three conflicting copies.
   `description:` as a derived caption, not an independent claim (do NOT regenerate the hook
   from `description:` — the descriptions are what rot). For the in-repo Solver ledger the
   structured half of this is machine-checked by `npm run solve:consistency`
-  ([`scripts/solve/ledger-consistency.js`](../../scripts/solve/ledger-consistency.js)):
+  (the v1 ledger-consistency script, retired in solve-v2 phase 2):
   version 2 epic no-status/size contract, legacy epic vocabulary, and
   quest↔oracle↔state consistency. External
   auto-memory has no gate, so for it this rule is the only guard.

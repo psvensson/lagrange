@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-authoritative-observation-watermark",
+  "statement": "A successful authoritative system-table repair records per-table observation evidence even when the authoritative result is unchanged or empty; snapshot freshness consumes the newest mutation-or-authoritative-observation watermark without conflating observation with mutation, so an unchanged service_endpoints table cannot remain permanently cache_stale_watermark after a successful repair, and the unchanged production five-node MovieLens Wave-4 milestone completes successfully.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before changing runtime source, reproduce the live composition with the real authoritative-repair gateway, system-table cache, and preflight freshness consumer: service_endpoints has an old or absent mutation watermark, a successful authoritative read returns an unchanged or confirmed-empty row set, and the repaired snapshot must become fresh without fabricating a CDC mutation. Prove red-on-revert."
+    },
+    {
+      "id": "data-owned-observation-evidence",
+      "statement": "Represent per-table authoritative observation time and cause as explicit cache data distinct from last mutation time. The authoritative-reconcile owner records it only after a successful complete read/reconcile, and freshness consumers select from that evidence rather than independently inferring freshness from repair promises, row counts, or elapsed mutation age."
+    },
+    {
+      "id": "focused-cross-layer-model",
+      "statement": "Add a focused TLA+ model of mutation watermark age, authoritative unchanged/empty observation, observation-watermark publication, freshness classification, repair retry, and schema admission. A mutation-only freshness mutant must violate eventual admission after successful authoritative observation while the fixed data-owned model passes; do not claim exhaustive repository layer coverage."
+    },
+    {
+      "id": "cache-safety-preserved",
+      "statement": "Do not relabel an authoritative observation as a CDC mutation, advance schema/version watermarks without source evidence, accept failed or partial reads as fresh, weaken tombstone/causal ordering, or allow an unconfirmed empty read to authorize deletion or freshness. Preserve existing cache mutation timestamps and cause IDs."
+    },
+    {
+      "id": "changed-live-witness",
+      "statement": "Use report movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json and immutable archive wave4-live-operation-ledger-terminal-hold-2026-07-16T12-23-19-124Z.tar.gz as the pre-fix witness: totalSpreadGap was 0 and authoritative readiness repairs succeeded, but schema admission remained observation_unavailable/stale_usable with cache_stale_watermark until the unchanged 180000ms budget expired."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, workload, joins, preload size, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, or live scenario semantics."
+    }
+  ],
+  "sealedAt": "78a2ff039a6d626b0decf8fbc2d4482aefb3639b",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-incremental-replace-spread-nonregression",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "78a2ff039a6d626b0decf8fbc2d4482aefb3639b"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-authoritative-observation-watermark-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

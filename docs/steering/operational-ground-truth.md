@@ -160,7 +160,7 @@ any distributed-harness or convergence work:
      failure's signature matches a recorded class — `budget_exceeded` starvation,
      join-exits-instead-of-degrading, a gate rejecting on a stale view while fresher
      evidence exists, formation-vs-steady-state circularity — grep
-     [`solve/theory-ledger.md`](../../solve/theory-ledger.md) and the
+     the theory findings in `solve/quests/<id>/log.ndjson` (the v1 ledger was folded into `solve/quests/theory-ledger/`) and the
      [`closure-ledger.md`](../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md)
      index FIRST. The recorded theory/closure usually names the owner, the intended
      mechanism, and the refuted fixes; a bespoke patch written without that lookup
@@ -183,7 +183,7 @@ any distributed-harness or convergence work:
   solved. Before committing effort to the next bespoke variant, STOP and triangulate prior
   art across THREE sources, in this order, capturing each in the change dir as a cited
   report:
-  1. **This codebase's own history** — grep `git log`, [`solve/theory-ledger.md`](../../solve/theory-ledger.md),
+  1. **This codebase's own history** — grep `git log`, the theory findings in `solve/quests/*/log.ndjson`,
      the per-file closure ledger, and external memory for a prior fix to the same *class*
      (not just the same symptom). Parallel machinery gets built here by accident; a shipped
      TLA+-modeled fix for the identical oscillation shape may already exist.
@@ -200,7 +200,7 @@ any distributed-harness or convergence work:
   bespoke path (a) reinvents a wheel the repo lacks raw materials for, while a cheaper,
   better-precedented cut already exists. Fold the result into the coupled-invariant
   step-back reflection above; the exemplar is
-  [`solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md`](../../solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md).
+  the research synthesis note of quest formation-ledger-self-move-blocks-cluster-ops (archived in the solve-v1 evidence bundle, see `solve/epics/solve-v2/solve-v1-archive.manifest.json`).
 - **Independently verify after implementing.** After a change, have a separate
   subagent independently verify it before relying on or reporting it. Arm the
   verifier with the attack checklist matching the change category from

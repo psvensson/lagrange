@@ -1,0 +1,81 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-test-proof-cone-shadow-validation",
+  "statement": "For any source-changing Quest aggregate diff, one canonical test-impact owner deterministically derives a fail-closed proof cone from changed paths, source dependency closure, declared owner/contract relationships, and available observed test coverage; the selected cone always includes the repository safety pregate and changed tests, explains every selected test and every escalation, and falls back to the full applicable test universe when impact evidence is incomplete or the proof machinery itself changes. Shadow validation compares that cone with the existing full Quest audit without changing landing eligibility, records selector misses as first-class evidence, and proves against historical regressions that every known regression detector is selected. Three consecutive deterministic scenario runs pass, with red-on-revert proof for missing dependency, contract, unknown-path, and self-change escalation cases.",
+  "epic": "developer-velocity-maintainability-and-product-readiness",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "quest-test-proof-cone-shadow-validation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-gate-weakening",
+      "statement": "This Quest is a building block only. It must not remove, bypass, sample, or weaken the existing full Quest audit or terminal landing requirement. Proof-cone results are shadow evidence until a separate cutover Quest is approved."
+    },
+    {
+      "id": "single-impact-owner",
+      "statement": "Exactly one owner derives test impact. Package scripts, Solver commands, CI wrappers, agents, and test runners consume its structured decision and must not independently re-derive affected tests."
+    },
+    {
+      "id": "fail-closed-unknown-impact",
+      "statement": "Any changed source path, generated contract, schema, protocol, test infrastructure file, dependency edge, or owner relationship that cannot be classified with sufficient evidence escalates to a broader declared lane or the full test universe; unknown impact may never select an empty or narrower proof cone."
+    },
+    {
+      "id": "proof-system-self-change-full",
+      "statement": "Any change to the test-impact selector, primary test classification, dependency analysis, observed-coverage collector, test runner, shard generator, acceptance runner, Solver landing/audit gate, or their authoritative manifests must select the full test universe."
+    },
+    {
+      "id": "selection-not-agent-authored",
+      "statement": "Agents and Quest authors may not supply or narrow the selected test list. They may declare semantic owner/contract metadata only through the canonical classification owner; the proof cone is derived from repository state and the exact aggregate diff."
+    },
+    {
+      "id": "selection-explainable",
+      "statement": "Every selected test must carry at least one machine-readable selection reason and provenance edge, and every escalation must name the rule that caused it. The landing/shadow receipt records selector version, source fingerprint, changed paths, selected tests, reasons, escalations, and full-suite comparison outcome."
+    },
+    {
+      "id": "historical-regression-conformance",
+      "statement": "The selector must be evaluated against a committed corpus of historical Lagrange regressions or red-on-revert proofs. For every corpus case, the selector given the historical changed paths must include at least one known regression-detecting test or explicitly escalate to a test universe containing it."
+    },
+    {
+      "id": "selector-miss-is-red",
+      "statement": "A shadow full-suite failure attributable to the candidate is a selector miss when no selected proof-cone test detects that regression. Such a miss makes the scenario red and produces structured evidence identifying the missing impact edge; it must never be recorded merely as an unrelated full-suite failure."
+    }
+  ],
+  "sealedAt": "225c69ff506ea0a6ae40d63c4e722b907c949ef3",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+      "draftedAtCommit": "225c69ff506ea0a6ae40d63c4e722b907c949ef3"
+    },
+    "frontiers": [
+      {
+        "id": "quest-test-proof-cone-shadow-validation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "quest-test-proof-cone-shadow-validation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

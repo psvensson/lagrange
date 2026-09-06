@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "project-hardening-workflow-proof-integrity",
+  "statement": "Canonical test and Solver workflows fail closed on absent evidence, retain explicit source-verification provenance, and publish generated command documentation that matches the hardened executable gates.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/project-hardening-workflow-proof-integrity.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "80196838a2d4436f28ff73ef6d26ec3d26bbd5bc",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "project-hardening-proof-integrity-cutover",
+      "planDoc": null,
+      "sealedAtCommit": "4e7ad63488e3e40d00bb95a32e8cea0f66f86388"
+    },
+    "frontiers": [
+      {
+        "id": "project-hardening-workflow-proof-integrity-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/project-hardening-workflow-proof-integrity.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

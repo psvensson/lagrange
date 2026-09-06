@@ -1,8 +1,19 @@
 ---
 id: formation-complexity-consolidation
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: discussing
 graduatesTo: null
+quests:
+  - control-snapshot-ready-lease-age-witness
+  - formation-liveness-dependency-serial-planner
+  - movielens-ready-lease-cdc-provenance
+  - movielens-ready-lease-chronology-discriminator
+  - movielens-ready-lease-witness-report-replay
+  - partition-live-leader-address-routing
+authorizes: []
+legacyStatus: discussing
 ---
 
 # Epic: Formation complexity consolidation (verified 2026-07-18 deep review)

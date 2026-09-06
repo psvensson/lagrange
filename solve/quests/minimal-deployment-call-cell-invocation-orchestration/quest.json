@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-call-cell-invocation-orchestration",
+  "statement": "An authenticated CALL BINDING resolves the durable call Binding through the CallBindingRouteResolver — failing closed not-invocable when the Binding carries no declared statement — and the CallCellInvoker orchestrates the landed runtime foundation (minimal-deployment-call-cell-invocation attempts 1-2): it drives the engine-side declared-statement fan-out into typed per-partition batches, invokes the ready Cell's run export per shard through the statement adapter over the sole ServiceDispatcher -> MessageRouter -> runtime invocation owner path (receiver handling INVOKE_CALL_CELL), publishes emitted partials under the reduce lease, invokes reduce over a complete fresh disjoint partial set on a leased replica, and publishes exactly one atomically visible final snapshot; live-integration evidence over a real engine + authenticated pgwire CALL BINDING + the componentized call-cell guest proves the exact reduced result and exactly-once semantics, and the minimal-deployment-call-cell-invocation scenario is 8/8 green.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-call-cell-invocation",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "6e361c1a6d74a4dafde51c2ffbc3a116d7b38962",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": "minimal-deployment-call-cell-invocation",
+      "planDoc": null,
+      "draftedAtCommit": "6e361c1a6d74a4dafde51c2ffbc3a116d7b38962"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-call-cell-invocation-orchestration-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-call-cell-invocation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

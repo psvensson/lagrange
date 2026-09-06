@@ -26,7 +26,9 @@ const TARGET_THRESHOLD = 20;
 // 2026-07-19: tightened 183 -> 179 (measured; owner-complexity rebalancer
 // planning refactors landed without taking the ratchet down).
 // 2026-09-04: tightened 179 -> 177 after liveness predicate extraction.
-const BASELINE_COUNT = 177;
+// 2026-09-06: tightened 177 -> 162 after the solve-v2 phase-2 cutover deleted
+// the v1 solver (measured with the checker's tightening hint).
+const BASELINE_COUNT = 162;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

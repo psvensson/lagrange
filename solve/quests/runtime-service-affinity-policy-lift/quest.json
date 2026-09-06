@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-service-affinity-policy-lift",
+  "statement": "getRuntimeServicePolicy assembles the affinity placement policy from live evidence, coherently with the service's routing policy: when service_definitions.read_locality is same_group, it aggregates the CDC-propagated service_partition_access rows for the service across nodes (staleness-bounded), joins each accessed partition's active replica locations to latency groups, normalizes to per-group weights (best group = 1), and returns policy.dataAffinity.groupWeights plus placementConstraints.preferDataAffinity=true so the shipped DATA_AFFINITY kernel dimension engages in production; when read_locality is any, or no fresh attribution exists, the returned policy is unchanged from today. Proven by deterministic red-on-revert tests (dt:prove) including an end-to-end case walking record -> publish -> aggregate -> policy -> DATA_AFFINITY score dimensions in the real placement kernel.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "runtime-service-affinity-policy-lift",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "4c0101b91d953cd6c9702904c66b2947c8b04a2f",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "service-partition-access-attribution",
+      "planDoc": "solve/epics/service-data-affinity-placement.md"
+    },
+    "frontiers": [
+      {
+        "id": "runtime-service-affinity-policy-lift-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "runtime-service-affinity-policy-lift",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

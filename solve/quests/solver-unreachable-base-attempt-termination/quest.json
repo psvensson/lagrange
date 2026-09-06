@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-unreachable-base-attempt-termination",
+  "statement": "An attempt whose recorded workspaceBaseCommit does not resolve to a reachable commit is classified by a single typed base-unreachable code at every consumer that reads that field; it is excluded from live replacement, checkpoint, and landing-candidate obligations instead of being pinned by a fail-closed ancestry probe; it never satisfies, substitutes for, or is reported as verification; it does not block recording a fresh attempt at a live base on the same frontier; and where the approved artifact bytes are reproducible from some reachable commit the classification records that reproducibility with its candidate count and never names a substitute base.",
+  "epic": "dead-base-attempt-disposition",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-unreachable-base-attempt-termination",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "895df032b3a046b8109a1528bf593ba27d3f7155",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/dead-base-attempt-disposition.md",
+      "draftedAtCommit": "895df032b3a046b8109a1528bf593ba27d3f7155"
+    },
+    "frontiers": [
+      {
+        "id": "solver-unreachable-base-attempt-termination-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "solver-unreachable-base-attempt-termination",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

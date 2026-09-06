@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-terminal-integrity-cutover",
+  "statement": "Solver terminal events are emitted only from accepted measured evidence; honest non-measurements use a dedicated bounded event and cannot progress or solve; unresolved version-2 integrity violations and unverifiable legacy accepted-after-violation histories fail audit; terminal report and next projections omit active blocker and continuation sections.",
+  "epic": "owner-boundary-hardening-and-unification",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-terminal-integrity-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "390e855e44a21624adee7c5934ed9d46fa1f55c1",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W1",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+      "sealedAtCommit": "fe2c28f35908eb17b94b45a8403c87bdd362a873"
+    },
+    "frontiers": [
+      {
+        "id": "solver-terminal-integrity-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "solver-terminal-integrity-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

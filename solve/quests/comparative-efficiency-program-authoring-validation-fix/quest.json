@@ -1,0 +1,62 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-efficiency-program-authoring-validation-fix",
+  "statement": "The full comparative-efficiency planning candidate preserves both rejected artifacts and append-only verdicts, records the exact passing validation scope that excludes immutable patch archives, retains every corrected ownership and dependency contract, and passes independent SHA-256-bound verification.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/comparative-efficiency-program-authoring-validation-fix.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "append-only-rejection-provenance",
+      "statement": "Preserve both rejected diff artifacts and their hash-bound verifier findings byte-for-byte; correct the validation statement through new append-only evidence."
+    },
+    {
+      "id": "full-replacement-union",
+      "statement": "The landing candidate must contain the complete planning program, both predecessor Quest histories and artifacts, and this validation correction."
+    },
+    {
+      "id": "accurate-validation-scope",
+      "statement": "Validation must name and execute the exact scoped whitespace check that excludes immutable diff archives while checking all live planning bytes."
+    },
+    {
+      "id": "independent-exact-diff-approval",
+      "statement": "The same independent verifier must approve the SHA-256-bound full replacement diff before handoff."
+    }
+  ],
+  "sealedAt": "d92c14b1d31a63c366f181a3402454a021c60ba9",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "d92c14b1d31a63c366f181a3402454a021c60ba9"
+    },
+    "frontiers": [
+      {
+        "id": "comparative-efficiency-program-authoring-validation-fix-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/comparative-efficiency-program-authoring-validation-fix.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,179 +1,27 @@
 {
   "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:llm:pack`) to emit docs/steering/llm/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
   "start": {
-    "summary": "Read-only operator entry point: run doctor, optionally create a linked Quest draft, lint it, and return the stable structured next action. It never seals or begins work.",
-    "usage": "node scripts/solve.js start --id <id> [--statement \"<sealed result>\" --class product|process --spec-ref <ref>] [--json]"
+    "summary": "Seal a quest: validate solve/quests/<id>/quest.json and its epic, measure the doneWhen probe, refuse unless the probe is red, then record sealedAt (HEAD) and the seal-time metric in the log.",
+    "usage": "node scripts/solve.js start --id <quest> [--json]"
   },
-  "continue": {
-    "summary": "Execute only trusted structured begin/commit action codes from the current next projection. A commit summary automatically captures the canonical working-tree delta against the active source epoch; explicit --changeRef remains an exceptional compatibility path. Rendered command text and judgment/gate actions are never executed.",
-    "usage": "node scripts/solve.js continue --id <id> [--summary \"<what changed>\"] [--changeRef diff:<path>] [--json]"
-  },
-  "land": {
-    "summary": "For source work, freeze one immutable review envelope containing the exact candidate/aggregate, source epoch, staged landing evidence, additive template checklist, generated-dependency receipts, and deterministic proof plan. A later structured verdict is drift-checked and ingested; approval passes through the audit-gated scope-safe commit, rejection never commits, and no path pushes.",
-    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verdict-file <workspace-receipt.json>] [--verifier <id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> --finding \"<category>: <defect>\" ... --observation \"<category>: <remark>\" ...] [--json]"
-  },
-  "decompose-rejection": {
-    "summary": "Discharge a slice of a standing candidate rejection with fresh independently approved coverage: the current quest's exactly approved candidate, or a successor quest's candidate receipt that still matches current bytes at an acceptable base. Records an append-only rejection-decomposition event; the standing obligation shrinks to the uncovered remainder, so split scope stays dischargeable.",
-    "usage": "node scripts/solve.js decompose-rejection --id <id> [--from-quest <successorId>]"
-  },
-  "new": {
-    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
-    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"
-  },
-  "run": {
-    "summary": "Run the Quest loop toward SOLVED/EXHAUSTED. Bare `run --id <id>` uses the default `dry` executor (a no-op skeleton — it prints a banner saying so); real autonomous work needs `--executor agent --yes`. Add `--keep-alive` to replay only progress-bearing MAX_CYCLES boundaries; judgment and repair stops return once with a typed action.",
-    "usage": "node scripts/solve.js run --id <id> --executor agent --yes --keep-alive [--max 20]"
-  },
-  "status": {
-    "summary": "Show the current Quest state: active frontier, rung, and recent movement.",
-    "usage": "node scripts/solve.js status --id <id>"
-  },
-  "report": {
-    "summary": "Write an ignored on-demand Quest report projected from the declaration and event log. Report presence and freshness never gate audit or handoff.",
-    "usage": "node scripts/solve.js report --id <id>"
-  },
-  "meta-ratio": {
-    "summary": "Commit-level meta-to-product ratio over a bounded git window: product (src/, examples/, charts/) vs test-only vs meta (solve/, docs/, scripts/, config only). The retrospective's overhead trend line; complements portfolio's quest-class ratio.",
-    "usage": "node scripts/solve.js meta-ratio [--days <n>]"
-  },
-  "meta-friction": {
-    "summary": "Ranks recorded workflow friction over a bounded window: violation classes (grouped by the set that fires together), charged guard-override codes, and parks with their reasons. Starts a retrospective from what actually fired rather than from recollection; complements meta-ratio's overhead trend line.",
-    "usage": "node scripts/solve.js meta-friction [--days <n>]"
-  },
-  "cost": {
-    "summary": "Per-quest attempt-cost rollup over a bounded window: attempts, verifier rejection rounds, violations, telemetry coverage and measured duration, wall span, and respin-chain membership (parentQuest link, else a flagged naming heuristic). The table a retrospective reads instead of hand-mining event logs; complements meta-friction's what-fired ranking.",
-    "usage": "node scripts/solve.js cost [--days <n>]"
-  },
-  "portfolio": {
-    "summary": "Cross-Quest portfolio view and meta-ratio over all quests.",
-    "usage": "node scripts/solve.js portfolio"
-  },
-  "frontier": {
-    "summary": "Render the frontier board; `--write` persists it to solve/FRONTIER.generated.md (the durable boot board).",
-    "usage": "node scripts/solve.js frontier [--write]"
-  },
-  "overview": {
-    "summary": "Live roadmap -> epic -> spec -> quest -> ledger overview; `--write` persists the ignored local projection.",
-    "usage": "node scripts/solve.js overview [--write]"
-  },
-  "trace": {
-    "summary": "Cross-layer planning trace joining quests via their `links` block. Pass exactly one selector.",
-    "usage": "node scripts/solve.js trace --row <id> | --cl <CL-#> | --spec <ref> | --quest <id>"
-  },
-  "handoff": {
-    "summary": "Compute the scope-safe git pathspec for committing exactly one terminal Quest; dry-run by default, `--commit` executes only after the full audit and aggregate source approval pass. Generated reports are never handoff scope.",
-    "usage": "node scripts/solve.js handoff --id <id> [--commit]"
-  },
-  "checkpoint": {
-    "summary": "At an explicit durability boundary, commit the one exact scope-clean landing candidate after approval. Version 2 requires a named boundary reason; routine attempts do not checkpoint. Never pushes.",
-    "usage": "node scripts/solve.js checkpoint --id <id> --reason <handoff|risky-tree|long-running|milestone> [--dry-run]"
-  },
-  "invariants": {
-    "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Always active (unconditional).",
-    "usage": "node scripts/solve.js invariants [--evaluate] [--json] [--changed a,b | --since <ref>] [--score] [--export [--out <path>]]"
+  "note": {
+    "summary": "Append one log entry: a finding (kinds theory, altitude-check, decision, ruled-out, evidence), an attempt (records HEAD and the changed paths), a verification (verifier subagent:<id>, verdict approve|reject), or a terminal entry other than solved (blocked with a next owner, exhausted, superseded).",
+    "usage": "node scripts/solve.js note --id <quest> (--finding \"<text>\" [--kind <kind>] [--status <status>] [--evidence <ref>] | --attempt \"<what changed>\" | --verification \"<summary>\" --verifier subagent:<id> --verdict approve|reject | --blocked \"<why>\" --next-owner judgment|verification|authorization | --exhausted \"<why>\" | --superseded \"<why>\" [--by <quest>]) [--json]"
   },
   "probe": {
-    "summary": "Run a registered probe directly over real artifacts and print its JSON result; the Solver trusts probes, not self-report. Takes no --id and does no quest resolution — every argument other than --probe is passed through to the probe itself.",
-    "usage": "node scripts/solve.js probe --probe <scenario-harness|oracle|invariantHeld> [probe-specific args...]"
+    "summary": "Measure a quest's doneWhen (or an epic's with --epic): metric, target, done, whether it measured, the delta from the seal-time value, and the last three log entries.",
+    "usage": "node scripts/solve.js probe --id <quest> | --epic <epic> [--json]"
   },
-  "finding": {
-    "summary": "Record durable knowledge in the append-only Quest log. Exact verifier approvals and rejections bind subagent evidence to a content fingerprint; recording either verdict never commits.",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>] [--finding \"<category>: <defect>\" ... --observation \"<category>: <remark>\" ...]"
-  },
-  "promote-finding": {
-    "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",
-    "usage": "node scripts/solve.js promote-finding --id <id> --frontier <f> --domain <architecture|testing|governance|style>"
-  },
-  "override": {
-    "summary": "Recorded-reason escape hatch: authorize one bypass of an overridable guard (only the heuristic theory/scope guards; never honesty/integrity invariants). Requires a falsifiable --reason.",
-    "usage": "node scripts/solve.js override --id <id> --frontier <f> --guard <theory|scope> --reason \"<justification>\""
-  },
-  "reflect": {
-    "summary": "Record a reflection think-cycle (no attempt, no metric claim): micro by default, or `--altitude` to question the frame. `--note` is required.",
-    "usage": "node scripts/solve.js reflect --id <id> --note \"<text>\" [--frontier <fid>] [--altitude]"
-  },
-  "step": {
-    "summary": "Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit` (or `--abort` to discard the pending attempt). At commit time, `--auto-diff` snapshots `git diff` against the pin recorded at step begin into solve/changes/<id>/attempt-<n>.diff and uses it as the changeRef (errors if nothing changed; solver-generated bookkeeping — solve/FRONTIER.generated.md, solve/state, solve/log, solve/report — is excluded from the snapshot; an explicit --changeRef takes precedence and prints a warning that --auto-diff was ignored).",
-    "usage": "node scripts/solve.js step --id <id> [--commit (--changeRef diff:<path> | --auto-diff) --summary \"<what changed>\" | --abort]"
-  },
-  "step-pending": {
-    "summary": "Print the pending supervised step (the pinned baseline attempt awaiting a commit) as JSON.",
-    "usage": "node scripts/solve.js step-pending --id <id>"
-  },
-  "next": {
-    "summary": "Typed \"what do I do next?\" projection. The default is a concise primary problem code plus exact next command; --verbose includes pending-step, blocker, advisory, and checkpoint-readiness dossier details, while --json returns the stable machine-readable projection.",
-    "usage": "node scripts/solve.js next --id <id> [--verbose|--json]"
-  },
-  "doctor": {
-    "summary": "Read-only operator preflight. Reports Git/worktree state, absent/malformed/disabled/enabled local agent configuration, live adapter executability, the no-op example adapter, attribution validity, and the recommended autonomous or supervised mode. Use --json for the stable machine-readable report.",
-    "usage": "node scripts/solve.js doctor [--json]"
-  },
-  "lint": {
-    "summary": "Read-only Quest authoring validation. --id checks one Quest; --all reports the versioned/legacy census without rewriting historical Quest files or logs.",
-    "usage": "node scripts/solve.js lint (--id <id> | --all) [--json]"
-  },
-  "theory": {
-    "summary": "Two-layer (system + frontier) theory management used to break a stall: system, option, select, record, supersede, list, card, import-ledger.",
-    "usage": "node scripts/solve.js theory <system|option|select|record|supersede|list|card|import-ledger> --id <id> ..."
-  },
-  "health": {
-    "summary": "Quest health diagnostics: stall, oscillation, and coupled-invariant signals that gate the theory/reflection rungs.",
-    "usage": "node scripts/solve.js health --id <id>"
-  },
-  "ingest-evidence": {
-    "summary": "Stamp an external evidence artifact onto a frontier (or doneWhen) so a probe can read it.",
-    "usage": "node scripts/solve.js ingest-evidence --id <id> --frontier <f> --evidence <path> [--probe doneWhen]"
-  },
-  "attempt": {
-    "summary": "Record a one-shot measured attempt that runs a harness command and captures the result as evidence.",
-    "usage": "node scripts/solve.js attempt --id <id> --frontier <f> --changeRef diff:<path> -- <harness cmd...>"
-  },
-  "audit": {
-    "summary": "Run the Quest audit (scope and evidence-honesty checks) that gates a git handoff.",
-    "usage": "node scripts/solve.js audit --id <id>"
-  },
-  "upgrade": {
-    "summary": "Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log and ingest any unrecorded evidence. Reports remain on-demand projections.",
-    "usage": "node scripts/solve.js upgrade --id <id> [--reason \"<text>\"]"
-  },
-  "reopen": {
-    "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen; `--frontier` defaults when exactly one frontier is parked.",
-    "usage": "node scripts/solve.js reopen --id <id> [--frontier <f>] --reason \"<why>\""
-  },
-  "park": {
-    "summary": "Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted.",
-    "usage": "node scripts/solve.js park --id <id> [--frontier <f>] --reason \"<why no honest remaining move exists>\""
-  },
-  "amend": {
-    "summary": "Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Corrections are capped at 2 per quest lifetime; the monotone kinds (verification-bar-expansion, receipt-bar-strengthen) carry their own cap of 4 and never spend a correction; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced.",
-    "usage": "node scripts/solve.js amend --id <id> --kind class-correction|oracle-command-correction|statement-strengthen [--class <c>] [--statement \"<strengthened>\"] [--done-when-args '<json>'] --evidence <finding ref>"
-  },
-  "inherit-candidate": {
-    "summary": "Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round.",
-    "usage": "node scripts/solve.js inherit-candidate --id <child> --from <parent>"
-  },
-  "correct-attempt-base": {
-    "summary": "Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused.",
-    "usage": "node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason \"<procedural cause>\""
-  },
-  "preflight": {
-    "summary": "Batch, read-only landing diagnostics for one quest: audit, landing-union, untracked intent, generated outputs, file-size, and required review templates in one pass; writes no log event and consumes no override. `--full` adds the publish-gate statics (duplication, unused exports, cycles, aggregate and cognitive complexity) that no earlier Solver stage runs.",
-    "usage": "node scripts/solve.js preflight --id <id> [--full]"
-  },
-  "reattempt": {
-    "summary": "First-class replacement attempt after a rejection: regenerates byte-contract dependencies, stages intent for untracked sources, inherits theory/model fields, and records through the unchanged step gates. A terminal result (theory gate, blocked disposition) records no attempt and says so.",
-    "usage": "node scripts/solve.js reattempt --id <id> --summary \"<what changed>\" [--changeRef diff:<path>]"
-  },
-  "scaffold-harness": {
-    "summary": "Write the deterministic evidence-harness skeleton scripts/quest-evidence-<id>.js for a test-receipt quest (one fail-closed receipt placeholder per required id, intent-added with git add -N). Never overwrites and seals nothing; `start` runs it automatically when the harness is absent.",
-    "usage": "node scripts/solve.js scaffold-harness --id <id>"
-  },
-  "rebase-epoch": {
-    "summary": "Record a source-epoch boundary at HEAD instead of resealing after main drifted behind the epoch base: the retired epoch's attempts stay visible but never count as verification, one covering attempt at the new base is demanded over every path the retired epoch reviewed, and a standing rejection transfers to the live-base coverage rule. Refuses a pending step, a --to that is not HEAD, a HEAD that origin/main does not contain, and an empty range; never runs git write operations.",
-    "usage": "node scripts/solve.js rebase-epoch --id <id> --to <commit> --reason \"<why the epoch must move>\""
+  "land": {
+    "summary": "Land a sealed quest: the probe must be green; a standing rejection blocks; src/ changes need a current approving verification; the altitude budget, the epic's authorizes scope, the coupled-pair guard and the changed-path static checkers must pass; then the inventories refresh, the canonical import graph verifies, npm test runs, the change commits with LAGRANGE_SOLVER_LANDING=1, and a terminal solved entry is written. Never pushes.",
+    "usage": "node scripts/solve.js land --id <quest> [--json]"
   },
   "evidence": {
-    "summary": "Upload one binary or oversized artifact to the solve-evidence GitHub pre-release as <quest-id>--<path under solve/ joined by __>, verify it by downloading it again and re-hashing, then record a finding of kind evidence (sha256, size, URL) on the quest. Binaries never enter git (pre-commit guard).",
-    "usage": "node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]"
+    "summary": "Upload a file to the solve-evidence pre-release, verify it by re-download and re-hash, and record an evidence finding with the sha256 reference and URL; nothing is recorded on a mismatch.",
+    "usage": "node scripts/solve.js evidence add <file> --id <quest> [--text \"<why>\"] [--json]"
+  },
+  "board": {
+    "summary": "Print the open epics and open quests computed from solve/epics and solve/quests on demand; nothing is written.",
+    "usage": "node scripts/solve.js board [--json]"
   }
 }

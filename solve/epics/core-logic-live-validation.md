@@ -1,8 +1,13 @@
 ---
 id: core-logic-live-validation
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: discussing
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: discussing
 ---
 
 # Epic: Live validation of the 2026-07-12 core-logic quest batch

@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-evaluation-generation-floor-closure-v2",
+  "statement": "Node readiness evaluation reuses one evaluated snapshot per (node, floored planning generation) under formation-rate churn with per-node evaluation fan-out: repeated getNodeReadinessSync reads for a node within one 250ms generation window serve one snapshot identity (no fresh buildEvaluatedNodeReadinessSnapshot or projection-evidence normalization graph per read), any source-table write rotates the generation and rebuilds within one window, and every sealed readiness invalidation contract keeps its exact semantics in the sealed suites — closing the final un-floored layer named by the profiled run archived as run-2026-08-15T20-55-51-160Z-profiled-manual (v2 reseal: the v1 declaration briefly carried a mis-declared harness scenario; the goalposts guard recorded a new-quest-only violation, so the approved candidate lands here with the metric declared correctly from the start)",
+  "epic": "publication-readiness-churn-liveness-closure",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "readiness-evaluation-generation-floor-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "876317caeff4f6d93639da6f397604b485482e89",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "readiness-evaluation-generation-floor-closure",
+      "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+      "draftedAtCommit": "876317caeff4f6d93639da6f397604b485482e89"
+    },
+    "frontiers": [
+      {
+        "id": "readiness-evaluation-generation-floor-closure-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "readiness-evaluation-generation-floor-closure",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

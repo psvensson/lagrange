@@ -71,8 +71,8 @@ async function writeFile(root, relativePath, content) {
 async function writeQuest(root, id, links) {
   await writeFile(
     root,
-    `solve/quests/${id}.json`,
-    `${JSON.stringify({id, class: 'product', links}, null, 2)}\n`,
+    `solve/quests/${id}/quest.json`,
+    `${JSON.stringify({id, legacy: {links}}, null, 2)}\n`,
   );
 }
 
@@ -116,7 +116,7 @@ async function createFixture() {
   );
   await writeFile(
     root,
-    'scripts/solve/overview.js',
+    'scripts/solve/schema.js',
     '\'_Scope authority (docs/steering/agpl-feature-map.md).\'\n',
   );
   await writeFile(

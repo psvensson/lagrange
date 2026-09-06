@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "harness-runtime-environment-allowlist-v3",
+  "statement": "Distributed node containers receive only the explicitly owned debug, capture, and raft snapshot threshold runtime controls from the host environment, while Git publish controls and arbitrary LAGRANGE variables are excluded; three focused lifecycle reports prove every admitted key and the negative boundary.",
+  "epic": "convergence-loop-and-workflow-overhead",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "harness-runtime-environment-allowlist-v3",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "5bf6e5fe5a8dd55696c160482edf4b5b234a6f54",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "test/distributed/harness/README.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+      "draftedAtCommit": "5bf6e5fe5a8dd55696c160482edf4b5b234a6f54"
+    },
+    "frontiers": [
+      {
+        "id": "harness-runtime-environment-allowlist-v3-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "harness-runtime-environment-allowlist-v3",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

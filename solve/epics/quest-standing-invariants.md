@@ -1,8 +1,13 @@
 ---
 id: quest-standing-invariants
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: graduated
 graduatesTo: standing-invariant-closure
+quests: []
+authorizes: []
+legacyStatus: graduated
 ---
 
 # Standing Invariants: evolving Quest closure from terminal to maintained

@@ -336,7 +336,7 @@ describe('acceptance proof manifest runner', () => {
       'test/control-plane/owner-outcome-contract.test.js',
       'test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js',
       'test/query/transaction-owned-commit-mode-guard.test.js',
-      'test/solve/content-addressed-change-artifact.test.js',
+      'test/solve/commands.test.js',
     ];
 
     assert.deepEqual(validateAcceptanceManifest(smoke), []);

@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-priority-surrogate-single-owner-arbitration",
+  "statement": "Every cluster-wide priority-recovery surrogate decision has one deterministic available rebalancer owner per planning generation, while each priority partition retains current-entity recovery, ownerless lost-wakeup fallback, operation safety, and the production five-node MovieLens milestone.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "changed-live-only",
+      "statement": "Do not widen the 180000ms schema budget, weaken the 60000ms stability policy, serialize scenario joins, reduce production logging, add a parallel freshness path, suppress topology or stale evidence, or rerun live without a changed deterministic owner invariant."
+    },
+    {
+      "id": "single-surrogate-arbitration-owner",
+      "statement": "Preserve direct current-entity recovery for every priority partition and level-triggered recovery for an ownerless partition, but admit one cluster-wide surrogate decision through exactly one deterministic owner before move construction, capacity checks, or operation admission; bottom-level operation deduplication alone is not closure."
+    },
+    {
+      "id": "declarative-owner-policy",
+      "statement": "Express current-owner, surrogate-owner, and defer outcomes through one inspectable decision policy with explicit evidence and deterministic tie-breaking; do not add another caller-local boolean that can drift across priority rebalancers."
+    },
+    {
+      "id": "full-movielens-milestone",
+      "statement": "The terminal live proof must use the production five-node MovieLens path and complete schema admission, durable ratings creation, 100000-row preload, ratings-only split convergence, and the successful three-way affinity report."
+    }
+  ],
+  "sealedAt": "5903c56100fd487a711978620d9a1b9db213b2d3",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-create-budget-intent-serialization",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "5903c56100fd487a711978620d9a1b9db213b2d3"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-priority-surrogate-single-owner-arbitration-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

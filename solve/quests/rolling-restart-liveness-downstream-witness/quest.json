@@ -1,0 +1,62 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-liveness-downstream-witness",
+  "statement": "The rolling-restart liveness analyzer enriches stuck_downstream_workflow_progress verdicts with a structured downstream workflow witness from priority-recovery and quiescence evidence, so known run4-family drain/in-flight stalls name the operation owner, partition, operation id, current workflow step, actuation state, queue/pressure state, and canonical blocker without treating replica_operations_in_flight as success or masking it.",
+  "epic": "rolling-restart-liveness-observatory",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-liveness-downstream-witness.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-run4-goalpost-mutation",
+      "statement": "Do not mutate rolling-restart-run4-drain-residual's sealed doneWhen or use this Quest to claim statistical product stability."
+    },
+    {
+      "id": "no-in-flight-masking",
+      "statement": "Do not discount replica_operations_in_flight or operation_drain blockers as success; preserve them as downstream workflow witness evidence."
+    }
+  ],
+  "sealedAt": "60b0d6a2ec6c5cae6f5ff783f196523085c32bfb",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-liveness-log-replay",
+      "planDoc": "solve/epics/rolling-restart-liveness-observatory.md"
+    },
+    "doneWhenSealed": {
+      "planDoc": "solve/epics/rolling-restart-liveness-observatory.md",
+      "oracle": "solve/oracle/rolling-restart-liveness-downstream-witness.json",
+      "closure": "The analyzer extends the existing liveness verdict with downstream workflow witness details only; this Quest does not run a new statistical gate, does not mutate run4, and does not claim product stability.",
+      "acceptance": [
+        "Given test-output/reports/stat-gate-20260628T064848Z-run4.report.json, a stuck_downstream_workflow_progress verdict includes a downstreamWorkflow witness with operation owner, partition, operation id, workflow step, actuation state, pressure/queue state, and evidence path.",
+        "Given test-output/reports/stat-gate-20260628T064848Z-run7.report.json, the witness preserves replica_operations_in_flight/quiescence evidence as a blocker rather than discounting it as success.",
+        "Existing publication liveness verdicts remain unchanged except for the added downstreamWorkflow absent/observed metadata.",
+        "Focused deterministic tests cover the synthetic downstream fixture and at least one real run4-family report."
+      ]
+    },
+    "frontiers": [
+      {
+        "id": "downstream-workflow-witness",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-liveness-downstream-witness.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

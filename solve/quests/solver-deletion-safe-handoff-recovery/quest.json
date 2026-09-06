@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-deletion-safe-handoff-recovery",
+  "statement": "Solver handoff and automatic commit stage exact in-scope tracked deletions even when already staged, preserve unrelated staged work, and never delete an accepted auto-diff artifact when a later Git commit operation fails; focused regressions and deterministic scenario proof close the loop.",
+  "epic": "developer-velocity-maintainability-and-product-readiness",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-deletion-safe-handoff-recovery",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "51f61cde599ca0c53bc424488aa320fb531f5167",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#a2aa2b--historical-payload-migration",
+      "closesCL": [],
+      "parentQuest": "solver-historical-artifact-batch-tooling",
+      "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+      "sealedAtCommit": "150af74036df05812f7dd58cd681f1b7cc7821ef"
+    },
+    "frontiers": [
+      {
+        "id": "solver-deletion-safe-handoff-recovery-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "solver-deletion-safe-handoff-recovery",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

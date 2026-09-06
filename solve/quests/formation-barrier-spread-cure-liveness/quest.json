@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-barrier-spread-cure-liveness",
+  "statement": "During cold formation, a barrier-latched joiner's READY-lease hold has a release path reachable within its own 120s fail-closed budget on current release predicates: the formation-cohort interaction seam is sealed by an owned decision table plus a TLC bug/fixed pair proving JoinerHoldEventuallyReleases; the settle gate and planning-gate escape ladder never classify a barrier-holding, CONNECTED-heartbeating cohort member that is a currently-valid spread target as a NODE_READY_LEASE_INCOMPLETE or TOPOLOGY_OPERATION_TARGET_IN_FLIGHT planning blocker for the priority partitions whose cure it can host; and priority-spread cure evaluation re-runs on operation-terminal and placement-eligibility edges while the spread gap is open, through the existing priority-recovery visibility and wake owners. The 70s post-clear stability window, fallback timers, 120s barrier fail-closed semantics, CL-036 guard negatives, remove-safety lanes, and all sealed numeric budgets remain unchanged.",
+  "epic": "latent-convergence-blocker-census",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-barrier-spread-cure-liveness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "evidence-first-lane-discrimination",
+      "statement": "Before any fix bytes: a deterministic witness must discriminate which deferral lane consumed run-4's dead windows (the settle-gate escalation vs any other pacing law) - fixing the wrong branch is this class's recorded signature failure (theory-history rehearsal E.2)."
+    },
+    {
+      "id": "contract-artifact-in-change",
+      "statement": "The decision table owning formation-cohort member classification and the TLC bug/fixed pair proving JoinerHoldEventuallyReleases land in the same change as the fix (doctrine s18); the bug config retains the timer-paced/circular-classification counterexample."
+    },
+    {
+      "id": "atomic-reconcile",
+      "statement": "The classification fix and the open-gap event-cadence fix land together as one atomic cross-owner reconcile; neither alone may claim the terminal (CoupledAdmission: single-frontier patches on this coupled seam oscillate)."
+    },
+    {
+      "id": "no-floor-weakening",
+      "statement": "Do not weaken any recorded floor: the 70s post-clear stability window (wakes replace dead timer time only; fixed-cadence fallbacks stay), the 120s barrier fail-closed semantics (no budget raises), CL-036 guard negatives (publications escape stays closed while publication OPEN or recovery active), remove-safety lanes, run-20 exclusivity, run-22 quorum-spread ordering, and the ledger_surplus_drain HoldEventuallyReleases seal."
+    },
+    {
+      "id": "hotpath-live-ab",
+      "statement": "This is a hot failure-handling path: closure requires a controlled live A/B of N>=2 staggered-joiner runs fixed vs N>=2 reverted (2026-07-10 finding), plus an engagement witness that the live path reaches the changed decision points."
+    },
+    {
+      "id": "predicate-scope-owner-decision",
+      "statement": "The d29c7d8c8 barrier-release predicate widening (partition-scoped spread proof -> global startupAuthorityReady) is decided explicitly by the operator, never silently in this Quest; if the operator directs restoration, it is a formation-qualified verdict inside the startup-authority owner in a separate owned change."
+    }
+  ],
+  "sealedAt": "bdd6b9710ba9d7722c65114ad61d6806587931a7",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-044.md",
+      "closesCL": [
+        "CL-044"
+      ],
+      "parentQuest": "blocked-spread-evaluation-event-wake",
+      "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+      "draftedAtCommit": "bdd6b9710ba9d7722c65114ad61d6806587931a7"
+    },
+    "frontiers": [
+      {
+        "id": "formation-barrier-spread-cure-liveness-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "formation-barrier-spread-cure-liveness",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "sweep-timer",
+      "formation-circularity",
+      "admission-gating"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

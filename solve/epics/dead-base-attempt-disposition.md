@@ -1,8 +1,15 @@
 ---
-epicContractVersion: 2
 id: dead-base-attempt-disposition
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests:
+  - solver-unreachable-base-attempt-termination-v2
+  - solver-unreachable-base-attempt-termination
+authorizes: []
+legacyStatus: null
 ---
 
 # Disposition of attempts whose workspace base commit is unreachable

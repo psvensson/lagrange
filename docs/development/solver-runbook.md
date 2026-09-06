@@ -4,6 +4,14 @@ audience: development
 
 # Solver Operator Runbook
 
+> **solve-v2 phase 2 (2026-09-06):** the v1 verbs shown below (`continue`,
+> `next`, `new`, `step`, `checkpoint`, `finding`, `attempt`, `audit`, `run`,
+> `status`, `theory`) no longer exist. The v2 CLI is `start`, `note`, `probe`,
+> `land` plus `evidence add` and `board`; its reference is the generated
+> [`solve-commands.md`](../steering/llm/solve-commands.md) and the happy path
+> in [`AGENTS.md`](../../AGENTS.md). Everything except the "Publish And Git
+> Exceptions" and "Partial clones" sections is rewritten in phase 3.
+
 This is an example-oriented operator aid. It does not define policy or a second
 boot sequence. Load order is owned by [`AGENTS.md`](../../AGENTS.md), executable
 orientation by [`boot.md`](../steering/llm/boot.md), and the binding workflow by
@@ -89,7 +97,7 @@ node scripts/solve.js doctor --json
 runnable supervised or autonomous mode. A missing config, `enabled: false`, an
 unexecutable command, or the no-op example adapter never masquerades as a live
 autonomous capability. Copy
-[`solve/config.example.json`](../../solve/config.example.json) to the ignored
+the v1 executor config example (retired in solve-v2 phase 2) to the ignored
 machine-local sibling `config.json`, and set `enabled: true` only after
 replacing the placeholder with a live executable.
 
@@ -219,7 +227,7 @@ as foreign and stays inside the attempt. Shared planning documents
 (`solve/epics/`, `solve/specs/`) have no owner: a shared spec edit still
 refuses a product Quest and the refusal names the path. Restore such a
 shared file with `git checkout -- <path>` before `continue --summary`. Never
-set aside a Quest's own `solve/log/` file by checking it out — the log is
+set aside a Quest's own `solve/quests/<id>/log.ndjson` by checking it out — the log is
 append-only and the events are lost. Record the attempt before committing
 anything else while a step is pending; a commit between begin-step and
 record-attempt moves the attempt base away from the step pin and the
@@ -227,7 +235,7 @@ candidate becomes unlandable.
 
 While this worktree holds a Quest lease the pre-commit hook refuses any
 source-changing commit that the Quest has not authorized
-(`scripts/solve/commit-authorization.js`). There is no bypass lane. For a
+(retired in solve-v2 phase 2; `land` now marks its commit with `LAGRANGE_SOLVER_LANDING=1`). There is no bypass lane. For a
 source change that genuinely belongs outside the Quest, release the lease,
 commit, and let the next Solver verb re-claim it:
 
@@ -298,7 +306,7 @@ decide progress and closure.
 
 ## Stored And Generated Artifacts
 
-- Track authored `solve/quests/`, append-only `solve/log/`, explanatory
+- Track authored `solve/quests/<id>/quest.json`, append-only `solve/quests/<id>/log.ndjson`, explanatory
   `solve/changes/`, and non-regenerable report evidence.
 - Treat `solve/state/`, ordinary `solve/report/<quest-id>.md`, and
   `OVERVIEW.generated.md` as regenerable local projections. Use `report`

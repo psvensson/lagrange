@@ -14,8 +14,9 @@ import {
 
 // Deterministic witness for the formation-gcp-runner-bounded-streak quest:
 // the three-run fixed-lane certification streak (sealed `consecutive: 3` in
-// solve/quests/formation-release-handoff-closure-v4.json) is driven by a
-// bounded `--runs N` mode instead of an ad-hoc shell loop. The mode refuses
+// the formation-release-handoff-closure-v4 quest, read through the solve
+// store) is driven by a bounded `--runs N` mode instead of an ad-hoc shell
+// loop. The mode refuses
 // N != sealed count and the reverted variant with typed reasons, admits each
 // run only on clean src/ with the run-1 candidate fingerprint, stops at the
 // first failed run without retry, and writes an aggregate report that only
@@ -131,10 +132,7 @@ test('streak-run-count-must-equal-sealed-consecutive: --runs N is refused ' +
   'run is started', async () => {
   const streak = await import(STREAK_MODULE);
   assert.equal(
-    await streak.readSealedConsecutive({
-      questFile: path.resolve('solve/quests/formation-release-handoff-closure-v4.json'),
-      scenario: SCENARIO,
-    }),
+    await streak.readSealedConsecutive({scenario: SCENARIO}),
     SEALED_CONSECUTIVE,
   );
   await withReportRoot(async (reportRoot) => {

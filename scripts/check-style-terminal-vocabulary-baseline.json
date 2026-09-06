@@ -1,29 +1,11 @@
 {
   "version": 1,
   "generatedAt": "2026-08-13T05:23:11.446Z",
-  "rawViolationCount": 25,
+  "rawViolationCount": 22,
   "violations": [
     {
       "filePath": "scripts/analyze-replace-ghost-retirements.js",
       "line": 6,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "scripts/solve/constants.js",
-      "line": 23,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "scripts/solve/constants.js",
-      "line": 476,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -213,15 +195,6 @@
     {
       "filePath": "test/rebalancer/spread-cure-at-target-minting-gap.test.js",
       "line": 86,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "test/solve/evidence.test.js",
-      "line": 672,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",

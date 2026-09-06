@@ -104,19 +104,7 @@
       "path": "scripts/solve.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "Quest CLI dispatch for new, step, finding, status, probe, run, and report"
-    },
-    {
-      "path": "scripts/solve/step.js",
-      "owner": "workflow_tooling_owner",
-      "boundary": "quest_lifecycle",
-      "transition": "supervised attempt begin, pending baseline, commit, and abort"
-    },
-    {
-      "path": "scripts/solve/loop.js",
-      "owner": "workflow_tooling_owner",
-      "boundary": "quest_lifecycle",
-      "transition": "sealed goal validation, autonomous theory preflight, attempt finalization, ladder movement, and terminal state recording"
+      "transition": "Quest CLI dispatch for start, note, probe, land, evidence add, and board (solve-v2)"
     },
     {
       "path": "scripts/solve/store.js",
@@ -125,40 +113,28 @@
       "transition": "append-only Quest event log and derived state projection"
     },
     {
-      "path": "scripts/solve/theory.js",
+      "path": "scripts/solve/schema.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "Quest-native system theory, frontier theory, owner-path metadata, selection, result, supersede, stale-theory gates, and archive import events"
+      "transition": "quest.json, log entry and epic front-matter shapes and vocabularies (solve-v2)"
     },
     {
-      "path": "scripts/solve/evidence.js",
+      "path": "scripts/solve/probes.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "probe evidence ingestion, blocker movement classification, and selected-theory result learning"
+      "transition": "every doneWhen measurement: test-receipt, scenario-harness, oracle, script"
     },
     {
-      "path": "scripts/solve/current-blocker.js",
+      "path": "scripts/solve/guards.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "current blocker projection, diagnostic movement, stale selected-theory detection, and next-move guidance"
+      "transition": "landing guards: change set, epic scope, static quality, coupled pairs, canonical import graph"
     },
     {
-      "path": "scripts/solve/scope-pressure.js",
+      "path": "scripts/solve/commands.js",
       "owner": "workflow_tooling_owner",
       "boundary": "quest_lifecycle",
-      "transition": "Quest-owned diff inspection for broad owner scope and mixed runtime/workflow or runtime/harness signals"
-    },
-    {
-      "path": "scripts/solve/health.js",
-      "owner": "workflow_tooling_owner",
-      "boundary": "quest_lifecycle",
-      "transition": "loop-health projection for current blocker, stale theory, scope pressure, theory-required, model-required, and live-probe divergence signals"
-    },
-    {
-      "path": "scripts/solve/mechanism-card.js",
-      "owner": "workflow_tooling_owner",
-      "boundary": "quest_lifecycle",
-      "transition": "evidence artifact summarization into Quest-native mechanism cards"
+      "transition": "start (seal against a red probe), note, probe, land (guards, npm test, commit, terminal solved), evidence add, board"
     }
   ],
   "modelBindings": [
@@ -188,7 +164,7 @@
     }
   ],
   "questRefs": [
-    "solve/quests/rolling-restart-core-stability.json"
+    "solve/quests/rolling-restart-core-stability/quest.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260522-experiment-theory-memory"
@@ -271,14 +247,13 @@ from the Quest's own diff artifacts, never from unrelated dirty files.
 
 ## Runtime Bindings
 
-`scripts/solve.js` owns the CLI. `scripts/solve/step.js` owns supervised
-attempt bracketing. `scripts/solve/loop.js` owns autonomous theory preflight,
-honesty checks, ladder movement, and terminal recording. `scripts/solve/store.js`
-owns the append-only event log and derived state. `scripts/solve/evidence.js`
-records blocker movement and selected-theory learning. `scripts/solve/current-blocker.js`
-projects the active owner/boundary/reason, stale theory state, and next move.
-`scripts/solve/scope-pressure.js` projects broad or mixed source scope from
-recorded attempt diffs.
+`scripts/solve.js` owns the CLI (solve-v2: start, note, probe, land,
+evidence add, board). `scripts/solve/commands.js` owns the four commands and
+the landing sequence. `scripts/solve/store.js` owns the append-only log and
+derived quest state. `scripts/solve/schema.js` owns record shapes and
+vocabularies. `scripts/solve/probes.js` owns every doneWhen measurement.
+`scripts/solve/guards.js` owns the landing guards (change set, epic scope,
+static quality, coupled pairs, canonical import graph).
 
 ## Model Bindings
 

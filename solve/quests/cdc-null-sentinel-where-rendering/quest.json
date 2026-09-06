@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-null-sentinel-where-rendering",
+  "statement": "The CDC system-table mutation ingress honors the null-sentinel where-value convention: a null whereClause value renders as 'column IS NULL' with no bound parameter (mirroring buildSqlMutationPlan in control-plane-system-table-gateway-query-execution.js verbatim) in BOTH updateSystemTableRow and deleteSystemTableRow, so the replica-operation terminal CAS (completed_at: null) matches rows again and the two SQL builders agree on one convention. Verified at HEAD 9ac889cb8 by executed proof: buildSystemTableMutationSqlParts renders 'completed_at = ?' binding null — never true in SQL — so every terminal transition on replica operations changes 0 rows on a healthy row on the correct leader, refuses via resolveZeroChangeOperationUpdate, and re-arms the repair unboundedly (974-992 typed refusals per formation run, present in green runs too; the sole remaining universal formation defect after five landed fixes). Existing suites stayed green because replica-operation-terminal-cas.test.js hand-simulates the correct rendering in its fake submitMutation and the dt6/dt suites key on the raw-SQL fallback lane production never takes. Fail-closed floor: non-null where values render exactly as today; the fix lives in the ingress builder owner (cdc-system-table-mutation-sql-helpers.js), never as a rebalancer-side lane fork.",
+  "epic": "latent-convergence-blocker-census",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/cdc-null-sentinel-where-rendering.receipt.json",
+      "requiredReceipts": [
+        "null-sentinel-renders-is-null-in-live-ingress",
+        "builders-agree-on-one-convention"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "9ac889cb8e7ef7abbbf0e00067c7bf93edf72faf",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "terminal-write-refusal-retry-ownership",
+      "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+      "draftedAtCommit": "9ac889cb8e7ef7abbbf0e00067c7bf93edf72faf"
+    },
+    "frontiers": [
+      {
+        "id": "cdc-null-sentinel-where-rendering-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/cdc-null-sentinel-where-rendering.receipt.json",
+            "requiredReceipts": [
+              "null-sentinel-renders-is-null-in-live-ingress",
+              "builders-agree-on-one-convention"
+            ]
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "adversarial-js-intrinsics",
+      "recovery-replay"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

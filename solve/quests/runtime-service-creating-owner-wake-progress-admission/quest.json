@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-service-creating-owner-wake-progress-admission",
+  "statement": "A target-observed ACTIVE outcome for a source-owned remote runtime-service ADD re-enters the canonical source owner while its durable row is CREATING, reconciles the exact target services row to terminal ACTIVE without target-side workflow writes or broad non-system create replay, and three consecutive fresh MovieLens runs report priority metric 0.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-source-owner-only",
+      "statement": "The remote target remains an observer and transport initiator only. It must not mutate, synthesize, or directly repair source-owned replica_operations state; the existing canonical source owner performs every workflow transition."
+    },
+    {
+      "id": "bounded-progress-wake-admission",
+      "statement": "Admit only explicit coordinator-created remote target-progress wakes for non-system runtime_service ADD/REPLACE rows in the create-side CREATING phase. Do not make ordinary non-system CREATING rows ready-node replayable, widen periodic rediscovery, or re-dispatch blind duplicate CREATE requests."
+    },
+    {
+      "id": "exact-target-active-proof",
+      "statement": "Terminalization must require the existing exact replica_id plus target_node_id services observation to be ACTIVE. An absent, wrong-node, CREATED, CREATING, FAILED, STOPPED, partition fallback, or unrelated service row must not terminalize the operation."
+    },
+    {
+      "id": "transport-and-retry-preservation",
+      "statement": "Reuse the existing replica-dispatch ingress, owner-key reconcile queue, owner single-flight lane, target-outcome handoff verification, canonical typed error classification, and current bounded retry/operation budgets. Do not add timers, retry maps, side channels, or payload trust that bypasses authoritative row refresh."
+    },
+    {
+      "id": "real-seam-red-on-revert",
+      "statement": "Before source change acceptance, a deterministic production-seam test must reproduce target ACTIVE -> source wake -> authoritative CREATING operation plus exact ACTIVE services row -> source terminal ACTIVE, stay red on current HEAD, and include negative controls for non-handoff replay and non-ACTIVE or wrong-target evidence."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change replica-operation deadlines, transition budgets, gateway timeouts, retry constants, rebalancer cadence or concurrency, MovieLens workload, preload size, schema stability or ordinary-release timing, stall/convergence budgets, affinity scoring, live runner ordering, or exact-result predicates."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After deterministic, focused, static, model, and verifier gates pass, use the unchanged ordered live runner: five formation probes must pass before three measuring MovieLens repetitions; stop on the first red, preserve immutable stopped-state evidence, and do not make an unchanged rerun."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T19:14:53.126Z source-stable Demo 2 is the witness: both runtime services rows are ACTIVE, but remote ADD a737532b-b8ad-4e24-801c-135237dcc809 remains CREATING; target ACTIVE handoff retries for its full budget while ReplicaDispatchService excludes non-system CREATING rows from progress re-entry, leaving affinity locality at 0.5."
+    }
+  ],
+  "sealedAt": "84263aebc9876833890f03b0bb55fba26346c6ec",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "runtime-replica-state-projection-retained-reconcile-integrity-reseal",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "84263aebc9876833890f03b0bb55fba26346c6ec"
+    },
+    "frontiers": [
+      {
+        "id": "runtime-service-creating-owner-wake-progress-admission-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

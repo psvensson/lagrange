@@ -200,11 +200,11 @@
     }
   ],
   "questRefs": [
-    "solve/quests/core-system-logic-model-adjacency.json",
-    "solve/quests/model-projection-freshness-epoch-fencing.json",
-    "solve/quests/model-owner-transition-recoverable-wake.json",
-    "solve/quests/model-bounded-retry-exit-routing.json",
-    "solve/quests/model-owner-trace-validation.json"
+    "solve/quests/core-system-logic-model-adjacency/quest.json",
+    "solve/quests/model-projection-freshness-epoch-fencing/quest.json",
+    "solve/quests/model-owner-transition-recoverable-wake/quest.json",
+    "solve/quests/model-bounded-retry-exit-routing/quest.json",
+    "solve/quests/model-owner-trace-validation/quest.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"

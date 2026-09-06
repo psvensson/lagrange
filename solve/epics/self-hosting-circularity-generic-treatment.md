@@ -1,8 +1,84 @@
 ---
 id: self-hosting-circularity-generic-treatment
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: graduated
 graduatesTo: voter-readiness-visibility-single-owner-table
+quests:
+  - cure-typing-owner-migration-admission-lanes
+  - cure-typing-owner-migration-move-minters
+  - cure-typing-single-owner-table
+  - hold-engagement-single-owner-table
+  - movielens-admin-event-loop-isolation-discriminator
+  - movielens-authoritative-observation-watermark-admin-contract-fixtures
+  - movielens-authoritative-observation-watermark
+  - movielens-exact-election-evidence-same-turn-model
+  - movielens-exact-election-evidence-same-turn-owner
+  - movielens-incremental-replace-spread-nonregression
+  - movielens-ledger-completion-continuity-discriminator
+  - movielens-local-leader-row-visibility-formal-model
+  - movielens-local-leader-row-visibility-model
+  - movielens-local-leader-row-visibility
+  - movielens-nodes-priority-recovery-adverse-ab-rollback-sealed
+  - movielens-nodes-priority-recovery-adverse-ab-rollback
+  - movielens-observation-watermark-churn-consolidation
+  - movielens-operation-ledger-terminal-hold
+  - movielens-stale-only-preflight-repair-scope
+  - partition-class-ladder-bootstrap-evidence-tooling
+  - partition-class-ladder-census-hardening-final
+  - partition-class-ladder-census-hardening-parameter-snapshot-final
+  - partition-class-ladder-census-hardening-recursive-final
+  - partition-class-ladder-census-hardening-rest-exclusion-evidence-tooling
+  - partition-class-ladder-census-hardening-rest-exclusion-final
+  - partition-class-ladder-census-proof-final
+  - partition-class-ladder-census-proof-integrity-migration
+  - partition-class-ladder-census-proof
+  - partition-class-ladder-control-plane-evidence-final
+  - partition-class-ladder-control-plane-evidence-tooling-final
+  - partition-class-ladder-control-plane-evidence-tooling
+  - partition-class-ladder-migration-bootstrap
+  - partition-class-ladder-migration-control-plane-final
+  - partition-class-ladder-migration-control-plane
+  - partition-class-ladder-migration-node-create
+  - partition-class-ladder-migration-node-runtime-readiness
+  - partition-class-ladder-migration-owner-execution
+  - partition-class-ladder-migration-partition-domain
+  - partition-class-ladder-migration-query-domain
+  - partition-class-ladder-migration-raft
+  - partition-class-ladder-migration-rebalance-coordinator
+  - partition-class-ladder-migration-rebalancer-repository-policy
+  - partition-class-ladder-migration-unified-rebalancer
+  - partition-class-ladder-node-create-evidence-tooling
+  - partition-class-ladder-node-runtime-readiness-evidence-tooling
+  - partition-class-ladder-owner-contract
+  - partition-class-ladder-owner-evidence-tooling
+  - partition-class-ladder-owner-execution-evidence-tooling
+  - partition-class-ladder-owner-implementation-final
+  - partition-class-ladder-owner-implementation
+  - partition-class-ladder-owner-runtime
+  - partition-class-ladder-owner-tooling
+  - partition-class-ladder-partition-domain-evidence-tooling
+  - partition-class-ladder-query-domain-evidence-tooling
+  - partition-class-ladder-raft-evidence-tooling
+  - partition-class-ladder-rebalance-coordinator-evidence-tooling
+  - partition-class-ladder-rebalancer-repository-policy-evidence-tooling
+  - partition-class-ladder-single-owner-table-integrity-archive-historical
+  - partition-class-ladder-single-owner-table-integrity-archive-replacements
+  - partition-class-ladder-single-owner-table-integrity-migration
+  - partition-class-ladder-single-owner-table
+  - partition-class-ladder-unified-rebalancer-evidence-tooling
+  - step-coverage-owner-migration-dispatch-family
+  - step-coverage-owner-migration-recovery-lanes
+  - step-coverage-single-owner-table
+  - voter-readiness-owner-critical-partition-set-home
+  - voter-readiness-owner-migration-partition-raft-aliases
+  - voter-readiness-owner-migration-raft-node-admin
+  - voter-readiness-owner-migration-rebalancer-batch2
+  - voter-readiness-owner-migration-rebalancer-control-plane
+  - voter-readiness-visibility-single-owner-table
+authorizes: []
+legacyStatus: graduated
 ---
 
 # Self-hosting circularity: one declared contract instead of N rediscovered patches

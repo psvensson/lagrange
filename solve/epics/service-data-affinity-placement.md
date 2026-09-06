@@ -1,8 +1,48 @@
 ---
 id: service-data-affinity-placement
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: sharpening
 graduatesTo: null
+quests:
+  - join-retry-resume-lifecycle-finalization
+  - movielens-admin-snapshot-deadline-propagation
+  - movielens-admin-snapshot-retry-deadline-budget
+  - movielens-affinity-placement-demo
+  - movielens-colocated-follower-remove-safety
+  - movielens-colocated-follower-replacement-source
+  - movielens-create-budget-intent-serialization
+  - movielens-formation-alive-peer-keepalive-liveness
+  - movielens-parallel-reduce-result-chronology
+  - movielens-pre-schema-priority-spread-admission-authority-measured
+  - movielens-pre-schema-priority-spread-admission-authority
+  - movielens-pre-schema-quiescence-live
+  - movielens-preload-admission-gate-cutover
+  - movielens-priority-spread-gap-coverage-authority
+  - movielens-priority-surrogate-single-followup
+  - movielens-priority-surrogate-single-owner-arbitration
+  - movielens-ratings-scoped-split-policy-live
+  - movielens-ready-lease-maintenance-critical-owner-lane
+  - movielens-three-way-affinity-demo
+  - placement-data-affinity-tier1b
+  - runtime-replica-state-projection
+  - runtime-service-affinity-policy-lift
+  - runtime-service-affinity-suboptimality-observer
+  - runtime-service-replace-canonical-target-handoff-integrity-reseal
+  - runtime-service-replace-canonical-target-handoff
+  - schema-provisioning-not-null-intent-recovery-roundtrip
+  - service-affinity-demo-report-evidence
+  - service-affinity-identity-wiring
+  - service-affinity-query-attribution-wiring
+  - service-data-affinity-parallel-reduce-demo-live
+  - service-data-affinity-parallel-reduce-demo
+  - service-parallel-reduce-runtime-protocol
+  - service-partition-access-attribution
+  - service-read-locality-policy
+  - user-partition-remote-executor-outcome-owner-wakeup
+authorizes: []
+legacyStatus: sharpening
 ---
 
 # Epic: Service↔data affinity placement (the differentiator, made real)

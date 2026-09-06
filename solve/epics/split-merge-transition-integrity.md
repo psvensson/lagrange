@@ -1,8 +1,26 @@
 ---
-epicContractVersion: 2
 id: split-merge-transition-integrity
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests:
+  - dead-setthresholds-removal
+  - durable-replay-cursor
+  - managed-partition-merge-live-validation
+  - managed-split-shutdown-timer-leak
+  - merge-backfill-batching
+  - node-shutdown-cell-worker-teardown
+  - split-abort-fence-parity
+  - split-dissolution-durable-proof
+  - split-key-comparator-typing
+  - split-merge-overlap-guard
+  - split-terminal-lifecycle
+  - workflow-fencing-wiring
+  - write-path-epoch-fencing
+authorizes: []
+legacyStatus: null
 ---
 
 # Epic: Split/merge transition integrity

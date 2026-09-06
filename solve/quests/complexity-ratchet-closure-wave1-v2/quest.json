@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "complexity-ratchet-closure-wave1-v2",
+  "statement": "The cognitive-complexity ratchet passes at no more than its 179-violation baseline and the cyclomatic-complexity ratchet passes at no more than its 1847-violation baseline, achieved solely by behavior-preserving reduction of real violations with neither baseline raised; the duplication, circular-dependency, unused-export, and file-size ratchets do not regress; and the test files exercising every touched source owner remain green.",
+  "epic": "roadmap-integrity-wave-0",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "complexity-ratchet-closure-wave1-v2",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "627238f762c11a502e4a06ac19e2e530db446713",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "complexity-ratchet-closure-wave1",
+      "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+      "draftedAtCommit": "627238f762c11a502e4a06ac19e2e530db446713"
+    },
+    "frontiers": [
+      {
+        "id": "complexity-ratchet-closure-wave1-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "complexity-ratchet-closure-wave1-v2",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

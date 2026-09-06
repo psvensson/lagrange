@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "user-table-leader-placement-spread",
+  "statement": "Ordinary user-table partition leaders spread across data hosts through the existing rebalancer owners: when a table's settled partitions have their raft leaders concentrated on fewer distinct nodes than available replica hosts, the rebalancer mints leader-handoff moves (reusing the existing STEP_DOWN_REPLICA / tracked-replacement-election machinery the REPLACE flow already owns) until leader placement matches the distinct-host capacity, bounded and hysteresis-guarded per the recorded oscillation cures. Verified at HEAD 2f0cd4f1e (run public-path-multinode-baseline-20260810T180137Z): after a managed split of account_activity into two NORMAL children with replicas on all three nodes, both child leaders remain on the seed indefinitely — leader-balancing machinery exists only for priority control-plane partitions (spread cures, publication-leader safety), ordinary tables have replica placement but no leader-placement cure, and no admin surface exposes leadership transfer; since the public call path executes shard reads at the canonical partition leader (call-partition-topology), all data-plane reads concentrate on the seed, making the pilot-readiness epic's multi-host local-read evidence (Q1 public-path-multinode-baseline, sealed constraint public-path-fidelity) unproducible and the production data plane seed-bottlenecked. Fail-closed floor: leader handoffs ride the existing tracked-replacement-election catch-up semantics (never elect a stale-log replica), respect the recorded flapping cures (hysteresis, stability windows — no new timers), and never reduce quorum safety; priority control-plane partitions keep their existing dedicated machinery untouched.",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "user-table-leader-placement-spread",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "2f0cd4f1e2e747a20c0936cabd3ae044e1d4ac13",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+      "closesCL": [],
+      "parentQuest": "public-path-multinode-baseline",
+      "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+      "draftedAtCommit": "2f0cd4f1e2e747a20c0936cabd3ae044e1d4ac13"
+    },
+    "frontiers": [
+      {
+        "id": "user-table-leader-placement-spread-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "user-table-leader-placement-spread",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "invariant-seed-planning-snapshot-merge-memo-engaged",
+  "statement": "v1 log without a quest record (invariant-seed-planning-snapshot-merge-memo-engaged.ndjson)",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {}
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "orphanLog": true
+  }
+}

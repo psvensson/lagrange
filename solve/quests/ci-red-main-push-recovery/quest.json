@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "ci-red-main-push-recovery",
+  "statement": "The exact local main candidate completes the repository post-push acceptance gate with zero failing commands, so origin/main can be fast-forwarded without bypassing the red-main guard.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "ci-red-main-push-recovery",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "ea944a3de8eb00b7be77c870ceb587f3b8b51151",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "AGENTS.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "ea944a3de8eb00b7be77c870ceb587f3b8b51151"
+    },
+    "frontiers": [
+      {
+        "id": "ci-red-main-push-recovery-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "ci-red-main-push-recovery",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

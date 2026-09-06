@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-source-change-subagent-verification",
+  "statement": "Quest workflow guidance requires subagent verification for every Quest-scoped source code change before audit and git handoff.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/quest-source-change-subagent-verification.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "9867129e21fc2cebddc4e0e35df43a0be59042ca",
+  "legacy": {
+    "priority": 1,
+    "frontiers": [
+      {
+        "id": "quest-source-change-subagent-verification-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/quest-source-change-subagent-verification.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,13 @@
 ---
 id: hardware-relative-convergence-budget
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: resolved
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Epic: Hardware-relative convergence budget (OQ1 resolution)

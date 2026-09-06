@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-snapshot-checkpoint-format",
+  "statement": "Versioned Raft snapshot checkpoint creation, durable publication, restart-read, and typed validation exist as new owner modules (src/raft/snapshot-checkpoint-constants.js, snapshot-checkpoint-format.js, snapshot-checkpoint-store.js) without modifying existing adapter files: a checkpoint for a file-backed SQLite partition replica seals envelope version, cluster identity, raft-group identity, state-machine entity kind/id, membership epoch, last-included index and term read from the sealed image's own watermarks, payload kind/version, payload byte length, and sha256 digest; the sealed payload provably excludes _raft_log and _raft_state while retaining _transaction_outcomes and state-machine rows; the partition apply path durably records lastAppliedIndex in _raft_state and creation fails closed with typed apply_watermark_divergence when applied and committed watermarks disagree or the applied watermark is absent; in-memory and memory-backed SQLite adapters get typed unsupported_adapter; partial, corrupt, truncated, stray-WAL, unsupported-version, unsupported-kind, foreign-cluster, foreign-group, foreign-entity, and stale-epoch inputs yield typed validation outcomes never advertised as recovery progress; proven by the deterministic guard scenario raft-snapshot-checkpoint-format (new guard tests plus the unweakened gated-compaction regression files) passing 3 consecutive runs.",
+  "epic": "raft-snapshot-transfer-install",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "raft-snapshot-checkpoint-format",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "gated-compaction-guard-unweakened",
+      "statement": "The raft-snapshot-gated-compaction guard tests and the compaction-policy typed refusal stay byte-identical; this Quest adds sibling owner modules only and does not modify src/raft/sqlite-log-adapter.js, in-memory-log-adapter.js, compaction-policy.js, or committed-entry-guard.js."
+    },
+    {
+      "id": "transfer-install-out-of-scope",
+      "statement": "No transfer, install, retention, or HMAC transport authentication in this Quest (S2/S3/S5 scope); creation, durable publication, restart-read, and typed validation only."
+    }
+  ],
+  "sealedAt": "c554b37bad6c4d27013d0c4e75deb599fb2576e5",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/raft-snapshot-transfer-install/tasks.md#S1",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/raft-snapshot-transfer-install.md",
+      "draftedAtCommit": "c554b37bad6c4d27013d0c4e75deb599fb2576e5"
+    },
+    "frontiers": [
+      {
+        "id": "raft-snapshot-checkpoint-format-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "raft-snapshot-checkpoint-format",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

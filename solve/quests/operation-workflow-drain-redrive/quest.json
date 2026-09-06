@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "operation-workflow-drain-redrive",
+  "statement": "A STALLED in-flight surplus-drain REPLACE that is masked from re-drive by an upstream spread_satisfied_in_flight (drain-completion) sign-off is un-masked so the EXISTING level-triggered dispatch-pending reentry re-drives it toward source-removal / over-target relief, instead of closure treating spread as already satisfied over a wedged op; genuinely-progressing in-flight ops stay signed off. Proven by focused virtual-clock rebalancer tests that FORCE the spread_satisfied_in_flight state over a stalled op (red-on-revert), before any rolling-restart statistical gate.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/operation-workflow-drain-redrive.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-first-gate-last",
+      "statement": "Do not use a rolling-restart statistical gate to prove this child Quest. Build and pass the focused owner-path deterministic tests first; the parent Quest owns any later statistical confirmation. The N=3 gate is too noisy to confirm this narrow-condition lever - validate below the gate with a directed repro that FORCES spread_satisfied_in_flight over a stalled op."
+    },
+    {
+      "id": "unmask-not-new-mechanism",
+      "statement": "Do not add a new or faster re-drive mechanism (new watchdog, second CDC consumer, or shortened backoff) while spread_satisfied_in_flight still signs the stalled op off upstream - that is the documented 0x-engagement trap. The lever is to un-mask the stalled in-flight op so the EXISTING reentry becomes reachable; the spread_satisfied_in_flight optimization must remain intact for genuinely-progressing in-flight ops."
+    }
+  ],
+  "sealedAt": "b41db60cc6c6640d3d3936a3ba3fcbce33635f45",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-run4-drain-residual",
+      "planDoc": "solve/epics/topology-convergence-hardening.md"
+    },
+    "doneWhenSealed": {
+      "parentEvidence": "rolling-restart-run4-drain-residual finding 2026-06-29T10:45:58.517Z; stat-gate-20260629T093159Z-run3.report.json; re-scoped 2026-06-29 on this Quest's parallel-research synthesis finding 2026-06-29T12:28:35.370Z (4 subagents + run3 bundle: spread_satisfied_in_flight x10955 vs ROUTER_CONNECTION_CLOSED x0) which falsified the original symptom-layer framing (REMOVE+ACTIVE / REPLACE+SENDING deferred-executor-outcome) and the write_backlog-as-gate and dispatch-to-connecting-target roots.",
+      "closure": "Deterministic owner-path closure only. RE-SCOPED (operator-directed, 2026-06-29): the binding run4 root is NOT a missing re-drive mechanism (a level-triggered reentry and a CDC trigger already exist) but an upstream spread_satisfied_in_flight MASK that signs a stalled in-flight op off before any re-drive predicate fires (prior levers zombie-redrive 54843bb4 / drain-extension bb2a6ca2 engaged 0x for exactly this). This child Quest proves the un-mask makes the EXISTING reentry reachable, with deterministic tests that force the masked state; the parent Quest owns the rolling-restart pass-rate and residual-family statistical bar.",
+      "acceptance": [
+        "A focused virtual-clock rebalancer test forces an in-flight priority-partition REPLACE to be classified spread_satisfied_in_flight while the op is durably STALLED (no workflow-step rank rise and no dispatch progress across the staleness window) and the partition is over target, then proves red-on-revert that the EXISTING level-triggered dispatch-pending reentry (schedulePriorityRecoveryDispatchPendingReentry) does NOT re-drive it - pinning the mask as the binding blocker.",
+        "A focused virtual-clock rebalancer test proves that with the stalled-in-flight un-mask in place the SAME wedged op is surfaced as actionable and the EXISTING reentry re-drives it toward source-removal / over-target relief, WITHOUT un-masking a genuinely-progressing in-flight op (a still-advancing in-flight REPLACE must remain signed off spread_satisfied_in_flight in the same test).",
+        "The un-mask is threaded through ALL THREE spread_satisfied_in_flight classifier sites (priority-recovery-snapshot-ingress, priority-recovery-completion, the drain-completion set) so a stalled op cannot be silently re-masked at any one site; a focused test asserts the stalled op is un-masked at each classification entry point.",
+        "The stall predicate does not rely solely on a per-step deadline (it must remain correct when stepTimeoutMs is 0 / no-deadline), proven by a test where the wedged op has no per-step deadline yet is still detected as stalled and re-driven.",
+        "Negative safety tests prove the re-drive does not bypass remove safety, quorum, leader-handoff-pending, or the control_plane_publications single-Raft-writer (B4) fence, and does not act on a genuinely-progressing or terminal in-flight op.",
+        "Race/idempotency coverage proves the un-masked reentry firing together with any timer/CDC re-drive still produces one operation id, one owner action, and CAS/steps-history-preserving progress, funneled through the existing operationWorkflowRunExclusive single-flight lane (no parallel lock set).",
+        "The Quest records focused test evidence and a subagent source-change verification finding before it can be consumed by rolling-restart-run4-drain-residual."
+      ]
+    },
+    "frontiers": [
+      {
+        "id": "operation-workflow-drain-redrive-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/operation-workflow-drain-redrive.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

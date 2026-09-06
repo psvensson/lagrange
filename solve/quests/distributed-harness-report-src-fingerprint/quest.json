@@ -1,0 +1,70 @@
+{
+  "schema": "solve-quest/2",
+  "id": "distributed-harness-report-src-fingerprint",
+  "statement": "The distributed test harness stamps the run's source fingerprint into every report it writes: buildReportMetadata in test/distributed/run.js (the single metadata owner, called once per written report) records metadata.srcFingerprint and metadata.srcFingerprintAlgo from the fingerprint the run already computes for its docker config, with a typed absent sentinel when no fingerprinted config exists, so a memory-soak report can be bound to the frozen release digest by the release verification producer's fail-closed fingerprint oracle; every other report field, the report writer, its property suite and the serialization-degrade behaviour are unchanged and no verdict, budget or cadence changes. Proven deterministically in the existing run.js suite: red on HEAD (metadata lacks srcFingerprint), green after.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/distributed-harness-report-src-fingerprint.receipt.json",
+      "requiredReceipts": [
+        "soak-report-carries-src-fingerprint",
+        "report-metadata-otherwise-unchanged",
+        "report-writer-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-metadata-owner",
+      "statement": "buildReportMetadata in test/distributed/run.js is the single owner of the stamp; the value is the fingerprint the run already computes (runConfig.docker.srcFingerprint and its algorithm), with a typed absent sentinel when no fingerprinted config exists; no verdict, budget, cadence or scenario logic changes."
+    },
+    {
+      "id": "additive-only",
+      "statement": "Every other report field, the report writer, its property suite and the serialization-degrade behaviour are byte-for-byte unchanged."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic scenario in the existing run.js suite, red on HEAD (metadata lacks srcFingerprint) and green after, with the unchanged run.js and report-writer suites as controls that must stay green."
+    }
+  ],
+  "sealedAt": "f8ac1c91b33b6f908452f5e5be61c0101bc842af",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-release-verification",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "release-0-2-verification-scenario-producer-v2",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "9ea0a3dc9"
+    },
+    "frontiers": [
+      {
+        "id": "distributed-harness-report-src-fingerprint-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/distributed-harness-report-src-fingerprint.receipt.json",
+            "requiredReceipts": [
+              "soak-report-carries-src-fingerprint",
+              "report-metadata-otherwise-unchanged",
+              "report-writer-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

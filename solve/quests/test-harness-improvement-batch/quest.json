@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "test-harness-improvement-batch",
+  "statement": "The 15 adversarially-vetted test-harness improvement recommendations from the 2026-07-02 harness audit are implemented, each verified (deterministic checks or subagent review), and committed: shard completeness gate; middle-tier gate wiring incl. runnable test:ci without whole-src mutation; gate-report diagnostics dedup; in-tool Wilson interval verdict with safety floor; memory-leak assertion surfaced in summaries with Bug-G re-arm tracking; rerun flake-marking; cross-gate trend query over existing stat-gate summaries; analyzer triage dispatcher; model:contracts artifact validators wired into a gate; bounded auto-retention respecting the 20-report history window; shared teardown-registering timer helper + open-handle diagnostics; DT determinism runtime tripwire incl. the liferaft.js:184 raw Date.now fix; deterministic-repro-tier routing table updated for DT6; consolidated DT limits section; negative-evidence PCT test headers scoped to drive granularity.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "test-harness-improvement-batch",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "6aca89f8cb9e94411f57b9197254f055b159e359",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "test-harness-improvement-batch-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "test-harness-improvement-batch",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "autonomy-and-parallel-defaults",
+  "statement": "Autonomy-by-default and parallel-first norms are encoded in core.md/boot.md/solver-quests.md/lifecycle.md, subagent-verified, and the steering packs regenerate green.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/autonomy-and-parallel-defaults.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "5e1af6977dcbed96366d5c36f6fb37920eb162e6",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "docs/autonomy-and-parallel-defaults-plan.md"
+    },
+    "frontiers": [
+      {
+        "id": "change-a-autonomy-default",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/autonomy-and-parallel-defaults-change-a.json"
+          }
+        }
+      },
+      {
+        "id": "change-b-parallel-first",
+        "priority": 2,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/autonomy-and-parallel-defaults-change-b.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

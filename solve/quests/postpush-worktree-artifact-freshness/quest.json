@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "postpush-worktree-artifact-freshness",
+  "statement": "npm run test:fast passes inside the publish post-push gate worktree: the owner-debt inventory and impact-cone freshness checks no longer fail because gitignored test-output analysis artifacts regenerated mid-gate diverge from the checked-in seals",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "postpush-worktree-artifact-freshness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "bb31a177e7e36afb6690e28e6a5d94095f8a96a7",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "bb31a177e7e36afb6690e28e6a5d94095f8a96a7"
+    },
+    "frontiers": [
+      {
+        "id": "postpush-worktree-artifact-freshness-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "postpush-worktree-artifact-freshness",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: ci-vm-admission-baseline
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Epic: CI VM admission baseline (and a separate, intentional jitter lane)

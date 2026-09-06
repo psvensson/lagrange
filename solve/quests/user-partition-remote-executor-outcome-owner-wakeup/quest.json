@@ -1,0 +1,76 @@
+{
+  "schema": "solve-quest/2",
+  "id": "user-partition-remote-executor-outcome-owner-wakeup",
+  "statement": "A successful non-system user-partition REPLACE target outcome wakes the canonical remote source owner through the existing replica-dispatch ingress, with bounded retry ownership and no wake for local, terminal, incompatible, or expired operations; deterministic real-seam tests prove the owner handoff and red-on-revert behavior.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "user-partition-remote-executor-outcome-owner-wakeup",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-owner-and-ingress",
+      "statement": "The durable operation source node remains the canonical coordinator owner for a non-system REPLACE. A remote target outcome may wake it only through the existing REPLICA_OPERATION_DISPATCH ingress; no parallel transport, direct repository mutation, or target-side ownership is introduced."
+    },
+    {
+      "id": "exact-outcome-shape",
+      "statement": "Remote wake eligibility is limited to a coordinator-created non-system REPLACE whose durable row is still SYNCING and whose executor outcome reports replica-create ACTIVE. Other operation types, steps, outcomes, terminal rows, local ownership, or incompatible shapes do not wake a remote owner."
+    },
+    {
+      "id": "bounded-retry-lifecycle",
+      "statement": "Initial dispatch and target-outcome wake remain distinct modes but share the existing retry registry, step deadline, operation timeout, stop, and cleanup lifecycle. Expiry or terminal observation stops retries; no unbounded timer or second retry owner is added."
+    },
+    {
+      "id": "owner-aware-diagnostics",
+      "statement": "Target-outcome retry diagnostics name the resolved source-owner destination, while initial-dispatch diagnostics retain the operation target. Logs must not present a target node as the remote outcome handoff destination."
+    },
+    {
+      "id": "deterministic-attacks",
+      "statement": "A real-seam red-on-revert test proves the remote source owner is woken and retry accounting follows it, then attacks local, terminal, wrong-step, wrong-outcome, wrong-operation-type, timeout, retry-stop, and diagnostics boundaries. Adjacent coordinator handoff and executor-outcome routing suites stay green."
+    },
+    {
+      "id": "building-block-closure",
+      "statement": "This Quest closes only the deterministic remote-outcome delivery building block. It does not claim the parent formation demo or MovieLens live proof is solved; the combined production-composed run remains required by the parent/cutover Quests."
+    },
+    {
+      "id": "donewhen-emitter",
+      "statement": "scripts/run-user-partition-remote-executor-outcome-owner-wakeup-scenarios.js emits the sealed scenario and fails closed on empty, skipped, todo, missing, or failing TAP evidence."
+    }
+  ],
+  "sealedAt": "7fea97448e8f1268ac5a278bea09602ab434d7ec",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "formation-ledger-self-move-blocks-cluster-ops",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "7fea97448e8f1268ac5a278bea09602ab434d7ec"
+    },
+    "frontiers": [
+      {
+        "id": "user-partition-remote-executor-outcome-owner-wakeup-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "user-partition-remote-executor-outcome-owner-wakeup",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

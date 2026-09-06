@@ -1,8 +1,22 @@
 ---
 id: convergence-loop-and-workflow-overhead
-status: active
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: quests
+quests:
+  - effective-placement-serial-priority-planner
+  - harness-runtime-environment-allowlist-v2
+  - harness-runtime-environment-allowlist-v3
+  - harness-runtime-environment-allowlist
+  - priority-surplus-remove-authoritative-placement-fence
+  - solver-operator-safety-facade
+  - solver-workflow-candidate-verification-cutover
+  - solver-workflow-epic-routing-cutover
+  - solver-workflow-projection-retention-cutover
+authorizes: []
+legacyStatus: active
 ---
 
 # Epic: convergence-loop-and-workflow-overhead

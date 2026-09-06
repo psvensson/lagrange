@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-once-cell-placement",
+  "statement": "A current schema-v2 once Binding compiles through the sole ServiceDefinitionsOwner into one active service definition, keeps caller replica intent absent, is admitted by the existing RuntimeServiceRebalancerOwner to exactly one system-policy-owned UnifiedRebalancer, and binds its once_v1 export through the sole component runtime readiness path; request, change, and time Cell behavior remain unchanged, boot, call, and pushdown stay inactive, and no one-shot invocation, source-specific planner, alternate contract, caller replica control, bootstrap hook, or per-replica once runtime is introduced.",
+  "epic": "minimal-deployment-surface",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-once-cell-placement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "7994867338a7005f8c1dc8af90de53c5e5f0cc50",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": "minimal-deployment-time-cell-placement",
+      "planDoc": "solve/epics/minimal-deployment-surface.md",
+      "draftedAtCommit": "7994867338a7005f8c1dc8af90de53c5e5f0cc50"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-once-cell-placement-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-once-cell-placement",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

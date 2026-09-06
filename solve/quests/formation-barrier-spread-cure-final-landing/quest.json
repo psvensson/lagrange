@@ -1,0 +1,73 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-barrier-spread-cure-final-landing",
+  "statement": "The exact CL-044 aggregate, anchored after the current Quest-review source epoch, preserves the single recovery-authority owner interaction and completes five-node formation under the unchanged 120-second global startup-authority barrier, with hostile authority provenance fail-closed and all existing safety floors intact.",
+  "epic": "latent-convergence-blocker-census",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-barrier-spread-cure-admission-liveness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-owner-history-first",
+      "statement": "Treat every observed defect as systemic until evidence rules that out: reconstruct history, the single semantic owner, the complete interaction, and tail consumers before changing bytes."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "exact-predecessor-candidate",
+      "statement": "The successor records exactly the current 21-path CL-044 aggregate from its parent at the current reachable source epoch; no product byte, owner path, or sealed global startupAuthorityReady predicate may drift during the epoch repair."
+    },
+    {
+      "id": "hotpath-live-ab",
+      "statement": "Closure retains the fresh N=2 exact-final-candidate versus N=2 exact-revert five-node A/B: both fixed runs stay inside the unchanged 120-second barrier, engagement crosses classification, cadence, authority, persistence, and admission, and the fail-honest reverted results remain recorded."
+    },
+    {
+      "id": "operation-authority-admission-boundary",
+      "statement": "Only an owner-minted own data priority-recovery authority may bridge token-stale deferred readiness; inherited and accessor-backed authority, fresh closed readiness, ordinary work, CL-036, remove safety, and every numeric floor remain fail-closed."
+    }
+  ],
+  "sealedAt": "a7d26367cd92b139efeccd5f08d6e12f7644bfc1",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/changes/formation-barrier-spread-cure-admission-liveness/live-ab/round-3/analysis.md",
+      "closesCL": [
+        "CL-044"
+      ],
+      "parentQuest": "formation-barrier-spread-cure-admission-liveness",
+      "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+      "draftedAtCommit": "a7d26367cd92b139efeccd5f08d6e12f7644bfc1"
+    },
+    "frontiers": [
+      {
+        "id": "formation-barrier-spread-cure-final-landing-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "formation-barrier-spread-cure-admission-liveness",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "sweep-timer",
+      "formation-circularity",
+      "admission-gating",
+      "adversarial-js-intrinsics"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

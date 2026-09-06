@@ -1,7 +1,7 @@
 /**
  * Solver evidence store (solve-v2 phase 1): binaries never enter git.
  *
- *   node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]
+ *   node scripts/solve.js evidence add <path> --id <id> [--text "<why>"]
  *
  * Uploads <path> as the asset `<quest-id>--<path under solve/ with __>` (the
  * basename outside solve/) of the dedicated GitHub pre-release `solve-evidence`, verifies the upload by downloading the asset

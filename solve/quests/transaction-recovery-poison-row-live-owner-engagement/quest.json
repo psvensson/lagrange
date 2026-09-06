@@ -1,0 +1,65 @@
+{
+  "schema": "solve-quest/2",
+  "id": "transaction-recovery-poison-row-live-owner-engagement",
+  "statement": "A restarted seed or joiner engages distributed transaction recovery through the startup runtime handoff owner even when control-plane background writers are already active; poison durable transaction-row replay produces a typed transaction_recovery_incomplete outcome with decisionDimension=commit_mode and the canonical route source before any generic recovery-ready or admission classification, and the fail-closed live vehicle proves N>=2 fixed samples against N>=2 reverted samples.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "transaction-recovery-poison-row-live-owner-engagement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "owner-engagement-not-background-writer-state",
+      "statement": "Distributed transaction recovery activation is an independent startup handoff prerequisite. Already-active lease or heartbeat writers must not suppress, imply, or complete transaction recovery. Preserve the existing single-flight recovery owner and do not add a parallel replay path."
+    },
+    {
+      "id": "fail-closed-live-vehicle",
+      "statement": "The live vehicle must fail when the poisoned row is not observed, the restart does not execute the owner replay path, no failed handoff sample is captured, the typed outcome is absent, decisionDimension is not commit_mode, routeSource is absent or non-canonical, or generic nodeAdmissionBlocked masks the causal outcome. A scenario PASS with null handoff evidence is forbidden."
+    },
+    {
+      "id": "controlled-live-ab",
+      "statement": "After deterministic red-on-revert proof, run N>=2 clean fixed samples and N>=2 clean reverted samples with identical node count, workload, poison row, failure schedule, source-fingerprint check, and artifact capture. Fixed samples must expose the typed owner outcome; reverted samples must fail the fail-closed vehicle for the named missing contract."
+    },
+    {
+      "id": "no-bootstrap-routing-patch",
+      "statement": "Do not patch seed-contact or bootstrap routing. The change belongs to the startup runtime handoff owner activation contract and its live observation surface."
+    }
+  ],
+  "sealedAt": "fe10d2aa65e1860f9edf3367face49090c5bf6d8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "transaction-recovery-poison-row-invariant",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "fe10d2aa65e1860f9edf3367face49090c5bf6d8"
+    },
+    "frontiers": [
+      {
+        "id": "transaction-recovery-poison-row-live-owner-engagement-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "transaction-recovery-poison-row-live-owner-engagement",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

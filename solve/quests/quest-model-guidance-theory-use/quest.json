@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-model-guidance-theory-use",
+  "statement": "Quest workflow tooling surfaces model-contract guidance for owner-boundary and architecture Quests during theory intake and context review.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/quest-model-guidance-theory-use.json"
+    }
+  },
+  "constraints": [],
+  "sealedAt": "be410746430552f3e4b8e2770d627e0a4fd4e7d2",
+  "legacy": {
+    "priority": 1,
+    "frontiers": [
+      {
+        "id": "quest-model-guidance-theory-use-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/quest-model-guidance-theory-use.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

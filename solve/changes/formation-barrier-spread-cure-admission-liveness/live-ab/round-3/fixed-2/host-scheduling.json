@@ -1,9 +1,0 @@
-{
-  "perNode": [],
-  "exceeded": false,
-  "budget": {
-    "maxSingleGapMs": 10000,
-    "maxTotalGapMs": 60000,
-    "maxBlockedPercent": 20
-  }
-}

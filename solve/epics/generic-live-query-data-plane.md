@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: generic-live-query-data-plane
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Generic live query data plane

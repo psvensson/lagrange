@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final",
+  "statement": "The checked-in priority-recovery owner-inventory tooling projection exactly matches the fully composed Wave 0 production recovery graph without source, generator, or baseline changes. doneWhen: solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final.json reaches zero only when the official generator is idempotent, the focused inventory test passes, and independent review confirms that only derived graph facts changed.",
+  "epic": "roadmap-integrity-wave-0",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "projection-only",
+      "statement": "Change only solve/changes/priority-recovery-owner-inventory/inventory.json plus this Quest's owned artifacts; do not change production source, tests, generators, or baselines."
+    },
+    {
+      "id": "independent-owner-contract-review",
+      "statement": "Before terminal handoff, obtain independent exact-attempt and aggregate verification that the regenerated inventory is an exact derived projection and invents or weakens no priority-recovery owner-boundary facts."
+    },
+    {
+      "id": "deterministic-idempotence",
+      "statement": "A second official generator run must leave the inventory byte-identical."
+    }
+  ],
+  "sealedAt": "99577c856ece382bc96a6fdbf142eb9578caa606",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "priority-recovery-owner-inventory-tooling-projection-refresh",
+      "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+      "draftedAtCommit": "99577c856ece382bc96a6fdbf142eb9578caa606"
+    },
+    "frontiers": [
+      {
+        "id": "priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

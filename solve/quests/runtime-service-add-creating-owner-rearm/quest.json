@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-service-add-creating-owner-rearm",
+  "statement": "A non-system runtime-service ADD whose coordinator-created remote handoff exhausts its operation budget while the target replica creation has already succeeded and the source durable operation row is still CREATING — including when the source node lacks local visibility of its own operation row — is not stranded: the canonical source owner rearms the exact parked operation before initial-placement timeout, terminalizes it to ACTIVE against the exact target services row, and releases the budget hold so the next queued ADD dispatches, proven by a deterministic production-seam discriminator modeling the exact 2026-07-21T13:35 live ordering (ADD bd00c558 created svc-movielens-topn-r1 remotely, row remained CREATING after replica success with missing local operation-row visibility, remote-handoff budget exhausted, second ADD blocked by budget, no rearm before initial-placement timeout) with red-on-revert for any fix, no timeout or budget widening, no broad non-system create replay, byte-identical behavior for system operations, and the unchanged five-node MovieLens live scenario completing initial service placement.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-source-owner-only",
+      "statement": "The remote target remains an observer and transport initiator only. It must not mutate, synthesize, or directly repair source-owned replica_operations state; the existing canonical source owner performs every workflow transition, including the rearm."
+    },
+    {
+      "id": "bounded-rearm-admission",
+      "statement": "Rearm only the exact parked non-system runtime_service ADD/REPLACE operation whose remote-handoff budget exhausted while its durable row is CREATING and target replica-creation evidence exists. Do not add periodic broad rediscovery of CREATING rows, blind duplicate CREATE dispatch, timers or retry maps that bypass authoritative row refresh, or any widening of operation budgets or the initial-placement timeout."
+    },
+    {
+      "id": "exact-target-active-proof",
+      "statement": "Terminalization must require the existing exact replica_id plus target_node_id services observation to be ACTIVE. An absent, wrong-node, CREATED, CREATING, FAILED, STOPPED, partition fallback, or unrelated service row must not terminalize the operation, and missing local operation-row visibility must defer, never fabricate, the operation row."
+    },
+    {
+      "id": "budget-hold-release-single-owner",
+      "statement": "The budget hold blocking the subsequent ADD is released only as a consequence of the parked operation reaching a canonical terminal through the source owner, never by clearing or resetting budget state independently of the operation outcome."
+    },
+    {
+      "id": "real-seam-red-on-revert",
+      "statement": "Before source change acceptance, a deterministic production-seam discriminator must reproduce the exact 2026-07-21T13:35 live ordering (remote replica created, source row CREATING with missing local operation-row visibility, handoff budget exhausted, second ADD budget-blocked, no rearm before initial-placement timeout), stay red on current HEAD, be red-on-revert for any fix, and include negative controls for broad non-system create replay and for system-operation byte-identical behavior."
+    }
+  ],
+  "sealedAt": "de5e546adbe58814f5ae61926fb015ba27fe909e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "runtime-service-handoff-budget-rearm-reentry",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "de5e546adbe58814f5ae61926fb015ba27fe909e"
+    },
+    "frontiers": [
+      {
+        "id": "runtime-service-add-creating-owner-rearm-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

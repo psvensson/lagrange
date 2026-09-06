@@ -1,2 +1,0 @@
-{"ts":"2026-07-26T06:44:00.071Z","type":"invariant.evaluated","invariant":"seed-planning-snapshot-merge-memo-engaged","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-034"}
-{"ts":"2026-07-26T06:45:03.304Z","type":"invariant.evaluated","invariant":"seed-planning-snapshot-merge-memo-engaged","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-034"}

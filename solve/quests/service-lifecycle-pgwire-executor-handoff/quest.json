@@ -1,0 +1,78 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-lifecycle-pgwire-executor-handoff",
+  "statement": "A PG-wire replica started on a provisional SQL engine resolves every later authenticated request through the current ServiceRuntimeLifecycle executor factory, so authoritative-engine handoff supersedes the provisional executor before shutdown without restarting the listener or changing service identity.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-lifecycle-pgwire-executor-handoff",
+      "reportDir": "test-output/reports/service-lifecycle-pgwire-executor-handoff",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "live-request-indirection",
+      "statement": "ServiceRuntimeLifecycle may inject the ordinary service-scoped queryExecutor at replica start, but the PG-wire sqlRequestExecutor resolves the current factory and its executeRequest capability for every request. It must not retain or fall back to the provisional executeRequest closure after the factory changes."
+    },
+    {
+      "id": "identity-and-security-preservation",
+      "statement": "Request-time resolution preserves the immutable issuing service identity and the existing PG-wire authentication, action authorization, canonical SqlRequest, session, and server-derived security-context boundaries. Client payload cannot choose an engine or executor."
+    },
+    {
+      "id": "fail-closed-handoff",
+      "statement": "If the current factory or its executeRequest capability is unavailable, the request fails closed through the existing PG-wire error path. No captured-executor fallback, listener restart, second lifecycle owner, direct SQL/table fallback, or feature flag is allowed."
+    },
+    {
+      "id": "production-engagement",
+      "statement": "A production-composed password-authenticated PG-wire listener is started while the provisional factory is active, the lifecycle factory is replaced with an authoritative executor, the provisional executor is made unusable, and the same listener successfully executes through only the authoritative executor."
+    },
+    {
+      "id": "bounded-source-scope",
+      "statement": "Production changes are bounded to ServiceRuntimeLifecycle query-executor injection semantics. Tests and one scenario runner may cover that path. SQL-engine construction, startup owner retention, catalog gateway rebinding, lifecycle grammar, catalog semantics, reconciliation, runtime activation, CLI behavior, and listener lifecycle are excluded."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario proves the listener is not restarted, the provisional executor receives zero post-handoff requests, the authoritative executor receives the authenticated canonical request with the same service identity, missing current executeRequest fails closed, and ordinary service queryExecutor injection remains unchanged."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must approve the exact source patch and aggregate fingerprint and show the scenario turns red when sqlRequestExecutor captures the initial queryExecutor, falls back to it, or resolves a client-selected identity."
+    }
+  ],
+  "sealedAt": "cbbbab783f4dc48b70e89b42a80d78fedf10dd36",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/service-portability-ladder/tasks.md#phase-1--install-and-control-plane",
+      "closesCL": [],
+      "parentQuest": "service-lifecycle-authoritative-sql-handoff",
+      "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+      "draftedAtCommit": "cbbbab783f4dc48b70e89b42a80d78fedf10dd36"
+    },
+    "frontiers": [
+      {
+        "id": "service-lifecycle-pgwire-executor-handoff-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-lifecycle-pgwire-executor-handoff",
+            "reportDir": "test-output/reports/service-lifecycle-pgwire-executor-handoff",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

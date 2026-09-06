@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-next-checkpoint-projection-closure",
+  "statement": "After an exact-approved source attempt has been committed by checkpoint, an open Quest's typed next action advances to its pending step, recorded gate, or current blocker instead of requesting an empty repeat checkpoint, while a new exact-approved uncheckpointed attempt still requires checkpoint.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-next-checkpoint-projection-closure.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "checkpoint-integrity-preserved",
+      "statement": "Do not weaken exact attempt approval, dirty-path coverage, rejection supersession, or terminal aggregate verification; change only typed next-action selection after an explicit checkpoint."
+    },
+    {
+      "id": "executable-next-action",
+      "statement": "The action rendered after checkpoint must be executable against the same repository state and must preserve pending-step and recorded-gate precedence."
+    }
+  ],
+  "sealedAt": "e356143cd936efd56fef9069e00cf67a1efa7384",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+      "closesCL": [],
+      "parentQuest": "solver-workflow-draft-receipt-signal-quality",
+      "planDoc": null,
+      "draftedAtCommit": "e356143cd936efd56fef9069e00cf67a1efa7384"
+    },
+    "frontiers": [
+      {
+        "id": "solver-next-checkpoint-projection-closure-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solver-next-checkpoint-projection-closure.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-scope-classifier-artifact-token-isolation",
+  "statement": "Evidence and change-artifact filenames containing generic scope keywords such as contract cannot expand a process Quest's effective source-owner scope; cited runtime source paths classify as runtime, cited Solver source paths classify as workflow, and mixed runtime/workflow artifacts remain rejected. doneWhen: solve/oracle/solver-scope-classifier-artifact-token-isolation.json is done only when the focused classifier regression, audit regression, lint, and scoped static gates are green.",
+  "epic": "roadmap-integrity-wave-0",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-scope-classifier-artifact-token-isolation.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "source-citations-own-scope",
+      "statement": "For a process Quest, an explicitly cited runtime or Solver source path is the authoritative source-owner scope hint. Evidence, oracle, report, and change-artifact paths under solve/ are bookkeeping references and cannot override that source citation merely because a filename contains a generic workflow keyword."
+    },
+    {
+      "id": "preserve-artifact-boundary-enforcement",
+      "statement": "The changed paths inside the inspected diff remain authoritative for runtime-versus-workflow artifact enforcement: workflow changes under a runtime-scoped Quest and runtime changes under a workflow-scoped Quest must still fail closed, while product-class scope remains runtime-authoritative."
+    },
+    {
+      "id": "negative-classifier-attacks",
+      "statement": "Focused tests must cover the real partition owner-runtime statement shape, a generic keyword in prose rather than an artifact path, a genuine scripts/solve source citation, product-class authority, and both directions of mixed owner-artifact rejection."
+    }
+  ],
+  "sealedAt": "3274ad20a73f04a4bbcb61533d05e77548aa20e7",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+      "draftedAtCommit": "3274ad20a73f04a4bbcb61533d05e77548aa20e7"
+    },
+    "frontiers": [
+      {
+        "id": "solver-scope-classifier-artifact-token-isolation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solver-scope-classifier-artifact-token-isolation.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

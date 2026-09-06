@@ -46,36 +46,28 @@ Quest before a second evidence-bearing intervention; preserve the first result a
 provenance rather than backdating it as an attempt.
 
 ```sh
-node scripts/solve.js doctor
+node scripts/solve.js board
 ```
 
-For an existing Quest, run the read-only entry point. It combines capability
-preflight, lint, and the stable structured next action without sealing or
-beginning work:
+`start` seals a quest: it validates `solve/quests/<id>/quest.json` and its
+epic, measures the `doneWhen` probe, refuses unless the probe is red, and
+records `sealedAt` plus the seal-time metric in the log:
 
 ```sh
 node scripts/solve.js start --id <id>
 ```
 
-For a new Quest, the same command may create and validate the linked draft:
+A new quest is authored by writing `solve/quests/<id>/quest.json` (statement,
+epic, `doneWhen` probe, constraints) before `start`; there is no draft verb.
+
+Routine supervised work uses `probe` to read the sealed probe and `note` to
+record attempts, findings, verifications and blocked stops; `land` is the one
+terminal action and stops for the operator when a guard refuses:
 
 ```sh
-node scripts/solve.js start --id <id> --statement "<sealed result>" \
-  --spec-ref <spec-or-plan-reference>
-```
-
-Drive routine supervised work with one verb. It executes structured
-`begin-step`, `record-attempt`, replacement, and ready-checkpoint actions;
-judgment, verification, audit-repair, and terminal actions stop for the operator.
-`record-attempt` records a measured attempt
-in the Solver event log; it does not create a Git commit. Recording that attempt
-requires a summary. When no exceptional `--changeRef` is supplied, the Solver
-captures the working-tree delta automatically against the active source epoch:
-
-```sh
-node scripts/solve.js continue --id <id>
+node scripts/solve.js probe --id <id>
 # make and prove the bounded change
-node scripts/solve.js continue --id <id> --summary "<what changed>"
+node scripts/solve.js note --id <id> --attempt "<what changed>"
 ```
 
 After `land` records a categorized verifier rejection, make the bounded repair
@@ -85,41 +77,26 @@ authorized scope remains authorized without another override event; any introduc
 source path stops for one new decision. Generated collateral is refreshed by its
 owner and does not broaden admission.
 
-`start` writes a versioned draft and stamps `links.draftedAtCommit` when the
-Quest is new; it does not seal the goal. The first safe continuation lints and
-appends the declaration. A lint failure appends nothing. The lower-level `new`,
-`lint`, `next`, `step`, `audit`, `checkpoint`, and `handoff` commands remain
-available for diagnostics and exceptional operations.
+`board` lists the open epics and quests. The v1 `doctor`, `new`, `lint`,
+`next`, `step`, `continue`, `run`, `audit`, `checkpoint` and `handoff` verbs
+were retired in solve-v2 phase 2; the four commands above plus `evidence add`
+and `board` are the whole CLI (`solve-commands.md` is the generated reference).
 
-`doctor` reports whether a live agent adapter is explicitly enabled and
-executable. Supervised mode uses `continue`; a configured autonomous adapter may
-still use `run`. The no-op example adapter is never treated as a capability.
-
-Version 2 source attempts accumulate into one landing candidate. `next` keeps
-routine work moving; it does not prescribe per-attempt review or checkpoint.
-Only at a real durability boundary request the candidate dossier explicitly:
-
-```sh
-node scripts/solve.js checkpoint --id <id> --dry-run \
-  --reason <handoff|risky-tree|long-running|milestone>
-```
-
-At a terminal, run `land` once. It runs the cheap changed-path preflight, caches
-the passing result by exact source digest, then freezes the review manifest and
-issues its immutable review id. Give that id to the independent verifier. Then run `land`
-again with the id and verdict; the Solver rejects any byte drift, constructs the
-receipt itself, runs the full audit, and on approval commits only Quest scope.
-Rejection records the fail-closed verdict and never commits. No Solver command
-pushes.
+At a terminal, run `land` once. It refuses unless the probe is green, the
+newest verification is not a standing rejection, `src/` changes carry an
+approving verification newer than the last attempt, the altitude budget and
+the epic's `authorizes` scope hold, and the coupled-pair guard and the
+changed-path static checkers pass; then it refreshes the inventories, verifies
+the canonical import graph, runs `npm test`, commits the change set with
+`LAGRANGE_SOLVER_LANDING=1`, and records the terminal `solved` entry. A
+refused commit leaves the quest open. No Solver command pushes.
 
 ```sh
+node scripts/solve.js note --id <id> --verification "<summary>" \
+  --verifier subagent:<id> --verdict approve
 node scripts/solve.js land --id <id>
-# verifier reviews the issued review-<hex> manifest
-node scripts/solve.js land --id <id> --review review-<hex> \
-  --verifier <stable-id> --verdict approve --receipt <ref>
-# on rejection, add repeatable: --finding "<category>: <summary>"
-# repair and capture in one call:
-node scripts/solve.js continue --id <id> --summary "<what changed>"
+# on rejection: --verdict reject, then repair and record the next attempt:
+node scripts/solve.js note --id <id> --attempt "<what changed>"
 ```
 
 After all intended Quest commits are landed, publish exactly the committed HEAD:
@@ -136,36 +113,10 @@ force-pushes, or sweeps the caller's working tree.
 
 ## Before Verification Or Checkpoint
 
-For terminal review, `land` owns the cheap mechanical preflight and refuses to
-mint a review id when it fails. The returned immutable manifest is the typed
-dossier; no separate preflight or `next` command is required.
-For exceptional diagnosis, `node scripts/solve.js next --id <id> --json`
-projects the same typed state without changing it.
-
-Only for an actual mid-Quest durability boundary, run the broader attempt
-preflight and explicit checkpoint simulation. Routine and terminal work does
-not add a checkpoint step.
-
-```sh
-npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id <id> --dry-run \
-  --reason <handoff|risky-tree|long-running|milestone>
-```
-
-The dossier must say that the candidate is structurally landable after the
-required approval. If it does not, record the canonical same-frontier/same-base
-replacement and complete path superset it names before spending a verifier turn.
-
-Give the verifier the complete first-pass candidate manifest: common base,
-fingerprint, complete current path union, attempt range, unresolved replacement
-obligations, aggregate context, and every applicable attack template. After
-approval, either perform the named checkpoint immediately or proceed directly
-to terminal aggregate review; any intervening change invalidates the receipt.
-The canonical details live in solver-quests.md "Source Change
-Verification" and "Regular Commit (No Push)."
-
-`report --id <id>` and `overview --write` are optional human views. They write
-ignored projections and are never prerequisites for verification or handoff.
+`land` owns the mechanical preflight and refuses before any commit when a
+guard fails; `probe --id <id> --json` projects the quest state (probe, seal
+delta, attempts since the last altitude check, recent entries) without
+changing it.
 
 ## Conflict Rule And Escape Hatch
 

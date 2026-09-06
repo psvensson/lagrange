@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-owner-implementation-final",
+  "statement": "Bounded Option-5 rung-5 owner slice: src/bootstrap/system-partition-classification.js declares and exports the exact frozen bootstrap-critical, priority-control-plane, and default vocabulary, one frozen ordered row table, and classifySystemPartition with row-preferred identity, original-options table resolution, and frozen overlap facts; legacy isSystemTablePartition and isPriorityControlPlanePartition delegate without behavior change, including top-level fallback when a row ID is unparsable. A decision-table-v1 JSON exhaustively pins bootstrap-critical precedence over priority overlap, and focused runtime tests independently compare legacy booleans across valid, absent, row-precedence, and unparsable-row inputs. doneWhen: bounded evidence reports metric at most 119, the owner check passed, and every gate green. NOT in scope: migrating consumers, changing table-id parsing, critical-transport classification, admission subclasses, numeric budgets, or behavior.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-owner-contract.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "6f6dc7b309c48764e7a842bf7206d71de0ce9ba8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-owner-tooling",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "6f6dc7b309c48764e7a842bf7206d71de0ce9ba8"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-owner-implementation-final-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-owner-contract.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

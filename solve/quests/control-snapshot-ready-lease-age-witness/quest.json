@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "control-snapshot-ready-lease-age-witness",
+  "statement": "AdminControlSnapshot emits a versioned ready-lease chronology witness from the exact existing first stale active-node scan, correlating signed heartbeat, lease, owner-HLC, and accepted per-key CDC ages while leaving freshness, repair, and reason outcomes unchanged.",
+  "epic": "formation-complexity-consolidation",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "control-snapshot-ready-lease-age-witness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-freshness-adjudicator",
+      "statement": "The witness must come from the exact first active node rejected by the existing readiness scan; it cannot add a second scan or freshness decision."
+    },
+    {
+      "id": "diagnostic-only",
+      "statement": "Freshness state, repair scheduling, reason codes, admission behavior, and error identity remain unchanged; only bounded diagnostic evidence is attached."
+    },
+    {
+      "id": "explicit-signed-chronology",
+      "statement": "The versioned witness uses explicit available and unavailable variants and preserves signed heartbeat, lease, owner-HLC, CDC-receipt, and owner-to-CDC ages without clamping."
+    },
+    {
+      "id": "accepted-key-bound-cdc",
+      "statement": "CDC evidence must come from the accepted per-key cache observation and match the selected row origin HLC; table-wide or envelope timestamps are forbidden substitutes."
+    }
+  ],
+  "sealedAt": "d583fca371e73457231e7d643cad99b375cb134e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-022.md",
+      "closesCL": [],
+      "parentQuest": "movielens-ready-lease-chronology-discriminator",
+      "planDoc": "solve/epics/formation-complexity-consolidation.md",
+      "draftedAtCommit": "d583fca371e73457231e7d643cad99b375cb134e"
+    },
+    "frontiers": [
+      {
+        "id": "control-snapshot-ready-lease-age-witness-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "control-snapshot-ready-lease-age-witness",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

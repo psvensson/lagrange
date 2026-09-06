@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-three-way-affinity-demo",
+  "statement": "One newcomer-facing MovieLens example replaces the callback and affinity-toggle demos with a single command and report comparing the same confidence-adjusted ranking through PostgreSQL grouped SQL, Lagrange distributed grouped SQL, and an always-data-affine replicated Lagrange service. Placement affinity engages whenever fresh service access evidence exists independently of read_locality; the service learns and reports its data-optimal placement without a public disable switch. All three paths emit identical ranked results, comparable steady-state transfer/latency metrics, explicit caveats, and the obsolete callback demo and orchestration are removed after their reusable dataset, loader, PostgreSQL, and cluster helpers move under the surviving example.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "221cb72027686e72891e3d8303bd9329029abcaf",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "service-data-affinity-parallel-reduce-demo-live",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "sealedAtCommit": "3978a48fd229a576cc07de1b2f25261f59d14f99"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-three-way-affinity-demo-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

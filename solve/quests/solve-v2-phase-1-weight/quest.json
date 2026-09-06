@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solve-v2-phase-1-weight",
+  "statement": "Phase 1 of solve-v2 (weight), Solver tooling (workflow) scope: the pre-solve-v2 tag marks the last pre-refactor head, every tarball and every file over 1 MB under solve/ is uploaded to the solve-evidence GitHub pre-release with a verified sha256 and recorded on its quest, none remains tracked, the pre-commit binary guard (scripts/checks/check-solve-binary-guard.js in .githooks/pre-commit) refuses any new one, node scripts/solve.js evidence add performs verified uploads, generated files are no longer committed, the solver runbook documents partial clones, and the history purge is documented as deferred.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solve-v2-phase-1-weight.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "phase-1-gate",
+      "statement": "Gate: no tarball tracked under solve/, no file over 1 MB under solve/ except the one allowlisted text log, the pre-commit binary guard in place; the 20 MB target belongs to phase 2."
+    },
+    {
+      "id": "no-history-rewrite",
+      "statement": "No git history is rewritten; the purge stays documented as deferred (design note section 5)."
+    },
+    {
+      "id": "verified-uploads-only",
+      "statement": "Every evidence record is written only after the asset was downloaded again and re-hashed to the local file."
+    }
+  ],
+  "sealedAt": "397707ff0938ed19c88ef3e52306b99b97347c79",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 3,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/solve-v2/design.md",
+      "closesCL": [],
+      "parentQuest": "solve-v2-phase-1",
+      "planDoc": "solve/epics/solve-v2.md",
+      "draftedAtCommit": "397707ff0938ed19c88ef3e52306b99b97347c79"
+    },
+    "frontiers": [
+      {
+        "id": "solve-v2-phase-1-weight-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solve-v2-phase-1-weight.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

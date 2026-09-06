@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-admin-snapshot-retry-deadline-budget",
+  "statement": "A caller-supplied admin query timeout is treated as one absolute budget across control-snapshot pressure retries, so each retry receives only the remaining time and the server responds before caller expiry without weakening fail-closed observations, while the production five-node MovieLens milestone completes schema admission, durable ratings creation, 100000-row preload, ratings-only split convergence, and the successful three-way report.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "changed-live-only",
+      "statement": "Do not widen the 180000ms schema budget, weaken the 60000ms quiescence window, serialize scenario joins, reduce production logging, add a parallel freshness path, suppress topology or stale evidence, or rerun live without a changed deterministic owner invariant."
+    },
+    {
+      "id": "absolute-deadline-fail-closed",
+      "statement": "Retry budgeting must preserve fail-closed snapshot observations and the existing retry limit while bounding the complete server request within the caller-supplied timeout; it must not fabricate freshness or admission."
+    }
+  ],
+  "sealedAt": "e4f3d4d694d53e090c64cdeb60680818faee3288",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-admin-snapshot-deadline-propagation",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "e4f3d4d694d53e090c64cdeb60680818faee3288"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-admin-snapshot-retry-deadline-budget-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-planning-snapshot-identity-owner",
+  "statement": "The canonical readiness-planning snapshot has one identity owner: the planning normalizer recognises its own output and returns that same frozen object for a canonical input instead of minting a byte-equal copy. On the seed of a five-node formation, 1430 of 2242 buildPriorityRecoveryPlanningProjection calls per 1000 owner builds were re-normalisations of an already canonical snapshot, every one byte-identical to its input, because every producer (direct build, merge tail, answer paths, the ready-gate helpers and startup-authority) re-normalised snapshots that were already the normalizer's own output; each re-normalisation minted a fresh object and defeated the identity memo that every downstream planning memo keys on. Re-normalisation is a proven byte-identical fixed point, so identity reuse serves nothing a rebuild would not have produced; reuse is gated on the floored planning source generation plus the reference identity of the cluster-incarnation fence, the system-table cache and the membership publication owner, entries live in a WeakMap whose self entry holds no reference to its own key, and every returned object is frozen. Node-scoped memo freshness is unweakened: they still read the live publication component and their miss paths build unconditionally, so a publication move without a table write still mints a fresh identity in exactly one rebuild. Measured on the production-composition rig that matches the live seed within three percent: heavy planning builds fall from 344.8 to 162.4 per second (812 builds per 1000 owner builds, minus 52.9 percent) and gate-snapshot builds fall 22.1 percent, with publications winner reads unchanged at 824 and no new cache, read, scheduler, budget, cadence, window, priority edge or second authority. That the reduction moves the seed's certification snapshot answer inside the 60 second window is NOT claimed here: it requires the five-node GCP run.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-planning-snapshot-identity-owner.receipt.json",
+      "requiredReceipts": [
+        "renormalisation-fixed-point-is-not-universal",
+        "renormalisation-is-a-byte-identical-fixed-point",
+        "renormalisation-fixed-point-holds-across-the-whole-rig",
+        "every-adopted-identity-is-verified-over-the-shape-space",
+        "shadow-audit-over-the-rig-finds-no-divergence",
+        "stable-inputs-burst-returns-one-canonical-identity",
+        "version-key-change-mints-one-fresh-identity",
+        "derived-identity-is-generation-gated",
+        "verified-canonical-identity-is-generation-independent",
+        "identity-observable-preserved",
+        "identical-counter-cache-swap-drops-the-canonical-identity",
+        "membership-owner-swap-drops-the-canonical-identity",
+        "canonical-identity-retains-no-back-reference",
+        "budgets-and-cadence-unchanged",
+        "formation-shaped-build-rate-after-identity-owner",
+        "gate-snapshot-build-rate-does-not-regress",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-identity-owner",
+      "statement": "The canonical planning snapshot has exactly one identity owner: the planning normalizer, which returns the same frozen object for a canonical input rather than minting a byte-equal copy."
+    },
+    {
+      "id": "fixed-point-proven",
+      "statement": "Re-normalisation is a byte-identical fixed point, so identity reuse serves nothing a rebuild would not have produced; proven over the publication-state matrix and over the whole production-composition sequence, never asserted."
+    },
+    {
+      "id": "identity-gated-on-inputs",
+      "statement": "Identity reuse is gated on the floored planning source generation plus the reference identity of every owner the derivation reads (cluster-incarnation fence, system-table cache, membership publication owner); an entry can never outlive its inputs."
+    },
+    {
+      "id": "version-key-freshness-unweakened",
+      "statement": "The node-scoped planning memos still read the live publication component and their miss paths build unconditionally, so a publication move without a table write still mints a fresh identity in exactly one rebuild."
+    },
+    {
+      "id": "no-new-cache-or-authority",
+      "statement": "No new cache, read, scheduler, budget, cadence, window, priority edge, or second ACTIVE or READY authority; publications winner reads stay at 824 and the drain queue keeps maxConcurrency 1 and maxItemsPerDrain 1 with its macrotask scheduler."
+    },
+    {
+      "id": "bounded-retention",
+      "statement": "Retention is bounded by construction: entries live in a WeakMap, the self entry holds no reference to its own key so no entry can pin the snapshot it describes, and every returned object is frozen."
+    },
+    {
+      "id": "measured-rate-never-regresses",
+      "statement": "The measured heavy planning build rate on the shared production-composition rig falls from 344.8 per second to 162.4 per second and must never regress above 812 builds per 1000 owner builds; the rate is measured on that rig, never projected."
+    }
+  ],
+  "sealedAt": "246239b2af30bbbcbf9e3fb2ace7329dca1f90a8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "readiness-planning-publication-version-key",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "d3e7753e0"
+    },
+    "frontiers": [
+      {
+        "id": "readiness-planning-snapshot-identity-owner-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/readiness-planning-snapshot-identity-owner.receipt.json",
+            "requiredReceipts": [
+              "renormalisation-fixed-point-is-not-universal",
+              "renormalisation-is-a-byte-identical-fixed-point",
+              "renormalisation-fixed-point-holds-across-the-whole-rig",
+              "every-adopted-identity-is-verified-over-the-shape-space",
+              "shadow-audit-over-the-rig-finds-no-divergence",
+              "stable-inputs-burst-returns-one-canonical-identity",
+              "version-key-change-mints-one-fresh-identity",
+              "derived-identity-is-generation-gated",
+              "verified-canonical-identity-is-generation-independent",
+              "identity-observable-preserved",
+              "identical-counter-cache-swap-drops-the-canonical-identity",
+              "membership-owner-swap-drops-the-canonical-identity",
+              "canonical-identity-retains-no-back-reference",
+              "budgets-and-cadence-unchanged",
+              "formation-shaped-build-rate-after-identity-owner",
+              "gate-snapshot-build-rate-does-not-regress",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "harness-fidelity"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

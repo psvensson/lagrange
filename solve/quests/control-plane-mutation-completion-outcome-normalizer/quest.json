@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "control-plane-mutation-completion-outcome-normalizer",
+  "statement": "Every value of the frozen seven-value CONTROL_PLANE_MUTATION_OUTCOME enum has exactly one immutable effect classification; resolveMutationCompletionState and resolveControlPlaneMutationOutcomeSnapshot derive from one immutable normalized view that reads exactly once the own data fields outcome, success, partitionResult and affectedRows, completionState, visibilityState, and pressureAction; NO_OP and DEFERRED without success:false are non-applied, PENDING_VISIBILITY and valid legacy envelopes including nullish partitionResult retain their semantics, hostile shapes fail closed without executing traps, and the exhaustive guard passes for three consecutive runs.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "control-plane-mutation-completion-outcome-normalizer",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "e8de34c0db8a84d6b18975e98ae5ca929f7be3f5",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+      "closesCL": [],
+      "parentQuest": "control-plane-mutation-result-normalization-owner",
+      "planDoc": null,
+      "draftedAtCommit": "e8de34c0db8a84d6b18975e98ae5ca929f7be3f5"
+    },
+    "frontiers": [
+      {
+        "id": "control-plane-mutation-completion-outcome-normalizer-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "control-plane-mutation-completion-outcome-normalizer",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "adversarial-js-intrinsics",
+      "harness-fidelity"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

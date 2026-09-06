@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-cache-delete-resurrection",
+  "statement": "A dropped or reordered CDC DELETE never leaves a permanently resurrected row in any downstream system-table cache: for every internalCachePropagation table, after a missed or late DELETE all replica caches converge to authoritative absence within a bounded interval, proven by a deterministic regression test plus a green suite.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "cdc-cache-delete-resurrection",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "d7b8bc38389e7ef3e5b3d826802a7725e31df28f",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "proximity-spray-cdc-propagation-overlay",
+      "closesCL": [],
+      "parentQuest": null
+    },
+    "frontiers": [
+      {
+        "id": "cdc-cache-delete-resurrection-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "cdc-cache-delete-resurrection",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

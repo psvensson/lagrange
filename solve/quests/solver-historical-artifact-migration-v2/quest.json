@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-historical-artifact-migration-v2",
+  "statement": "A versioned historical proof-artifact migration receipt binds the exact committed A1 census identity, schema, 22-batch inventory, and every approved payload's pre/post logical identity without modifying the W11/W12 receipt or any historical payload; validation fails closed on census, schema, batch, identity, storage-plan, tamper, partial-coverage, and replay drift before A2b may begin.",
+  "epic": "developer-velocity-maintainability-and-product-readiness",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-historical-artifact-migration-v2",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "b113c457deca93b32c4baeae5205bc76200cc230",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#a2aa2b--historical-payload-migration",
+      "closesCL": [],
+      "parentQuest": "solver-historical-artifact-census-migration",
+      "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+      "sealedAtCommit": "36848be1a29a3b90bc9dc0717c9def2c35ae60a3"
+    },
+    "frontiers": [
+      {
+        "id": "solver-historical-artifact-migration-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "solver-historical-artifact-migration-v2",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

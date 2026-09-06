@@ -1,0 +1,84 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-query-participant-failures-surfaced",
+  "statement": "A distributed write that fails with participant failures is diagnosable end to end: the admin query error envelope (src/admin/admin-query-result-message-envelope.js) carries the typed participantFailures list capped at ADMIN_QUERY_RESULT.PARTICIPANT_FAILURES_LIMIT with participantFailuresOmittedCount and firstFailedParticipant, only when the owner result has failed participants; the distributed write coordinator emits exactly one typed warn line per failed fan-out naming the operation, failed partitions and per-participant node, address, error code and failed table; the example AdminWsClient attaches errorCode, details, participantFailures, firstFailedParticipant and the omitted count to the rejected Error only when present on the frame; and the service-data-affinity demo reports serialise them as an additive errorDetail through one owner (buildAffinityDemoReportError) while detail.error stays the message string. No verdict, retry or classification changes. Proven deterministically at fixture level (envelope, coordinator log, client and report): red on HEAD, green after, with the success-envelope and error-without-participants controls unchanged.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/admin-query-participant-failures-surfaced.receipt.json",
+      "requiredReceipts": [
+        "envelope-carries-participant-failures-typed-fields-and-cap",
+        "client-error-carries-participant-failures",
+        "demo-failure-report-serialises-participant-failures",
+        "write-fanout-participant-failures-logged-once",
+        "successful-result-envelope-unchanged",
+        "error-without-participants-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "bounded-additive-envelope",
+      "statement": "The participant list on the error envelope is bounded by ADMIN_QUERY_RESULT.PARTICIPANT_FAILURES_LIMIT and participantFailuresOmittedCount equals the entries dropped; a success envelope or an error without failed participants carries none of the fields."
+    },
+    {
+      "id": "one-log-line-no-decision",
+      "statement": "The distributed write owner emits exactly one warn line per failed fan-out and none on success; no retry, verdict, or classification consumes the line or the new fields (AdminWsClient attaches typed fields only when present and sets no error.code)."
+    },
+    {
+      "id": "single-report-error-owner",
+      "statement": "Demo reports keep detail.error as the message string; errorDetail is additive through the single buildAffinityDemoReportError owner used by both writers."
+    },
+    {
+      "id": "no-behaviour-change",
+      "statement": "No verdict or decision changes; all edits are additive diagnostics; budgets, cadences and the 60-second certification window are unchanged."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is deterministic fixture-level witnesses (envelope, coordinator log, client/report), red on HEAD and green after, with the success-envelope and error-without-participants controls that must stay green."
+    }
+  ],
+  "sealedAt": "677d8bf6667e9dd0a8b044c6de3f9dff8b53c3bf",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 2,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "release-0-2-five-node-convergence",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "b750e4df8"
+    },
+    "frontiers": [
+      {
+        "id": "admin-query-participant-failures-surfaced-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/admin-query-participant-failures-surfaced.receipt.json",
+            "requiredReceipts": [
+              "envelope-carries-participant-failures-typed-fields-and-cap",
+              "client-error-carries-participant-failures",
+              "demo-failure-report-serialises-participant-failures",
+              "write-fanout-participant-failures-logged-once",
+              "successful-result-envelope-unchanged",
+              "error-without-participants-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

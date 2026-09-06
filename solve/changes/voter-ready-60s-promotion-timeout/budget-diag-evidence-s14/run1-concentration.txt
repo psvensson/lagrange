@@ -1,3 +1,0 @@
-      6 "totalVoters":2,"maxVotersOnOneNode":1
-      2 "totalVoters":2,"maxVotersOnOneNode":2
-      1 "totalVoters":1,"maxVotersOnOneNode":1

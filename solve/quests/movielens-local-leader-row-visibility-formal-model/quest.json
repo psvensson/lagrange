@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-local-leader-row-visibility-formal-model",
+  "statement": "A fresh integrity Quest supersedes the history-bearing local-leader-row-visibility-model Quest: the focused local-leader-row model passes with preserved causal versions and pre-submit ownership rechecks, while missing-seed, stale-publish-after-demotion, local-timestamp-bump, and demoted-durable-replay mutants each produce their declared counterexample.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-local-leader-row-visibility-model",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "focused-composition-only",
+      "statement": "Model only the Raft leader, canonical local row, durable row, successor LWW delivery, demotion, pre-submit ownership fence, and remove-safety consumer composition; do not claim exhaustive repository layer coverage."
+    },
+    {
+      "id": "mutants-required",
+      "statement": "The missing local seed, stale publish after demotion, locally minted timestamp, and demoted durable replay shapes must each fail for the declared invariant while the fixed configuration passes."
+    },
+    {
+      "id": "no-runtime-semantics",
+      "statement": "This proof-package Quest must not change runtime policy, live budgets, workload, joins, preload, quorum, membership, or serialized interlock semantics."
+    }
+  ],
+  "sealedAt": "96aa1b12a73557671d5e07ec1f4ca9ffd39b3535",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-local-leader-row-visibility",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "aead52ac"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-local-leader-row-visibility-formal-model-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-local-leader-row-visibility-model",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "invariant-raft-log-matching-committed-entry-identity",
+  "statement": "v1 log without a quest record (invariant-raft-log-matching-committed-entry-identity.ndjson)",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {}
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "orphanLog": true
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "configured-split-threshold-policy-precedence",
+  "statement": "Configured partition split thresholds govern tables without explicit split policy overrides; explicit per-table split thresholds still win; PartitionSplitMergeManager consumes one effective policy answer from TablePolicyService, proven by real-owner deterministic tests.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "configured-split-threshold-policy-precedence",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "7e436545fc732c161d9fd189defe69beaab711d2",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "7e436545fc732c161d9fd189defe69beaab711d2"
+    },
+    "frontiers": [
+      {
+        "id": "configured-split-threshold-policy-precedence-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "configured-split-threshold-policy-precedence",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -225,7 +225,7 @@ test('a test selected twice executes once, carrying both reasons', () => {
 test('source ownership is all-rules, so order cannot decide scope', () => {
   for (const sourcePath of [
     'src/query/executor.js', 'src/rebalancer/move-planner.js',
-    'scripts/solve/attempt.js', 'scripts/check-subsystem.js',
+    'scripts/solve/commands.js', 'scripts/check-subsystem.js',
     'package.json', 'test/shards/subsystem-classes.json',
   ]) {
     const owner = subsystemForSourcePath(sourcePath);

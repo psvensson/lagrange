@@ -1,0 +1,568 @@
+--- a/scripts/checks/run-oci-container-driver-live-activation-scenarios.js
++++ b/scripts/checks/run-oci-container-driver-live-activation-scenarios.js
+@@ -6,0 +7 @@
++// C1.
+--- a/src/runtime/oci-host-agent-json.js
++++ b/src/runtime/oci-host-agent-json.js
+@@ -12,0 +13,34 @@
++const C0_CONTROL_MAX = 0x1f;
++const C1_CONTROL_MIN = 0x7f;
++const C1_CONTROL_MAX = 0x9f;
++const HIGH_SURROGATE_MIN = 0xd800;
++const HIGH_SURROGATE_MAX = 0xdbff;
++const LOW_SURROGATE_MIN = 0xdc00;
++const LOW_SURROGATE_MAX = 0xdfff;
++const ESCAPE_DIGITS = 4;
++const HEX_RADIX = 16;
++const LENGTH_FIELD = 'length';
++const DESCRIPTOR_VALUE = 'value';
++const ARRAY_CLOSE = ']';
++const ARRAY_OPEN = '[';
++const DECIMAL_POINT = '.';
++const DIGIT_NINE = '9';
++const DIGIT_ONE = '1';
++const DIGIT_ZERO = '0';
++const ESCAPE = '\\';
++const EXPONENT_LOWER = 'e';
++const EXPONENT_UPPER = 'E';
++const FALSE_INITIAL = 'f';
++const FALSE_LITERAL = 'false';
++const MEMBER_SEPARATOR = ',';
++const MINUS = '-';
++const NAME_SEPARATOR = ':';
++const NULL_INITIAL = 'n';
++const NULL_LITERAL = 'null';
++const OBJECT_CLOSE = '}';
++const OBJECT_OPEN = '{';
++const PLUS = '+';
++const QUOTE = '"';
++const TRUE_INITIAL = 't';
++const TRUE_LITERAL = 'true';
++const UNICODE_ESCAPE = 'u';
+@@ -21 +55,2 @@
+-    if (codeUnit <= 0x1f || (codeUnit >= 0x7f && codeUnit <= 0x9f)) {
++    if (codeUnit <= C0_CONTROL_MAX ||
++        (codeUnit >= C1_CONTROL_MIN && codeUnit <= C1_CONTROL_MAX)) {
+@@ -24 +59 @@
+-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
++    if (codeUnit >= HIGH_SURROGATE_MIN && codeUnit <= HIGH_SURROGATE_MAX) {
+@@ -27 +62,2 @@
+-          nextCodeUnit < 0xdc00 || nextCodeUnit > 0xdfff) {
++          nextCodeUnit < LOW_SURROGATE_MIN ||
++          nextCodeUnit > LOW_SURROGATE_MAX) {
+@@ -31 +67,2 @@
+-    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
++    } else if (codeUnit >= LOW_SURROGATE_MIN &&
++        codeUnit <= LOW_SURROGATE_MAX) {
+@@ -63,7 +100,11 @@
+-    if (token === '{') return this.#parseObject();
+-    if (token === '[') return this.#parseArray();
+-    if (token === '"') return this.#parseString();
+-    if (token === 't') return this.#parseLiteral('true', true);
+-    if (token === 'f') return this.#parseLiteral('false', false);
+-    if (token === 'n') {
+-      this.#parseLiteral('null', null);
++    if (token === OBJECT_OPEN) return this.#parseObject();
++    if (token === ARRAY_OPEN) return this.#parseArray();
++    if (token === QUOTE) return this.#parseString();
++    if (token === TRUE_INITIAL) {
++      return this.#parseLiteral(TRUE_LITERAL, true);
++    }
++    if (token === FALSE_INITIAL) {
++      return this.#parseLiteral(FALSE_LITERAL, false);
++    }
++    if (token === NULL_INITIAL) {
++      this.#parseLiteral(NULL_LITERAL, null);
+@@ -72 +113 @@
+-    if (token === '-' || (token >= '0' && token <= '9')) {
++    if (token === MINUS || (token >= DIGIT_ZERO && token <= DIGIT_NINE)) {
+@@ -88 +129 @@
+-    if (this.source[this.index] === '}') {
++    if (this.source[this.index] === OBJECT_CLOSE) {
+@@ -94 +135 @@
+-      if (this.source[this.index] !== '"') invalidJson();
++      if (this.source[this.index] !== QUOTE) invalidJson();
+@@ -100 +141 @@
+-      if (this.source[this.index] !== ':') invalidJson();
++      if (this.source[this.index] !== NAME_SEPARATOR) invalidJson();
+@@ -112 +153 @@
+-      if (separator === '}') {
++      if (separator === OBJECT_CLOSE) {
+@@ -116 +157 @@
+-      if (separator !== ',') invalidJson();
++      if (separator !== MEMBER_SEPARATOR) invalidJson();
+@@ -127 +168 @@
+-    if (this.source[this.index] === ']') {
++    if (this.source[this.index] === ARRAY_CLOSE) {
+@@ -136 +177 @@
+-      if (separator === ']') {
++      if (separator === ARRAY_CLOSE) {
+@@ -140 +181 @@
+-      if (separator !== ',') invalidJson();
++      if (separator !== MEMBER_SEPARATOR) invalidJson();
+@@ -153 +194 @@
+-      if (character === '"') {
++      if (character === QUOTE) {
+@@ -157 +198 @@
+-      if (character === '\\') {
++      if (character === ESCAPE) {
+@@ -161 +202 @@
+-      if (character.charCodeAt(0) <= 0x1f) {
++      if (character.charCodeAt(0) <= C0_CONTROL_MAX) {
+@@ -183,3 +224,6 @@
+-    if (escape !== 'u') invalidJson();
+-    const hexadecimal = this.source.slice(this.index, this.index + 4);
+-    if (hexadecimal.length !== 4 ||
++    if (escape !== UNICODE_ESCAPE) invalidJson();
++    const hexadecimal = this.source.slice(
++      this.index,
++      this.index + ESCAPE_DIGITS,
++    );
++    if (hexadecimal.length !== ESCAPE_DIGITS ||
+@@ -189,2 +233,2 @@
+-    this.index += 4;
+-    return String.fromCharCode(Number.parseInt(hexadecimal, 16));
++    this.index += ESCAPE_DIGITS;
++    return String.fromCharCode(Number.parseInt(hexadecimal, HEX_RADIX));
+@@ -195 +239 @@
+-    if (this.source[this.index] === '-') this.index += 1;
++    if (this.source[this.index] === MINUS) this.index += 1;
+@@ -207 +251 @@
+-    if (this.source[this.index] === '0') {
++    if (this.source[this.index] === DIGIT_ZERO) {
+@@ -216 +260 @@
+-    if (this.source[this.index] !== '.') return;
++    if (this.source[this.index] !== DECIMAL_POINT) return;
+@@ -223,2 +267,2 @@
+-    if (this.source[this.index] !== 'e' &&
+-        this.source[this.index] !== 'E') return;
++    if (this.source[this.index] !== EXPONENT_LOWER &&
++        this.source[this.index] !== EXPONENT_UPPER) return;
+@@ -226 +270,2 @@
+-    if (this.source[this.index] === '+' || this.source[this.index] === '-') {
++    if (this.source[this.index] === PLUS ||
++        this.source[this.index] === MINUS) {
+@@ -234 +279 @@
+-    return character >= '0' && character <= '9';
++    return character >= DIGIT_ZERO && character <= DIGIT_NINE;
+@@ -238 +283 @@
+-    return character >= '1' && character <= '9';
++    return character >= DIGIT_ONE && character <= DIGIT_NINE;
+@@ -249 +294 @@
+-  if (ownKeys.some((key) => key !== 'length' &&
++  if (ownKeys.some((key) => key !== LENGTH_FIELD &&
+@@ -259 +304,2 @@
+-    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
++    if (!descriptor || !descriptor.enumerable ||
++        !(DESCRIPTOR_VALUE in descriptor)) {
+@@ -264 +310 @@
+-  return `[${elements.join(',')}]`;
++  return `[${elements.join(MEMBER_SEPARATOR)}]`;
+@@ -275 +321,2 @@
+-    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
++    if (!descriptor || !descriptor.enumerable ||
++        !(DESCRIPTOR_VALUE in descriptor)) {
+@@ -283 +330 @@
+-  return `{${members.join(',')}}`;
++  return `{${members.join(MEMBER_SEPARATOR)}}`;
+@@ -294 +341,3 @@
+-  if (typeof value === 'boolean') return value ? 'true' : 'false';
++  if (typeof value === 'boolean') {
++    return value ? TRUE_LITERAL : FALSE_LITERAL;
++  }
+--- a/src/runtime/oci-host-agent-protocol-errors.js
++++ b/src/runtime/oci-host-agent-protocol-errors.js
+@@ -18 +17,0 @@
+-
+@@ -22 +21 @@
+-    this.name = 'OciHostAgentProtocolError';
++    this.name = this.constructor.name;
+--- a/src/runtime/oci-host-agent-protocol.js
++++ b/src/runtime/oci-host-agent-protocol.js
+@@ -1,0 +2 @@
++import {types} from 'node:util';
+@@ -19,0 +21,8 @@
++const HMAC_ALGORITHM = 'sha256';
++const AUTH_ALGORITHM = 'hmac-sha256';
++const ENCODING_ASCII = 'ascii';
++const ENCODING_BASE64 = 'base64';
++const ENCODING_UTF8 = 'utf8';
++const HMAC_SEPARATOR = '\n';
++const STOP_OPERATION = 'stop';
++const DESCRIPTOR_VALUE = 'value';
+@@ -33,0 +43,5 @@
++const ENROLLED_FIELDS = Object.freeze([
++  'clusterIncarnation',
++  'key',
++  'nodeId',
++]);
+@@ -62,2 +76,5 @@
+-  const key = Buffer.isBuffer(value) ? value :
+-    value instanceof Uint8Array ? Buffer.from(value) : null;
++  if (types.isProxy(value)) {
++    protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
++  }
++  const key = Buffer.isBuffer(value) || types.isUint8Array(value) ?
++    Buffer.from(value) : null;
+@@ -76,2 +93,3 @@
+-  const decoded = Buffer.from(value, 'base64');
+-  if (decoded.length !== expectedBytes || decoded.toString('base64') !== value) {
++  const decoded = Buffer.from(value, ENCODING_BASE64);
++  if (decoded.length !== expectedBytes ||
++      decoded.toString(ENCODING_BASE64) !== value) {
+@@ -85,4 +103,4 @@
+-  return createHmac('sha256', asKeyBuffer(key))
+-    .update(domain, 'ascii')
+-    .update('\n', 'ascii')
+-    .update(canonicalEnvelope, 'utf8')
++  return createHmac(HMAC_ALGORITHM, asKeyBuffer(key))
++    .update(domain, ENCODING_ASCII)
++    .update(HMAC_SEPARATOR, ENCODING_ASCII)
++    .update(canonicalEnvelope, ENCODING_UTF8)
+@@ -94,2 +112,2 @@
+-    algorithm: 'hmac-sha256',
+-    signature: signatureFor(domain, envelope, key).toString('base64'),
++    algorithm: AUTH_ALGORITHM,
++    signature: signatureFor(domain, envelope, key).toString(ENCODING_BASE64),
+@@ -101 +119 @@
+-  if (value.algorithm !== 'hmac-sha256') {
++  if (value.algorithm !== AUTH_ALGORITHM) {
+@@ -120 +138 @@
+-  }), 'utf8');
++  }), ENCODING_UTF8);
+@@ -150 +168 @@
+-  if (canonicalizeOciHostAgentJson(decoded) !== body.toString('utf8')) {
++  if (canonicalizeOciHostAgentJson(decoded) !== body.toString(ENCODING_UTF8)) {
+@@ -170 +188 @@
+-  if (envelope.operation === 'stop' &&
++  if (envelope.operation === STOP_OPERATION &&
+@@ -182,0 +201,26 @@
++function snapshotEnrolledKeyRecord(record) {
++  if (types.isProxy(record) || !isPlainObject(record)) {
++    protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
++  }
++  const fields = Reflect.ownKeys(record);
++  if (fields.length !== ENROLLED_FIELDS.length ||
++      fields.some((field) => typeof field !== 'string')) {
++    protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
++  }
++  fields.sort();
++  if (fields.some((field, index) =>
++    field !== ENROLLED_FIELDS[index])) {
++    protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
++  }
++  const snapshot = {};
++  for (const field of ENROLLED_FIELDS) {
++    const descriptor = Object.getOwnPropertyDescriptor(record, field);
++    if (!descriptor || !descriptor.enumerable ||
++        !Object.hasOwn(descriptor, DESCRIPTOR_VALUE)) {
++      protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
++    }
++    snapshot[field] = descriptor.value;
++  }
++  return snapshot;
++}
++
+@@ -191,9 +235 @@
+-    const record = resolveKey(keyId);
+-    if (!isPlainObject(record)) {
+-      protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
+-    }
+-    const fields = Object.keys(record).sort();
+-    if (fields.length !== 3 || fields[0] !== 'clusterIncarnation' ||
+-        fields[1] !== 'key' || fields[2] !== 'nodeId') {
+-      protocolError(OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE);
+-    }
++    const record = snapshotEnrolledKeyRecord(resolveKey(keyId));
+--- a/src/runtime/oci-host-agent-schema.js
++++ b/src/runtime/oci-host-agent-schema.js
+@@ -75,0 +76,43 @@
++const FIELD = Object.freeze({
++  ARGS: 'args',
++  ARTIFACT_REF: 'artifactRef',
++  CLUSTER_INCARNATION: 'clusterIncarnation',
++  CONTAINER_ID: 'containerId',
++  CONTAINER_PORT: 'containerPort',
++  CPU_MILLIS: 'cpuMillis',
++  ENTRYPOINT: 'entrypoint',
++  ENVIRONMENT: 'environment',
++  ERROR_CODE: 'errorCode',
++  EXPECTED_DIGEST: 'expectedDigest',
++  FENCE_STATE: 'fenceState',
++  GRACE_MS: 'graceMs',
++  IMAGE_DIGEST: 'imageDigest',
++  KIND: 'kind',
++  LABELS: 'labels',
++  LAST_OBSERVATION: 'lastObservation',
++  MEMORY_BYTES: 'memoryBytes',
++  NODE_ID: 'nodeId',
++  OBSERVATION: 'observation',
++  PORTS: 'ports',
++  PROTOCOL: 'protocol',
++  REGISTRY_CREDENTIAL_ID: 'registryCredentialId',
++  RESIDUAL_RESOURCES: 'residualResources',
++  RESOURCES: 'resources',
++  RUNTIME_CONFIG_DIGEST: 'runtimeConfigDigest',
++  SECRET_REFS: 'secretRefs',
++  STATE: 'state',
++  VALUES: 'values',
++});
++const MANAGED_LABEL = STABLE_LABEL_FIELDS[0];
++const IMAGE_DIGEST_LABEL = STABLE_LABEL_FIELDS[6];
++const RUNTIME_CONFIG_DIGEST_LABEL = STABLE_LABEL_FIELDS[7];
++const CREATE_OPERATION_LABEL = STABLE_LABEL_FIELDS[8];
++const CREATE_INTENT_LABEL = STABLE_LABEL_FIELDS[9];
++const ABSENCE_KIND = 'absence';
++const CONTAINER_KIND = 'container';
++const IMAGE_KIND = 'image';
++const NOT_OBSERVED = 'not_observed';
++const ABSENCE_STATE = 'absent';
++const MANAGED_LABEL_VALUE = 'true';
++const BASE64_ENCODING = 'base64';
++const PORT_PROTOCOLS = new Set(['tcp', 'udp']);
+@@ -108,0 +152 @@
++const [CLEANUP_NOT_REQUIRED, CLEANUP_COMPLETED] = CLEANUP_STATE;
+@@ -156,0 +201,5 @@
++  DIGEST_BYTES: 71,
++  ENVIRONMENT_KEY_BYTES: 128,
++  REQUEST_ID_BYTES: 36,
++  NONCE_BYTES: 32,
++  CONTAINER_ID_BYTES: 64,
+@@ -223,2 +272,3 @@
+-  const decoded = Buffer.from(value, 'base64');
+-  if (decoded.length !== decodedBytes || decoded.toString('base64') !== value) {
++  const decoded = Buffer.from(value, BASE64_ENCODING);
++  if (decoded.length !== decodedBytes ||
++      decoded.toString(BASE64_ENCODING) !== value) {
+@@ -244 +294,4 @@
+-  assertCleanString(value, {maximumBytes: 71, pattern: SHA256_PATTERN});
++  assertCleanString(value, {
++    maximumBytes: MAXIMUM.DIGEST_BYTES,
++    pattern: SHA256_PATTERN,
++  });
+@@ -250,2 +303,2 @@
+-    ['artifactRef', 'expectedDigest'],
+-    ['registryCredentialId'],
++    [FIELD.ARTIFACT_REF, FIELD.EXPECTED_DIGEST],
++    [FIELD.REGISTRY_CREDENTIAL_ID],
+@@ -262 +315 @@
+-  if (hasOwn(payload, 'registryCredentialId')) {
++  if (hasOwn(payload, FIELD.REGISTRY_CREDENTIAL_ID)) {
+@@ -284 +337 @@
+-      maximumBytes: 128,
++      maximumBytes: MAXIMUM.ENVIRONMENT_KEY_BYTES,
+@@ -299,3 +352,3 @@
+-  assertExactObject(environment, [], ['values', 'secretRefs']);
+-  const values = hasOwn(environment, 'values') ? environment.values : {};
+-  const secretRefs = hasOwn(environment, 'secretRefs') ?
++  assertExactObject(environment, [], [FIELD.VALUES, FIELD.SECRET_REFS]);
++  const values = hasOwn(environment, FIELD.VALUES) ? environment.values : {};
++  const secretRefs = hasOwn(environment, FIELD.SECRET_REFS) ?
+@@ -319,2 +372,2 @@
+-    assertExactObject(port, ['protocol', 'containerPort']);
+-    assertEnum(port.protocol, new Set(['tcp', 'udp']));
++    assertExactObject(port, [FIELD.PROTOCOL, FIELD.CONTAINER_PORT]);
++    assertEnum(port.protocol, PORT_PROTOCOLS);
+@@ -329,3 +382,4 @@
+-  assertExactObject(resources, [], ['cpuMillis', 'memoryBytes']);
+-  if (!hasOwn(resources, 'cpuMillis') && !hasOwn(resources, 'memoryBytes')) fail();
+-  if (hasOwn(resources, 'cpuMillis')) {
++  assertExactObject(resources, [], [FIELD.CPU_MILLIS, FIELD.MEMORY_BYTES]);
++  if (!hasOwn(resources, FIELD.CPU_MILLIS) &&
++      !hasOwn(resources, FIELD.MEMORY_BYTES)) fail();
++  if (hasOwn(resources, FIELD.CPU_MILLIS)) {
+@@ -334 +388 @@
+-  if (hasOwn(resources, 'memoryBytes')) {
++  if (hasOwn(resources, FIELD.MEMORY_BYTES)) {
+@@ -346,2 +400,8 @@
+-    ['imageDigest', 'runtimeConfigDigest'],
+-    ['entrypoint', 'args', 'environment', 'ports', 'resources'],
++    [FIELD.IMAGE_DIGEST, FIELD.RUNTIME_CONFIG_DIGEST],
++    [
++      FIELD.ENTRYPOINT,
++      FIELD.ARGS,
++      FIELD.ENVIRONMENT,
++      FIELD.PORTS,
++      FIELD.RESOURCES,
++    ],
+@@ -351 +411 @@
+-  if (hasOwn(payload, 'entrypoint')) {
++  if (hasOwn(payload, FIELD.ENTRYPOINT)) {
+@@ -358 +418 @@
+-  if (hasOwn(payload, 'args')) {
++  if (hasOwn(payload, FIELD.ARGS)) {
+@@ -365,3 +425,3 @@
+-  if (hasOwn(payload, 'environment')) validateEnvironment(payload.environment);
+-  if (hasOwn(payload, 'ports')) validatePorts(payload.ports);
+-  if (hasOwn(payload, 'resources')) validateResources(payload.resources);
++  if (hasOwn(payload, FIELD.ENVIRONMENT)) validateEnvironment(payload.environment);
++  if (hasOwn(payload, FIELD.PORTS)) validatePorts(payload.ports);
++  if (hasOwn(payload, FIELD.RESOURCES)) validateResources(payload.resources);
+@@ -375,2 +435,2 @@
+-  assertExactObject(payload, [], ['graceMs']);
+-  if (!hasOwn(payload, 'graceMs')) return;
++  assertExactObject(payload, [], [FIELD.GRACE_MS]);
++  if (!hasOwn(payload, FIELD.GRACE_MS)) return;
+@@ -398 +458 @@
+-    maximumBytes: 36,
++    maximumBytes: MAXIMUM.REQUEST_ID_BYTES,
+@@ -405 +465 @@
+-  assertCanonicalBase64(envelope.nonce, 32);
++  assertCanonicalBase64(envelope.nonce, MAXIMUM.NONCE_BYTES);
+@@ -420 +480 @@
+-  assertExactObject(identity, ['clusterIncarnation', 'nodeId']);
++  assertExactObject(identity, [FIELD.CLUSTER_INCARNATION, FIELD.NODE_ID]);
+@@ -428 +488 @@
+-  if (labels['io.lagrange.managed'] !== 'true') fail();
++  if (labels[MANAGED_LABEL] !== MANAGED_LABEL_VALUE) fail();
+@@ -440,2 +500,2 @@
+-  assertDigest(labels['io.lagrange.image_digest']);
+-  assertDigest(labels['io.lagrange.runtime_config_digest']);
++  assertDigest(labels[IMAGE_DIGEST_LABEL]);
++  assertDigest(labels[RUNTIME_CONFIG_DIGEST_LABEL]);
+@@ -443 +503 @@
+-    labels['io.lagrange.create_operation_id'],
++    labels[CREATE_OPERATION_LABEL],
+@@ -446 +506 @@
+-  assertDigest(labels['io.lagrange.create_intent_digest']);
++  assertDigest(labels[CREATE_INTENT_LABEL]);
+@@ -450 +510 @@
+-  assertExactObject(cleanup, ['state', 'residualResources']);
++  assertExactObject(cleanup, [FIELD.STATE, FIELD.RESIDUAL_RESOURCES]);
+@@ -456 +516,2 @@
+-  if ((cleanup.state === 'not_required' || cleanup.state === 'completed') &&
++  if ((cleanup.state === CLEANUP_NOT_REQUIRED ||
++      cleanup.state === CLEANUP_COMPLETED) &&
+@@ -461 +522 @@
+-    assertExactObject(resource, ['containerId', 'labels']);
++    assertExactObject(resource, [FIELD.CONTAINER_ID, FIELD.LABELS]);
+@@ -463 +524 @@
+-      maximumBytes: 64,
++      maximumBytes: MAXIMUM.CONTAINER_ID_BYTES,
+@@ -473 +534 @@
+-    if (resource.labels['io.lagrange.create_operation_id'] !==
++    if (resource.labels[CREATE_OPERATION_LABEL] !==
+@@ -475 +536 @@
+-        resource.labels['io.lagrange.create_intent_digest'] !==
++        resource.labels[CREATE_INTENT_LABEL] !==
+@@ -484,2 +545,2 @@
+-  if (observation.kind === 'not_observed') {
+-    assertExactObject(observation, ['kind']);
++  if (observation.kind === NOT_OBSERVED) {
++    assertExactObject(observation, [FIELD.KIND]);
+@@ -488,2 +549,2 @@
+-  if (observation.kind === 'image') {
+-    assertExactObject(observation, ['kind', 'imageDigest']);
++  if (observation.kind === IMAGE_KIND) {
++    assertExactObject(observation, [FIELD.KIND, FIELD.IMAGE_DIGEST]);
+@@ -493,3 +554,3 @@
+-  if (observation.kind === 'absence') {
+-    assertExactObject(observation, ['kind', 'state']);
+-    if (observation.state !== 'absent') fail();
++  if (observation.kind === ABSENCE_KIND) {
++    assertExactObject(observation, [FIELD.KIND, FIELD.STATE]);
++    if (observation.state !== ABSENCE_STATE) fail();
+@@ -498 +559 @@
+-  if (observation.kind !== 'container') fail();
++  if (observation.kind !== CONTAINER_KIND) fail();
+@@ -500,6 +561,6 @@
+-    'kind',
+-    'containerId',
+-    'state',
+-    'labels',
+-    'imageDigest',
+-    'runtimeConfigDigest',
++    FIELD.KIND,
++    FIELD.CONTAINER_ID,
++    FIELD.STATE,
++    FIELD.LABELS,
++    FIELD.IMAGE_DIGEST,
++    FIELD.RUNTIME_CONFIG_DIGEST,
+@@ -508 +569 @@
+-    maximumBytes: 64,
++    maximumBytes: MAXIMUM.CONTAINER_ID_BYTES,
+@@ -515 +576 @@
+-  if (observation.labels['io.lagrange.image_digest'] !==
++  if (observation.labels[IMAGE_DIGEST_LABEL] !==
+@@ -517 +578 @@
+-      observation.labels['io.lagrange.runtime_config_digest'] !==
++      observation.labels[RUNTIME_CONFIG_DIGEST_LABEL] !==
+@@ -545 +606 @@
+-  assertExactObject(result, [...RESULT_COMMON_FIELDS, 'observation']);
++  assertExactObject(result, [...RESULT_COMMON_FIELDS, FIELD.OBSERVATION]);
+@@ -555 +616 @@
+-    if (result.observation.labels['io.lagrange.create_operation_id'] !==
++    if (result.observation.labels[CREATE_OPERATION_LABEL] !==
+@@ -557 +618 @@
+-        result.observation.labels['io.lagrange.create_intent_digest'] !==
++        result.observation.labels[CREATE_INTENT_LABEL] !==
+@@ -565 +626 @@
+-  assertExactObject(result, [...RESULT_COMMON_FIELDS, 'observation']);
++  assertExactObject(result, [...RESULT_COMMON_FIELDS, FIELD.OBSERVATION]);
+@@ -572 +633 @@
+-  if (result.observation.kind !== 'absence') fail();
++  if (result.observation.kind !== ABSENCE_KIND) fail();
+@@ -576 +637 @@
+-  assertExactObject(result, [...RESULT_COMMON_FIELDS, 'errorCode']);
++  assertExactObject(result, [...RESULT_COMMON_FIELDS, FIELD.ERROR_CODE]);
+@@ -584,2 +645,2 @@
+-    'errorCode',
+-    'lastObservation',
++    FIELD.ERROR_CODE,
++    FIELD.LAST_OBSERVATION,
+@@ -595,3 +656,3 @@
+-    'errorCode',
+-    'lastObservation',
+-    'fenceState',
++    FIELD.ERROR_CODE,
++    FIELD.LAST_OBSERVATION,
++    FIELD.FENCE_STATE,
+@@ -627 +688 @@
+-    maximumBytes: 36,
++    maximumBytes: MAXIMUM.REQUEST_ID_BYTES,
+--- a/test/runtime/oci-host-agent-protocol-admission.test.js
++++ b/test/runtime/oci-host-agent-protocol-admission.test.js
+@@ -233,0 +234,42 @@
++  it('rejects executable or hidden enrolled key records', () => {
++    const frame = encodeOciHostAgentRequestFrame(requestEnvelope(), KEY);
++    const accesses = [];
++    const observe = (value) => () => {
++      accesses.push(value);
++      return value;
++    };
++    const proxy = new Proxy(
++      enrolledKeyRecord(),
++      new Proxy({}, {get: (_, method) => observe(Reflect[method])}),
++    );
++    const accessor = (value) => ({enumerable: true, get: observe(value)});
++    const accessorRecord = Object.defineProperties({}, {
++      clusterIncarnation: accessor(IDENTITY.clusterIncarnation),
++      key: accessor(KEY),
++      nodeId: accessor(IDENTITY.nodeId),
++    });
++    const hiddenRecord = (field) => Object.defineProperty(
++      enrolledKeyRecord(), field, {value: true},
++    );
++    const revocable = Proxy.revocable(enrolledKeyRecord(), {});
++    revocable.revoke();
++    const decode = (record) => decodeOciHostAgentRequestFrame(
++      frame,
++      requestDecodeOptions({resolveKey: () => record}),
++    );
++    const unavailable = (error) =>
++      error.code === OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE &&
++      error.message === OCI_HOST_AGENT_PROTOCOL_ERROR.KEY_UNAVAILABLE;
++
++    for (const record of [
++      proxy,
++      revocable.proxy,
++      accessorRecord,
++      hiddenRecord(Symbol('hidden-enrollment-state')),
++      hiddenRecord('hiddenEnrollmentState'),
++    ]) {
++      assert.throws(() => decode(record), unavailable);
++    }
++    assert.deepEqual(accesses, []);
++  });
++
+

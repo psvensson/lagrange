@@ -1,0 +1,86 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-installation-reconciler",
+  "statement": "Under one production write authority, every Phase-1 OCI or WASM install and upgrade intent deterministically records one non-retryable activation_unsupported failure and settles recorded_not_running, while removal of an installation that never activated settles removed; startup and periodic authoritative reconciliation recover partial work without service-definition, instance, endpoint, or runtime-driver mutation.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-installation-reconciler",
+      "reportDir": "test-output/reports/service-installation-reconciler",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "phase-one-truth-boundary",
+      "statement": "Neither the current OCI container driver nor the current WASM component adapter is classified as a genuine production activation capability. Install and upgrade therefore record failure code activation_unsupported with retryable=false, retain latest_failure_id, and transition to recorded_not_running. They never report running, converged, or activated."
+    },
+    {
+      "id": "zero-runtime-mutation",
+      "statement": "Unsupported Phase-1 reconciliation performs zero service_definitions, services, or service_endpoints mutation and zero runtime-driver, ServiceLifecycleManager, ServiceReconciler, or RuntimeServiceRebalancerOwner calls. Removal of an installation that never activated is a catalog-only removing-to-removed no-op."
+    },
+    {
+      "id": "catalog-owner-only",
+      "statement": "The reconciler consumes an explicit authoritative projection and guarded transition methods from ServiceInstallCatalogOwner. It does not read catalog tables through raw SQL or cache projections, choose a latest per-service head, or add a parallel desired-vs-actual owner. Each installation intent is processed independently."
+    },
+    {
+      "id": "authority-and-concurrency",
+      "statement": "Only the service_installations-p1 leader schedules reconciliation. Leadership loss cancels future scheduling and invalidates the current generation before later awaited steps; any unavoidable handoff overlap submits the same deterministic idempotent catalog operation and is coalesced or defeated by immutable identity plus catalog CAS. Work is single-flight per installation, overlapping event/startup/sweep triggers coalesce safely, and events may only enqueue work."
+    },
+    {
+      "id": "deterministic-recovery",
+      "statement": "An authoritative startup scan and injected-clock periodic sweep recover missed events, restart, lost responses, and interruption after failure persistence but before the final rollout transition. Identical sweeps do not duplicate failure rows or regress terminal state; production timers are unref'd and cleanup stops further work."
+    },
+    {
+      "id": "production-composition",
+      "statement": "The terminal service-lifecycle-authoritative-sql-handoff Quest is an engagement prerequisite. The reconciler is retained by the steady-state production runtime composition, uses the exact ServiceInstallCatalogOwner retained with lifecycle command submission after that authoritative SQL-engine and gateway handoff, and starts/stops with service_installations-p1 leadership. No feature flag, bootstrap-only loop, test-only runtime branch, or second ServiceReconciler is allowed."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario covers OCI and WASM install/upgrade, never-activated removal, event loss, repeated triggers, restart, partial failure attachment, stale/non-authoritative execution, clock advance, reentrant sweep, and cleanup, while asserting exact failure identity, stable latest_failure_id, truthful recorded_not_running/removed state, and empty actual-state and driver call ledgers."
+    },
+    {
+      "id": "bounded-source-scope",
+      "statement": "Production changes are bounded to one installation reconciliation owner, ServiceInstallCatalogOwner reconciliation projections/transitions, and shared steady-state composition/authority lifecycle. Tests and one scenario runner may cover those paths. Genuine OCI/WASM activation, service-definition construction, placement, endpoints, CLI behavior, and provider selection are excluded."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must approve the exact source patch and aggregate fingerprint and show the scenario turns red when unsupported failure persistence, final recorded_not_running transition, startup/sweep recovery, write-authority gating, per-install single-flight, or zero-runtime-mutation enforcement is removed."
+    }
+  ],
+  "sealedAt": "d2a74764c4e877b083b8fedf57fb12cb10e4f512",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+      "draftedAtCommit": "d2a74764c4e877b083b8fedf57fb12cb10e4f512"
+    },
+    "frontiers": [
+      {
+        "id": "service-installation-reconciler-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-installation-reconciler",
+            "reportDir": "test-output/reports/service-installation-reconciler",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

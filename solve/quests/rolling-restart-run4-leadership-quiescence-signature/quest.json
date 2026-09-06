@@ -1,0 +1,59 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-run4-leadership-quiescence-signature",
+  "statement": "Run3-shaped rolling-restart leadership quiescence residual has deterministic proof: a stale or transient missing leader-signature entry for an otherwise converged control-plane snapshot no longer prevents the post-restart quiescence stable window, or the retained stat-gate-20260630T173805Z-run3 shape is proven to be a real product leadership loss requiring a separate owner fix; prior run4 child Quest closures and parent Wilson/statistical closure remain outside this child Quest.",
+  "epic": "convergence-timeout-leadership-settle",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-leadership-quiescence-signature.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-first-no-stat-gate-closure",
+      "statement": "Do not run or require a rolling-restart statistical gate for this child Quest; prove the retained run3 shape with focused deterministic evidence, retained-report replay, or in-process harness/analyzer fixtures."
+    },
+    {
+      "id": "preserve-real-leader-loss",
+      "statement": "Do not hide real raft leadership loss, missing control-plane leaders, active operation drain, publication debt, readiness failure, or critical-system spread gaps. Any quiescence selector change must only cover the retained all-green-with-transient-or-stale-leader-signature shape."
+    },
+    {
+      "id": "no-parent-closure-claim",
+      "statement": "Do not claim the parent rolling-restart Wilson/statistical closure bar from this child Quest."
+    }
+  ],
+  "sealedAt": "6e39ff165b01a490d8516f92c17ceff76516b2ad",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-run4-drain-residual",
+      "planDoc": "solve/epics/convergence-timeout-leadership-settle.md"
+    },
+    "doneWhenSealed": {
+      "closure": "Focused deterministic evidence proves the stat-gate-20260630T173805Z-run3 leadership-quiescence shape: an otherwise converged post-restart control-plane snapshot with publication, priority recovery, active-gate snapshot coverage, readiness, critical-system spread, and effective in-flight drain satisfied no longer fails solely because the leader signature drops a stale/transient partition entry near the stable-window threshold; or the retained shape is proven to be real product leadership loss requiring a separate owner fix. Parent Wilson/statistical closure remains outside this child Quest.",
+      "oracle": "solve/oracle/rolling-restart-run4-leadership-quiescence-signature.json"
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-run4-leadership-quiescence-signature-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-run4-leadership-quiescence-signature.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

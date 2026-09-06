@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "quest_model_guidance_active",
-  "detail": "Owner-boundary and architecture Quests now surface model-contract guidance in Quest health/context, attach it to recorded theories, and document model:contracts as the theory discriminator."
-}

@@ -1,8 +1,14 @@
 ---
 id: control-plane-write-wedge-leader-local-establishment
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: resolved
 graduatesTo: null
+quests:
+  - rolling-restart-w1-priority-establishment-write-unwedge
+authorizes: []
+legacyStatus: resolved
 ---
 
 > # 🚦 UPDATE 2026-07-01 — NO ESTABLISHMENT-WRITE LEVER SURVIVES (Head-B EXHAUSTED). Frontier = validate the Head-A fix, NOT a write lever.

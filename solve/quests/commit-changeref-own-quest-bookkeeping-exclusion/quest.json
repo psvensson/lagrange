@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "commit-changeref-own-quest-bookkeeping-exclusion",
+  "statement": "A measurement-only (commit:) changeRef whose committed tree-to-tree range bundles the recording quest's OWN solve/ bookkeeping (solve/changes|log|quests|oracle|report|state|FRONTIER.generated.md for that quest id) alongside its source paths is no longer scope-refused in a runtime/product quest: inspectCommitChangeArtifact excludes the quest's own bookkeeping paths from the workflow-scope classification, mirroring what the Solver's own checkpoint commits legitimately bundle. Foreign workflow paths (scripts/solve/, another quest's solve/ tree, package.json, docs/steering/) in the range are STILL refused. This unblocks discharging a base-unreachable rejected-attempt replacement obligation when the reviewed source content is already committed in a checkpoint that bundled the quest's own bookkeeping (the oci-container-driver-live-activation impasse). Red-first test in test/solve/commit-changeref.test.js proves own-quest solve/ paths are excluded and foreign workflow paths still refuse; the change is subagent-verified.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "babdec603b4fbed85ac6fd7a703f40c7e1ded595",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "commit-changeref-own-quest-bookkeeping-exclusion-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -8,7 +8,7 @@
 // literal at the call site). Metric 0 == every site consumes the owner table.
 //
 // With --oracle it writes the quest oracle file
-// (solve/oracle/voter-readiness-visibility-single-owner-table.json); `done`
+// (scripts/oracles/voter-readiness-visibility-single-owner-table.json); `done`
 // additionally requires --with-gates (lint + targeted suites) to pass, per the
 // sealed doneWhen. Exclusions are committed data below, each with a reason
 // tied to the quest's NOT-in-scope list; new sites are counted by default.
@@ -39,7 +39,7 @@ const LOCAL_STR_OWNED_014 = '\n';
 
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
-const ORACLE_FILE = 'solve/oracle/voter-readiness-visibility-single-owner-table.json';
+const ORACLE_FILE = 'scripts/oracles/voter-readiness-visibility-single-owner-table.json';
 const ORACLE_TARGET = 0;
 
 // The single owner of voter-readiness semantics. Role-set declarations and

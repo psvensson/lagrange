@@ -114,7 +114,7 @@ The normal sequence is:
 4. map the owner path or focused proof surface
 5. execute one bounded attempt
 6. rerun the focused proof
-7. commit the attempt with `node scripts/solve.js step --commit`
+7. record the attempt with `node scripts/solve.js note --attempt` and land it
 
 ## 18. Interactions Between Owners Are Owned Contracts
 

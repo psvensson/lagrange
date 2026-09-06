@@ -1,8 +1,25 @@
 ---
 id: golden-capability-gold-plating
-status: resolved
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests:
+  - bootstrap-mode-routing-property-repair
+  - failed-authoritative-read-admission-invariant
+  - model-tlc-mode-selection
+  - planner-retention-admission-hold-model
+  - priority-partition-census-artifact-identity-closure
+  - priority-recovery-census-diagnostic-pass-through
+  - priority-service-publication-census-model
+  - priority-spread-cold-boot-dt
+  - reservation-reconcile-query-operation-binding
+  - service-init-cli-scaffold-contract-repair
+  - solver-operator-workflow-land-regressions-v2
+  - solver-operator-workflow-land-regressions
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Epic: gold-plate the once-achieved capabilities (stop the flip-flop tax)

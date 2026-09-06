@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "listener-port-model-cli-guidance-gap",
+  "statement": "Every admin CLI guide and interactive help surface targets the canonical admin WebSocket default rather than the REST port, with a guard that fails on contradictory localhost:8080 examples.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "listener-port-model-cli-guidance-gap",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "b42734c72624ddf3e5cc26734ab60d3ef233cd82",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "listener-port-model-single-authority",
+      "planDoc": null,
+      "draftedAtCommit": "b42734c72624ddf3e5cc26734ab60d3ef233cd82"
+    },
+    "frontiers": [
+      {
+        "id": "listener-port-model-cli-guidance-gap-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "listener-port-model-cli-guidance-gap",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

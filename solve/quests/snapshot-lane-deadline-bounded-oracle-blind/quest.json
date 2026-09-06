@@ -1,0 +1,76 @@
+{
+  "schema": "solve-quest/2",
+  "id": "snapshot-lane-deadline-bounded-oracle-blind",
+  "statement": "A snapshot lane still in flight at the certification deadline is classified as an unreadable oracle, not as an inactive cluster: the blindness resolver (test/distributed/harness/oracle-blindness.js) decides on the typed deadline-bounded laneOutcome marker its producer emits and carries the typed lane reason as the transport error, instead of inferring sight from the empty probe-witness list such a record necessarily has. On GCP run 2026-08-30T17-32-03 every one of the five nodes reported active and the seed answered control_snapshot at t+62.9 s against a 61 s verdict, yet the harness printed 'Not all nodes reached ACTIVE state within 60000ms' — a label that sent five consecutive forensics hunting a cluster stall that never existed. An empty probe-witness list from any other producer keeps its prior not-blind meaning, the gate verdict is unchanged (a deadline-bounded lane still fails the check because coverage is incomplete), and the window, poll interval, extension rules, re-sample admission and progress classification are untouched. Proven deterministically on the real resolver: red on HEAD, green after.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/snapshot-lane-deadline-bounded-oracle-blind.receipt.json",
+      "requiredReceipts": [
+        "deadline-bounded-snapshot-lane-is-oracle-blind",
+        "empty-witness-list-from-other-producers-unchanged",
+        "blindness-classification-unchanged",
+        "attempt-join-contract-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "typed-marker-not-inference",
+      "statement": "Blindness for a deadline-bounded lane is decided by the typed laneOutcome marker its producer emits, never by inferring sight or blindness from an empty probe-witness list; an empty list from any other producer keeps its prior not-blind meaning."
+    },
+    {
+      "id": "no-verdict-change",
+      "statement": "The gate verdict itself is unchanged: a deadline-bounded lane still FAILS the ACTIVE check (coverage is incomplete); only its classification and reported reason change, so an unreadable oracle is never reported as an inactive cluster."
+    },
+    {
+      "id": "no-window-or-cadence-change",
+      "statement": "The 60-second certification window, the poll interval, the extension rules, the re-sample admission and the progress classification are unchanged; no src/ change."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness on the real blindness resolver reproducing GCP run 2026-08-30T17-32-03 (all five nodes active, coverage 0/5, lane in flight at the deadline), red on HEAD and green after, with the surrounding blindness scenarios and the attempt-join contract as controls that must stay green."
+    }
+  ],
+  "sealedAt": "aaf05ce040011904a2651deb06f17cc4829e1997",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "cluster-active-probe-resample-after-snapshot-lane",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "f8e161599"
+    },
+    "frontiers": [
+      {
+        "id": "snapshot-lane-deadline-bounded-oracle-blind-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/snapshot-lane-deadline-bounded-oracle-blind.receipt.json",
+            "requiredReceipts": [
+              "deadline-bounded-snapshot-lane-is-oracle-blind",
+              "empty-witness-list-from-other-producers-unchanged",
+              "blindness-classification-unchanged",
+              "attempt-join-contract-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

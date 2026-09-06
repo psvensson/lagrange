@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "blocked-spread-evaluation-event-wake",
+  "statement": "A blocked spread evaluation re-evaluates when its blocking condition clears instead of sleeping out a flat 70-80s timer: the rebalancer's blocked-branch scheduling (resolvePrioritySpreadPlanningGateDecision -> getBackgroundPrioritySpreadReleaseDelayMs, [70000,80000)ms flat) gains an event-driven wake through the existing owners — the shared background-priority-spread-release tracker notifies its readiness-owner scope on stable release, and placement-eligibility/operation-terminal edges already surfaced by the priority-recovery visibility cache reach parked entities — so formation completes its spread in consecutive fast evaluations rather than one burst followed by an 80s dead window. Verified at HEAD 24c0b1edc (run ec-q6-20260810T092844Z): with progress-proof promotion landed, formation mints 3 CREATE_REPLICA in the first 8s (proofs granted ~2.5s after learner start) and then stalls — the final evaluation logs blockedPartitionCount=6 largestSpreadGap=2 delayMs=79955 and no further moves occur within the 135s budget; prior research (solve/changes/formation-barrier-spread-release-oscillation/RESEARCH.md and the leadership-flap trace) established the delay law is flat with NO reset seam for parked entities (bindPriorityRecoveryVisibilityCacheListener early-returns for non-priority entities; every shouldEnqueue predicate ANDs evidence.priorityPartition; the shared tracker rearm-on-stale can hold all entities), and that the admission hold's feasibility scan counts only connection_state=ready targets while placement eligibility accepts JOINING — two owners disagreeing about actionability. Fail-closed floor: the stable-window semantics of the release tracker (70s post-clear stability) are a recorded oscillation cure and must not be weakened — the wake replaces dead TIMER time after release, never the stability window itself; fixed-cadence fallback timers remain as the safety net.",
+  "epic": "latent-convergence-blocker-census",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/blocked-spread-evaluation-event-wake.receipt.json",
+      "requiredReceipts": [
+        "blocked-spread-wakes-on-release",
+        "stability-window-and-fallback-preserved"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "24c0b1edc2569d7fe6da2ec84be784a9b242134b",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "over-target-cap-spread-cure-wipe",
+      "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+      "draftedAtCommit": "24c0b1edc2569d7fe6da2ec84be784a9b242134b"
+    },
+    "frontiers": [
+      {
+        "id": "blocked-spread-evaluation-event-wake-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/blocked-spread-evaluation-event-wake.receipt.json",
+            "requiredReceipts": [
+              "blocked-spread-wakes-on-release",
+              "stability-window-and-fallback-preserved"
+            ]
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "sweep-timer",
+      "formation-circularity"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "solved",
-  "note": "PublicationConvergence.tla proves EventuallySteady holds iff ScheduledReconcileAct. Under transport saturation, when the diagnostic probe is cache-only, the scheduled owner-command Tick triggers a weekly-fair membership-publication reconcile directly, and the regression test test/control-plane/failure-class-owner-path-regression.test.js asserts that publication_drain_determinism invariant checks pass under all conditions."
-}

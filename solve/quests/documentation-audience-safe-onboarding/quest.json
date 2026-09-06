@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "documentation-audience-safe-onboarding",
+  "statement": "Human product documentation presents one current, internally consistent newcomer path with a generated capabilities and limitations reference, a distributed-systems primer, a vocabulary map, a runnable first-hour tutorial, and a supported-first service guide; contributor and agent entry paths remain separate; human documents contain no steering links, Solver mechanics, or planning/evidence detours; documentation audits and semantic claim checks fail closed on audience or current-truth drift.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "documentation-audience-safe-onboarding",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "fde67e3ca9c3fe74175771a045764554a963bcca",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "docs/steering/audience-boundary.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "fde67e3ca9c3fe74175771a045764554a963bcca"
+    },
+    "frontiers": [
+      {
+        "id": "documentation-audience-safe-onboarding-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "documentation-audience-safe-onboarding",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-candidacy-reluctance-drain-source",
+  "statement": "A raft replica that is deliberately stepped down for drain (requestTrackedPartitionLeaderHandoff) becomes candidacy-RELUCTANT for a bounded window: its randomized election timeout is inflated by a finite multiplier (unconditional, no env flag), so it stops re-winning the successor election ahead of caught-up peers — the 68%-undirected re-gain waste measured by leadership-flap-attribution-census — while (a) liveness is preserved unconditionally (finite inflation: if no peer can win, the reluctant node still campaigns within the window), (b) the deliberate R1/R3 replacement-election path is untouched (requestElectionNow passes an explicit 1ms duration that bypasses timeout()), and (c) raft safety is untouched (no vote/term/log logic changes). Proven deterministically on the DT6 real-liferaft substrate with seeded election RNG: red-on-revert seed sweep where the stepped-down leader re-wins WITHOUT the lever and never re-wins ahead of a live caught-up peer WITH it, plus a liveness case (no viable peer -> reluctant node still becomes leader), plus subagent verification. No Docker gates; value is settle-time tail-shortening per the attribution census.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/raft-candidacy-reluctance-drain-source.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "ec6d7a8db0cb99b77fa005af4568cd62b428ca58",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "rolling-restart-core-stability",
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "raft-candidacy-reluctance-drain-source-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/raft-candidacy-reluctance-drain-source.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

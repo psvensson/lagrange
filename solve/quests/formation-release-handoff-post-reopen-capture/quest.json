@@ -1,0 +1,90 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-release-handoff-post-reopen-capture",
+  "statement": "The seed-owned formation-release handoff closure owner (src/control-plane/formation-release-handoff-closure-owner.js) mints a successor generation when a captured generation completes after the operation-ledger reopen has already been observed (authority not READY, recovery reason priority_partitions_not_spread) and connected JOINING members of the canonical set remain without a contract: a typed successor-capture admission (closed | completed_generation) opens at completion and admits exactly one capture on the next evaluation while isRetainableAuthority still holds, carrying the current publication epoch and the completed generation's fence and boot incarnation, non-authorizing until the durable readback, closed by that capture, by any revocation, or by the first incompatible or absent authority observation, so late joiners (run 2026-08-30T10-05-10: n3/n4 waited 55 s at waiting_for_startup_authority with formationReleaseHandoffState null) consume a contract through the unchanged CONSUMER validation and release at the same instant as cohort members instead of waiting for the raw three-way spread cure. The READY-gated capture, retention across a compatible reopen, cohort selection, revocation, consumer code, budgets, cadences, the 60-second window and the 120-second barrier are unchanged; nothing derives ACTIVE or READY from nodes.status, publication counts, or coverage. Proven deterministically on the real owner: red on HEAD (no successor, late joiner null), green after.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-release-handoff-post-reopen-capture.receipt.json",
+      "requiredReceipts": [
+        "post-reopen-completion-captures-successor",
+        "late-joiner-consumes-successor-and-releases",
+        "pre-reopen-capture-unchanged",
+        "no-candidates-no-capture",
+        "successor-capture-bounded",
+        "successor-capture-fails-closed",
+        "pair-witnesses-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-seed-minting-authority",
+      "statement": "Only the seed's formation-release closure owner mints a successor generation, and only on the evaluation after a captured generation completes, while isRetainableAuthority(authority, completedGeneration) still holds."
+    },
+    {
+      "id": "typed-bounded-admission",
+      "statement": "The successor admission is one typed variant (closed | completed_generation) closed by the successor capture, by any revocation, and by the first incompatible or absent authority observation; it never reopens without a new completion; repeated evaluations mint no generation, log no transition and issue no durable write; no candidates means no capture."
+    },
+    {
+      "id": "consumer-validation-unchanged",
+      "statement": "A successor captured under the reopen carries the current publication epoch and the completed generation's fence and boot incarnation, is non-authorizing until the durable readback, and is consumed only through the unchanged CONSUMER validation; no consumer/joiner code changes."
+    },
+    {
+      "id": "unchanged-owner-rules",
+      "statement": "The READY-gated capture, retention across the compatible reopen, cohort selection from the canonical set, and member-loss/incarnation/substantive-block revocation are byte-for-byte unchanged; budgets, cadences, the 60-second GCP certification window and the 120-second barrier are unchanged; no sleeps."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness on the real closure owner reproducing run 2026-08-30T10-05-10 (reopen observed before gen-1 completes, two pre-ready candidates), red on HEAD (3/8) and green after (8/8), with the pre-reopen sequence and both pair witnesses as controls that must stay green; no GCP run is part of the proof."
+    }
+  ],
+  "sealedAt": "64befd99423145510b719b3bb2dfb1975fdc5c34",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "formation-release-handoff-closure-v4",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "97df29720"
+    },
+    "frontiers": [
+      {
+        "id": "formation-release-handoff-post-reopen-capture-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/formation-release-handoff-post-reopen-capture.receipt.json",
+            "requiredReceipts": [
+              "post-reopen-completion-captures-successor",
+              "late-joiner-consumes-successor-and-releases",
+              "pre-reopen-capture-unchanged",
+              "no-candidates-no-capture",
+              "successor-capture-bounded",
+              "successor-capture-fails-closed",
+              "pair-witnesses-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

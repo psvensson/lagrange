@@ -1,8 +1,19 @@
 ---
 id: hysteresis-consolidation
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: active
 graduatesTo: null
+quests:
+  - node-liveness-semantic-projection-owner-bootstrap-readiness-fixture-repair
+  - node-liveness-semantic-projection-owner-clock-publish-repair
+  - node-liveness-semantic-projection-owner
+  - readiness-planning-generation-granularity-v3
+  - readiness-routing-bridge-liveness-veto
+  - readiness-routing-cache-lag-bridge
+authorizes: []
+legacyStatus: active
 ---
 
 # Epic: consolidate the fragmented hysteresis mechanisms

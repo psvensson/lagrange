@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "model-owner-trace-validation",
+  "statement": "Representative runtime traces can be checked against owner, handoff, and active-gate models so harness summaries are backed by model-conformant event sequences rather than symptom-only outcomes.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/model-owner-trace-validation.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "9867129e21fc2cebddc4e0e35df43a0be59042ca",
+  "legacy": {
+    "priority": 1,
+    "frontiers": [
+      {
+        "id": "model-owner-trace-validation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/model-owner-trace-validation.json"
+          }
+        }
+      }
+    ],
+    "links": {
+      "roadmapRow": null,
+      "specRef": "core-topology-control-plane-rewrite",
+      "closesCL": [],
+      "parentQuest": null
+    },
+    "migratedBy": "solve-v2 migration"
+  }
+}

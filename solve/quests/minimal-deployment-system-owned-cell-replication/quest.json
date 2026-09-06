@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-system-owned-cell-replication",
+  "statement": "Binding declarations contain no elasticity, replica-count, voter, or learner intent; Binding-derived service definitions never derive placement targets from application input; and the sole RuntimeServiceRebalancerOwner and UnifiedRebalancer path derives Cell target, minimum, maximum, topology, capacity, and affinity decisions from the existing system-owned runtime-service policy while request Cell readiness and routing remain unchanged and partition quorum ownership is untouched.",
+  "epic": "minimal-deployment-surface",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-system-owned-cell-replication",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "6d76b9dcf324fc6cd7cff195fa9cbf7bfb3524e2",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": "minimal-deployment-change-cell-runtime-activation",
+      "planDoc": "solve/epics/minimal-deployment-surface.md",
+      "draftedAtCommit": "6d76b9dcf324fc6cd7cff195fa9cbf7bfb3524e2"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-system-owned-cell-replication-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-system-owned-cell-replication",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-land-generated-output-coverage",
+  "statement": "Terminal landing no longer stops with committed: no (commit-gate) when the only paths outside the recorded attempt union are registered generated outputs (the test-classification manifests and the import-graph seal) whose bytes are byte-identical to a fresh regeneration from the exact candidate snapshot: scripts/solve/generated-dependencies.js exposes generatedOutputCoverage (typed FRESH/STALE/UNAVAILABLE), the landing union guard treats only FRESH outputs as covered and rides them in the terminal commit scope, while STALE or UNAVAILABLE outputs and every non-generated path keep blocking with the union guard's unchanged code; the land step order is untouched. Proven deterministically on the real landing preflight and commit path with the exact two-step sequence of 2026-08-30: red on HEAD (commit-gate stop, second land needed), green after (one land commits union plus fresh seal).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-land-generated-output-coverage.receipt.json",
+      "requiredReceipts": [
+        "fresh-generated-seal-covered-at-land",
+        "landing-commits-fresh-seal-with-union",
+        "classification-manifest-fresh-covered",
+        "stale-generated-output-stays-uncovered",
+        "non-generated-uncovered-path-still-blocks-unchanged",
+        "evidence-only-landing-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-landing-owner",
+      "statement": "The Solver landing/attempt owner under scripts/solve remains the single authority; no duplicated predicate is introduced elsewhere."
+    },
+    {
+      "id": "byte-identical-only",
+      "statement": "A registered generated output (including the import-graph seal) is covered at landing iff its bytes equal a fresh regeneration from the exact candidate snapshot; STALE or UNAVAILABLE stays uncovered and blocks with the union guard's existing code."
+    },
+    {
+      "id": "landing-order-unchanged",
+      "statement": "The land step order is untouched; coverage is evaluated only when every uncovered path is a registered generated output, and the union guard's block for any other path is byte-for-byte unchanged."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic replay of the recorded operator sequence through the real Solver modules on a temporary repository fixture, red on HEAD and green after, with controls that must stay green."
+    }
+  ],
+  "sealedAt": "38e1fec83440b8e6dff6e8a27f120929b3e6e93e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+      "closesCL": [],
+      "parentQuest": "solver-land-recorded-attempt-union-guard",
+      "planDoc": "docs/steering/roadmap.md",
+      "draftedAtCommit": "cfef64c3d"
+    },
+    "frontiers": [
+      {
+        "id": "solver-land-generated-output-coverage-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/solver-land-generated-output-coverage.receipt.json",
+            "requiredReceipts": [
+              "fresh-generated-seal-covered-at-land",
+              "landing-commits-fresh-seal-with-union",
+              "classification-manifest-fresh-covered",
+              "stale-generated-output-stays-uncovered",
+              "non-generated-uncovered-path-still-blocks-unchanged",
+              "evidence-only-landing-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

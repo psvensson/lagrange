@@ -1,1 +1,0 @@
-{"ts":"2026-07-26T06:45:02.637Z","type":"invariant.evaluated","invariant":"published-node-transport-alive-trough-retention","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-001"}

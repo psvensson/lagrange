@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-partition-census-adapter-authority-closure",
+  "statement": "The production current-priority-placement adapter strictly classifies its options, active-node-view container, and precedence-ordered node lists before admission: malformed explicit higher-priority evidence cannot fall through, hostile values return unavailable without throwing, valid nullable fallbacks remain compatible, and the direct adapter guard passes three consecutive runs.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-partition-census-adapter-authority-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "27450077b7c6760ba639e603630f679beb80acdc",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+      "closesCL": [],
+      "parentQuest": "priority-partition-census-canonical-record-closure",
+      "planDoc": null,
+      "draftedAtCommit": "27450077b7c6760ba639e603630f679beb80acdc"
+    },
+    "frontiers": [
+      {
+        "id": "priority-partition-census-adapter-authority-closure-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-partition-census-adapter-authority-closure",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "adversarial-js-intrinsics",
+      "harness-fidelity",
+      "admission-gating"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-run4-readiness-support-evidence",
+  "statement": "Failure-bundle topology diagnostics consume explicit startup readiness support evidence: when publication, priority recovery, active-gate coverage, and readiness timeline node-reason counts are satisfied, run4 residual analysis no longer reports readiness_startup_support evidence_missing; explicit satisfied support evidence is surfaced under startup_readiness_owner/startup_support_evidence, while truly absent readiness evidence remains evidence_missing.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-readiness-support-evidence.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "9bcfc3cb0e7e0b927780266afd4c0c08032495cd",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-run4-drain-residual",
+      "planDoc": "solve/epics/topology-convergence-hardening.md"
+    },
+    "doneWhenSealed": {
+      "closure": "A deterministic diagnostics regression derived from stat-gate-20260630T051118Z-run1 proves that explicit startup readiness support evidence is surfaced and consumed as startup_readiness_owner/startup_support_evidence instead of leaving readiness_startup_support at evidence_missing, while the prior absent-readiness regression remains evidence_missing.",
+      "oracle": "solve/oracle/rolling-restart-run4-readiness-support-evidence.json"
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-run4-readiness-support-evidence-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-run4-readiness-support-evidence.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "routed-mutation-silent-ledger-write-loss",
+  "statement": "A routed (writeMode=sql-routed single-write) system-table UPDATE that reports success MUST durably replicate to a ledger quorum: persistOperationUpdate must not return true for a write that acked but never landed on any replica. ROOT (design-cdc-nontermination-fix.md gap v, live run-legA-1-2026-07-07T06-34-29Z, on-disk SQLite): replica_operation 26c60ea9 (ratings ADD) logged 'Operation completed' (operation-workflow-transition-persistence.js:315-320 only logs on committed) so persistOperationUpdate returned true, yet the durable ledger row is PENDING/completed_at=NULL on ALL replicas r2/r4/r5/r6 — the terminal (and pending->creating progress) UPDATE never durably landed. The gateway UPDATE reported changeCount>0 or recoveredAfterRetryableFailure against a local/cache copy, confirmPersistedOperationUpdate recorded a witness and returned true, but the write was lost below the persistence layer (routed-mutation quorum-ack gap). Downstream dispatch re-drives forever on 'Cache update not observed for replica operation 26c60ea9' (REPLICA_OPERATION_VISIBILITY_LAG, 46x) -> op immortal in-flight -> demo [2/4] post-load settle stalls. SCOPE: diagnose why a routed UPDATE acks success without durable quorum replication (partition-cdc-parameterized-sql.js:316-357 + the routed-mutation write-mode / quorum-ack layer feeding it); a durability lie must be fixed where durability is claimed, NOT papered over in persistence-methods. NEEDS OWN DIAGNOSIS FIRST. Sibling of formation-ledger-self-move-blocks-cluster-ops (gap ii).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "routed-mutation-silent-ledger-write-loss",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "547b1a4790ba1bb9f82fc5a09e133e715701e748",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "routed-mutation-silent-ledger-write-loss-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "routed-mutation-silent-ledger-write-loss",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

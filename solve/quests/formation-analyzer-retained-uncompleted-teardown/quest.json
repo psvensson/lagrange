@@ -1,0 +1,82 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-analyzer-retained-uncompleted-teardown",
+  "statement": "The five-node formation certification analyzer (scripts/checks/formation-release-handoff-gcp-analysis.js, the single owner of generation classification and closure verdicts) classifies a generation whose last recorded state is active at the seed's draining marker but which never completed as the DISTINCT typed outcome GENERATION_CLASSIFICATION.RETAINED_UNCOMPLETED_AT_TEARDOWN with its own failing invariant noRetainedUncompletedAtTeardown, so run 2026-08-30T07-13-07.175Z (generation e1:4 retained active at teardown) is refused instead of certified, while teardown_truncated keeps its sealed prior semantics; completionMs covers every captured generation and is null (never a partial number) while any generation is stranded or retained-uncompleted; an active terminal without a draining marker stays stranded (fail-closed); nothing derives cluster ACTIVE or READY from nodes.status, publication counts, or coverage. Proven deterministically on an immutable excerpt of the 07-13-07 run: red on HEAD (certified), green after.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-analyzer-retained-uncompleted-teardown.receipt.json",
+      "requiredReceipts": [
+        "retained-uncompleted-at-teardown-classified",
+        "retained-uncompleted-typed-outcome-class",
+        "completion-span-covers-every-generation",
+        "completion-span-unchanged-for-completed-generations",
+        "teardown-truncated-class-unchanged",
+        "active-without-drain-marker-stays-stranded",
+        "no-second-active-ready-authority",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-classification-owner",
+      "statement": "The closure analyzer remains the single owner of generation classification and closure verdicts; no other script mints a pass/fail of its own."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Nothing derives cluster ACTIVE or READY from nodes.status, publication counts, or coverage; READY is only the owner's recorded readyNodeIds, and unattributable retention (no draining marker) fails closed as stranded."
+    },
+    {
+      "id": "fail-closed-typed",
+      "statement": "Every outcome is a typed GENERATION_CLASSIFICATION constant with its own invariant; completionMs is null rather than a partial number while any captured generation never completed; teardown_truncated keeps its sealed prior semantics."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness over an immutable excerpt of run 2026-08-30T07-13-07.175Z, red on HEAD (certified) and green after, with unchanged controls that must stay green; no cloud run is part of the proof."
+    }
+  ],
+  "sealedAt": "e5cba2cd098fd28daa684e11bfae932dae2da119",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "formation-release-handoff-closure-v4",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "79a7ac1d4"
+    },
+    "frontiers": [
+      {
+        "id": "formation-analyzer-retained-uncompleted-teardown-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/formation-analyzer-retained-uncompleted-teardown.receipt.json",
+            "requiredReceipts": [
+              "retained-uncompleted-at-teardown-classified",
+              "retained-uncompleted-typed-outcome-class",
+              "completion-span-covers-every-generation",
+              "completion-span-unchanged-for-completed-generations",
+              "teardown-truncated-class-unchanged",
+              "active-without-drain-marker-stays-stranded",
+              "no-second-active-ready-authority",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

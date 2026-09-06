@@ -1,0 +1,6 @@
+{"ts":"2026-07-26T06:39:48.400Z","type":"invariant.evaluated","invariant":"raft-election-restriction-empty-log-last-term-zero","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-042"}
+{"ts":"2026-07-26T06:41:44.434Z","type":"invariant.evaluated","invariant":"raft-election-restriction-empty-log-last-term-zero","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-042"}
+{"ts":"2026-07-26T06:43:06.969Z","type":"invariant.evaluated","invariant":"raft-election-restriction-empty-log-last-term-zero","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-042"}
+{"ts":"2026-07-26T06:44:02.005Z","type":"invariant.evaluated","invariant":"raft-election-restriction-empty-log-last-term-zero","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-042"}
+{"ts":"2026-07-26T06:45:05.223Z","type":"invariant.evaluated","invariant":"raft-election-restriction-empty-log-last-term-zero","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-042"}
+{"ts":"2026-09-06T09:26:16.337Z","source":"solve-v2 migration","type":"terminal","status":"superseded","text":"v1 log with no quest record; closed by the solve-v2 migration"}

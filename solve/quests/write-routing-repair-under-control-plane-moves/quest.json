@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "write-routing-repair-under-control-plane-moves",
+  "statement": "A distributed write to a system partition whose replica was just REPLACE-moved recovers within a bounded window instead of freezing the cluster: when a writer hits NO_HANDLER on a stale placement (the designed handleNoHandlerCandidate -> maybeAwaitRuntimeRoutingRepair path), routing repair restores a writable route even while OTHER control-plane partitions (e.g. control_plane_publications-p1) are themselves mid-move — breaking the observed mutual dependency where repairing replica_operations-p1 routing waited on control-plane state whose publication was blocked on the frozen operations table (live forensics: run-13 finding on movielens-affinity-placement-demo, 5-minute cluster-wide ops freeze, budget pinned 5/5). Proven by a deterministic red-on-revert reproduction of the freeze shape (replica moved + stale route + concurrent second control-plane move -> writes recover on current fix, freeze on revert), with the repair path's engagement asserted and no weakening of readiness gating for genuinely-down nodes.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "write-routing-repair-under-control-plane-moves",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-class",
+      "statement": "Formation-vs-steady-state circular dependency class: the fix must not introduce a new authority or cache (avoid-secondary-caches directive) — finish/unblock the EXISTING repair mechanism (query-executor-write-retry-routing.js maybeAwaitRuntimeRoutingRepair) or the routing-metadata refresh it depends on."
+    },
+    {
+      "id": "c-timeouts",
+      "statement": "TEST-0021: raising timeouts is not a fix; the recovery must come from repair engagement."
+    },
+    {
+      "id": "c-vet",
+      "statement": "Adversarially vet this statement via subagent before first attempt (statement written from single-run forensics; verify the mutual-dependency hypothesis against code before sealing the fix direction)."
+    }
+  ],
+  "sealedAt": "259cf0455122a5730b7e13772eae9fb1837aec6e",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "movielens-affinity-placement-demo",
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "write-routing-repair-under-control-plane-moves-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "write-routing-repair-under-control-plane-moves",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

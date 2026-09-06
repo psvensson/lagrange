@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  ORACLE_FILE,
   buildOraclePayload,
   collectFileSites,
   evaluateOwnerContract,
@@ -13,8 +14,10 @@ import {
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(TEST_DIRECTORY, '../..');
-const PARENT_ORACLE =
-  'solve/oracle/partition-class-ladder-single-owner-table.json';
+// The checker owns where its sealed oracle table lives; the test names the
+// same file through that owner instead of restating a path.
+const PARENT_ORACLE = ORACLE_FILE;
+const NON_PARENT_ORACLE = 'scripts/oracles/child.json';
 
 function productionPath(fileName) {
   return path.join(REPO_ROOT, 'src', 'census-fixture', fileName);
@@ -670,7 +673,7 @@ test('sealed parent target cannot be weakened through done-at aliases', (t) => {
     () => resolveDoneAt(`./${PARENT_ORACLE}`, '125'),
     /cannot change the sealed parent target 0/,
   );
-  t.equal(resolveDoneAt('solve/oracle/child.json', '17'), 17);
+  t.equal(resolveDoneAt(NON_PARENT_ORACLE, '17'), 17);
 
   const result = spawnSync(
     process.execPath,

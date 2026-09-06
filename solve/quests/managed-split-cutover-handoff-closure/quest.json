@@ -1,0 +1,88 @@
+{
+  "schema": "solve-quest/2",
+  "id": "managed-split-cutover-handoff-closure",
+  "statement": "Under concurrent writes, a split source remains routable until one fenced ManagedSplitWorkflow handoff owner proves target-epoch publication and query-plane closure, after which source retirement is exact-once and no source or child routing-readiness terminal failure occurs in the named N>=2 fixed-versus-reverted live A/B.",
+  "epic": "release-0-2-five-node-convergence",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "managed-split-cutover-handoff-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-owner-history-first",
+      "statement": "Treat the split failure as systemic until the complete producer, lifecycle-authority, routing, delivery, retry, publication, recovery, and terminal-consumer cone plus its git history is explicit; implement only after the contradiction and every involved owner are recorded."
+    },
+    {
+      "id": "single-interaction-owner",
+      "statement": "ManagedSplitWorkflow remains the sole split lifecycle authority and owns exactly one subordinate split-cutover-handoff-closure interaction decision; PartitionService, readiness/publication, routing, QueryExecutor, and DistributedWriteCoordinator contribute typed evidence or consume the decision but never become parallel retirement authorities."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "false-cleanup-is-progress-only",
+      "statement": "A real CLEANUP_COMPLETED acknowledgement with own-data sourceMirrorRemoved:false persists replay progress but can never authorize source replica removal, source descriptor deletion, or terminal split completion; inherited, accessor, missing, malformed, stale-fence, and duplicate evidence fail closed."
+    },
+    {
+      "id": "versioned-whole-plane-handoff",
+      "statement": "Source retirement requires a durable versioned proof that the target partition epoch is authoritative, both children are write-and-serve routable, replay is drained, and every active query plane has crossed an in-flight-safe target-epoch observation boundary; local child rows or one observer's readiness are insufficient."
+    },
+    {
+      "id": "event-driven-rearm",
+      "statement": "Publication, readiness, routing, and relevant CDC changes re-arm the same owner-key reconcile decision; do not add arbitrary sleeps, widen query/loader retry, broaden CDC redrive, or create a second retirement timer/authority."
+    },
+    {
+      "id": "preserve-split-safety-floors",
+      "statement": "Preserve durable affectedRows deletion proof, lease and fence validation, exact-once teardown, abort safety, split/merge overlap exclusion, durable replay cursor, sibling epoch promotion, and merge lifecycle semantics."
+    },
+    {
+      "id": "hotpath-live-ab",
+      "statement": "Closure requires a fresh exact-source GCP A/B with N>=2 fixed and N>=2 exact aggregate revert runs under concurrent write load; the fixed arm must prove publication/handoff engagement and strict source-retirement ordering with zero source Partition service not found, child planning_snapshot_refresh_pending terminal failures, or duplicate dissolution."
+    },
+    {
+      "id": "thermal-offload",
+      "statement": "Run only narrow focused deterministic checks locally while monitoring CPU and SSD temperature; run broad, long-running, large, and live cluster validation in GCP."
+    }
+  ],
+  "sealedAt": "f9b82ded73444acd58acbd09e83259aa517fa46f",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "release-0-2-five-node-convergence",
+      "planDoc": "docs/steering/roadmap.md",
+      "draftedAtCommit": "f9b82ded73444acd58acbd09e83259aa517fa46f"
+    },
+    "frontiers": [
+      {
+        "id": "managed-split-cutover-handoff-closure-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "managed-split-cutover-handoff-closure",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "concurrency-serialization",
+      "recovery-replay",
+      "transport-delivery",
+      "harness-fidelity",
+      "admission-gating"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

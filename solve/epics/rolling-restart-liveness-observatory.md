@@ -1,8 +1,18 @@
 ---
 id: rolling-restart-liveness-observatory
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: graduated
 graduatesTo: topology-convergence-hardening
+quests:
+  - rolling-restart-liveness-downstream-witness
+  - rolling-restart-liveness-emulation
+  - rolling-restart-liveness-epic-graduation
+  - rolling-restart-liveness-log-replay
+  - rolling-restart-run4-liveness-residual-agreement
+authorizes: []
+legacyStatus: graduated
 ---
 
 # Epic: Rolling restart liveness observatory

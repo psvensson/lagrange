@@ -1,0 +1,78 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-efficiency-postgresql-comparator-reuse",
+  "statement": "Development iterations can reuse a content-addressed PostgreSQL comparator only when exact semantic, topology, resource, harness, freshness, and drift-revalidation contracts match; otherwise comparator capture is required, while final claim-grade campaigns remain contemporaneously paired.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-postgresql-comparator-reuse",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "development-only-projection",
+      "statement": "Comparator reuse is exploratory development evidence and must remain claimEligible=false. It must never satisfy, replace, or be projected as the contemporaneously paired full-campaign evidence required by comparative-efficiency-movielens-measured-p0-campaign."
+    },
+    {
+      "id": "content-addressed-comparator",
+      "statement": "The PostgreSQL comparator artifact must be immutable and content addressed over exact raw samples, window and resource receipts, capacity summary, dataset/workload/semantic-oracle identity, PostgreSQL image/version/configuration/query-plan/topology identity, harness/protocol/source identity, resource and host envelope, capture time, validity interval, and objective sufficiency decision."
+    },
+    {
+      "id": "objective-capture-sufficiency",
+      "statement": "Comparator capture continues from the sealed minimum to maximum repetition bound until every tail sample is sufficient, capacity is bracketed in every block, and the independent capacity interval meets the sealed relative-width target. Maximum-bound evidence that misses the target remains durable but is not reusable."
+    },
+    {
+      "id": "fail-closed-revalidation",
+      "statement": "Reuse requires an exact compatibility-digest match, unexpired validity, valid source and artifact digests, and a derived drift witness within its sealed tolerance. Missing, accessor-backed, inherited, malformed, stale, mismatched, re-signed, or out-of-tolerance evidence requires fresh comparator capture."
+    },
+    {
+      "id": "independent-not-paired-statistics",
+      "statement": "A Lagrange iteration joined to a stored comparator must use an explicitly independent-sample effect and carry both uncertainty sources. It must never label block ordinals as contemporaneous pairs or reuse paired-effect terminology."
+    },
+    {
+      "id": "no-lagrange-setup-dependency",
+      "statement": "PostgreSQL comparator capture must not start or depend on the Lagrange cluster, Lagrange PostgreSQL ingress service, Request Cell placement, or Binding lifecycle. Lagrange setup failure must not invalidate or force recapture of an otherwise compatible comparator."
+    }
+  ],
+  "sealedAt": "c5ee327e8e504d5d7f90a7d55797607faa77631d",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "comparative-efficiency-movielens-measured-p0-campaign",
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "c5ee327e8e504d5d7f90a7d55797607faa77631d"
+    },
+    "frontiers": [
+      {
+        "id": "comparative-efficiency-postgresql-comparator-reuse-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "comparative-efficiency-postgresql-comparator-reuse",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "adversarial-js-intrinsics",
+      "harness-fidelity"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,14 @@
 ---
 id: solver-streamlining-spec
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: active
 graduatesTo: null
+quests:
+  - solver-streamlining-2026-09
+authorizes: []
+legacyStatus: active
 ---
 
 # Solver streamlining — corrected specification (independent design review)

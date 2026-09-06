@@ -53,7 +53,7 @@ candidate risks, or suggested frontiers. This optional review does not replace
 mandatory independent adversarial vetting before presenting a non-trivial
 hypothesis or proposed lever, or content-bound verification before source
 checkpoint or terminal handoff. Durable conclusions must be recorded with
-`node scripts/solve.js finding` before they are relied on by later attempts.
+`node scripts/solve.js note --finding` before they are relied on by later attempts.
 
 ## Verification Templates
 

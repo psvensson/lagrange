@@ -1,0 +1,83 @@
+{
+  "schema": "solve-quest/2",
+  "id": "durable-withdrawal-cleanup-intent-v2",
+  "statement": "A failed-join withdrawal no longer relies on a pure in-memory reconcile queue that teardown destroys: either a withdrawal intent is persisted before teardown so a later run completes it, or lease-expiry is explicitly documented as the designed fallback (the choice recorded in a finding), and a status-column and endpoint-row reaper alongside the existing lease sweep removes the residual stale rows that today no writer ever drives to STOPPED. doneWhen: the test-receipt probe reads solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json with outstanding 0 — withdrawal-intent-durability and stale-row-reaper receipts passing (deterministic red-on-revert evidence harness).",
+  "epic": "cluster-identity-and-join-fencing",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json",
+      "requiredReceipts": [
+        "withdrawal-intent-durable-across-teardown",
+        "lease-expiry-fallback-explicit",
+        "reaper-drives-status-to-stopped",
+        "reaper-reaps-endpoint-rows"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "explicit-choice",
+      "statement": "Choose one and record it in a finding: persist a withdrawal intent before teardown (durable retry owner), OR explicitly document lease-expiry as the designed fallback. Do not leave DEFERRED silently meaning 'not applied' with no owner."
+    },
+    {
+      "id": "reaper-scope",
+      "statement": "Any reaper must drive the status column to STOPPED and reap endpoint rows, complementing (not replacing) the leader's lease sweep and the active-node projection's stale-lease trim; leftovers must be stale rows, not live routing targets."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the durable-intent or reaper mechanism is reverted while the rest of the change remains."
+    }
+  ],
+  "sealedAt": "3b559f8069180a07cb433474007251a0c97c5f18",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "join-path-audit-finding-8-deferred-withdrawal-retry-owner",
+      "closesCL": [],
+      "parentQuest": "durable-withdrawal-cleanup-intent",
+      "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+      "draftedAtCommit": "3b559f8069180a07cb433474007251a0c97c5f18",
+      "replaces": "durable-withdrawal-cleanup-intent"
+    },
+    "frontiers": [
+      {
+        "id": "withdrawal-intent-durability",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json",
+            "requiredReceipts": [
+              "withdrawal-intent-durable-across-teardown",
+              "lease-expiry-fallback-explicit"
+            ]
+          }
+        }
+      },
+      {
+        "id": "stale-row-reaper",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json",
+            "requiredReceipts": [
+              "reaper-drives-status-to-stopped",
+              "reaper-reaps-endpoint-rows"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

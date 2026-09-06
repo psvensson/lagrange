@@ -1,8 +1,17 @@
 ---
-epicContractVersion: 2
 id: large-scale-data-plane-certification
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: large-scale-data-plane-certification
+quests:
+  - readiness-scale-contract-portfolio-verifier-fix
+  - scale-certification-evidence-contract
+  - scale-certification-receipt-freshness-authoring
+  - scale-certification-receipt-freshness
+authorizes: []
+legacyStatus: null
 ---
 
 # Large-scale data-plane certification

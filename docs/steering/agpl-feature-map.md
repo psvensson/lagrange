@@ -95,7 +95,7 @@ be completed.
 Phase 0.1 feature scope is listed below. Whether the release is currently
 exit-complete is intentionally not tracked in this roadmap.
 
-Use `solve/quests/` and `solve/report/` for active release-gate truth. Archived
+Use `solve/quests/<id>/` (quest.json, log.ndjson, evidence/) for active release-gate truth. Archived
 pre-Quest release notes live in git history (the `_legacy_work/` checkout copy
 was pruned) for historical context only.
 

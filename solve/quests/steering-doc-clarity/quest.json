@@ -1,0 +1,73 @@
+{
+  "schema": "solve-quest/2",
+  "id": "steering-doc-clarity",
+  "statement": "The 17 audited steering-doc clarity issues are resolved (or explicitly deferred): packs are labeled as priority subsets, core.md is self-sufficient for first-read vocabulary, stop-conditions/ladder/ownership are stated once, dangling refs and reworded duplicates are fixed; steering:check regenerates green, no GOV/ARCH/TEST id remaps without citation updates, and the diff is subagent-verified.",
+  "epic": "steering-doc-clarity",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/steering-doc-clarity.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "917a9ddd4cab5e22481481c1f1a0164eed5f2f01",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/steering-doc-clarity.md"
+    },
+    "frontiers": [
+      {
+        "id": "mechanical-fixes",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/steering-doc-clarity-mechanical-fixes.json"
+          }
+        }
+      },
+      {
+        "id": "pack-hygiene",
+        "priority": 2,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/steering-doc-clarity-pack-hygiene.json"
+          }
+        }
+      },
+      {
+        "id": "framing-and-vocab",
+        "priority": 3,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/steering-doc-clarity-framing-and-vocab.json"
+          }
+        }
+      },
+      {
+        "id": "ownership-map",
+        "priority": 4,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/steering-doc-clarity-ownership-map.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

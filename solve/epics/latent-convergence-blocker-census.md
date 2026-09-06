@@ -1,8 +1,25 @@
 ---
 id: latent-convergence-blocker-census
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: graduated
 graduatesTo: topology-convergence-hardening
+quests:
+  - blocked-spread-evaluation-event-wake
+  - cdc-null-sentinel-where-rendering
+  - formation-barrier-release-snapshot-coherence
+  - formation-barrier-spread-cure-admission-liveness
+  - formation-barrier-spread-cure-final-landing
+  - formation-barrier-spread-cure-liveness
+  - formation-barrier-spread-cure-test-classification
+  - formation-barrier-spread-release-oscillation
+  - over-target-cap-spread-cure-wipe
+  - partition-callback-read-failure-typed-outcome
+  - raft-committed-prefix-conflict-livelock
+  - terminal-write-refusal-retry-ownership
+authorizes: []
+legacyStatus: graduated
 ---
 
 # Epic: Latent convergence-blocker census (parallel deep analysis)

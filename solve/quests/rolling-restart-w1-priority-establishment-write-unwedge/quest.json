@@ -1,0 +1,70 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-w1-priority-establishment-write-unwedge",
+  "statement": "Re-establish the GENUINE current dominant Head-B rolling-restart PASS blocker from FRESH evidence and close it high-care - NOT presuming the classic leader-local establishment-write lever. The write-wedge epic's own 2026-06-24 re-grounding REFUTED the specific lever-(a)-on-a-wedged-replica_operations-write premise (the op reached REMOVED / already covered by DRAIN_LOCAL_PROGRESS; the control plane CONVERGES, it just was not queryable in time; the real scenario-failing assertion was the 30s QUERY_ENGINE_UNAVAILABLE, now FIXED by the default-on early-admin SQL engine that landed the campaign's first PASS), and the Head-A over-replication fix (4700a47b) has since landed. Deterministic-first: identify the binding establishment/drain/visibility stall that burns the joiner's ~120s readiness budget from the FRESHEST gate evidence, reproduce it below the gate RED-on-revert, then close it owner-locally IF a genuine lever exists (write-substrate/quorum safety invariants held + subagent-verified) - OR honestly conclude the residual is within the sealed Wilson-95 statistical closure and NO high-payoff lever remains. The sealed safety-floor + Wilson bar must not regress; re-seal upward only on fresh N>=15 evidence.",
+  "epic": "control-plane-write-wedge-leader-local-establishment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-w1-priority-establishment-write-unwedge.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "identify-before-lever-HARD",
+      "statement": "Step 1 (identify the genuine binding blocker from FRESH evidence + a red-on-revert below-gate repro) MUST complete before any write-path or lever code. Do not presume the leader-local establishment-write lever; the classic lever-(a) premise and the query-engine assertion are refuted/fixed. Manufacturing a lever for a refuted premise is the failure mode this constraint forbids."
+    },
+    {
+      "id": "write-substrate-safety-subagent-verify-HARD",
+      "statement": "Before ANY gate run or commit that touches the write path, spawn a subagent to independently verify the five write-substrate safety invariants (owner-identity; self-supersession + LWW/tombstone fence; no split-brain establishment write; no dropped write-quorum; no lost committed row). Record a finding with evidence subagent:<id>. A failed or uncertain verification blocks the change. Never relaxed."
+    },
+    {
+      "id": "deterministic-first-gate-last",
+      "statement": "The red-on-revert DT repro of the actual identified stall is the PRIMARY evidence and must exist BEFORE any source change. Gate runs are a last resort: at most one N>=15 gate to validate/promote; never gate to see if it helped or to find the next blocker."
+    },
+    {
+      "id": "flag-off-building-block-first",
+      "statement": "Land any lever flag-off default and byte-identical when off; promote or bake in unconditional ONLY after deterministic proof + safety verify + gate validation. No lingering flag at closure."
+    },
+    {
+      "id": "no-statistical-regression-HARD",
+      "statement": "The sealed safety-floor (0 every run) and Wilson-95 convergence bar (docs/convergence-donewhen-metric.md §5, T(5)=0.357) must not regress. Do not relax to the retired consecutive-N proxy. Re-seal T upward only on a fresh N>=15 Wilson lower bound that clears the old."
+    }
+  ],
+  "sealedAt": "c97b1d91d92e0db81f8ea9aa555d7d402740a0d8",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/control-plane-write-wedge-leader-local-establishment.md"
+    },
+    "doneWhenSealed": {
+      "payoffAndCare": "HIGH PAYOFF IF a genuine Head-B lever exists (the epic long named leader-local establishment write the dominant remaining rolling-restart PASS blocker) and HIGH CARE (write-substrate / write-quorum - a bug here = split-brain establishment, lost committed control-plane rows, or dropped write-quorum). Care governs the whole quest: nothing lands on the write path without the safety invariants subagent-verified first. But payoff is CONDITIONAL - step 1 must confirm a real lever exists before any write-path change.",
+      "premiseCorrection_READ_FIRST": "Do NOT re-aim at the refuted targets. REFUTED/FIXED per the write-wedge epic's 2026-06-24 top banner + gate stat-gate-20260623T183833Z failure-bundle: (a) 'extend lever (a) applyLocalPriorityOperationProgressRow to a wedged replica_operations write' - the op reached REMOVED, already covered by LAGRANGE_PR_DRAIN_LOCAL_PROGRESS; no uncovered write transition to absorb; (b) the 30s QUERY_ENGINE_UNAVAILABLE visibility assertion - FIXED by LAGRANGE_EARLY_ADMIN_SQL_ENGINE (default-on, f68d1625); (c) the join-membership deferred-seed (LAGRANGE_JOIN_DEFERRED_SEED) - REFUTED, the join-membership rows are not the wedge. Also: the Head-A surplus-drain / over-replication family was just fixed (4700a47b, process-alive occupied guard). So the target has MOVED repeatedly; trust FRESH evidence, not the stale reactivation banner or the convergence-timeout epic's stale W-1 ranking.",
+      "step1_identify_binding_blocker": "BEFORE any lever or code: re-establish the genuine current dominant rolling-restart blocker from the FRESHEST gate evidence (run a fresh N-small gate or read the freshest existing report; use npm run analyze:latent-blockers + the actual failure-bundle, NOT a stale peel-order). Localize it precisely: is it a real establishment-WRITE wedge (a write that genuinely does not durably land), a DRAIN/quiescence stall (surplus not settling - overlaps the just-fixed Head-A), a VISIBILITY gap (converged-but-not-queryable), or is the residual within the sealed Wilson bar with no single lever? Deterministic-first: reproduce the identified stall below the gate, RED without a lever.",
+      "step2_lever_conditional": "Choose the lever ONLY from the identified binding blocker. If a genuine owner-local establishment-write lever exists (a write that does not durably land under formation load), the structural Option B is the ranked candidate: make the joiner a routable local control-plane replica so writes/reads spread off the single-active seed (deliverLocal at message-router-delivery-pressure-routing.js:353 never engages in formation) - deepest root, largest blast radius, highest care. Do NOT resurrect lever (a) or the query-engine path.",
+      "safetyInvariants_HARD_never_relaxed": "IF a write-path change is made: subagent-verified BEFORE any gate or commit: (1) owner-identity - only the legitimate establishment owner writes the row; (2) self-supersession + LWW/tombstone fence - a stale local write can never overwrite a newer authoritative row; (3) no split-brain establishment write; (4) no dropped write-quorum - the owner-local write never bypasses the durability the remote path guaranteed; (5) no lost committed publication/replica_operations row. Flag-off byte-identical.",
+      "statisticalNonRegression_HARD": "The sealed rolling-restart closure (docs/convergence-donewhen-metric.md §5/§7: safety-floor CORRUPT=NODE_EXIT=ORACLE_BLIND=stale=0 EVERY run + Wilson-95 PASS-rate lower bound >= the sealed T(5)=0.357) must NOT regress. Re-seal T upward ONLY if a fresh N>=15 gate's Wilson lower bound clears the old. Do NOT score the retired consecutive-N liveness proxy as closure.",
+      "flagDiscipline": "Land any lever flag-off default, byte-identical when off; promote to default-on / bake in unconditional ONLY after the deterministic proof + safety verify + one N>=15 gate validates it. No lingering flag at closure.",
+      "terminal": "SOLVED when a genuine binding blocker is identified, a lever closes it with a red-on-revert DT proof + the 5 safety invariants subagent-verified + a fresh N>=15 gate that holds the safety floor 0/N and does not regress the Wilson bar (re-seal upward if it clears). EXHAUSTED (honest, and a legitimate high-value outcome) if step 1 shows the residual is within the sealed Wilson-95 closure with no single high-payoff lever - i.e. rolling-restart convergence is already closed on the statistical bar and further per-blocker levers are not warranted. Do NOT manufacture a lever for a refuted premise.",
+      "verdictArtifact": "solve/oracle/rolling-restart-w1-priority-establishment-write-unwedge.json carrying {done, verdict:'lever-closed'|'no-lever-residual-within-sealed-bar', identifiedBlocker, dtReproRedOnRevert?, safetyInvariantsVerified?, gateWilsonLB, reSealed}, subagent-verified before closure."
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-w1-priority-establishment-write-unwedge-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-w1-priority-establishment-write-unwedge.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

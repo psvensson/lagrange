@@ -89,7 +89,7 @@
     }
   ],
   "questRefs": [
-    "solve/quests/rolling-restart-core-stability.json"
+    "solve/quests/rolling-restart-core-stability/quest.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260530-rolling-restart-priority-recovery-rebalancer-handoff-scheduling-retry-architecture-gap",

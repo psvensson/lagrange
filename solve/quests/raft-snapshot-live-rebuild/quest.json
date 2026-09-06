@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-snapshot-live-rebuild",
+  "statement": "A large replica rebuild under continuous foreground writes is data-safe, resource-bounded, throughput-measured, restartable, and convergence-safe, certified against a sealed bar by a fresh live rolling-restart-class terminal — closing the S1-S5 snapshot chain into production. Phase A wires every previously-dead production link with deterministic red-on-revert guards: a leader-only, role-gated, re-entrancy-guarded checkpoint cadence tick riding the 1s prepared-state-hold sweep (entry-count and byte thresholds; typed refusal for in-memory/control-plane partitions; retention sweep with the full pin set on fire); the onSnapshotCatchupNeeded dispatcher seam set at the shared ReplicaHandler setup so BOTH the bootstrap and join/durable-rejoin factories are covered; a bulk-channel registry instantiated and attached at the shared MessageRouter setup with peer dial via resolveNodeWebSocketAddress over node_endpoints; a bulk-connection/transfer-socket adapter routing chunk frames through sendChunkFrame (token bucket + pending bound authoritative, non-SENT treated as fatal, no double-pacing) with a consumer-facing close hook and offMessage; a peek-then-replay follower offer router mapping the OFFER descriptor raftGroupId to the local replica and driving orchestrateSnapshotCatchupInstall with replaceLocalReplicaService (localServices + setLocalReplica swap; CDC idempotency guarded); and a scaled sealed-generation fixture (~50k fat rows, tens of MiB, dozens of chunks) proving multi-chunk transfer, resume from a verified chunk boundary, pacing, and the corruption/truncation/duplicate/stale-epoch/cancel/restart attack battery deterministically. Phase B adds the snapshot-live-rebuild distributed scenario (preload a target partition to a declared row/byte floor via key-range-aware batched INSERT, continuous acknowledged-write-tracked load, stop a non-seed follower, wipeReplicaData in-container, restart, observe dispatch to transfer to install to recreate to resume, convergence + acknowledged-write reconciliation) emitting the R5 evidence as additive loadMetrics/details/top-level report fields with fidelity 'live' — this defines the P0 slice of the scale-certification evidence contract. Phase C seals a snapshot-live-rebuild bar (safety floor: zero stale-source/corrupt/node-exit/oracle-blind, zero lost acknowledged writes, zero hard invariant breaches, install outcomes only installed-and-recreated on success, zero install-state-conflict, boundary monotonic; plus a Wilson-lower-bound rebuild-success rate and foreground non-starvation + resource fractions) via a gate-verdict consumer change, and after a mechanistic engagement pass and gate:preflight runs the N>=15 certification whose fresh terminal report is the sealed-bar evidence; all S1-S5 and gated-compaction guard suites stay unweakened and CL-040/041/042 green throughout.",
+  "epic": "raft-snapshot-transfer-install",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "raft-snapshot-live-rebuild",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "chain-guards-unweakened",
+      "statement": "All S1-S5 and gated-compaction guard suites pass unmodified; the proofless compactCommittedEntries result stays byte-identical; CL-040/041/042 repros green on every attempt."
+    },
+    {
+      "id": "live-terminal-required",
+      "statement": "Closure requires a fresh live rolling-restart-class terminal (the snapshot-live-rebuild stat-gate) above its sealed bar with the hard safety floor clean; a deterministic-guard report alone cannot close this quest (authoring bar)."
+    }
+  ],
+  "sealedAt": "9fbbd8406ef8df6926eda75d3c428648253d4144",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/raft-snapshot-transfer-install/tasks.md#S6",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/raft-snapshot-transfer-install.md",
+      "draftedAtCommit": "9fbbd8406ef8df6926eda75d3c428648253d4144"
+    },
+    "frontiers": [
+      {
+        "id": "raft-snapshot-live-rebuild-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "raft-snapshot-live-rebuild",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

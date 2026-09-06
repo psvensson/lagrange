@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-rebalancer-repository-policy-evidence-tooling",
+  "statement": "Mechanical Option-5 rung-5 rebalancer repository/policy evidence checkpoint: persist the committed analyzer views after migration f28736a2 using an explicit two-oracle workflow patch. The parent oracle records metric 56, target 0, done false; the bounded source oracle records metric 56, target 56, done true; both record ownerCheck passed and all gates green. No source, test, specification, analyzer, package, migration, target, or behavior changes.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-rebalancer-repository-policy.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "f28736a2cb2d3ebf283c8ac9ad93aa10ca2278d3",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-migration-rebalancer-repository-policy",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "f28736a2cb2d3ebf283c8ac9ad93aa10ca2278d3"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-rebalancer-repository-policy-evidence-tooling-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-migration-rebalancer-repository-policy.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

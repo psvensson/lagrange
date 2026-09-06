@@ -1,25 +1,17 @@
 ---
-epicContractVersion: 2
 id: <kebab-case-id>
-roadmapRow: <id|null>
-graduatesTo: <spec-name|null>
+status: open
+proof: deterministic | simulation | certification
+doneWhen:
+  probe: script
+  args:
+    command: node scripts/checks/<check>.js --metric
+quests:
+  - <quest-id>
+authorizes:
+  - <path or glob a quest under this epic may change>
 ---
 
 # <title>
 
-## Intent (why now)
-
-<What outcome does this pursue, and why is it worth doing now? One short paragraph.>
-
-## Options under discussion
-
-- <Option A — sketch + main trade-off>
-- <Option B — sketch + main trade-off>
-
-## Open questions
-
-- <The unresolved decisions that block writing a sealed doneWhen.>
-
-## Decision log
-
-- <YYYY-MM-DD> — <what was decided or learned>
+<Why now, in one paragraph. What the probe measures and why zero means done.>

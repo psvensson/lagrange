@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "voter-readiness-visibility-single-owner-table",
+  "statement": "Voter-readiness visibility is ONE declared, single-owner decision table consumed everywhere (epic self-hosting-circularity-generic-treatment Option 5, first semantic; CL-035 lineage). Today 'is this replica a ready voter' is re-derived at ~16 censused sites with FOUR role-set declarations and THREE different memberships (VOTER_RAFT_ROLES src/raft/constants.js:42; duplicate ESTABLISHED_VOTER_ROLES src/node/replica-handler-transition-policy.js:38; LOAD_LANE_VOTER_READY_REPLICA_ROLES src/admin/admin-websocket-api-shared.js:163 + isLoadReadyReplicaRaftRole src/node/replica-state-machine-constants.js:158 excluding candidate; plus bare raftRole!=='learner' literals) — the CL-035 defect class (seed scoped priority-only while the consuming gate was not) is expressible exactly because each site re-derives the semantic with its own scoping. SEALED RESULT: a single owner module declares the voter-readiness semantics as named, frozen decision-table rows in the house idiom (replica-operation-progress.js / rebalancer-planning-gate-constants.js precedent; plus decision-table-v1 JSON + npm run model:decision-tables exhaustiveness if architecture-significant; rule ARCH-0013), with at minimum named rows distinguishing quorum-voter-ready (non-learner voter: safety gates, floors, voter counts) from load-routable (leader/follower: admin/load-lane admission) and any other deliberately-distinct membership — real differences survive as NAMED rows, never as silent local drift; scoping keys on the declared partition-class taxonomy (src/bootstrap/system-partition-classification.js), deleting the three local CRITICAL_SYSTEM_PARTITION_IDS re-derivations (replica-handler-transition-policy.js:27, partition-service-shared.js:225, partition-service-row-owner.js:37) and the duplicate ESTABLISHED_VOTER_ROLES; every censused derivation site consumes the table (priority-publication-safety-topology, replica-handler-voter-readiness-methods, replica-inventory, move-planner-move-calculation-methods, operation-ledger-quorum-concentration, partition-service-learner-promotion-methods, replica-handler-runtime-metadata-methods, unified-rebalancer-control-plane-readiness-methods, unified-rebalancer-budget-planning, membership-publication-priority-partition-summary, priority-recovery-snapshot-rebalancer, admin-service-discovery, admin-websocket-load-lane-admission, admin-control-snapshot-leadership-summary, operation-workflow-remove-safety-evaluator, priority-recovery-snapshot-burndown). Behavior is preserved EXCEPT where a divergence is proven a bug (any behavior change needs its own red-on-revert pin + recorded finding); the CL-035 guard test stays green and dt:prove pins the seed/gate consumption paths. doneWhen: a committed, re-runnable census analyzer (check-* script style, AST/grep over src/) writes solve/oracle/voter-readiness-visibility-single-owner-table.json with metric = count of independent voter-readiness role-set declarations or inline learner/voter-role membership literals outside the owner module, done only at metric 0 with lint + targeted suites green recorded in the oracle detail. NOT in scope: the other Option-5 semantics (workflow-step persistence coverage, hold engagement, cure typing — sibling quests per the epic ladder), the 119-site partition-class ladder beyond the three deletions above, leader-routing (raft_role==='leader') call sites, and pure normalizers/CLI observability formatting.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/voter-readiness-visibility-single-owner-table.json",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "29fa0f8fa1a3e107ac953ef979bdb2ad793d5888",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "sealedAtCommit": "ec2331551f83933544bc038f677e0ea29e2d1331"
+    },
+    "frontiers": [
+      {
+        "id": "voter-readiness-visibility-single-owner-table-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/voter-readiness-visibility-single-owner-table.json",
+            "target": 0
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

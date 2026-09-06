@@ -1,11 +1,13 @@
 ---
 id: spread-satisfied-in-flight-staleness-unmask
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: landed-default-off
 graduatesTo: control-plane-write-wedge-leader-local-establishment
-links:
-  quests: [rolling-restart-core-stability]
-  censusSurvivor: pr-spread-satisfied-in-flight-masks-stuck-surplus
+quests: []
+authorizes: []
+legacyStatus: landed-default-off
 ---
 
 # Census #4 — un-mask `spread_satisfied_in_flight`, the consistent binding mask of the rolling-restart `convergence_timeout`

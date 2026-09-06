@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "sql-statement-parser-coverage",
+  "statement": "Every SQL statement variant the write path emits (plain INSERT, INSERT OR REPLACE, INSERT OR IGNORE — the variant set that grew with replica-operation-insert-retry-idempotency) is pinned against every SQL-text parser seam in one coverage matrix guard (test/partition/sql-statement-parser-coverage-matrix.test.js): parameterized extraction (partition-cdc-parameterized-sql extractParamInsertData; partition-sql-parser extractDataFromParameterizedSQL), literal-values extraction (extractInsertDataFromSQL), CDC operation classification (partition-cdc-generator determineOperation — OR IGNORE documented as INSERT: collision re-emits the durable fetched row and subscriber apply is HLC-guarded upsert), table-name extraction (cdc-sql-builder, cdc-routed-mutation-readiness), and sqlite-store operation prefix patterns — so introducing a statement variant (or parser seam) without covering the cross-product fails statically instead of emitting '?'-placeholder garbage rows in a live cluster (affinity-demo run-18 witness, 3712 errors).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "sql-statement-parser-coverage",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "47d0b5d14f70412d67448a54abca5b1029cab366",
+  "legacy": {
+    "priority": 2,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "replica-operation-insert-retry-idempotency",
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "sql-statement-parser-coverage-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "sql-statement-parser-coverage",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-init-cli-scaffold-contract-repair",
+  "statement": "The service-init CLI tests match the shipped scaffold contract: --oci legacy scaffold bytes and routing, and help text demoting dev-install while documenting --oci, assert against the actual CLI surface.",
+  "epic": "golden-capability-gold-plating",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-init-cli-scaffold-contract-repair",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "670a08cc5e363402d927cf55d3ff58b04d8ec898",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/golden-capability-gold-plating.md",
+      "draftedAtCommit": "670a08cc5e363402d927cf55d3ff58b04d8ec898"
+    },
+    "frontiers": [
+      {
+        "id": "service-init-cli-scaffold-contract-repair-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-init-cli-scaffold-contract-repair",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

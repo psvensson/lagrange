@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: services-doc-tightening
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Tighten the documentation around one service story

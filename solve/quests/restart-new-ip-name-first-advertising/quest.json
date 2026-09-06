@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "restart-new-ip-name-first-advertising",
+  "statement": "A node can be configured to advertise a STABLE hostname/DNS name (not a raw IP) as its peer WebSocket address, and that name is preserved end-to-end even when the transport binds to a wildcard host (0.0.0.0/ANY) -- i.e. the routable-local-IP substitution in resolveAdvertisedWebSocketAddress does NOT override an explicitly configured advertised name. Peers dial the node by that name and the OS re-resolves it on each (re)connect, so a restart that changes the node's IP behind a stable name is transparent to peers. Proven by a deterministic test: a name-advertised node publishes its name into node_endpoints, a peer resolves+dials the name, and a changed backing IP is picked up on reconnect without manual address updates. Layered ON TOP of approach (b) (defects 2+3, already landed), not a replacement.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "restart-new-ip-name-first-advertising",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "4bc9737a2970ced56bb2d770cf0abec1ce40fd79",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "restart-new-ip-name-first-advertising-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "restart-new-ip-name-first-advertising",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

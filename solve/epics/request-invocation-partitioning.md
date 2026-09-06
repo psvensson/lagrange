@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: request-invocation-partitioning
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: request-invocation-partitioning
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Request invocation partitioning

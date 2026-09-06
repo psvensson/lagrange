@@ -56,7 +56,7 @@ const REPO_ROOT = path.resolve(
 const SCAN_ROOT = 'src';
 const OWNER_MODULE = 'src/bootstrap/system-partition-classification.js';
 const ORACLE_FILE =
-  'solve/oracle/partition-class-ladder-single-owner-table.json';
+  'scripts/oracles/partition-class-ladder-single-owner-table.json';
 const ORACLE_TARGET = 0;
 const ANALYZER_CONTRACT_VERSION = 3;
 const EPIC_CENSUS_BASELINE = 119;
@@ -764,6 +764,7 @@ async function main() {
 runGuidelineCheckWhenDirect(import.meta.url, main);
 
 export {
+  ORACLE_FILE,
   buildOraclePayload,
   collectCensus,
   collectFileSites,

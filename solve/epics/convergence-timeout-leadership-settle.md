@@ -1,13 +1,14 @@
 ---
 id: convergence-timeout-leadership-settle
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: resolved
 graduatesTo: null
-links:
-  quests: [rolling-restart-core-stability]
-  upstreamEpic: topology-convergence-hardening
-  relatedEpic: control-plane-write-wedge-leader-local-establishment
-  relatedSpec: membership-lifecycle-placement-hard-cutover
+quests:
+  - rolling-restart-run4-leadership-quiescence-signature
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Convergence-timeout + leadership-settle — the rolling-restart PASS blocker AFTER the slow-rejoiner remove-safety wedge was cleared

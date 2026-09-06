@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "architecture_model_contract_bound",
-  "detail": "Core system logic has an architecture-adjacent contract, statechart, invariant registry entries, architecture index links, and default model-contract gate coverage."
-}

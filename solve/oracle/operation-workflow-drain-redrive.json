@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "solved",
-  "note": "SOLVED (2026-06-29, deterministic owner-path closure). Focused virtual-clock tests prove the stalled-in-flight spread un-mask: (a) a durably STALLED not-voter-ready REPLACE-remove-dispatch op is no longer masked as spread_satisfied_in_flight (red-on-revert) so the existing reentry/drain no longer accepts it as drain-complete; (b) a still-progressing op keeps optimistic certification (guard); threaded consistently through both context builders (per-partition + closure/serve-eligibility) via the shared resolvePriorityRecoveryStepAge helper; stepTimeoutMs=0-safe (explicit case); classification-only so remove-safety/quorum/B4/handoff + single-flight idempotency are structurally preserved (pure classifier, never dispatches). Source-change verified by two subagents (a073ae5ab73d9d0b6 found+fixed a closure-path partial-wiring defect; a35039b54426ffce9 re-verified TRUSTED). The 60s stall-budget tuning and the actual passRate lift are owned by the parent Quest's statistical gate (deterministic-first/gate-last)."
-}

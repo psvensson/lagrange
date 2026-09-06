@@ -25,7 +25,7 @@ const UNKNOWN_VALUE = 'unknown';
 const PRIORITY_REASON = 'priority_recovery_progress_blocked';
 const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
-const QUEST_NEW_COMMAND_PREFIX = 'npm run solve:new --';
+const QUEST_NEW_COMMAND_PREFIX = 'write solve/quests/<id>/quest.json then: node scripts/solve.js start';
 const QUEST_NEW_FLAG_ID = '--id';
 const QUEST_NEW_FLAG_STATEMENT = '--statement';
 const SUCCESSOR_NEXT_ACTION =

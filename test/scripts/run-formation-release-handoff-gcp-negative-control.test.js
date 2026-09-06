@@ -16,7 +16,7 @@ import {analyzeFormationReleaseEvents} from
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {scenarioHarnessProbe} from
-  '../../scripts/solve/probes/scenario-harness.js';
+  '../../scripts/solve/probes.js';
 import {
   STRANDED_TEARDOWN_RUN,
   buildBothCompletedRunEvents,

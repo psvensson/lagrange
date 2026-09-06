@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-parallel-reduce-result-chronology",
+  "statement": "The unchanged live MovieLens affinity scenario passes three consecutive fresh runs with a runtime-owner-published result-to-partial snapshot witness that remains valid while later periodic partial snapshots continue.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-oracle",
+      "statement": "Do not widen convergence or stall timeouts, weaken freshness, identity, boundedness, placement, or exact-result checks, or relabel the existing live scenario."
+    },
+    {
+      "id": "deterministic-real-sql-first",
+      "statement": "Before another live run, reproduce the result/partial chronology failure deterministically through the production parallel-reduce runtime and real SQLite, then prove the correction red-on-revert."
+    },
+    {
+      "id": "owned-snapshot-witness",
+      "statement": "The runtime owner must publish the result-to-partial snapshot witness; the demo observer may validate that witness but must not infer it from polling cadence or relax it to result equality alone."
+    }
+  ],
+  "sealedAt": "23c7244530f03b99ee8dcba2eb35db4524335b81",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-three-way-affinity-demo",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "23c7244530f03b99ee8dcba2eb35db4524335b81"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-parallel-reduce-result-chronology-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

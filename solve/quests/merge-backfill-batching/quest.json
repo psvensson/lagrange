@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "merge-backfill-batching",
+  "statement": "Merge snapshot backfill batches rows like split does: applyMergeSnapshotRow's per-row INSERT OR REPLACE (one routed write per row, one descriptor-epoch assert per row) is replaced by a bounded multi-row batch path mirroring routeSplitSnapshotBatch (SPLIT_SNAPSHOT_MAX_BIND_VARIABLES-capped values tuples, one epoch assert per batch, the same yield cadence), so a large merge backfill stops paying per-row round-trips. doneWhen: the test-receipt probe reads solve/evidence/merge-backfill-batching.receipt.json with outstanding 0 — batched-merge-backfill, bind-variable-cap-respected, and epoch-assert-per-batch receipts all passing.",
+  "epic": "split-merge-transition-integrity",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/merge-backfill-batching.receipt.json",
+      "requiredReceipts": [
+        "batched-merge-backfill",
+        "bind-variable-cap-respected",
+        "epoch-assert-per-batch"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding mechanism is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert probes) and writes the receipt artifact."
+    },
+    {
+      "id": "ordering-preserved",
+      "statement": "Batching must not reorder rows or skip the backfill yield cadence (F22): rows land in primary-key order within and across batches, and splitSnapshotBackfillYieldEveryRows still paces the copy."
+    }
+  ],
+  "sealedAt": "34328f2bcb609297823f25e3d38fb20f46086af8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/split-merge-transition-integrity.md",
+      "draftedAtCommit": "34328f2bcb609297823f25e3d38fb20f46086af8"
+    },
+    "frontiers": [
+      {
+        "id": "merge-backfill-batching-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/merge-backfill-batching.receipt.json",
+            "requiredReceipts": [
+              "batched-merge-backfill",
+              "bind-variable-cap-respected",
+              "epoch-assert-per-batch"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

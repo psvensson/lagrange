@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "dt-drain-safety-overremoval-hunt",
+  "statement": "Directed PCT interleaving hunt on the DT6-hosted REAL RebalanceCoordinator + OperationWorkflowOwner finds-or-bounds safety-invariant breaches on two targets: (1) the self-documented over-removal seam in projectQuorumAfterRemoval (the optimistic recoveryProjectionNodeIds node-union on the completion-safe floor path) and (2) source-removal-only-after-target-durably-active drain ordering. Terminal is BINARY: a minimized seed that deterministically breaches the invariant with red-on-revert proof, OR a bounded 'no breach at PCT depth <= D over >= N seeds' negative. This is the dst-cost-model-circle epic's Option-A (safety / design-bug) lane and makes NO scenario passRate / cost-model fidelity claim.",
+  "epic": "dst-cost-model-circle",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/dt-drain-safety-overremoval-hunt.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-scenario-rate-or-cost-model-fidelity",
+      "statement": "This quest must not make or depend on any scenario passRate, root-cause-label, or cost-model fidelity claim. Reproducing the rolling-restart rate is REFUTED for the safety lane and is the fidelity-spike's exclusive concern. Any drift toward 'make the sweep match docker' is out of scope."
+    },
+    {
+      "id": "settled-sampling-artifact-filter",
+      "statement": "Invariant breaches may only be sampled on settled state via driveNetworkFine + onSettled. A violation observed mid-drive (drive-granularity artifact) is NOT a bug and must not be reported as one."
+    },
+    {
+      "id": "red-on-revert-or-bounded-negative",
+      "statement": "Every claimed breach must be minimized (minimizePctDepth) and red-on-revert proven (npm run dt:prove) before it is called a bug. A bounded 'no breach at depth <= D over >= N seeds' is a valid terminal; do not escalate depth without limit to manufacture a hit."
+    },
+    {
+      "id": "dedup-before-hunt",
+      "statement": "Before Step B, confirm no existing quest/test already covers the target seam: operation-workflow-drain-redrive (SOLVED; was drain re-drive UNMASK / liveness, not removal-safety) and membership-publication-drain-determinism (publication drain, not rebalancer removal). Do not re-run covered ground."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "617a58766b04bb94c9fcf1f27c0c410163ffef57",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/dst-cost-model-circle.md"
+    },
+    "doneWhenSealed": {
+      "lane": "This is the dst-cost-model-circle epic's OPTION A (logical circle for the safety / design-bug class). It is the sibling of the Option-B kill-gate quest dst-cost-model-fidelity-spike; the two must not be conflated. This quest makes NO scenario passRate, root-cause-label, or cost-model FIDELITY claim of any kind - that is exclusively the fidelity-spike's concern.",
+      "scopeRefinedByStep1": "Step-1 feasibility read (finding 2026-07-01, subagent aa4848030035daf79) re-scoped this quest: T2 (source-removal-after-target-active) is ALREADY covered by cl-038-source-removed-handoff-terminalizes.test.js -> DROPPED. Only T1 remains. DT6 hosting is NOT the path (bigger-than-scoped AND unnecessary).",
+      "target_T1": "The self-documented over-removal seam inside projectQuorumAfterRemoval (src/rebalancer/operation-workflow-remove-safety-evaluator.js:49-74, COMPLETION_SAFE_FLOOR): effectiveProjectedVoterReadyCount = max(strict, recoveryProjectionNodeIds.length). Confirmed UNCOVERED (the sole test pins it open as behavior-preserving) and REACHABLE (recoveryProjectionNodeIds comes from projected MEMBERSHIP ids with no voter-ready filter; a catch-up learner can enter the union).",
+      "approach": "PURE-SEAM FIRST (cheap, deterministic, no DT6 hosting, no PCT): an adversarial resolvePriorityRecoveryQuorumProjection / resolvePriorityRemoveSafetyMembershipSnapshot -> projectQuorumAfterRemoval case where a non-voter-ready projected node inflates effectiveProjectedVoterReadyCount past minReplicaCount, permitting a removal the strict floor blocks; red-on-revert via npm run dt:prove. ESCALATE to DT6 hosting (finish op-store + control-plane readiness fixtures) ONLY if proving real below-floor HARM requires a live end-to-end interleaving.",
+      "terminal": "BINARY. BUG-FOUND: a deterministic case shows the optimistic union permits a removal that leaves the partition below its TRUE voter-ready floor / requiredDistinctNodeCount in a state where the projected node does NOT become voter-ready (real durable harm, not merely the documented accept-gap), minimized + red-on-revert proven, then fixed at the single documented branch point (completionSafe && effectiveProjectedVoterReadyCount > projectedVoterReadyCount) + subagent-verified. BOUNDED-NEGATIVE: the optimistic union provably cannot cause a below-true-floor removal (the projected node is guaranteed to catch up, or an upstream guard blocks it) -> benign optimism; STOP, record will-not-fix. HONESTY CAVEAT: a test that the evaluator merely ACCEPTS the optimistic input is NOT a bug - it must show real below-floor harm.",
+      "verdictArtifact": "solve/oracle/dt-drain-safety-overremoval-hunt.json carrying {done:true, verdict:'bug-found'|'bounded-no-breach', target, seed?, minimizedDepth?, redOnRevert?, D, N, recommendation}, subagent-verified before closure."
+    },
+    "frontiers": [
+      {
+        "id": "dt-drain-safety-overremoval-hunt-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/dt-drain-safety-overremoval-hunt.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

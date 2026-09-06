@@ -218,10 +218,13 @@ handoff 979, theory 841, store 759, change-artifact 718.
 - **States**: `open` -> `solved` | `exhausted` | `superseded`; one
   non-terminal stop `blocked` naming `nextOwner` (judgment | verification |
   authorization) in a terminal-shaped log entry.
-- **Altitude rule**: after two `attempt` entries with no metric improvement
-  the next entry must be a `finding kind: altitude-check` stating whether the
-  quest can succeed at its altitude; if not, the quest goes `superseded` and
-  the agent authors the epic or quest at the right altitude first.
+- **Altitude rule**: after more than three `attempt` entries with no `finding
+  kind: altitude-check` between them, `land` refuses until one is recorded stating
+  whether the quest can succeed at its altitude (phase 2 measures attempts,
+  not metric movement, because the migrated logs carry no seal-time metric;
+  the rule is enforced at `land`, and `probe` shows the running count); if
+  the answer is no, the quest goes `superseded` and the agent authors the
+  epic or quest at the right altitude first.
 - **Commands** (`scripts/solve.js`): `start <id>` validates, measures the
   probe (must be red), seals `quest.json`, opens the log; `note <id> --type
   finding|attempt|verification --text ... [--kind ...] [--evidence ref]`;
@@ -376,3 +379,45 @@ blobs once they are out of the tree.
   under the quest's `evidence/` as text.
 - `scripts/checks/solve-v2-budget.js` is committed in phase 0 so the
   baseline row is reproducible; it is the only script phase 0 adds.
+
+### 7.6 The size gate measures two different things
+
+The v1 logs that phase 2 copies verbatim total 27.3 MB (825 files at the
+pre-migration commit). A single raw-directory gate cannot separate that
+immutable historical payload from the active v2 footprint, so the only ways
+to satisfy it are destroying evidence or moving the number. Phase 2 splits
+the measurement instead:
+
+- the migration owner emits `solve/epics/solve-v2/migration-inventory.json`,
+  recording per migrated quest the exact length and sha256 of its v1 log at
+  the pre-migration commit. It is derived from that commit, never
+  hand-maintained;
+- `solve-active-bytes` is tracked bytes under `solve/` minus that corpus,
+  budgeted at 20 MB. Entries appended to a migrated log after the migration
+  count here, as active footprint;
+- `legacy-corpus-drift` re-hashes each recorded prefix and must be 0. The
+  corpus is frozen evidence: it cannot shrink to make the budget pass, and
+  the losslessness of the migration becomes a standing mechanical invariant
+  rather than a one-time verifier claim.
+
+Archival and history-retention policy stays a separate decision after
+phase 4.
+
+### 7.7 The change proof proves the tree that will be committed
+
+The first landing was refused by its own proof: a taxonomy liveness rule
+reads the repository through `git ls-files`, and `land` ran the proof before
+staging, so the index still described the pre-cutover tree. `land` now stages
+the change set before proving it and gives the index back when the proof or
+the commit is refused. Consumers that ask git what the repository contains
+therefore see exactly what the landing will commit.
+
+### 7.8 Phase 2 outcome
+
+Measured after the cutover: active v2 footprint 8,974,688 of 20,971,520
+bytes; grandfathered corpus 27,337,660 bytes across 825 migrated logs with
+zero drift; 0 files over 1 MB; 0 quest directories off shape; solver 3,151
+lines; tests 886 lines. The mapping report sums to 15,902 entries with an
+empty unmapped table; one v1 type (`goal-declared`, one entry) was missing
+from the 23-type inventory and is kept verbatim. The archive bundle holds
+3,003 files (29.7 MB) on the evidence store.

@@ -1,0 +1,74 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-promotion-proof-channel-witness-determinism",
+  "statement": "The learner-promotion proof-channel witness (test/convergence/dt6-learner-promotion-proof-channel-wake.test.js) is deterministic under host load: the row landing is an explicit fixture schedule — leader INSERT, wait for the leader's own replication observable (readFollowerMatchIndex at the committed prefix) to prove the learner caught up, then the learner UPDATE/wake — instead of applying both in one tick and racing liferaft's wall-clock 20 ms heartbeat against the 0 ms wake request, so two identical drives produce byte-identical refusal/wake sequences (exactly one learner_address_unresolvable refusal, two round trips, one services_row_visible wake, one kick, zero requests inside the landing phase) whether run alone or as five concurrent copies; every sealed receipt of learner-promotion-proof-channel-wake keeps its semantics and still discriminates on the reverted owner cure; only test/ and scripts/ change — the owner, liferaft timers, cadence and timeout constants are byte-identical. Proven deterministically: red on HEAD (the quantized-landing scenario and the load-robust receipt), green after.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/learner-promotion-proof-channel-witness-determinism.receipt.json",
+      "requiredReceipts": [
+        "witness-landing-quantized",
+        "witness-deterministic",
+        "existing-receipts-unchanged",
+        "witness-load-robust"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "test-only",
+      "statement": "The cure touches only test/ and scripts/; the learner-promotion owner, liferaft timers, LEARNER_CATCH_UP_CHECK_INTERVAL_MS and MESSAGE_TIMEOUT_MS are byte-for-byte unchanged."
+    },
+    {
+      "id": "schedule-not-time",
+      "statement": "The row landing is an explicit fixture schedule ordered on the leader's own replication observable (readFollowerMatchIndex at the committed prefix), never on elapsed time; the fixture never promotes, never re-derives the proof, and never fakes an owner response."
+    },
+    {
+      "id": "sealed-receipts-still-discriminate",
+      "statement": "Every sealed learner-promotion-proof-channel-wake receipt keeps its semantics and still discriminates (red on the reverted owner cure, green after); no sleeps, timeouts or bounds are widened."
+    },
+    {
+      "id": "self-guarding-receipts",
+      "statement": "Receipt commands are verbatim and self-guarding (a zero-test node --test run cannot pass as green); the sealed evidence file of the parent quest is never written by the nested harness (--output to a gitignored path)."
+    }
+  ],
+  "sealedAt": "e259c2646d3cf02a60fe3514a31a5657cd68d3de",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "docs/steering/operational-ground-truth.md",
+      "closesCL": [],
+      "parentQuest": "learner-promotion-proof-channel-wake",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "6cdca0cb1"
+    },
+    "frontiers": [
+      {
+        "id": "learner-promotion-proof-channel-witness-determinism-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/learner-promotion-proof-channel-witness-determinism.receipt.json",
+            "requiredReceipts": [
+              "witness-landing-quantized",
+              "witness-deterministic",
+              "existing-receipts-unchanged",
+              "witness-load-robust"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

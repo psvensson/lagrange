@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "roadmap-audience-authority-cutover",
+  "statement": "The root roadmap.md is a concise human Now/Next/Later roadmap, while one agent-only AGPL feature map under docs/steering preserves every existing RM-* identity as the unique implementation-scope authority; roadmap consumers, lifecycle classification, steering load metadata, cross-edition documentation placement, and machine checks prevent audience or row-link drift, and the documentation audience, lifecycle, steering, and static gates pass.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "roadmap-audience-authority-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "77cc1af063297d87262dd522ae7d9295ba40e21b",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "docs/steering/audience-boundary.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "77cc1af063297d87262dd522ae7d9295ba40e21b"
+    },
+    "frontiers": [
+      {
+        "id": "roadmap-audience-authority-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "roadmap-audience-authority-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

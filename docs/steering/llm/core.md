@@ -31,7 +31,7 @@ canonical first-read glossary; `boot.md` points here.
 | Theory | A testable causal explanation (system- or frontier-level) selected to break a stall. |
 | Park / parked | A frontier set aside with no honest remaining local move; the scheduler redirects elsewhere. Classified by kind × provenance: kind `exhausted` (counts toward EXHAUSTED) vs `cannot_measure` (resumable measurement park; never closes a quest), and ladder (measured, no provenance field) vs operator (`provenance: operator` via `solve.js park`, a recorded decision). |
 | Rung | A position on the strategy ladder for an attempt (`observe`, `local-fix`, `widen-scope`, `model`, `change-approach`, `park`); a stalled frontier climbs rungs. |
-| Dossier | The pinned-frontier attempt bundle `solve.js step` prints (rung, metric, evidence) and that a delegated worker is handed. |
+| Dossier | Retired v1 term (the attempt bundle `step` printed); in solve-v2 a delegated worker is handed the quest statement, the `probe` output and the log. |
 | Owner / owner boundary | The single component that owns a semantic decision or resource; others observe (cache), they do not re-derive it. |
 | Proof ladder | A compact sequence of 3-5 executable commands that demonstrates a claim. |
 | Subagent | A spawned worker that produces verification or research; recorded as evidence `subagent:<id>`. |
@@ -239,20 +239,16 @@ of every `solve.js` subcommand (with usage), see
 
 | Abstract Rule / Constraint | Canonical CLI Guardrail Command | Enforced By File/Script |
 | --- | --- | --- |
-| Quest status | `node scripts/solve.js status --id <id>` | `scripts/solve.js` |
-| Quest report | `node scripts/solve.js report --id <id>` | `scripts/solve/report.js` |
-| Quest probe | `node scripts/solve.js probe ...` | `scripts/solve/probe.js` |
-| Quest theory | `node scripts/solve.js theory ...` | `scripts/solve/theory.js` |
-| Quest health | `node scripts/solve.js health --id <id>` | `scripts/solve/health.js` |
+| Quest probe and state | `node scripts/solve.js probe --id <id>` | `scripts/solve/probes.js`, `scripts/solve/store.js` |
+| Open epics and quests | `node scripts/solve.js board` | `scripts/solve/commands.js` |
 | Touched/created file-size limits | `npm run audit:file-size` | `scripts/check-file-size-thresholds.js` |
 | Runtime syntax and grammar | `npm run audit:runtime-grammar` | `scripts/check-runtime-grammar-contracts.js` |
-| Record a finding | `node scripts/solve.js finding --id <id> --frontier <f> --claim "<learning>"` | `scripts/solve.js` |
-| Promote a finding to steering | `node scripts/solve.js promote-finding --id <id> --frontier <f> --domain <domain>` | `scripts/solve.js` |
+| Record a finding | `node scripts/solve.js note --id <id> --finding "<learning>" [--kind theory\|altitude-check\|decision\|ruled-out\|evidence]` | `scripts/solve/commands.js` |
 
-`finding` records a learning into the Quest event log; `promote-finding` promotes
-a recorded finding into in-repo steering as a rule (requires
-`--domain <architecture|testing|governance|style>`, then regenerate with
-`npm run steering:llm:pack`).
+`note --finding` records a learning into the quest log. A learning that should
+bind future work is promoted by hand into the steering source for its domain,
+then regenerated with `npm run steering:llm:pack` (the v1 `promote-finding`
+verb was retired in solve-v2 phase 2).
 
 ## Core Principles
 

@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-operation-insert-retry-idempotency",
+  "statement": "A replica-operation INSERT whose first attempt landed but whose outcome was lost (post-apply delivery failure, transport hiccup, coordinator retry) converges to already-applied SUCCESS instead of failing the operation: the retry's 'UNIQUE constraint failed: replica_operations.operation_id' collision — the strongest possible already-applied witness, since operation ids are minted once — is recognized (classification or INSERT OR IGNORE via the gateway's EXISTING ignoreExisting option, plus read-back verification through the EXISTING recoverPersistedReplicaOperationMutation machinery made reachable for this error class), so formation-time control-plane churn no longer kills rebalancer moves and client CREATE TABLE/load with 'Distributed operation failed due to participant failures' (affinity-demo runs 16-17, 2/2 modal: 379 UNIQUE warns, 36 fatal, load aborts seconds into phase 2). Proven by a deterministic red-on-revert reproduction (insert lands, outcome lost, retry collides, op still reports success and the row is intact) with no weakening of genuine-duplicate detection for DIFFERING row content under the same id.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "replica-operation-insert-retry-idempotency",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "c-existing-machinery",
+      "statement": "Finish/wire EXISTING mechanisms (gateway ignoreExisting -> INSERT OR IGNORE; recoverPersistedReplicaOperationMutation read-back; retryable-error classification) — no new caches, tables, or parallel retry layers (avoid-secondary-caches directive)."
+    },
+    {
+      "id": "c-honest-witness",
+      "statement": "Already-applied must be confirmed by an ACTUAL (read-back of the row / OR-IGNORE against the durable table), never inferred from the error string alone; content mismatch under the same operation_id stays a hard failure. Lesson from write-routing-repair-under-control-plane-moves: targets/inferences must not gate liveness or mask corruption."
+    },
+    {
+      "id": "c-timeouts",
+      "statement": "TEST-0021: raising timeouts or retry budgets is not a fix; convergence must come from recognizing already-applied."
+    }
+  ],
+  "sealedAt": "8b7454191b659338bc88dee7d7ab1f9c09e87510",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "movielens-affinity-placement-demo",
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "replica-operation-insert-retry-idempotency-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "replica-operation-insert-retry-idempotency",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

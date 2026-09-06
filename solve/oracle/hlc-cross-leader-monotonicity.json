@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "hlc_cross_leader_monotonicity_proven",
-  "detail": "Unit-provable clock invariant; closed on this oracle backed by deterministic tests verified by a subagent (not the distributed harness). metric = number of the two invariants not yet proven by a passing, subagent-verified test, target 0. Flip done:true only when BOTH hold with a green suite: (1) MERGE-ON-APPLY — applyCommittedEntry advances the applying replica's hlcClock to >= the committed entry's HLC (leader and follower), so a new leader's now() exceeds the last applied entry's HLC; proven by a deterministic unit test on the partition apply path plus a two-replica leader-handoff test where the new leader's DELETE HLC > the old leader's INSERT HLC. (2) RESTART HIGH-WATER-MARK — after process restart a node never emits an HLC below one it previously committed (warm the clock from MAX committed HLC on init, or confirm committed-log replay already advances it); proven by a restart test. The distributed consequence (no resurrection under handoff) is measured separately by Quest cdc-cache-delete-resurrection, which depends on this one."
-}

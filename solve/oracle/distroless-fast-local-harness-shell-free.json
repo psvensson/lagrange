@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "validated",
-  "note": "Shell-less Docker harness tooling fix completed: stat gate passes --no-fast-local; fast-local reusable containers use the image entrypoint/CMD without shell override; reusable /data reset is host-managed through exact .tmp/reuse-data/<container> bind matching; reusable ABI label and current image ID guard stale container reuse; focused tests, static guardrails, and subagent verification passed."
-}

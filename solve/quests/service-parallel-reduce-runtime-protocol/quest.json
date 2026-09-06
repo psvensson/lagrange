@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-parallel-reduce-runtime-protocol",
+  "statement": "The generic SQL query-loop runtime supports exact cross-replica top-N reduction through stable leased slots, disjoint shard SQL, fresh bounded atomic partial snapshots, and an atomic coordinator result snapshot; failed runtime starts never project ACTIVE, and deterministic tests exercise replacement takeover and stale-release fencing through real SQLite.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-data-affinity-parallel-reduce-demo",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "f68ed3108fb3c1c75309d10aa747f7ba6c1ecc0d",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "service-data-affinity-parallel-reduce-demo-live",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "sealedAtCommit": "9ebfe678d21ce614afa0047575a58e92d188b5ec"
+    },
+    "frontiers": [
+      {
+        "id": "service-parallel-reduce-runtime-protocol-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-data-affinity-parallel-reduce-demo",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

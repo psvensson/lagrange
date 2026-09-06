@@ -1,0 +1,94 @@
+{
+  "schema": "solve-quest/2",
+  "id": "critical-system-placement-distinct-node-invariant",
+  "statement": "Critical system-table formation readiness means the required replica count on that many DISTINCT eligible node IDs, not a logical replica count that three seed-local replicas already satisfy.",
+  "epic": "cluster-formation-topology-admission-closure",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/critical-system-placement-distinct-node-invariant.receipt.json",
+      "requiredReceipts": [
+        "seed-local-replicas-are-not-converged",
+        "distinct-nodes-meeting-required-count-are-converged",
+        "critical-set-is-the-declared-vocabulary",
+        "required-count-derives-from-initial-replica-ids",
+        "non-serving-service-rows-do-not-count",
+        "absent-evidence-is-not-converged",
+        "repeated-node-rows-count-once",
+        "evaluator-mints-no-readiness-verdict",
+        "classification-vocabulary-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-critical-set-owner",
+      "statement": "The critical partition set is read from the declared vocabulary in system-partition-classification.js (CRITICAL_SYSTEM_PARTITION_IDS) and the required replica count from getInitialReplicaIds in system-table-schemas-constants.js; the evaluator re-derives neither locally and hardcodes no replication factor."
+    },
+    {
+      "id": "distinct-node-is-the-invariant",
+      "statement": "Convergence for a critical partition is distinct serving node_id count >= required replica count. Three replicas on one node is NOT converged; a logical replica count alone never satisfies the invariant."
+    },
+    {
+      "id": "projection-only-no-second-authority",
+      "statement": "The evaluator is a pure projection over supplied rows: it mints no readiness verdict, no lifecycle transition and no cluster-ACTIVE or READY answer, and nothing derives ACTIVE or READY from nodes.status, publication counts, or coverage."
+    },
+    {
+      "id": "fail-closed-typed",
+      "statement": "Absent, empty or unreadable placement evidence is NOT converged, with a typed reason; absence is never treated as satisfaction and is never skipped."
+    },
+    {
+      "id": "runtime-unchanged",
+      "statement": "No existing readiness, barrier, routing or lifecycle behaviour changes in this Quest; system-table creation keeps its seed-local initial representation; ratchet baselines are not raised."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness over immutable row fixtures, red on HEAD (evaluator absent) and green after, with classification-vocabulary-unchanged as the control that must stay green; no cloud run is part of the proof."
+    }
+  ],
+  "sealedAt": "192d0389a4278be92ee5b96c36561511e2978a84",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "src/bootstrap/system-partition-classification.js",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+      "draftedAtCommit": "192d0389a4278be92ee5b96c36561511e2978a84"
+    },
+    "frontiers": [
+      {
+        "id": "critical-system-placement-distinct-node-invariant-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/critical-system-placement-distinct-node-invariant.receipt.json",
+            "requiredReceipts": [
+              "seed-local-replicas-are-not-converged",
+              "distinct-nodes-meeting-required-count-are-converged",
+              "critical-set-is-the-declared-vocabulary",
+              "required-count-derives-from-initial-replica-ids",
+              "non-serving-service-rows-do-not-count",
+              "absent-evidence-is-not-converged",
+              "repeated-node-rows-count-once",
+              "evaluator-mints-no-readiness-verdict",
+              "classification-vocabulary-unchanged",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

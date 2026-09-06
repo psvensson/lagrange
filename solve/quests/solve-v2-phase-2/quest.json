@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solve-v2-phase-2",
+  "statement": "Phase 2 of solve-v2 (schema and CLI cutover), Solver tooling (workflow) scope: the v2 schema, a lossless migration that converts every quest, log and epic to v2 with a mapping report whose counts sum to every entry and whose unmapped table is empty, and the four-command CLI (start refuses a green probe; note; probe; land honors the last verdict, requires a verification entry for src changes, runs the change proof and the coupled-pair guard) replace scripts/solve and test/solve in one cutover; solve/ ends under 20 MB with every quest directory on shape.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/quests/solve-v2-phase-2/evidence/oracle.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "lossless-migration",
+      "statement": "Every v1 log entry is copied verbatim; the mapping report sums to every entry with zero unmapped rows; anything not expressible keeps its bytes under quest.json.legacy with a decision finding."
+    },
+    {
+      "id": "phase-2-gate",
+      "statement": "solve/ under 20 MB on disk, no file over 1 MB, every quest directory on shape, scripts/solve.js + scripts/solve/ at most 6000 lines and test/solve/ at most 6000; npm run check green at every commit."
+    },
+    {
+      "id": "keep-change-proof-and-pair-guard",
+      "statement": "land keeps calling npm test (select-change-tests.js) and the coupledPairs landing guard; test selection, impact contracts and the proof cone are not reimplemented."
+    }
+  ],
+  "sealedAt": "a3431c013be204fe895dae1068d5fbcfb5dd2109",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 3,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/solve-v2/design.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/solve-v2.md",
+      "draftedAtCommit": "a3431c013be204fe895dae1068d5fbcfb5dd2109"
+    },
+    "frontiers": [
+      {
+        "id": "solve-v2-phase-2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solve-v2-phase-2.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

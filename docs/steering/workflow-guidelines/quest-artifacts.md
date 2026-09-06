@@ -33,8 +33,8 @@ The Solver may create:
 - `solve/report/<id>.md`
 - `solve/changes/<id>/...`
 
-Track `solve/log/` because it is the append-only source of truth for attempts,
-findings, and terminal events. Track `solve/report/` and `solve/changes/` when
+Track `solve/quests/<id>/log.ndjson` because it is the append-only source of truth for attempts,
+findings, and terminal events. Track `solve/quests/<id>/evidence/` and `solve/changes/` when
 they document committed Quest progress or closure.
 
 `solve/state/` is derived cache. The derived cache is git-ignored and may be

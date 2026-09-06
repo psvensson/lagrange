@@ -15,10 +15,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `check` — `node scripts/check-fast-static.js && npm test`
 - `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the curated Quest-first command quickstart.
-- `frontier` — Print the Solver frontier board.
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
-- `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
 - `prepare` — `node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"`
 - `publish` — `node scripts/publish-head.js`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
@@ -27,7 +25,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `solve` — `node scripts/solve.js`
 - `start` — `node src/index.js`
 - `test` — `node scripts/select-change-tests.js`
-- `trace` — Join quests/specs/CLs across planning layers (solve.js trace).
 - `triage` — `node scripts/triage-distributed-failure.js`
 
 ## analyze
@@ -89,7 +86,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
 - `audit:shards` — `node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
-- `audit:static-gate` — `node scripts/solve/static-gate.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
 - `audit:style-terminal-vocabulary` — `node scripts/check-style-terminal-vocabulary.js`
 - `audit:voter-readiness-owner` — `node scripts/check-voter-readiness-single-owner.js`
@@ -132,10 +128,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## dt
 
 - `dt:prove` — `node scripts/dt-prove.js`
-
-## frontier
-
-- `frontier:write` — Write the durable frontier board to solve/FRONTIER.generated.md.
 
 ## gate
 
@@ -181,10 +173,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `model:statecharts` — `node scripts/check-statecharts.js`
 - `model:tlc` — `node scripts/model-tlc.js`
 
-## overview
-
-- `overview:write` — Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.
-
 ## package
 
 - `package:npm` — `node scripts/release-npm-package.js verify`
@@ -192,10 +180,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## publish
 
 - `publish:npm` — `node scripts/release-npm-package.js publish`
-
-## quest
-
-- `quest:context` — Print full Quest context: status, model guidance, pending step, latest probe, findings, dirty worktree.
 
 ## release
 
@@ -205,28 +189,12 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## solve
 
-- `solve:attempt` — `node scripts/solve.js attempt`
-- `solve:audit` — `node scripts/solve.js audit`
-- `solve:checkpoint` — `node scripts/solve.js checkpoint`
-- `solve:consistency` — `node scripts/solve/ledger-consistency.js`
-- `solve:continue` — Begin the next attempt; on capture, add only --summary "<what changed>".
-- `solve:doctor` — `node scripts/solve.js doctor`
-- `solve:finding` — `node scripts/solve.js finding`
-- `solve:health` — `node scripts/solve.js health`
-- `solve:ingest-evidence` — `node scripts/solve.js ingest-evidence`
-- `solve:land` — Land a no-source Quest or issue the immutable review id for source work.
-- `solve:lint` — `node scripts/solve.js lint`
-- `solve:new` — `node scripts/solve.js new`
-- `solve:next` — `node scripts/solve.js next`
-- `solve:probe` — `node scripts/solve.js probe`
-- `solve:report` — `node scripts/solve.js report`
-- `solve:run` — `node scripts/solve.js run`
-- `solve:start` — Create or resume a Quest and show its next safe action.
-- `solve:status` — `node scripts/solve.js status`
-- `solve:step` — `node scripts/solve.js step`
-- `solve:step-pending` — `node scripts/solve.js step-pending`
-- `solve:theory` — `node scripts/solve.js theory`
-- `solve:upgrade` — `node scripts/solve.js upgrade`
+- `solve:board` — `node scripts/solve.js board`
+- `solve:evidence` — `node scripts/solve.js evidence`
+- `solve:land` — Land the quest: guards, npm test, commit; never push.
+- `solve:note` — Record an attempt, finding, verification or blocked entry.
+- `solve:probe` — Measure the doneWhen probe.
+- `solve:start` — Seal a quest against a red probe.
 
 ## spike
 
@@ -314,4 +282,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-209 scripts indexed; 36 have a curated description, 173 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+186 scripts indexed; 31 have a curated description, 155 fall back to their raw command. Improve coverage in the two sources named in the header comment.

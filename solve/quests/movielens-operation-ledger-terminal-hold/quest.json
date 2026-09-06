@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-operation-ledger-terminal-hold",
+  "statement": "A locally created operation-ledger REPLACE keeps the serialized self-move hold engaged until authoritative terminal or reaper-owned release evidence exists; durable step-age timeout alone cannot release dependent operation creation while the self-move still has active target/source progress, so a post-spread batch cannot overlap the ledger's own surgery, and the unchanged production five-node MovieLens Wave-4 milestone completes successfully.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before changing runtime source, reproduce the live composition with the real coordinator/interlock and virtual time: a locally held replica_operations REPLACE has crossed its durable step timeout while owner-side target/source progress is still active, and a dependent batch must remain deferred until authoritative terminal or reaper-owned release evidence. Prove red-on-revert and retain the run-20 serialization and run-22 spread-first controls."
+    },
+    {
+      "id": "single-release-owner",
+      "statement": "Represent self-move hold release as one declared state/action relation consumed by admission. The interlock must not independently reinterpret a raw workflow timestamp as terminality; reuse the operation-workflow terminal/recovery owner and the existing operation-ledger hold policy rather than adding a parallel Boolean, timer, cache, or query owner."
+    },
+    {
+      "id": "focused-cross-layer-model",
+      "statement": "Add a focused TLA+ model of ledger self-move progress, durable-row lag, timeout/reaper ownership, hold release, dependent batch admission, workflow writes, and snapshot closure. A timeout-only-release mutant must violate serialization or eventual closure while the fixed owner-composed model passes; do not claim exhaustive repository layer coverage."
+    },
+    {
+      "id": "safety-preserved",
+      "statement": "Do not weaken run-20 disruptive self-move exclusivity, run-22 quorum-spread-first ordering, CL-043 stale-phantom recovery, quorum floors, voter readiness, membership, leader succession, peer reachability, or operation deduplication."
+    },
+    {
+      "id": "changed-live-witness",
+      "statement": "Use the immutable Wave-4 archive wave4-live-exact-election-same-turn-2026-07-16T11-45-37-305Z.tar.gz as the pre-fix witness: dependent creates began at 11:44:43 while the held replica_operations REPLACE remained non-terminal until 11:44:51, followed by participant failures on all five dependent workflow rows."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, workload, joins, preload size, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, or live scenario semantics."
+    }
+  ],
+  "sealedAt": "fb734240abe1e30fbc9201a1686452147fb63a1f",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-incremental-replace-spread-nonregression",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "fb734240abe1e30fbc9201a1686452147fb63a1f"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-operation-ledger-terminal-hold-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

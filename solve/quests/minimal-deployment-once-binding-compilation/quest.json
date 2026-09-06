@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-once-binding-compilation",
+  "statement": "Every immutable once Binding is CDC-woken and level-triggered by the existing service_definitions planning leader through the shared compiler into exactly one deterministic, lineage-bound inactive zero-replica desired service preserving its pinned Artifact and full canonical projection; replay converges idempotently, invalid durable state fails closed, request, change, and time remain unchanged, and no invocation or runtime actual is created.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-once-binding-compilation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "12e9ec6e84d3bd515341128705756154751ca314",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "12e9ec6e84d3bd515341128705756154751ca314"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-once-binding-compilation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-once-binding-compilation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

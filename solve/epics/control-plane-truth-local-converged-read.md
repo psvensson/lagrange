@@ -1,8 +1,17 @@
 ---
 id: control-plane-truth-local-converged-read
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.2-five-node-convergence
-status: sharpening
 graduatesTo: movielens-nodes-priority-recovery-escape
+quests:
+  - publication-readiness-hotpath-starvation-relief
+  - publication-recovery-snapshot-starvation-relief
+  - raft-churn-sync-section-attribution
+  - spread-fence-proven-local-leadership-read
+authorizes: []
+legacyStatus: sharpening
 ---
 
 # Epic: Control-plane truth as a local, converged read

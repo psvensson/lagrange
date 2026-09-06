@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "alloy_model_bound",
-  "detail": "Core system structural ownership rules now have an architecture-adjacent Alloy model checked by model:alloy and model:contracts while TLA+ remains active."
-}

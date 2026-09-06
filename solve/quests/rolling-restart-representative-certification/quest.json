@@ -1,0 +1,98 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-representative-certification",
+  "statement": "On the declared five-node reference hardware class, a clean fixed-code representative rolling-restart window records at least fifteen runs, keeps corruption, unexpected node exit, oracle blindness, stale-source execution, acknowledged-write loss, and acknowledged-write verification gaps at zero in every run, and reports a Wilson-95 scenario-pass lower bound at or above the sealed T(5)=0.357 together with failure-class distribution and p50/p95 convergence time through the canonical stat-gate verdict.",
+  "epic": "rolling-restart-certification",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart",
+      "metric": "sealed-bar",
+      "minimumRuns": 15,
+      "certification": true,
+      "sealedBarsFile": "test/distributed/config/convergence-sealed-bars.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "reuse-canonical-gate",
+      "statement": "REUSED: execute scripts/rolling-restart-stat-gate.sh in certification mode, classify with scripts/rolling-restart-stat-gate-summary.js, read test/distributed/config/convergence-sealed-bars.json, calibrate through scripts/calibrate-machine.js, and project closure through the scenario-harness sealed-bar metric. Do not create a parallel gate, pass-rate calculator, safety classifier, oracle file, or timeout policy."
+    },
+    {
+      "id": "clean-fixed-code-window",
+      "statement": "Every contributing run must use the same clean committed source fingerprint, five-node scenario configuration, workload, restart schedule, clean-start protocol, declared hardware class, resource limits, and machine-factor calibration. Reused containers, mixed fingerprints, dirty-source runs, and stale-source execution are non-contributing failures, never passes."
+    },
+    {
+      "id": "sealed-statistical-bar",
+      "statement": "The certification window contains at least 15 runs and passes only when the canonical verdict is ABOVE_BAR with Wilson-95 lower bound >= 0.357. Consecutive passes are a liveness heartbeat only. If the N=15 interval is INCONCLUSIVE, additional runs may extend only that identical fixed-code window; the sealed bar may move upward only under docs/convergence-donewhen-metric.md and never downward."
+    },
+    {
+      "id": "hard-safety-floor",
+      "statement": "Every contributing run must report CORRUPT=0, NODE_EXIT=0, ORACLE_BLIND=0, staleSource=0, acknowledgedWriteLoss=0, and acknowledgedWriteUnverified=0. One breach fails the entire window regardless of pass rate. Do not weaken readiness, durability, oracle coverage, source-fingerprint checks, or protocol timers."
+    },
+    {
+      "id": "hardware-relative-liveness-only",
+      "statement": "Only work-bound convergence budgets may use the recorded machine factor. Quiet windows, sampling cadence, Raft protocol timers, correctness checks, and safety floors remain unscaled. Do not certify by increasing a raw timeout or lowering load."
+    },
+    {
+      "id": "statistical-run-last-resort",
+      "statement": "Before the live window, run the latent-blocker census and gate:preflight with the exact milestone-certification question. The N>=15 window is a one-time representative certification, never the iteration loop or a mechanism-discovery tool."
+    },
+    {
+      "id": "one-invariant-at-a-time",
+      "statement": "A failed certification keeps its immutable outer verdict and is classified with the existing distributed-failure, causal-model, topology-convergence, priority-recovery, and liveness analyzers. Any product correction is a bounded child Quest with a deterministic red-on-revert reproduction at the owning invariant before another fixed-code certification window."
+    },
+    {
+      "id": "model-discriminator",
+      "statement": "When a selected child theory crosses an owner, lifecycle, handoff, fairness, or coupled-invariant boundary, run npm run model:contracts and extend the existing TLA+/Alloy contract only when the current model cannot express the discriminator. A model result never substitutes for the live statistical verdict."
+    },
+    {
+      "id": "canonical-verdict-projection",
+      "statement": "The doneWhen probe reads the newest canonical stat-gate aggregate and requires source commit/fingerprint, clean-tree receipt, config digest, hardware class, node count, workload and failure schedule identity, run count, safety counters, Wilson interval and sealed bar, failure-class distribution, p50/p95 convergence time, acknowledged-write visibility, and immutable contributing report paths. Narrative summaries and hand-authored oracle files cannot satisfy it."
+    }
+  ],
+  "sealedAt": "04c3a1fccaf393d47f9b94f80fd6230fb0b941e0",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "verificationTemplates": [
+      "admission-gating",
+      "formation-circularity",
+      "harness-fidelity",
+      "recovery-replay",
+      "retry-loops",
+      "sweep-timer"
+    ],
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "04c3a1fccaf393d47f9b94f80fd6230fb0b941e0"
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-representative-certification-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "rolling-restart",
+            "metric": "sealed-bar",
+            "minimumRuns": 15,
+            "certification": true,
+            "sealedBarsFile": "test/distributed/config/convergence-sealed-bars.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

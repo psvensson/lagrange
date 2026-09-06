@@ -221,7 +221,7 @@ statement cites files or CL ids touched by a recent `revert(...)` commit —
 treat such a warning as a mandatory confirm-not-the-reverted-lever check
 before the first rung. Because a successor is sealed against the PARENT's
 evidence, the seal-freshness advisory will demand a `repro-on-head` finding
-(`solve.js finding --kind repro-on-head ...`) once `src/` drifts: reproduce
+(`solve.js note --finding ... --kind evidence`) once `src/` drifts: reproduce
 the sealed symptom on current HEAD before spending any disambiguation rung —
 a symptom already fixed in the meantime exhausts the quest immediately.
 
@@ -450,7 +450,7 @@ A narrowing Quest can shuffle the same blocker between owners forever and call i
 progress. The guards below keep the loop converging instead of oscillating. Each
 detector is a pure read-model over the append-only log; the policy that turns a
 detection into a gate lives at the call site behind the master
-`CONVERGENCE_GUARDS` policy map (`scripts/solve/constants.js`), and every
+`CONVERGENCE_GUARDS` policy map (the v1 constants module, retired in solve-v2 phase 2), and every
 threshold is a named constant. The `CONVERGENCE_GUARDS` map is a source-owned
 compile-time policy surface, not a runtime flag or Quest-local override:
 changing it is a reviewed code and guardrail change, and a guard MUST NOT be
@@ -663,15 +663,15 @@ rejected rather than silently ignored.
 
 For supervised work, one attempt is a three-phase flow:
 
-1. **Begin**: `node scripts/solve.js step --id <id>` pins the frontier, prints
-   the rung dossier, and writes the pending-attempt baseline to
-   `solve/state/<id>.pending.json`. Nothing is recorded in the event log yet.
+1. **Begin**: `node scripts/solve.js probe --id <id>` shows the sealed probe,
+   the seal-time metric and the last entries (solve-v2: no pending baseline
+   file; the seal-time metric in the log is the baseline).
 2. **Work**: do the work and rerun the relevant harness/probe so fresh evidence
    exists.
-3. **Record attempt**: `node scripts/solve.js step --id <id> --commit --changeRef
-   diff:<path> --summary "<hypothesis>"` measures against the pinned baseline,
-   validates the attempt, updates the strategy ladder, records the log event,
-   and clears the pending file. The historical `--commit` flag commits only the
+3. **Record attempt**: `node scripts/solve.js note --id <id> --attempt
+   "<hypothesis and what changed>"` records HEAD and the changed paths
+   (solve-v2 replaced the v1 `step --commit --changeRef` flow, the strategy
+   ladder and the pending file). The historical `--commit` flag committed only the
    attempt record as one synchronous log append; it never creates a Git commit.
    `step --abort` discards the pending attempt without recording anything;
    beginning a second step while one is pending is an error (record or abort it
@@ -710,8 +710,7 @@ The concrete incantation for one attempt:
 ```sh
 git diff --binary --full-index --no-ext-diff <base> -- <quest-paths> \
   > solve/changes/<questId>/attempt-<n>.diff
-node scripts/solve.js step --id <questId> --commit \
-  --changeRef diff:solve/changes/<questId>/attempt-<n>.diff --summary "..."
+node scripts/solve.js note --id <questId> --attempt "..."
 ```
 
 The artifact must live under `solve/changes/<questId>/`, end in `.diff`, and
@@ -799,11 +798,9 @@ mechanism; apply
 status alone. Record an exact candidate approval on the active frontier:
 
 ```sh
-node scripts/solve.js finding --id <quest> --frontier <frontier> \
-  --kind verifier-approval \
-  --claim "Independent verification passed" \
-  --evidence subagent:<id> \
-  --verification-scope candidate \
+node scripts/solve.js note --id <quest> \
+  --verification "Independent verification passed" \
+  --verifier subagent:<id> --verdict approve \
   --verification-fingerprint sha256:<candidate-fingerprint>
 ```
 
@@ -827,7 +824,7 @@ node scripts/solve.js land --id <quest> --review <review-id> \
   --finding "adversarial-js-intrinsics: inherited toJSON changed the canonical digest" \
   --finding "correctness: paired result values were never compared"
 # fix and prove the bounded replacement
-node scripts/solve.js continue --id <quest> --summary "<what changed>"
+node scripts/solve.js note --id <quest> --attempt "<what changed>"
 ```
 
 Each entry is `<category>: <summary>`; categories are kebab-case slugs,
@@ -953,7 +950,7 @@ work is never swept in. The `handoff` command is a dry run by default;
 `--commit` executes the printed `git add`/`commit` for the in-scope paths only
 (it never pushes).
 
-Landing union guard (`scripts/solve/landing-union-guard.js`): before any
+Landing union guard (the v1 landing-union-guard module, retired in solve-v2 phase 2; v2 lands the whole change set of `scripts/solve/guards.js` `changedPaths`): before any
 branch and before any commit, a terminal `land` compares every path outside
 `solve/` that differs from HEAD in the index or working tree (staged,
 modified, intent-to-add) with the recorded attempt union. Any uncovered path
@@ -1024,7 +1021,7 @@ refuted discrimination is investigative progress only; it never satisfies
 
 ## Findings Log
 
-Use `node scripts/solve.js finding` to record durable knowledge:
+Use `node scripts/solve.js note --finding` to record durable knowledge:
 
 - a claim learned during the Quest;
 - optional evidence for the claim;
@@ -1035,8 +1032,8 @@ ad-hoc memory and chat-only handoff notes.
 
 When a finding materially falsifies or constrains ANOTHER declared quest's
 premise, route it: record a finding on the affected quest too (until a
-dedicated route command exists, `node scripts/solve.js finding --id
-<affected-quest> ...` works cross-quest), with a backlink to the source
+dedicated route command exists, `node scripts/solve.js note --id
+<affected-quest> --finding ...` works cross-quest), with a backlink to the source
 quest's evidence. Do not edit the sibling's sealed goal in place — the routed
 finding is evidence for the sibling's own next step or exhaustion, decided
 there. Unrouted falsifications rot: the sibling quest starts later on a
@@ -1144,8 +1141,8 @@ hardest) and the decision is recorded as a `gate-decision` event:
 
 Flip any continuation-code mapping to `terminal` to restore the original
 "guard → stop" behaviour for that code. The mapping lives in
-`scripts/solve/continuation.js` (`CONTINUATION_DISPOSITIONS`) and is resolved by
-`scripts/solve/gate.js`.
+the v1 continuation module (`CONTINUATION_DISPOSITIONS`) and was resolved by
+the v1 gate module (both retired in solve-v2 phase 2).
 
 ### Soft-first / quorum before escalation
 
@@ -1274,7 +1271,7 @@ the reflection turn never perturbs the deterministic test suite. A reflection
 that times out or returns no note is still recorded (the cadence resets) — the
 event simply carries no text. A supervised driver sees the same conditions as the
 read-only `reflection-due` / `altitude-reflection-due` advisories
-(`scripts/solve/advisories.js`).
+(the v1 advisories module, retired in solve-v2 phase 2).
 
 Reflection is additive and reversible: it produces a recorded note and resets a
 cadence counter; it never changes a verdict, threshold, or `doneWhen`.
@@ -1293,7 +1290,7 @@ runs) is lost at restart because it was never written to the append-only log.
 
 To keep that progress in quest memory, the read-only diagnostic commands
 `status`, `step`, `health`, and `report` surface non-blocking **advisories** (see
-`scripts/solve/advisories.js`). Each names a move that is available and the exact
+the v1 advisories module, retired). Each names a move that is available and the exact
 command to take it; recording the move stays an explicit operator action.
 
 - **evidence-unrecorded**: a fresh probe/harness measurement is newer than quest
@@ -1323,7 +1320,7 @@ same recorded memory.
 A long-running quest used to die when one driver session ended: an external agent
 that drives the Solver through individual subcommands in a single chat loses all
 momentum when that chat ends. `run --keep-alive` wraps the loop in
-`runSupervised` (`scripts/solve/loop.js`) and automatically crosses only a
+`runSupervised` (the v1 loop module, retired in solve-v2 phase 2) and automatically crosses only a
 progress-bearing MAX_CYCLES boundary. It is decision-aware:
 
 - **SOLVED / EXHAUSTED**: the honest two-terminal contract — stop and report.
@@ -1357,10 +1354,10 @@ so stale execution state cannot masquerade as an active steering rule.
 
 Track authored Quest files under `solve/quests/`.
 
-Track the append-only event log under `solve/log/` because it is the durable
+Track the append-only event log `solve/quests/<id>/log.ndjson` because it is the durable
 source of truth for findings, attempts, and terminal state. Track exact attempt
 change artifacts under `solve/changes/` and non-regenerable evidence under
-`solve/report/`.
+`solve/quests/<id>/evidence/`.
 
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Ordinary `solve/report/<quest-id>.md` files with a
@@ -1369,7 +1366,7 @@ likewise ignored local projections. Generate either on demand. The presence,
 mtime, or bytes of ignored projections MUST NOT gate `next`, audit, checkpoint,
 or terminal handoff.
 
-Files under `solve/report/` that cannot be reconstructed from one Quest
+Files under `solve/quests/<id>/evidence/` that cannot be reconstructed from one Quest
 declaration and event log remain durable evidence. A projection-retention
 migration MUST classify exact paths before removal, record base commit, byte
 count, and SHA-256 for removed and retained files, and preserve every unmatched
@@ -1398,7 +1395,7 @@ surfaces, drifts the moment a landing is amended, and is what pushed the
 the changed decision (a reframed pass criterion, an answered open question) is
 the ceiling; outcomes live in the projections.
 
-`npm run solve:consistency` ([`scripts/solve/ledger-consistency.js`](../../../scripts/solve/ledger-consistency.js))
+`npm run solve:consistency` (the v1 ledger-consistency script, retired in solve-v2 phase 2)
 gates the machine-checkable half:
 
 - version 2 epics carry no `status:`, contain `## Decision log`, and remain within

@@ -46,7 +46,7 @@ const ARCHIVE_SUFFIXES = Object.freeze([
 // The one tracked text log over the rule, kept verbatim by decision of the
 // solve-v2 epic (design note section 6); nothing else is exempt.
 const ALLOWLIST = Object.freeze([
-  'solve/log/rolling-restart-core-stability.ndjson',
+  'solve/quests/rolling-restart-core-stability/log.ndjson',
 ]);
 const EXIT_OK = 0;
 const EXIT_REFUSED = 1;
@@ -54,7 +54,7 @@ const REASON_TOO_LARGE = 'larger than 1 MB';
 const REASON_ARCHIVE = 'archive';
 const REFUSAL_PREFIX = 'solve binary guard: refusing ';
 const REFUSAL_SUFFIX =
-  ' (upload with `node scripts/solve.js evidence add <path> --quest <id>` ' +
+  ' (upload with `node scripts/solve.js evidence add <path> --id <id>` ' +
   'and reference it from the log)';
 
 function stagedPaths() {

@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-recovery-owner-inventory",
+  "statement": "A tooling-generated inventory classifies every priority/publication-recovery module by owner and semantic layer, records every import edge, identifies duplicate DTO or reducer authority, and emits bounded owner-scoped migration candidates without moving runtime files.",
+  "epic": "owner-boundary-hardening-and-unification",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-recovery-owner-inventory",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "354238f897d5da084faade2739e1b984ec823c53",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W14",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+      "sealedAtCommit": "720657bb503ae1b9036f828b55fc2d06f809952c"
+    },
+    "frontiers": [
+      {
+        "id": "priority-recovery-owner-inventory-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-recovery-owner-inventory",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

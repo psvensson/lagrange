@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-ws-client-open-timeout",
+  "statement": "AdminWsClient rejects a stalled websocket opening attempt with a typed retryable timeout inside its configured deadline, releases socket ownership, and permits a fresh later attempt.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "admin-ws-client-open-timeout",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "505503fd0637f3a9e6da49e43918fbcc03e73f11",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "solve/epics/release-0-2.md",
+      "closesCL": [],
+      "parentQuest": "raft-follower-append-sqlite-starvation-relief",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "505503fd0637f3a9e6da49e43918fbcc03e73f11"
+    },
+    "frontiers": [
+      {
+        "id": "admin-ws-client-open-timeout-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "admin-ws-client-open-timeout",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

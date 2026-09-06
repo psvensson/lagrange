@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "theory-ledger",
+  "statement": "Legacy theory-ledger entries that cite no quest (folded from solve/theory-ledger.md).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {}
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "preamble": "# Experiment And Theory Ledger\n\nThis ledger is an evidence-linked index for current experiments, causal\ntheories, and superseded hypotheses. It is not an authority over package\nstatus, current-blocker routing, representative artifacts, or runtime behavior.\n\nPackages, generated current-blocker files, and artifacts remain canonical.\nLedger entries help agents find the theory trail before they choose or resume\nwork.\n\n## Contract\n\n1. Use one `"
+  }
+}

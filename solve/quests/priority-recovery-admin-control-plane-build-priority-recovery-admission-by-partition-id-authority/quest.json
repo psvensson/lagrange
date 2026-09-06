@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority",
+  "statement": "AdminControlSnapshot imports canonical priority-recovery admission and publication projection builders directly from the control-plane burndown owner; the Admin context duplicates and forwarding aliases are deleted.",
+  "epic": "owner-boundary-hardening-and-unification",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "4fb9f368c41e8b2a6afd15ead72109eb79fb2a09",
+  "legacy": {
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W14-measured-baseline-and-draft-closure-rows-revision-5",
+      "closesCL": [],
+      "parentQuest": "priority-recovery-owner-inventory",
+      "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+      "sealedAtCommit": "2ea2c8149523f5ab92dd963e4217efeefe5f9838"
+    },
+    "frontiers": [
+      {
+        "id": "priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

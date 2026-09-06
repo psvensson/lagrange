@@ -1,8 +1,13 @@
 ---
 id: membership-single-owner-cutover
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: resolved
 graduatesTo: membership-lifecycle-placement-hard-cutover
+quests: []
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Membership single-owner cutover (altitude insight)

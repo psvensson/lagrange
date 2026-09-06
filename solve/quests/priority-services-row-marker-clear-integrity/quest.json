@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-services-row-marker-clear-integrity",
+  "statement": "A joiner's priority control-plane replica converges its durable services-table row: the replica lifecycle persistence owner clears the CL-016 localOnly marker ONLY when the submitMutation result confirms a durable apply (success not false, outcome not observed_state_changed / affectedRows > 0, unknown result shapes counting as applied), so a returned readiness deferral or a zero-row UPDATE keeps the marker and the already-wired CL-021 reconcile owner retries the UPSERT until the row exists durably; the marker is never re-marked from a zero-row UPDATE on a previously-confirmed row (no resurrection of rows other owners removed), and the UPSERT keeps preserving raft_role/group_id from the cached row with a fresh updated_at. Verified at HEAD 85bdaa52d: replica-state-machine-transition.js:310-313 clears the marker unconditionally after any non-throwing submitMutation - including returned success:false readiness deferrals (background workClass during joiner convergence) and zero-row UPDATEs reported success with outcome observed_state_changed - after which every readiness write is a zero-row UPDATE ('No row found for CDC update' 63x on the services-p1 leader in run public-path-multinode-baseline-20260811T095750Z), no CDC event is emitted, the CL-021 reconcile owner never sees the row again, and the priority-spread census stays at readyDistinctNodeCount 2/3 with empty exclusionReasonCounts for the whole run - the dominant cold-boot starvation blocking public-path-multinode-baseline (3/5 runs). The existing guard test simulates only THROWN failures; it gains the returned-failure and zero-row shapes as red-on-revert cases mirroring the didConfigSeedInsertApply consumption precedent (dynamic-config-service.js:195-208).",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-services-row-marker-clear-integrity",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "85bdaa52d8308eaf9bd7ec29a9afdb6811eea5d0",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-021.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "85bdaa52d8308eaf9bd7ec29a9afdb6811eea5d0"
+    },
+    "frontiers": [
+      {
+        "id": "priority-services-row-marker-clear-integrity-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-services-row-marker-clear-integrity",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

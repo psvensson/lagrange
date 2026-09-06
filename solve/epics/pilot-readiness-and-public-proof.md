@@ -1,8 +1,22 @@
 ---
-epicContractVersion: 2
 id: pilot-readiness-and-public-proof
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests:
+  - learner-promotion-progress-proof
+  - partition-leader-row-publication-integrity-v2
+  - partition-leader-row-publication-integrity-v3
+  - partition-leader-row-publication-integrity
+  - public-path-multinode-baseline
+  - user-table-leader-handoff-demotion-pairing-v2
+  - user-table-leader-handoff-demotion-pairing
+  - user-table-leader-placement-spread-v2
+  - user-table-leader-placement-spread
+authorizes: []
+legacyStatus: null
 ---
 
 # Pilot readiness and public-path proof

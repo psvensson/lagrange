@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: native-call-context-wit-contract
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Native call-context WIT contract

@@ -19,12 +19,11 @@
 # (git commit --no-verify also bypasses, as before)
 set -euo pipefail
 
-COMMIT_AUTHORIZATION="$({ node scripts/solve/commit-authorization.js check; } 2>&1)" || {
-  echo "${COMMIT_AUTHORIZATION}"
-  exit 1
-}
+# A Solver landing (`node scripts/solve.js land`) sets LAGRANGE_SOLVER_LANDING=1:
+# it has already refreshed the inventories and run the change proof, so the
+# regeneration below is skipped for that commit (solve-v2 phase 2).
 SOLVER_AUTHORIZED=0
-if [ "${COMMIT_AUTHORIZATION}" = "solver-authorized" ]; then
+if [ "${LAGRANGE_SOLVER_LANDING:-}" = "1" ]; then
   SOLVER_AUTHORIZED=1
 fi
 

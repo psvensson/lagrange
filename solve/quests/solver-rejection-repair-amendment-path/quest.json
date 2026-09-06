@@ -1,0 +1,102 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-rejection-repair-amendment-path",
+  "statement": "A verifier rejection must stay recordable after the repair it demands, and a doneWhen bar that only grows must not need a rejection finding at all: bind rejection findings to the sealed review manifest rather than to current worktree bytes, add a monotone receipt-bar-strengthen amendment, and validate scope before bytes so the refusal message names the actionable flag.",
+  "epic": "cluster-formation-topology-admission-closure",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-rejection-repair-amendment-path.receipt.json",
+      "requiredReceipts": [
+        "rejection-binds-to-sealed-review-manifest",
+        "rejection-binding-refuses-wrong-fingerprint",
+        "rejection-requires-review-when-one-exists",
+        "receipt-bar-strengthen-needs-no-rejection-finding",
+        "receipt-bar-strengthen-refuses-removal",
+        "receipt-bar-strengthen-refuses-probe-or-file-change",
+        "receipt-bar-strengthen-updates-frontier-metric",
+        "scope-validated-before-bytes",
+        "amend-refusal-names-the-actionable-flags",
+        "existing-amendment-kinds-unchanged",
+        "existing-rejection-flow-unchanged",
+        "witness-deterministic",
+        "receipt-bar-strengthen-preserves-sibling-args",
+        "review-binding-refuses-another-quests-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-src-changes",
+      "statement": "This is a process Quest: it changes scripts/solve*, its tests and docs only. No src/ file changes, and no runtime behaviour of the database itself is touched."
+    },
+    {
+      "id": "rejection-binds-to-immutable-record",
+      "statement": "A verifier-rejection finding validates its fingerprint against the sealed review manifest (solve/state/reviews/<id>.json manifest.candidate/aggregate fingerprint), which is immutable once minted, rather than against current worktree bytes. This makes a rejection recordable after the repair it demanded, because the referent is what WAS verified, not what is present now."
+    },
+    {
+      "id": "strengthening-is-monotone-and-ungated",
+      "statement": "receipt-bar-strengthen accepts only a strict superset of the sealed requiredReceipts on the same probe and the same receipt file. It can never remove, rename or rewrite a receipt, never change doneWhen.probe, and therefore needs no verifier-rejection finding: it can only make the bar harder."
+    },
+    {
+      "id": "bar-actually-binds",
+      "statement": "A strengthened bar updates the frontier metric args as well as doneWhen args wherever they share the probe and receipt file, because the test-receipt probe measures only requiredReceipts; strengthening doneWhen alone would raise a bar that nothing measures."
+    },
+    {
+      "id": "deterministic-refusals",
+      "statement": "Scope validity is checked before any current-bytes comparison, so the refusal a caller sees names the actionable flag and does not depend on whether the quest happens to have candidate-contract attempts."
+    },
+    {
+      "id": "backward-compatible",
+      "statement": "Existing recorded amendments and rejection findings keep their meaning; the existing amendment kinds, the amendment limit, and the evidence-linkage rule for verifier-driven kinds are unchanged, proven by controls that must stay green."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness on temp roots, red on HEAD and green after, with existing-amendment-kinds-unchanged and existing-rejection-flow-unchanged as controls that must stay green."
+    }
+  ],
+  "sealedAt": "192d0389a4278be92ee5b96c36561511e2978a84",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "scripts/solve/amend.js",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+      "draftedAtCommit": "192d0389a4278be92ee5b96c36561511e2978a84"
+    },
+    "frontiers": [
+      {
+        "id": "solver-rejection-repair-amendment-path-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/solver-rejection-repair-amendment-path.receipt.json",
+            "requiredReceipts": [
+              "rejection-binds-to-sealed-review-manifest",
+              "rejection-binding-refuses-wrong-fingerprint",
+              "rejection-requires-review-when-one-exists",
+              "receipt-bar-strengthen-needs-no-rejection-finding",
+              "receipt-bar-strengthen-refuses-removal",
+              "receipt-bar-strengthen-refuses-probe-or-file-change",
+              "receipt-bar-strengthen-updates-frontier-metric",
+              "scope-validated-before-bytes",
+              "amend-refusal-names-the-actionable-flags",
+              "existing-amendment-kinds-unchanged",
+              "existing-rejection-flow-unchanged",
+              "witness-deterministic",
+              "receipt-bar-strengthen-preserves-sibling-args",
+              "review-binding-refuses-another-quests-review"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

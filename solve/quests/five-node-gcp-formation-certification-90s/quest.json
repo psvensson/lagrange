@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "five-node-gcp-formation-certification-90s",
+  "statement": "Operator-amended terminal certification (Peter, 2026-08-15, recorded in the schema-provisioning-collision-retry-closure log at 2026-08-16T05:54:03Z): one profiled plus three consecutive natural five-node GCP MovieLens runs each reach ACTIVE and publication 5/5 within 90 seconds of cluster start, with no named event-loop gap above 3000ms, natural teardown, and booted source fingerprints matching the local tree — every term identical to the predecessor bar except the formation window, amended 60s to 90s on the round-8 timeline proof that the joiner ACTIVE chain is inherently serial with a best-case floor of 50-65 seconds on this topology",
+  "epic": "publication-readiness-churn-liveness-closure",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "five-node-gcp-formation-certification-90s",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "operator-amended-window-only",
+      "statement": "The 90-second window is the only amended term; the 3000ms gap ceiling, fingerprint identity, natural teardown, and run counts stay exactly as sealed in the predecessor chain, and no further window relaxation may occur without a new operator decision recorded as a finding."
+    }
+  ],
+  "sealedAt": "78cddaa19ab4be63e9d561be71308ad162d32c31",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "schema-provisioning-collision-retry-closure",
+      "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+      "draftedAtCommit": "90f881359"
+    },
+    "frontiers": [
+      {
+        "id": "five-node-gcp-formation-certification-90s-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "five-node-gcp-formation-certification-90s",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

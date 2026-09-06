@@ -1,8 +1,13 @@
 ---
-epicContractVersion: 2
 id: cell-execution-ownership-vs-replica-topology
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: null
 ---
 
 # Cell execution ownership vs durable replica topology

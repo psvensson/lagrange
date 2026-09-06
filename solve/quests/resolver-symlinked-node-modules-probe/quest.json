@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "resolver-symlinked-node-modules-probe",
+  "statement": "generate-global-owner-debt-inventory.js --refresh succeeds inside a git worktree whose node_modules is a symlink, so the publish post-push gate passes 6/6 instead of failing on noncanonical-probe for bare-package resolutions that traverse the symlink",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/solve/resolver-symlinked-node-modules-probe.receipt.json",
+      "requiredReceipts": [
+        "symlinked-worktree-refresh-exits-zero"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "405caf2e0a42d3f6dd788256d6030fee5d0a1fc5",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "405caf2e0a42d3f6dd788256d6030fee5d0a1fc5"
+    },
+    "frontiers": [
+      {
+        "id": "resolver-symlinked-node-modules-probe-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "test-output/solve/resolver-symlinked-node-modules-probe.receipt.json",
+            "requiredReceipts": [
+              "symlinked-worktree-refresh-exits-zero"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

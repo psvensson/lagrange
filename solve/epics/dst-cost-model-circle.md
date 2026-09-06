@@ -1,14 +1,15 @@
 ---
 id: dst-cost-model-circle
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: resolved-option-b-refuted-pivot-to-a
 graduatesTo: null
-links:
-  quests: [dst-cost-model-fidelity-spike, dt-drain-safety-overremoval-hunt]
-  upstreamEpic: topology-convergence-hardening
-  relatedEpic: convergence-timeout-leadership-settle
-  relatedDoc: docs/deterministic-directed-testing-plan.md
-  relatedDoc2: docs/convergence-donewhen-metric.md
+quests:
+  - dst-cost-model-fidelity-spike
+  - dt-drain-safety-overremoval-hunt
+authorizes: []
+legacyStatus: resolved-option-b-refuted-pivot-to-a
 ---
 
 # Complete the DST circle — host all subsystems on a calibrated virtual-time cost model

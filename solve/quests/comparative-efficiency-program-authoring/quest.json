@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "comparative-efficiency-program-authoring",
+  "statement": "A version-2 comparative-efficiency epic, graduated specification, shared scale-evidence prerequisite, and complete linked Quest ladder define an outcome-neutral program for analytical estimates, paired alternative benchmarks, whole-topology cost projection, and fail-closed evidence-qualified claims.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/comparative-efficiency-program-authoring.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "planning-only",
+      "statement": "This Quest authors planning contracts and draft successor Quests only; it must not claim that comparative performance, cost, or scale has been measured."
+    },
+    {
+      "id": "one-evidence-schema",
+      "statement": "The comparative program must consume the scale-certification profile and report identity instead of inventing a parallel run-profile schema."
+    },
+    {
+      "id": "outcome-neutral",
+      "statement": "Quest completion must depend on valid preregistered evidence, never on Lagrange winning a comparison."
+    }
+  ],
+  "sealedAt": "aa0cc26a48389d78da4fbb2370417e8ba1baa074",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "aa0cc26a48389d78da4fbb2370417e8ba1baa074"
+    },
+    "frontiers": [
+      {
+        "id": "comparative-efficiency-program-authoring-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/comparative-efficiency-program-authoring.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

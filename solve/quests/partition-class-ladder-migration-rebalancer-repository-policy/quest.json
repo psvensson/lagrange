@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-migration-rebalancer-repository-policy",
+  "statement": "Bounded Option-5 rung-5 rebalancer repository/policy migration: all 19 censused decisions in repository composition, move-planner state, provisioning admission, priority-publication safety/handoff, superseded-target recovery, and operation liveness consume classifySystemPartition outcome fields with identical option objects and preserved system-table versus priority truth tables. Lane, visibility, row, planner admission, provisioning availability, readiness, handoff, recovery, and timeout behavior remain unchanged. doneWhen: solve/oracle/partition-class-ladder-migration-rebalancer-repository-policy.json reports metric at most 56, ownerCheck passed, and all gates green. NOT in scope: remaining unified-rebalancer, coordinator, or owner-execution sites; parsing; predicate removal; numeric budgets; timing; retry policy; admission policy; or behavior changes.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-rebalancer-repository-policy.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "b629f7a5c9517b2807f04e9cd7e852e0738486ef",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-single-owner-table",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "b629f7a5c9517b2807f04e9cd7e852e0738486ef"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-migration-rebalancer-repository-policy-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-migration-rebalancer-repository-policy.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

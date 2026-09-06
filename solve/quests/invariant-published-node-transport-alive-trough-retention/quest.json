@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "invariant-published-node-transport-alive-trough-retention",
+  "statement": "v1 log without a quest record (invariant-published-node-transport-alive-trough-retention.ndjson)",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {}
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "orphanLog": true
+  }
+}

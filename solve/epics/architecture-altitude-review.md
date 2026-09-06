@@ -1,8 +1,14 @@
 ---
 id: architecture-altitude-review
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: discussing
 graduatesTo: null
+quests:
+  - altitude-reflection-mechanism
+authorizes: []
+legacyStatus: discussing
 ---
 
 # Architecture-altitude review (standing)

@@ -1,0 +1,61 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-boot-cell-placement-migration",
+  "statement": "The exact boot Cell placement implementation blocked only by malformed Solver evidence history is migrated without source divergence: a current schema-v2 boot Binding compiles through the sole ServiceDefinitionsOwner into one active service definition, keeps caller replica intent absent, is admitted by the existing RuntimeServiceRebalancerOwner to exactly one system-policy-owned UnifiedRebalancer, binds its boot_v1 export through the sole component runtime readiness path, and passes the existing minimal-deployment-boot-cell-placement scenario and independent exact-candidate verification while request, change, time, and once remain unchanged, call and pushdown stay inactive, and bootstrap invocation remains absent.",
+  "epic": "minimal-deployment-surface",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-boot-cell-placement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "migration-exact-current-bytes",
+      "statement": "Migrate the exact current boot Cell placement source, architecture, runner, and test delta from base commit d66d04d45369a2a02d08e780e2a13760b44e1524; do not add, remove, or reinterpret product behavior while replacing the prior Quest's malformed evidence history."
+    },
+    {
+      "id": "boot-cell-contract-preserved",
+      "statement": "Preserve the existing ServiceDefinitionsOwner activation, RuntimeServiceRebalancerOwner admission, system-owned capacity, UnifiedRebalancer placement, and ServiceRuntimeLifecycle Component readiness owners without a bootstrap hook, seed registry, alternate runtime, or caller replica control."
+    },
+    {
+      "id": "boot-invocation-deferred",
+      "statement": "Do not add bootstrap invocation or make boot Binding lineage part of the axiomatic bootstrap set; this Quest only migrates the already-tested Cell placement and readiness delta."
+    }
+  ],
+  "sealedAt": "d66d04d45369a2a02d08e780e2a13760b44e1524",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": "minimal-deployment-boot-cell-placement",
+      "planDoc": "solve/epics/minimal-deployment-surface.md",
+      "draftedAtCommit": "d66d04d45369a2a02d08e780e2a13760b44e1524"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-boot-cell-placement-migration-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-boot-cell-placement",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

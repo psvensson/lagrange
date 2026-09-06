@@ -1,8 +1,89 @@
 ---
 id: topology-convergence-hardening
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: sharpening
 graduatesTo: membership-lifecycle-placement-hard-cutover
+quests:
+  - cold-node-authority-reacquisition-pressure
+  - executor-active-services-cache-handoff
+  - formation-background-release-owner-closure
+  - formation-background-release-quiescence-anchor-live
+  - formation-joining-ready-phase-fence-live
+  - formation-joining-ready-phase-fence
+  - formation-priority-spread-authoritative-handoff-closure
+  - formation-priority-spread-authoritative-publication-closure
+  - formation-priority-spread-without-exclusive-self-move-cost
+  - formation-release-priority-observation-owner
+  - formation-schema-operation-collision-leader-read-closure
+  - membership-publication-drain-determinism
+  - movielens-canonical-leader-publication-retained-wake-integrity-migration
+  - movielens-raft-peer-cohort-pruning-election-liveness
+  - operation-ledger-quorum-authoritative-release
+  - operation-workflow-drain-redrive
+  - ordinary-placement-ready-lease-candidate-admission
+  - priority-placement-completed-topology-observation
+  - priority-placement-snapshot-owner-reconciliation
+  - replica-projection-stale-leader-route-resync
+  - rolling-restart-acknowledged-write-durability-visibility
+  - rolling-restart-core-stability
+  - rolling-restart-durable-rejoin-formation-barrier
+  - rolling-restart-fresh-formation-node-authority-deferred-read
+  - rolling-restart-fresh-formation-terminal-add-observation-v2
+  - rolling-restart-fresh-formation-terminal-add-observation
+  - rolling-restart-handoff-witness-canonical-projection
+  - rolling-restart-handoff-witness-projection-v2
+  - rolling-restart-handoff-witness-projection
+  - rolling-restart-handoff-witness-trap-free-projection
+  - rolling-restart-infrastructure-join-progress-witness
+  - rolling-restart-leadership-churn-attribution
+  - rolling-restart-lifecycle-owner-rebind-recurrence
+  - rolling-restart-lifecycle-owner-rebind-scenario-registration
+  - rolling-restart-logging-vs-publication-queue-discriminator
+  - rolling-restart-outer-reattempt-owner-membership-restoration
+  - rolling-restart-pre-handoff-recovery-discriminator
+  - rolling-restart-run4-admin-query-backpressure
+  - rolling-restart-run4-control-plane-publications-failed-operation-mask
+  - rolling-restart-run4-critical-spread
+  - rolling-restart-run4-drain-residual
+  - rolling-restart-run4-join-runtime-activation-integrity-migration
+  - rolling-restart-run4-join-runtime-activation-workflow-integrity-migration
+  - rolling-restart-run4-join-runtime-activation
+  - rolling-restart-run4-load-admission-backpressure
+  - rolling-restart-run4-load-lane-admin-emission
+  - rolling-restart-run4-load-lane-owner-reproducer
+  - rolling-restart-run4-mixed-priority-context-selection
+  - rolling-restart-run4-observer-staleness
+  - rolling-restart-run4-operation-drain-owner-progress-token
+  - rolling-restart-run4-operation-drain
+  - rolling-restart-run4-passfail-discriminator-census
+  - rolling-restart-run4-postrebalance-diagnostics-routing
+  - rolling-restart-run4-postrebalance-drain-run15
+  - rolling-restart-run4-postrebalance-trim-drain
+  - rolling-restart-run4-publication-visibility-run2
+  - rolling-restart-run4-readiness-analyzer-normalization
+  - rolling-restart-run4-readiness-support-evidence
+  - rolling-restart-run4-stat-gate-classifier
+  - rolling-restart-run4-target-sync-reentry
+  - runtime-replica-state-projection-retained-reconcile-integrity-reseal
+  - runtime-replica-state-projection-retained-reconcile
+  - runtime-service-active-outcome-remote-owner-handoff
+  - runtime-service-add-creating-owner-rearm
+  - runtime-service-affinity-observer-intent-parity
+  - runtime-service-creating-owner-wake-progress-admission
+  - runtime-service-handler-executor-outcome-late-binding
+  - runtime-service-handoff-budget-rearm-reentry
+  - schema-admission-canonical-drain-handoff
+  - schema-provisioning-inline-execute-owner-redrive
+  - transaction-recovery-poison-row-final-sql-handoff-current-hash-closure-v2
+  - transaction-recovery-poison-row-final-sql-handoff-current-hash-closure
+  - transaction-recovery-poison-row-final-sql-handoff-live-ab
+  - transaction-recovery-poison-row-invariant
+  - transaction-recovery-poison-row-live-owner-engagement-v2
+  - transaction-recovery-poison-row-live-owner-engagement
+authorizes: []
+legacyStatus: sharpening
 ---
 
 # Epic: Topology convergence hardening

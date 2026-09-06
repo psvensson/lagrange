@@ -16,34 +16,17 @@ const ORIENTATION_GROUP_TITLE = 'Orientation';
 const MODEL_CONTRACT_GROUP_TITLE = 'Model And Contract Checks';
 const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
 const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
+const EVIDENCE_GROUP_TITLE = 'Evidence Tools';
 
 const COMMANDS_COMMAND = 'npm run commands';
 const SOLVE_START_COMMAND = 'npm run solve:start -- --id <quest>';
-const SOLVE_CONTINUE_COMMAND = 'npm run solve:continue -- --id <quest>';
+const SOLVE_NOTE_COMMAND =
+  'npm run solve:note -- --id <quest> --attempt "<what changed>"';
+const SOLVE_PROBE_COMMAND = 'npm run solve:probe -- --id <quest>';
 const SOLVE_LAND_COMMAND = 'npm run solve:land -- --id <quest>';
-const ADVANCED_SOLVE_LAND_COMMAND =
-  'npm run solve:land -- --id <quest> [--review <id> --verifier <id> ' +
-  '--verdict <approve|reject> --receipt <ref>]';
-const QUEST_CONTEXT_COMMAND = 'npm run quest:context -- --id <quest>';
-const SOLVE_STATUS_COMMAND = 'npm run solve:status -- --id <quest>';
-const SOLVE_STEP_COMMAND = 'npm run solve:step -- --id <quest>';
-const SOLVE_STEP_COMMIT_COMMAND =
-  'npm run solve:step -- --id <quest> --commit --changeRef diff:<path> --summary "<what changed>"';
-const SOLVE_STEP_PENDING_COMMAND =
-  'npm run solve:step-pending -- --id <quest>';
-const SOLVE_ATTEMPT_COMMAND =
-  'npm run solve:attempt -- --id <quest> --frontier <frontier> --changeRef diff:<path> --summary "<what changed>" -- <command...>';
-const SOLVE_FINDING_COMMAND =
-  'npm run solve:finding -- --id <quest> --frontier <frontier> --claim "<claim>"';
-const SOLVE_AUDIT_COMMAND = 'npm run solve:audit -- --id <quest>';
-const SOLVE_UPGRADE_COMMAND = 'npm run solve:upgrade -- --id <quest>';
-const SOLVE_PROBE_COMMAND =
-  'npm run solve:probe -- --probe scenario-harness --scenario <scenario> --reportDir test-output/reports --metric priority';
-const SOLVE_REPORT_COMMAND = 'npm run solve:report -- --id <quest>';
-const SOLVE_NEW_COMMAND =
-  'npm run solve:new -- --id <quest> --statement "<done condition>"';
-const SOLVE_INGEST_EVIDENCE_COMMAND =
-  'npm run solve:ingest-evidence -- --id <quest> --frontier <frontier> --evidence <path>';
+const SOLVE_EVIDENCE_COMMAND = 'npm run solve:evidence -- add <file> --id <quest>';
+const SOLVE_BOARD_COMMAND = 'npm run solve:board';
+const RETIRED_STEP_COMMAND = 'npm run solve:step';
 const STEERING_PACK_COMMAND = 'npm run steering:llm:pack';
 const TEST_SMOKE_COMMAND = 'npm run test:smoke';
 
@@ -84,8 +67,6 @@ const PRIORITY_RESIDUALS_COMMAND =
 const HARNESS_SUMMARY_COMMAND =
   'npm run summarize:harness -- --report-dir test-output/reports';
 
-const QUEST_CONTEXT_SCRIPT = 'quest:context';
-const QUEST_CONTEXT_SCRIPT_COMMAND = 'node scripts/quest-context.js';
 const COMMANDS_SCRIPT = 'commands';
 const COMMANDS_SCRIPT_COMMAND = 'node scripts/list-commands.js';
 const MODEL_CONTRACT_RECORDS_SCRIPT = 'model:contract-records';
@@ -101,31 +82,16 @@ const SOLVE_SCRIPT = 'solve';
 const SOLVE_SCRIPT_COMMAND = 'node scripts/solve.js';
 const SOLVE_START_SCRIPT = 'solve:start';
 const SOLVE_START_SCRIPT_COMMAND = 'node scripts/solve.js start';
-const SOLVE_CONTINUE_SCRIPT = 'solve:continue';
-const SOLVE_CONTINUE_SCRIPT_COMMAND = 'node scripts/solve.js continue';
-const SOLVE_LAND_SCRIPT = 'solve:land';
-const SOLVE_LAND_SCRIPT_COMMAND = 'node scripts/solve.js land';
-const SOLVE_STATUS_SCRIPT = 'solve:status';
-const SOLVE_STATUS_SCRIPT_COMMAND = 'node scripts/solve.js status';
-const SOLVE_STEP_SCRIPT = 'solve:step';
-const SOLVE_STEP_SCRIPT_COMMAND = 'node scripts/solve.js step';
-const SOLVE_STEP_PENDING_SCRIPT = 'solve:step-pending';
-const SOLVE_STEP_PENDING_SCRIPT_COMMAND = 'node scripts/solve.js step-pending';
-const SOLVE_ATTEMPT_SCRIPT = 'solve:attempt';
-const SOLVE_ATTEMPT_SCRIPT_COMMAND = 'node scripts/solve.js attempt';
-const SOLVE_INGEST_EVIDENCE_SCRIPT = 'solve:ingest-evidence';
-const SOLVE_INGEST_EVIDENCE_SCRIPT_COMMAND =
-  'node scripts/solve.js ingest-evidence';
-const SOLVE_AUDIT_SCRIPT = 'solve:audit';
-const SOLVE_AUDIT_SCRIPT_COMMAND = 'node scripts/solve.js audit';
-const SOLVE_UPGRADE_SCRIPT = 'solve:upgrade';
-const SOLVE_UPGRADE_SCRIPT_COMMAND = 'node scripts/solve.js upgrade';
-const SOLVE_FINDING_SCRIPT = 'solve:finding';
-const SOLVE_FINDING_SCRIPT_COMMAND = 'node scripts/solve.js finding';
+const SOLVE_NOTE_SCRIPT = 'solve:note';
+const SOLVE_NOTE_SCRIPT_COMMAND = 'node scripts/solve.js note';
 const SOLVE_PROBE_SCRIPT = 'solve:probe';
 const SOLVE_PROBE_SCRIPT_COMMAND = 'node scripts/solve.js probe';
-const SOLVE_REPORT_SCRIPT = 'solve:report';
-const SOLVE_REPORT_SCRIPT_COMMAND = 'node scripts/solve.js report';
+const SOLVE_LAND_SCRIPT = 'solve:land';
+const SOLVE_LAND_SCRIPT_COMMAND = 'node scripts/solve.js land';
+const SOLVE_EVIDENCE_SCRIPT = 'solve:evidence';
+const SOLVE_EVIDENCE_SCRIPT_COMMAND = 'node scripts/solve.js evidence';
+const SOLVE_BOARD_SCRIPT = 'solve:board';
+const SOLVE_BOARD_SCRIPT_COMMAND = 'node scripts/solve.js board';
 const RUNTIME_GRAMMAR_BROAD_SCRIPT = 'audit:runtime-grammar';
 const RUNTIME_GRAMMAR_FILE_SCRIPT = 'audit:runtime-grammar:file';
 const RUNTIME_GRAMMAR_CHECK_COMMAND =
@@ -150,19 +116,22 @@ function readPackageScripts() {
   return packageJson.scripts;
 }
 
-test('default command help exposes only the three Quest verbs', (t) => {
+test('default command help exposes only the four Quest verbs', (t) => {
   const rendered = renderCommandList();
   const commands = COMMAND_GROUPS.flatMap((group) => group.commands)
     .map((entry) => entry.command);
   t.same(commands, [
     SOLVE_START_COMMAND,
-    SOLVE_CONTINUE_COMMAND,
+    SOLVE_NOTE_COMMAND,
+    SOLVE_PROBE_COMMAND,
     SOLVE_LAND_COMMAND,
   ]);
   t.match(rendered, SOLVE_START_COMMAND);
-  t.match(rendered, SOLVE_CONTINUE_COMMAND);
+  t.match(rendered, SOLVE_NOTE_COMMAND);
+  t.match(rendered, SOLVE_PROBE_COMMAND);
   t.match(rendered, SOLVE_LAND_COMMAND);
-  t.notMatch(rendered, SOLVE_STEP_COMMAND);
+  t.notMatch(rendered, SOLVE_EVIDENCE_COMMAND);
+  t.notMatch(rendered, RETIRED_STEP_COMMAND);
   t.end();
 });
 
@@ -172,21 +141,11 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
   for (const command of [
     COMMANDS_COMMAND,
     SOLVE_START_COMMAND,
-    SOLVE_CONTINUE_COMMAND,
-    ADVANCED_SOLVE_LAND_COMMAND,
-    QUEST_CONTEXT_COMMAND,
-    SOLVE_STATUS_COMMAND,
-    SOLVE_STEP_COMMAND,
-    SOLVE_STEP_COMMIT_COMMAND,
-    SOLVE_STEP_PENDING_COMMAND,
-    SOLVE_ATTEMPT_COMMAND,
-    SOLVE_FINDING_COMMAND,
-    SOLVE_AUDIT_COMMAND,
-    SOLVE_UPGRADE_COMMAND,
+    SOLVE_NOTE_COMMAND,
     SOLVE_PROBE_COMMAND,
-    SOLVE_REPORT_COMMAND,
-    SOLVE_NEW_COMMAND,
-    SOLVE_INGEST_EVIDENCE_COMMAND,
+    SOLVE_LAND_COMMAND,
+    SOLVE_EVIDENCE_COMMAND,
+    SOLVE_BOARD_COMMAND,
     STEERING_PACK_COMMAND,
     TEST_SMOKE_COMMAND,
     MODEL_CONTRACT_RECORDS_COMMAND,
@@ -209,12 +168,12 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
   const orientation = ADVANCED_COMMAND_GROUPS.find((group) =>
     group.title === ORIENTATION_GROUP_TITLE);
   t.same(
-    orientation.commands.slice(2, 5).map((entry) => entry.command),
-    [SOLVE_START_COMMAND, SOLVE_CONTINUE_COMMAND, ADVANCED_SOLVE_LAND_COMMAND],
-    'the primary start/continue/land workflow leads component commands',
+    orientation.commands.slice(1, 5).map((entry) => entry.command),
+    [SOLVE_START_COMMAND, SOLVE_NOTE_COMMAND, SOLVE_PROBE_COMMAND, SOLVE_LAND_COMMAND],
+    'the start/note/probe/land workflow leads component commands',
   );
-  t.equal(findCommandEntry(QUEST_CONTEXT_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
-  t.equal(findCommandEntry(SOLVE_STEP_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
+  t.equal(findCommandEntry(SOLVE_BOARD_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
+  t.equal(findCommandEntry(SOLVE_EVIDENCE_COMMAND).group.title, EVIDENCE_GROUP_TITLE);
   t.equal(
     findCommandEntry(MODEL_CONTRACT_RECORDS_COMMAND).group.title,
     MODEL_CONTRACT_GROUP_TITLE,
@@ -225,18 +184,13 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
   );
   t.match(
     rendered,
-    `${QUEST_CONTEXT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
-      'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
+    `${SOLVE_PROBE_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      'Measure the doneWhen probe (or an epic with --epic) and show the delta from the seal-time value.',
   );
   t.match(
     rendered,
-    `${SOLVE_FINDING_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
-      'Record durable Quest memory for a frontier.',
-  );
-  t.match(
-    rendered,
-    `${SOLVE_AUDIT_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
-      'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
+    `${SOLVE_BOARD_COMMAND}\`${COMMAND_ENTRY_SEPARATOR}` +
+      'Print the open epics and quests on demand.',
   );
   t.end();
 });
@@ -275,22 +229,11 @@ test('package scripts expose Quest aliases and runtime grammar guards', (t) => {
   t.equal(scripts[COMMANDS_SCRIPT], COMMANDS_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_SCRIPT], SOLVE_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_START_SCRIPT], SOLVE_START_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_CONTINUE_SCRIPT], SOLVE_CONTINUE_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_LAND_SCRIPT], SOLVE_LAND_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_STATUS_SCRIPT], SOLVE_STATUS_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_STEP_SCRIPT], SOLVE_STEP_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_STEP_PENDING_SCRIPT], SOLVE_STEP_PENDING_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_ATTEMPT_SCRIPT], SOLVE_ATTEMPT_SCRIPT_COMMAND);
-  t.equal(
-    scripts[SOLVE_INGEST_EVIDENCE_SCRIPT],
-    SOLVE_INGEST_EVIDENCE_SCRIPT_COMMAND,
-  );
-  t.equal(scripts[SOLVE_AUDIT_SCRIPT], SOLVE_AUDIT_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_UPGRADE_SCRIPT], SOLVE_UPGRADE_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_FINDING_SCRIPT], SOLVE_FINDING_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_NOTE_SCRIPT], SOLVE_NOTE_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_PROBE_SCRIPT], SOLVE_PROBE_SCRIPT_COMMAND);
-  t.equal(scripts[SOLVE_REPORT_SCRIPT], SOLVE_REPORT_SCRIPT_COMMAND);
-  t.equal(scripts[QUEST_CONTEXT_SCRIPT], QUEST_CONTEXT_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_LAND_SCRIPT], SOLVE_LAND_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_EVIDENCE_SCRIPT], SOLVE_EVIDENCE_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_BOARD_SCRIPT], SOLVE_BOARD_SCRIPT_COMMAND);
   t.equal(
     scripts[MODEL_CONTRACT_RECORDS_SCRIPT],
     MODEL_CONTRACT_RECORDS_SCRIPT_COMMAND,

@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-preload-admission-gate-cutover",
+  "statement": "The MovieLens affinity demo makes production ratings load-lane admission its sole preload authority after typed snapshot observation. Unrelated nonblocking operations do not deny load; pressure, snapshot blindness, and ratings-specific failures do. The harness and demo share production classifiers, with no test imports or legacy raw-operation gate. Red-on-revert tests and one production-composed run prove the cutover engages before load.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-preload-admission-gate-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-owner-reuse",
+      "statement": "Typed control-plane quiescence classification and the ratings-table admission probe are production-owned reusable modules under src/. The example may not import test/ or recreate benchmark-admission, topology, operation-staleness, pressure, or critical-spread decisions. The distributed harness must consume the same shared modules after the cutover."
+    },
+    {
+      "id": "load-lane-authority",
+      "statement": "A successful ratings probe through the production admin WebSocket load lane is the final preload admit decision. Snapshot blindness, pressure, benchmark_admission_blocked, ratings routing/schema/topology degradation, stale relevant operations, voter/CDC unreadiness, or unstable leadership remain fail-closed. Unrelated nonblocking raw operation rows alone do not deny load."
+    },
+    {
+      "id": "connection-lane-engagement",
+      "statement": "Control snapshots use the snapshot lane, and both the ratings admission probe and the actual ratings loader use the load lane. Tests must prove the connection targets and show the production admission owner is engaged rather than bypassed."
+    },
+    {
+      "id": "bounded-cutover-scope",
+      "statement": "Source changes are bounded to extracting the existing pure quiescence classifier and load-probe builder into production-owned modules, one injectable example preload gate, the example wiring/report fields, harness imports, deterministic tests, and the placement-affinity scenario registry. Rebalancer operation semantics, admission policy decisions, and the sealed formation quest metric are excluded."
+    },
+    {
+      "id": "file-size-cutover",
+      "statement": "The touched run-affinity-demo.js file must finish below the 800-line source threshold by removing its raw global-operation settling implementation after the typed gate is wired; no suppressions or parallel legacy gate remain."
+    },
+    {
+      "id": "deterministic-attacks",
+      "statement": "Red-on-head tests prove: an unrelated nonblocking global operation cannot deny an otherwise admitted ratings load; quiescence without ratings admission still denies; snapshot blindness and pressure deny; snapshot/probe/loader use their required lanes; and no example imports test-only machinery."
+    },
+    {
+      "id": "production-engagement",
+      "statement": "Before terminal handoff, one combined production-composed MovieLens run must record typed quiescence plus successful ratings load-lane admission before load begins, complete the ratings load, and advance to runtime placement with replicas greater than zero. The same run may satisfy the runtime-replica-state-projection live clause."
+    },
+    {
+      "id": "donewhen-emitter",
+      "statement": "Extend scripts/run-placement-affinity-scenarios.js with the movielens-preload-admission-gate-cutover deterministic guard files. The scenario must fail closed on empty, skipped, todo, or missing TAP evidence."
+    }
+  ],
+  "sealedAt": "7fea97448e8f1268ac5a278bea09602ab434d7ec",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "movielens-three-way-affinity-demo",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "7fea97448e8f1268ac5a278bea09602ab434d7ec"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-preload-admission-gate-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-preload-admission-gate-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

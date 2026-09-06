@@ -1,0 +1,69 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lifecycle-controller-live-delegates-only-v2",
+  "statement": "The membership lifecycle controller is reduced to its live decision layer: the intent/drain delegates (submitJoinIntent at join start, submitDrainIntent on SIGTERM driving bootstrapAPI.markDraining) are preserved, while the unconsumed per-member state machine and transition history (zero consumers) and the currently-unreachable invalid-removal transition are removed. doneWhen: the test-receipt probe reads solve/evidence/lifecycle-controller-live-delegates-only-v2.receipt.json with outstanding 0 — delegates-preserved and shadow-state-machine-removed receipts passing (deterministic red-on-revert evidence harness).",
+  "epic": "cluster-identity-and-join-fencing",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/lifecycle-controller-live-delegates-only-v2.receipt.json",
+      "requiredReceipts": [
+        "intent-drain-delegates-preserved",
+        "shadow-state-machine-removed",
+        "reintroduction-guard-fails"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "preserve-live-delegates",
+      "statement": "Keep the live intent/drain delegates (submitJoinIntent, submitDrainIntent -> bootstrapAPI.markDraining); the reframe confirmed these are NOT shadow. Only the unconsumed state machine and transition history are removed."
+    },
+    {
+      "id": "no-behavior-change",
+      "statement": "This is a dead-code removal; no runtime decision changes. Proof is that the intent/drain behavior tests stay green and the removed surface had zero production consumers."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "A guard must fail if the unconsumed state machine or transition history is reintroduced without a consumer."
+    }
+  ],
+  "sealedAt": "3b559f8069180a07cb433474007251a0c97c5f18",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "join-path-audit-finding-13-lifecycle-controller-shadow-state",
+      "closesCL": [],
+      "parentQuest": "lifecycle-controller-live-delegates-only",
+      "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+      "draftedAtCommit": "3b559f8069180a07cb433474007251a0c97c5f18",
+      "replaces": "lifecycle-controller-live-delegates-only"
+    },
+    "frontiers": [
+      {
+        "id": "strip-shadow-state-machine",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/lifecycle-controller-live-delegates-only-v2.receipt.json",
+            "requiredReceipts": [
+              "intent-drain-delegates-preserved",
+              "shadow-state-machine-removed",
+              "reintroduction-guard-fails"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

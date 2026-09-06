@@ -1,8 +1,17 @@
 ---
-epicContractVersion: 2
 id: parallel-session-architecture
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: quests
+quests:
+  - parallel-evidence-machine-mutex
+  - parallel-session-quest-leases
+  - parallel-session-scope-advisory
+  - solver-measurement-only-attempt
+authorizes: []
+legacyStatus: null
 ---
 
 # Parallel sessions without interference
@@ -112,9 +121,9 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   pushes. Next quests to author: session registry + quest leases (item 3),
   evidence mutex (item 4), registry-fed scope advisory (item 5).
 - 2026-07-29 (later) — Items 3-5 implemented and quest drafts authored
-  ([mutex](../quests/parallel-evidence-machine-mutex.json),
-  [leases](../quests/parallel-session-quest-leases.json),
-  [advisory](../quests/parallel-session-scope-advisory.json)). Open
+  ([mutex](../quests/parallel-evidence-machine-mutex/quest.json),
+  [leases](../quests/parallel-session-quest-leases/quest.json),
+  [advisory](../quests/parallel-session-scope-advisory/quest.json)). Open
   questions resolved: leases are a solve-integrated claim (enforced at
   `solve start`/`continue`, CLI for manual claim/release); the evidence
   mutex is MANDATORY with a loud bypass env var, not advisory — corrupted

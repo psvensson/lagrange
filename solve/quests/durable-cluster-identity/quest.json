@@ -1,0 +1,73 @@
+{
+  "schema": "solve-quest/2",
+  "id": "durable-cluster-identity",
+  "statement": "A durable cluster identity is minted at first seed bootstrap, persisted in the rejoin hints, an authoritative cluster row, and the raft snapshot-checkpoint seam (replacing the config-pinned 'lagrange-default-cluster' default), and the bootstrap request carries expectedClusterId with seed-side rejection on mismatch, so a node can never join or seed over state belonging to a different cluster.",
+  "epic": "cluster-identity-and-join-fencing",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "durable-cluster-identity",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "designated-seam",
+      "statement": "Persist cluster identity through the existing raft snapshot-checkpoint clusterId seam (src/raft/snapshot-catchup-constants.js), whose own comment records that no durable cluster identity exists; do not invent a parallel identity concept."
+    },
+    {
+      "id": "bootstrap-contract",
+      "statement": "The bootstrap request must carry expectedClusterId and the seed must reject mismatches with a typed refusal classified as terminal; a missing expectedClusterId from a pre-identity joiner is handled by explicit compatibility policy, not silent acceptance."
+    },
+    {
+      "id": "fail-closed-mismatch",
+      "statement": "A cluster-id mismatch at any durable evidence source (rejoin hints, authoritative row, snapshot checkpoint) must fail closed with a typed identity-mismatch outcome, never fall through to fresh seed or join."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding mint/persist/reject mechanism is reverted while the rest of the change remains."
+    }
+  ],
+  "sealedAt": "2bd27df143c3e367a55adb8079e3b5f20f9269f9",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+      "specRef": "join-path-audit-finding-3-no-cluster-identity"
+    },
+    "frontiers": [
+      {
+        "id": "cluster-identity-mint-and-persist",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "durable-cluster-identity",
+            "metric": "priority"
+          }
+        }
+      },
+      {
+        "id": "cluster-identity-join-gate",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "durable-cluster-identity",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

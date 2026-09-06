@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-class-ladder-owner-evidence-tooling",
+  "statement": "Mechanical Option-5 rung-5 evidence tooling checkpoint: rerun the committed partition-class analyzer against the committed owner and persist both authoritative views. The parent oracle remains metric 119, target 0, done false, ownerCheck passed, with lint, decision-table, and targeted gates green; the bounded owner oracle is identical except target 119 and done true. No source, test, specification, analyzer, package, migration, target, or behavior changes.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-owner-contract.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "37d19580288d151f646726a3c01ea28f7ad24bed",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "closesCL": [],
+      "parentQuest": "partition-class-ladder-owner-implementation-final",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "37d19580288d151f646726a3c01ea28f7ad24bed"
+    },
+    "frontiers": [
+      {
+        "id": "partition-class-ladder-owner-evidence-tooling-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/partition-class-ladder-owner-contract.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

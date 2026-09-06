@@ -1,0 +1,75 @@
+{
+  "schema": "solve-quest/2",
+  "id": "operation-ownership-lease-fencing",
+  "statement": "Replica-operation ownership becomes durable and fenced: owner identity with a lease is persisted (the schema's vestigial lease_expires_at column is the foothold — today it is never read or written), orphaned operations on ordinary partitions get adopted by a fenced successor instead of never being resumed, priority-control-plane drain remote-settlement stops relying on the unfenced routing-readiness heuristic, and shutdown joins in-flight work — a bounded await of in-flight lanes plus a fence bump — instead of flag-set + map-clear while continuations past an await proceed unguarded. Verified-audit findings 5 and 14. Sequenced after Tier 1/2: the terminal CAS (replica-operation-terminal-cas) removes the worst consequence of duplicate owners in the meantime. doneWhen: the test-receipt probe reads solve/evidence/operation-ownership-lease-fencing.receipt.json with outstanding 0 — durable-owner-lease-enforced, orphan-op-adopted-by-fenced-successor, and shutdown-joins-in-flight receipts passing (deterministic red-on-revert evidence harness).",
+  "epic": "rebalancer-operation-safety-audit-remediation",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/operation-ownership-lease-fencing.receipt.json",
+      "requiredReceipts": [
+        "durable-owner-lease-enforced",
+        "orphan-op-adopted-by-fenced-successor",
+        "shutdown-joins-in-flight"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the lease/fence or the shutdown-join is reverted while the rest of the change remains."
+    },
+    {
+      "id": "sequenced-after-tier-1-2",
+      "statement": "Do not start before replica-operation-terminal-cas lands; Tier-1/Tier-2 fixes remove the worst duplicate-owner consequences first and this Quest must not re-open them."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "bbb8522616736db58e040e8fea54ec6feba4b795",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "rebalancer-safety-audit-findings-5-14-ownership-lease",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+    },
+    "frontiers": [
+      {
+        "id": "durable-owner-lease",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/operation-ownership-lease-fencing.receipt.json",
+            "requiredReceipts": [
+              "durable-owner-lease-enforced",
+              "orphan-op-adopted-by-fenced-successor"
+            ]
+          }
+        }
+      },
+      {
+        "id": "shutdown-join-in-flight",
+        "priority": 2,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/operation-ownership-lease-fencing.receipt.json",
+            "requiredReceipts": [
+              "shutdown-joins-in-flight"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

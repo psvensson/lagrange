@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "priority-spread-cure-guard-ordering-contract",
+  "statement": "The real RebalanceCoordinator.createOperation path invokes critical create-lane admission before the topology guard, while the spread-cure exemption deliberately delegates target readiness to ReplicaDispatchService, which keeps a not-ready target undispatched and retryable until it becomes eligible; a focused guard proves both ownership premises for three consecutive runs.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-spread-cure-guard-ordering-contract",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "6bdd0a08d28c73f98b809200e24fd6e28fb6b189",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "6bdd0a08d28c73f98b809200e24fd6e28fb6b189"
+    },
+    "frontiers": [
+      {
+        "id": "priority-spread-cure-guard-ordering-contract-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "priority-spread-cure-guard-ordering-contract",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,13 @@
 ---
 id: continuous-ai-workflow-landscape
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: resolved
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Continuous long-horizon AI-engineering workflow landscape (research note)

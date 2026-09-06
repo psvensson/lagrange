@@ -1,0 +1,27 @@
+{
+  "schema": "solve-quest/2",
+  "id": "durable-cluster-identity-v2",
+  "statement": "A durable cluster identity is minted at first seed bootstrap, persisted in the rejoin hints, an authoritative cluster row, and the raft snapshot-checkpoint seam (replacing the config-pinned 'lagrange-default-cluster' default), and the bootstrap request carries expectedClusterId with seed-side rejection on mismatch, so a node can never join or seed over state belonging to a different cluster. doneWhen: the test-receipt probe reads solve/evidence/durable-cluster-identity-v2.receipt.json (written by a deterministic evidence harness over real focused test runs) with outstanding 0 — every mint/persist, join-gate, and seam-wiring receipt passing.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/durable-cluster-identity-v2.receipt.json",
+      "requiredReceipts": [
+        "cluster-identity-minted-once-at-first-seed-bootstrap",
+        "cluster-identity-carried-in-rejoin-hints",
+        "cluster-identity-persisted-as-config-row",
+        "cluster-identity-threaded-into-snapshot-catchup",
+        "cluster-identity-mismatch-fails-closed",
+        "join-gate-carries-expected-cluster-id",
+        "join-gate-rejects-mismatch-terminal"
+      ]
+    }
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "orphanLog": true
+  }
+}

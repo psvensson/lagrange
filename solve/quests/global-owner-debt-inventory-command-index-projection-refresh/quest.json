@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "global-owner-debt-inventory-command-index-projection-refresh",
+  "statement": "The checked-in global owner-debt inventory exactly projects the composed Wave 0 source after the command-index computed-flag regression fix, without generator or baseline changes. doneWhen: the oracle is done only when the official refresh is idempotent, the focused inventory test and complete Solver suite pass, and independent review confirms only derived owner-debt facts changed.",
+  "epic": "roadmap-integrity-wave-0",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/global-owner-debt-inventory-command-index-projection-refresh.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "projection-only",
+      "statement": "Change only solve/changes/global-owner-debt-inventory/inventory.json plus this Quest's owned artifacts; do not change source, tests, generators, generated baselines, or ratchet thresholds."
+    },
+    {
+      "id": "independent-owner-contract-review",
+      "statement": "Before terminal handoff, obtain independent exact-attempt and aggregate verification that the regenerated inventory is an exact derived projection and invents or weakens no owner-boundary facts."
+    },
+    {
+      "id": "deterministic-idempotence",
+      "statement": "A second official generator run must leave the inventory byte-identical."
+    }
+  ],
+  "sealedAt": "4af1fe1339b7d28157bbafb7a518cdaa37ea3167",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "global-owner-debt-inventory-tooling-projection-refresh-wave0",
+      "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+      "draftedAtCommit": "4af1fe1339b7d28157bbafb7a518cdaa37ea3167"
+    },
+    "frontiers": [
+      {
+        "id": "global-owner-debt-inventory-command-index-projection-refresh-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/global-owner-debt-inventory-command-index-projection-refresh.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

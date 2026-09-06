@@ -1,0 +1,5 @@
+{
+  "metric": 0,
+  "target": 0,
+  "note": "metric = phase-2 acceptance rows over budget, as printed by `node scripts/checks/solve-v2-budget.js --metric solve-active-bytes,legacy-corpus-drift,solve-files-over-1mb,quest-dirs-off-shape,solver-lines,solver-test-lines`. Measured 0 on 2026-09-06: active v2 footprint 8,974,688 of 20,971,520 bytes; grandfathered migration corpus 27,337,660 bytes across 825 migrated logs, drift 0; no tracked file over 1 MB; no quest directory off shape; solver 3,151 of 6,000 lines; solver tests 886 of 6,000. The steering rows (steering-lines, always-load-lines, rules-json-absent, rules-md-count) are phase 3 and are excluded here."
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-runtime-access-policy-live-validation",
+  "statement": "Through the production ControlPlaneSetup wiring, authenticated CONFIGURE SERVICE ACCESS directly grants and revokes one schema-v3 Artifact/schema-v2 Binding service's SQL and Component table access without rebuild or restart; every subsequent invocation observes the exact replacement policy and fails closed after revocation, successful authorized SQL continues into the existing service_partition_access affinity publisher, and neither access observations nor affinity publication mutate access-policy configuration.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-runtime-access-policy-live-validation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "1ea2eab98e409815d1bac6a9fc839f7c3e28f45f",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "1ea2eab98e409815d1bac6a9fc839f7c3e28f45f"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-runtime-access-policy-live-validation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-runtime-access-policy-live-validation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

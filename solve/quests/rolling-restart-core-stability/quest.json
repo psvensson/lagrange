@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-core-stability",
+  "statement": "rolling-restart passes 3 consecutive harness runs with no priority items after core stability fixes.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart",
+      "reportDir": "test-output/reports",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [],
+  "sealedAt": "bfdae207db9e783fd56c3bfa3579cf28336b7842",
+  "legacy": {
+    "priority": 1,
+    "frontiers": [
+      {
+        "id": "rolling-restart-core-stability-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "rolling-restart",
+            "reportDir": "test-output/reports",
+            "metric": "distance"
+          }
+        }
+      }
+    ],
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [
+        "CL-001",
+        "CL-004",
+        "CL-030"
+      ],
+      "parentQuest": null,
+      "planDoc": "solve/epics/topology-convergence-hardening.md"
+    },
+    "migratedBy": "solve-v2 migration"
+  }
+}

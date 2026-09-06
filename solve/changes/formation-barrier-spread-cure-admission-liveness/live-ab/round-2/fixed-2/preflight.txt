@@ -1,5 +1,0 @@
-2026-08-25T10:32:52+02:00
-4.68 4.31 4.42 2/3855 1168142
-/sys/class/thermal/thermal_zone0/temp 27800
-/sys/class/thermal/thermal_zone1/temp 50000
-/sys/class/thermal/thermal_zone2/temp 

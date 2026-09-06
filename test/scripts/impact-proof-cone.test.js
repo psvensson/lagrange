@@ -34,11 +34,7 @@ import {
 } from '../../scripts/checks/test-primary-classification.js';
 import {evaluateCoverage} from
   '../../scripts/checks/impact-proof-cone-inputs.js';
-import {
-  canonicalImportGraphProblem,
-  landingReviewPreflight,
-  landingProofConeFromSelection,
-} from '../../scripts/solve/landing-preflight.js';
+import {canonicalImportGraphProblem} from '../../scripts/solve/guards.js';
 
 function writeFixture(rootDirectory, relativePath, content = '') {
   const absolute = path.join(rootDirectory, relativePath);
@@ -1177,10 +1173,6 @@ test('unavailable or empty live census is a typed fatal decision', () => {
     assert.equal(broken.runnable, false);
     assert.equal(testImpactDecision(broken).mode, MODE_FATAL);
     assert.throws(() => assertRunnableProofSelection(broken), /not runnable/iu);
-    assert.throws(
-      () => landingProofConeFromSelection(broken, 'candidate-digest'),
-      /not runnable/iu,
-    );
   } finally {
     fs.rmSync(brokenRoot, {recursive: true, force: true});
   }
@@ -1204,7 +1196,7 @@ test('unavailable or empty live census is a typed fatal decision', () => {
   }
 });
 
-test('landing preflight refuses stale graph and seal bytes before cache reuse', () => {
+test('canonical graph verification refuses stale graph and seal bytes', () => {
   withSelectorFixture(({rootDirectory}) => {
     const producerPath = path.join(
       rootDirectory, 'scripts/generate-global-owner-debt-inventory.js');
@@ -1224,15 +1216,7 @@ test('landing preflight refuses stale graph and seal bytes before cache reuse', 
     });
     const receiptOutput = `${canonicalReceipt}\n`;
     const passingProducer = fs.readFileSync(producerPath, 'utf8');
-    const manifest = {
-      candidate: {files: []},
-      aggregate: {
-        fingerprint: `sha256:${'a'.repeat(64)}`,
-        sourcePaths: ['src/exact-owner.js'],
-      },
-    };
-    const first = landingReviewPreflight(rootDirectory, manifest);
-    assert.equal(first.cached, false);
+    assert.equal(canonicalImportGraphProblem(rootDirectory), null);
 
     writeFixture(
       rootDirectory,
@@ -1243,7 +1227,7 @@ test('landing preflight refuses stale graph and seal bytes before cache reuse', 
       'graph.importers = {};\n' +
       `fs.writeFileSync('${graphPath}', JSON.stringify(graph));\n`,
     );
-    assert.throws(() => landingReviewPreflight(rootDirectory, manifest),
+    assert.match(canonicalImportGraphProblem(rootDirectory),
       /canonical import-graph verification failed.*verified bytes changed/isu);
     fs.writeFileSync(graphPath, graphBytes);
     writeFixture(rootDirectory,
@@ -1258,26 +1242,26 @@ test('landing preflight refuses stale graph and seal bytes before cache reuse', 
       `seal.snapshotDigest = '${'f'.repeat(64)}';\n` +
       `fs.writeFileSync('${sealPath}', JSON.stringify(seal));\n`,
     );
-    assert.throws(() => landingReviewPreflight(rootDirectory, manifest),
+    assert.match(canonicalImportGraphProblem(rootDirectory),
       /canonical import-graph verification failed.*verified bytes changed/isu);
     fs.writeFileSync(sealPath, sealBytes);
     writeFixture(rootDirectory,
       'scripts/generate-global-owner-debt-inventory.js', passingProducer);
 
     fs.unlinkSync(producerPath);
-    assert.throws(() => landingReviewPreflight(rootDirectory, manifest),
+    assert.match(canonicalImportGraphProblem(rootDirectory),
       /canonical import-graph verification failed.*generate-global.*is missing/isu);
 
     writeFixture(rootDirectory, 'producer-stub.js', passingProducer);
     fs.symlinkSync(producerStub, producerPath);
-    assert.throws(() => landingReviewPreflight(rootDirectory, manifest),
+    assert.match(canonicalImportGraphProblem(rootDirectory),
       /canonical import-graph verification failed.*not a regular file/isu);
     fs.unlinkSync(producerPath);
 
     fs.unlinkSync(importGraphPath(rootDirectory));
     fs.unlinkSync(path.join(
       rootDirectory, 'test/shards/impact-graph-seal.json'));
-    assert.throws(() => landingReviewPreflight(rootDirectory, manifest),
+    assert.match(canonicalImportGraphProblem(rootDirectory),
       /canonical import-graph verification failed.*generate-global.*is missing/isu);
   });
 });

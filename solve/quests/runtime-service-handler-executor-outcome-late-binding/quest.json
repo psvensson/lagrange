@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-service-handler-executor-outcome-late-binding",
+  "statement": "Seed and joining startup late-bind an already-created RuntimeServiceHandler to the canonical RebalanceCoordinator executor-outcome emitter when control-plane setup resolves it, so successful and failed runtime-service executor outcomes retain one owner, runtime ADD/REPLACE operations terminalize instead of remaining CREATING, the runtime-service rebalancer schedules its next affinity-policy evaluation, and the unchanged fresh MovieLens live gate reports priority metric 0.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change MovieLens schema, preload, workload, joins, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, 180000ms schema budget, 60000ms stability window, 300000ms stall window, 600000ms convergence budget, affinity scoring, freshness, identity, boundedness, placement, or exact-result predicates."
+    },
+    {
+      "id": "single-executor-outcome-owner",
+      "statement": "The already-canonical RebalanceCoordinator executorOutcomeEmitter remains the only executor-outcome owner. Late binding may attach that same instance to an existing RuntimeServiceHandler but must not create another emitter, write replica_operations directly, synthesize completion, or add a demo-specific path."
+    },
+    {
+      "id": "startup-order-coverage",
+      "statement": "Prove both seed and joining compositions when RuntimeServiceHandler exists before control-plane setup: after the canonical coordinator is resolved, the existing handler references its exact emitter; absent handlers and absent emitters remain safe, and the existing replica-handler and message-group-handler handoffs remain unchanged."
+    },
+    {
+      "id": "runtime-outcome-semantics",
+      "statement": "Preserve RuntimeServiceHandler outcome types and lifecycle ordering for create ACTIVE/FAILED and remove COMPLETED/FAILED. The fix owns dependency handoff only; coordinator visibility, retry, terminalization, ADD/REPLACE, and remove-safety semantics remain canonical."
+    },
+    {
+      "id": "deterministic-before-live",
+      "statement": "Before another live run, reproduce the missing late binding through production seed and join control-plane initialization with an existing runtime handler, prove the current path leaves its executorOutcomeEmitter stale while updating the other two handlers, then prove the correction red-on-revert and run focused bootstrap, node-handler, outcome-routing, and rebalancer scheduling coverage."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T14:57:13.589Z fresh ordered run is the pre-fix witness: schema and preload admitted, runtime replicas r1/r2 became ACTIVE, attribution and exact bounded results were healthy, but operations 8b21fc11-251f-4ddb-8b59-53125b8b97e8 and 51948e8a-696e-46df-a6df-f54ea404af1f remained CREATING and locality stalled at 0.500 because the runtime handlers emitted into no owner."
+    }
+  ],
+  "sealedAt": "5c701ed8e869ab67412735d47957de358239918f",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "formation-background-release-quiescence-anchor-live",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "5c701ed8e869ab67412735d47957de358239918f"
+    },
+    "frontiers": [
+      {
+        "id": "runtime-service-handler-executor-outcome-late-binding-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

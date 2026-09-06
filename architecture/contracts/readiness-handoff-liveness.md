@@ -122,8 +122,8 @@
     }
   ],
   "questRefs": [
-    "solve/quests/model-readiness-handoff-liveness.json",
-    "solve/quests/rolling-restart-core-stability.json"
+    "solve/quests/model-readiness-handoff-liveness/quest.json",
+    "solve/quests/rolling-restart-core-stability/quest.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260526-rolling-restart-selected-snapshot-source-staleness",

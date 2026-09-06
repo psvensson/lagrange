@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "distroless-fast-local-harness-shell-free",
+  "statement": "The distributed Docker harness is compliant with shell-less minimal runtime images: rolling-restart stat gates avoid fast-local reuse, fast-local reusable containers start via the image entrypoint without a shell override, reusable data reset is host-managed, and focused harness tests plus subagent verification pass.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/distroless-fast-local-harness-shell-free.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "8618292eb9dcb98c47bf2de5bbd5374f8ce16b8a",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null
+    },
+    "frontiers": [
+      {
+        "id": "distroless-fast-local-harness-shell-free-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/distroless-fast-local-harness-shell-free.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

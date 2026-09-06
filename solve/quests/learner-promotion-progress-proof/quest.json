@@ -1,0 +1,71 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-promotion-progress-proof",
+  "statement": "A partition learner becomes a voter only after the current leader proves the learner has applied through a safe promotion index for the current term and membership epoch; time is only a retry/backoff input, snapshot-installed and log-caught-up learners use the same progress contract, stale leaders and membership changes invalidate the proof, and promotion cannot reduce quorum safety or exceed the target voter count. Verified at HEAD 761dc17c7: both the raft layer (raft-replica-base.js checkLearnerPromotion, 30s default) and the production partition-service owner (partition-service-learner-promotion-methods.js) promote on elapsed time plus leader-identity discovery and quorum-shape gates, with no applied-index progress check and snapshot-installed learners reusing the same timer path.",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "learner-promotion-progress-proof",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "The partition-service learner-promotion methods remain the promotion owner and the raft layer remains the replication-progress owner; the progress contract flows between them. No second promotion authority in the control plane or harness."
+    },
+    {
+      "id": "quorum-safety-preserved",
+      "statement": "Promotion keeps the existing quorum-shape gates (even-voter avoidance, target replica count, priority-control-plane behavior) and adds the progress proof as a necessary condition; it must not weaken any existing gate."
+    },
+    {
+      "id": "attack-coverage",
+      "statement": "Required attacks: slow learner past the old timer, snapshot install still applying, leader change after proof collection, membership epoch change, learner reporting a future or stale index, restart between proof and promotion, even-voter and target-count pressure, and priority control-plane partition behavior."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "A live five-node recovery scenario must never promote a deliberately lagging learner and must promote once the authoritative applied-index condition holds; reintroducing time-only promotion must fail the scenario deterministically."
+    }
+  ],
+  "sealedAt": "761dc17c7facd847843f7e68c39d253bca256a62",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "verificationTemplates": [
+      "admission-gating",
+      "recovery-replay",
+      "retry-loops",
+      "sweep-timer"
+    ],
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#learner-promotion-progress",
+      "closesCL": [],
+      "parentQuest": "public-path-multinode-baseline",
+      "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+      "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+    },
+    "frontiers": [
+      {
+        "id": "learner-promotion-progress-proof-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "learner-promotion-progress-proof",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

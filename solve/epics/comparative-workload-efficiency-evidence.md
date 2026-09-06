@@ -1,8 +1,47 @@
 ---
-epicContractVersion: 2
 id: comparative-workload-efficiency-evidence
+status: superseded
+proof: deterministic
+legacy: true
 roadmapRow: null
 graduatesTo: comparative-workload-efficiency-evidence
+quests:
+  - benchmark-capacity-protocol-v2-foundation-closure
+  - benchmark-capacity-protocol-v2-foundation
+  - benchmark-resource-docker-observation-boundary
+  - benchmark-semantic-parity-v2
+  - benchmark-semantic-parity
+  - benchmark-statistical-capacity-protocol-durable-observation-base-aligned
+  - benchmark-statistical-capacity-protocol-durable-observation
+  - benchmark-statistical-capacity-protocol
+  - benchmark-whole-topology-resource-accounting-final
+  - benchmark-whole-topology-resource-accounting
+  - comparative-efficiency-c4-evidence-envelope-authoring
+  - comparative-efficiency-change-rate-crossover
+  - comparative-efficiency-claim-projection-base-aligned
+  - comparative-efficiency-claim-projection
+  - comparative-efficiency-evidence-contract
+  - comparative-efficiency-measured-cell-admission
+  - comparative-efficiency-movielens-grouped-reduce
+  - comparative-efficiency-movielens-paired-runtime-adapters-m1-base-reconciliation-v2
+  - comparative-efficiency-movielens-paired-runtime-adapters-m1-base-reconciliation
+  - comparative-efficiency-movielens-paired-runtime-adapters-verifier-closure
+  - comparative-efficiency-movielens-paired-runtime-adapters
+  - comparative-efficiency-movielens-public-request-workload
+  - comparative-efficiency-negative-controls-claim-disposition
+  - comparative-efficiency-negative-controls-intrinsic-hardening
+  - comparative-efficiency-negative-controls
+  - comparative-efficiency-opportunity-calculator-v2
+  - comparative-efficiency-opportunity-calculator
+  - comparative-efficiency-postgresql-comparator-capture-reuse
+  - comparative-efficiency-postgresql-comparator-reuse
+  - comparative-efficiency-program-authoring-validation-fix
+  - comparative-efficiency-program-authoring-verifier-fix
+  - comparative-efficiency-program-authoring
+  - comparative-efficiency-request-enrichment
+  - scale-certification-receipt-freshness-integrity-hardening
+authorizes: []
+legacyStatus: null
 ---
 
 # Comparative workload-efficiency evidence

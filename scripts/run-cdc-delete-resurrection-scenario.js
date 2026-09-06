@@ -5,7 +5,7 @@
  * Executes the deterministic apply-path harness
  * (`test/cache/cdc-cache-delete-resurrection-scenario.js`) and writes a
  * scenario-harness report into `test-output/reports/` in the shape the Solver's
- * `scenario-harness` probe reads (`scripts/solve/probes/scenario-harness.js`):
+ * `scenario-harness` probe reads (`scripts/solve/probes.js`):
  *   - standardSummary.scenarios[].current.passed / verdict
  *   - optimizationSummary.totalPriorityItems  (the lower-is-better gradient =
  *     number of non-converging (table, mode) cells)

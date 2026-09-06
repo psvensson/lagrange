@@ -1,12 +1,13 @@
 ---
 id: slow-rejoiner-progress-or-evict
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
-status: resolved
 graduatesTo: convergence-timeout-leadership-settle
-links:
-  quests: [rolling-restart-core-stability]
-  upstreamEpic: control-plane-write-wedge-leader-local-establishment
-  relatedSpec: membership-lifecycle-placement-hard-cutover
+quests: []
+authorizes: []
+legacyStatus: resolved
 ---
 
 # Slow-rejoiner progress-or-evict — break the coupled remove-safety deadlock that keeps rolling-restart scenario-PASS at 0

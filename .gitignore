@@ -42,23 +42,6 @@ tools/alloy-*.tar.gz
 models/**/*_TTrace_*.tla
 models/**/*_TTrace_*.bin
 
-# Solver derived state is local cache. Quest definitions, append-only event logs,
-# retained evidence, and attempt change diffs are durable workflow evidence.
-solve/state/
-# Ordinary Quest reports and the work overview are byte-stable projections of
-# declarations and event logs. Regenerate them on demand instead of committing
-# them. Preserve the one unmatched immediate Markdown evidence file; nested
-# report evidence and non-Markdown run archives are unaffected by this pattern.
-/solve/report/*.md
-!/solve/report/rolling-restart.md
-/solve/OVERVIEW.generated.md
-# Machine-local executor capability and attribution. Never commit credentials or
-# workstation-specific adapter commands.
-/solve/config.json
-# Standing-invariant status board: a per-run projection of evaluation results
-# (regenerate on demand via `solve invariants --export`); not committed because it
-# reflects local evaluation runs, unlike the Quest-state-derived FRONTIER/OVERVIEW boards.
-solve/invariant-status.generated.md
 
 # TLC scratch output from manual tlc2.TLC runs
 states/
@@ -78,6 +61,5 @@ city.toml
 .antigravitycli/
 .codex
 
-# Solver generated projections are printed on demand (solve-v2 phase 1)
-solve/FRONTIER.generated.md
-solve/OVERVIEW.generated.md
+# solve-v2: the v1 archive bundle lives in the evidence store, never in git
+solve/epics/solve-v2/solve-v1-archive.tar.gz

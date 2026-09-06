@@ -1,0 +1,73 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-routing-bridge-liveness-veto",
+  "statement": "The stored readiness evidence persistence guard protects fresher stored evidence only against pure heartbeat and lease lag: a node row whose status or connection state changed replaces the stored evidence at once, so the liveness identity vetoes stale-positive last-known-good reuse immediately, while a lagged row with unchanged status keeps bridging until its ready lease expires; every routed-read bridge witness stays green.",
+  "epic": "hysteresis-consolidation",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-routing-bridge-liveness-veto.receipt.json",
+      "requiredReceipts": [
+        "V1-liveness-identity-vetoes-stale-positive-reuse",
+        "V2-routing-cache-lag-contract-holds",
+        "V3-real-cache-heartbeat-window",
+        "V4-stored-snapshot-persistence",
+        "V5-identity-owner-pins",
+        "V6-sync-and-priority-recovery",
+        "V7-live-seed-rebalance-converges"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "lag-only-guard",
+      "statement": "The persistence guard keeps stored evidence only when the replacing snapshot carries the same node status and connection state with an older heartbeat or lease; any status or connection transition replaces the stored evidence."
+    }
+  ],
+  "sealedAt": "d0516be76df0b53a0aad1a2fe759ec355816a2fd",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 3,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/evidence/readiness-routing-bridge-liveness-veto.dep-scope.md",
+      "closesCL": [],
+      "parentQuest": "readiness-routing-cache-lag-bridge",
+      "planDoc": "solve/epics/hysteresis-consolidation.md",
+      "draftedAtCommit": "d0516be76df0b53a0aad1a2fe759ec355816a2fd"
+    },
+    "frontiers": [
+      {
+        "id": "readiness-routing-bridge-liveness-veto-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/readiness-routing-bridge-liveness-veto.receipt.json",
+            "requiredReceipts": [
+              "V1-liveness-identity-vetoes-stale-positive-reuse",
+              "V2-routing-cache-lag-contract-holds",
+              "V3-real-cache-heartbeat-window",
+              "V4-stored-snapshot-persistence",
+              "V5-identity-owner-pins",
+              "V6-sync-and-priority-recovery",
+              "V7-live-seed-rebalance-converges"
+            ]
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "harness-fidelity",
+      "recovery-replay"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

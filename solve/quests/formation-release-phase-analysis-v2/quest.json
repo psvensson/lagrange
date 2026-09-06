@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-release-phase-analysis-v2",
+  "statement": "npm run analyze:formation-release-phases -- <report-dir> is registered as Solver/operator tooling (package.json script, scripts/list-commands.js Report And Triage entry, docs/steering/tool-descriptions.json and the regenerated tools-index) and implemented by scripts/checks/analyze-formation-release-phases.js: it prints, per generation and cohort member of a five-node formation certification run, the timeline W (capture) -> handoff observed -> barrier release -> READY with deltas and the typed NODE_PHASE per node, carrying the closure analyzer's classification, closure verdict, failure reasons and completionMs unchanged; the view reuses the analyzer's exported functions (FORMATION_LOG_EVIDENCE) and mints no verdict of its own; READY is only the owner's recorded readyNodeIds and nothing derives ACTIVE or READY from nodes.status, publication counts, or coverage; no runtime (src/) file changes. Proven deterministically on immutable report excerpts: red on HEAD (command absent), green after; analyzer classification unchanged as the control.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-release-phase-analysis.receipt.json",
+      "requiredReceipts": [
+        "phase-timeline-per-node",
+        "phase-outcome-from-analyzer-classification",
+        "phase-cli-renders-report-dir",
+        "phase-projection-carries-no-new-verdict",
+        "analyzer-classification-unchanged",
+        "npm-script-registered",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "projection-only",
+      "statement": "The phase view reuses the closure analyzer's exported functions and copies its classification, closure, failure reasons and completionMs; it mints no verdict of its own and changes no analyzer decision."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "READY in the timeline is only the owner's recorded readyNodeIds; nothing derives ACTIVE or READY from nodes.status, publication counts, or coverage."
+    },
+    {
+      "id": "no-cloud-in-tests",
+      "statement": "The witness runs on immutable report excerpts; no cloud command is part of the proof."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic witness red on HEAD (1/7) and green after (7/7) with analyzer-classification-unchanged as the control that must stay green."
+    }
+  ],
+  "sealedAt": "8913874d60ab442cddb9efbf16382a7330c78e16",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 3,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "scripts/list-commands.js",
+      "closesCL": [],
+      "parentQuest": "formation-release-handoff-closure-v4",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "ec2b3f2f0"
+    },
+    "frontiers": [
+      {
+        "id": "formation-release-phase-analysis-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/formation-release-phase-analysis.receipt.json",
+            "requiredReceipts": [
+              "phase-timeline-per-node",
+              "phase-outcome-from-analyzer-classification",
+              "phase-cli-renders-report-dir",
+              "phase-projection-carries-no-new-verdict",
+              "analyzer-classification-unchanged",
+              "npm-script-registered",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

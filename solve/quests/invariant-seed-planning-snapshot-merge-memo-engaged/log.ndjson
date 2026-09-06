@@ -1,0 +1,3 @@
+{"ts":"2026-07-26T06:44:00.071Z","type":"invariant.evaluated","invariant":"seed-planning-snapshot-merge-memo-engaged","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-034"}
+{"ts":"2026-07-26T06:45:03.304Z","type":"invariant.evaluated","invariant":"seed-planning-snapshot-merge-memo-engaged","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-034"}
+{"ts":"2026-09-06T09:26:16.337Z","source":"solve-v2 migration","type":"terminal","status":"superseded","text":"v1 log with no quest record; closed by the solve-v2 migration"}

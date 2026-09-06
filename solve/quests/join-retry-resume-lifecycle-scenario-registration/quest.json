@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "join-retry-resume-lifecycle-scenario-registration",
+  "statement": "scripts/run-placement-affinity-scenarios.js registers the join-retry-resume-lifecycle-finalization deterministic guard and the registered scenario reports priority metric 0.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "join-retry-resume-lifecycle-finalization",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "05c625343d742bc8211d6631cb8ecf23054166d1",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "join-retry-resume-lifecycle-finalization",
+      "planDoc": null,
+      "draftedAtCommit": "05c625343d742bc8211d6631cb8ecf23054166d1"
+    },
+    "frontiers": [
+      {
+        "id": "join-retry-resume-lifecycle-scenario-registration-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "join-retry-resume-lifecycle-finalization",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

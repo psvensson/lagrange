@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "split-abort-fence-parity",
+  "statement": "The split abort path reaches merge's fencing parity: the split abort step result carries the claim fenceToken/ownerId so the abort transition persists through the fenced persistWorkflowTransition (today it persists unfenced with fenceToken: null while cutover and phase-advance paths are stamped), and the owner-recorded dissolution acks on the abort path are fence-stamped — a cross-process abort can never interleave with a fenced cutover through the unfenced abort write. doneWhen: the test-receipt probe reads solve/evidence/split-abort-fence-parity.receipt.json with outstanding 0 — abort-transition-fenced, abort-dissolution-acks-fenced, and cross-process-abort-cutover-exclusion receipts all passing.",
+  "epic": "split-merge-transition-integrity",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/split-abort-fence-parity.receipt.json",
+      "requiredReceipts": [
+        "abort-transition-fenced",
+        "abort-dissolution-acks-fenced",
+        "cross-process-abort-cutover-exclusion"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding mechanism is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert probes) and writes the receipt artifact."
+    },
+    {
+      "id": "no-unfenced-transition-write",
+      "statement": "No owner-lane transition write may bypass assertTransitionFence (F18 residual): the abort path is the last unfenced split transition; cross-process protection must not rest on status re-validation alone."
+    }
+  ],
+  "sealedAt": "34328f2bcb609297823f25e3d38fb20f46086af8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/split-merge-transition-integrity.md",
+      "draftedAtCommit": "34328f2bcb609297823f25e3d38fb20f46086af8"
+    },
+    "frontiers": [
+      {
+        "id": "split-abort-fence-parity-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/split-abort-fence-parity.receipt.json",
+            "requiredReceipts": [
+              "abort-transition-fenced",
+              "abort-dissolution-acks-fenced",
+              "cross-process-abort-cutover-exclusion"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

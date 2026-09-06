@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "legacy-work-tracker-removal",
+  "statement": "The legacy work tracker is no longer part of active tooling or steering, and the former work directory is preserved as _legacy_work.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/changes/legacy-work-tracker-removal/validation.json"
+    }
+  },
+  "constraints": [],
+  "sealedAt": "bfdae207db9e783fd56c3bfa3579cf28336b7842",
+  "legacy": {
+    "priority": 1,
+    "frontiers": [
+      {
+        "id": "legacy-work-tracker-removal-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/changes/legacy-work-tracker-removal/validation.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "solve-quest/2",
+  "id": "invariant-replica-voter-ready-visible-to-remove-safety-gate",
+  "statement": "v1 log without a quest record (invariant-replica-voter-ready-visible-to-remove-safety-gate.ndjson)",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {}
+  },
+  "constraints": [],
+  "sealedAt": null,
+  "legacy": {
+    "migratedBy": "solve-v2 migration",
+    "orphanLog": true
+  }
+}

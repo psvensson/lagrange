@@ -6,7 +6,9 @@
  * any budget is exceeded. `--json` prints the measurements; `--phase-0`
  * only measures and never fails (the inventory phase records the baseline).
  *
- *   solve/ on disk < 20 MB, no tracked file > 1 MB under solve/
+ *   active v2 footprint < 20 MB (tracked bytes under solve/ minus the
+ *   grandfathered migration corpus), that corpus intact, no tracked file
+ *   > 1 MB under solve/
  *   scripts/solve.js + scripts/solve/ <= 6000 lines; test/solve/ <= 6000
  *   docs/steering/ <= 3000 lines; always-load path <= 360 lines incl. AGENTS.md
  *   docs/steering/llm/rules.json absent; docs/steering/rules.md <= 25 rules
@@ -17,13 +19,16 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
+import {verifyMigrationCorpus} from '../solve/migrate-v1.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringPadEnd = Function.call.bind(String.prototype.padEnd);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
@@ -35,6 +40,11 @@ const TEXT_ENCODING = 'utf8';
 const ARGV_OFFSET = 2;
 const JSON_FLAG = '--json';
 const PHASE_ZERO_FLAG = '--phase-0';
+// `--metric [<id,id,...>]` prints one number: how many of the named rows
+// (every row when none is named) are over budget; the v2 script probe reads
+// it, and the exit code is non-zero when any is.
+const METRIC_FLAG = '--metric';
+const METRIC_ID_SEPARATOR = ',';
 const GIT_BINARY = 'git';
 const GIT_LS_SOLVE = Object.freeze(['ls-files', '-z', 'solve']);
 const NUL = '\0';
@@ -42,14 +52,18 @@ const LINE_SEPARATOR = '\n';
 const DETAIL_SEPARATOR = ', ';
 const DETAIL_LIMIT = 5;
 const MEGABYTE = 1024 * 1024;
-const SOLVE_DIR = 'solve';
-const SOLVE_DISK_BUDGET_BYTES = 20 * MEGABYTE;
+const MISSING_INVENTORY = 'no migration inventory: run migrate-v1 --inventory-from <commit>';
+const ACTIVE_FOOTPRINT_BUDGET_BYTES = 20 * MEGABYTE;
 const SOLVE_FILE_BUDGET_BYTES = MEGABYTE;
 const QUESTS_DIR = 'solve/quests';
 const QUEST_FILE = 'quest.json';
 const QUEST_LOG = 'log.ndjson';
 const QUEST_EVIDENCE_DIR = 'evidence';
 const QUEST_ALLOWED_ENTRIES = Object.freeze([QUEST_FILE, QUEST_LOG, QUEST_EVIDENCE_DIR]);
+const TERMINAL_TYPE = 'terminal';
+const LEGACY_QUEST_TYPE = 'quest';
+const LEGACY_PARK_TYPE = 'park';
+const CLOSED_STATUSES = Object.freeze(['solved', 'exhausted', 'superseded']);
 const SOLVER_LINE_BUDGET = 6000;
 const SOLVER_TEST_LINE_BUDGET = 6000;
 const STEERING_LINE_BUDGET = 3000;
@@ -85,7 +99,8 @@ const VERDICT_OVER = 'OVER';
 const CELL_GAP = '  ';
 
 const METRIC = Object.freeze({
-  SOLVE_DISK_BYTES: 'solve-disk-bytes',
+  SOLVE_ACTIVE_BYTES: 'solve-active-bytes',
+  LEGACY_CORPUS_DRIFT: 'legacy-corpus-drift',
   SOLVE_FILES_OVER_1MB: 'solve-files-over-1mb',
   QUEST_DIRS_OFF_SHAPE: 'quest-dirs-off-shape',
   SOLVER_LINES: 'solver-lines',
@@ -127,14 +142,19 @@ function trackedSolveFiles() {
   return arrayFilter(stringSplit(out, NUL), Boolean);
 }
 
-function diskBytes(dir) {
-  const absolute = path.join(REPO_ROOT, dir);
-  if (!fs.existsSync(absolute)) return 0;
-  return fs.readdirSync(absolute, {withFileTypes: true}).reduce((total, entry) => {
-    const relative = path.join(dir, entry.name);
-    if (entry.isDirectory()) return total + diskBytes(relative);
-    return total + fs.statSync(path.join(REPO_ROOT, relative)).size;
+function trackedBytes(tracked) {
+  return tracked.reduce((total, file) => {
+    const absolute = path.join(REPO_ROOT, file);
+    return fs.existsSync(absolute) ? total + fs.statSync(absolute).size : total;
   }, 0);
+}
+
+// The active v2 footprint: everything solve/ carries except the immutable
+// v1 payload the migration grandfathered in. That corpus is historical
+// evidence, not a size regression of the running system; its own row proves
+// it is still intact rather than quietly shrinking to make this one pass.
+function activeFootprintBytes(context) {
+  return trackedBytes(context.tracked) - context.corpus.bytes;
 }
 
 function rulesCount() {
@@ -152,14 +172,40 @@ function alwaysLoadLines() {
 // Amendment 4: a v2 quest directory holds exactly quest.json + log.ndjson,
 // plus evidence/ while open. Before phase 2 every legacy quest file counts
 // as off shape, which is the honest baseline.
+// A quest is closed once its log carries a terminal entry (v2 `terminal`
+// with solved/exhausted/superseded, or the v1 `quest`/`park` events it
+// classifies from); a closed quest may not keep evidence/.
+function questIsClosed(logFile) {
+  if (!fs.existsSync(logFile)) return false;
+  const lines = arrayFilter(
+    stringSplit(fs.readFileSync(logFile, TEXT_ENCODING), LINE_SEPARATOR),
+    (line) => stringTrim(line) !== '');
+  let closed = false;
+  for (const line of lines) {
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch (_error) {
+      continue;
+    }
+    const terminalShaped = entry.type === TERMINAL_TYPE || entry.type === LEGACY_QUEST_TYPE;
+    if (terminalShaped && arrayIncludes(CLOSED_STATUSES, entry.status)) closed = true;
+    if (entry.type === LEGACY_PARK_TYPE) closed = true;
+  }
+  return closed;
+}
+
 function questDirectoriesOffShape() {
   const absolute = path.join(REPO_ROOT, QUESTS_DIR);
   if (!fs.existsSync(absolute)) return [];
   return arrayFilter(fs.readdirSync(absolute, {withFileTypes: true}), (entry) => {
     if (!entry.isDirectory()) return true;
-    const names = fs.readdirSync(path.join(absolute, entry.name));
+    const dir = path.join(absolute, entry.name);
+    const names = fs.readdirSync(dir);
+    const hasEvidence = arrayIncludes(names, QUEST_EVIDENCE_DIR);
     return !arrayIncludes(names, QUEST_FILE) || !arrayIncludes(names, QUEST_LOG) ||
-      arraySome(names, (name) => !arrayIncludes(QUEST_ALLOWED_ENTRIES, name));
+      arraySome(names, (name) => !arrayIncludes(QUEST_ALLOWED_ENTRIES, name)) ||
+      (hasEvidence && questIsClosed(path.join(dir, QUEST_LOG)));
   });
 }
 
@@ -177,8 +223,18 @@ function oversizedSolveFiles(tracked) {
 // One row per acceptance metric: the measurement, its budget, and the
 // comparison that decides it (strict or inclusive as the epic states).
 const METRIC_ROWS = Object.freeze([
-  Object.freeze({id: METRIC.SOLVE_DISK_BYTES, budget: SOLVE_DISK_BUDGET_BYTES,
-    measure: () => diskBytes(SOLVE_DIR), ok: (value) => value < SOLVE_DISK_BUDGET_BYTES}),
+  Object.freeze({id: METRIC.SOLVE_ACTIVE_BYTES, budget: ACTIVE_FOOTPRINT_BUDGET_BYTES,
+    measure: activeFootprintBytes,
+    ok: (value) => value < ACTIVE_FOOTPRINT_BUDGET_BYTES,
+    detail: (context) => [`${context.corpus.bytes} grandfathered bytes in ` +
+      `${context.corpus.quests} migrated logs excluded`]}),
+  Object.freeze({id: METRIC.LEGACY_CORPUS_DRIFT, budget: 0,
+    measure: (context) => context.corpus.present ? context.corpus.drift.length : 1,
+    ok: (value) => value === 0,
+    detail: (context) => context.corpus.present ?
+      arrayMap(context.corpus.drift.slice(0, DETAIL_LIMIT),
+        (entry) => `${entry.id}: ${entry.reason}`) :
+      [MISSING_INVENTORY]}),
   Object.freeze({id: METRIC.SOLVE_FILES_OVER_1MB, budget: 0,
     measure: (context) => context.oversized.length, ok: (value) => value === 0,
     detail: (context) => context.oversized.slice(0, DETAIL_LIMIT)}),
@@ -210,7 +266,8 @@ const METRIC_ROWS = Object.freeze([
  */
 function measureSolveV2Budget() {
   const tracked = trackedSolveFiles();
-  const context = {tracked, oversized: oversizedSolveFiles(tracked)};
+  const context = {tracked, oversized: oversizedSolveFiles(tracked),
+    corpus: verifyMigrationCorpus(REPO_ROOT)};
   return arrayMap(METRIC_ROWS, (row) => {
     const value = row.measure(context);
     return {
@@ -233,8 +290,20 @@ function renderTable(rows) {
   return [header, ...lines].join(LINE_SEPARATOR);
 }
 
+function metricMode(argv, rows) {
+  const index = arrayIndexOf(argv, METRIC_FLAG);
+  if (index === -1) return null;
+  const ids = arrayFilter(stringSplit(String(argv[index + 1] || ''), METRIC_ID_SEPARATOR), Boolean);
+  const selected = ids.length === 0 ? rows : arrayFilter(rows, (row) => arrayIncludes(ids, row.id));
+  const over = arrayFilter(selected, (row) => !row.ok).length;
+  process.stdout.write(`${over}${LINE_SEPARATOR}`);
+  return over === 0 ? EXIT_OK : EXIT_OVER_BUDGET;
+}
+
 function main(argv) {
   const rows = measureSolveV2Budget();
+  const metric = metricMode(argv, rows);
+  if (metric !== null) return metric;
   if (arrayIncludes(argv, JSON_FLAG)) {
     process.stdout.write(JSON.stringify(rows, null, JSON_INDENT) + LINE_SEPARATOR);
   } else {

@@ -1,6 +1,0 @@
-diff --git a/src/formation-priority-spread-without-exclusive-self-move-cost-main.js b/src/formation-priority-spread-without-exclusive-self-move-cost-main.js
---- a/src/formation-priority-spread-without-exclusive-self-move-cost-main.js
-+++ b/src/formation-priority-spread-without-exclusive-self-move-cost-main.js
-@@ -1 +1 @@
--dry before formation-priority-spread-without-exclusive-self-move-cost-main
-+dry widen-scope formation-priority-spread-without-exclusive-self-move-cost-main

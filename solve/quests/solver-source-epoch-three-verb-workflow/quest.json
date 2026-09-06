@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-source-epoch-three-verb-workflow",
+  "statement": "Normal Quest operation uses only start, continue, and land: the first source attempt after a Solver checkpoint owns one source epoch base, continue refuses before appending any later attempt when an intervening commit changed that epoch's reviewed paths, an active Quest lease blocks raw source commits unless checkpoint or land presents a one-use worktree/index-bound authorization, deterministic inventories and the Quest's own log/declaration/evidence bookkeeping are committed but excluded from source ownership and verifier fingerprints, continue with a summary explicitly captures the working tree without requiring auto-diff vocabulary, and land issues an immutable review id only for a structurally landable manifest then consumes that id without operator-supplied scope or fingerprint; default command help exposes only the three verbs while advanced diagnostics remain available.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-source-epoch-three-verb-workflow.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "fail-before-history-corruption",
+      "statement": "Base movement or unauthorized commit detection must refuse before appending a second source attempt, verifier receipt, checkpoint marker, or terminal event."
+    },
+    {
+      "id": "no-integrity-bypass",
+      "statement": "The generic pre-commit skip flag must not bypass active-Quest source commit ownership; Solver authorization is one-use, time-bounded, and bound to the worktree, quest, commit mode, and staged index tree."
+    },
+    {
+      "id": "review-exactness",
+      "statement": "A review id is issued only for a structurally landable exact manifest and is invalid after any reviewed byte, path, base, or attempt-range drift."
+    },
+    {
+      "id": "bookkeeping-separation",
+      "statement": "Own Quest bookkeeping and named deterministic derived inventories remain in the handoff commit but never alter source ownership, candidate paths, aggregate paths, or verifier fingerprints."
+    },
+    {
+      "id": "compatibility",
+      "statement": "Existing expert commands and legacy land flags remain accepted for compatibility, but normal help, next actions, and steering teach only start, continue, and land."
+    }
+  ],
+  "sealedAt": "3de99a21333cd6a1601492dec78603ec64d7d242",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "docs/steering/workflow-guidelines/solver-quests.md",
+      "draftedAtCommit": "3de99a21333cd6a1601492dec78603ec64d7d242"
+    },
+    "frontiers": [
+      {
+        "id": "solver-source-epoch-three-verb-workflow-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/solver-source-epoch-three-verb-workflow.json"
+          }
+        }
+      }
+    ],
+    "verificationTemplates": [
+      "admission-gating",
+      "concurrency-serialization",
+      "harness-fidelity",
+      "adversarial-js-intrinsics"
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

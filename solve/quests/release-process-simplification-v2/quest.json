@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-process-simplification-v2",
+  "statement": "Releasing is deterministic and cheap: the exit is full corpus green on the exact SHA plus the tag workflow's artifact build and smoke plus an honest changelog; one preflight script replaces the digest-bound row Quests and local receipts; formation health is a machine-readable verdict with a standing trend and a local seed-starvation gate rather than a release gate.",
+  "epic": "release-process-simplification",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/release-process-simplification-v2.receipt.json",
+      "requiredReceipts": [
+        "D5-formation-verdict-causal-chain",
+        "D5-live-report-carries-the-verdict",
+        "D5-formation-health-trend",
+        "D6-local-seed-budget-gate",
+        "D2-release-preflight-facts",
+        "D1-release-notes-still-gate-the-tag",
+        "D2-command-index-names-the-new-surface"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "103786ef31e228db949a029930e575d574ddac89",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 3,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/release-process-simplification.md",
+      "closesCL": [],
+      "parentQuest": "release-process-simplification",
+      "planDoc": "solve/epics/release-process-simplification.md",
+      "draftedAtCommit": "103786ef31e228db949a029930e575d574ddac89"
+    },
+    "frontiers": [
+      {
+        "id": "release-process-simplification-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/release-process-simplification-v2.receipt.json",
+            "requiredReceipts": [
+              "D5-formation-verdict-causal-chain",
+              "D5-live-report-carries-the-verdict",
+              "D5-formation-health-trend",
+              "D6-local-seed-budget-gate",
+              "D2-release-preflight-facts",
+              "D1-release-notes-still-gate-the-tag",
+              "D2-command-index-names-the-new-surface"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

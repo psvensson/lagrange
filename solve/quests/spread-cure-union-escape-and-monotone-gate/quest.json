@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "spread-cure-union-escape-and-monotone-gate",
+  "statement": "Peer-system transplants for the critical-spread-gap terminal stall (evidence: live run 17-40-24, terminal topology sql_write_operations-p1 at [A,A,B] with free nodes and every spread ADD denied replica_inventory_unusable for 3 minutes). SEALED RESULT: a priority control-plane partition at target replica count with co-located replicas, free active nodes, and an UNAVAILABLE authoritative services read receives an admitted spread-restoring operation within one evaluation cycle - the topology guard's conservative-union escape (generalized from the concentrated-ledger cure, same provenance preconditions, union-proven need and safety, occupied/target-count rows still enforced) admits the planner's cure-typed spread move, whose typing now survives the coordinator operation-request boundary; the demo schema-admission stability window HOLDS accumulated evidence and confirmations through observer-side poll failures bounded by one stable window of blindness while regressing observations still reset both; and a critical-spread-open denial names the gapped partitions inline in its reason detail.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "spread-cure-union-escape-and-monotone-gate",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "7b48240da254e7c3415ffae01d95f692f6b64523",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/formation-complexity-consolidation.md",
+      "closesCL": [],
+      "parentQuest": "formation-joining-ready-phase-fence-live",
+      "planDoc": null,
+      "draftedAtCommit": "7b48240da254e7c3415ffae01d95f692f6b64523"
+    },
+    "frontiers": [
+      {
+        "id": "spread-cure-union-escape-and-monotone-gate-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "spread-cure-union-escape-and-monotone-gate",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

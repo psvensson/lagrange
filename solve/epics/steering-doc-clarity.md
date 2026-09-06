@@ -1,8 +1,14 @@
 ---
 id: steering-doc-clarity
+status: done
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: graduated
 graduatesTo: null
+quests:
+  - steering-doc-clarity
+authorizes: []
+legacyStatus: graduated
 ---
 
 # Epic: Steering-doc clarity remediation

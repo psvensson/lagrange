@@ -1,0 +1,65 @@
+{
+  "schema": "solve-quest/2",
+  "id": "benchmark-statistical-capacity-protocol-durable-observation",
+  "statement": "A preregistered open-loop randomized blocked-pair capacity protocol emits claim-eligible live evidence only after one-use externally observed authorization, consumes distinct coordinate- and row-count-bound PostgreSQL occurrences, and replays its canonical byte-bound artifacts offline after infrastructure cleanup while preserving the complete C3 statistical and non-success contract.",
+  "epic": "comparative-workload-efficiency-evidence",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "benchmark-statistical-capacity-protocol",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-semantic-parity",
+      "statement": "Do not seal this Quest until benchmark-semantic-parity is terminal for the workload surface under test."
+    },
+    {
+      "id": "preregistered-statistics",
+      "statement": "Seal randomized blocked pairs, minimum and maximum N, stopping rule, estimator, confidence interval, practical significance, p99 sample minimum, timeout and reject handling, warmup, cache policy, run order, and multiple-comparison treatment before measurement."
+    },
+    {
+      "id": "slo-capacity-definition",
+      "statement": "Capacity is maximum correct throughput satisfying the shared end-to-end latency and error SLO under open-loop offered load including client queueing."
+    },
+    {
+      "id": "harness-fidelity",
+      "statement": "Apply the harness-fidelity attack checklist and record immutable raw artifacts plus live engagement evidence; a synthetic fixture alone cannot establish measured capacity."
+    }
+  ],
+  "sealedAt": "6dbfc3857ca3d5ac587117297a0ce4334ff70a92",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#C3",
+      "closesCL": [],
+      "parentQuest": "benchmark-statistical-capacity-protocol",
+      "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+      "draftedAtCommit": "6dbfc3857ca3d5ac587117297a0ce4334ff70a92"
+    },
+    "frontiers": [
+      {
+        "id": "benchmark-statistical-capacity-protocol-durable-observation-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "benchmark-statistical-capacity-protocol",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

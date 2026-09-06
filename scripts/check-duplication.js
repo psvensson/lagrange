@@ -58,8 +58,10 @@ const RATCHET_TARGETS = [
     // recovery-protocol-snapshot reused the active-node-projection normalizers.
     // 2026-08-29: tightened 58/1867 -> 58/1865 while landing the formation-release
     // handoff candidate (incarnation-fence normalization shared one owner).
-    baselineCloneGroupCount: 58,
-    baselineDuplicatedLineCount: 1865,
+    // 2026-09-06: tightened 58/1865 -> 57/1845 after the solve-v2 phase-2
+    // cutover deleted the v1 solver (checker hint).
+    baselineCloneGroupCount: 57,
+    baselineDuplicatedLineCount: 1845,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -124,8 +126,10 @@ const RATCHET_TARGETS = [
     // rebalancer liveness-projection test owner.
     // 2026-09-05: tightened 800/30745 -> 800/30731 after Quest 2's integration
     // double clone moved into one shared rebalancer-integration-doubles helper.
-    baselineCloneGroupCount: 800,
-    baselineDuplicatedLineCount: 30731,
+    // 2026-09-06: tightened 800/30731 -> 795/30575 after the solve-v2 phase-2
+    // cutover deleted test/solve (checker hint).
+    baselineCloneGroupCount: 795,
+    baselineDuplicatedLineCount: 30575,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

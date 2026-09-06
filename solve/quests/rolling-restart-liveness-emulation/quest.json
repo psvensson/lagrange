@@ -1,0 +1,87 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-liveness-emulation",
+  "statement": "Rolling-restart failed samples can be classified without timeout hand-waving by deterministic replay/emulation of owner wake, queue drain, publication visibility, and operation workflow progress; the classifier distinguishes observed progress before budget exhaustion from stuck and insufficient-evidence states, with fixtures covering the latest publication_missing_active_node stall and at least one known drain/in-flight stall.",
+  "epic": "rolling-restart-liveness-observatory",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-liveness-emulation.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-run4-goalpost-mutation",
+      "statement": "Do not mutate rolling-restart-run4-drain-residual's sealed doneWhen or use this Quest to close its statistical product-stability claim."
+    },
+    {
+      "id": "progress-witness-required",
+      "statement": "Do not classify a failed run as observed_progressing_budget_exhausted from enqueue, backlog, retry scheduling, or timeout extension alone; require a later progress witness."
+    },
+    {
+      "id": "deterministic-first-gate-last",
+      "statement": "Mechanism classification must be proven by replay/emulation and deterministic fixtures before any new rolling-restart gate is used for certification."
+    }
+  ],
+  "sealedAt": "3f0622dd76e28ea72d7b2787be89655363e80e52",
+  "legacy": {
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "membership-lifecycle-placement-hard-cutover",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-run4-drain-residual",
+      "planDoc": "solve/epics/rolling-restart-liveness-observatory.md"
+    },
+    "doneWhenSealed": {
+      "planDoc": "solve/epics/rolling-restart-liveness-observatory.md",
+      "oracle": "solve/oracle/rolling-restart-liveness-emulation.json",
+      "closure": "The classifier/emulator is replayable and tested; this Quest does not claim rolling-restart product stability, does not close run4, and does not mutate run4's sealed statistical bar.",
+      "requiredVerdicts": [
+        "observed_progressing_budget_exhausted",
+        "stuck_no_enabled_action",
+        "stuck_enabled_action_not_executed",
+        "stuck_executed_no_visibility",
+        "stuck_downstream_workflow_progress",
+        "insufficient_evidence"
+      ],
+      "progressWitnessRule": "A verdict may be observed_progressing_budget_exhausted only when a post-action witness shows queue or in-flight depth decreasing, reconcile execution starting or completing, publication epoch/readback changing, missingPublished shrinking, or CDC lag decreasing across timestamps.",
+      "acceptance": [
+        "Given test-output/reports/stat-gate-20260629T045155Z-run1.report.json, the analyzer/emulator emits exactly one structured verdict from the requiredVerdicts set.",
+        "The verdict includes owner, boundary, enabled action, last progress timestamp, queue state, publication delta, and evidence path.",
+        "A fixture goes red if owner_reconcile_enqueued plus nonzero owner queue depth is classified as observed_progressing_budget_exhausted without a later progress witness.",
+        "Deterministic fixtures prove classifier behavior for synthetic slow-progress and true-stuck publication cases.",
+        "At least one known drain/in-flight stall fixture is classified through the same evidence model.",
+        "Implementation changes are limited to instrumentation/analyzer/test artifacts unless a separate product Quest is opened."
+      ]
+    },
+    "frontiers": [
+      {
+        "id": "publication-liveness-emulation",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-liveness-emulation.json"
+          }
+        }
+      },
+      {
+        "id": "drain-in-flight-progress-emulation",
+        "priority": 2,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-liveness-emulation.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

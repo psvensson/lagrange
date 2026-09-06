@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-single-version-contract-cutover",
+  "statement": "External Artifact ingress, normalization, catalog replay, scaffolding, and every consumer accept and emit only schema-v3 manifests; Deployment Binding ingress, durable replay, compilation, placement, readiness, and routing accept and emit only schema-v2 rows; every schema-v1/v2 Artifact and schema-v0/v1 Binding decoder, validator, projection, fallback branch, test fixture, and compatibility claim is deleted, while the sole current contracts retain system-owned replication and runtime-owned access policy.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-single-version-contract-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "a412a6a9e26f1c14dfde9249fee29b7f6a94bbfc",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-2.0-minimal-deployment-surface",
+      "specRef": "architecture/minimal-deployment-surface.md",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "a412a6a9e26f1c14dfde9249fee29b7f6a94bbfc"
+    },
+    "frontiers": [
+      {
+        "id": "minimal-deployment-single-version-contract-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "minimal-deployment-single-version-contract-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

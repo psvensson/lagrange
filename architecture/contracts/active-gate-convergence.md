@@ -219,7 +219,7 @@
     }
   ],
   "questRefs": [
-    "solve/quests/membership-publication-drain-determinism.json"
+    "solve/quests/membership-publication-drain-determinism/quest.json"
   ],
   "theoryLedgerRefs": [
     "theory-20260529-rolling-restart-active-gate-priority-recovery-coupled-invariants"

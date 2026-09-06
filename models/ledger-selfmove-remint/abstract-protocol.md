@@ -2,7 +2,7 @@
 
 Model: `LedgerSelfMoveRemint.tla` (property `EventuallySettled`).
 Quest: `formation-ledger-self-move-blocks-cluster-ops`.
-Live evidence: `solve/changes/formation-ledger-self-move-blocks-cluster-ops/diagnose-run6-demo-stall.md`.
+Live evidence: the run-6 demo-stall diagnosis note of quest formation-ledger-self-move-blocks-cluster-ops (archived in the solve-v1 evidence bundle; manifest `solve/epics/solve-v2/solve-v1-archive.manifest.json`).
 
 ## Why a model (DT7)
 This is a design-class LIVENESS bug: the docker/local demo can only *fail to

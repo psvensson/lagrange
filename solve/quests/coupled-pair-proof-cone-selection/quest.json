@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "coupled-pair-proof-cone-selection",
+  "statement": "Impact proof-cone selection consumes the canonical schema-v2 registry parser and matcher, honors exact, directory, and legacy filename-stem owner declarations, expands claimant tests without a second registry interpretation, fails closed to the full suite when registry inputs are invalid or selector-owning files change, and binds the registry semantic digest into its receipt.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "coupled-pair-proof-cone-selection",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "ec543322c4b4f5d743f459fc0fef7f3d2e8f214e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-1-enforcement-machinery-make-steering-machine-checked",
+      "closesCL": [],
+      "parentQuest": "coupled-pair-landing-guard",
+      "planDoc": null,
+      "draftedAtCommit": "ec543322c4b4f5d743f459fc0fef7f3d2e8f214e"
+    },
+    "frontiers": [
+      {
+        "id": "coupled-pair-proof-cone-selection-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "coupled-pair-proof-cone-selection",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

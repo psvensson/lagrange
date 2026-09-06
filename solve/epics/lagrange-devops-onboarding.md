@@ -1,8 +1,14 @@
 ---
 id: lagrange-devops-onboarding
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: active
 graduatesTo: null
+quests:
+  - newcomer-onboarding-friction
+authorizes: []
+legacyStatus: active
 ---
 
 # Epic: Lagrange DevOps Onboarding (Docker + Kubernetes try-it path)
@@ -542,3 +548,7 @@ psql round-trip on a ≥3-node cluster.
   the image registry, retaining the runtime's proven amd64-only boundary.
   Multi-arch and GHCR publication are explicitly deferred. Target:
   `solve/quests/github-release-workflow-cutover.json`.
+
+## Drafts carried by the solve-v2 migration
+
+- lagrange-devops-onboarding (RM-0.5-cde-helm-chart): A DevOps-savvy operator can stand up a multi-node Lagrange cluster — locally via 'docker compose up' and on Kubernetes via the charts/lagrange Helm chart (StatefulSet, per-pod stable NODE_ID, PVC-backed Raft/SQLite, probes, headless+sql+admin services) — from a published multi-arch ghcr.io image, and reach a working psql SQL round-trip by following getting-started-compose.md or getting-started-kubernetes.md, within ~30 minutes (Phase 0.5 exit criterion); the chart render-gate runs in test:ci.

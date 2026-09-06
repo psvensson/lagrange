@@ -1,0 +1,59 @@
+{
+  "schema": "solve-quest/2",
+  "id": "stale-replica-file-startup-reconciliation",
+  "statement": "A replica reassigned while its node is down, or a crash mid-cleanup, no longer leaves a stale nodes-p* replica .db with no startup reconciliation: a startup sweep reconciles on-disk replica files against the authoritative assignment so orphaned replica state is removed or quarantined instead of being scanned as if it were current durable evidence.",
+  "epic": "cluster-identity-and-join-fencing",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "stale-replica-file-startup-reconciliation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "depends-on-identity-manifest",
+      "statement": "The reconciliation keys on the membership manifest / typed evidence from startup-evidence-single-identity-decision; it should land after that Quest so the sweep compares against the canonical assignment, not the raw file union it replaces."
+    },
+    {
+      "id": "fail-closed-on-orphan",
+      "statement": "An orphaned replica file must be removed or quarantined before it can be read as durable evidence; the sweep must not itself become a new reader of ambiguous state."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the reconciliation sweep is reverted while the rest of the change remains."
+    }
+  ],
+  "sealedAt": "c03e416f3fd9641edf2465f498caa1fbd43744af",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+      "parentQuest": "startup-evidence-single-identity-decision",
+      "specRef": "join-path-audit-finding-4-stale-replica-files"
+    },
+    "frontiers": [
+      {
+        "id": "startup-replica-reconciliation-sweep",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "stale-replica-file-startup-reconciliation",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-lifecycle-sql-control-surface",
+  "statement": "Authenticated PG-wire lifecycle SQL classifies INSTALL, UPGRADE, REMOVE, and SHOW SERVICE statements before execution, requires action-specific authorization, carries only the server-derived security context, composes the existing manifest, artifact, and catalog owners with stable owner-derived operation identity, and returns typed durable operation or status outcomes without mutating catalog tables or runtime actual state from SQL.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-lifecycle-sql-control-surface",
+      "reportDir": "test-output/reports/service-lifecycle-sql-control-surface",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "sealed-sql-grammar",
+      "statement": "The initial grammar is exactly parameterized INSTALL SERVICE $1, UPGRADE SERVICE $1, REMOVE SERVICE $1, SHOW SERVICE $1, and parameterless SHOW SERVICES, with an optional trailing semicolon. Mutation payloads require an idempotency_key; install and upgrade payloads carry manifest, artifact_source, and optional config; remove and single-service reads carry service_name. Extra SQL tokens, extra parameters, malformed JSON, unknown payload fields, and client-supplied tenant, principal, roles, service-definition, installation, revision, operation, signature-policy, or owner-outcome fields fail closed with typed errors."
+    },
+    {
+      "id": "ordered-security-boundary",
+      "statement": "PG wire classifies lifecycle intent before execution and authorizes distinct service.install, service.upgrade, service.remove, and service.read actions. An unauthenticated session, a policy granting only pgwire.execute_query, a trust-mode production default, a missing canonical security context, and every client identity-spoof attempt must fail before the catalog owner is called. The immutable SqlRequest carries a defensive copy of the authenticated server-derived tenant, principal, and roles."
+    },
+    {
+      "id": "owner-composition",
+      "statement": "SQL owns grammar and projection only. A service lifecycle command owner normalizes the existing external manifest contract, applies a server-configured explicit artifact signature policy through InstallableServiceArtifactResolver, derives stable package, revision, service-definition, installation, and operation identifiers from canonical intent plus authenticated context, and invokes ServiceInstallCatalogOwner methods. SQL must not issue direct service catalog table mutations, infer runtime success, or copy services/service_endpoints actual state."
+    },
+    {
+      "id": "durable-retry-and-status",
+      "statement": "Identical authenticated retries with the same action and idempotency_key return the same durable operation and do not duplicate installation intent; reuse of that key for changed intent fails with a typed idempotency conflict. Successful install and upgrade initially report recorded_not_running. Remove records a removed desired-state intent against the latest catalog revision. SHOW reads authoritative catalog-owner projections and never reports recorded_not_running as running."
+    },
+    {
+      "id": "production-composition",
+      "statement": "The shared bootstrap/join ControlPlaneSetup wires one ServiceLifecycleCommandOwner, backed by its createSystemMetadataOwners serviceInstallCatalogOwner, into the live SQLQueryEngine. Password-mode PG wire production policy includes the four lifecycle actions; trust mode retains generic query authorization only. No feature flag, admin-WebSocket fallback, direct-table fallback, or CLI implementation is in scope."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario must prove unauthenticated rejection, generic-only authorization rejection, trust-default rejection, malformed lifecycle grammar and payload rejection, client identity and signature-policy spoof rejection, missing command-owner rejection, changed-intent idempotency collision, unresolved artifact rejection without catalog writes, direct-engine missing-context rejection, and truthful recorded_not_running projection, while a password-authenticated action-authorized install reaches the real catalog owner and replays deterministically."
+    },
+    {
+      "id": "bounded-source-scope",
+      "statement": "Production changes are bounded to the PG wire authorization/adapter request boundary, lifecycle SQL grammar and SQLQueryEngine dispatch, one service lifecycle command owner composing the existing service owners, ServiceInstallCatalogOwner authoritative read helpers, and shared ControlPlaneSetup wiring. Tests and one scenario runner may cover those paths; architecture/service-control-transport.md and architecture/lagrange-service-registry.md may be aligned. Reconciliation, runtime activation, CLI behavior, new registry transport, provider credentials, and actual-state owners are excluded."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must approve the exact source patch and aggregate fingerprint, show the scenario turns red when lifecycle classification is downgraded to generic authorization, when authenticated context propagation is removed, or when SQL bypasses the catalog command owner, and confirm the production composition owner is engaged before checkpoint and handoff."
+    }
+  ],
+  "sealedAt": "d830f496b667e78fd86a590d26571c80346f5c92",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+      "draftedAtCommit": "d830f496b667e78fd86a590d26571c80346f5c92"
+    },
+    "frontiers": [
+      {
+        "id": "service-lifecycle-sql-control-surface-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "service-lifecycle-sql-control-surface",
+            "reportDir": "test-output/reports/service-lifecycle-sql-control-surface",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

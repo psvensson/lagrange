@@ -1,0 +1,2 @@
+{"ts":"2026-07-26T06:45:02.637Z","type":"invariant.evaluated","invariant":"published-node-transport-alive-trough-retention","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-001"}
+{"ts":"2026-09-06T09:26:16.337Z","source":"solve-v2 migration","type":"terminal","status":"superseded","text":"v1 log with no quest record; closed by the solve-v2 migration"}

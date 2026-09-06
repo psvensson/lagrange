@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "coupled-pair-landing-guard",
+  "statement": "The canonical impact-contract registry uses a validated schema-v2 coupled-pair graph for the four known cross-owner safety premises; each pair independently declares two endpoints, a shared semantic contract, and exact primary-classified witness tests. One parser and path matcher owns registry validation, proof-cone selection, and Solver terminal audit. Any current aggregate source delta crossing both endpoints with an invalid, dead, incomplete, or missing witness edge hard-blocks land before review minting; one-endpoint and same-endpoint changes do not false-positive; registry identity is pinned into immutable reviews; existing filename-stem owner prefixes select their contracts; and a production publication-to-census guard closes the only missing witness. Three consecutive deterministic guard runs pass, and a deliberate missing-edge red proves landing refusal.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "coupled-pair-landing-guard",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "ec543322c4b4f5d743f459fc0fef7f3d2e8f214e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-1--enforcement-machinery-make-steering-machine-checked",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "draftedAtCommit": "ec543322c4b4f5d743f459fc0fef7f3d2e8f214e"
+    },
+    "frontiers": [
+      {
+        "id": "coupled-pair-landing-guard-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "coupled-pair-landing-guard",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

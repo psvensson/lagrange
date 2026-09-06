@@ -1,0 +1,68 @@
+{
+  "schema": "solve-quest/2",
+  "id": "split-key-comparator-typing",
+  "statement": "Split routing compares keys with a typed comparator: resolveSplitTargetPartitionId's raw `value < metadata.splitKey` JavaScript relational comparison is replaced by a type-aware comparator (numeric vs string vs buffer) owned in one module, mixed-type key spaces are rejected with a typed outcome instead of silently mis-routing, and the same comparator is used by every split routing decision (mirror replay, snapshot batching, query routing). doneWhen: the test-receipt probe reads solve/evidence/split-key-comparator-typing.receipt.json with outstanding 0 — typed-comparator-owned, mixed-type-rejection, and single-comparator-call-sites receipts all passing.",
+  "epic": "split-merge-transition-integrity",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/split-key-comparator-typing.receipt.json",
+      "requiredReceipts": [
+        "typed-comparator-owned",
+        "mixed-type-keyspace-rejected",
+        "single-comparator-call-sites"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding mechanism is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert probes) and writes the receipt artifact."
+    },
+    {
+      "id": "no-silent-misroute",
+      "statement": "A key whose type is incomparable to the splitKey type must never be routed by JavaScript's arbitrary relational coercion (F12): reject with a typed outcome rather than routing a row to the wrong child."
+    }
+  ],
+  "sealedAt": "34328f2bcb609297823f25e3d38fb20f46086af8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/epics/split-merge-transition-integrity.md",
+      "draftedAtCommit": "34328f2bcb609297823f25e3d38fb20f46086af8"
+    },
+    "frontiers": [
+      {
+        "id": "split-key-comparator-typing-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/split-key-comparator-typing.receipt.json",
+            "requiredReceipts": [
+              "typed-comparator-owned",
+              "mixed-type-keyspace-rejected",
+              "single-comparator-call-sites"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -27,7 +27,7 @@ import {execFile, spawn} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
-import {NON_MEASURING_VERDICT_REASONS} from './solve/constants.js';
+import {NON_MEASURING_VERDICT_REASONS} from './solve/probes.js';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 import {

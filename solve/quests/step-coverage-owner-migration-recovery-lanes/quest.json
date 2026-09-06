@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "step-coverage-owner-migration-recovery-lanes",
+  "statement": "Bounded child of step-coverage-single-owner-table (scope-pressure split; parent keeps the census oracle at 0-with-gates). SEALED RESULT: the batch's censused step-coverage re-derivations consume named rows of src/rebalancer/replica-operation-step-policy.js with byte-identical membership (moved Set/array declarations) or truth-table-identical predicates (rewritten branch piles); the policy module carries a red-on-revert guard test pinning every row's exact membership (test/rebalancer/replica-operation-step-policy.test.js, dt:prove PROVEN). Batch step-coverage-owner-migration-recovery-lanes per the parent's site census; behavior preserved exactly; the census reports 0 counted sites in the batch's files under the committed detector. doneWhen: scripts/check-step-coverage-owner.js --oracle --oracle-file solve/oracle/step-coverage-owner-migration-recovery-lanes.json --done-at 0 --with-gates reports census metric 0 with lint + targeted suites green.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/step-coverage-owner-migration-recovery-lanes.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "21e123eecee346890ab4131fcbc68bbaae5dccfc",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "step-coverage-single-owner-table",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "21e123eecee346890ab4131fcbc68bbaae5dccfc"
+    },
+    "frontiers": [
+      {
+        "id": "step-coverage-owner-migration-recovery-lanes-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/step-coverage-owner-migration-recovery-lanes.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,8 +1,13 @@
 ---
 id: strategy-gate-and-altitude-teeth
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: discussing
 graduatesTo: null
+quests: []
+authorizes: []
+legacyStatus: discussing
 ---
 
 # Epic: Strategy gate + altitude teeth — make high-level thinking gate behavior

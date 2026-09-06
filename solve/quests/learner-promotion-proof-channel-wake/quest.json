@@ -1,0 +1,86 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-promotion-proof-channel-wake",
+  "statement": "The partition-service learner-promotion owner turns the promotion proof channel from a timer-only poll into an event-driven, typed exchange without changing proof semantics: a learner re-requests its promotion proof immediately when its own services row becomes visible in the system-table cache, when the published membership epoch changes, or when a leader ack advances its match index (the 1-second LEARNER_CATCH_UP_CHECK_INTERVAL_MS remains the floor, never the only trigger); the leader's request_invalid refusal carries a typed cause (learner_address_unresolvable vs request_shape) and the learner distinguishes response_binding_mismatch, logging all three at info; on learner_address_unresolvable the learner re-asserts its durable services row (kicking the CL-021 status-write retry) instead of blind re-polling; each proof delivery carries a bounded timeoutMs (no larger than the existing MESSAGE_TIMEOUT_MS and not stacking with the interval) and proof_transport_failed is logged at info. Leader-proven progress (learnerMatchIndex >= safePromotionIndex), publication-epoch binding, the target+1 voter cap, CL-035/CL-036 row seeds and quorum caps are byte-for-byte unchanged. Proven by a real PartitionService leader+learner witness on the dt6 five-node fixture with the learner's services row withheld from the leader cache for 20 seconds and a 5-second proof round trip: red on HEAD (one request_invalid then progress_behind cycles, learner ACTIVE no earlier than +26s), green after (typed learner_address_unresolvable followed by a wake under 1 second after the row lands, learner ACTIVE by +12s with learnerMatchIndex equal to safePromotionIndex and matching epochs). Root cause from the 4bc6c1d25 GCP runs: control_plane_publications learner creation cost 25-32s in every run (request_invalid at epoch 1 while the target's status write was deferred, then progress_behind behind 2-5s seed event-loop stalls with 5s transport timeouts), ordering the ledger self-move behind it.",
+  "epic": "release-0-2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/learner-promotion-proof-channel-wake.receipt.json",
+      "requiredReceipts": [
+        "proof-wakes-on-services-row-visibility",
+        "proof-wakes-on-published-epoch-change",
+        "typed-refusal-cause-address-unresolvable",
+        "learner-reasserts-row-on-unresolvable",
+        "proof-delivery-timeout-bounded-and-logged",
+        "proof-semantics-and-voter-cap-unchanged",
+        "cpp-learner-active-within-bound",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-learner-promotion-owner",
+      "statement": "The partition-service learner-promotion owner (partition-service-learner-promotion*.js, partition-service-learner-promotion-proof-methods.js, src/raft/learner-promotion-progress.js) stays the sole owner of when a proof is requested, refused, and granted; the replica handler, rebalancer, readiness owner and harness never re-derive promotion or promote on elapsed time."
+    },
+    {
+      "id": "proof-semantics-unchanged",
+      "statement": "Leader-proven progress (learnerMatchIndex >= safePromotionIndex), publication-epoch binding and epoch_mismatch fencing, the target+1 voter cap, quorum caps, and the CL-035/CL-036 row seeds are unchanged; no promotion ever happens on elapsed time, timer count, or transport success alone."
+    },
+    {
+      "id": "unchanged-budgets-and-cadence",
+      "statement": "LEARNER_CATCH_UP_CHECK_INTERVAL_MS, MESSAGE_TIMEOUT_MS, the CL-021 status-write retry bounds, the 60-second GCP certification window and the 3000 ms event-loop gap ceiling are unchanged; the proof delivery timeout may only be bounded downward to not stack with the interval. No sleeps or timeout widening."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Prove through the real PartitionService leader+learner witness (dt6 five-node fixture, loopback transport, split caches, virtual clock) red on HEAD and green after, before any GCP run; the GCP streak is certification, never an iteration loop."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    }
+  ],
+  "sealedAt": "4bc6c1d25ae4673542a71ef7a165e30020498d24",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "architecture/contracts/core-system-logic.md",
+      "closesCL": [],
+      "parentQuest": "operation-ledger-self-move-hold-fairness",
+      "planDoc": "solve/epics/release-0-2.md",
+      "draftedAtCommit": "4bc6c1d25ae4673542a71ef7a165e30020498d24"
+    },
+    "frontiers": [
+      {
+        "id": "learner-promotion-proof-channel-wake-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/learner-promotion-proof-channel-wake.receipt.json",
+            "requiredReceipts": [
+              "proof-wakes-on-services-row-visibility",
+              "proof-wakes-on-published-epoch-change",
+              "typed-refusal-cause-address-unresolvable",
+              "learner-reasserts-row-on-unresolvable",
+              "proof-delivery-timeout-bounded-and-logged",
+              "proof-semantics-and-voter-cap-unchanged",
+              "cpp-learner-active-within-bound",
+              "witness-deterministic"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fresh-join-multi-peer-contact",
+  "statement": "A fresh-joining node accepts multiple candidate contact addresses (comma-separated SEED_NODE_ADDRESS / --seed) and probes them for reachability exactly like the durable-rejoin path, so a fresh join succeeds through any live cluster node when a listed candidate is down; guard tests prove candidate-list parsing, probe fallback selection, and an in-process join completed through a non-seed node.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "fresh-join-multi-peer-contact",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "464226567beb776bea273f60d45f180ece28575c",
+  "legacy": {
+    "priority": 2,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": null,
+      "sealedAtCommit": "51f61cde599ca0c53bc424488aa320fb531f5167"
+    },
+    "frontiers": [
+      {
+        "id": "fresh-join-multi-peer-contact-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "fresh-join-multi-peer-contact",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

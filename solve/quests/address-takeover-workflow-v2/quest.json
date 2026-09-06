@@ -1,0 +1,89 @@
+{
+  "schema": "solve-quest/2",
+  "id": "address-takeover-workflow-v2",
+  "statement": "The three address-drift policies are unified into one canonical takeover decision, and the concrete hard-exit is fixed: a changed-address restart that arrives while the old row's ready lease is still live no longer produces a terminal 409 that the entrypoint turns into process.exit(1); instead the in-lease-window conflict is classified retryable-with-backoff until lease expiry, after which readmission proceeds. doneWhen: the test-receipt probe reads solve/evidence/address-takeover-workflow-v2.receipt.json with outstanding 0 — retryable-classification, no-hard-exit, unified-policy, and lease-expiry-readmission receipts all passing (deterministic red-on-revert evidence harness), plus the sealed live A/B comparison receipt.",
+  "epic": "cluster-identity-and-join-fencing",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/address-takeover-workflow-v2.receipt.json",
+      "requiredReceipts": [
+        "in-lease-conflict-retryable-not-terminal",
+        "no-hard-exit-on-lease-window",
+        "single-canonical-takeover-policy",
+        "readmission-after-lease-expiry",
+        "live-ab-fixed-vs-reverted"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-hard-exit-on-lease-window",
+      "statement": "The in-lease-window 409 must be classified retryable-with-backoff until lease expiry, never terminal; recovery must not depend on an external supervisor outlasting the lease. This is the concrete availability defect."
+    },
+    {
+      "id": "single-takeover-policy",
+      "statement": "Unify the three address-drift policies into one canonical takeover decision; do not leave three independent branches composing into slow-path readmission."
+    },
+    {
+      "id": "live-ab-required",
+      "statement": "This changes a hot failure-classification/retry path; per repo policy it requires a controlled live A/B (fixed vs reverted, comparing aggregate error counts and outcome) before landing, not only a deterministic unit proof."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the retryable classification or unified policy is reverted while the rest of the change remains."
+    }
+  ],
+  "sealedAt": "3b559f8069180a07cb433474007251a0c97c5f18",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.1-fs-rolling-restart",
+      "specRef": "join-path-audit-finding-9-address-drift-hard-exit",
+      "closesCL": [],
+      "parentQuest": "address-takeover-workflow",
+      "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+      "draftedAtCommit": "3b559f8069180a07cb433474007251a0c97c5f18",
+      "replaces": "address-takeover-workflow"
+    },
+    "frontiers": [
+      {
+        "id": "in-lease-conflict-retryable",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/address-takeover-workflow-v2.receipt.json",
+            "requiredReceipts": [
+              "in-lease-conflict-retryable-not-terminal",
+              "no-hard-exit-on-lease-window",
+              "readmission-after-lease-expiry",
+              "live-ab-fixed-vs-reverted"
+            ]
+          }
+        }
+      },
+      {
+        "id": "address-policy-unification",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/address-takeover-workflow-v2.receipt.json",
+            "requiredReceipts": [
+              "single-canonical-takeover-policy"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

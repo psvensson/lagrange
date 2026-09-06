@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-ratings-scoped-split-policy-live",
+  "statement": "One production MovieLens five-node local-process milestone reaches preload admission, loads ratings, and emits the successful three-way comparison report while node split defaults remain production-wide and only ratings carries the sparse 1 MiB split override. Deterministic guards prove invocation ordering, bounded stable confirmation, and ratings-only selection through the real policy/split owners; immutable milestone logs show the system logs partition was not selected.",
+  "epic": "service-data-affinity-placement",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "022f27a3cd117d1dbfc8c9438ed47b77ba900ad8",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/service-data-affinity-placement.md",
+      "closesCL": [],
+      "parentQuest": "movielens-three-way-affinity-demo",
+      "planDoc": "solve/epics/service-data-affinity-placement.md",
+      "draftedAtCommit": "022f27a3cd117d1dbfc8c9438ed47b77ba900ad8"
+    },
+    "frontiers": [
+      {
+        "id": "movielens-ratings-scoped-split-policy-live-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "movielens-lagrange-service-affinity-live",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

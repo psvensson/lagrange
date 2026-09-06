@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rolling-restart-run4-join-runtime-activation-workflow-integrity-migration",
+  "statement": "The Solver workflow archives the legacy rolling-restart join-runtime activation Quest under fresh v2 integrity when the operator-EXHAUSTED parent log/report, the superseded misclassified migration child history, and a HEAD-bound 100/100 deterministic revalidation receipt are committed coherently; this migration changes no product source and makes no consecutive-15, live rolling-restart, or SOLVED claim for the parent.",
+  "epic": "topology-convergence-hardening",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/rolling-restart-run4-join-runtime-activation-workflow-integrity-migration.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "e7c1de4941feab23dc9ef43142ecbbf90b1cc0c4",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/topology-convergence-hardening.md",
+      "closesCL": [],
+      "parentQuest": "rolling-restart-run4-join-runtime-activation-integrity-migration",
+      "planDoc": "solve/epics/topology-convergence-hardening.md",
+      "draftedAtCommit": "e7c1de4941feab23dc9ef43142ecbbf90b1cc0c4"
+    },
+    "frontiers": [
+      {
+        "id": "rolling-restart-run4-join-runtime-activation-workflow-integrity-migration-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/rolling-restart-run4-join-runtime-activation-workflow-integrity-migration.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

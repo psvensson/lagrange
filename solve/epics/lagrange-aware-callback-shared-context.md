@@ -1,8 +1,13 @@
 ---
 id: lagrange-aware-callback-shared-context
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: discussing
 graduatesTo: service-portability-ladder
+quests: []
+authorizes: []
+legacyStatus: discussing
 ---
 
 # Epic: Rung 2 — one Lagrange-aware callback surface with a shared service context

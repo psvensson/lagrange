@@ -1,0 +1,66 @@
+{
+  "schema": "solve-quest/2",
+  "id": "pgwire-authentication-cutover",
+  "statement": "PG wire password mode performs a real PostgreSQL credential exchange before session creation, correct credentials reach SQL through the production runtime listener, wrong or missing credentials fail closed, password mode refuses a missing credential verifier, and explicit trust mode remains loopback-only.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "pgwire-authentication-cutover",
+      "reportDir": "test-output/reports/pgwire-authentication-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "credential-owner-boundary",
+      "statement": "Password material must be supplied through the runtime credential-verifier boundary, must not be stored in runtime_config, emitted in logs, or accepted from a client-selected security context."
+    },
+    {
+      "id": "trust-remains-local",
+      "statement": "The existing trust mode remains explicit and loopback-only; this Quest must not widen it or make authentication implicit."
+    },
+    {
+      "id": "real-client-negative-proof",
+      "statement": "The declared scenario runs the real pg client against the production PostgresWireRuntimeModule listener and proves correct-password success plus wrong-password and missing-verifier rejection."
+    },
+    {
+      "id": "tls-is-separate",
+      "statement": "This Quest owns credential exchange only. TLS negotiation, certificate policy, and any claim that an external deployment is secure remain sealed to pgwire-tls-policy-cutover."
+    }
+  ],
+  "sealedAt": "183365af63c643e0e23a62ed6e4ee26c858b89c2",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/service-portability-ladder/requirements.md#r2--existing-application-portability",
+      "closesCL": [],
+      "parentQuest": null,
+      "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+      "draftedAtCommit": "183365af63c643e0e23a62ed6e4ee26c858b89c2"
+    },
+    "frontiers": [
+      {
+        "id": "pgwire-authentication-cutover-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "pgwire-authentication-cutover",
+            "reportDir": "test-output/reports/pgwire-authentication-cutover",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

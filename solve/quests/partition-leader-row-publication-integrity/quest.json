@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-leader-row-publication-integrity",
+  "statement": "The durable partitions.leader_node_id publication becomes divergence-owned, riding the delivery lane that matches its causal criticality under bounded loud retry ownership. (a) Lane: the leader-row UPDATE escalates to the critical service-row delivery option not only for bootstrap-critical -p1 partitions or when the observed row is EMPTY, but whenever the observed/authoritative row names a node other than the publishing leader - divergence is a first-class initial-publication case. Both publication paths obey one option owner (partition-service-row-owner.js buildPartitionLeaderUpdateOptions and partition-service-metadata-mutation-helpers.js buildLeaderNodeMutationDeliveryOptions must not re-derive the decision independently). Live witness run 4 (user-table-leader-placement-spread-20260811T054134Z): a split child is deliberately anchored on the parent's leader host, publishes that host as its first leader, and the correcting publication after real leadership settles elsewhere is demoted to BACKGROUND precisely because the row is non-empty, then starved by per-node queue saturation - the scenario froze fictional topology and flagged the honest correction as a flap. (b) Retry ownership: the authoritative-row-mutation flush gains the house bounded-retry contract (attempt/deadline budget with a typed loud terminal per terminal-write-refusal-retry-ownership e21a459c9; the runRetryableControlPlaneWrite precedent already bounds the sibling size_bytes writer on the SAME row); leadership loss mid-retry must not silently clearPending (typed warn naming the dropped value and successor owner); an authoritative-read failure that defers the publication is typed and visible, never indistinguishable from not-converged. Live witness run 3 (user-table-leader-placement-spread-20260811T052645Z): five participant-failure attempts over two minutes at BACKGROUND priority under seed outbound-queue saturation, then the window closed with the row stale. Out of sealed scope, routed as their own candidates: metering/pacing the raft direct-send catch-up lane (transport owner) and the three backpressure-evidence flattening sites (query-executor-shared.js buildDistributedFailureSummary, distributed-write-coordinator.js deferRetry lift, delivery-behaviors.js 500ms hint overwrite). Fail-closed floor: CAS guard semantics unchanged (never publish over a fresher foreign claim without the guard), quorum and raft safety untouched, no new timers beyond the bounded budget, priority reserves not widened.",
+  "epic": "pilot-readiness-and-public-proof",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "user-table-leader-placement-spread",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "93f557d6461f60d7317e0806d29ff20f707843bb",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+      "closesCL": [],
+      "parentQuest": "user-table-leader-handoff-demotion-pairing",
+      "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+      "draftedAtCommit": "93f557d6461f60d7317e0806d29ff20f707843bb"
+    },
+    "frontiers": [
+      {
+        "id": "partition-leader-row-publication-integrity-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "user-table-leader-placement-spread",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

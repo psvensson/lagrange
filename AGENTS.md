@@ -14,18 +14,19 @@ The binding threshold is in
 ## Quest Happy Path
 
 ```sh
-node scripts/solve.js start --id <id>
-node scripts/solve.js continue --id <id>
-# make and test the bounded change
-node scripts/solve.js continue --id <id> --summary "<what changed>"
-node scripts/solve.js land --id <id>
+node scripts/solve.js start --id <id>      # seals against a red probe
+node scripts/solve.js note --id <id> --attempt "<what changed>"
+node scripts/solve.js probe --id <id>
+node scripts/solve.js land --id <id>       # guards, npm test, commit; never pushes
 ```
 
-`continue` executes only a trusted structured action. Automation dispatches on
-`action.code` and validated `action.payload`, never rendered command text. Stop
-for exactly four owner decisions: judgment, independent verification, audit
-repair, or terminal landing. Source changes require an independent verifier.
-Solver commits only reviewed Quest scope and never pushes.
+A quest is `solve/quests/<id>/quest.json` (statement, epic, `doneWhen`
+probe) plus an append-only `log.ndjson` of findings, attempts, verifications
+and one terminal entry. Stop for exactly four owner decisions: judgment,
+independent verification, audit repair, or terminal landing. Source changes
+require an independent verifier (`note --verification ... --verifier
+subagent:<id> --verdict approve`). Solver commits only reviewed Quest scope
+and never pushes.
 
 After every intended Quest commit has landed, publish the exact committed HEAD:
 
@@ -82,7 +83,7 @@ registered contract edge.
 | Rule lookup | `npm run rule -- --id <ID>` |
 | Architecture tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
 | Adversarial verification templates | [`verification-templates`](docs/steering/verification-templates/INDEX.md) |
-| Cross-layer trace | `node scripts/solve.js trace --quest <id>` |
+| Open epics and quests | `node scripts/solve.js board` |
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.

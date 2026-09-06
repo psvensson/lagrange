@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-authoritative-row-mutation-outcome-classifier",
+  "statement": "Raft authoritative-row mutation completion consumes the canonical control-plane mutation-result classification as its sole apply and zero-row decision: NO_OP and DEFERRED without success:false preserve pending state and arm bounded retries; invalid, unknown, contradictory, inherited, accessor, proxy, and coercive envelopes fail closed without recording persistence; APPLIED, PENDING_VISIBILITY, OBSERVED_STATE_CHANGED, and valid legacy envelopes retain their canonical semantics; every frozen enum value has an explicit Raft disposition; and the focused guard passes for three consecutive runs.",
+  "epic": "legacy",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "raft-authoritative-row-mutation-outcome-classifier",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "9c94aabcc76179ccfd9a9a99b8dbe246c3fbf71a",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": null,
+      "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+      "closesCL": [],
+      "parentQuest": "control-plane-mutation-apply-classifier",
+      "planDoc": null,
+      "draftedAtCommit": "9c94aabcc76179ccfd9a9a99b8dbe246c3fbf71a"
+    },
+    "frontiers": [
+      {
+        "id": "raft-authoritative-row-mutation-outcome-classifier-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "raft-authoritative-row-mutation-outcome-classifier",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

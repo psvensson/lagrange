@@ -4,7 +4,7 @@
  * file for scenario 'learner-promotion-progress-proof' (a five-node
  * recovery scenario over the real promotion owners) and writes a
  * scenario-harness report in the shape the Solver probe reads
- * (`scripts/solve/probes/scenario-harness.js`).
+ * (`scripts/solve/probes.js`).
  *
  * Verdict honesty: a run whose guard process never measured (timeout,
  * spawn failure, TAP stream incomplete, zero assertions) emits

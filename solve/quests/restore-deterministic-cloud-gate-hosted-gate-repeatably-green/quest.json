@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "restore-deterministic-cloud-gate-hosted-gate-repeatably-green",
+  "statement": "Every failure observed on b8cd88bd5 in the GitHub-hosted blocking gate has an understood cause, nondeterministic defects have regression coverage, resource-sensitive tests have an explicit execution contract, no correctness test was weakened to obtain green, and the complete hosted blocking gate passes repeatedly. (frontier hosted-gate-repeatably-green)",
+  "epic": "deterministic-cloud-gate",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/restore-deterministic-cloud-gate-hosted-gate-repeatably-green/evidence/receipt.json",
+      "requiredReceipts": [
+        "hosted-gate-repeatability"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "b8cd88bd52e5dc1b5ac7a1195375a03291336345",
+  "legacy": {
+    "parentQuest": "restore-deterministic-cloud-gate",
+    "frontier": {
+      "id": "hosted-gate-repeatably-green",
+      "priority": 2,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/restore-deterministic-cloud-gate/receipt.json",
+          "requiredReceipts": [
+            "hosted-gate-repeatability"
+          ]
+        }
+      }
+    },
+    "migratedBy": "solve-v2 migration"
+  }
+}

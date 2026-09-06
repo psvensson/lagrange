@@ -20,10 +20,10 @@ import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
+import {readQuest} from '../solve/store.js';
 
 const arrayIsArray = Array.isArray;
 const dateToISOString = Function.call.bind(Date.prototype.toISOString);
-const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectHasOwn = Object.hasOwn;
@@ -35,9 +35,10 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // The sealed streak requirement lives in the closure quest's doneWhen; the
-// runner never restates the number, it reads the seal.
-const SEALED_QUEST_RELATIVE_PATH =
-  'solve/quests/formation-release-handoff-closure-v4.json';
+// runner never restates the number, it reads the seal. The quest is named by
+// id: `scripts/solve/store.js` owns where a quest lives on disk, so this
+// runner carries no quest-layout knowledge of its own.
+const SEALED_QUEST_ID = 'formation-release-handoff-closure-v4';
 const FIELD_DONE_WHEN = 'doneWhen';
 const FIELD_ARGS = 'args';
 const FIELD_SCENARIO = 'scenario';
@@ -56,7 +57,6 @@ const FIRST_RUN_INDEX = 1;
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain', '--', 'src']);
 const SOURCE_SUBDIR = 'src';
-const ENCODING_UTF8 = 'utf8';
 const NEWLINE_SEPARATOR = '\n';
 const EMPTY_STRING = '';
 const TIME_SEPARATOR = ':';
@@ -141,14 +141,16 @@ function readOwn(target, field) {
 // Read the sealed `consecutive` count for the certification scenario from the
 // closure quest's doneWhen. Refuses when the seal is unreadable or names a
 // different scenario than the runner's certification lane.
-async function readSealedConsecutive({questFile, scenario}) {
+async function readSealedConsecutive({
+  root = ROOT, questId = SEALED_QUEST_ID, scenario,
+}) {
   let quest;
   try {
-    quest = jsonParse(await fs.readFile(questFile, ENCODING_UTF8));
+    quest = readQuest(root, questId);
   } catch (error) {
     throw new StreakRefusalError(
       STREAK_REFUSAL.SEAL_UNREADABLE,
-      `${questFile}: ${stringConstructor(error.message || error)}`,
+      `${questId}: ${stringConstructor(error.message || error)}`,
     );
   }
   const args = readOwn(readOwn(quest, FIELD_DONE_WHEN), FIELD_ARGS);
@@ -157,14 +159,14 @@ async function readSealedConsecutive({questFile, scenario}) {
   if (sealedScenario !== scenario) {
     throw new StreakRefusalError(
       STREAK_REFUSAL.SEAL_SCENARIO_MISMATCH,
-      `${questFile} seals ${stringConstructor(sealedScenario)}, ` +
+      `${questId} seals ${stringConstructor(sealedScenario)}, ` +
         `runner certifies ${scenario}`,
     );
   }
   if (!numberIsSafeInteger(consecutive) || consecutive <= 0) {
     throw new StreakRefusalError(
       STREAK_REFUSAL.SEAL_UNREADABLE,
-      `${questFile} doneWhen.args.consecutive is not a positive integer`,
+      `${questId} doneWhen.args.consecutive is not a positive integer`,
     );
   }
   return consecutive;
@@ -279,7 +281,7 @@ async function writeStreakReport(streak, reportRoot) {
  * @param {string} options.variant runner variant (only `fixed` is admitted)
  * @param {string} options.scenario sealed certification scenario name
  * @param {string} options.reportRoot directory receiving the streak report
- * @param {string} [options.questFile] closure quest file carrying the seal
+ * @param {string} [options.questRoot] repository root holding the sealed quest
  * @param {Object} dependencies
  * @param {Function} dependencies.runOnce (runIndex) => Promise<{report,
  *   reportPath, probeReportPath}> — the live single-run execution
@@ -289,22 +291,21 @@ async function writeStreakReport(streak, reportRoot) {
  */
 async function runBoundedStreak(options, dependencies) {
   const scenario = options.scenario;
-  const questFile = options.questFile || path.join(
-    ROOT,
-    SEALED_QUEST_RELATIVE_PATH,
-  );
+  const questRoot = options.questRoot || ROOT;
   if (options.variant !== FIXED_VARIANT) {
     throw new StreakRefusalError(
       STREAK_REFUSAL.VARIANT_NOT_FIXED,
       `variant ${stringConstructor(options.variant)} ${VARIANT_REFUSAL_DETAIL}`,
     );
   }
-  const sealedConsecutive = await readSealedConsecutive({questFile, scenario});
+  const sealedConsecutive = await readSealedConsecutive({
+    root: questRoot, scenario,
+  });
   if (options.runs !== sealedConsecutive) {
     throw new StreakRefusalError(
       STREAK_REFUSAL.RUN_COUNT_NOT_SEALED,
       `--runs ${stringConstructor(options.runs)} must equal the sealed ` +
-        `consecutive count ${sealedConsecutive} (${SEALED_QUEST_RELATIVE_PATH})`,
+        `consecutive count ${sealedConsecutive} (${SEALED_QUEST_ID})`,
     );
   }
   const resolved = {
@@ -324,7 +325,7 @@ async function runBoundedStreak(options, dependencies) {
     schemaVersion: STREAK_REPORT_SCHEMA_VERSION,
     mode: STREAK_MODE,
     scenario,
-    sealedQuest: SEALED_QUEST_RELATIVE_PATH,
+    sealedQuest: SEALED_QUEST_ID,
     sealedConsecutive,
     requestedRuns: options.runs,
     candidateFingerprint: state.candidateFingerprint,

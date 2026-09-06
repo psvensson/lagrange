@@ -9,88 +9,24 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
         description: 'Print the Quest-first command index with diagnostic, triage, and validation entrypoints.',
       }),
       Object.freeze({
-        command: 'npm run solve:doctor -- [--json]',
-        description: 'Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.',
-      }),
-      Object.freeze({
         command: 'npm run solve:start -- --id <quest>',
-        description: 'Preflight and start or resume a Quest without beginning an attempt.',
+        description: 'Seal a quest: validate quest.json and its epic, refuse a green probe, record sealedAt and the seal-time metric.',
       }),
       Object.freeze({
-        command: 'npm run solve:continue -- --id <quest>',
-        description: 'Execute the Quest’s next safe begin-step or attempt-record action.',
+        command: 'npm run solve:note -- --id <quest> --attempt "<what changed>"',
+        description: 'Append a log entry: --finding (kinds theory, altitude-check, decision, ruled-out, evidence), --attempt, --verification with --verifier subagent:<id> --verdict approve|reject, or --blocked/--exhausted/--superseded.',
       }),
       Object.freeze({
-        command: 'npm run solve:land -- --id <quest> [--review <id> --verifier <id> --verdict <approve|reject> --receipt <ref>]',
-        description: 'Issue an immutable review id, then validate its independent verdict and commit eligible Quest scope; never push.',
+        command: 'npm run solve:probe -- --id <quest>',
+        description: 'Measure the doneWhen probe (or an epic with --epic) and show the delta from the seal-time value.',
       }),
       Object.freeze({
-        command: 'npm run solve:next -- --id <quest> [--json]',
-        description: 'Print the typed next action for an existing Quest.',
+        command: 'npm run solve:land -- --id <quest>',
+        description: 'Land: green probe, last verdict, src/ verification, altitude budget, epic scope, coupled-pair guard, static checkers, npm test, then commit; never pushes.',
       }),
       Object.freeze({
-        command: 'npm run solve:lint -- --id <quest> | --all [--json]',
-        description: 'Validate the versioned Quest authoring contract or report the read-only legacy census.',
-      }),
-      Object.freeze({
-        command: 'npm run quest:context -- --id <quest>',
-        description: 'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:status -- --id <quest>',
-        description: 'Print the Solver projection for a Quest.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:step -- --id <quest>',
-        description: 'Begin a supervised attempt and pin the before metric.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:step -- --id <quest> --commit --changeRef diff:<path> --summary "<what changed>"',
-        description: 'Validate a Quest-scoped patch artifact and record the measured result.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:step-pending -- --id <quest>',
-        description: 'Inspect the pinned supervised-step baseline without changing Quest memory.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:attempt -- --id <quest> --frontier <frontier> --changeRef diff:<path> --summary "<what changed>" -- <command...>',
-        description: 'Run a command through the Solver-owned measured-attempt path.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:finding -- --id <quest> --frontier <frontier> --claim "<claim>"',
-        description: 'Record durable Quest memory for a frontier.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:theory -- list --id <quest>',
-        description: 'List Quest-native system theories, frontier theories, selections, and outcomes.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:health -- --id <quest>',
-        description: 'Report Quest loop-health, theory gates, divergence signals, and the next legal action.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:audit -- --id <quest>',
-        description: 'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:checkpoint -- --id <quest>',
-        description: 'Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:upgrade -- --id <quest>',
-        description: 'Establish a strict-audit baseline for an existing pre-hardening Quest.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:probe -- --probe scenario-harness --scenario <scenario> --reportDir test-output/reports --metric priority',
-        description: 'Measure a scenario metric directly without recording an attempt.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:report -- --id <quest>',
-        description: 'Print the Quest report projection.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:new -- --id <quest> --statement "<done condition>"',
-        description: 'Create an authored Quest file under solve/quests.',
+        command: 'npm run solve:board',
+        description: 'Print the open epics and quests on demand.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',
@@ -115,12 +51,8 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
     title: 'Evidence Tools',
     commands: Object.freeze([
       Object.freeze({
-        command: 'npm run solve:ingest-evidence -- --id <quest> --frontier <frontier> --evidence <path>',
-        description: 'Record fresh probe evidence with a content fingerprint before the next attempt.',
-      }),
-      Object.freeze({
-        command: 'npm run solve:theory -- card --evidence <path-to-artifact>',
-        description: 'Print a Quest-native mechanism card that can seed system or frontier theory events.',
+        command: 'npm run solve:evidence -- add <file> --id <quest>',
+        description: 'Upload a file to the solve-evidence pre-release, verify by re-download, and record an evidence finding.',
       }),
     ]),
   }),
@@ -307,15 +239,19 @@ const COMMAND_GROUPS = Object.freeze([
     commands: Object.freeze([
       Object.freeze({
         command: 'npm run solve:start -- --id <quest>',
-        description: 'Create or resume a Quest and show its next safe action.',
+        description: 'Seal a quest against a red probe.',
       }),
       Object.freeze({
-        command: 'npm run solve:continue -- --id <quest>',
-        description: 'Begin the next attempt; on capture, add only --summary "<what changed>".',
+        command: 'npm run solve:note -- --id <quest> --attempt "<what changed>"',
+        description: 'Record an attempt, finding, verification or blocked entry.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:probe -- --id <quest>',
+        description: 'Measure the doneWhen probe.',
       }),
       Object.freeze({
         command: 'npm run solve:land -- --id <quest>',
-        description: 'Land a no-source Quest or issue the immutable review id for source work.',
+        description: 'Land the quest: guards, npm test, commit; never push.',
       }),
     ]),
   }),

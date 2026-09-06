@@ -58,7 +58,7 @@ const CURE_TYPING_ANALYZER_OUTPUT = Object.freeze({
 
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
-const ORACLE_FILE = 'solve/oracle/cure-typing-single-owner-table.json';
+const ORACLE_FILE = 'scripts/oracles/cure-typing-single-owner-table.json';
 const ORACLE_TARGET = 0;
 
 // The owner family of the cure-typing semantic: the declared

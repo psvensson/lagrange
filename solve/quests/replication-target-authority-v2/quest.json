@@ -1,0 +1,108 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replication-target-authority-v2",
+  "statement": "Separate the immutable replication TARGET from mutable replica IDENTITIES: desired replication factor comes only from a valid persisted partition policy row, creation initializes that policy from the schema declaration, and runtime replica identities never determine desired RF. A minted replace-replica-<hex> is a new identity, not a changed factor. Every behaviour-deciding reader resolves the target through one policy decoder.",
+  "epic": "cluster-formation-topology-admission-closure",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/replication-target-authority-v2.receipt.json",
+      "requiredReceipts": [
+        "target-comes-from-declared-schema-not-identity-count",
+        "partition-row-policy-overrides-the-default",
+        "absent-partition-row-is-undeclared-not-defaulted",
+        "identity-churn-cannot-move-the-target",
+        "every-critical-table-declares-the-same-target",
+        "authority-mints-no-runtime-state",
+        "required-count-derives-from-declared-policy",
+        "witness-deterministic",
+        "hostile-policy-rows-cannot-forge-a-target",
+        "production-handoff-cannot-mutate-the-declaration",
+        "creation-default-tracks-schema-declaration",
+        "message-group-handoff-cannot-mutate-the-declaration",
+        "readiness-target-reads-declared-policy",
+        "quorum-concentration-target-reads-declared-policy",
+        "missing-policy-hydration-cannot-release-the-formation-barrier",
+        "rejected-policy-cannot-be-locally-reinterpreted",
+        "routed-consumers-reject-unusable-policy-at-the-decision",
+        "message-group-policy-comes-from-its-own-schema"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "target-is-policy-not-identity",
+      "statement": "Desired replication factor comes ONLY from a valid persisted partition policy row. Creation initializes that policy from the schema declaration, and the creation default tracks that declaration rather than restating it. Runtime replica identities never determine desired RF: a minted replace-replica-<hex> is a new identity, not a changed factor, and an identity count must never be written into the policy column."
+    },
+    {
+      "id": "one-decoder-for-behaviour",
+      "statement": "Every behaviour-deciding reader of desired RF resolves it through the single policy decoder: readiness, quorum concentration, replica recovery, managed split, managed merge, existing-table reconciliation, learner voter promotion and the formation barrier. Diagnostic and display-only readers may remain outside it. No consumer may reintroduce a local interpretation after the decoder returns."
+    },
+    {
+      "id": "declaration-is-not-handed-out",
+      "statement": "Neither INITIAL_REPLICA_IDS nor INITIAL_MESSAGE_GROUP_REPLICA_IDS is handed out by reference. PartitionService and MessageGroupService copy the peer list they are given, because raft reconciliation and raft lifecycle mutate it in place; a caller mutating its copy must not change what the next reader sees."
+    },
+    {
+      "id": "absent-policy-fails-closed-without-disarming",
+      "statement": "An absent or invalid policy row resolves undeclared and never silently borrows the creation default. The formation barrier is the one exception and it is deliberate: during formation the ledger row may not be hydrated and the creation default IS its declared policy, because seed registration creates that row with exactly that value. A zero target there is NOT fail-closed — it makes the cohort check false, barrierEngaged never latches, and BYPASSED_INSUFFICIENT_COHORT is a RELEASE state, so the barrier would disarm in the very window it polices."
+    },
+    {
+      "id": "projection-only",
+      "statement": "The authority is a frozen projection carrying exactly replicationFactor and source; it mints no holders, no replica identities, no convergence and no readiness."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness; every guard is mutation-verified against the final head with a harness that asserts the patch anchor is unique, and no cloud run is part of the proof."
+    }
+  ],
+  "sealedAt": "3cddfcf65971a3cc131e54483fe433c7bf5a50f7",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "product",
+    "links": {
+      "roadmapRow": "RM-0.2-five-node-convergence",
+      "specRef": "src/bootstrap/replication-target-authority.js",
+      "closesCL": [],
+      "parentQuest": "replication-target-authority",
+      "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+      "draftedAtCommit": "3cddfcf65971a3cc131e54483fe433c7bf5a50f7"
+    },
+    "frontiers": [
+      {
+        "id": "replication-target-authority-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "test-receipt",
+          "args": {
+            "file": "solve/evidence/replication-target-authority-v2.receipt.json",
+            "requiredReceipts": [
+              "target-comes-from-declared-schema-not-identity-count",
+              "partition-row-policy-overrides-the-default",
+              "absent-partition-row-is-undeclared-not-defaulted",
+              "identity-churn-cannot-move-the-target",
+              "every-critical-table-declares-the-same-target",
+              "authority-mints-no-runtime-state",
+              "required-count-derives-from-declared-policy",
+              "witness-deterministic",
+              "hostile-policy-rows-cannot-forge-a-target",
+              "production-handoff-cannot-mutate-the-declaration",
+              "creation-default-tracks-schema-declaration",
+              "message-group-handoff-cannot-mutate-the-declaration",
+              "readiness-target-reads-declared-policy",
+              "formation-target-is-declared-policy-and-fails-closed",
+              "camel-alias-is-decoded-as-policy",
+              "quorum-concentration-target-reads-declared-policy"
+            ]
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

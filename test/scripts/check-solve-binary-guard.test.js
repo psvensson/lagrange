@@ -51,5 +51,5 @@ test('archives and files over 1 MB under solve/ are refused, nothing else is', (
 
 test('the allowlist holds exactly the one pre-v2 text log', () => {
   assert.deepEqual([...ALLOWLIST],
-    ['solve/log/rolling-restart-core-stability.ndjson']);
+    ['solve/quests/rolling-restart-core-stability/log.ndjson']);
 });

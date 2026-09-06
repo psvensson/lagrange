@@ -1,8 +1,38 @@
 ---
 id: owner-boundary-hardening-and-unification
+status: open
+proof: deterministic
+legacy: true
 roadmapRow: null
-status: active
 graduatesTo: owner-boundary-hardening-and-unification
+quests:
+  - canonical-replica-inventory-cutover
+  - control-plane-readiness-trust-cutover
+  - durable-provisioning-job-owner
+  - helm-admin-default-deny-cutover
+  - helm-contract-ci-tooling
+  - helm-render-parser-tooling
+  - priority-recovery-admin-control-plane-admission-publication-single-engaged-authority
+  - priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority
+  - priority-recovery-admin-dormant-context-retirement
+  - priority-recovery-control-plane-normalize-distinct-string-array-authority
+  - priority-recovery-owner-inventory
+  - provisioning-parent-deadline-cutover
+  - raft-committed-entry-immutability
+  - raft-snapshot-gated-compaction
+  - solver-acceptance-proof-manifest
+  - solver-proof-artifact-census
+  - solver-proof-artifact-content-addressing
+  - solver-scope-pressure-precommit-enforcement
+  - solver-terminal-integrity-cutover-exhaustion-fix
+  - solver-terminal-integrity-cutover-fail-closed-fix
+  - solver-terminal-integrity-cutover-verifier-fix
+  - solver-terminal-integrity-cutover
+  - solver-terminal-integrity-red-test-bootstrap-verifier-fix
+  - solver-terminal-integrity-red-test-bootstrap
+  - transaction-owned-commit-mode-cutover
+authorizes: []
+legacyStatus: active
 ---
 
 # Owner-Boundary Hardening and Unification

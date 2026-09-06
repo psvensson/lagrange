@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T12:55:02.785Z",
+  "generatedAt": "2026-09-06T09:53:15.156Z",
   "stats": {
     "candidateCount": 714,
     "dedupedRuleCount": 708,
@@ -7,7 +7,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 704,
     "emittedMasterRuleCount": 704,
-    "estimatedAllRulesTokens": 33806
+    "estimatedAllRulesTokens": 33800
   },
   "sources": [
     {
@@ -327,7 +327,7 @@
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 30,
-      "estimatedTokens": 4153,
+      "estimatedTokens": 4092,
       "domains": [
         "architecture",
         "testing",
@@ -410,7 +410,7 @@
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
       "ruleCount": 209,
-      "estimatedTokens": 12145,
+      "estimatedTokens": 12139,
       "domains": [
         "governance"
       ],

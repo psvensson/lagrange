@@ -1,0 +1,8 @@
+{"ts":"2026-06-26T08:02:08.881Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:31:40.459Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:39:47.846Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:41:43.168Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:43:05.041Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:43:59.418Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-07-26T06:45:02.054Z","type":"invariant.evaluated","invariant":"rebalancer-surplus-drain-handoff-terminalizes","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-038"}
+{"ts":"2026-09-06T09:26:16.337Z","source":"solve-v2 migration","type":"terminal","status":"superseded","text":"v1 log with no quest record; closed by the solve-v2 migration"}

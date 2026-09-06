@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cure-typing-owner-migration-admission-lanes",
+  "statement": "Bounded migration slice of parent cure-typing-single-owner-table (epic self-hosting-circularity-generic-treatment Option 5, rung 4): the eight admission-lane conjunct sites consume the declared cure-by-partition-class lane rows instead of hand-rolling the emergency-partition classifier conjunct. Sites: resolveConcurrentCreateBudgetScope and getPriorityRecoveryAdmissionPlan (src/rebalancer/rebalance-coordinator-concurrent-add-budget.js), buildPriorityDeferredObservationPressureEvidence and buildPriorityAddAdmissionPressureEvidence (src/rebalancer/rebalance-coordinator-pressure-helper.js), buildConcurrentAddCountByPriorityClass (src/rebalancer/rebalance-coordinator-priority-budget-helper.js), getOrdinaryPriorityRecoverySerialGateSnapshot (src/rebalancer/unified-rebalancer-budget-planning.js), getPriorityRecoveryAdmissionPlan plan wiring (src/rebalancer/unified-rebalancer-priority-recovery-coordination.js), and isPriorityRecoveryOrdinarySerialLanePartitionId (src/control-plane/priority-recovery-serial-wait-operation-contexts.js). SEALED RESULT: every site resolves its lane through owner rows/predicates from src/rebalancer/replica-placement-cure-policy.js and the admission-plan owner in src/control-plane (mechanism stays at the sites: numeric budget counting, evidence assembly, snapshot construction). Behavior preserved exactly — each rewritten decision is truth-table identical on its move-type and partition-class domain; any lane GAP is recorded as a finding and fixed only in its own pinned follow-up. doneWhen: the committed census scripts/check-cure-typing-owner.js --oracle --oracle-file solve/oracle/cure-typing-owner-migration-admission-lanes.json --done-at 7 --with-gates reports metric at most 7 (every admission_lane_conjunct site migrated; the 7 cure_move_type_mint sites belong to the sibling slice) with lint + targeted suites green. Checkpoint commit after every attempt.",
+  "epic": "self-hosting-circularity-generic-treatment",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/cure-typing-owner-migration-admission-lanes.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "691a756503be854a74452bea1721fc3784e3d63e",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "cure-typing-single-owner-table",
+      "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+      "draftedAtCommit": "691a756503be854a74452bea1721fc3784e3d63e"
+    },
+    "frontiers": [
+      {
+        "id": "cure-typing-owner-migration-admission-lanes-main",
+        "priority": 1,
+        "metric": {
+          "probe": "oracle",
+          "args": {
+            "file": "solve/oracle/cure-typing-owner-migration-admission-lanes.json"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}

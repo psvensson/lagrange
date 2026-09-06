@@ -1,7 +1,0 @@
-{
-  "metric": 0,
-  "target": 0,
-  "done": true,
-  "classification": "yaml_parser_dependency_declared",
-  "verification": "package.json declares yaml ^2.9.0 directly, package-lock resolves yaml 2.9.0, clean dependency checks and the real Helm render parser passed"
-}

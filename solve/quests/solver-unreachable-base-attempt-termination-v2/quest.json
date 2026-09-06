@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solver-unreachable-base-attempt-termination-v2",
+  "statement": "An attempt whose recorded workspaceBaseCommit is a well-formed commit id that no longer resolves is classified by the single typed base_unreachable code at every consumer that resolves that field against the repository, with no raw Git stderr reaching an operator surface; such an attempt is excluded from checkpoint receipt recomputation and ancestry pinning while never satisfying or being reported as verification; a rejection whose recorded base is unreachable is resolved only by a later same-frontier attempt or candidate at a reachable base whose paths cover every rejected source path and which carries its own later exact independent approval, with no operator waiver mechanism; the landing candidate and terminal aggregate anchor at a reachable recorded base while covering every recorded attempt path, and when no reachable base exists they report a typed actionable problem naming the required covering attempt instead of an unsatisfiable obligation; recording a fresh attempt at a live base on the same frontier is never blocked; and the explicit reproducibility probe reports whether recorded artifact bytes reproduce from reachable commits together with the candidate count and scan bound, and never names a substitute base.",
+  "epic": "dead-base-attempt-disposition",
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-unreachable-base-attempt-termination-v2",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "sealedAt": "e298222e49b4f39deada4e5635557e1eea44b3da",
+  "legacy": {
+    "authoringContractVersion": 1,
+    "verificationContractVersion": 2,
+    "priority": 1,
+    "class": "process",
+    "links": {
+      "roadmapRow": null,
+      "specRef": null,
+      "closesCL": [],
+      "parentQuest": "solver-unreachable-base-attempt-termination",
+      "planDoc": "solve/epics/dead-base-attempt-disposition.md",
+      "draftedAtCommit": "e298222e49b4f39deada4e5635557e1eea44b3da"
+    },
+    "frontiers": [
+      {
+        "id": "solver-unreachable-base-attempt-termination-v2-main",
+        "priority": 1,
+        "metric": {
+          "probe": "scenario-harness",
+          "args": {
+            "scenario": "solver-unreachable-base-attempt-termination-v2",
+            "metric": "priority"
+          }
+        }
+      }
+    ],
+    "migratedBy": "solve-v2 migration"
+  }
+}
