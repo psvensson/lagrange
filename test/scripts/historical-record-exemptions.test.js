@@ -20,7 +20,7 @@ const QUEST_LOG = 'solve/quests/demo-quest/log.ndjson';
 const GOVERNED = Object.freeze([
   'solve/quests/demo-quest/quest.json',
   'solve/quests/demo-quest/evidence/receipt.json',
-  'docs/steering/llm/core.md',
+  'docs/steering/rules.md',
   'docs/steering/workflow-guidelines/solver-quests.md',
   'docs/development/solver-runbook.md',
   'AGENTS.md',

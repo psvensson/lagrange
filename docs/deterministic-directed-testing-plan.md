@@ -112,6 +112,6 @@ npm run model:check
 
 Run the focused unit tests for the selected substrate before a scenario. For
 distributed convergence work, follow
-[`operational-ground-truth.md`](steering/operational-ground-truth.md): analyze
+[`operational-ground-truth.md`](../test/distributed/operational-ground-truth.md): analyze
 existing artifacts first, prove one invariant at a time, and reserve expensive
 gates for claims their environment can actually establish.

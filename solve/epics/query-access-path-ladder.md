@@ -142,7 +142,7 @@ The milestone boundary is explicit so excluded work is not an unowned backlog:
 
 - 2026-07-27 — Epic created from code verification of the documented
   query-layer limitations; ladder ordering and roadmap rows `RM-1.0-qs-*`
-  added to `docs/steering/agpl-feature-map.md`.
+  added to `docs/development/agpl-feature-map.md`.
 - 2026-07-27 — Adversarial re-verification corrected the draft: the declared PK
   is already persisted (`tables.partition_key`), so rung 2 needs no schema
   migration; the fourth compare site is a raw `<`, not `localeCompare` (three

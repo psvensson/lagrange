@@ -68,6 +68,28 @@ async function writeFile(root, relativePath, content) {
   await fs.writeFile(absolutePath, content, 'utf8');
 }
 
+const ROUTER = [
+  '---',
+  'audience: agent',
+  '---',
+  '',
+  '# Owner router',
+  '',
+  '| Key | Authority | Consult when |',
+  '| --- | --- | --- |',
+  '| `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing |',
+  '',
+  '## Conditional material',
+  '',
+  '| Work | Read |',
+  '| --- | --- |',
+  '| roadmap scope or a `roadmapRow` | ' +
+    '[`agpl-feature-map.md`](../development/agpl-feature-map.md) |',
+  '| proposing or changing roadmap policy | ' +
+    '[`roadmap-policy.md`](../development/roadmap-policy.md) |',
+  '',
+].join('\n');
+
 async function writeQuest(root, id, links) {
   await writeFile(
     root,
@@ -79,35 +101,14 @@ async function writeQuest(root, id, links) {
 async function createFixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), TEMP_PREFIX));
   await writeFile(root, 'roadmap.md', HUMAN_ROADMAP);
-  await writeFile(root, 'docs/steering/agpl-feature-map.md', FEATURE_MAP);
+  await writeFile(root, 'docs/development/agpl-feature-map.md', FEATURE_MAP);
+  await writeFile(root, 'docs/steering/router.md', ROUTER);
   await writeFile(
     root,
-    'docs/steering/llm-pack.config.json',
-    `${JSON.stringify({
-      sources: [
-        {file: 'roadmap.md', role: 'packed', domain: 'governance'},
-        {
-          file: 'agpl-feature-map.md',
-          role: 'direct-load',
-          domain: 'governance',
-          loadWhen: 'When authoring product work.',
-        },
-      ],
-    }, null, 2)}\n`,
-  );
-  await writeFile(
-    root,
-    'docs/steering/roadmap.md',
+    'docs/development/roadmap-policy.md',
     '# Roadmap Policy\n\n' +
       'The canonical AGPL feature sequence and scope map lives at\n' +
       '[`agpl-feature-map.md`](agpl-feature-map.md).\n',
-  );
-  await writeFile(
-    root,
-    'docs/steering/system-guidelines.md',
-    '# System Guidelines\n\n' +
-      '- [`agpl-feature-map.md`](agpl-feature-map.md): detailed AGPL ' +
-      'implementation\n  scope and broad feature sequence\n',
   );
   await writeFile(
     root,
@@ -117,7 +118,7 @@ async function createFixture() {
   await writeFile(
     root,
     'scripts/solve/schema.js',
-    '\'_Scope authority (docs/steering/agpl-feature-map.md).\'\n',
+    '\'_Scope authority (docs/development/agpl-feature-map.md).\'\n',
   );
   await writeFile(
     root,
@@ -158,7 +159,7 @@ test('roadmap authority rejects duplicate and unresolved row identities',
     const root = await createFixture();
     await writeFile(
       root,
-      'docs/steering/agpl-feature-map.md',
+      'docs/development/agpl-feature-map.md',
       `${FEATURE_MAP}\n| RM-0.2-release | Duplicate |\n` +
       '| RM-0.2-Bad_Slug | Malformed |\n',
     );
@@ -218,35 +219,44 @@ test('roadmap authority rejects machine vocabulary and phase drift in human copy
     t.match(errors, /milestone phases/u);
   });
 
-test('roadmap authority rejects non-direct feature-map loading and old root path',
+test('roadmap authority rejects unrouted roadmap material and old root path',
   async (t) => {
     const root = await createFixture();
     await writeFile(
       root,
-      'docs/steering/llm-pack.config.json',
-      `${JSON.stringify({
-        sources: [
-          {
-            file: 'roadmap.md',
-            role: 'reference-only',
-            domain: 'governance',
-          },
-          {
-            file: 'agpl-feature-map.md',
-            role: 'reference-only',
-            domain: 'governance',
-          },
-        ],
-      }, null, 2)}\n`,
+      'docs/steering/router.md',
+      ROUTER.replace('../development/agpl-feature-map.md', 'agpl-feature-map.md')
+        .replace('## Conditional material', '## Always loaded'),
     );
     await writeFile(root, 'product-roadmap.md', '# Old location\n');
     const result = validateRoadmapAuthority(root);
     const errors = result.errors.join('\n');
 
     t.equal(result.ok, false);
-    t.match(errors, /roadmap\.md must remain packed governance policy/u);
-    t.match(errors, /must be direct-load governance scope/u);
+    t.match(errors, /router\.md: no conditional material section/u);
     t.match(errors, /retired root path must remain absent/u);
+  });
+
+test('roadmap authority rejects a roadmap authority the router does not reach',
+  async (t) => {
+    const root = await createFixture();
+    await writeFile(
+      root,
+      'docs/steering/router.md',
+      ROUTER.replace(
+        '| roadmap scope or a `roadmapRow` | ' +
+          '[`agpl-feature-map.md`](../development/agpl-feature-map.md) |\n',
+        '',
+      ),
+    );
+    const result = validateRoadmapAuthority(root);
+    const errors = result.errors.join('\n');
+
+    t.equal(result.ok, false);
+    t.match(
+      errors,
+      /docs\/development\/agpl-feature-map\.md must stay reachable as conditional/u,
+    );
   });
 
 test('roadmap authority rejects stale planning scope and weak consumer mentions',
@@ -262,28 +272,22 @@ test('roadmap authority rejects stale planning scope and weak consumer mentions'
       'solve/specs/core-topology-control-plane-rewrite/tasks.md',
       `${HISTORICAL_ROADMAP_TASK}\nNew work backed by \`roadmap.md\`.\n`,
     );
-    await writeFile(
-      root,
-      'docs/steering/system-guidelines.md',
-      '# System Guidelines\n\nA non-authoritative agpl-feature-map.md mention.\n',
-    );
     const result = validateRoadmapAuthority(root);
     const errors = result.errors.join('\n');
 
     t.equal(result.ok, false);
-    t.match(errors, /planning authority must use docs\/steering\/agpl-feature-map/u);
+    t.match(errors, /planning authority must use docs\/development\/agpl-feature-map/u);
     t.match(
       errors,
       /core-topology-control-plane-rewrite\/tasks\.md: planning authority/u,
     );
-    t.match(errors, /missing roadmap authority reference detailed AGPL/u);
   });
 
 test('roadmap authority rejects feature and product audience drift', async (t) => {
   const root = await createFixture();
   await writeFile(
     root,
-    'docs/steering/agpl-feature-map.md',
+    'docs/development/agpl-feature-map.md',
     FEATURE_MAP.replace('audience: agent', 'audience: human'),
   );
   await writeFile(

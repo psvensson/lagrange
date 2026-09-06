@@ -4,52 +4,91 @@ audience: development
 
 # Solver Operator Runbook
 
-> **solve-v2 phase 2 (2026-09-06):** the v1 verbs shown below (`continue`,
-> `next`, `new`, `step`, `checkpoint`, `finding`, `attempt`, `audit`, `run`,
-> `status`, `theory`) no longer exist. The v2 CLI is `start`, `note`, `probe`,
-> `land` plus `evidence add` and `board`; its reference is the generated
-> [`solve-commands.md`](../steering/llm/solve-commands.md) and the happy path
-> in [`AGENTS.md`](../../AGENTS.md). Everything except the "Publish And Git
-> Exceptions" and "Partial clones" sections is rewritten in phase 3.
+Example-oriented operator aid for landing, publishing and repairing. It defines
+no policy and no second boot sequence: the load order is owned by
+[`AGENTS.md`](../../AGENTS.md), the binding workflow by
+[`solver-quests.md`](../steering/workflow-guidelines/solver-quests.md), and the
+complete generated CLI reference by
+[`solve-commands.md`](../steering/generated/solve-commands.md).
 
-This is an example-oriented operator aid. It does not define policy or a second
-boot sequence. Load order is owned by [`AGENTS.md`](../../AGENTS.md), executable
-orientation by [`boot.md`](../steering/llm/boot.md), and the binding workflow by
-[`solver-quests.md`](../steering/workflow-guidelines/solver-quests.md). The complete
-generated CLI reference is [`solve-commands.md`](../steering/llm/solve-commands.md).
-
-## Primary Three-Verb Workflow
+## The Four Verbs
 
 ```sh
-# Existing Quest: read-only doctor + lint + structured next action.
-node scripts/solve.js start --id my-quest
-
-# New Quest: create and validate the linked draft, but do not seal it.
-node scripts/solve.js start --id my-quest \
-  --statement "The named scenario passes three consecutive fresh runs." \
-  --spec-ref solve/specs/my-feature/requirements.md#acceptance
-
-# Begin, then summarize one proved change; capture is automatic.
-node scripts/solve.js continue --id my-quest
-node scripts/solve.js continue --id my-quest \
-  --summary "route the decision through its owner"
-
-# At terminal, issue an immutable review id, then record its verdict.
-node scripts/solve.js land --id my-quest
-node scripts/solve.js land --id my-quest --review review-<hex> \
-  --verifier <stable-id> --verdict approve --receipt <ref>
+node scripts/solve.js start --id <id>       # seals against a red probe
+node scripts/solve.js note  --id <id> --attempt "<what changed>"
+node scripts/solve.js probe --id <id>       # measures doneWhen, changes nothing
+node scripts/solve.js land  --id <id>       # guards, tests, commits; never pushes
 ```
 
-`continue` executes only trusted structured begin/record-attempt, replacement, and
-ready-checkpoint codes. It never runs
-the rendered command text, captures against the active source epoch only when a
-commit summary is supplied, and stops on verification, repair, or judgment
-actions. `land` validates current
-bytes before recording the verdict; rejection never commits, approval uses the
-existing full audit and scope-safe commit, and neither path pushes.
+Two more exist: `evidence add <path> --quest <id>` uploads a file too large for
+git and records it only after re-download and re-hash, and `board` lists open
+epics and quests. There are no others; anything else you have seen written down
+is a retired v1 operation.
 
-The remaining sections document component commands for diagnostics, explicit
-durability boundaries, and exceptional operations.
+`note` takes exactly one of `--finding`, `--attempt`, `--verification`,
+`--blocked`, `--exhausted` or `--superseded`. A verification also takes
+`--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
+cannot land without an approving verification newer than the last attempt.
+
+## After A Rejection
+
+Record the rejection as a verification with `--verdict reject`, repair, then
+record the next attempt with `note --attempt`. A rejection stands until an
+attempt is newer than it; there is no separate corrective verb.
+
+## When Landing Refuses
+
+`land` refuses before it commits anything, and the refusal names the guard:
+
+| Refusal | What it means |
+| --- | --- |
+| `doneWhen is not green` | the sealed probe does not yet measure success |
+| `doneWhen differs from the sealed probe` | the acceptance criterion was edited after sealing; it is immutable, so supersede the quest instead |
+| `outside the scope of <epic>` | a staged path is not authorised by the epic; widen the epic explicitly or leave the change out |
+| a verification entry is required | an independent verifier has not approved this tree |
+| `the newest verification is a rejection` | repair and record a newer attempt first |
+
+None of these is worked around. Each names the thing to fix.
+
+## Deciding Without Asking
+
+Relocated from the retired always-load pack, whose "Default Posture: Autonomy"
+stated it. R16 says which actions need authority you do not already have.
+Everything outside that is autonomous: choose the obvious default, record a
+finding stating the choice and why, and keep going. Surface the decisions in
+the final report, not mid-run. Pausing on a question the repository, the quest
+or a sensible default already answers costs more than a recorded wrong guess
+about how, which the next attempt corrects.
+
+Questioning a quest's altitude is not pausing and is not moving goalposts. When
+the evidence says the real lever is an owner boundary the sealed scope cannot
+touch, record the insight, end the quest honestly, and author the higher one.
+
+## Commit On Completion
+
+Relocated from the retired always-load pack, whose "Default Posture: Commit On
+Completion" and must-not #16 stated it. It applies to ad-hoc work as much as to
+a quest, so it needs a home that ad-hoc work reaches.
+
+When a unit of work is complete and coherent - a quest terminal, a bug fix, a
+docs or tooling change, anything you would report as done - commit it. Do not
+leave finished work sitting uncommitted waiting to be asked. Committing
+completed work is durably authorised; a never-before-authorised push or publish
+is not, and stays an authority boundary under R16.
+
+Scope every commit to the work at hand, never sweeping unrelated dirty worktree
+entries. For a quest the landing guard already does this by staging only the
+quest's own scope; ad-hoc work has to do it deliberately.
+
+## Choosing What To Run In Parallel
+
+Also relocated from the retired pack. Independent sub-tasks run concurrently:
+batch independent reads and searches into one step, verify N independent
+findings with N concurrent verifiers, and use the workflow harness for broad
+mechanical sweeps. Serialize only when outputs feed each other or when workers
+would mutate the same files, in which case isolate them in worktrees or order
+the writes. Parallelism applies to the work, never to the proof: verification,
+measurement and one-quest-per-commit stay serial.
 
 ## Publish And Git Exceptions
 
@@ -82,240 +121,13 @@ The default runner is GitHub-hosted. Self-hosted routing requires
 `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
 checks still run. `--no-verify` skips every gate and is emergencies-only.
 
+`LAGRANGE_SKIP_PRECOMMIT=1` skips the pre-commit guard. It is for a work-in-
+progress branch only, never for a commit that lands source on the shared
+branch: skipping a gate to obtain a green state is exactly what R23 forbids.
+
 The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
 duplication/file-size ratchets, cycles, unused exports, then the long post-push
 test corpus. Fix one-way ratchets rather than raising their baselines.
-
-## Orient Without Mutation
-
-```sh
-node scripts/solve.js doctor
-node scripts/solve.js doctor --json
-```
-
-`doctor` reports Git state, agent-adapter capability, local attribution, and the
-runnable supervised or autonomous mode. A missing config, `enabled: false`, an
-unexecutable command, or the no-op example adapter never masquerades as a live
-autonomous capability. Copy
-the v1 executor config example (retired in solve-v2 phase 2) to the ignored
-machine-local sibling `config.json`, and set `enabled: true` only after
-replacing the placeholder with a live executable.
-
-For component-level diagnosis, inspect the same projection directly:
-
-```sh
-node scripts/solve.js next --id <quest>
-node scripts/solve.js next --id <quest> --json
-```
-
-The action is typed as `executable-command`, `command-template`,
-`manual-action`, or `terminal`.
-
-## Author And Validate A Draft
-
-Normally use `start`; the component form is:
-
-```sh
-node scripts/solve.js new --id my-quest \
-  --statement "The named scenario passes three consecutive fresh runs." \
-  --spec-ref solve/specs/my-feature/requirements.md#acceptance \
-  --closes-cl CL-42
-node scripts/solve.js lint --id my-quest
-```
-
-A `test-receipt` draft gets its evidence harness skeleton
-(`scripts/quest-evidence-<id>.js`, one placeholder per required receipt id)
-from `solve start`, or explicitly from `solve scaffold-harness --id <id>`;
-fill each placeholder's test file or anchored test name before the receipts
-can pass. Useful authoring flags are `--class product|process`, `--plan-doc`,
-`--parent-quest`, `--roadmap-row`, `--spec-ref`, repeatable `--closes-cl`, and
-`--inherit-rulesout-from`. New drafts carry `authoringContractVersion: 1` and
-`links.draftedAtCommit`. They are sealed only when the first execution command
-passes lint and appends the declaration.
-
-The corpus census is read-only:
-
-```sh
-node scripts/solve.js lint --all
-node scripts/solve.js lint --all --json
-```
-
-It reports versioned and legacy Quests; it does not migrate or rewrite them.
-
-## Drive One Supervised Attempt
-
-Normally use `continue`; the component form is:
-
-```sh
-node scripts/solve.js step --id my-quest
-
-# Make one bounded change and refresh the configured evidence.
-
-node scripts/solve.js step --id my-quest --commit --auto-diff \
-  --summary "route the decision through its owner"
-```
-
-An explicit artifact is also accepted:
-
-```sh
-git add -N path/to/new-file.js
-git diff --binary --full-index --no-ext-diff <base> -- <quest-paths> \
-  > solve/changes/my-quest/attempt-1.diff
-node scripts/solve.js step --id my-quest --commit \
-  --changeRef diff:solve/changes/my-quest/attempt-1.diff \
-  --summary "route the decision through its owner"
-```
-
-`step --commit` records the measured attempt; it does not make a Git commit.
-Use `step --abort` to discard a pending pin without recording an attempt.
-
-## Continue Source Work; Verify Only At A Durability Boundary
-
-Version 2 attempts accumulate without individual review. Keep following
-`solve next` until terminal unless a real durability boundary requires a commit.
-At that boundary, run the cheap checks and project the one current candidate:
-
-```sh
-npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id my-quest --dry-run --reason milestone
-node scripts/solve.js next --id my-quest --json
-```
-
-When `continue` refuses with "source epoch changed reviewed path(s) in an
-intervening commit" and the intervening commits are already on `origin/main`,
-rebase or merge the branch, then record the boundary with
-`node scripts/solve.js rebase-epoch --id my-quest --to HEAD --reason "<why>"`
-and follow `next`: it demands one covering attempt at the new base over the
-retired epoch's paths. Reseal (park + `new --from`) only when the quest's
-statement or bar must change.
-
-Before requesting the verifier round on a terminal candidate, run
-`node scripts/solve.js preflight --id my-quest --full`: the default preflight
-is cheap and read-only; `--full` adds the publish-gate statics (duplication,
-unused exports, cycles, aggregate complexity) that no earlier Solver stage
-runs, so a ratchet miss costs one edit instead of a gate run.
-
-The dry run must say the candidate will be checkpoint-landable after one exact
-approval. Give its common-base/current-union dossier and applicable templates to
-an independent verifier, then record the exact candidate verdict:
-
-```sh
-node scripts/solve.js finding --id my-quest --frontier my-quest-main \
-  --kind verifier-approval \
-  --claim "Independent verification passed" \
-  --evidence subagent:<id> \
-  --verification-scope candidate \
-  --verification-fingerprint sha256:<candidate-fingerprint>
-
-node scripts/solve.js checkpoint --id my-quest --reason milestone
-```
-
-The finding has no commit side effect. The checkpoint records the durability
-reason, refuses any candidate drift, commits only Quest scope, and never pushes.
-Routine work skips this section entirely and goes straight to terminal review.
-
-## Foreign Dirty Files And Commits Under A Lease
-
-The attempt capture sweeps the working tree. Another declared Quest's
-bookkeeping (its quest file, evidence receipt, dep-scope note, oracle, or
-attempt diffs under its own `solve/` id) is excluded from the capture
-automatically and named on stdout
-(`auto-diff: excluded another quest's bookkeeping from the attempt: ...`);
-it stays dirty in the tree, untouched. The owner is resolved against the
-declared ids under `solve/quests/`, so an undeclared name is never treated
-as foreign and stays inside the attempt. Shared planning documents
-(`solve/epics/`, `solve/specs/`) have no owner: a shared spec edit still
-refuses a product Quest and the refusal names the path. Restore such a
-shared file with `git checkout -- <path>` before `continue --summary`. Never
-set aside a Quest's own `solve/quests/<id>/log.ndjson` by checking it out — the log is
-append-only and the events are lost. Record the attempt before committing
-anything else while a step is pending; a commit between begin-step and
-record-attempt moves the attempt base away from the step pin and the
-candidate becomes unlandable.
-
-While this worktree holds a Quest lease the pre-commit hook refuses any
-source-changing commit that the Quest has not authorized
-(retired in solve-v2 phase 2; `land` now marks its commit with `LAGRANGE_SOLVER_LANDING=1`). There is no bypass lane. For a
-source change that genuinely belongs outside the Quest, release the lease,
-commit, and let the next Solver verb re-claim it:
-
-```sh
-node scripts/solve/session-registry.js release --quest <id>
-git commit -m "<message>"
-node scripts/solve.js next --id <id>
-```
-
-Or make the change in a second worktree. `LAGRANGE_SKIP_PRECOMMIT=1` is for
-WIP branches only and never for a commit that lands source on the release
-branch. Documentation and `solve/` records are not source and commit normally.
-
-## Terminal Verification And Handoff
-
-Normally pass the independent verdict to `land`; the component form is:
-
-At SOLVED or EXHAUSTED, source-changing work needs a fresh approval of the
-aggregate fingerprint that `solve next` prints. `both` is valid only when the
-candidate and aggregate base, paths, range, and fingerprint are identical.
-
-```sh
-node scripts/solve.js report --id my-quest
-node scripts/solve.js audit --id my-quest
-node scripts/solve.js handoff --id my-quest
-node scripts/solve.js handoff --id my-quest --commit
-```
-
-Terminal handoff requires the terminal state, aggregate approval when
-applicable, a passing full audit, and scope-pressure admission. The dry run
-lists both included and excluded dirty paths. No Solver command pushes.
-
-The landing preflight's import-graph verify (~22 s idle, 30 s budget, one
-retry) waits for one-minute load headroom before it spawns (`load-gate:` lines
-on stderr; skip with `LAGRANGE_SKIP_LOAD_GATE=1`); a machine that stays loaded
-still runs the verify and reports the timeout with the
-`LAGRANGE_IMPORT_GRAPH_VERIFY_TIMEOUT_MS` knob.
-
-## Autonomous Mode
-
-Use the agent executor only when `doctor` reports it available:
-
-```sh
-node scripts/solve.js run --id my-quest --executor agent --yes --keep-alive
-```
-
-The supervisor automatically replays only a MAX_CYCLES stop that made durable
-progress. THEORY_REQUIRED, measurement repair, recoverable BLOCKED, and an
-unchanged MAX_CYCLES return once with their typed next action. The default
-`dry` executor is a test skeleton and makes no real edits.
-
-## Theory, Evidence, And Diagnostics
-
-When `next`, `health`, or the dossier requests theory, use the generated command
-reference for the full argument grammar. Common read-only commands are:
-
-```sh
-node scripts/solve.js health --id my-quest
-node scripts/solve.js theory list --id my-quest
-node scripts/solve.js status --id my-quest
-node scripts/solve.js audit --id my-quest
-npm run quest:context -- --id my-quest
-```
-
-Record durable learning with `finding`; record causal hypotheses and their
-results with `theory`. Probe evidence and metric movement, not agent self-report,
-decide progress and closure.
-
-## Stored And Generated Artifacts
-
-- Track authored `solve/quests/<id>/quest.json`, append-only `solve/quests/<id>/log.ndjson`, explanatory
-  `solve/changes/`, and non-regenerable report evidence.
-- Treat `solve/state/`, ordinary `solve/report/<quest-id>.md`, and
-  `OVERVIEW.generated.md` as regenerable local projections. Use `report`
-  or `overview --write` only when a human wants that view; audit and handoff do
-  not require either file.
-- Keep the machine-local `config.json` beside the tracked example and out of
-  Git.
-- Regenerate the full CLI and steering indexes with
-  `npm run steering:llm:pack` after command or steering-source changes.
 
 ## Partial clones (solve-v2 phase 1)
 

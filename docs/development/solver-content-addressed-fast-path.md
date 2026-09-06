@@ -10,22 +10,9 @@ that content and its relevant inputs.
 
 ## Normal path
 
-For routine Quest work the operator surface remains:
-
-```sh
-node scripts/solve.js start --id <quest>
-node scripts/solve.js continue --id <quest>
-# edit + run the focused proof
-node scripts/solve.js continue --id <quest> --summary "<what changed>"
-node scripts/solve.js land --id <quest>
-# independent verifier reviews the returned review id
-node scripts/solve.js land --id <quest> --review <review-id> \
-  --verifier <id> --verdict approve --receipt <ref>
-```
-
-Manual `diff:` artifacts and `ingest-evidence` remain diagnostic/compatibility
-surfaces. They are not routine steps when `continue` can capture the change and
-the Quest's declared probe produced the evidence.
+For routine quest work the operator surface is the four v2 verbs; the runbook
+holds them ([`solver-runbook.md`](solver-runbook.md)). This document is about
+what the safety boundary is made of, not about which commands to type.
 
 ## Identity model
 

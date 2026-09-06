@@ -114,7 +114,7 @@ remain Phase 1.x; cost-based combination of multiple indexes remains Phase 2.0.
 - Deterministic-first: index maintenance, backfill resume, staleness
   bounds, compound-prefix/range selection, and drop-under-read SHALL each
   have deterministic in-process repros before distributed-harness
-  confirmation, per `docs/steering/operational-ground-truth.md`.
+  confirmation, per `test/distributed/operational-ground-truth.md`.
 - The distributed proof SHALL include: node failure during backfill, index
   partition leader loss during maintenance, and (async mode) CDC redelivery
   after restart — each with the base table remaining correct and the index

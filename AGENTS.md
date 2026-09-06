@@ -1,7 +1,26 @@
+---
+audience: agent
+requires:
+  - docs/steering/rules.md
+  - docs/steering/router.md
+---
+
 # AGENTS
 
 This repository uses the **Quest** workflow. This file is the single steering
 entry point and the only document that prescribes a load order.
+
+## Steering Load Order
+
+1. Read this file.
+2. Read [`rules.md`](docs/steering/rules.md): twenty-five cross-cutting
+   invariants you can violate merely by not knowing them.
+3. Consult [`router.md`](docs/steering/router.md) for the owner of whatever
+   the work touches. Nothing else is read by default, and no rule holds the
+   detail its owner holds.
+
+That is the whole always-loaded surface. Every other document is conditional
+material the router names, or an owner's own authority.
 
 ## Choose The Work Unit
 
@@ -36,54 +55,21 @@ npm run publish
 
 The publisher gates a clean temporary worktree, writes a HEAD-bound receipt,
 checks fast-forward eligibility and the remote SHA, and never stages, commits,
-amends, force-pushes, or sweeps the caller's worktree. Red-main repair, runner
-routing, direct Git escape hatches, and recovery commands live in the
-[`Solver operator runbook`](docs/development/solver-runbook.md).
-
-## Steering Load Order
-
-1. Read this file.
-2. Read [`core.md`](docs/steering/llm/core.md).
-3. Read [`boot.md`](docs/steering/llm/boot.md).
-4. Load only the relevant complete domain pack(s):
-   [`architecture`](docs/steering/llm/architecture.md),
-   [`testing`](docs/steering/llm/testing.md),
-   [`style`](docs/steering/llm/style.md), or
-   [`governance`](docs/steering/llm/governance.md). Cross-cutting work loads
-   each intersecting pack.
-5. Let Solver own attempts, findings, evidence, verification, and handoff.
-6. Consult source steering only for cited detail or pack repair. After editing a
-   configured steering source, run `npm run steering:llm:pack`.
-
-For distributed-harness or convergence work, first read the canonical
-[`operational ground truth`](docs/steering/operational-ground-truth.md).
-For roadmap scope or a `roadmapRow`, directly load the
-[`AGPL feature map`](docs/steering/agpl-feature-map.md).
-The domain packs are complete selective surfaces. Optional early-stage planning
-under `solve/epics/` is for bounded decision memos, never a mandatory waypoint.
-
-**Protected core interactions.** `coupledPairs` in
-[`test/shards/impact-contracts.json`](test/shards/impact-contracts.json) are the
-machine-enforced registry of cross-owner interactions whose invariants must stay
-green together. Before changing a path owned by a registered pair, read the
-pair's named contract and witness tests and treat the interaction—not either
-participant alone—as the change boundary. Do not locally bypass, reconstruct,
-or tune around one side of the pair. Cross-owner changes use the
-[`owner-interaction`](docs/steering/verification-templates/owner-interaction.md)
-verification template; the proof-cone and Solver landing guard enforce the
-registered contract edge.
+amends, force-pushes, or sweeps the caller's worktree.
 
 ## Find The Right Surface
 
 | Need | Read / run |
 | --- | --- |
+| The owner of a concern | [`router.md`](docs/steering/router.md) |
 | Quest rules and guardrails | [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
 | Examples, Git, recovery, component commands | [`solver-runbook.md`](docs/development/solver-runbook.md) |
 | Available project commands | `npm run commands` |
-| Rule lookup | `npm run rule -- --id <ID>` |
-| Architecture tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
-| Adversarial verification templates | [`verification-templates`](docs/steering/verification-templates/INDEX.md) |
 | Open epics and quests | `node scripts/solve.js board` |
+
+Before writing an ad-hoc shell command for a repository task, look for the
+script that already does it: `npm run commands` is the curated quickstart and
+the generated tools index is the complete list.
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.

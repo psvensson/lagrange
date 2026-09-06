@@ -884,7 +884,7 @@ logs are supplemental evidence.
   defines the broader stable kernel API ladder consumed by installable services.
 - [`docs/development/product-roadmap.md`](../../../docs/development/product-roadmap.md)
   carries the cross-edition visibility milestone.
-- [`docs/steering/agpl-feature-map.md`](../../../docs/steering/agpl-feature-map.md)
+- [`docs/development/agpl-feature-map.md`](../../../docs/development/agpl-feature-map.md)
   is the planning authority for scope and sequence; the human product
   milestone narrative is visibility only, never implementation-scope authority.
 - [`edition-matrix.md`](../../../edition-matrix.md) remains authoritative for

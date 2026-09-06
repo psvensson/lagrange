@@ -18,7 +18,8 @@ const CONST_DECLARATION_KIND = 'const';
 const VARIABLE_DECLARATOR_NODE = 'VariableDeclarator';
 const VARIABLE_DECLARATION_NODE = 'VariableDeclaration';
 const IDENTIFIER_NODE = 'Identifier';
-const RULE_REFERENCE = 'system guidelines.md §4.1 Constants, Not Literals';
+const RULES_MD = 'docs/steering/rules.md ';
+const RULE_REFERENCE = `${RULES_MD}R06. Scalars, states and names have owners`;
 const VIOLATION_KIND = 'opaque_generated_constant_name';
 const VIOLATION_REASON =
   'named constants must describe their semantic owner rather than generated tokens';

@@ -11,8 +11,9 @@ const LOCAL_STR_SLASH = '/';
 const LOCAL_STR_HOTSPOT_BOUNDARY_STILL_CONTAINS_LEGACY_S = 'hotspot boundary still contains legacy semantic mode fragment ';
 const LOCAL_STR_BOUNDARY_MODE_CONTRACT_HOTSPOT = 'boundary-mode-contract hotspot';
 
+const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
-  'system guidelines.md §0.2.1 Shared Contract Shape And Boundary-Impedance Discipline';
+  `${RULES_MD}R08. A shared contract has one canonical shape`;
 
 const VIOLATION_KIND = 'legacy_boundary_mode_fragment';
 

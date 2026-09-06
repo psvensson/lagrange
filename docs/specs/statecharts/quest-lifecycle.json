@@ -5,197 +5,210 @@
   "states": [
     {
       "id": "authored",
-      "description": "A Quest file exists under solve/quests with sealed doneWhen and frontier metric definitions ready to declare."
+      "description": "solve/quests/steering-diet/quest.json exists with a statement, an owning epic and one binary doneWhen probe, and has not been sealed."
     },
     {
-      "id": "declared",
-      "description": "The Solver log contains the sealed declaration event and the Quest is open for measured attempts."
+      "id": "sealed",
+      "description": "The log carries the seal entry: sealedAt is the head the quest was sealed against, and the seal-time probe was measured red."
     },
     {
-      "id": "pending_attempt",
-      "description": "A supervised step has pinned the before metric and awaits a commit or abort."
+      "id": "attempted",
+      "description": "The log carries an attempt newer than the seal, naming the head it was made against and the change set it covers."
     },
     {
-      "id": "theory_required",
-      "description": "The selected frontier is stalled at a rung that requires Quest-native system or frontier theory before another supervised or autonomous attempt can begin."
+      "id": "verification_required",
+      "description": "The staged change touches src/, so landing needs an approving verification newer than the last attempt."
     },
     {
-      "id": "theory_recorded",
-      "description": "The Solver log contains system theory, frontier theory, selected theory, or theory result events that can be projected into durable Quest memory."
+      "id": "verification_rejected",
+      "description": "The newest verification is a rejection, and no attempt is newer than it."
     },
     {
-      "id": "attempt_recorded",
-      "description": "An attempt event has recorded before and after metrics, evidence, changeRef, and ladder movement."
+      "id": "verified",
+      "description": "The newest verification approves and is newer than the last attempt."
     },
     {
-      "id": "frontier_parked",
-      "description": "A frontier exhausted the finite strategy ladder and has been parked."
+      "id": "blocked",
+      "description": "The log carries a blocked entry naming the next owner; landing refuses until an attempt or typed finding clears it."
     },
     {
       "id": "solved",
-      "description": "The Quest doneWhen probe is true against live evidence and the Solver recorded SOLVED."
+      "description": "land measured doneWhen green, every guard passed, the quest scope was committed and the terminal entry recorded."
     },
     {
       "id": "exhausted",
-      "description": "Every frontier is parked and the Solver recorded EXHAUSTED."
+      "description": "The log carries a terminal exhausted entry: no honest remaining move."
+    },
+    {
+      "id": "superseded",
+      "description": "The log carries a terminal superseded entry: the premise the quest was sealed on is gone."
     }
   ],
   "terminalStates": [
     "solved",
-    "exhausted"
+    "exhausted",
+    "superseded"
   ],
   "transitions": [
     {
       "from": "authored",
-      "event": "declare_goal",
-      "to": "declared",
-      "evidence": "node scripts/solve.js step or run records the initial quest-declared event."
+      "event": "seal_against_a_red_probe",
+      "to": "sealed",
+      "evidence": "node scripts/solve.js start --id steering-diet validates the record and its epic, measures doneWhen, refuses unless it is red, then records sealedAt and the seal-time metric."
     },
     {
-      "from": "declared",
-      "event": "begin_supervised_step",
-      "to": "pending_attempt",
-      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability writes a pending baseline with the before metric."
+      "from": "sealed",
+      "event": "record_attempt",
+      "to": "attempted",
+      "evidence": "node scripts/solve.js note --id steering-diet --attempt \"what changed\" appends the attempt; note refuses an attempt on an unsealed quest."
     },
     {
-      "from": "declared",
-      "event": "theory_gate_blocks_step",
-      "to": "theory_required",
-      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability returns THEORY REQUIRED when rung gates lack selected theory evidence."
+      "from": "attempted",
+      "event": "record_further_attempt",
+      "to": "attempted",
+      "evidence": "Each attempt is appended; nothing recorded is edited."
     },
     {
-      "from": "declared",
-      "event": "theory_gate_blocks_run",
-      "to": "theory_required",
-      "evidence": "node scripts/solve.js run --id rolling-restart-core-stability stops before invoking an executor when rung gates lack selected theory evidence."
+      "from": "attempted",
+      "event": "staged_change_touches_source",
+      "to": "verification_required",
+      "evidence": "land refuses with that src/ changes need a verification entry naming the verifier."
     },
     {
-      "from": "theory_required",
-      "event": "record_system_or_frontier_theory",
-      "to": "theory_recorded",
-      "evidence": "node scripts/solve.js theory system|option|select appends Quest-native theory events."
+      "from": "verification_required",
+      "event": "verifier_approves",
+      "to": "verified",
+      "evidence": "node scripts/solve.js note --id steering-diet --verification \"what was checked\" --verifier subagent:a72375b --verdict approve."
     },
     {
-      "from": "theory_recorded",
-      "event": "theory_gate_satisfied",
-      "to": "declared",
-      "evidence": "node scripts/solve.js health --id rolling-restart-core-stability reports no blocking theory-required signal for the selected rung."
+      "from": "verification_required",
+      "event": "verifier_rejects",
+      "to": "verification_rejected",
+      "evidence": "node scripts/solve.js note --id steering-diet --verification \"the defects found\" --verifier subagent:a72375b --verdict reject."
     },
     {
-      "from": "pending_attempt",
-      "event": "commit_measured_attempt",
-      "to": "attempt_recorded",
-      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability --commit records the attempt event with a diff changeRef."
+      "from": "verification_rejected",
+      "event": "repair_and_record_next_attempt",
+      "to": "attempted",
+      "evidence": "A rejection stands until an attempt is newer than it; there is no separate corrective operation."
     },
     {
-      "from": "pending_attempt",
-      "event": "abort_without_attempt",
-      "to": "declared",
-      "evidence": "node scripts/solve.js step --id rolling-restart-core-stability --abort clears the pending baseline without an attempt event."
+      "from": "attempted",
+      "event": "record_blocking_owner",
+      "to": "blocked",
+      "evidence": "node scripts/solve.js note --id steering-diet --blocked \"why\" names the owner who must decide."
     },
     {
-      "from": "declared",
-      "event": "autonomous_attempt",
-      "to": "attempt_recorded",
-      "evidence": "node scripts/solve.js run --id rolling-restart-core-stability executes loop cycles and records measured attempts."
+      "from": "blocked",
+      "event": "owner_decision_recorded",
+      "to": "attempted",
+      "evidence": "An attempt or typed finding newer than the blocked entry clears it; land refuses while it stands."
     },
     {
-      "from": "attempt_recorded",
-      "event": "metric_progress_or_next_attempt",
-      "to": "declared",
-      "evidence": "The latest attempt is folded into state and the next step reselects an open frontier."
+      "from": "attempted",
+      "event": "probe_green_and_guards_pass",
+      "to": "solved",
+      "evidence": "node scripts/solve.js land --id steering-diet re-measures doneWhen, proves the staged tree, commits the quest scope and records the terminal entry."
     },
     {
-      "from": "attempt_recorded",
-      "event": "linked_theory_result_recorded",
-      "to": "theory_recorded",
-      "evidence": "A measured attempt with theoryRef appends supported, falsified, or needs-rerun theory-result learning."
+      "from": "verified",
+      "event": "probe_green_and_guards_pass",
+      "to": "solved",
+      "evidence": "Same landing, with an approving verification newer than the last attempt."
     },
     {
-      "from": "attempt_recorded",
-      "event": "frontier_ladder_exhausted",
-      "to": "frontier_parked",
-      "evidence": "The attempt event is followed by a park event after the finite ladder reaches park."
-    },
-    {
-      "from": "frontier_parked",
-      "event": "another_frontier_open",
-      "to": "declared",
-      "evidence": "The scheduler redirects to another open frontier in the same Quest."
-    },
-    {
-      "from": "frontier_parked",
-      "event": "all_frontiers_parked",
+      "from": "attempted",
+      "event": "no_honest_remaining_move",
       "to": "exhausted",
-      "evidence": "The Solver records EXHAUSTED only when no open frontier remains."
+      "evidence": "node scripts/solve.js note --id steering-diet --exhausted \"what was ruled out\"."
     },
     {
-      "from": "declared",
-      "event": "doneWhen_true",
-      "to": "solved",
-      "evidence": "The Solver records SOLVED only when the doneWhen probe returns done true."
+      "from": "attempted",
+      "event": "premise_is_gone",
+      "to": "superseded",
+      "evidence": "node scripts/solve.js note --id steering-diet --superseded \"what replaced it\"."
     },
     {
-      "from": "attempt_recorded",
-      "event": "doneWhen_true",
-      "to": "solved",
-      "evidence": "The Solver re-measures doneWhen after commit and records SOLVED when live evidence satisfies it."
+      "from": "sealed",
+      "event": "measure_without_mutating",
+      "to": "sealed",
+      "evidence": "node scripts/solve.js probe --id steering-diet projects the quest state and changes nothing."
     }
   ],
   "forbiddenTransitions": [
     {
-      "from": "declared",
-      "event": "edit_doneWhen_after_declare",
-      "to": "declared",
-      "reason": "Goalpost changes after declaration are recorded as violations, not accepted transitions."
+      "from": "authored",
+      "event": "seal_an_already_green_probe",
+      "to": "sealed",
+      "reason": "start refuses unless the probe is red, so a quest can never be born already satisfied."
     },
     {
-      "from": "declared",
-      "event": "claim_solved_without_probe",
+      "from": "sealed",
+      "event": "edit_doneWhen_after_sealing",
+      "to": "sealed",
+      "reason": "land refuses when doneWhen differs from the sealed probe; the acceptance criterion is immutable and a dead premise is superseded instead."
+    },
+    {
+      "from": "attempted",
+      "event": "claim_solved_without_a_green_probe",
       "to": "solved",
-      "reason": "Only live doneWhen evidence can close a Quest."
+      "reason": "land refuses while the sealed probe is not green; only its own measurement closes a quest."
     },
     {
-      "from": "pending_attempt",
-      "event": "commit_without_diff_changeRef",
-      "to": "attempt_recorded",
-      "reason": "Attempt proof must be a resolvable diff artifact."
+      "from": "verification_required",
+      "event": "land_source_change_without_verification",
+      "to": "solved",
+      "reason": "A change under src/ lands only behind an approving verification newer than the last attempt."
     },
     {
-      "from": "declared",
-      "event": "widen_scope_without_selected_frontier_theory",
-      "to": "pending_attempt",
-      "reason": "The widen-scope rung requires selected frontier theory before another supervised attempt begins."
+      "from": "verification_rejected",
+      "event": "land_over_a_standing_rejection",
+      "to": "solved",
+      "reason": "A rejection stands until an attempt answers it."
     },
     {
-      "from": "declared",
-      "event": "autonomous_widen_scope_without_selected_frontier_theory",
-      "to": "attempt_recorded",
-      "reason": "The autonomous loop must stop at theory_required before invoking an executor or recording an attempt."
+      "from": "blocked",
+      "event": "land_while_blocked",
+      "to": "solved",
+      "reason": "A blocked quest names an owner who must decide; landing waits for that decision."
     },
     {
-      "from": "pending_attempt",
-      "event": "model_rung_commit_without_model_evidence",
-      "to": "attempt_recorded",
-      "reason": "The model rung requires selected frontier theory, active system theory, and modelRef or modelNotApplicable evidence."
+      "from": "attempted",
+      "event": "commit_a_path_the_epic_does_not_authorise",
+      "to": "solved",
+      "reason": "land refuses a staged path outside the epic scope; widening the scope is a recorded decision."
+    },
+    {
+      "from": "attempted",
+      "event": "rewrite_a_recorded_entry",
+      "to": "attempted",
+      "reason": "The log is append-only; a correction is a new entry."
     }
   ],
   "invariants": [
     {
-      "id": "sealed-goalposts-immutable",
-      "statement": "The declaration event's doneWhen and frontier metric definitions match the Quest file for every later step."
+      "id": "sealed-acceptance-immutable",
+      "statement": "The doneWhen in the record equals the doneWhen in the seal entry for the whole life of the quest; landing refuses on any difference."
     },
     {
-      "id": "attempt-proof-is-evidence-bound",
-      "statement": "Progress credit requires finite before and after metrics, an existing evidence artifact, and a resolvable diff changeRef."
+      "id": "sealing-requires-a-red-probe",
+      "statement": "A quest is sealed only against a probe measured red at sealedAt, so its terminal claim measures a real change."
     },
     {
-      "id": "closure-is-solver-terminal",
-      "statement": "SOLVED and EXHAUSTED are represented by Solver terminal state events and report projection."
+      "id": "source-changes-are-independently-verified",
+      "statement": "A staged change under src/ lands only behind an approving verification newer than the last attempt, and a standing rejection blocks landing."
     },
     {
-      "id": "theory-gates-prevent-local-patch-loops",
-      "statement": "Widen-scope and later rungs require selected frontier theory before supervised or autonomous attempts, and model rung commits require active system theory plus model evidence or modelNotApplicable."
+      "id": "closure-is-measured-not-asserted",
+      "statement": "SOLVED is recorded only by land, after it re-measures the sealed probe green and every guard passes on the tree it commits."
+    },
+    {
+      "id": "history-is-append-only",
+      "statement": "Findings, attempts, verifications and the one terminal entry are appended; no recorded entry is edited, truncated, relocated or deleted."
+    },
+    {
+      "id": "scope-is-what-the-epic-authorises",
+      "statement": "Landing commits only paths the quest directory or its epic authorises; widening is a recorded decision on the epic."
     }
   ]
 }

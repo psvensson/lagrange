@@ -87,7 +87,7 @@
       "id": "documentation-only",
       "provenance": "policy: documentation cannot change behaviour",
       "changed": [
-        "docs/steering/llm/core.md"
+        "docs/steering/rules.md"
       ],
       "mustIncludeSubsystems": [],
       "expectSpineOnly": true,

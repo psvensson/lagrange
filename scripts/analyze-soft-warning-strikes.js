@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Soft-warning two-strikes analyzer (the machine check behind
-// docs/steering/testing-guidelines/regression-policy.md "Two-Strikes
+// test/guidelines/regression-policy.md "Two-Strikes
 // Escalation Tripwires" #1).
 //
 // THE RULE: the SAME soft warning code appearing in the two most recent

@@ -40,11 +40,12 @@ const LOCAL_STR_1E8GB = 'exported literal constant outside canonical constants-o
 const LOCAL_STR_B3TUC = 'raw literal outside a named constant owner';
 const LOCAL_NUM_TWO = 2;
 
+const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
-  'system-guidelines.md §4 Scalars, State, And Naming Have Owners';
+  `${RULES_MD}R06. Scalars, states and names have owners`;
 
 // JavaScript-language primitives are not domain scalars
-// (docs/steering/code-style.md "Constants And Naming"): typeof-comparison
+// (docs/development/code-style.md "Constants And Naming"): typeof-comparison
 // strings, the empty string, and the structural integers -1/0/1/2 may be
 // written literally.
 const LOCAL_STR_BINARYEXPRESSION = 'BinaryExpression';

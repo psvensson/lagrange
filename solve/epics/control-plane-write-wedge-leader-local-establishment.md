@@ -157,7 +157,7 @@ legacyStatus: resolved
 
 > Handoff scope for the next agent. Everything below is evidence-grounded from the
 > 2026-06-23 profiling session (file:line verified at HEAD `67f5a10c`, but POSITIONAL —
-> re-grep before trusting). Read [`docs/steering/operational-ground-truth.md`](../../docs/steering/operational-ground-truth.md)
+> re-grep before trusting). Read [`test/distributed/operational-ground-truth.md`](../../test/distributed/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify).
 
 ## Intent (why now)

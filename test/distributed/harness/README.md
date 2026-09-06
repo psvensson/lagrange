@@ -48,7 +48,7 @@ The docker stat gate (`bash scripts/rolling-restart-stat-gate.sh <N>`) is expens
 (~5–10 min/run). **Start with the lowest N that could answer the question and
 escalate only when a small run is inconclusive** — the burden is on justifying a
 LARGER N, never a smaller one (full rationale in
-[`docs/steering/operational-ground-truth.md`](../../../docs/steering/operational-ground-truth.md)).
+[`test/distributed/operational-ground-truth.md`](../../../test/distributed/operational-ground-truth.md)).
 
 - **Default N=3.** It is also the `rolling-restart-core-stability` doneWhen streak
   (3 consecutive scenario-PASS), so a clean 3/3 satisfies closure — confirm with

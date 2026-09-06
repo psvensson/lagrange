@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "steering-diet",
+  "statement": "Always-loaded steering contains only cross-cutting invariants and routing; everything detailed or owner-specific lives at its authoritative owner and is loaded only when relevant. Every line of the corpus at 60bd588f5 is first classified by responsibility, then moved to its owner, kept as conditional material, or deleted as duplication or retired mechanism. rules.md carries exactly 25 rules derived from the real cross-cutting invariants, each stating an invariant and routing to its owner rather than restating the owner's detail; rules.json is gone; the transitive always-load path is at most 360 lines and the corpus at most 3000; no current steering presents any of the 18 retired v1 verbs as an available operation; and representative tasks are shown to reach their authoritative owner from the always-load layer with no invariant lost. Mechanical ratchets keep all of it from growing back.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/steering-diet/evidence/receipt.json",
+      "requiredReceipts": [
+        "steering-inventory-accounts-for-every-line",
+        "rules-md-holds-exactly-25-structural-rules",
+        "rules-json-is-absent",
+        "always-load-transitive-path-within-360-lines",
+        "steering-corpus-within-3000-lines",
+        "no-current-steering-teaches-a-retired-verb",
+        "rules-route-to-owners-rather-than-restating-them",
+        "representative-tasks-reach-their-owner-from-always-load"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "information-architecture-not-compression",
+      "statement": "Targets are met by moving knowledge to the owner that holds it, never by minifying prose or deleting material whose only home is steering. Content with no other owner is relocated or made conditional, not vanished."
+    },
+    {
+      "id": "safeguards-retained",
+      "statement": "Routing stays clear for single semantic ownership, interaction ownership, formation and release discipline, authority and incarnation boundaries, coupled invariants, scope pressure, sealed acceptance and probes, red-main handling, and proof and landing honesty, wherever those remain current contracts."
+    },
+    {
+      "id": "rules-are-a-router",
+      "statement": "Changing a detail at its authoritative contract owner must not require editing rules.md unless the cross-cutting invariant itself changed. Twenty-five is a consequence of the invariant model, not of combining bullets until the count matches."
+    },
+    {
+      "id": "history-is-not-steering",
+      "statement": "Retired verbs may remain in immutable quest logs and migration evidence as historical record; they must not appear anywhere an agent reads as current instruction."
+    },
+    {
+      "id": "published-boundaries-immutable",
+      "statement": "60bd588f5 is the frozen pre-diet baseline. Phases 2 and earlier, the size accounting and the shape amendment are settled architecture and are not reopened."
+    }
+  ],
+  "sealedAt": "60bd588f5ea3e8635d87cbdc9572f9bddf4dff2b"
+}

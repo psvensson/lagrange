@@ -144,7 +144,7 @@ test('the quest-log path is exactly one canonical file per quest', () => {
     'solve/autonomous/state.json',
     'solve/changes/demo-quest/attempt-1.diff',
     // Live surface stays governed even when it names the same strings.
-    'docs/steering/llm/core.md',
+    'docs/steering/rules.md',
     'docs/steering/workflow-guidelines/solver-quests.md',
     'scripts/solve/store.js',
     'AGENTS.md',

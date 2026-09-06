@@ -50,7 +50,7 @@ legacyStatus: resolved
 > regardless of C-2 → that epic is now the live START-HERE.** Read its top banner first.
 
 > **FRESH-AGENT START HERE.** This epic is self-contained. Read
-> [`docs/steering/operational-ground-truth.md`](../../docs/steering/operational-ground-truth.md)
+> [`test/distributed/operational-ground-truth.md`](../../test/distributed/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify /
 > **coupled-invariant: stop single-frontier patching**). All file:line below were verified
 > at HEAD `a71e0b32` (2026-06-23) but are POSITIONAL — re-grep before trusting. This epic is

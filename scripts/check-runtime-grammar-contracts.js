@@ -9,8 +9,10 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
-  'docs/steering/doctrine/state-encoding.md and architecture/current-owner-maps.md';
+  `${RULES_MD}R07. A semantic outcome is a named state, and ` +
+  'architecture/current-owner-maps.md';
 
 const VIOLATION_KIND = Object.freeze({
   FORBIDDEN_FRAGMENT: 'runtime_grammar_forbidden_fragment',

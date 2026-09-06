@@ -58,7 +58,7 @@ const SCAN_ROOTS = Object.freeze([
   'test',
 ]);
 const GENERATED_PREFIXES = Object.freeze([
-  'docs/steering/llm/',
+  'docs/steering/generated/',
 ]);
 const GENERATED_FILES = Object.freeze([
   'solve/FRONTIER.generated.md',

@@ -56,7 +56,7 @@ const WIT_PATH = 'wit/world.wit';
 const RUNNER_PATH = 'scripts/run-test-files.js';
 const SELECTOR_PATH = 'scripts/checks/impact-proof-cone.js';
 const SAFETY_SAMPLE = 'test/closure/CL-040.repro.test.js';
-const DOC_PATH = 'docs/steering/llm/core.md';
+const DOC_PATH = 'docs/steering/rules.md';
 
 const ERR_NO_DECISION = 'selector produced no decision';
 const ERR_LEAF_NOT_SELECTED = 'leaf change did not select a bounded cone';

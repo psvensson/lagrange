@@ -155,7 +155,7 @@ in-process hosting of the live demo is the deferred north star (only ~15 of
 "MovieLens deterministic in-process" now. Instead:
 
 **2a — RESOLVED AS ALREADY COVERED (2026-07-19 implementation pass).** The
-deterministic-first bullet in `docs/steering/operational-ground-truth.md`
+deterministic-first bullet in `test/distributed/operational-ground-truth.md`
 already requires exactly this: the primary evidence for every convergence fix
 is a deterministic in-process reproduction, red-on-revert, "built BEFORE
 changing code and kept as the validating proof afterward", with live
@@ -268,7 +268,7 @@ second mechanism.
 
 **4a — steering rule for baseline movement (no new mechanism).**
 APPLIED 2026-07-19: added as the "Static Gate Baselines Are A One-Way
-Ratchet" section of `docs/steering/testing-guidelines/release-gate.md` (the
+Ratchet" section of `test/guidelines/release-gate.md` (the
 packed testing source owning static/release-gate policy — chosen over
 `operational-ground-truth.md`, whose scope is distributed-work traps), then
 packs regenerated via `npm run steering:llm:pack`. This turns the good
@@ -282,7 +282,7 @@ same-commit epic decision-log change. Deliberately deferred: prefer rule +
 review over hook proliferation.
 
 **4c — RESOLVED AS ALREADY COVERED (2026-07-19 implementation pass).**
-`docs/steering/code-style.md` "Source File Size And Naming" already mandates
+`docs/development/code-style.md` "Source File Size And Naming" already mandates
 semantic-owner extraction before quest closure, names for responsibility not
 split position, no ordinal/segment/grab-bag names, and explicit-context
 modules over new `*-methods.js` mixin fragments (existing fragments are

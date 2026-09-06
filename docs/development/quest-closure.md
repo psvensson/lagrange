@@ -1,0 +1,65 @@
+---
+scope: governance
+status: canonical
+always_load: false
+source_of_truth: self
+last_reviewed: 2026-07-10
+---
+
+> **Canonical source.** Quest closure and failure migration policy. Reached
+> from the [`owner router`](../steering/router.md).
+
+# Quest Closure
+
+## SOLVED
+
+A Quest is SOLVED only when `doneWhen` is satisfied by live probe evidence.
+
+Before claiming SOLVED:
+
+1. rerun the relevant harness or probe;
+2. record the final attempt through the Solver;
+3. complete Solver verification, audit, and terminal handoff;
+4. cite the terminal verdict and evidence path in the final response.
+
+A quest report is an optional human-readable
+projection. The optional report may be generated and cited for convenience, but
+its presence is never a SOLVED precondition and it does not own the terminal
+verdict.
+
+## EXHAUSTED
+
+A Quest is EXHAUSTED only when every frontier has parked **as `exhausted`**,
+either by the finite strategy ladder (measured — the frontier had at least one
+honestly-measured sample and no honest remaining move exists) or by a recorded
+operator decision (recorded with its provenance, requiring a
+prior altitude reflection and a reason; see solver-quests.md "Operator park"). A
+frontier that parked as `cannot_measure` (it could not be measured at all) is
+**not** EXHAUSTED: it is a resumable measurement park and does not count toward the
+terminal, so a Quest with any `cannot_measure` park is still open (see
+solver-quests.md "resumable measurement park").
+
+EXHAUSTED is a real terminal result, not a request to keep patching locally.
+Use findings to explain what was ruled out and author a new Quest only if the
+desired outcome or frontiers have changed.
+
+## MAX_CYCLES
+
+MAX_CYCLES is not closure. It means the runner hit a safety bound. It is a
+resume point, not a handoff: re-run with `--keep-alive` (which survives this
+gate via the supervisor) or raise `--max` and resume. Switch to a supervised
+`step` only when the work is genuinely human-paced (see core.md "Default
+Posture: Autonomy").
+
+## Failure Migration
+
+When a fix changes the dominant failure without satisfying `doneWhen`, record a
+finding that names:
+
+- the previous dominant failure;
+- the new dominant failure;
+- the evidence path proving the shift;
+- whether the current frontier still owns the next attempt.
+
+If the frontier no longer owns the next attempt, park it or author a new Quest
+with corrected frontiers. Do not treat symptom movement as SOLVED.

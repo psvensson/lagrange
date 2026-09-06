@@ -29,7 +29,7 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
         description: 'Print the open epics and quests on demand.',
       }),
       Object.freeze({
-        command: 'npm run steering:llm:pack',
+        command: 'npm run steering:generate',
         description: 'Regenerate compact steering packs for prompt loading.',
       }),
     ]),

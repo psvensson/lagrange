@@ -250,8 +250,6 @@
     "src/partition/proposal-queue-constants.js": "3657d49ab3b3396d36a4b43b9f0df0264d139c4bd6b12e9eee964582fc09b3c7",
     "src/partition/proposal-queue.js": "04d4eff8720e3c4a71630fe4ebeed253d7fdfd0377e356d843b6855c2ec23b96",
     "test/partition/proposal-queue.test.js": "02fb4ac59c02d1b7e90b2741f1276bf73a77b4dde02733b1e29e1188bffd2ef0",
-    "scripts/generate-steering-llm-pack.js": "c43285ecb07a9080311215a2bea008d5e749095ba6da4c2e8fad2bbdd4beb76e",
-    "test/scripts/generate-steering-llm-pack.test.js": "875247cd8f2d84bd5a64d3e6be05f9ac0d88dd343519d2757eea059c429f378c",
     "src/admin/admin-deprecation.js": "9f57c396d142ac42f1711199fbf61129df52cf4c27dd449ba6398f76d3df0d3e",
     "src/admin/admin-meta-command-handlers.js": "43b0f8466365670511b39330dc9c7270a020a330e5dd37ca16aff917aaaa0811",
     "test/admin/admin-deprecation.test.js": "342686b98adb3aae348886ed0e5628a84413ef053e310e6a5363bd6d424ff42b",
@@ -1808,11 +1806,6 @@
       "src/partition/proposal-queue.js",
       "src/test-helpers/tap.js",
       "test/partition/proposal-queue.test.js"
-    ],
-    "test/scripts/generate-steering-llm-pack.test.js": [
-      "scripts/generate-steering-llm-pack.js",
-      "src/test-helpers/tap.js",
-      "test/scripts/generate-steering-llm-pack.test.js"
     ],
     "test/admin/admin-deprecation.test.js": [
       "src/admin/admin-deprecation.js",

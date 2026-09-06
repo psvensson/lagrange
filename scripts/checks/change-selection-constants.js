@@ -187,7 +187,7 @@ export const SOURCE_SUBSYSTEM_RULES = Object.freeze([
   {id: 'source-workflows', pattern: /^\.github\//, subsystem: 'test-infrastructure'},
   // The package manifest and lockfile are the packaging surface. A dependency
   // change is broader than any single subsystem; see the four-command table in
-  // docs/steering/testing-guidelines/harness.md for when that escalates to
+  // test/guidelines/harness.md for when that escalates to
   // check:release.
   {id: 'source-package', pattern: /^package(-lock)?\.json$/, subsystem: 'release-packaging'},
   // Non-test files under test/: harness code, helpers and fixtures. Test FILES

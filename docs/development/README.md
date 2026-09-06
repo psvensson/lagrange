@@ -10,7 +10,7 @@ outside. Nothing here is needed to run, operate, or integrate the system
 (that lives in [`docs/`](../README.md) and the root [README](../../README.md)),
 and nothing here binds agents (that lives in [`AGENTS.md`](../../AGENTS.md)
 and [`docs/steering/`](../steering/)). Zoning rules:
-[`docs/steering/audience-boundary.md`](../steering/audience-boundary.md).
+[`docs/steering/rules.md`](../steering/rules.md).
 
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) — contribution policy and
   contributor entry point
@@ -29,7 +29,7 @@ and [`docs/steering/`](../steering/)). Zoning rules:
 The human-facing product direction is in the root
 [roadmap](../../roadmap.md). The detailed AGPL implementation-scope authority
 is the agent-only
-[feature map](../steering/agpl-feature-map.md).
+[feature map](agpl-feature-map.md).
 
 Development-audience documents whose paths are pinned by machine consumers
 stay outside this directory (see the audience-boundary doc): notably

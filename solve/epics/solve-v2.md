@@ -22,10 +22,12 @@ authorizes:
   - docs
   - AGENTS.md
   - CLAUDE.md
+  - CHANGELOG.md
+  - DEBUGGING.md
   - .githooks
   - .gitignore
   - package.json
-  - architecture/contracts
+  - architecture
   - models/ledger-selfmove-remint/abstract-protocol.md
 ---
 
@@ -39,6 +41,13 @@ to read in one sitting. Design note and measured inventory:
 `scripts/checks/solve-v2-budget.js`.
 
 ## Phases
+
+Scope widening of 2026-09-06 (phase 3): `architecture` replaces
+`architecture/contracts`, and `CHANGELOG.md` and `DEBUGGING.md` join the list.
+The steering diet moves owner detail to the owner that holds it, so the
+architecture tree is a destination, and any live document that pointed at a
+relocated file has to be repointed in the same commit or it dangles. Nothing
+else was added.
 
 | Phase | Quest | Stop |
 | --- | --- | --- |
@@ -322,3 +331,47 @@ evidence,log,migrations,oracle,oracles,report,state}`, the flat
   no theory rung, scope counted as authored files). The readiness owner quest
   `critical-topology-readiness-under-source-change` keeps its recorded
   falsifier finding and is re-expressed under v2 in phase 4.
+
+## Phase 3 report (2026-09-06)
+
+Frozen pre-diet baseline: `60bd588f5`.
+
+| Metric | Before (60bd588f5) | After phase 3 |
+| --- | --- | --- |
+| docs/steering/ lines | 22045 (6719 authored + 15326 generated) | 683 (368 authored + 315 generated indexes) |
+| always-load lines incl. AGENTS.md | 553 (AGENTS 88 + core 273 + boot 139) | 318 (AGENTS 75 + rules.md 192 + router.md 55), measured transitively from `requires:` |
+| rules.json | present, 708 rules | absent, with the generator, its config, the query CLI and the four domain packs |
+| rules.md | absent | 25 rules, each one invariant + one owner key + one conflict resolution |
+| unregistered solver operations named by current steering | not measured | 0 |
+| steering audits in test:static | none | `audit:steering-diet` |
+
+Disposition of the 7131-line authored corpus. The corpus is enumerated from
+the baseline by `scripts/checks/steering-baseline-inventory.js`, which yields
+262 sections across 60 files, including `core.md` and `boot.md`: the two
+hand-curated files under the generated directory that were steps 2 and 3 of
+the baseline load order. Each section has one row in
+`solve/epics/solve-v2/steering-disposition.json`, and a test re-derives the
+inventory and compares, so the accounting cannot be silent about a file.
+
+| Disposition | Lines |
+| --- | --- |
+| moved to the owner that holds it | 3421 |
+| retained as steering | 75 |
+| deleted as duplication of a named canonical source | 1836 |
+| deleted as illustration | 195 |
+| deleted as historical or retired mechanism | 1604 |
+
+Judgment calls: (1) the rule set stays at 25 because `land` refuses when
+`doneWhen` differs from the sealed probe. The authorization invariant the
+first verification found missing folded into R16, which now reads "Authority
+is bounded and widening is explicit" and covers taking an irreversible or
+outward-facing action only where that authority already exists. R16 therefore
+states two invariants; that is recorded debt for the next rule-set revision,
+not a hidden compromise. (2) Three sections of `solver-quests.md` were
+reclassified from `retain` to `duplicate-delete`: 450 lines claimed retention
+into a file rewritten to 58, which was the dishonest label. Their invariants
+are R15 to R23 and their residual procedure is the rewritten file. (3) The
+epic's `authorizes` widened from `architecture/contracts` to `architecture`,
+plus `CHANGELOG.md` and `DEBUGGING.md`, because relocation makes the
+architecture tree a destination and any live document pointing at a moved file
+has to be repointed in the same commit.

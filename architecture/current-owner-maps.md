@@ -23,7 +23,7 @@ Do not use this file for:
 - roadmap scope decisions
 
 For durable implementation rules, use
-[`docs/steering/system-guidelines.md`](../docs/steering/system-guidelines.md).
+[`docs/steering/rules.md`](../docs/steering/rules.md).
 
 ## Contents
 

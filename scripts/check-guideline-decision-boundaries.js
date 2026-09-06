@@ -30,8 +30,9 @@ const LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_ASSIG = 'multiple independent
 const LOCAL_STR_MULTIPLE_INDEPENDENT_IF_STATEMENTS_RETUR = 'multiple independent if statements return semantic outcome objects';
 const LOCAL_STR_DECISION_BOUNDARY_GUIDELINE = 'decision-boundary guideline';
 
+const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
-  'system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models';
+  `${RULES_MD}R07. A semantic outcome is a named state`;
 
 const FUNCTION_TYPE = Object.freeze({
   ARROW: 'ArrowFunctionExpression',

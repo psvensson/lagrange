@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "steering-diet",
+  "status": "pass",
+  "generatedAt": "2026-09-06T18:11:02.414Z",
+  "receipts": [
+    {
+      "id": "steering-inventory-accounts-for-every-line",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the inventory is re-derived from the frozen baseline, not transcribed$\" test/scripts/steering-diet.test.js",
+      "detail": "the corpus at the frozen baseline is enumerated from the baseline itself and every section is classified by responsibility before anything is edited, so deletions are decisions about ownership rather than about length and the accounting cannot be silent about a file"
+    },
+    {
+      "id": "rules-md-holds-exactly-25-structural-rules",
+      "passed": true,
+      "command": "node scripts/checks/solve-v2-budget.js --metric rules-md-count",
+      "detail": "rules.md holds exactly 25 structurally recognised rules"
+    },
+    {
+      "id": "rules-json-is-absent",
+      "passed": true,
+      "command": "node scripts/checks/solve-v2-budget.js --metric retired-steering-surfaces",
+      "detail": "the generated rule corpus is gone: the sealed claim, proved by the broader measurement that covers it"
+    },
+    {
+      "id": "retired-v1-steering-surface-is-absent",
+      "passed": true,
+      "command": "node scripts/checks/solve-v2-budget.js --metric retired-steering-surfaces",
+      "detail": "the compiled rule corpus, its query CLI, the pack generator and the domain packs are all gone"
+    },
+    {
+      "id": "always-load-transitive-path-within-360-lines",
+      "passed": true,
+      "command": "node scripts/checks/solve-v2-budget.js --metric always-load-lines",
+      "detail": "the transitive always-load path, not one file, is within 360 lines"
+    },
+    {
+      "id": "steering-corpus-within-3000-lines",
+      "passed": true,
+      "command": "node scripts/checks/solve-v2-budget.js --metric steering-lines",
+      "detail": "the steering corpus is within 3000 lines"
+    },
+    {
+      "id": "no-current-steering-teaches-a-retired-verb",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^current steering refers only to registered solver operations$\" test/scripts/steering-diet.test.js",
+      "detail": "registered-operation closure: current steering refers to a solver operation only if the canonical command registry contains it, so a fresh agent cannot discover a retired operation and no historical vocabulary has to be maintained"
+    },
+    {
+      "id": "rules-route-to-owners-rather-than-restating-them",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a detail change at an owner does not require editing rules.md$\" test/scripts/steering-diet.test.js",
+      "detail": "rules.md states invariants and routes to owners: changing an owner detail does not require editing it, which is what stops the corpus growing back"
+    },
+    {
+      "id": "representative-tasks-reach-their-owner-from-always-load",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^each representative task reaches its owner from the always-load layer$\" test/scripts/steering-diet.test.js",
+      "detail": "for each representative task the always-load layer reaches the authoritative owner with no invariant lost"
+    }
+  ]
+}

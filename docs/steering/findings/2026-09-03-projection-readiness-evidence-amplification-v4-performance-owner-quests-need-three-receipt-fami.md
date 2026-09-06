@@ -1,5 +1,0 @@
----
-source: quest:projection-readiness-evidence-amplification-v4#projection-readiness-evidence-amplification-v4-main
----
-
-A performance/optimization quest MUST seal three receipt families, not one. A soundness receipt alone (the cached/optimized answer is correct) is satisfiable by a vacuous implementation whose mechanism never engages — quest projection-readiness-evidence-amplification-v3 landed exactly that: receipts green under a pinned clock, production reuse 0 per ~10k builds because the memo key digested a per-evaluation timestamp. Therefore every such quest MUST also seal an ENGAGEMENT receipt — the mechanism demonstrably fires under production-shaped variance (a moving clock, fresh object identities, churning generations), with a red-on-revert proof that disabling the mechanism fails the receipt — and a BOUNDED-WORK receipt — the work count tracks the semantic driver (e.g. builds == semantic generations), never the call count. "All semantic tests pass" MUST NOT be accepted as closure for an optimization; runtime engagement evidence is the acceptance bar.

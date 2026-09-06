@@ -9,7 +9,7 @@
 #
 # See solve/specs/metastable-convergence-resilience/ (Phase 0).
 #
-# Sample size — SMALLEST FIRST (see docs/steering/operational-ground-truth.md
+# Sample size — SMALLEST FIRST (see test/distributed/operational-ground-truth.md
 # "Deterministic-first, gate-last"): start with the lowest N that could answer the
 # question and escalate ONLY when a small run is inconclusive. Default to N=3 — it
 # is also the `rolling-restart-core-stability` liveness heartbeat (3 consecutive

@@ -11,7 +11,7 @@ releases without a compatibility guarantee.
 ## [Unreleased]
 
 The 0.2 _Stable Core_ work (`RM-0.2-*` rows in
-`docs/steering/agpl-feature-map.md`), landed on `main` with Solver-verified
+`docs/development/agpl-feature-map.md`), landed on `main` with Solver-verified
 evidence and not yet tagged. The release process changed on 2026-09-05
 (`RELEASE.md`): a tag proves what is deterministic about its bytes (full
 corpus green on the exact SHA, artifacts built and smoke-tested by the tag

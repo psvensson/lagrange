@@ -1,6 +1,6 @@
 // Reusable hostile-intrinsics mutation fixtures for adversarial verification
 // of guard/contract modules (the attack class catalogued in
-// docs/steering/verification-templates/adversarial-js-intrinsics.md).
+// docs/development/verification-templates/adversarial-js-intrinsics.md).
 //
 // Each helper mutates a prototype or intrinsic and returns a restore closure;
 // `withHostileIntrinsics` applies a batch, runs the assertion callback, and

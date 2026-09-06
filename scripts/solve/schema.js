@@ -1,7 +1,7 @@
 // v2 quest and epic records: shapes, vocabularies and validation. One
 // location per concept: a quest is a directory with quest.json + log.ndjson
 // (+ evidence/ while open); an epic is a markdown file with YAML front-matter.
-// _Scope authority (docs/steering/agpl-feature-map.md)._ Roadmap rows live
+// _Scope authority (docs/development/agpl-feature-map.md)._ Roadmap rows live
 // there; an epic cites one through `roadmapRow`.
 
 const QUEST_SCHEMA = 'solve-quest/2';

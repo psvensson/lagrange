@@ -27,7 +27,7 @@ The repository derives a document class from its location. Frontmatter may state
 
 The human roadmap and the agent feature map intentionally have different
 classes. Root `roadmap.md` is a planning narrative for product direction.
-`docs/steering/agpl-feature-map.md` is a stable steering contract whose row
+`docs/development/agpl-feature-map.md` is a stable steering contract whose row
 identities constrain implementation scope; it does not record active execution
 state. Active goals and evidence remain owned by the Solver.
 

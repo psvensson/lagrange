@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Charter check for the external auto-memory hot index (MEMORY.md): the index
 // must stay a pointer list — its own header mandates one line per memory,
-// ≤~160 chars, narrative in topic files (see docs/steering/memory-boundary.md).
+// ≤~160 chars, narrative in topic files (see docs/steering/rules.md).
 // Warn-only (always exits 0): memory lives under ~/.claude, outside the repo,
 // so this can never gate CI. Run via `npm run check:memory-index`; to surface
 // violations at session boot, add it as a SessionStart hook in

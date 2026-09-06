@@ -11,8 +11,9 @@ const LOCAL_STR_SLASH = '/';
 const LOCAL_STR_HOTSPOT_OWNER_PATH_NO_LONGER_EXPOSES_THE = 'hotspot owner path no longer exposes the required structured ';
 const LOCAL_STR_STRUCTURED_DEFERRED_OUTCOME_HOTSPOT = 'structured deferred-outcome hotspot';
 
+const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
-  'doctrine.md §5 Slower Under Pressure, Never Less Correct';
+  `${RULES_MD}R12. Load slows the system, never breaks it`;
 
 const VIOLATION_KIND = 'missing_structured_deferred_outcome_fragment';
 

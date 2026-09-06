@@ -17,7 +17,9 @@ const NEWLINE = '\n';
 const TEXT_ENCODING = 'utf8';
 const MARKDOWN_EXTENSION = '.md';
 const PASS_MESSAGE = 'Documentation path boundary holds.';
-const RULES_MESSAGE = 'Rules: docs/steering/audience-boundary.md.';
+// This check is itself the owner of the public/agent documentation
+// boundary: there is no prose copy of the rule to drift from it.
+const RULES_MESSAGE = 'Rules: scripts/check-doc-audience.js.';
 
 const MARKDOWN_INLINE_LINK_PATTERN = /\[[^\]]*\]\(([^)]+)\)/gu;
 const MARKDOWN_REFERENCE_DEFINITION_PATTERN =
@@ -211,7 +213,7 @@ function runCheck(root = REPO_ROOT) {
     ...TOMBSTONE_PATHS.flatMap((tombstone) =>
       fs.existsSync(path.join(root, tombstone)) ?
         [`${tombstone}: relocated path reappeared ` +
-          '(see docs/steering/audience-boundary.md)'] :
+          '(see scripts/check-doc-audience.js)'] :
         []),
   ];
   if (problems.length === 0) {

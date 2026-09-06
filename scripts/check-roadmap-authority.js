@@ -10,13 +10,17 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const HUMAN_ROADMAP_PATH = 'roadmap.md';
-const FEATURE_MAP_PATH = 'docs/steering/agpl-feature-map.md';
+const FEATURE_MAP_PATH = 'docs/development/agpl-feature-map.md';
 const PRODUCT_ROADMAP_PATH = 'docs/development/product-roadmap.md';
 const RETIRED_PRODUCT_ROADMAP_PATH = 'product-roadmap.md';
-const STEERING_CONFIG_PATH = 'docs/steering/llm-pack.config.json';
-const ROADMAP_POLICY_PATH = 'docs/steering/roadmap.md';
-const SYSTEM_GUIDELINES_PATH = 'docs/steering/system-guidelines.md';
+const ROUTER_PATH = 'docs/steering/router.md';
+const ROADMAP_POLICY_PATH = 'docs/development/roadmap-policy.md';
 const EDITION_MATRIX_PATH = 'edition-matrix.md';
+const NOT_PRESENT = -1;
+const CONDITIONAL_HEADING = '## Conditional material';
+const ROUTED_AUTHORITIES = Object.freeze([
+  FEATURE_MAP_PATH, ROADMAP_POLICY_PATH,
+]);
 const OVERVIEW_PATH = 'scripts/solve/schema.js';
 const EPICS_PATH = 'solve/epics';
 const SPECS_PATH = 'solve/specs';
@@ -37,17 +41,10 @@ const AGENT_AUDIENCE = 'agent';
 const DEVELOPMENT_AUDIENCE = 'development';
 const PLANNING_CLASS = 'planning';
 const STEERING_CLASS = 'steering';
-const PACKED_ROLE = 'packed';
-const DIRECT_LOAD_ROLE = 'direct-load';
-const GOVERNANCE_DOMAIN = 'governance';
-const FEATURE_MAP_SOURCE = 'agpl-feature-map.md';
-const ROADMAP_POLICY_SOURCE = 'roadmap.md';
 const HUMAN_PLAN_DOC = 'roadmap.md';
 const COMMA_SEPARATOR = ',';
 const MISSING_VALUE = '(missing)';
 const EMPTY_SET_LABEL = '(none)';
-const PACKED_POLICY_LABEL = 'governance policy';
-const DIRECT_LOAD_GUIDANCE = 'governance scope with loadWhen guidance';
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---/u;
 const FEATURE_ROW_CELL_PATTERN = /^\|\s*`?(RM-[^`|\s]+)`?\s*\|/gmu;
 const FEATURE_ROW_ID_PATTERN =
@@ -214,32 +211,29 @@ function validateEpicLinks(root, featureRows, errors) {
   }
 }
 
-function validateSteeringConfig(content, errors) {
-  let config;
-  try {
-    config = JSON.parse(content);
-  } catch (error) {
-    errors.push(`${STEERING_CONFIG_PATH}: invalid JSON: ${error.message}`);
+// Roadmap material is conditional: an agent reaches it because the router
+// sends it there, not because it was loaded by default. The router is the one
+// place a concern becomes a path, so both roadmap authorities must be
+// reachable from it and must be reachable only as conditional material.
+function validateRouting(content, errors) {
+  const start = content.indexOf(CONDITIONAL_HEADING);
+  if (start === NOT_PRESENT) {
+    errors.push(`${ROUTER_PATH}: no conditional material section`);
     return;
   }
-  const sources = Array.isArray(config.sources) ? config.sources : [];
-  const policy = sources.find((source) => source.file === ROADMAP_POLICY_SOURCE);
-  if (policy?.role !== PACKED_ROLE || policy?.domain !== GOVERNANCE_DOMAIN) {
-    errors.push(
-      `${STEERING_CONFIG_PATH}: ${ROADMAP_POLICY_SOURCE} must remain packed ` +
-      PACKED_POLICY_LABEL,
-    );
+  const conditional = content.slice(start);
+  for (const target of ROUTED_AUTHORITIES) {
+    if (!conditional.includes(routerLink(target))) {
+      errors.push(
+        `${ROUTER_PATH}: ${target} must stay reachable as conditional material`,
+      );
+    }
   }
-  const featureMap = sources.find((source) => source.file === FEATURE_MAP_SOURCE);
-  if (featureMap?.role !== DIRECT_LOAD_ROLE ||
-      featureMap?.domain !== GOVERNANCE_DOMAIN ||
-      typeof featureMap?.loadWhen !== 'string' ||
-      featureMap.loadWhen.trim() === EMPTY_TEXT) {
-    errors.push(
-      `${STEERING_CONFIG_PATH}: ${FEATURE_MAP_SOURCE} must be direct-load ` +
-      DIRECT_LOAD_GUIDANCE,
-    );
-  }
+}
+
+// docs/steering paths are router-relative.
+function routerLink(target) {
+  return `(${path.posix.relative(path.posix.dirname(ROUTER_PATH), target)})`;
 }
 
 function markdownFilesUnder(root, relativeDirectory) {
@@ -285,12 +279,6 @@ function validateAuthorityConsumers(root, errors) {
       description: 'canonical AGPL feature-map declaration',
     },
     {
-      path: SYSTEM_GUIDELINES_PATH,
-      pattern:
-        /\[`agpl-feature-map\.md`\]\(agpl-feature-map\.md\): detailed AGPL implementation\s+scope and broad feature sequence/u,
-      description: 'detailed AGPL implementation-scope pointer',
-    },
-    {
       path: EDITION_MATRIX_PATH,
       pattern: /AGPL feature map \(agent steering\)/u,
       description: 'agent-steering feature-map classification',
@@ -298,7 +286,7 @@ function validateAuthorityConsumers(root, errors) {
     {
       path: OVERVIEW_PATH,
       pattern:
-        /_Scope authority \(docs\/steering\/agpl-feature-map\.md\)\./u,
+        /_Scope authority \(docs\/development\/agpl-feature-map\.md\)\./u,
       description: 'Solver overview scope-authority declaration',
     },
   ]);
@@ -332,7 +320,7 @@ function validateRoadmapAuthority(root = REPO_ROOT) {
   const humanRoadmap = readRequired(root, HUMAN_ROADMAP_PATH, errors);
   const featureMap = readRequired(root, FEATURE_MAP_PATH, errors);
   const productRoadmap = readRequired(root, PRODUCT_ROADMAP_PATH, errors);
-  const steeringConfig = readRequired(root, STEERING_CONFIG_PATH, errors);
+  const router = readRequired(root, ROUTER_PATH, errors);
   if (humanRoadmap) validateHumanRoadmap(humanRoadmap, errors);
   if (featureMap) {
     validateFrontmatter(
@@ -351,7 +339,7 @@ function validateRoadmapAuthority(root = REPO_ROOT) {
   validateQuestLinks(root, featureRows, errors);
   validateEpicLinks(root, featureRows, errors);
   validatePlanningAuthorityReferences(root, errors);
-  if (steeringConfig) validateSteeringConfig(steeringConfig, errors);
+  if (router) validateRouting(router, errors);
   if (productRoadmap) {
     validateProductRoadmapPlacement(root, productRoadmap, errors);
   }

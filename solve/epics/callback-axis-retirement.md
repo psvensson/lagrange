@@ -34,7 +34,7 @@ plus the internal query-loop runtime (`src/runtime/sql-query-loop-*.js`).
    callback ctx expresses today: partition-scoped input, bounded emit of
    partials, and reduction. Delivery of this rung is owned by the
    "Non-request source invocation" follow-on
-   (`docs/steering/agpl-feature-map.md` Phase 0 table; plan:
+   (`docs/development/agpl-feature-map.md` Phase 0 table; plan:
    `solve/epics/minimal-deployment-surface.md`) — this epic consumes that
    proof, it must not duplicate the plan. The capability comparison that
    defines "rich enough" is: batch iteration, `emit(key, value)`,

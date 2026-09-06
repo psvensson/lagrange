@@ -1,5 +1,5 @@
 {
-  "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:llm:pack`) to emit docs/steering/llm/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
+  "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:generate`) to emit docs/steering/generated/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
   "start": {
     "summary": "Seal a quest: validate solve/quests/<id>/quest.json and its epic, measure the doneWhen probe, refuse unless the probe is red, then record sealedAt (HEAD) and the seal-time metric in the log.",
     "usage": "node scripts/solve.js start --id <quest> [--json]"

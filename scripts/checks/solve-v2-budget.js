@@ -16,7 +16,7 @@
  *   and the migrated corpus stays intact
  *   scripts/solve.js + scripts/solve/ <= 6000 lines; test/solve/ <= 6000
  *   docs/steering/ <= 3000 lines; always-load path <= 360 lines incl. AGENTS.md
- *   docs/steering/llm/rules.json absent; docs/steering/rules.md <= 25 rules
+ *   the retired v1 steering surface stays absent; rules.md <= 25 rules
  */
 
 import fs from 'node:fs';
@@ -27,6 +27,9 @@ import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js
 import {verifyMigrationCorpus} from '../solve/migrate-v1.js';
 import {isQuestLogPath} from '../solve/store.js';
 import {closedQuestShapeOffences} from './check-closed-quest-shape.js';
+import {
+  alwaysLoadClosure, declaredRules, steeringCorpusLines,
+} from './check-steering-diet.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -69,27 +72,25 @@ const SOLVER_TEST_LINE_BUDGET = 6000;
 const STEERING_LINE_BUDGET = 3000;
 const ALWAYS_LOAD_LINE_BUDGET = 360;
 const RULES_BUDGET = 25;
-const RULE_HEADING = /^(?:- |\d+\. |#{2,3} )/u;
-const RULES_MD = 'docs/steering/rules.md';
-const RULES_JSON = 'docs/steering/llm/rules.json';
-const AGENTS_MD = 'AGENTS.md';
-const ALWAYS_LOAD_CANDIDATES = Object.freeze([
-  'docs/steering/llm/always.md',
-  'docs/steering/llm/core.md',
-  'docs/steering/llm/boot.md',
+// The retired v1 steering surface: a compiled rule corpus, its query CLI, the
+// generator that produced both, and the domain packs they fed. The diet
+// replaced them with one authored rule set and one router, so their return is
+// a regression, not an addition.
+const RETIRED_STEERING_SURFACES = Object.freeze([
+  'docs/steering/llm',
+  'docs/steering/llm-pack.config.json',
+  'scripts/generate-steering-llm-pack.js',
+  'scripts/lookup-rule.js',
 ]);
 const SOLVER_ENTRY = 'scripts/solve.js';
 const SOLVER_DIR = 'scripts/solve';
 const SOLVER_TEST_DIR = 'test/solve';
-const STEERING_DIR = 'docs/steering';
 const JS_EXTENSIONS = Object.freeze(['.js', '.mjs', '.cjs']);
-const TEXT_EXTENSIONS = Object.freeze(['.md', '.json', '.txt']);
 const EXIT_OK = 0;
 const EXIT_OVER_BUDGET = 1;
 const JSON_INDENT = 2;
 const CELL_WIDTH = 46;
 const VALUE_WIDTH = 12;
-const RULES_ABSENT = -1;
 const HEADER_METRIC = 'metric';
 const HEADER_VALUE = 'value';
 const HEADER_BUDGET = 'budget';
@@ -110,7 +111,7 @@ const METRIC = Object.freeze({
   SOLVER_TEST_LINES: 'solver-test-lines',
   STEERING_LINES: 'steering-lines',
   ALWAYS_LOAD_LINES: 'always-load-lines',
-  RULES_JSON_ABSENT: 'rules-json-absent',
+  RETIRED_STEERING_SURFACES: 'retired-steering-surfaces',
   RULES_MD_COUNT: 'rules-md-count',
 });
 
@@ -169,16 +170,19 @@ function classifySolveFootprint(tracked) {
   };
 }
 
+// Both delegate: the steering-diet checker owns what a rule is and what the
+// always-load path contains. This file owns only the budgets they must meet.
 function rulesCount() {
-  const absolute = path.join(REPO_ROOT, RULES_MD);
-  if (!fs.existsSync(absolute)) return RULES_ABSENT;
-  return arrayFilter(
-    stringSplit(fs.readFileSync(absolute, TEXT_ENCODING), LINE_SEPARATOR),
-    (line) => RULE_HEADING.test(line)).length;
+  return declaredRules(REPO_ROOT).length;
 }
 
 function alwaysLoadLines() {
-  return lineCount(AGENTS_MD) + linesOf(ALWAYS_LOAD_CANDIDATES);
+  return alwaysLoadClosure(REPO_ROOT).lines;
+}
+
+function retiredSteeringSurfaces() {
+  return arrayFilter(RETIRED_STEERING_SURFACES,
+    (relative) => fs.existsSync(path.join(REPO_ROOT, relative)));
 }
 
 // Amendment 4: a v2 quest directory holds exactly quest.json + log.ndjson,
@@ -243,13 +247,13 @@ const METRIC_ROWS = Object.freeze([
     measure: () => linesOf(walk(SOLVER_TEST_DIR, JS_EXTENSIONS)),
     ok: (value) => value <= SOLVER_TEST_LINE_BUDGET}),
   Object.freeze({id: METRIC.STEERING_LINES, budget: STEERING_LINE_BUDGET,
-    measure: () => linesOf(walk(STEERING_DIR, TEXT_EXTENSIONS)),
+    measure: () => steeringCorpusLines(REPO_ROOT),
     ok: (value) => value <= STEERING_LINE_BUDGET}),
   Object.freeze({id: METRIC.ALWAYS_LOAD_LINES, budget: ALWAYS_LOAD_LINE_BUDGET,
     measure: () => alwaysLoadLines(), ok: (value) => value <= ALWAYS_LOAD_LINE_BUDGET}),
-  Object.freeze({id: METRIC.RULES_JSON_ABSENT, budget: 0,
-    measure: () => (fs.existsSync(path.join(REPO_ROOT, RULES_JSON)) ? 1 : 0),
-    ok: (value) => value === 0}),
+  Object.freeze({id: METRIC.RETIRED_STEERING_SURFACES, budget: 0,
+    measure: () => retiredSteeringSurfaces().length, ok: (value) => value === 0,
+    detail: () => retiredSteeringSurfaces()}),
   Object.freeze({id: METRIC.RULES_MD_COUNT, budget: RULES_BUDGET,
     measure: () => rulesCount(),
     ok: (value) => value > 0 && value <= RULES_BUDGET}),

@@ -1,0 +1,1850 @@
+{
+  "schema": "steering-inventory/2",
+  "baseline": "60bd588f5ea3e8635d87cbdc9572f9bddf4dff2b",
+  "note": "Every authored steering section at the frozen baseline, classified by responsibility before any editing. Derived by scripts/checks/steering-baseline-inventory.js and re-derived by its test, so the inventory cannot be silent about a baseline file. Authored means everything under docs/steering except the generated pack, plus core.md and boot.md, which the baseline generator states are hand-curated and which were steps 2 and 3 of the baseline load order.",
+  "totals": {
+    "always-load-invariant": 3421,
+    "owner-duplication": 1836,
+    "explanation-example": 195,
+    "historical-retired": 1604,
+    "owner-routing": 75
+  },
+  "total": 7131,
+  "sections": 262,
+  "entries": [
+    {
+      "id": "docs/steering/agpl-feature-map.md#(front matter)",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "(front matter)",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Scope",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Scope",
+      "lines": 17,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Roadmap State Legend",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Roadmap State Legend",
+      "lines": 8,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Roadmap Row IDs",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Roadmap Row IDs",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Live Truth Pointers",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Live Truth Pointers",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 0.1 \u2014 Internal Coherence",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 0.1 \u2014 Internal Coherence",
+      "lines": 111,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 0.2 \u2014 Stable Core Release",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 0.2 \u2014 Stable Core Release",
+      "lines": 40,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 0.3 \u2014 Queryable Core",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 0.3 \u2014 Queryable Core",
+      "lines": 41,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 0.5 \u2014 External Usability",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 0.5 \u2014 External Usability",
+      "lines": 84,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 1.0 \u2014 Real Product",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 1.0 \u2014 Real Product",
+      "lines": 73,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 1.x \u2014 SQL Breadth and Compatibility",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 1.x \u2014 SQL Breadth and Compatibility",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Phase 2.0 \u2014 Distributed Execution Platform",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Phase 2.0 \u2014 Distributed Execution Platform",
+      "lines": 123,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/agpl-feature-map.md#Long-Term Vision",
+      "file": "docs/steering/agpl-feature-map.md",
+      "section": "Long-Term Vision",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/architecture.md#(front matter)",
+      "file": "docs/steering/architecture.md",
+      "section": "(front matter)",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/architecture.md#Document Role",
+      "file": "docs/steering/architecture.md",
+      "section": "Document Role",
+      "lines": 28,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#(front matter)",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#Public product and architecture",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "Public product and architecture",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#Repository development",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "Repository development",
+      "lines": 16,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#Agent steering",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "Agent steering",
+      "lines": 15,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#Portals",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "Portals",
+      "lines": 11,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/audience-boundary.md#Enforcement",
+      "file": "docs/steering/audience-boundary.md",
+      "section": "Enforcement",
+      "lines": 15,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/code-style.md#(front matter)",
+      "file": "docs/steering/code-style.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Document Role",
+      "file": "docs/steering/code-style.md",
+      "section": "Document Role",
+      "lines": 25,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/code-style.md#Linting Compliance",
+      "file": "docs/steering/code-style.md",
+      "section": "Linting Compliance",
+      "lines": 7,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Key Rules to Follow",
+      "file": "docs/steering/code-style.md",
+      "section": "Key Rules to Follow",
+      "lines": 10,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Source File Size And Naming",
+      "file": "docs/steering/code-style.md",
+      "section": "Source File Size And Naming",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Constants And Naming",
+      "file": "docs/steering/code-style.md",
+      "section": "Constants And Naming",
+      "lines": 39,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Before Completing Code Changes",
+      "file": "docs/steering/code-style.md",
+      "section": "Before Completing Code Changes",
+      "lines": 8,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Related Checks",
+      "file": "docs/steering/code-style.md",
+      "section": "Related Checks",
+      "lines": 9,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/code-style.md#Common Patterns",
+      "file": "docs/steering/code-style.md",
+      "section": "Common Patterns",
+      "lines": 13,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/code-style.md#Reference",
+      "file": "docs/steering/code-style.md",
+      "section": "Reference",
+      "lines": 5,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/doctrine.md#(front matter)",
+      "file": "docs/steering/doctrine.md",
+      "section": "(front matter)",
+      "lines": 20,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/INDEX.md#(front matter)",
+      "file": "docs/steering/doctrine/INDEX.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/INDEX.md#Document Role",
+      "file": "docs/steering/doctrine/INDEX.md",
+      "section": "Document Role",
+      "lines": 23,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/INDEX.md#Doctrine Summary (highlights \u2014 not the full rule set)",
+      "file": "docs/steering/doctrine/INDEX.md",
+      "section": "Doctrine Summary (highlights \u2014 not the full rule set)",
+      "lines": 17,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/INDEX.md#Files",
+      "file": "docs/steering/doctrine/INDEX.md",
+      "section": "Files",
+      "lines": 8,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/decision-experiments.md#(front matter)",
+      "file": "docs/steering/doctrine/decision-experiments.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/decision-experiments.md#8. Architectural Direction For Repeated Control-Plane Problems",
+      "file": "docs/steering/doctrine/decision-experiments.md",
+      "section": "8. Architectural Direction For Repeated Control-Plane Problems",
+      "lines": 18,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/decision-experiments.md#9. Escalate Repeated Scenario Failures Into Causal Analysis",
+      "file": "docs/steering/doctrine/decision-experiments.md",
+      "section": "9. Escalate Repeated Scenario Failures Into Causal Analysis",
+      "lines": 45,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/decision-experiments.md#11a. Sharpen Work Before Changing Code",
+      "file": "docs/steering/doctrine/decision-experiments.md",
+      "section": "11a. Sharpen Work Before Changing Code",
+      "lines": 43,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/decision-experiments.md#16. Treat Failure Migration As Boundary Evidence",
+      "file": "docs/steering/doctrine/decision-experiments.md",
+      "section": "16. Treat Failure Migration As Boundary Evidence",
+      "lines": 19,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#(front matter)",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#1. One Semantic Owner Per Concern",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "1. One Semantic Owner Per Concern",
+      "lines": 23,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#6. Shrink The Boundary When Bugs Cluster",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "6. Shrink The Boundary When Bugs Cluster",
+      "lines": 18,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#14. Shared Surfaces Must Name Consumers",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "14. Shared Surfaces Must Name Consumers",
+      "lines": 22,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#17. Quest Execution Has One Current Boundary",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "17. Quest Execution Has One Current Boundary",
+      "lines": 41,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/owner-boundaries.md#18. Interactions Between Owners Are Owned Contracts",
+      "file": "docs/steering/doctrine/owner-boundaries.md",
+      "section": "18. Interactions Between Owners Are Owned Contracts",
+      "lines": 48,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#(front matter)",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#2. One Ingress, Not Many Helpers",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "2. One Ingress, Not Many Helpers",
+      "lines": 16,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#3. One Dissemination Path For Shared Metadata",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "3. One Dissemination Path For Shared Metadata",
+      "lines": 12,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#11b. One Contract Shape Per Concern",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "11b. One Contract Shape Per Concern",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#12. Normalize Boundary Impedance Once",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "12. Normalize Boundary Impedance Once",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/single-path.md#13. Prefer Named Modes Over Combinable Flags",
+      "file": "docs/steering/doctrine/single-path.md",
+      "section": "13. Prefer Named Modes Over Combinable Flags",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#(front matter)",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#4. Phase Code Must Hand Off Completely",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "4. Phase Code Must Hand Off Completely",
+      "lines": 10,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#5. Slower Under Pressure, Never Less Correct",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "5. Slower Under Pressure, Never Less Correct",
+      "lines": 42,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#7. Resource Lifetime Must Be Owned And Bounded",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "7. Resource Lifetime Must Be Owned And Bounded",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#10. Normalize Evidence Before Adjudicating Decisions",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "10. Normalize Evidence Before Adjudicating Decisions",
+      "lines": 67,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/doctrine/state-encoding.md#15. Lifecycle Boundaries Must Publish One Progress Grammar",
+      "file": "docs/steering/doctrine/state-encoding.md",
+      "section": "15. Lifecycle Boundaries Must Publish One Progress Grammar",
+      "lines": 17,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+      "section": "(front matter)",
+      "lines": 12,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-30-correctness-over-fewest-lines.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-30-correctness-over-fewest-lines.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-30-plan-requests-stay-plan-only.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-30-plan-requests-stay-plan-only.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-06-30-read-freshest-precomputed-artifact-first.md#(front matter)",
+      "file": "docs/steering/findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-07-05-prefer-machine-checks-over-prose.md#(front matter)",
+      "file": "docs/steering/findings/2026-07-05-prefer-machine-checks-over-prose.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md#(front matter)",
+      "file": "docs/steering/findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+      "section": "(front matter)",
+      "lines": 9,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-07-10-reuse-comparison-before-new-machinery.md#(front matter)",
+      "file": "docs/steering/findings/2026-07-10-reuse-comparison-before-new-machinery.md",
+      "section": "(front matter)",
+      "lines": 9,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md#(front matter)",
+      "file": "docs/steering/findings/2026-09-03-projection-readiness-evidence-amplification-v4-performance-owner-quests-need-three-receipt-fami.md",
+      "section": "(front matter)",
+      "lines": 5,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/README.md#(front matter)",
+      "file": "docs/steering/findings/README.md",
+      "section": "(front matter)",
+      "lines": 6,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/README.md#How a file gets here",
+      "file": "docs/steering/findings/README.md",
+      "section": "How a file gets here",
+      "lines": 9,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/README.md#What the steering generator actually reads (important)",
+      "file": "docs/steering/findings/README.md",
+      "section": "What the steering generator actually reads (important)",
+      "lines": 17,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/README.md#After promoting",
+      "file": "docs/steering/findings/README.md",
+      "section": "After promoting",
+      "lines": 21,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/findings/_template.md#(front matter)",
+      "file": "docs/steering/findings/_template.md",
+      "section": "(front matter)",
+      "lines": 8,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/llm-pack.config.json#(whole file)",
+      "file": "docs/steering/llm-pack.config.json",
+      "section": "(whole file)",
+      "lines": 344,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#(front matter)",
+      "file": "docs/steering/llm/boot.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#Authority Order",
+      "file": "docs/steering/llm/boot.md",
+      "section": "Authority Order",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#Quest Vocabulary",
+      "file": "docs/steering/llm/boot.md",
+      "section": "Quest Vocabulary",
+      "lines": 6,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#First Commands",
+      "file": "docs/steering/llm/boot.md",
+      "section": "First Commands",
+      "lines": 77,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#Before Verification Or Checkpoint",
+      "file": "docs/steering/llm/boot.md",
+      "section": "Before Verification Or Checkpoint",
+      "lines": 7,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/boot.md#Conflict Rule And Escape Hatch",
+      "file": "docs/steering/llm/boot.md",
+      "section": "Conflict Rule And Escape Hatch",
+      "lines": 19,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/llm/core.md#(front matter)",
+      "file": "docs/steering/llm/core.md",
+      "section": "(front matter)",
+      "lines": 16,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Vocabulary",
+      "file": "docs/steering/llm/core.md",
+      "section": "Vocabulary",
+      "lines": 27,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/llm/core.md#North Star",
+      "file": "docs/steering/llm/core.md",
+      "section": "North Star",
+      "lines": 6,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Default Posture: Autonomy",
+      "file": "docs/steering/llm/core.md",
+      "section": "Default Posture: Autonomy",
+      "lines": 35,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Default Posture: Commit On Completion",
+      "file": "docs/steering/llm/core.md",
+      "section": "Default Posture: Commit On Completion",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Default Posture: Parallelism",
+      "file": "docs/steering/llm/core.md",
+      "section": "Default Posture: Parallelism",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Pack vs Source Precedence",
+      "file": "docs/steering/llm/core.md",
+      "section": "Pack vs Source Precedence",
+      "lines": 27,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/llm/core.md#30-Second Must-Not Checklist",
+      "file": "docs/steering/llm/core.md",
+      "section": "30-Second Must-Not Checklist",
+      "lines": 71,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Tool Discovery",
+      "file": "docs/steering/llm/core.md",
+      "section": "Tool Discovery",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Canonical Guardrail Command Map",
+      "file": "docs/steering/llm/core.md",
+      "section": "Canonical Guardrail Command Map",
+      "lines": 19,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/llm/core.md#Core Principles",
+      "file": "docs/steering/llm/core.md",
+      "section": "Core Principles",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/memory-boundary.md#(front matter)",
+      "file": "docs/steering/memory-boundary.md",
+      "section": "(front matter)",
+      "lines": 6,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/memory-boundary.md#The two systems",
+      "file": "docs/steering/memory-boundary.md",
+      "section": "The two systems",
+      "lines": 11,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/memory-boundary.md#Rules",
+      "file": "docs/steering/memory-boundary.md",
+      "section": "Rules",
+      "lines": 44,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/memory-boundary.md#Why",
+      "file": "docs/steering/memory-boundary.md",
+      "section": "Why",
+      "lines": 6,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/operational-ground-truth.md#(front matter)",
+      "file": "docs/steering/operational-ground-truth.md",
+      "section": "(front matter)",
+      "lines": 207,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#(front matter)",
+      "file": "docs/steering/roadmap.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Document Role",
+      "file": "docs/steering/roadmap.md",
+      "section": "Document Role",
+      "lines": 40,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Document Authority Map",
+      "file": "docs/steering/roadmap.md",
+      "section": "Document Authority Map",
+      "lines": 23,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Quest Intake And Execution Flow",
+      "file": "docs/steering/roadmap.md",
+      "section": "Quest Intake And Execution Flow",
+      "lines": 23,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#AGPL Preparatory Work",
+      "file": "docs/steering/roadmap.md",
+      "section": "AGPL Preparatory Work",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Readiness To Start Work",
+      "file": "docs/steering/roadmap.md",
+      "section": "Readiness To Start Work",
+      "lines": 12,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Roadmap State Policy",
+      "file": "docs/steering/roadmap.md",
+      "section": "Roadmap State Policy",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Feature Flag Lifecycle",
+      "file": "docs/steering/roadmap.md",
+      "section": "Feature Flag Lifecycle",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/roadmap.md#Audit Procedure",
+      "file": "docs/steering/roadmap.md",
+      "section": "Audit Procedure",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#(front matter)",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Document Role",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Document Role",
+      "lines": 14,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Owner And Path Detail",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Owner And Path Detail",
+      "lines": 23,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#System-Table Row Lifecycle",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "System-Table Row Lifecycle",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Cache And Read Models",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Cache And Read Models",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Snapshot Readers And Repair",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Snapshot Readers And Repair",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Critical Convergence Priority",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Critical Convergence Priority",
+      "lines": 19,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Canonical Owner Rows",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Canonical Owner Rows",
+      "lines": 57,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Runtime Shared-Metadata Gateways",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Runtime Shared-Metadata Gateways",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Bootstrap And Phase Handoff",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Bootstrap And Phase Handoff",
+      "lines": 21,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Producer Consumer Handoff Invariants",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Producer Consumer Handoff Invariants",
+      "lines": 29,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Deterministic Control-Plane Progression",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Deterministic Control-Plane Progression",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Durable Workflow And Transaction Boundaries",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Durable Workflow And Transaction Boundaries",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Admission, Readiness, And Multi-Signal Decisions",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Admission, Readiness, And Multi-Signal Decisions",
+      "lines": 38,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Modes And Status Taxonomy",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Modes And Status Taxonomy",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Timeout And Invariant Rules",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Timeout And Invariant Rules",
+      "lines": 19,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Pressure, Backpressure, And Resource Lifetime",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Pressure, Backpressure, And Resource Lifetime",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Query Routing And Transport",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Query Routing And Transport",
+      "lines": 22,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/runtime-contracts.md#Idempotency",
+      "file": "docs/steering/runtime-contracts.md",
+      "section": "Idempotency",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/solve-commands.json#(whole file)",
+      "file": "docs/steering/solve-commands.json",
+      "section": "(whole file)",
+      "lines": 27,
+      "bucket": "owner-routing"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#(front matter)",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#Document Role",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "Document Role",
+      "lines": 57,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#Process Weight Gate",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "Process Weight Gate",
+      "lines": 17,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#1. Work Starts From One Bounded Quest",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "1. Work Starts From One Bounded Quest",
+      "lines": 23,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#2. One Semantic Owner Per Concern",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "2. One Semantic Owner Per Concern",
+      "lines": 28,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#3. One Path Per Semantic Decision",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "3. One Path Per Semantic Decision",
+      "lines": 25,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#4. Scalars, State, And Naming Have Owners",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "4. Scalars, State, And Naming Have Owners",
+      "lines": 24,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#5. Shared Runtime Contracts Have One Shape",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "5. Shared Runtime Contracts Have One Shape",
+      "lines": 18,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#6. Tables, Cache, And Metadata Follow One Authority Chain",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "6. Tables, Cache, And Metadata Follow One Authority Chain",
+      "lines": 27,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#7. Phase Code Must Hand Off To Runtime Owners",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "7. Phase Code Must Hand Off To Runtime Owners",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#8. Control-Plane Work Uses Shared Primitives",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "8. Control-Plane Work Uses Shared Primitives",
+      "lines": 26,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#9. Load May Slow The System, Not Break It",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "9. Load May Slow The System, Not Break It",
+      "lines": 21,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#10. Communication Has One Replicated Data Path",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "10. Communication Has One Replicated Data Path",
+      "lines": 14,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#11. Mutations Are Idempotent",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "11. Mutations Are Idempotent",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#12. User-Facing Model Stays Small",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "12. User-Facing Model Stays Small",
+      "lines": 16,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#13. Closure Requires Proof, Review, And Truth Repair",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "13. Closure Requires Proof, Review, And Truth Repair",
+      "lines": 33,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/system-guidelines.md#14. Stop Checklist Before Writing Code",
+      "file": "docs/steering/system-guidelines.md",
+      "section": "14. Stop Checklist Before Writing Code",
+      "lines": 25,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/testing-guidelines.md#(front matter)",
+      "file": "docs/steering/testing-guidelines.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/INDEX.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/INDEX.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/INDEX.md#Document Role",
+      "file": "docs/steering/testing-guidelines/INDEX.md",
+      "section": "Document Role",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/INDEX.md#Files",
+      "file": "docs/steering/testing-guidelines/INDEX.md",
+      "section": "Files",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#System-Table Mutation Test Requirements",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "System-Table Mutation Test Requirements",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#No Skipped Tests Policy",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "No Skipped Tests Policy",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#No Test-Only Code Paths in Production Code",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "No Test-Only Code Paths in Production Code",
+      "lines": 33,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#No Flag-Coupled Tests",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "No Flag-Coupled Tests",
+      "lines": 23,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/fixtures.md#System Guideline Conformance Gate for New and Behavior-Meaningful Tests",
+      "file": "docs/steering/testing-guidelines/fixtures.md",
+      "section": "System Guideline Conformance Gate for New and Behavior-Meaningful Tests",
+      "lines": 29,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Runner Stability Boundary Policy",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Runner Stability Boundary Policy",
+      "lines": 18,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Runner Parallelism Budget Policy",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Runner Parallelism Budget Policy",
+      "lines": 19,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Test Duration Hard Limit",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Test Duration Hard Limit",
+      "lines": 51,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Timeout Budget and Classification Policy",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Timeout Budget and Classification Policy",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Test Execution Strategy",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Test Execution Strategy",
+      "lines": 23,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#What The Four Commands Prove",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "What The Four Commands Prove",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Before Any Commit",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Before Any Commit",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Full Test Suite Execution",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Full Test Suite Execution",
+      "lines": 3,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Test Output Management",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Test Output Management",
+      "lines": 3,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Example Commands",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Example Commands",
+      "lines": 3,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#Distributed test harness",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "Distributed test harness",
+      "lines": 5,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/harness.md#External Testing Procedures and Resources",
+      "file": "docs/steering/testing-guidelines/harness.md",
+      "section": "External Testing Procedures and Resources",
+      "lines": 7,
+      "bucket": "explanation-example"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/proof-ladders.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/proof-ladders.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/proof-ladders.md#Quest-Driven Validation Policy",
+      "file": "docs/steering/testing-guidelines/proof-ladders.md",
+      "section": "Quest-Driven Validation Policy",
+      "lines": 54,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/proof-ladders.md#Static Guardrail Preflight And Closure Policy",
+      "file": "docs/steering/testing-guidelines/proof-ladders.md",
+      "section": "Static Guardrail Preflight And Closure Policy",
+      "lines": 52,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/proof-ladders.md#File-Size Ratchet Policy",
+      "file": "docs/steering/testing-guidelines/proof-ladders.md",
+      "section": "File-Size Ratchet Policy",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "(front matter)",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Test-First Bug Fix Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Test-First Bug Fix Policy",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Reuse-First Fix Strategy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Reuse-First Fix Strategy",
+      "lines": 51,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Two-Strikes Escalation Tripwires",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Two-Strikes Escalation Tripwires",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Bug-Cluster Escalation Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Bug-Cluster Escalation Policy",
+      "lines": 26,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Owner-Path Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Owner-Path Regression Policy",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Gateway Boundary Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Gateway Boundary Regression Policy",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Deterministic Control-Loop Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Deterministic Control-Loop Regression Policy",
+      "lines": 28,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Temporal Witness Replay Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Temporal Witness Replay Policy",
+      "lines": 22,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Continuity And Lifetime Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Continuity And Lifetime Regression Policy",
+      "lines": 19,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Bounded-Memory Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Bounded-Memory Regression Policy",
+      "lines": 17,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Structured Deferred-Outcome Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Structured Deferred-Outcome Regression Policy",
+      "lines": 22,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Read-Side Repair Separation Regression Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Read-Side Repair Separation Regression Policy",
+      "lines": 19,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Availability Under Pressure Test Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Availability Under Pressure Test Policy",
+      "lines": 55,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Fix Failing Tests Immediately",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Fix Failing Tests Immediately",
+      "lines": 22,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/regression-policy.md#Baseline-Discovered Bug Closure Policy",
+      "file": "docs/steering/testing-guidelines/regression-policy.md",
+      "section": "Baseline-Discovered Bug Closure Policy",
+      "lines": 32,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#(front matter)",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#Reference Scenario Policy",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "Reference Scenario Policy",
+      "lines": 24,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#Fixture Versus Runtime Proof",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "Fixture Versus Runtime Proof",
+      "lines": 14,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#Representative Rerun Order",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "Representative Rerun Order",
+      "lines": 26,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#Deterministic Proof Must Move the Binding Observable",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "Deterministic Proof Must Move the Binding Observable",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/testing-guidelines/release-gate.md#Static Gate Baselines Are A One-Way Ratchet",
+      "file": "docs/steering/testing-guidelines/release-gate.md",
+      "section": "Static Gate Baselines Are A One-Way Ratchet",
+      "lines": 21,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/tool-descriptions.json#(whole file)",
+      "file": "docs/steering/tool-descriptions.json",
+      "section": "(whole file)",
+      "lines": 36,
+      "bucket": "owner-routing"
+    },
+    {
+      "id": "docs/steering/verification-templates/INDEX.md#(front matter)",
+      "file": "docs/steering/verification-templates/INDEX.md",
+      "section": "(front matter)",
+      "lines": 57,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/admission-gating.md#(front matter)",
+      "file": "docs/steering/verification-templates/admission-gating.md",
+      "section": "(front matter)",
+      "lines": 34,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/adversarial-js-intrinsics.md#(front matter)",
+      "file": "docs/steering/verification-templates/adversarial-js-intrinsics.md",
+      "section": "(front matter)",
+      "lines": 52,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/concurrency-serialization.md#(front matter)",
+      "file": "docs/steering/verification-templates/concurrency-serialization.md",
+      "section": "(front matter)",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/design-note-template.md#(front matter)",
+      "file": "docs/steering/verification-templates/design-note-template.md",
+      "section": "(front matter)",
+      "lines": 38,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/formation-circularity.md#(front matter)",
+      "file": "docs/steering/verification-templates/formation-circularity.md",
+      "section": "(front matter)",
+      "lines": 30,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/harness-fidelity.md#(front matter)",
+      "file": "docs/steering/verification-templates/harness-fidelity.md",
+      "section": "(front matter)",
+      "lines": 39,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/owner-interaction.md#(front matter)",
+      "file": "docs/steering/verification-templates/owner-interaction.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/owner-interaction.md#Checklist",
+      "file": "docs/steering/verification-templates/owner-interaction.md",
+      "section": "Checklist",
+      "lines": 77,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/owner-interaction.md#Verdict bar",
+      "file": "docs/steering/verification-templates/owner-interaction.md",
+      "section": "Verdict bar",
+      "lines": 6,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/recovery-replay.md#(front matter)",
+      "file": "docs/steering/verification-templates/recovery-replay.md",
+      "section": "(front matter)",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/retry-loops.md#(front matter)",
+      "file": "docs/steering/verification-templates/retry-loops.md",
+      "section": "(front matter)",
+      "lines": 32,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/sweep-timer.md#(front matter)",
+      "file": "docs/steering/verification-templates/sweep-timer.md",
+      "section": "(front matter)",
+      "lines": 25,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/verification-templates/transport-delivery.md#(front matter)",
+      "file": "docs/steering/verification-templates/transport-delivery.md",
+      "section": "(front matter)",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines.md",
+      "section": "(front matter)",
+      "lines": 13,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/INDEX.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/INDEX.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/INDEX.md#Document Role",
+      "file": "docs/steering/workflow-guidelines/INDEX.md",
+      "section": "Document Role",
+      "lines": 22,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/INDEX.md#Files",
+      "file": "docs/steering/workflow-guidelines/INDEX.md",
+      "section": "Files",
+      "lines": 10,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/closure.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/closure.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/closure.md#SOLVED",
+      "file": "docs/steering/workflow-guidelines/closure.md",
+      "section": "SOLVED",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/closure.md#EXHAUSTED",
+      "file": "docs/steering/workflow-guidelines/closure.md",
+      "section": "EXHAUSTED",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/closure.md#MAX_CYCLES",
+      "file": "docs/steering/workflow-guidelines/closure.md",
+      "section": "MAX_CYCLES",
+      "lines": 8,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/closure.md#Failure Migration",
+      "file": "docs/steering/workflow-guidelines/closure.md",
+      "section": "Failure Migration",
+      "lines": 12,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/lifecycle.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/lifecycle.md",
+      "section": "(front matter)",
+      "lines": 17,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/lifecycle.md#Progress Grammar",
+      "file": "docs/steering/workflow-guidelines/lifecycle.md",
+      "section": "Progress Grammar",
+      "lines": 12,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/quest-artifacts.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/quest-artifacts.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/quest-artifacts.md#Authored Artifacts",
+      "file": "docs/steering/workflow-guidelines/quest-artifacts.md",
+      "section": "Authored Artifacts",
+      "lines": 11,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/quest-artifacts.md#Runtime Artifacts",
+      "file": "docs/steering/workflow-guidelines/quest-artifacts.md",
+      "section": "Runtime Artifacts",
+      "lines": 16,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/quest-artifacts.md#Artifact Boundaries",
+      "file": "docs/steering/workflow-guidelines/quest-artifacts.md",
+      "section": "Artifact Boundaries",
+      "lines": 11,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "(front matter)",
+      "lines": 17,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Operating Contract",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Operating Contract",
+      "lines": 141,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Quest Anatomy",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Quest Anatomy",
+      "lines": 100,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Closure Of Cutover Vs Building-Block Quests",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Closure Of Cutover Vs Building-Block Quests",
+      "lines": 20,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Metric Validity And Invalid Samples",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Metric Validity And Invalid Samples",
+      "lines": 52,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Scenario Runner Location",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Scenario Runner Location",
+      "lines": 9,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Current Blocker And Diagnostic Movement",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Current Blocker And Diagnostic Movement",
+      "lines": 73,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Regular Commit (No Push)",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Regular Commit (No Push)",
+      "lines": 34,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Convergence Guards",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Convergence Guards",
+      "lines": 104,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Closure Strength",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Closure Strength",
+      "lines": 14,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Two-Layer Theory",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Two-Layer Theory",
+      "lines": 78,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Attempt Flow",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Attempt Flow",
+      "lines": 41,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Parallel-First Execution",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Parallel-First Execution",
+      "lines": 15,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Evidence And Change References",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Evidence And Change References",
+      "lines": 53,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Source Change Verification",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Source Change Verification",
+      "lines": 177,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Git Handoff",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Git Handoff",
+      "lines": 37,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Strategy Ladder",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Strategy Ladder",
+      "lines": 56,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Findings Log",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Findings Log",
+      "lines": 24,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Autonomy Default And Stop Triggers",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Autonomy Default And Stop Triggers",
+      "lines": 16,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Terminal And Blocking Conditions",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Terminal And Blocking Conditions",
+      "lines": 119,
+      "bucket": "owner-duplication"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Recorded-Reason Override Escape Hatch",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Recorded-Reason Override Escape Hatch",
+      "lines": 41,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Mandatory Step-Back Reflection Turn",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Mandatory Step-Back Reflection Turn",
+      "lines": 60,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Workflow Advisories For Supervised Drivers",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Workflow Advisories For Supervised Drivers",
+      "lines": 36,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Keep-Alive Supervisor",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Keep-Alive Supervisor",
+      "lines": 28,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Worked Examples",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Worked Examples",
+      "lines": 7,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Tracked Versus Regenerable",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Tracked Versus Regenerable",
+      "lines": 23,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Ledger Consistency",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Ledger Consistency",
+      "lines": 42,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#Portfolio And Meta Ratio",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "Portfolio And Meta Ratio",
+      "lines": 18,
+      "bucket": "historical-retired"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/solver-quests.md#User-Facing Vocabulary",
+      "file": "docs/steering/workflow-guidelines/solver-quests.md",
+      "section": "User-Facing Vocabulary",
+      "lines": 12,
+      "bucket": "owner-routing"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#Delegation Model",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "Delegation Model",
+      "lines": 6,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#Worker Dossier",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "Worker Dossier",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#Worker Response",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "Worker Response",
+      "lines": 11,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#Review Delegation",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "Review Delegation",
+      "lines": 10,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/subagents.md#Verification Templates",
+      "file": "docs/steering/workflow-guidelines/subagents.md",
+      "section": "Verification Templates",
+      "lines": 27,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/validators.md#(front matter)",
+      "file": "docs/steering/workflow-guidelines/validators.md",
+      "section": "(front matter)",
+      "lines": 15,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/validators.md#Probe-Owned Truth",
+      "file": "docs/steering/workflow-guidelines/validators.md",
+      "section": "Probe-Owned Truth",
+      "lines": 13,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/validators.md#Goalpost Immutability",
+      "file": "docs/steering/workflow-guidelines/validators.md",
+      "section": "Goalpost Immutability",
+      "lines": 20,
+      "bucket": "always-load-invariant"
+    },
+    {
+      "id": "docs/steering/workflow-guidelines/validators.md#Report Projection",
+      "file": "docs/steering/workflow-guidelines/validators.md",
+      "section": "Report Projection",
+      "lines": 11,
+      "bucket": "always-load-invariant"
+    }
+  ]
+}

@@ -27,7 +27,7 @@ const SOLVE_LAND_COMMAND = 'npm run solve:land -- --id <quest>';
 const SOLVE_EVIDENCE_COMMAND = 'npm run solve:evidence -- add <file> --id <quest>';
 const SOLVE_BOARD_COMMAND = 'npm run solve:board';
 const RETIRED_STEP_COMMAND = 'npm run solve:step';
-const STEERING_PACK_COMMAND = 'npm run steering:llm:pack';
+const STEERING_PACK_COMMAND = 'npm run steering:generate';
 const TEST_SMOKE_COMMAND = 'npm run test:smoke';
 
 const MODEL_CONTRACT_RECORDS_COMMAND =

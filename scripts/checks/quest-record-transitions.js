@@ -10,7 +10,6 @@
  * range, so a commit is compared against every parent rather than the first.
  */
 
-import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 const GIT_BINARY = 'git';
@@ -136,10 +135,6 @@ function trackedAt(root, rev, accepts) {
   return arrayFilter(stringSplit(listed, NUL), (file) => file && accepts(file));
 }
 
-function repositoryPath(root, file) {
-  return path.join(root, file);
-}
-
 const BASE_FLAG = '--base';
 const METRIC_FLAG = '--metric';
 const EXIT_OK = 0;
@@ -185,5 +180,5 @@ function reportRecordOffences(report) {
 
 export {
   HEAD_REV, NO_EDGES, admittedEdges, baseFromArgv, changedPathsBetween, git,
-  publicationBase, readBlobs, reportRecordOffences, repositoryPath, trackedAt,
+  publicationBase, readBlobs, reportRecordOffences, trackedAt,
 };

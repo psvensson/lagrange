@@ -207,7 +207,7 @@ test('unknown precise cover widens to the subsystem, never to everything', () =>
 });
 
 test('inert paths select nothing beyond the spine', () => {
-  const result = plan(['docs/steering/llm/core.md', 'solve/log/x.ndjson']);
+  const result = plan(['docs/steering/rules.md', 'solve/log/x.ndjson']);
   assert.equal(result.kind, SELECTION_PRECISE);
   assert.equal(result.tests.length, spine.length,
     'documentation cannot change behaviour, so it adds no behavioural proof');

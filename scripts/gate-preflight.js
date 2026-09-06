@@ -34,7 +34,7 @@ const CALIBRATION_HEADER =
   '\n## N calibration (smallest informative N; ' +
   'escalate only when the result forces it)\n';
 const OPERATIONAL_GROUND_TRUTH_SOURCE =
-  '\nSource: docs/steering/operational-ground-truth.md ' +
+  '\nSource: test/distributed/operational-ground-truth.md ' +
   '("Deterministic-first; the gate is a LAST RESORT ONLY").\n';
 const LATENT_BLOCKER_FAILURE =
   'gate:preflight: analyze:latent-blockers failed — resolve that before ' +

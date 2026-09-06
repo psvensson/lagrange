@@ -29,7 +29,7 @@ program with explicit binding observables, run counts, and kill criteria.
 Validation failures become NEW quests — no mid-validation patching.
 
 Prerequisite reading for the executor:
-`docs/steering/operational-ground-truth.md` (mandatory before any
+`test/distributed/operational-ground-truth.md` (mandatory before any
 distributed-harness work) and `test/distributed/harness/README.md`.
 
 ## Standing rules applied

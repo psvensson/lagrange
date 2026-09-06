@@ -21,7 +21,7 @@ method names or log-message catalogs.
 The architecture owner maps are in
 [Current Owner Maps](architecture/current-owner-maps.md). Distributed-work
 diagnostic rules are in
-[Operational Ground Truth](docs/steering/operational-ground-truth.md).
+[Operational Ground Truth](test/distributed/operational-ground-truth.md).
 
 ## Process Health
 

@@ -25,7 +25,7 @@ actionable work in this codebase.
 | 🔲     | Not Started  |
 
 Note: in the
-[AGPL feature map](../steering/agpl-feature-map.md) the ✅ glyph means
+[AGPL feature map](agpl-feature-map.md) the ✅ glyph means
 "available at roadmap scope" — release readiness may still need release-gate
 proof there, while here it simply means done.
 
