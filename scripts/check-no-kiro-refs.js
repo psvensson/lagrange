@@ -10,16 +10,19 @@
 // Run via `npm run audit:no-kiro` (wired into test:static).
 
 import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+
+import {isQuestLogPath} from './solve/store.js';
 
 // Locations where a `.kiro/` reference is allowed because the content is an
 // immutable historical record, a deliberate external snapshot, or a parallel
 // working copy — none of which is the live operating surface.
+// A quest's append-only log is the immutable historical record; the store
+// owns which path that is, so this guard asks rather than restating the
+// layout. Everything else under a quest, its authored record included, stays
+// governed as live surface.
 const ALLOWED_PREFIXES = Object.freeze([
   '.claude/worktrees/', // parallel git worktrees
-  'solve/changes/', // recorded historical diffs of past Quest work
-  'solve/log/', // append-only event logs (immutable)
-  'solve/report/', // terminal Quest reports (historical)
-  'solve/autonomous/', // autorun state (historical)
   'solve/specs/raft-logic-migration/reports/', // generated benchmark data
   'scripts/check-no-kiro-refs.js', // this guard necessarily names the token
   // Generated guideline baselines capture violation VALUES verbatim — the
@@ -46,8 +49,15 @@ function trackedHits() {
   return out.split('\n').filter(Boolean);
 }
 
+/**
+ * Whether a tracked file may name a pre-solve path. Exported so the
+ * exemption boundary itself is testable.
+ * @param {string} file repository-relative path
+ * @return {boolean}
+ */
 function isAllowed(file) {
-  return ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix));
+  return isQuestLogPath(file) ||
+    ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix));
 }
 
 function main() {
@@ -76,4 +86,10 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Only scan when run directly: importing this module to test the exemption
+// boundary must not execute the guard.
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
+
+export {ALLOWED_PREFIXES, isAllowed};

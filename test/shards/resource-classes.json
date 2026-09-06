@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2035,
+    "ordinary": 2037,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2052,
-  "digest": "fnv1a32-f2c5b5ae",
+  "censusSize": 2054,
+  "digest": "fnv1a32-9ebcacdb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1766,6 +1766,7 @@
     "test/scripts/check-operation-progress-authority.test.js": "ordinary",
     "test/scripts/check-owner-traces.test.js": "ordinary",
     "test/scripts/check-partition-class-owner.test.js": "ordinary",
+    "test/scripts/check-quest-log-append-only.test.js": "ordinary",
     "test/scripts/check-roadmap-authority.test.js": "ordinary",
     "test/scripts/check-runtime-grammar-contracts.test.js": "ordinary",
     "test/scripts/check-solve-binary-guard.test.js": "ordinary",
@@ -1787,6 +1788,7 @@
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "ordinary",
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",
     "test/scripts/generate-steering-llm-pack.test.js": "ordinary",
+    "test/scripts/historical-record-exemptions.test.js": "ordinary",
     "test/scripts/impact-contract-registry.test.js": "ordinary",
     "test/scripts/impact-proof-cone-consumers.test.js": "ordinary",
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "ordinary",

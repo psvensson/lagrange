@@ -15,6 +15,9 @@
 // Run via `npm run audit:no-legacy-naming` (wired into test:static).
 
 import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+
+import {isQuestLogPath} from './solve/store.js';
 
 const LEGACY_TOKENS = Object.freeze([
   'ddb-admin',
@@ -26,12 +29,11 @@ const LEGACY_TOKENS = Object.freeze([
 
 // Locations where a legacy token is allowed because the content is an
 // immutable historical record or a parallel working copy.
+// A quest's append-only log is the immutable historical record; the store
+// owns which path that is (see isAllowed), so this guard carries no
+// quest-layout knowledge of its own.
 const ALLOWED_PREFIXES = Object.freeze([
   'CHANGELOG.md', // release history may name removed commands
-  'solve/changes/', // recorded historical diffs of past Quest work
-  'solve/log/', // append-only event logs (immutable)
-  'solve/report/', // terminal Quest reports (historical)
-  'solve/autonomous/', // autorun state (historical)
   '.claude/worktrees/', // parallel git worktrees
   'scripts/check-no-legacy-naming.js', // this guard necessarily names the tokens
 ]);
@@ -60,7 +62,8 @@ function trackedHits() {
 }
 
 function isAllowed(file) {
-  return ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix));
+  return isQuestLogPath(file) ||
+    ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix));
 }
 
 function main() {
@@ -92,4 +95,9 @@ function main() {
   process.exit(1);
 }
 
-main();
+// Only scan when run directly; importing for tests must not execute it.
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
+
+export {ALLOWED_PREFIXES, isAllowed};

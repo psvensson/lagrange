@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "quest-log-append-only-exemption",
+  "statement": "The live-surface guards exempt exactly one file per quest, its canonical append-only log, and that exemption rests on an enforced invariant rather than a comment: a checker refuses any in-place rewrite or deletion of a committed quest log, admits appends and new logs, and runs in the static gate, while the exemption boundary itself (a quest's authored record, its evidence, deleted v1 directories, and live steering, scripts and docs that merely name the same strings) is asserted adversarially by tests.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/quest-log-append-only-exemption/evidence/receipt.json",
+      "requiredReceipts": [
+        "append-only-checker-refuses-an-in-place-rewrite",
+        "append-only-checker-refuses-a-deleted-log",
+        "append-only-checker-admits-an-append-and-a-new-log",
+        "append-only-checker-runs-in-the-static-gate",
+        "exemption-is-the-canonical-quest-log-only"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-v1-layout-compatibility",
+      "statement": "No guard regains quest-layout knowledge of its own, no deleted v1 directory is reintroduced or re-exempted, and no fallback lookup is added; the solve store answers which path is a quest log."
+    },
+    {
+      "id": "history-is-not-a-normative-channel",
+      "statement": "The exemption may only cover content that is mechanically append-only. Any rewrite of a committed quest log must be refused by the checker rather than left to convention."
+    },
+    {
+      "id": "phase-2-landing-stands",
+      "statement": "Commit 5271defb5 truthfully records that the phase-2 land transaction succeeded; this quest is a publication-gate repair against that landed head and never reopens or rewrites phase 2's sealed record."
+    }
+  ],
+  "sealedAt": "5271defb5015e524148b533489e08673574f704a"
+}

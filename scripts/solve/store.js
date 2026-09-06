@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  ENTRY_TYPE, EPICS_DIR, EPIC_STATUS, EVIDENCE_DIR, FINDING_KIND, LOG_FILE,
-  QUESTS_DIR, QUEST_FILE, QUEST_STATUS, TERMINAL_STATUSES, VERDICT,
+  ENTRY_TYPE, EPICS_DIR, EPIC_STATUS, EVIDENCE_DIR, FINDING_KIND, ID_PATTERN,
+  LOG_FILE, QUESTS_DIR, QUEST_FILE, QUEST_STATUS, TERMINAL_STATUSES, VERDICT,
   isPlainObject,
 } from './schema.js';
 
@@ -18,6 +18,7 @@ const YAML_LIST_PREFIX = '- ';
 const EMPTY_LIST = '[]';
 const PRIVATE_EPIC_PREFIX = '_';
 const EPIC_README = 'README.md';
+const PATH_SEPARATOR = '/';
 const YAML_KEY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
 const YAML_NESTED_KEY_PATTERN = /^(\s+)([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
 const YAML_NUMBER_PATTERN = /^-?\d+(\.\d+)?$/u;
@@ -287,12 +288,32 @@ function listEpics(root) {
     .filter((epic) => epic && epic.front);
 }
 
+/**
+ * True when a repository path is a quest's append-only log: exactly
+ * `solve/quests/<quest-id>/log.ndjson`, with a canonical quest id. It is the
+ * one file under a quest that is written only by appending, so a guard over
+ * the live operating surface may treat it as historical record. Nothing else
+ * qualifies: the authored `quest.json` is live surface, evidence belongs to
+ * the evidence owner, and a lookalike path is not history.
+ * @param {string} relativePath repository-relative path, `/`-separated
+ * @return {boolean}
+ */
+function isQuestLogPath(relativePath) {
+  const segments = relativePath.split(PATH_SEPARATOR);
+  const prefix = QUESTS_DIR.split(PATH_SEPARATOR);
+  if (segments.length !== prefix.length + 2) return false;
+  if (!prefix.every((segment, index) => segments[index] === segment)) return false;
+  return ID_PATTERN.test(segments[prefix.length]) &&
+    segments[prefix.length + 1] === LOG_FILE;
+}
+
 function isOpenEpic(epic) {
   return epic?.front?.status === EPIC_STATUS.OPEN;
 }
 
 export {
-  appendEntry, classifyEntry, epicFile, evidenceDir, isOpenEpic, listEpics,
+  appendEntry, classifyEntry, epicFile, evidenceDir, isOpenEpic,
+  isQuestLogPath, listEpics,
   listQuestIds, logFile, parseFrontMatter, questDir, questExists, questFile,
   questState, readEpic, readLog, readQuest, terminalStatusOf, verdictOf,
   writeQuest,

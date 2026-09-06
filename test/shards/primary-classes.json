@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1792,
+    "unit": 1794,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2052,
-  "digest": "fnv1a32-aa06083c",
+  "censusSize": 2054,
+  "digest": "fnv1a32-1fefbce1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1767,6 +1767,7 @@
     "test/scripts/check-operation-progress-authority.test.js": "unit",
     "test/scripts/check-owner-traces.test.js": "unit",
     "test/scripts/check-partition-class-owner.test.js": "unit",
+    "test/scripts/check-quest-log-append-only.test.js": "unit",
     "test/scripts/check-roadmap-authority.test.js": "unit",
     "test/scripts/check-runtime-grammar-contracts.test.js": "unit",
     "test/scripts/check-solve-binary-guard.test.js": "unit",
@@ -1788,6 +1789,7 @@
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
     "test/scripts/generate-steering-llm-pack.test.js": "unit",
+    "test/scripts/historical-record-exemptions.test.js": "unit",
     "test/scripts/impact-contract-registry.test.js": "unit",
     "test/scripts/impact-proof-cone-consumers.test.js": "unit",
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "unit",

@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "quest-log-append-only-exemption",
+  "status": "pass",
+  "generatedAt": "2026-09-06T11:21:23.196Z",
+  "receipts": [
+    {
+      "id": "append-only-checker-refuses-an-in-place-rewrite",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a rewritten committed log is refused$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "editing a committed quest log in place is reported, so the guards' historical-record exemption cannot become a writable channel"
+    },
+    {
+      "id": "append-only-checker-refuses-a-deleted-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a deleted committed log is refused$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "quest history may not vanish"
+    },
+    {
+      "id": "append-only-checker-admits-an-append-and-a-new-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^appending and adding a log are admitted$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "the normal solver lifecycle only appends, so the invariant costs nothing in ordinary use"
+    },
+    {
+      "id": "append-only-checker-refuses-a-rewrite-committed-after-creation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a rewrite committed after creation is refused$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "the case a snapshot comparison cannot see: a log introduced after the publication base and rewritten in a later commit of the same unpublished stack is refused at that transition, even though the working tree then matches HEAD"
+    },
+    {
+      "id": "append-only-checker-refuses-a-renamed-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a renamed log is refused as a deletion$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "relocating a committed log is losing the committed path, and is refused as the deletion it is"
+    },
+    {
+      "id": "append-only-checker-admits-a-stack-of-append-commits",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a stack of append commits is admitted$\" test/scripts/check-quest-log-append-only.test.js",
+      "detail": "several append commits in one unpublished stack stay admitted, so the invariant does not obstruct ordinary landing"
+    },
+    {
+      "id": "append-only-checker-runs-in-the-static-gate",
+      "passed": true,
+      "command": "node -e \"const p=require('./package.json');process.exit(p.scripts['test:static'].includes('audit:quest-log-append-only')?0:1)\"",
+      "detail": "test:static runs audit:quest-log-append-only, so the push gate enforces the invariant the exemption rests on"
+    },
+    {
+      "id": "exemption-is-the-canonical-quest-log-only",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/historical-record-exemptions.test.js",
+      "detail": "both guards exempt the canonical quest log and nothing else: not the authored record, not evidence, not a deleted v1 directory, and not live steering, scripts or docs that name the same strings"
+    }
+  ]
+}

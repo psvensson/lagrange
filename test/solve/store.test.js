@@ -11,8 +11,8 @@ import {
   ENTRY_TYPE, FINDING_KIND, NEXT_OWNER, QUEST_STATUS, VERDICT,
 } from '../../scripts/solve/schema.js';
 import {
-  appendEntry, classifyEntry, listEpics, listQuestIds, parseFrontMatter, questState,
-  readLog, writeQuest,
+  appendEntry, classifyEntry, isQuestLogPath, listEpics, listQuestIds,
+  parseFrontMatter, questState, readLog, writeQuest,
 } from '../../scripts/solve/store.js';
 
 const TEXT = 'x';
@@ -107,4 +107,50 @@ test('disk: quest dirs, append-only log, epics skip README and template', (t) =>
     fs.writeFileSync(path.join(epics, name), `---\nid: ${name}\nstatus: ${STATUS_DONE}\n---\n`);
   }
   assert.deepEqual(listEpics(root).map((epic) => epic.id).sort(), [EPIC_A, EPIC_B]);
+});
+
+test('the quest-log path is exactly one canonical file per quest', () => {
+  // A guard over the live operating surface may treat this one file as
+  // historical record, so the boundary is stated adversarially here.
+  for (const history of ['solve/quests/demo-quest/log.ndjson',
+    'solve/quests/q9/log.ndjson', 'solve/quests/a-b-c-1/log.ndjson']) {
+    assert.equal(isQuestLogPath(history), true, history);
+  }
+  const notHistory = [
+    // The authored record and everything else under the quest stay governed.
+    'solve/quests/demo-quest/quest.json',
+    'solve/quests/demo-quest/evidence/receipt.json',
+    'solve/quests/demo-quest/evidence/log.ndjson',
+    'solve/quests/demo-quest',
+    'solve/quests/log.ndjson',
+    // Non-canonical quest ids are not quests.
+    'solve/quests/Demo-Quest/log.ndjson',
+    'solve/quests/not a slug/log.ndjson',
+    'solve/quests/-leading/log.ndjson',
+    'solve/quests/a/log.ndjson',
+    'solve/quests/../log.ndjson',
+    'solve/quests/./log.ndjson',
+    // Lookalikes.
+    'solve/quests/demo-quest/log.ndjson.bak',
+    'solve/quests/demo-quest/log.ndjsonx',
+    'solve/quests/demo-quest/log.ndjson/inner',
+    'solve/quests/demo-quest/nested/log.ndjson',
+    'x/solve/quests/demo-quest/log.ndjson',
+    'solve//quests/demo-quest/log.ndjson',
+    'SOLVE/quests/demo-quest/log.ndjson',
+    // Deleted v1 locations get no special treatment.
+    'solve/log/demo-quest.ndjson',
+    'solve/report/demo-quest.md',
+    'solve/autonomous/state.json',
+    'solve/changes/demo-quest/attempt-1.diff',
+    // Live surface stays governed even when it names the same strings.
+    'docs/steering/llm/core.md',
+    'docs/steering/workflow-guidelines/solver-quests.md',
+    'scripts/solve/store.js',
+    'AGENTS.md',
+    'src/thing.js',
+  ];
+  for (const live of notHistory) {
+    assert.equal(isQuestLogPath(live), false, live);
+  }
 });

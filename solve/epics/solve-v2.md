@@ -10,6 +10,7 @@ quests:
   - solve-v2-phase-0-inventory
   - solve-v2-phase-1-weight
   - solve-v2-phase-2
+  - quest-log-append-only-exemption
   - solve-v2-phase-3
   - solve-v2-phase-4
   - solve-v2-phase-0
@@ -222,6 +223,38 @@ still describe 18 retired verbs in prose (phase 3 rewrites the rules
 source), `test/shards/impact-coverage.json` names 41 deleted files (inert,
 out of scope), and six tracked `attempt-*.diff` files under
 `solve/changes/global-owner-debt-inventory/` predate v2.
+
+## Post-land publication repair (2026-09-06)
+
+The phase-2 report above describes the landed head and is left as it stood at
+`5271defb5`; that commit truthfully records a successful land transaction.
+What follows happened after it, against that head, and is recorded here and
+in `solve/quests/quest-log-append-only-exemption/log.ndjson`:
+
+1. `npm run publish` ran the exact landed head in a throwaway worktree and
+   refused at the static-analysis stage. Nothing was pushed.
+2. `audit:no-kiro` reported 9 disallowed references inside migrated quest
+   logs. Its whitelist exempted `solve/log/`, `solve/report/` and
+   `solve/autonomous/`, directories the cutover deleted; the immutable
+   records they protected now live at `solve/quests/<id>/log.ndjson`.
+   `check-no-legacy-naming.js` carried the same three stale prefixes,
+   latent because nothing currently trips it.
+3. The exemption's premise was unenforced. Rewriting a recorded verifier
+   verdict inside a committed quest log was noticed by nothing, so the
+   guards were exempting a channel that could be written.
+4. Repair, under quest `quest-log-append-only-exemption`: both guards ask
+   `scripts/solve/store.js` whether a path is a quest log rather than
+   restating the layout; the exemption is exactly
+   `solve/quests/<canonical-id>/log.ndjson`, so a quest's authored record and
+   its evidence stay governed; the three dead prefixes are gone rather than
+   left as stale taxonomy; and `audit:quest-log-append-only` now refuses any
+   in-place rewrite, truncation or deletion of a committed quest log from the
+   static gate, which makes the immutability the exemption rests on a fact
+   instead of a convention.
+
+The lesson recorded for phase 3: this session had been running a subset of
+the static checks, so the ninth v1-layout consumer reached the publish gate
+instead of the local loop. `npm run test:static` is the discovery surface.
 
 ## Concepts removed (running list)
 
