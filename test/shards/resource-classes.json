@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2133,
+    "ordinary": 2135,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2150,
-  "digest": "fnv1a32-130e628d",
+  "censusSize": 2152,
+  "digest": "fnv1a32-67968c9d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1768,6 +1768,7 @@
     "test/scripts/check-partition-class-owner.test.js": "ordinary",
     "test/scripts/check-roadmap-authority.test.js": "ordinary",
     "test/scripts/check-runtime-grammar-contracts.test.js": "ordinary",
+    "test/scripts/check-solve-binary-guard.test.js": "ordinary",
     "test/scripts/check-staged-constant-names.test.js": "ordinary",
     "test/scripts/check-subsystem.test.js": "ordinary",
     "test/scripts/check-unified-system-metadata-gateway.test.js": "ordinary",
@@ -1896,6 +1897,7 @@
     "test/solve/dossier-budget.test.js": "ordinary",
     "test/solve/engagement-witness.test.js": "ordinary",
     "test/solve/epoch-rebase.test.js": "ordinary",
+    "test/solve/evidence-store.test.js": "ordinary",
     "test/solve/evidence.test.js": "ordinary",
     "test/solve/file-size-admission.test.js": "ordinary",
     "test/solve/findings.test.js": "ordinary",

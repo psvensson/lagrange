@@ -308,3 +308,24 @@ decide progress and closure.
   Git.
 - Regenerate the full CLI and steering indexes with
   `npm run steering:llm:pack` after command or steering-source changes.
+
+## Partial clones (solve-v2 phase 1)
+
+Binary evidence (run-state and log tarballs, raw evidence bundles) lives in
+the `solve-evidence` GitHub pre-release, never in git; the pre-commit guard
+`scripts/checks/check-solve-binary-guard.js` refuses any archive or file over
+1 MB under `solve/`. History still carries the old tarballs, so clone with
+
+```sh
+git clone --filter=blob:none git@github.com:psvensson/lagrange.git
+```
+
+A blobless partial clone fetches file contents lazily and never downloads
+blobs that no checked-out tree references, so the purged evidence costs
+nothing. Rewriting history to drop it (`git filter-repo`) is deferred: it
+would change every SHA the quest records cite (`draftedAtCommit`, `sealedAt`,
+`changeRef`) and needs a commit-map pass first (design note
+`solve/epics/solve-v2/design.md`, section 5).
+
+Upload evidence with `node scripts/solve.js evidence add <path> --quest <id>`;
+the record is written only after the asset is downloaded again and re-hashed.

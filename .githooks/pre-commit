@@ -71,6 +71,9 @@ run_check() {
 }
 
 # Fast structural guards inherited from the original hook (<2s).
+# Solver evidence rule (solve-v2 phase 1): no archive and nothing over 1 MB
+# under solve/ enters git; binaries go to the evidence store.
+run_check "solve binary guard" node scripts/checks/check-solve-binary-guard.js
 run_check "file-size ratchet" npm run -s audit:file-size
 run_check "hot-path diagnostics guideline" \
   npm run -s audit:guideline:hot-path-diagnostics

@@ -1,0 +1,684 @@
+diff --git a/.githooks/pre-commit b/.githooks/pre-commit
+index 6e2c165c651718ba461dd1daef17e038b59239ee..1be61ba9bcece6a279c12559209948bfc2dd16ea 100755
+--- a/.githooks/pre-commit
++++ b/.githooks/pre-commit
+@@ -71,6 +71,9 @@ run_check() {
+ }
+ 
+ # Fast structural guards inherited from the original hook (<2s).
++# Solver evidence rule (solve-v2 phase 1): no archive and nothing over 1 MB
++# under solve/ enters git; binaries go to the evidence store.
++run_check "solve binary guard" node scripts/checks/check-solve-binary-guard.js
+ run_check "file-size ratchet" npm run -s audit:file-size
+ run_check "hot-path diagnostics guideline" \
+   npm run -s audit:guideline:hot-path-diagnostics
+diff --git a/docs/development/solver-runbook.md b/docs/development/solver-runbook.md
+index f4cecbc7eebeb3b61b00294b3a00906df739a0db..68a43fd18f76b453cc2b62968dbb890a8b2e82c7 100644
+--- a/docs/development/solver-runbook.md
++++ b/docs/development/solver-runbook.md
+@@ -308,3 +308,24 @@ decide progress and closure.
+   Git.
+ - Regenerate the full CLI and steering indexes with
+   `npm run steering:llm:pack` after command or steering-source changes.
++
++## Partial clones (solve-v2 phase 1)
++
++Binary evidence (run-state and log tarballs, raw evidence bundles) lives in
++the `solve-evidence` GitHub pre-release, never in git; the pre-commit guard
++`scripts/checks/check-solve-binary-guard.js` refuses any archive or file over
++1 MB under `solve/`. History still carries the old tarballs, so clone with
++
++```sh
++git clone --filter=blob:none git@github.com:psvensson/lagrange.git
++```
++
++A blobless partial clone fetches file contents lazily and never downloads
++blobs that no checked-out tree references, so the purged evidence costs
++nothing. Rewriting history to drop it (`git filter-repo`) is deferred: it
++would change every SHA the quest records cite (`draftedAtCommit`, `sealedAt`,
++`changeRef`) and needs a commit-map pass first (design note
++`solve/epics/solve-v2/design.md`, section 5).
++
++Upload evidence with `node scripts/solve.js evidence add <path> --quest <id>`;
++the record is written only after the asset is downloaded again and re-hashed.
+diff --git a/docs/steering/llm/solve-commands.md b/docs/steering/llm/solve-commands.md
+index 01f193f66f0aa1e9cba3b9bf1173ce8ddf22fa18..a91652c0420c5965b20050d37f1e2996e1d15346 100644
+--- a/docs/steering/llm/solve-commands.md
++++ b/docs/steering/llm/solve-commands.md
+@@ -49,6 +49,7 @@ guardrail command map.
+ | `theory` | Two-layer (system + frontier) theory management used to break a stall: system, option, select, record, supersede, list, card, import-ledger. | `node scripts/solve.js theory <system|option|select|record|supersede|list|card|import-ledger> --id <id> ...` |
+ | `health` | Quest health diagnostics: stall, oscillation, and coupled-invariant signals that gate the theory/reflection rungs. | `node scripts/solve.js health --id <id>` |
+ | `ingest-evidence` | Stamp an external evidence artifact onto a frontier (or doneWhen) so a probe can read it. | `node scripts/solve.js ingest-evidence --id <id> --frontier <f> --evidence <path> [--probe doneWhen]` |
++| `evidence` | Upload one binary or oversized artifact to the solve-evidence GitHub pre-release as <quest-id>--<path under solve/ joined by __>, verify it by downloading it again and re-hashing, then record a finding of kind evidence (sha256, size, URL) on the quest. Binaries never enter git (pre-commit guard). | `node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]` |
+ | `attempt` | Record a one-shot measured attempt that runs a harness command and captures the result as evidence. | `node scripts/solve.js attempt --id <id> --frontier <f> --changeRef diff:<path> -- <harness cmd...>` |
+ | `audit` | Run the Quest audit (scope and evidence-honesty checks) that gates a git handoff. | `node scripts/solve.js audit --id <id>` |
+ | `upgrade` | Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log and ingest any unrecorded evidence. Reports remain on-demand projections. | `node scripts/solve.js upgrade --id <id> [--reason "<text>"]` |
+@@ -64,4 +65,4 @@ guardrail command map.
+ 
+ ---
+ 
+-43 subcommands registered; 43 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
++44 subcommands registered; 44 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+diff --git a/docs/steering/solve-commands.json b/docs/steering/solve-commands.json
+index 682a0077490aee2fa8d174c1c202de275b93fa30..225c7f6d8a1a83c958310e6d3a3ed78e163e0906 100644
+--- a/docs/steering/solve-commands.json
++++ b/docs/steering/solve-commands.json
+@@ -171,5 +171,9 @@
+   "rebase-epoch": {
+     "summary": "Record a source-epoch boundary at HEAD instead of resealing after main drifted behind the epoch base: the retired epoch's attempts stay visible but never count as verification, one covering attempt at the new base is demanded over every path the retired epoch reviewed, and a standing rejection transfers to the live-base coverage rule. Refuses a pending step, a --to that is not HEAD, a HEAD that origin/main does not contain, and an empty range; never runs git write operations.",
+     "usage": "node scripts/solve.js rebase-epoch --id <id> --to <commit> --reason \"<why the epoch must move>\""
++  },
++  "evidence": {
++    "summary": "Upload one binary or oversized artifact to the solve-evidence GitHub pre-release as <quest-id>--<path under solve/ joined by __>, verify it by downloading it again and re-hashing, then record a finding of kind evidence (sha256, size, URL) on the quest. Binaries never enter git (pre-commit guard).",
++    "usage": "node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]"
+   }
+ }
+diff --git a/scripts/checks/check-solve-binary-guard.js b/scripts/checks/check-solve-binary-guard.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..807ac550cb0ef15042563fb004acc99bc5d864ba
+--- /dev/null
++++ b/scripts/checks/check-solve-binary-guard.js
+@@ -0,0 +1,116 @@
++/**
++ * Pre-commit guard for the Solver evidence rule (solve-v2 phase 1):
++ * nothing larger than 1 MB and no archive enters git under solve/. Binaries
++ * belong in the evidence store (`solve evidence add`), referenced from a log
++ * entry by sha256 and URL.
++ *
++ *   node scripts/checks/check-solve-binary-guard.js [<staged path>...]
++ *
++ * With no paths it reads the staged index (`git diff --cached --name-only
++ * --diff-filter=ACMR`). Exits 1 naming every offending file. The single
++ * allowlisted path is the one pre-v2 text log that exceeds the size rule and
++ * must stay verbatim (non-negotiable 5: findings are never rewritten).
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {execFileSync} from 'node:child_process';
++import {fileURLToPath} from 'node:url';
++
++const arrayFilter = Function.call.bind(Array.prototype.filter);
++const arrayMap = Function.call.bind(Array.prototype.map);
++const arraySome = Function.call.bind(Array.prototype.some);
++const arrayIncludes = Function.call.bind(Array.prototype.includes);
++const stringSplit = Function.call.bind(String.prototype.split);
++const stringStartsWith = Function.call.bind(String.prototype.startsWith);
++const stringEndsWith = Function.call.bind(String.prototype.endsWith);
++
++const REPO_ROOT = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)), '../..',
++);
++const TEXT_ENCODING = 'utf8';
++const ARGV_OFFSET = 2;
++const GIT_BINARY = 'git';
++const GIT_STAGED_ARGUMENTS = Object.freeze([
++  'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z',
++]);
++const NUL = '\0';
++const GIT_CAT_FILE_SIZE_ARGUMENTS = Object.freeze(['cat-file', '-s']);
++const INDEX_STAGE_PREFIX = ':';
++const LINE_SEPARATOR = '\n';
++const SOLVE_PREFIX = 'solve/';
++const MAX_BYTES = 1024 * 1024;
++const ARCHIVE_SUFFIXES = Object.freeze([
++  '.tar.gz', '.tgz', '.tar', '.gz', '.zip', '.7z', '.xz', '.bz2',
++]);
++// The one tracked text log over the rule, kept verbatim by decision of the
++// solve-v2 epic (design note section 6); nothing else is exempt.
++const ALLOWLIST = Object.freeze([
++  'solve/log/rolling-restart-core-stability.ndjson',
++]);
++const EXIT_OK = 0;
++const EXIT_REFUSED = 1;
++const REASON_TOO_LARGE = 'larger than 1 MB';
++const REASON_ARCHIVE = 'archive';
++const REFUSAL_PREFIX = 'solve binary guard: refusing ';
++const REFUSAL_SUFFIX =
++  ' (upload with `node scripts/solve.js evidence add <path> --quest <id>` ' +
++  'and reference it from the log)';
++
++function stagedPaths() {
++  const out = execFileSync(GIT_BINARY, [...GIT_STAGED_ARGUMENTS], {
++    cwd: REPO_ROOT, encoding: TEXT_ENCODING,
++  });
++  return arrayFilter(stringSplit(out, NUL), Boolean);
++}
++
++// The staged blob is what would be committed; fall back to the working-tree
++// file when the path is not in the index (an explicit path argument).
++function stagedOrTreeSize(relative) {
++  try {
++    const size = execFileSync(GIT_BINARY, [...GIT_CAT_FILE_SIZE_ARGUMENTS,
++      `${INDEX_STAGE_PREFIX}${relative}`], {cwd: REPO_ROOT, encoding: TEXT_ENCODING});
++    return Number(size);
++  } catch (_error) {
++    const absolute = path.join(REPO_ROOT, relative);
++    return fs.existsSync(absolute) ? fs.statSync(absolute).size : 0;
++  }
++}
++
++function offence(relative) {
++  if (!stringStartsWith(relative, SOLVE_PREFIX)) return null;
++  if (arrayIncludes(ALLOWLIST, relative)) return null;
++  if (arraySome(ARCHIVE_SUFFIXES, (suffix) => stringEndsWith(relative, suffix))) {
++    return REASON_ARCHIVE;
++  }
++  return stagedOrTreeSize(relative) > MAX_BYTES ? REASON_TOO_LARGE : null;
++}
++
++/**
++ * Offending paths among `paths`, each with its reason. Pure over the tree.
++ * @param {string[]} paths
++ * @return {{path: string, reason: string}[]}
++ */
++function solveBinaryOffences(paths) {
++  return arrayFilter(arrayMap(paths, (relative) =>
++    ({path: relative, reason: offence(relative)})), (entry) => entry.reason);
++}
++
++function main(argv) {
++  const paths = argv.length > 0 ? argv : stagedPaths();
++  const offences = solveBinaryOffences(paths);
++  for (const entry of offences) {
++    process.stderr.write(
++      `${REFUSAL_PREFIX}${entry.path}: ${entry.reason}${REFUSAL_SUFFIX}${LINE_SEPARATOR}`);
++  }
++  return offences.length === 0 ? EXIT_OK : EXIT_REFUSED;
++}
++
++const isMainModule = process.argv[1] &&
++  import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href;
++
++if (isMainModule) {
++  process.exitCode = main(process.argv.slice(ARGV_OFFSET));
++}
++
++export {ALLOWLIST, MAX_BYTES, solveBinaryOffences};
+diff --git a/scripts/checks/solve-v2-budget.js b/scripts/checks/solve-v2-budget.js
+index 4a33fdb6d425124ccc3e2e199a5c9f63716668ea..130a105be4960a84ff54eb90dd9d2e6466f9b5c8 100644
+--- a/scripts/checks/solve-v2-budget.js
++++ b/scripts/checks/solve-v2-budget.js
+@@ -16,6 +16,7 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import {execFileSync} from 'node:child_process';
+ import {fileURLToPath} from 'node:url';
++import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
+ 
+ const arrayFilter = Function.call.bind(Array.prototype.filter);
+ const arrayMap = Function.call.bind(Array.prototype.map);
+@@ -162,10 +163,13 @@ function questDirectoriesOffShape() {
+   });
+ }
+ 
++// The pre-commit guard's allowlist (one pre-v2 text log kept verbatim) is
++// the single documented exception; both checks read the same list.
+ function oversizedSolveFiles(tracked) {
+   return arrayFilter(tracked, (file) => {
+     const absolute = path.join(REPO_ROOT, file);
+-    return fs.existsSync(absolute) &&
++    return !arrayIncludes(BINARY_GUARD_ALLOWLIST, file) &&
++      fs.existsSync(absolute) &&
+       fs.statSync(absolute).size > SOLVE_FILE_BUDGET_BYTES;
+   });
+ }
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 6c53aeaf67e4970ec07a05f7c80f7ba2bc9c0808..1f441b509b1f930a7d3f4a08b248bece147ef2d2 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -32,6 +32,12 @@ import {writeReport} from './solve/report.js';
+ import {runStep, stepAbort, stepPending} from './solve/step.js';
+ import {runNextCommand} from './solve/next.js';
+ import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
++import {
++  EVIDENCE_RELEASE_TAG,
++  EVIDENCE_REF_PREFIX,
++  FINDING_KIND_EVIDENCE,
++  uploadAndVerify,
++} from './solve/evidence-store.js';
+ import {
+   QUEST_CLASS_PRODUCT,
+   QUEST_CLASSES,
+@@ -661,6 +667,39 @@ function optionalStringArgument(args, name) {
+   return typeof args[name] === 'string' ? args[name] : null;
+ }
+ 
++const EVIDENCE_SUBCOMMAND_ADD = 'add';
++const EVIDENCE_USAGE =
++  'evidence: usage is evidence add <path> --quest <id> [--frontier <f>]';
++const EVIDENCE_MAIN_SUFFIX = '-main';
++
++// solve-v2 phase 1: binaries never enter git. Upload, verify by re-download
++// and re-hash, then record a `finding` of kind `evidence` on the quest.
++function cmdEvidence(root, args) {
++  const [subcommand, file] = args._;
++  const questId = typeof args.quest === 'string' ? args.quest : null;
++  if (subcommand !== EVIDENCE_SUBCOMMAND_ADD || !file || !questId) {
++    throw new Error(EVIDENCE_USAGE);
++  }
++  const absolute = path.resolve(root, file);
++  if (!fs.existsSync(absolute)) throw new Error(`evidence: no such file ${file}`);
++  const quest = loadQuest(root, questId);
++  const frontier = typeof args.frontier === 'string' ? args.frontier :
++    (quest.frontiers?.[0]?.id || `${questId}${EVIDENCE_MAIN_SUFFIX}`);
++  const record = uploadAndVerify({file: absolute, questId, root});
++  cmdFinding(root, {
++    id: questId,
++    frontier,
++    kind: FINDING_KIND_EVIDENCE,
++    claim: `Evidence ${record.asset} (${record.bytes} bytes, originally ` +
++      `${file}) uploaded to the ${EVIDENCE_RELEASE_TAG} store and verified ` +
++      `by re-download: ${EVIDENCE_REF_PREFIX}${record.sha256} at ${record.url}`,
++    evidence: `${EVIDENCE_REF_PREFIX}${record.sha256}`,
++  });
++  process.stdout.write(`${record.asset} ${EVIDENCE_REF_PREFIX}${record.sha256} ` +
++    `${record.bytes} ${record.url}\n`);
++  return record;
++}
++
+ function cmdFinding(root, args) {
+   const id = args.id || args._[0];
+   if (!id) throw new Error('finding: --id <questId> is required');
+@@ -1484,6 +1523,7 @@ const COMMANDS = {
+   'theory': cmdTheory,
+   'health': cmdHealth,
+   'ingest-evidence': cmdIngestEvidence,
++  'evidence': cmdEvidence,
+   'attempt': cmdAttempt,
+   'audit': cmdAudit,
+   'upgrade': cmdUpgrade,
+diff --git a/scripts/solve/evidence-store.js b/scripts/solve/evidence-store.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4454028ba84eb98380add6dd842b499f4553178
+--- /dev/null
++++ b/scripts/solve/evidence-store.js
+@@ -0,0 +1,115 @@
++/**
++ * Solver evidence store (solve-v2 phase 1): binaries never enter git.
++ *
++ *   node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]
++ *
++ * Uploads <path> as the asset `<quest-id>--<path under solve/ with __>` (the
++ * basename outside solve/) of the dedicated GitHub pre-release `solve-evidence`, verifies the upload by downloading the asset
++ * again and re-hashing it, and only then records a `finding` of kind
++ * `evidence` on the quest carrying sha256, size, asset name and URL. A hash
++ * mismatch, a failed upload or a failed download records nothing and exits 1.
++ * The release is created once with `gh release create solve-evidence
++ * --prerelease --latest=false`; its tag never matches release.yml's `v*`.
++ */
++
++import crypto from 'node:crypto';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {execFileSync} from 'node:child_process';
++
++const EVIDENCE_RELEASE_TAG = 'solve-evidence';
++const ASSET_SEPARATOR = '--';
++const GH_BINARY = 'gh';
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
++const TEXT_ENCODING = 'utf8';
++const SCRATCH_PREFIX = 'solve-evidence-';
++const FINDING_KIND_EVIDENCE = 'evidence';
++const EVIDENCE_REF_PREFIX = 'sha256:';
++const RELEASE_URL_FIELD = 'url';
++const ASSETS_FIELD = 'assets';
++const NAME_FIELD = 'name';
++const GH_RELEASE = 'release';
++const GH_UPLOAD = 'upload';
++const GH_DOWNLOAD = 'download';
++const GH_VIEW = 'view';
++const GH_CLOBBER_FLAG = '--clobber';
++const GH_PATTERN_FLAG = '--pattern';
++const GH_DIR_FLAG = '--dir';
++const GH_JSON_FLAG = '--json';
++const VERIFY_DIR = 'verify';
++const PATH_SEGMENT_JOINER = '__';
++const SOLVE_PREFIX = 'solve/';
++
++function sha256Of(file) {
++  return crypto.createHash(HASH_ALGORITHM)
++    .update(fs.readFileSync(file)).digest(HASH_ENCODING);
++}
++
++function gh(args, options = {}) {
++  return execFileSync(GH_BINARY, args, {encoding: TEXT_ENCODING, ...options});
++}
++
++// `<quest-id>--<original-name>` where the original name is the file's path
++// under solve/ with the quest's own directory dropped and `/` joined by `__`,
++// so sibling bundles that share a basename (round-2/fixed-1/node-logs.tar.gz
++// and round-2/fixed-2/node-logs.tar.gz) never clobber each other. A file
++// outside solve/ keeps its basename.
++function assetName(questId, file, root = process.cwd()) {
++  const relative = path.relative(root, path.resolve(root, file))
++    .split(path.sep).join('/');
++  const underSolve = relative.startsWith(SOLVE_PREFIX) ?
++    relative.slice(SOLVE_PREFIX.length) : path.basename(relative);
++  const segments = underSolve.split('/');
++  const withoutQuestDir = segments.length > 2 && segments[1] === questId ?
++    [segments[0], ...segments.slice(2)] : segments;
++  return `${questId}${ASSET_SEPARATOR}${withoutQuestDir.join(PATH_SEGMENT_JOINER)}`;
++}
++
++function assetUrl(name, run) {
++  const release = JSON.parse(run([GH_RELEASE, GH_VIEW, EVIDENCE_RELEASE_TAG,
++    GH_JSON_FLAG, `${ASSETS_FIELD},${RELEASE_URL_FIELD}`]));
++  const asset = (release[ASSETS_FIELD] || []).find((entry) =>
++    entry[NAME_FIELD] === name);
++  return asset ? asset[RELEASE_URL_FIELD] : null;
++}
++
++/**
++ * Upload one file, verify it by re-download and re-hash, and return the
++ * record to log. Throws on any mismatch; never records on failure.
++ * @param {Object} options {file, questId, gh?, tmpdir?}
++ * @return {{sha256: string, bytes: number, asset: string, url: string}}
++ */
++function uploadAndVerify({
++  file, questId, run = gh, tmpdir = os.tmpdir(), root = process.cwd(),
++}) {
++  const name = assetName(questId, file, root);
++  const sha256 = sha256Of(file);
++  const bytes = fs.statSync(file).size;
++  const scratch = fs.mkdtempSync(path.join(tmpdir, SCRATCH_PREFIX));
++  try {
++    const staged = path.join(scratch, name);
++    fs.copyFileSync(file, staged);
++    run([GH_RELEASE, GH_UPLOAD, EVIDENCE_RELEASE_TAG, staged, GH_CLOBBER_FLAG]);
++    const downloadDir = path.join(scratch, VERIFY_DIR);
++    fs.mkdirSync(downloadDir);
++    run([GH_RELEASE, GH_DOWNLOAD, EVIDENCE_RELEASE_TAG, GH_PATTERN_FLAG, name,
++      GH_DIR_FLAG, downloadDir]);
++    const downloaded = sha256Of(path.join(downloadDir, name));
++    if (downloaded !== sha256) {
++      throw new Error(`evidence add: re-downloaded ${name} hashes to ` +
++        `${downloaded}, expected ${sha256}; nothing recorded`);
++    }
++    const url = assetUrl(name, run);
++    if (!url) throw new Error(`evidence add: ${name} not listed after upload`);
++    return {sha256, bytes, asset: name, url};
++  } finally {
++    fs.rmSync(scratch, {recursive: true, force: true});
++  }
++}
++
++export {
++  ASSET_SEPARATOR, EVIDENCE_RELEASE_TAG, EVIDENCE_REF_PREFIX,
++  FINDING_KIND_EVIDENCE, assetName, sha256Of, uploadAndVerify,
++};
+diff --git a/solve/epics/solve-v2.md b/solve/epics/solve-v2.md
+index c82d5eeb7e77f29b5f5a5191c255e057b14c0c63..1813d8aa5a17866bdba26350071c6a6dc1a9ed5b 100644
+--- a/solve/epics/solve-v2.md
++++ b/solve/epics/solve-v2.md
+@@ -8,7 +8,7 @@ doneWhen:
+     command: node scripts/checks/solve-v2-budget.js
+ quests:
+   - solve-v2-phase-0-inventory
+-  - solve-v2-phase-1
++  - solve-v2-phase-1-weight
+   - solve-v2-phase-2
+   - solve-v2-phase-3
+   - solve-v2-phase-4
+@@ -36,7 +36,7 @@ to read in one sitting. Design note and measured inventory:
+ | Phase | Quest | Stop |
+ | --- | --- | --- |
+ | 0 inventory and design note | `solve-v2-phase-0-inventory` | Authorization: review the design note before any deletion |
+-| 1 weight | `solve-v2-phase-1` | gate: no tarball tracked, no file > 1 MB under solve/, pre-commit check in place; history purge deferred (amendment 10) |
++| 1 weight | `solve-v2-phase-1-weight` | gate: no tarball tracked, no file > 1 MB under solve/, pre-commit check in place; history purge deferred (amendment 10) |
+ | 2 schema and CLI cutover | `solve-v2-phase-2` | gate: solve/ < 20 MB after the directory collapse; v2 solver runs phases 3–4 |
+ | 3 steering diet | `solve-v2-phase-3` | — |
+ | 4 prove it | `solve-v2-phase-4` | — |
+@@ -68,7 +68,7 @@ replaced by the quest-directory shape row.
+ | Metric | Before | After phase 1 |
+ | --- | --- | --- |
+ | solve/ on disk | 324.9 MB | 115.7 MB (gate for this phase: binaries only; 20 MB is due at the end of phase 2) |
+-| tarballs tracked under solve/ | 33 | 0 |
++| tarballs tracked under solve/ | 33 | 0 (520 small gzip-compressed attempt diffs under solve/artifacts and solve/changes remain; they are text artifacts phase 2 deletes with the directory collapse) |
+ | files > 1 MB under solve/ | 16 | 0 (one allowlisted text log, 2.3 MB, kept verbatim) |
+ | pre-commit binary guard | absent | `scripts/checks/check-solve-binary-guard.js` in `.githooks/pre-commit` |
+ | generated files committed | `FRONTIER.generated.md` | none (gitignored; v1 still regenerates it locally until phase 2) |
+@@ -98,6 +98,7 @@ projections.
+ ## Decision log
+ 
+ - 2026-09-06 — `solve-v2-phase-0` was sealed solved at declaration by v1's oracle probe (metric 0 before any attempt) and could not land its script; redeclared as `solve-v2-phase-0-inventory`. Recorded in the design note as a measured v1 trap.
++- 2026-09-06 — `solve-v2-phase-1` parked: v1 classified its statement as runtime scope and refused the Solver-tooling attempt; redeclared as `solve-v2-phase-1-weight` naming the scope (second v1 trap recorded for the design note).
+ - 2026-09-06 — Design note approved for phase 1 with ten amendments (start
+   refuses a green probe; land honors the last verdict; phase-1 gate = no
+   tarballs, no file > 1 MB, pre-commit check; file-count row replaced by quest
+diff --git a/solve/oracle/solve-v2-phase-1-weight.json b/solve/oracle/solve-v2-phase-1-weight.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..5450ebe0327faf181c38a37937f18c9818b9365a
+--- /dev/null
++++ b/solve/oracle/solve-v2-phase-1-weight.json
+@@ -0,0 +1 @@
++{"metric": 0, "target": 0, "note": "phase 1 gate: 0 tarballs tracked, 0 files over 1 MB under solve/ (allowlisted log excepted), pre-commit binary guard wired; 38 assets verified in solve-evidence"}
+diff --git a/solve/quests/solve-v2-phase-1-weight.json b/solve/quests/solve-v2-phase-1-weight.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..e699dd53238724f9496a436f2fc5d975bb44be96
+--- /dev/null
++++ b/solve/quests/solve-v2-phase-1-weight.json
+@@ -0,0 +1,52 @@
++{
++  "id": "solve-v2-phase-1-weight",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 3,
++  "statement": "Phase 1 of solve-v2 (weight), Solver tooling (workflow) scope: the pre-solve-v2 tag marks the last pre-refactor head, every tarball and every file over 1 MB under solve/ is uploaded to the solve-evidence GitHub pre-release with a verified sha256 and recorded on its quest, none remains tracked, the pre-commit binary guard (scripts/checks/check-solve-binary-guard.js in .githooks/pre-commit) refuses any new one, node scripts/solve.js evidence add performs verified uploads, generated files are no longer committed, the solver runbook documents partial clones, and the history purge is documented as deferred.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/solve-v2/design.md",
++    "closesCL": [],
++    "parentQuest": "solve-v2-phase-1",
++    "planDoc": "solve/epics/solve-v2.md",
++    "draftedAtCommit": "397707ff0938ed19c88ef3e52306b99b97347c79"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/solve-v2-phase-1-weight.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solve-v2-phase-1-weight-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/solve-v2-phase-1-weight.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "phase-1-gate",
++      "statement": "Gate: no tarball tracked under solve/, no file over 1 MB under solve/ except the one allowlisted text log, the pre-commit binary guard in place; the 20 MB target belongs to phase 2."
++    },
++    {
++      "id": "no-history-rewrite",
++      "statement": "No git history is rewritten; the purge stays documented as deferred (design note section 5)."
++    },
++    {
++      "id": "verified-uploads-only",
++      "statement": "Every evidence record is written only after the asset was downloaded again and re-hashed to the local file."
++    }
++  ]
++}
+diff --git a/test/scripts/check-solve-binary-guard.test.js b/test/scripts/check-solve-binary-guard.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae5747bec5c75fe95751f71759bbe69b42de5b9a
+--- /dev/null
++++ b/test/scripts/check-solve-binary-guard.test.js
+@@ -0,0 +1,55 @@
++/**
++ * Solver evidence rule (solve-v2 phase 1): an archive or a file over 1 MB
++ * under solve/ is refused at commit time with the evidence-store hint; the
++ * single allowlisted text log and everything outside solve/ pass.
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {fileURLToPath} from 'node:url';
++import {
++  ALLOWLIST,
++  MAX_BYTES,
++  solveBinaryOffences,
++} from '../../scripts/checks/check-solve-binary-guard.js';
++
++const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
++
++function writeScratch(relative, bytes) {
++  const absolute = path.join(REPO_ROOT, relative);
++  fs.mkdirSync(path.dirname(absolute), {recursive: true});
++  fs.writeFileSync(absolute, Buffer.alloc(bytes, 120));
++  return relative;
++}
++
++test('archives and files over 1 MB under solve/ are refused, nothing else is', () => {
++  const big = writeScratch('solve/changes/scratch-guard/big.ndjson', MAX_BYTES + 1);
++  const exact = writeScratch('solve/changes/scratch-guard/exact.ndjson', MAX_BYTES);
++  const small = writeScratch('solve/changes/scratch-guard/small.json', 10);
++  try {
++    const offences = solveBinaryOffences([
++      'solve/changes/scratch-guard/node-logs.tar.gz',
++      'solve/report/x/run.tgz',
++      big, exact, small,
++      'src/big/but-outside-solve.tar.gz',
++      ALLOWLIST[0],
++      'solve/changes/scratch-guard/missing.tar.gz',
++    ]);
++    assert.deepEqual(offences, [
++      {path: 'solve/changes/scratch-guard/node-logs.tar.gz', reason: 'archive'},
++      {path: 'solve/report/x/run.tgz', reason: 'archive'},
++      {path: big, reason: 'larger than 1 MB'},
++      {path: 'solve/changes/scratch-guard/missing.tar.gz', reason: 'archive'},
++    ]);
++  } finally {
++    fs.rmSync(path.join(REPO_ROOT, 'solve/changes/scratch-guard'),
++      {recursive: true, force: true});
++  }
++});
++
++test('the allowlist holds exactly the one pre-v2 text log', () => {
++  assert.deepEqual([...ALLOWLIST],
++    ['solve/log/rolling-restart-core-stability.ndjson']);
++});
+diff --git a/test/solve/evidence-store.test.js b/test/solve/evidence-store.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2fcd70efe850fc12d3a7a3a1ab0cbf1c6e20d1a9
+--- /dev/null
++++ b/test/solve/evidence-store.test.js
+@@ -0,0 +1,103 @@
++/**
++ * Evidence store (solve-v2 phase 1): an upload is recorded only after the
++ * asset is downloaded again and re-hashes to the local file; a mismatch or a
++ * failed listing records nothing; assets are named <quest-id>--<path under
++ * solve/ with __> (the basename outside solve/).
++ */
++
++import crypto from 'node:crypto';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  ASSET_SEPARATOR,
++  EVIDENCE_RELEASE_TAG,
++  assetName,
++  sha256Of,
++  uploadAndVerify,
++} from '../../scripts/solve/evidence-store.js';
++
++function scratchFile(name, content) {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evidence-store-'));
++  const file = path.join(dir, name);
++  fs.writeFileSync(file, content);
++  return file;
++}
++
++function fakeGh({corrupt = false, listed = true} = {}) {
++  const calls = [];
++  const uploaded = new Map();
++  return {
++    calls,
++    run: (args) => {
++      calls.push(args.join(' '));
++      const [verb, action] = args;
++      if (verb === 'release' && action === 'upload') {
++        const staged = args[3];
++        uploaded.set(path.basename(staged), fs.readFileSync(staged));
++        return '';
++      }
++      if (verb === 'release' && action === 'download') {
++        const name = args[args.indexOf('--pattern') + 1];
++        const dir = args[args.indexOf('--dir') + 1];
++        const bytes = uploaded.get(name);
++        fs.writeFileSync(path.join(dir, name),
++          corrupt ? Buffer.concat([bytes, Buffer.from('x')]) : bytes);
++        return '';
++      }
++      if (verb === 'release' && action === 'view') {
++        return JSON.stringify({assets: listed ?
++          [...uploaded.keys()].map((name) =>
++            ({name, url: `https://example.test/${name}`})) : []});
++      }
++      throw new Error(`unexpected gh ${args.join(' ')}`);
++    },
++  };
++}
++
++test('a verified upload returns sha256, size, asset name and URL', () => {
++  const file = scratchFile('node-logs.tar.gz', 'tar bytes');
++  const gh = fakeGh();
++  const record = uploadAndVerify({file, questId: 'quest-a', run: gh.run,
++    root: path.dirname(file)});
++  assert.equal(record.asset, `quest-a${ASSET_SEPARATOR}node-logs.tar.gz`);
++  assert.equal(record.sha256,
++    crypto.createHash('sha256').update('tar bytes').digest('hex'));
++  assert.equal(record.bytes, 9);
++  assert.equal(record.url, 'https://example.test/quest-a--node-logs.tar.gz');
++  assert.match(gh.calls[0], new RegExp(`^release upload ${EVIDENCE_RELEASE_TAG} .*quest-a--node-logs.tar.gz --clobber$`));
++  assert.match(gh.calls[1], /^release download solve-evidence --pattern quest-a--node-logs.tar.gz --dir /);
++  assert.equal(assetName('q', '/tmp/x/y.bin', '/tmp'), 'q--y.bin',
++    'outside solve/ the basename is the original name');
++  assert.equal(
++    assetName('quest-a',
++      'solve/changes/quest-a/live-ab/round-2/fixed-1/node-logs.tar.gz', '/r'),
++    'quest-a--changes__live-ab__round-2__fixed-1__node-logs.tar.gz',
++    'under solve/ the path (minus the quest directory) keeps siblings apart');
++  assert.equal(
++    assetName('quest-a',
++      'solve/changes/quest-a/live-ab/round-2/fixed-2/node-logs.tar.gz', '/r'),
++    'quest-a--changes__live-ab__round-2__fixed-2__node-logs.tar.gz');
++  assert.equal(assetName('solve-v2-phase-1',
++    'solve/artifacts/sha256/0f/abc.diff.gz', '/r'),
++  'solve-v2-phase-1--artifacts__sha256__0f__abc.diff.gz');
++  assert.equal(sha256Of(file), record.sha256);
++});
++
++test('a re-download that does not hash back refuses and records nothing', () => {
++  const file = scratchFile('run-state.tar.gz', 'state');
++  const gh = fakeGh({corrupt: true});
++  assert.throws(() => uploadAndVerify({file, questId: 'quest-b', run: gh.run,
++    root: path.dirname(file)}),
++  /re-downloaded quest-b--run-state\.tar\.gz hashes to .*expected .*nothing recorded/u);
++});
++
++test('an upload the release does not list afterwards is refused', () => {
++  const file = scratchFile('raw.tar.gz', 'raw');
++  const gh = fakeGh({listed: false});
++  assert.throws(() => uploadAndVerify({file, questId: 'quest-c', run: gh.run,
++    root: path.dirname(file)}),
++  /quest-c--raw\.tar\.gz not listed after upload/u);
++});

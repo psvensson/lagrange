@@ -171,5 +171,9 @@
   "rebase-epoch": {
     "summary": "Record a source-epoch boundary at HEAD instead of resealing after main drifted behind the epoch base: the retired epoch's attempts stay visible but never count as verification, one covering attempt at the new base is demanded over every path the retired epoch reviewed, and a standing rejection transfers to the live-base coverage rule. Refuses a pending step, a --to that is not HEAD, a HEAD that origin/main does not contain, and an empty range; never runs git write operations.",
     "usage": "node scripts/solve.js rebase-epoch --id <id> --to <commit> --reason \"<why the epoch must move>\""
+  },
+  "evidence": {
+    "summary": "Upload one binary or oversized artifact to the solve-evidence GitHub pre-release as <quest-id>--<path under solve/ joined by __>, verify it by downloading it again and re-hashing, then record a finding of kind evidence (sha256, size, URL) on the quest. Binaries never enter git (pre-commit guard).",
+    "usage": "node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]"
   }
 }

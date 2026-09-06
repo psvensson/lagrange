@@ -8,7 +8,7 @@ doneWhen:
     command: node scripts/checks/solve-v2-budget.js
 quests:
   - solve-v2-phase-0-inventory
-  - solve-v2-phase-1
+  - solve-v2-phase-1-weight
   - solve-v2-phase-2
   - solve-v2-phase-3
   - solve-v2-phase-4
@@ -36,7 +36,7 @@ to read in one sitting. Design note and measured inventory:
 | Phase | Quest | Stop |
 | --- | --- | --- |
 | 0 inventory and design note | `solve-v2-phase-0-inventory` | Authorization: review the design note before any deletion |
-| 1 weight | `solve-v2-phase-1` | gate: no tarball tracked, no file > 1 MB under solve/, pre-commit check in place; history purge deferred (amendment 10) |
+| 1 weight | `solve-v2-phase-1-weight` | gate: no tarball tracked, no file > 1 MB under solve/, pre-commit check in place; history purge deferred (amendment 10) |
 | 2 schema and CLI cutover | `solve-v2-phase-2` | gate: solve/ < 20 MB after the directory collapse; v2 solver runs phases 3–4 |
 | 3 steering diet | `solve-v2-phase-3` | — |
 | 4 prove it | `solve-v2-phase-4` | — |
@@ -68,7 +68,7 @@ replaced by the quest-directory shape row.
 | Metric | Before | After phase 1 |
 | --- | --- | --- |
 | solve/ on disk | 324.9 MB | 115.7 MB (gate for this phase: binaries only; 20 MB is due at the end of phase 2) |
-| tarballs tracked under solve/ | 33 | 0 |
+| tarballs tracked under solve/ | 33 | 0 (520 small gzip-compressed attempt diffs under solve/artifacts and solve/changes remain; they are text artifacts phase 2 deletes with the directory collapse) |
 | files > 1 MB under solve/ | 16 | 0 (one allowlisted text log, 2.3 MB, kept verbatim) |
 | pre-commit binary guard | absent | `scripts/checks/check-solve-binary-guard.js` in `.githooks/pre-commit` |
 | generated files committed | `FRONTIER.generated.md` | none (gitignored; v1 still regenerates it locally until phase 2) |
@@ -98,6 +98,7 @@ projections.
 ## Decision log
 
 - 2026-09-06 — `solve-v2-phase-0` was sealed solved at declaration by v1's oracle probe (metric 0 before any attempt) and could not land its script; redeclared as `solve-v2-phase-0-inventory`. Recorded in the design note as a measured v1 trap.
+- 2026-09-06 — `solve-v2-phase-1` parked: v1 classified its statement as runtime scope and refused the Solver-tooling attempt; redeclared as `solve-v2-phase-1-weight` naming the scope (second v1 trap recorded for the design note).
 - 2026-09-06 — Design note approved for phase 1 with ten amendments (start
   refuses a green probe; land honors the last verdict; phase-1 gate = no
   tarballs, no file > 1 MB, pre-commit check; file-count row replaced by quest

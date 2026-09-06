@@ -33,6 +33,12 @@ import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {runNextCommand} from './solve/next.js';
 import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
 import {
+  EVIDENCE_RELEASE_TAG,
+  EVIDENCE_REF_PREFIX,
+  FINDING_KIND_EVIDENCE,
+  uploadAndVerify,
+} from './solve/evidence-store.js';
+import {
   QUEST_CLASS_PRODUCT,
   QUEST_CLASSES,
   SAME_GUARD_OVERRIDE_LIMIT,
@@ -659,6 +665,39 @@ function cmdProbe(root, args) {
 
 function optionalStringArgument(args, name) {
   return typeof args[name] === 'string' ? args[name] : null;
+}
+
+const EVIDENCE_SUBCOMMAND_ADD = 'add';
+const EVIDENCE_USAGE =
+  'evidence: usage is evidence add <path> --quest <id> [--frontier <f>]';
+const EVIDENCE_MAIN_SUFFIX = '-main';
+
+// solve-v2 phase 1: binaries never enter git. Upload, verify by re-download
+// and re-hash, then record a `finding` of kind `evidence` on the quest.
+function cmdEvidence(root, args) {
+  const [subcommand, file] = args._;
+  const questId = typeof args.quest === 'string' ? args.quest : null;
+  if (subcommand !== EVIDENCE_SUBCOMMAND_ADD || !file || !questId) {
+    throw new Error(EVIDENCE_USAGE);
+  }
+  const absolute = path.resolve(root, file);
+  if (!fs.existsSync(absolute)) throw new Error(`evidence: no such file ${file}`);
+  const quest = loadQuest(root, questId);
+  const frontier = typeof args.frontier === 'string' ? args.frontier :
+    (quest.frontiers?.[0]?.id || `${questId}${EVIDENCE_MAIN_SUFFIX}`);
+  const record = uploadAndVerify({file: absolute, questId, root});
+  cmdFinding(root, {
+    id: questId,
+    frontier,
+    kind: FINDING_KIND_EVIDENCE,
+    claim: `Evidence ${record.asset} (${record.bytes} bytes, originally ` +
+      `${file}) uploaded to the ${EVIDENCE_RELEASE_TAG} store and verified ` +
+      `by re-download: ${EVIDENCE_REF_PREFIX}${record.sha256} at ${record.url}`,
+    evidence: `${EVIDENCE_REF_PREFIX}${record.sha256}`,
+  });
+  process.stdout.write(`${record.asset} ${EVIDENCE_REF_PREFIX}${record.sha256} ` +
+    `${record.bytes} ${record.url}\n`);
+  return record;
 }
 
 function cmdFinding(root, args) {
@@ -1484,6 +1523,7 @@ const COMMANDS = {
   'theory': cmdTheory,
   'health': cmdHealth,
   'ingest-evidence': cmdIngestEvidence,
+  'evidence': cmdEvidence,
   'attempt': cmdAttempt,
   'audit': cmdAudit,
   'upgrade': cmdUpgrade,

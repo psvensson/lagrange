@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -162,10 +163,13 @@ function questDirectoriesOffShape() {
   });
 }
 
+// The pre-commit guard's allowlist (one pre-v2 text log kept verbatim) is
+// the single documented exception; both checks read the same list.
 function oversizedSolveFiles(tracked) {
   return arrayFilter(tracked, (file) => {
     const absolute = path.join(REPO_ROOT, file);
-    return fs.existsSync(absolute) &&
+    return !arrayIncludes(BINARY_GUARD_ALLOWLIST, file) &&
+      fs.existsSync(absolute) &&
       fs.statSync(absolute).size > SOLVE_FILE_BUDGET_BYTES;
   });
 }

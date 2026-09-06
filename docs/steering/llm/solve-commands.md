@@ -49,6 +49,7 @@ guardrail command map.
 | `theory` | Two-layer (system + frontier) theory management used to break a stall: system, option, select, record, supersede, list, card, import-ledger. | `node scripts/solve.js theory <system|option|select|record|supersede|list|card|import-ledger> --id <id> ...` |
 | `health` | Quest health diagnostics: stall, oscillation, and coupled-invariant signals that gate the theory/reflection rungs. | `node scripts/solve.js health --id <id>` |
 | `ingest-evidence` | Stamp an external evidence artifact onto a frontier (or doneWhen) so a probe can read it. | `node scripts/solve.js ingest-evidence --id <id> --frontier <f> --evidence <path> [--probe doneWhen]` |
+| `evidence` | Upload one binary or oversized artifact to the solve-evidence GitHub pre-release as <quest-id>--<path under solve/ joined by __>, verify it by downloading it again and re-hashing, then record a finding of kind evidence (sha256, size, URL) on the quest. Binaries never enter git (pre-commit guard). | `node scripts/solve.js evidence add <path> --quest <id> [--frontier <f>]` |
 | `attempt` | Record a one-shot measured attempt that runs a harness command and captures the result as evidence. | `node scripts/solve.js attempt --id <id> --frontier <f> --changeRef diff:<path> -- <harness cmd...>` |
 | `audit` | Run the Quest audit (scope and evidence-honesty checks) that gates a git handoff. | `node scripts/solve.js audit --id <id>` |
 | `upgrade` | Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log and ingest any unrecorded evidence. Reports remain on-demand projections. | `node scripts/solve.js upgrade --id <id> [--reason "<text>"]` |
@@ -64,4 +65,4 @@ guardrail command map.
 
 ---
 
-43 subcommands registered; 43 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+44 subcommands registered; 44 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
