@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solve-footprint-accounting",
+  "status": "pass",
+  "generatedAt": "2026-09-06T13:30:49.303Z",
+  "receipts": [
+    {
+      "id": "accounting-reports-total-history-and-active",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the accounting reports total, append-only history and active bytes$\" test/scripts/solve-footprint-accounting.test.js",
+      "detail": "three byte counts are measured and reported, so the historical and live parts of solve/ are separately visible"
+    },
+    {
+      "id": "history-is-classified-by-the-quest-layout-owner",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^history is whatever the quest-layout owner classifies, and only that$\" test/scripts/solve-footprint-accounting.test.js",
+      "detail": "the size checker asks scripts/solve/store.js which paths are canonical append-only quest logs instead of restating the layout or subtracting a list of migrated files"
+    },
+    {
+      "id": "active-footprint-is-the-twenty-megabyte-gate",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the active footprint carries the 20 MB budget and meets it$\" test/scripts/solve-footprint-accounting.test.js",
+      "detail": "the original 20 MB target is unchanged and now applies to the active footprint alone, which satisfies it"
+    },
+    {
+      "id": "accounting-adds-up",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the accounting adds up$\" test/scripts/solve-footprint-accounting.test.js",
+      "detail": "total equals active plus append-only history, proved by a residual row rather than asserted in prose"
+    },
+    {
+      "id": "only-canonical-quest-history-escapes-the-active-gate",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^history is whatever the quest-layout owner classifies, and only that$\" test/scripts/solve-footprint-accounting.test.js",
+      "detail": "a file placed under a quest directory does not become history: only the canonical log escapes the active-footprint gate"
+    }
+  ]
+}

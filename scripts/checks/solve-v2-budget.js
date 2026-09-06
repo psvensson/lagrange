@@ -6,9 +6,14 @@
  * any budget is exceeded. `--json` prints the measurements; `--phase-0`
  * only measures and never fails (the inventory phase records the baseline).
  *
- *   active v2 footprint < 20 MB (tracked bytes under solve/ minus the
- *   grandfathered migration corpus), that corpus intact, no tracked file
- *   > 1 MB under solve/
+ *   solve/ is accounted for in two semantic classes rather than one number:
+ *   append-only quest history (the canonical logs, as classified by the
+ *   quest-layout owner) and the active footprint that remains. Total, history
+ *   and active bytes are each reported and the accounting is asserted to add
+ *   up; only the active footprint carries the 20 MB budget, because history
+ *   is an immutable record whose growth is normal and whose retention is a
+ *   separate concern with its own owner. No tracked file > 1 MB under solve/,
+ *   and the migrated corpus stays intact
  *   scripts/solve.js + scripts/solve/ <= 6000 lines; test/solve/ <= 6000
  *   docs/steering/ <= 3000 lines; always-load path <= 360 lines incl. AGENTS.md
  *   docs/steering/llm/rules.json absent; docs/steering/rules.md <= 25 rules
@@ -20,6 +25,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
 import {verifyMigrationCorpus} from '../solve/migrate-v1.js';
+import {isQuestLogPath} from '../solve/store.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -54,6 +60,9 @@ const DETAIL_LIMIT = 5;
 const MEGABYTE = 1024 * 1024;
 const MISSING_INVENTORY = 'no migration inventory: run migrate-v1 --inventory-from <commit>';
 const ACTIVE_FOOTPRINT_BUDGET_BYTES = 20 * MEGABYTE;
+// A row that is measured and printed but never fails: the number is there to
+// be seen, not to gate.
+const REPORTED_ONLY = '-';
 const SOLVE_FILE_BUDGET_BYTES = MEGABYTE;
 const QUESTS_DIR = 'solve/quests';
 const QUEST_FILE = 'quest.json';
@@ -99,7 +108,10 @@ const VERDICT_OVER = 'OVER';
 const CELL_GAP = '  ';
 
 const METRIC = Object.freeze({
+  SOLVE_TOTAL_BYTES: 'solve-total-bytes',
+  SOLVE_HISTORY_BYTES: 'solve-history-bytes',
   SOLVE_ACTIVE_BYTES: 'solve-active-bytes',
+  ACCOUNTING_RESIDUAL: 'solve-accounting-residual',
   LEGACY_CORPUS_DRIFT: 'legacy-corpus-drift',
   SOLVE_FILES_OVER_1MB: 'solve-files-over-1mb',
   QUEST_DIRS_OFF_SHAPE: 'quest-dirs-off-shape',
@@ -149,12 +161,21 @@ function trackedBytes(tracked) {
   }, 0);
 }
 
-// The active v2 footprint: everything solve/ carries except the immutable
-// v1 payload the migration grandfathered in. That corpus is historical
-// evidence, not a size regression of the running system; its own row proves
-// it is still intact rather than quietly shrinking to make this one pass.
-function activeFootprintBytes(context) {
-  return trackedBytes(context.tracked) - context.corpus.bytes;
+// solve/ holds two semantic classes. Append-only quest history is an
+// immutable record: `scripts/solve/store.js` owns which paths those are, so
+// this check asks rather than restating the layout or subtracting a list of
+// migrated files. Everything else is live solver state and carries the
+// budget. A file placed under a quest directory is not history; only the
+// canonical log is.
+function classifySolveFootprint(tracked) {
+  const history = arrayFilter(tracked, isQuestLogPath);
+  const active = arrayFilter(tracked, (file) => !isQuestLogPath(file));
+  return {
+    total: trackedBytes(tracked),
+    history: trackedBytes(history),
+    active: trackedBytes(active),
+    historyFiles: history.length,
+  };
 }
 
 function rulesCount() {
@@ -223,11 +244,24 @@ function oversizedSolveFiles(tracked) {
 // One row per acceptance metric: the measurement, its budget, and the
 // comparison that decides it (strict or inclusive as the epic states).
 const METRIC_ROWS = Object.freeze([
+  // Reported, never gated: the honest size of solve/ on the record.
+  Object.freeze({id: METRIC.SOLVE_TOTAL_BYTES, budget: REPORTED_ONLY,
+    measure: (context) => context.footprint.total, ok: () => true,
+    detail: (context) => [`${context.tracked.length} tracked files`]}),
+  // Reported, never gated: an append-only record necessarily grows, and
+  // retention or compaction is a separate concern with a separate owner.
+  Object.freeze({id: METRIC.SOLVE_HISTORY_BYTES, budget: REPORTED_ONLY,
+    measure: (context) => context.footprint.history, ok: () => true,
+    detail: (context) => [`${context.footprint.historyFiles} canonical quest ` +
+      'logs, classified by scripts/solve/store.js']}),
   Object.freeze({id: METRIC.SOLVE_ACTIVE_BYTES, budget: ACTIVE_FOOTPRINT_BUDGET_BYTES,
-    measure: activeFootprintBytes,
-    ok: (value) => value < ACTIVE_FOOTPRINT_BUDGET_BYTES,
-    detail: (context) => [`${context.corpus.bytes} grandfathered bytes in ` +
-      `${context.corpus.quests} migrated logs excluded`]}),
+    measure: (context) => context.footprint.active,
+    ok: (value) => value < ACTIVE_FOOTPRINT_BUDGET_BYTES}),
+  // total = active + append-only history, proved rather than asserted.
+  Object.freeze({id: METRIC.ACCOUNTING_RESIDUAL, budget: 0,
+    measure: (context) => context.footprint.total -
+      (context.footprint.active + context.footprint.history),
+    ok: (value) => value === 0}),
   Object.freeze({id: METRIC.LEGACY_CORPUS_DRIFT, budget: 0,
     measure: (context) => context.corpus.present ? context.corpus.drift.length : 1,
     ok: (value) => value === 0,
@@ -267,6 +301,7 @@ const METRIC_ROWS = Object.freeze([
 function measureSolveV2Budget() {
   const tracked = trackedSolveFiles();
   const context = {tracked, oversized: oversizedSolveFiles(tracked),
+    footprint: classifySolveFootprint(tracked),
     corpus: verifyMigrationCorpus(REPO_ROOT)};
   return arrayMap(METRIC_ROWS, (row) => {
     const value = row.measure(context);
@@ -321,4 +356,6 @@ if (isMainModule) {
   process.exitCode = main(process.argv.slice(ARGV_OFFSET));
 }
 
-export {METRIC, measureSolveV2Budget, renderTable};
+export {
+  ACTIVE_FOOTPRINT_BUDGET_BYTES, METRIC, measureSolveV2Budget, renderTable,
+};

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1794,
+    "unit": 1795,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2054,
-  "digest": "fnv1a32-1fefbce1",
+  "censusSize": 2055,
+  "digest": "fnv1a32-1e24074b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1829,6 +1829,7 @@
     "test/scripts/selection-golden-corpus.test.js": "unit",
     "test/scripts/service-portability-claims-contract.test.js": "unit",
     "test/scripts/service-portability-static-gate.test.js": "unit",
+    "test/scripts/solve-footprint-accounting.test.js": "unit",
     "test/scripts/spec-led-runtime-legacy-deletion-guard.test.js": "unit",
     "test/scripts/stop-distributed-harness-containers.test.js": "unit",
     "test/scripts/summarize-distributed-failure-report.test.js": "unit",

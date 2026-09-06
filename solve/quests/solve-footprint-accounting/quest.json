@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "solve-footprint-accounting",
+  "statement": "The solve/ size gate stops conflating two semantic classes. The budget reports the total solve footprint, the append-only quest history within it, and the active footprint that remains, where history is whatever the quest-layout owner classifies as a canonical append-only log and nothing else. The 20 MB budget applies to the active footprint alone and is met; total, history and active are each reported in bytes and the accounting is asserted to add up, so it is inspectable rather than asserted. History growth is observable and uncapped: retention, compaction or archival is a separate concern with its own owner and is not smuggled in here.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/solve-footprint-accounting/evidence/receipt.json",
+      "requiredReceipts": [
+        "accounting-reports-total-history-and-active",
+        "history-is-classified-by-the-quest-layout-owner",
+        "active-footprint-is-the-twenty-megabyte-gate",
+        "accounting-adds-up",
+        "only-canonical-quest-history-escapes-the-active-gate"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-file-list-and-no-duplicated-classification",
+      "statement": "Classification comes from scripts/solve/store.js. The size checker never restates which paths are quest logs and never derives the active footprint by subtracting a list of migrated files or an approximate constant."
+    },
+    {
+      "id": "history-is-preserved-and-uncapped",
+      "statement": "No migrated or v2 quest log is archived, compacted or deleted to satisfy a budget, and no absolute cap is placed on quest history; its size is reported so growth is observable."
+    },
+    {
+      "id": "no-invented-exemptions",
+      "statement": "Only canonical append-only quest history is excluded from the active gate. Any further exclusion requires a real semantic owner and stops for that decision rather than being invented here."
+    },
+    {
+      "id": "phase-2-record-untouched",
+      "statement": "Phase 2 is published at d6aeeac14; its quests and reports are not modified, reopened or reinterpreted. This quest closes the size decision in its own append-only log."
+    }
+  ],
+  "sealedAt": "d6aeeac143c79728eecd2a09487c7c262c4fe3a0"
+}
