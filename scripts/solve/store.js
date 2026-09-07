@@ -152,6 +152,10 @@ function applyTerminal(state, entry) {
     state.hold = NO_HOLD;
   } else if (terminal === QUEST_STATUS.BLOCKED) {
     state.hold = entry;
+  } else if (terminal === QUEST_STATUS.AWAITING_EXTERNAL_PROOF) {
+    // The implementation landed and its claim did not close. The quest stays
+    // open, and remembers which landing it is waiting on.
+    state.awaitingExternalProof = entry;
   }
 }
 
@@ -184,13 +188,17 @@ const ENTRY_EFFECTS = Object.freeze({
  * Derived state of a quest from its log: status, the newest entry of each
  * type, the seal, and the attempts since the last altitude check. A
  * `blocked` terminal entry holds the quest until the next attempt or typed
- * finding.
+ * finding. `awaiting-external-proof` records that an implementation landed
+ * whose claim needs evidence that cannot exist until the head is published: it
+ * is a status the quest carries, never a terminal one, so the quest stays open
+ * until something measures the external claim against the head it names.
  * @param {Object[]} entries
  * @return {Object}
  */
 function questState(entries) {
   const state = {
     status: QUEST_STATUS.OPEN, hold: NO_HOLD, seal: null, attempts: [],
+    awaitingExternalProof: null,
     attemptsSinceAltitudeCheck: [], lastVerification: null,
     lastVerificationIndex: -1, lastAttemptIndex: -1,
   };
@@ -200,7 +208,10 @@ function questState(entries) {
   });
   const held = state.hold !== NO_HOLD && state.status === QUEST_STATUS.OPEN;
   return {
-    status: held ? QUEST_STATUS.BLOCKED : state.status,
+    status: held ? QUEST_STATUS.BLOCKED :
+      (state.status === QUEST_STATUS.OPEN && state.awaitingExternalProof ?
+        QUEST_STATUS.AWAITING_EXTERNAL_PROOF : state.status),
+    awaitingExternalProof: state.awaitingExternalProof,
     terminal: TERMINAL_STATUSES.includes(state.status),
     blocked: held ? state.hold : null,
     seal: state.seal,

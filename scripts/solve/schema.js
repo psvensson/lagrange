@@ -44,6 +44,12 @@ const VERIFIER_PREFIX = 'subagent:';
 
 const QUEST_STATUS = Object.freeze({
   OPEN: 'open',
+  // Landed, and waiting on evidence that cannot exist until this head is
+  // published. Not terminal: the implementation is proven, the claim is not.
+  // A quest reaches this by declaring `externalProof: true`; if it also
+  // declares `implementedWhen`, landing measures that instead of the claim and
+  // leaves the quest here rather than closing it.
+  AWAITING_EXTERNAL_PROOF: 'awaiting-external-proof',
   SOLVED: 'solved',
   EXHAUSTED: 'exhausted',
   SUPERSEDED: 'superseded',
@@ -186,7 +192,8 @@ function problemsForVerification(entry) {
 
 function problemsForTerminal(entry) {
   const problems = [];
-  const statuses = [...TERMINAL_STATUSES, QUEST_STATUS.BLOCKED];
+  const statuses = [...TERMINAL_STATUSES, QUEST_STATUS.BLOCKED,
+    QUEST_STATUS.AWAITING_EXTERNAL_PROOF];
   if (!statuses.includes(entry.status)) {
     problems.push(`${PROBLEM.TERMINAL_PREFIX}${statuses.join(LIST_SEPARATOR)}`);
   }

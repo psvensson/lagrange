@@ -12,6 +12,7 @@
       ]
     }
   },
+  "externalProof": true,
   "constraints": [
     {
       "id": "source-change-subagent-verification",

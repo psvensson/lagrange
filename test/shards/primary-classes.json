@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1800,
+    "unit": 1801,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2060,
-  "digest": "fnv1a32-ff4a41b3",
+  "censusSize": 2061,
+  "digest": "fnv1a32-5a08f936",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1884,6 +1884,7 @@
     "test/service/service-type-adapter.test.js": "unit",
     "test/solve/commands.test.js": "unit",
     "test/solve/evidence-store.test.js": "unit",
+    "test/solve/external-proof-lifecycle.test.js": "unit",
     "test/solve/guards.test.js": "unit",
     "test/solve/migrate-v1.test.js": "unit",
     "test/solve/probes.test.js": "unit",

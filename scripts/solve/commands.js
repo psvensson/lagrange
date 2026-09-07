@@ -9,8 +9,8 @@ import {spawnSync} from 'node:child_process';
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
-  FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, TERMINAL_STATUSES,
-  VERDICT, entryProblems, epicProblems, questProblems, text,
+  FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, SHA_PATTERN,
+  TERMINAL_STATUSES, VERDICT, entryProblems, epicProblems, questProblems, text,
 } from './schema.js';
 import {
   appendEntry, evidenceDir, isOpenEpic, listEpics, listQuestIds, logFile, questDir,
@@ -63,6 +63,12 @@ const MESSAGE = Object.freeze({
   ID_REQUIRED: '--id <quest> is required',
   SOLVED_BY_LAND: 'solved is recorded by land, never by note',
   REJECTION_STANDS: 'the newest verification is a rejection and no attempt is newer than it',
+  DONE_WHEN: 'doneWhen',
+  IMPLEMENTED_WHEN: 'implementedWhen',
+  AWAITING_SUFFIX: '; the claim awaits evidence that needs this head published',
+  NOT_AWAITING: 'is not awaiting external proof; nothing landed that needs it',
+  EXTERNAL_HEAD: 'external proof names the head it certifies (--head <sha>)',
+  EXTERNAL_NOT_GREEN: 'doneWhen is not green against the published head',
   VERIFICATION_MISSING: 'src/ changes need a verification entry (verifier subagent:<id>)',
   VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
   VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
@@ -386,10 +392,15 @@ function land(root, options) {
     refuse(`quest ${quest.id}: doneWhen differs from the sealed probe; ${MESSAGE.PROBE_IMMUTABLE}`);
   }
   const epic = loadEpic(root, quest);
-  const measured = measure(root, quest.doneWhen);
+  // A claim whose evidence cannot exist until this head is published is proven
+  // in two steps. `implementedWhen` is what landing measures; `doneWhen` stays
+  // the claim and is measured later, against the head this landing produces.
+  const external = Boolean(quest.externalProof) && Boolean(quest.implementedWhen);
+  const measured = measure(root, external ? quest.implementedWhen : quest.doneWhen);
   const problems = [];
   if (!measured.done) {
-    problems.push(`doneWhen is not green: metric ${measured.metric} target ` +
+    problems.push(`${external ? MESSAGE.IMPLEMENTED_WHEN : MESSAGE.DONE_WHEN}` +
+      ` is not green: metric ${measured.metric} target ` +
       `${measured.target} (${measured.reason})`);
   }
   const paths = pathsOutsideQuest(root, quest.id);
@@ -407,11 +418,13 @@ function land(root, options) {
   // the entry back out so the quest stays open and land can be retried.
   const logPath = logFile(root, quest.id);
   const logBefore = fs.readFileSync(logPath);
+  const landedProbe = external ? quest.implementedWhen : quest.doneWhen;
   const terminal = appendEntry(root, quest.id, {
     type: ENTRY_TYPE.TERMINAL,
-    status: QUEST_STATUS.SOLVED,
-    text: `landed: probe ${quest.doneWhen.probe} metric=${measured.metric} ` +
-      `target=${measured.target}; ${paths.length} paths`,
+    status: external ? QUEST_STATUS.AWAITING_EXTERNAL_PROOF : QUEST_STATUS.SOLVED,
+    text: `landed: probe ${landedProbe.probe} metric=${measured.metric} ` +
+      `target=${measured.target}; ${paths.length} paths` +
+      (external ? MESSAGE.AWAITING_SUFFIX : ''),
     probe: measured,
     ...changeSetRecord(paths),
   });
@@ -443,6 +456,45 @@ function land(root, options) {
  * @param {{asset: string, authorizedAsset: ?string, run?: Function}} options
  * @return {{asset: string}}
  */
+/**
+ * Close a quest whose implementation landed and whose claim needed evidence
+ * that could only exist once that head was published. It measures the sealed
+ * `doneWhen` now, and records the exact implementation head the proof
+ * certifies: the closure may live on a later head, but it never leaves which
+ * tree was actually proven to inference.
+ * @param {string} root
+ * @param {{id: string, head: string, text: string}} options
+ * @return {Object}
+ */
+function externallyProven(root, options) {
+  const {quest, state} = openState(root, options.id);
+  // Two shapes reach here. A quest with an implementation landed it and is
+  // waiting; a quest with nothing to implement was only ever waiting. Both
+  // declared that their claim needs a published head, and neither may close
+  // without naming the head that was actually proven.
+  if (state.status !== QUEST_STATUS.AWAITING_EXTERNAL_PROOF &&
+    !quest.externalProof) {
+    refuse(`quest ${quest.id} ${MESSAGE.NOT_AWAITING}`);
+  }
+  if (!SHA_PATTERN.test(String(options.head || ''))) {
+    refuse(`quest ${quest.id}: ${MESSAGE.EXTERNAL_HEAD}`);
+  }
+  const measured = measure(root, quest.doneWhen);
+  if (!measured.done) {
+    refuse(`quest ${quest.id}: ${MESSAGE.EXTERNAL_NOT_GREEN}: metric ` +
+      `${measured.metric} target ${measured.target} (${measured.reason})`);
+  }
+  const entry = appendEntry(root, quest.id, {
+    type: ENTRY_TYPE.TERMINAL,
+    status: QUEST_STATUS.SOLVED,
+    text: options.text,
+    implementationHead: options.head,
+    probe: measured,
+  });
+  return {id: quest.id, status: QUEST_STATUS.SOLVED,
+    implementationHead: options.head, probe: measured, entry};
+}
+
 function evidenceDelete(root, options) {
   return deleteSharedEvidenceAsset({asset: options.asset,
     authorizedAsset: options.authorizedAsset, run: options.run});
@@ -498,5 +550,6 @@ function board(root) {
 
 export {
   ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, externallyProven, land,
+  note, probe, start,
 };

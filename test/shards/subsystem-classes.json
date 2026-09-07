@@ -17,7 +17,7 @@
     "release-packaging": 10,
     "runtime-primitives": 22,
     "services-runtime": 169,
-    "solver-tooling": 7,
+    "solver-tooling": 8,
     "storage-partition": 141,
     "storage-raft": 75,
     "test-infrastructure": 118,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2060,
-  "digest": "fnv1a32-9b6f9b19",
+  "censusSize": 2061,
+  "digest": "fnv1a32-fe9a38ce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1901,6 +1901,7 @@
     "test/service/service-type-adapter.test.js": "services-runtime",
     "test/solve/commands.test.js": "solver-tooling",
     "test/solve/evidence-store.test.js": "solver-tooling",
+    "test/solve/external-proof-lifecycle.test.js": "solver-tooling",
     "test/solve/guards.test.js": "solver-tooling",
     "test/solve/migrate-v1.test.js": "solver-tooling",
     "test/solve/probes.test.js": "solver-tooling",

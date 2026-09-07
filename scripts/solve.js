@@ -8,8 +8,10 @@
 //   node scripts/solve.js note --id <quest> --blocked "<why>" --next-owner judgment|verification|authorization
 //   node scripts/solve.js note --id <quest> --exhausted "<why>" | --superseded "<why>" [--by <quest>]
 //   node scripts/solve.js probe --id <quest> | --epic <epic>
-//   node scripts/solve.js land --id <quest>
+//   node scripts/solve.js note --id <quest> --externally-proven "<text>"
+//     --head <sha>
 //   node scripts/solve.js evidence add <file> --id <quest> [--text "<why>"] [--replace]
+//   node scripts/solve.js note --id <quest> --externally-proven "<text>" --head <sha>
 //   node scripts/solve.js evidence delete <asset> --authorize-asset <asset>
 //   node scripts/solve.js board
 // Every command accepts --json.
@@ -21,7 +23,8 @@ import {fileURLToPath} from 'node:url';
 
 import {ENTRY_TYPE, QUEST_STATUS} from './solve/schema.js';
 import {
-  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, externallyProven, land,
+  note, probe, start,
 } from './solve/commands.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,7 +39,8 @@ const EVIDENCE_ADD = 'add';
 const EVIDENCE_DELETE = 'delete';
 const AUTHORIZE_ASSET_FLAG = 'authorize-asset';
 const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
-const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
+const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, ' +
+  '--externally-proven, --blocked, ' +
   '--exhausted, --superseded';
 const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
   '[--text "<why>"] [--replace] | ' +
@@ -58,6 +62,8 @@ const NOTE_SHAPES = Object.freeze([
     text: flags.blocked, nextOwner: flags[NEXT_OWNER_FLAG]})},
   {flag: 'exhausted', build: (flags) => ({type: ENTRY_TYPE.TERMINAL,
     status: QUEST_STATUS.EXHAUSTED, text: flags.exhausted})},
+  {flag: 'externally-proven', build: (flags) => ({externallyProven: true,
+    text: flags['externally-proven'], head: flags.head})},
   {flag: 'superseded', build: (flags) => ({type: ENTRY_TYPE.TERMINAL,
     status: QUEST_STATUS.SUPERSEDED, text: flags.superseded, supersededBy: flags.by})},
 ]);
@@ -94,7 +100,14 @@ function cmdStart(root, {flags}) {
 }
 
 function cmdNote(root, {flags}) {
-  return note(root, noteOptions(flags));
+  const options = noteOptions(flags);
+  // Closing on evidence that needed a published head is not an ordinary
+  // entry: it measures the sealed claim now and names the head it certifies.
+  if (options.externallyProven) {
+    return externallyProven(root,
+      {id: flags.id, head: options.head, text: options.text});
+  }
+  return note(root, options);
 }
 
 function cmdProbe(root, {flags}) {

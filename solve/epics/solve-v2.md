@@ -18,6 +18,7 @@ quests:
   - evidence-deletion-authority
   - certification-verdict-observation
   - ci-outward-action-grant
+  - external-proof-lifecycle
   - solve-v2-phase-4
   - solve-v2-phase-0
   - solve-v2-phase-1

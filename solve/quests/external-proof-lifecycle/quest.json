@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "external-proof-lifecycle",
+  "statement": "A claim that cannot be proved until its head is published has a lifecycle instead of a dead end. Landing required a green doneWhen and landing produced the head, so a quest whose evidence is hosted runs on a published tree could never close; its own parent recorded that the more rigorous sealing was the one the machinery punished. A quest may now declare that its claim needs a published head, and optionally what proving its implementation means. Landing such a quest measures the implementation rather than the claim and leaves it awaiting external proof, a state it carries and never a terminal one; the quest stays open until something measures the sealed claim and records the exact head that proof certifies. The closure may live on a later head, but which tree was actually proven is never left to inference. The case is generic and additive: it is not a mode for one kind of evidence, and a quest that proves its claim locally still closes in one step with nothing about it changed.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/external-proof-lifecycle/evidence/receipt.json",
+      "requiredReceipts": [
+        "awaiting-external-proof-is-carried-never-terminal",
+        "the-external-proof-closes-it-and-the-landing-does-not",
+        "an-ordinary-quest-is-unaffected",
+        "the-state-is-a-recognised-entry-status",
+        "a-hold-survives-awaiting-external-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "generic-not-a-mode",
+      "statement": "The case is a lifecycle state, not a special path for hosted CI. Nothing in it names a workflow, a runner or a provider, and any claim whose evidence needs a published head uses it."
+    },
+    {
+      "id": "additive",
+      "statement": "A quest that proves its claim locally is unchanged: it lands and closes in one step. The new state is reachable only by a quest that declares its claim needs a published head."
+    },
+    {
+      "id": "the-proven-head-is-named",
+      "statement": "Closure records the exact implementation head the external proof certifies. A closure that cannot say which tree was proven is refused."
+    }
+  ],
+  "sealedAt": "971fa8fd45e504152253092f733f2716c04749da"
+}

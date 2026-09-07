@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "external-proof-lifecycle",
+  "status": "pass",
+  "generatedAt": "2026-09-07T20:10:43.863Z",
+  "receipts": [
+    {
+      "id": "awaiting-external-proof-is-carried-never-terminal",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^awaiting external proof is a state a quest carries, never a terminal one$\" test/solve/external-proof-lifecycle.test.js",
+      "detail": "a landing that proved an implementation rather than a claim leaves the quest open, and the quest remembers what it is waiting on"
+    },
+    {
+      "id": "the-external-proof-closes-it-and-the-landing-does-not",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the external proof closes it, and the landing does not$\" test/solve/external-proof-lifecycle.test.js",
+      "detail": "the claim closes the quest; the landing never does"
+    },
+    {
+      "id": "an-ordinary-quest-is-unaffected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an ordinary quest is unaffected$\" test/solve/external-proof-lifecycle.test.js",
+      "detail": "the case is additive: a quest that proves its claim locally still lands and closes in one step"
+    },
+    {
+      "id": "the-state-is-a-recognised-entry-status",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the state is a recognised entry status$\" test/solve/external-proof-lifecycle.test.js",
+      "detail": "the record accepts the state, so it is part of the vocabulary rather than a string the log happens to carry"
+    },
+    {
+      "id": "a-hold-survives-awaiting-external-proof",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a blocked quest is still blocked while awaiting external proof$\" test/solve/external-proof-lifecycle.test.js",
+      "detail": "waiting on a published head does not clear a hold naming an owner who must decide something"
+    }
+  ]
+}
