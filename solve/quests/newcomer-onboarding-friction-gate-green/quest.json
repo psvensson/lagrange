@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "newcomer-onboarding-friction-gate-green",
+  "statement": "A new developer following the public onboarding surfaces (README quickstart, CLI docs, examples, charts) hits no stale ddb naming, no broken paths, no unstated prerequisites, and a fresh clone contains no bulk legacy artifacts: DEBUGGING.md paths fixed; README minimal .env drops NODE_ID and testing guidance points at test:fast with a bare-tap warning; broken test:coverage script removed; start-node scripts drop hardcoded NODE_IDs; examples/ has an index README and per-family prerequisites; the ddb->lagrange rename is completed atomically (bin, SEA entrypoint and output names, config dir, DDB_* CLI env vars, CLI docs) with git grep clean outside whitelisted internals; _legacy_work slimmed to its live-referenced closure (theory-ledger.md, work-theory-ledger.js, work-package-schema.js, inventory/) with an archive README; tracked .playback, .tmp, .antigravitycli, .codex untracked and ignored; a narrow naming guard wired into test:static; npm run test:gate green at closure.",
+  "epic": "lagrange-devops-onboarding",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/project-hardening-gate.js --metric"
+    }
+  },
+  "preSatisfied": true,
+  "supersedes": {
+    "quest": "newcomer-onboarding-friction",
+    "reason": "its sealed doneWhen named a scenario-harness scenario that has never existed in the tree or the registry, so the probe reported no report for the scenario and always would. The statement is preserved verbatim; only the acceptance changes, from a probe that cannot measure the claim to the clause the claim itself names."
+  },
+  "constraints": [
+    {
+      "id": "claim-preserved-verbatim",
+      "statement": "The statement is the superseded quest's statement, unchanged. Nothing in it is narrowed, and the semantic delta is zero."
+    },
+    {
+      "id": "the-clause-the-claim-names",
+      "statement": "Acceptance is npm run test:gate green, which is the closure clause written into the statement itself, read through a projector rather than restated."
+    }
+  ],
+  "sealedAt": "69836e698bee762e99be33c191d7e6407e729d9c"
+}

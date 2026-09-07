@@ -69,6 +69,12 @@ const MESSAGE = Object.freeze({
   NOT_AWAITING: 'is not awaiting external proof; nothing landed that needs it',
   EXTERNAL_HEAD: 'external proof names the head it certifies (--head <sha>)',
   EXTERNAL_NOT_GREEN: 'doneWhen is not green against the published head',
+  PRE_SATISFIED: '; sealed already satisfied: the claim held before ' +
+    'this quest existed and no red was manufactured',
+  PRE_SATISFIED_BUT_RED: 'declares preSatisfied but its probe is red, ' +
+    'so the claim did not already hold',
+  GREEN_SEAL_REPAIR: 'write a probe that is red now, or declare ' +
+    'preSatisfied if the claim already held',
   VERIFICATION_MISSING: 'src/ changes need a verification entry (verifier subagent:<id>)',
   VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
   VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
@@ -145,9 +151,19 @@ function start(root, options) {
     refuse(`quest ${quest.id} cannot start on a probe that does not measure ` +
       `(${measured.reason}); make the probe red first`);
   }
-  if (measured.done) {
+  // A green probe at sealing normally means the claim was written to fit what
+  // already passed, which is why it is refused. Inherited work is the one
+  // honest exception: a claim that was already true before this quest existed
+  // has nothing to make red, and manufacturing a red would falsify the history
+  // to satisfy a shape. Such a quest says so, and the seal records that it was
+  // already satisfied rather than that it was ever unmet.
+  if (measured.done && quest.preSatisfied !== true) {
     refuse(`quest ${quest.id} cannot start on a green probe (metric ` +
-      `${measured.metric} <= ${measured.target}); write a probe that is red now`);
+      `${measured.metric} <= ${measured.target}); ${MESSAGE.GREEN_SEAL_REPAIR}`);
+  }
+  if (!measured.done && quest.preSatisfied === true) {
+    refuse(`quest ${quest.id} ${MESSAGE.PRE_SATISFIED_BUT_RED} ` +
+      `(metric ${measured.metric} > ${measured.target})`);
   }
   const sealedAt = headSha(root);
   const sealed = {...quest, schema: QUEST_SCHEMA, sealedAt};
@@ -157,7 +173,9 @@ function start(root, options) {
     type: ENTRY_TYPE.FINDING,
     kind: FINDING_KIND.DECISION,
     text: `sealed at ${sealedAt}; seal-time probe ${quest.doneWhen.probe} ` +
-      `metric=${measured.metric} target=${measured.target} measuring=${measured.measuring}`,
+      `metric=${measured.metric} target=${measured.target} ` +
+      `measuring=${measured.measuring}` +
+      (quest.preSatisfied === true ? MESSAGE.PRE_SATISFIED : ''),
     seal: {sealedAt, statement: quest.statement, doneWhen: quest.doneWhen,
       metric: measured.metric, target: measured.target, measuring: measured.measuring,
       reason: measured.reason},

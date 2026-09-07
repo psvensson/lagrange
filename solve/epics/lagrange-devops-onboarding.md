@@ -7,6 +7,7 @@ roadmapRow: null
 graduatesTo: null
 quests:
   - newcomer-onboarding-friction
+  - newcomer-onboarding-friction-gate-green
 authorizes: []
 legacyStatus: active
 ---
