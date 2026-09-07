@@ -12,6 +12,11 @@
 // conclusions. Any failed run on that SHA fails the check outright — a red run
 // followed by three green ones is not repeatability, it is a flake with a
 // survivor bias.
+//
+// `--metric` prints how far the head is from that bar and nothing else, so a
+// probe can read the answer this check already computes. Without it the check
+// states its verdict in prose, which no probe can measure; the number is the
+// same verdict, not a second one.
 
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
@@ -25,10 +30,13 @@ const RUN_QUERY_LIMIT = '40';
 const UTF8 = 'utf8';
 const EXIT_FAILURE = 1;
 const SHA_DISPLAY_LENGTH = 9;
+const METRIC_FLAG = '--metric';
+const UNREADABLE_METRIC = 1;
 const CANNOT_READ_PROBLEM =
   'hosted-gate-repeatability: cannot read HEAD or hosted run list\n';
 
 // Ambient-intrinsic hardening (system-guidelines): capture at module load.
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const stringSlice = Function.call.bind(String.prototype.slice);
@@ -52,10 +60,14 @@ function hostedRuns() {
 }
 
 function main() {
+  const metricOnly = arrayIncludes(process.argv, METRIC_FLAG);
   const sha = headSha();
   const runs = hostedRuns();
   if (!sha || runs === null) {
-    process.stdout.write(CANNOT_READ_PROBLEM);
+    // Not knowing is not passing: an unreadable head or run list is one
+    // shortfall, never zero.
+    process.stdout.write(metricOnly ?
+      `${UNREADABLE_METRIC}\n` : CANNOT_READ_PROBLEM);
     process.exitCode = EXIT_FAILURE;
     return;
   }
@@ -66,10 +78,12 @@ function main() {
     onHead, (run) => run.conclusion === CONCLUSION_SUCCESS);
   const failures = arrayFilter(
     onHead, (run) => run.conclusion === CONCLUSION_FAILURE);
-  process.stdout.write(
+  const shortfall = failures.length +
+    Math.max(REQUIRED_PASSES - passes.length, 0);
+  process.stdout.write(metricOnly ? `${shortfall}\n` :
     `hosted-gate-repeatability: ${passes.length}/${REQUIRED_PASSES} passing, ` +
     `${failures.length} failing on ${stringSlice(sha, 0, SHA_DISPLAY_LENGTH)}\n`);
-  if (failures.length > 0 || passes.length < REQUIRED_PASSES) {
+  if (shortfall > 0) {
     process.exitCode = EXIT_FAILURE;
   }
 }

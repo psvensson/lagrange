@@ -13,6 +13,11 @@
  *   log, and the proof artifacts its sealed terminal claim requires, and
  *   those artifacts are neither deleted nor modified after closure.
  *
+ * "After closure" is measured at each commit transition, from the quest's own
+ * log as it stood there. Asking whether a quest is closed now and applying
+ * that answer to every earlier edge would condemn the very commits that built
+ * the evidence a quest went on to close upon.
+ *
  * Which artifacts a sealed claim requires is derived structurally, by the
  * probe owner, from the sealed `doneWhen`. Nothing is inferred from prose or
  * from a filename, so mentioning `something.json` in a log entry grants it
@@ -35,11 +40,11 @@ import {
   LOG_FILE, QUESTS_DIR, QUEST_FILE,
 } from '../solve/schema.js';
 import {
-  listQuestIds, questDir, questState, readLog, readQuest,
+  listQuestIds, questState, readLog, readQuest,
 } from '../solve/store.js';
 import {requiredProofArtifacts} from '../solve/probes.js';
 import {
-  HEAD_REV, admittedEdges, baseFromArgv, changedPathsBetween, publicationBase,
+  admittedEdges, baseFromArgv, changedPathsBetween, publicationBase,
   readBlobs, reportRecordOffences, trackedAt,
 } from './quest-record-transitions.js';
 import {resolvedCheckBase} from './changed-paths.js';
@@ -48,6 +53,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const PATH_SEPARATOR = '/';
 const ARGV_OFFSET = 2;
 const WORKING_TREE = 'working tree';
+const LINE_SEPARATOR = '\n';
+const EMPTY_TEXT = '';
 const STATUS_ADDED = 'A';
 const STATUS_DELETED = 'D';
 const OFFENCE = Object.freeze({
@@ -69,7 +76,9 @@ const bufferEquals = Function.call.bind(Buffer.prototype.equals);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringSlice = Function.call.bind(String.prototype.slice);
+const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 function walk(root, relative) {
   const absolute = path.join(root, relative);
@@ -100,6 +109,36 @@ function allowedPaths(root, id) {
 
 function isClosed(root, id) {
   return questState(readLog(root, id)).terminal;
+}
+
+// Whether a quest had already closed at a revision, read from the log as it
+// stood there. Present-tense closure is the wrong question for a past edge: a
+// quest closing today would otherwise make every earlier edit to its evidence
+// look like a post-closure rewrite, including the edits that produced the
+// evidence it closed on.
+function closedAt(root, rev, file) {
+  const log = readBlobs(root, [{key: file, rev: `${rev}:${file}`}]).get(file);
+  if (!log) return null;
+  const entries = [];
+  for (const line of stringSplit(String(log), LINE_SEPARATOR)) {
+    if (stringTrim(line) === EMPTY_TEXT) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch {
+      return null;
+    }
+  }
+  return questState(entries).terminal;
+}
+
+function questRecordAt(root, rev, file) {
+  const record = readBlobs(root, [{key: file, rev: `${rev}:${file}`}]).get(file);
+  if (!record) return null;
+  try {
+    return JSON.parse(String(record));
+  } catch {
+    return null;
+  }
 }
 
 // Composition: every file the closed quest holds must be one the sealed
@@ -153,10 +192,13 @@ function closedRequirementsAt(root, rev) {
   for (const file of questFiles) {
     const id = stringSlice(file, `${QUESTS_DIR}${PATH_SEPARATOR}`.length,
       file.length - `${PATH_SEPARATOR}${QUEST_FILE}`.length);
-    if (stringIncludes(id, PATH_SEPARATOR) ||
-      !fs.existsSync(questDir(root, id))) continue;
-    if (!isClosed(root, id)) continue;
-    for (const artifact of requiredProofArtifacts(readQuest(root, id).doneWhen)) {
+    if (stringIncludes(id, PATH_SEPARATOR)) continue;
+    const logFile = `${QUESTS_DIR}${PATH_SEPARATOR}${id}` +
+      `${PATH_SEPARATOR}${LOG_FILE}`;
+    if (!closedAt(root, rev, logFile)) continue;
+    const record = questRecordAt(root, rev, file);
+    if (!record) continue;
+    for (const artifact of requiredProofArtifacts(record.doneWhen)) {
       requirements.set(artifact, id);
     }
   }
@@ -174,10 +216,15 @@ function closedQuestShapeOffences(options = {}) {
   const composition = arrayFlatMap(
     arrayFilter(listQuestIds(root), (id) => isClosed(root, id)),
     (id) => compositionOffences(root, id));
-  const requirements = closedRequirementsAt(root, HEAD_REV);
-  const mutations = requirements.size === 0 ? [] :
-    arrayFlatMap(admittedEdges(root, base),
-      (edge) => mutationOffences(root, edge, requirements));
+  // The requirement set is asked for at each edge's parent, not at HEAD. A
+  // quest that closes today would otherwise make every earlier edit to the
+  // evidence it closed on look like a post-closure rewrite - including the
+  // edits that produced that evidence.
+  const mutations = arrayFlatMap(admittedEdges(root, base), (edge) => {
+    const requirements = closedRequirementsAt(root, edge.parent);
+    return requirements.size === 0 ? [] :
+      mutationOffences(root, edge, requirements);
+  });
   return [...composition, ...mutations];
 }
 
