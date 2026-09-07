@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2041,
+    "ordinary": 2043,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2058,
-  "digest": "fnv1a32-a93e4d34",
+  "censusSize": 2060,
+  "digest": "fnv1a32-5d11b705",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1731,6 +1731,7 @@
     "test/runtime/work-class-scheduler.test.js": "ordinary",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "ordinary",
     "test/scripts/action-authority.test.js": "ordinary",
+    "test/scripts/action-grant.test.js": "ordinary",
     "test/scripts/analyze-cl039-link-rate.test.js": "ordinary",
     "test/scripts/analyze-fix-engagement.test.js": "ordinary",
     "test/scripts/analyze-formation-release-phases.test.js": "ordinary",
@@ -1813,6 +1814,7 @@
     "test/scripts/release-notes.test.js": "ordinary",
     "test/scripts/release-npm-package.test.js": "ordinary",
     "test/scripts/release-preflight.test.js": "ordinary",
+    "test/scripts/release-workflow-grant.test.js": "ordinary",
     "test/scripts/rolling-restart-leadership-churn-attribution.test.js": "ordinary",
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "ordinary",
     "test/scripts/rule-set-revision.test.js": "ordinary",

@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "ci-outward-action-grant",
+  "statement": "R26 holds where this repository's most consequential outward actions run. Pushing a container image and creating a public release happen in workflow YAML, which cannot import a decision, and registering them while noting that YAML cannot ask would leave a global invariant false exactly where it matters most. Instead the authority decides once, before the noninteractive executor runs, and records a scoped grant naming one action, one subject and the head it was issued for; each executing step then refuses unless the grant for exactly what it is about to do is present. The workflow does not ask - it is unable to act without a decision that already happened. A grant is evidence that an authorization existed and never a substitute for one: requiring it re-asks the authority, so a grant naming an unregistered action buys nothing, a grant for one subject or action authorizes no other, a grant does not survive the head it was issued for, and an unreadable grant is a refusal rather than an absence.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/ci-outward-action-grant/evidence/receipt.json",
+      "requiredReceipts": [
+        "an-executor-cannot-proceed-without-a-grant",
+        "the-authority-decides-and-the-grant-records-it",
+        "a-grant-for-one-subject-authorizes-no-other",
+        "a-grant-for-one-action-authorizes-no-other",
+        "a-grant-does-not-survive-its-head",
+        "a-forged-grant-is-not-an-authorization",
+        "an-unreadable-grant-is-a-refusal",
+        "the-authority-refuses-to-issue-what-it-would-not-permit",
+        "the-workflow-cannot-act-without-requiring-its-grant"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "grants-record-decisions",
+      "statement": "A grant records that the authority permitted something. Requiring one re-asks the authority rather than trusting the file, so a grant can never become the decision."
+    },
+    {
+      "id": "narrow-by-construction",
+      "statement": "A grant names one action, one subject and one head. It authorizes nothing else, and it expires when the tree it was issued for moves."
+    },
+    {
+      "id": "no-invented-actions",
+      "statement": "No code is written to perform an action this repository does not already perform, and no workflow step is added that acts. The only change to the workflow is that two steps which already acted now cannot."
+    }
+  ],
+  "sealedAt": "0d545fec1dcb1126d02cf8163d72764a70757db7"
+}

@@ -45,14 +45,13 @@ is owned by `npm run audit:doc-audience`, not by this table.
 
 ## Known owner gap
 
-Every outward action performed by this repository's own code now asks that
-owner before acting, and an action nobody has registered is refused. What sits
-outside it is the release workflow and the push hook: pushing a container image
-and creating a public release happen in workflow YAML, which cannot ask a
-module, so they are registered but unasked; the pre-push hook decides for
-itself whether the shared branch is red; and nothing refuses a force push or a
-release-tag push, which is true because no code here performs either rather
-than because anything would stop it.
+Every outward action this repository performs asks that owner before acting,
+and an action nobody has registered is refused. The two that run in workflow
+YAML, which cannot ask a module, consume a scoped grant the authority issued
+before they run and refuse without it. What is left outside is the pre-push
+hook, which decides for itself whether the shared branch is red, and the fact
+that nothing refuses a force push, which is true because no code here performs
+one rather than because anything would stop it.
 
 ## When authorities disagree
 

@@ -264,6 +264,20 @@ jobs:
       # publisher configured on npmjs.com. No token env: a configured token
       # would take precedence over OIDC and defeat the binding. Provenance
       # (publishConfig.provenance) is generated natively on this path.
+      # R26: the outward steps below run in YAML, which cannot ask the action
+      # authority. So the authority decides here, once, from the tag a
+      # maintainer pushed, and records a scoped grant; each step then refuses
+      # unless the grant for exactly what it is about to do is present. YAML
+      # does not ask - it is unable to act without a decision that already
+      # happened.
+      - name: Authorize the outward release actions
+        run: |
+          set -euo pipefail
+          node scripts/checks/action-grant.js issue \
+            --action publish-container-image --subject "$GITHUB_REF_NAME"
+          node scripts/checks/action-grant.js issue \
+            --action create-public-release --subject "$GITHUB_REF_NAME"
+
       - name: Publish npm package
         run: |
           set -euo pipefail
@@ -300,6 +314,8 @@ jobs:
               sleep "$((attempt * 5))"
             done
           }
+          node scripts/checks/action-grant.js require \
+            --action publish-container-image --subject "$GITHUB_REF_NAME"
           retry docker push "$DOCKERHUB_IMAGE:$VERSION"
           LATEST_REMOTE_TAG="$(
             gh api --paginate \
@@ -341,6 +357,8 @@ jobs:
             test -f "$asset"
           done
           NOTES="${{ steps.release.outputs.notes_dir }}/release-notes.md"
+          node scripts/checks/action-grant.js require \
+            --action create-public-release --subject "$GITHUB_REF_NAME"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
             gh release edit "$GITHUB_REF_NAME" \

@@ -17,6 +17,7 @@ quests:
   - action-authority-owner
   - evidence-deletion-authority
   - certification-verdict-observation
+  - ci-outward-action-grant
   - solve-v2-phase-4
   - solve-v2-phase-0
   - solve-v2-phase-1
