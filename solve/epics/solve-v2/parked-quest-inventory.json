@@ -12,148 +12,174 @@
     {
       "id": "restore-deterministic-cloud-gate-nondeterminism-defects",
       "epic": "deterministic-cloud-gate",
-      "class": "directly-expressible",
-      "why": "Its doneWhen is a test-receipt over two receipts that both pass at this head; the only thing keeping it red is that the migration copied one shared receipt into three quest directories, so it inherits a fail status belonging to a sibling's hosted-gate receipt. Re-expression gives it its own receipt scoped to its own two claims. No claim changes.",
       "blockedBy": [
         "shares a receipt file with two sibling quests"
       ],
-      "missingCapability": null
+      "missingCapability": null,
+      "disposition": "closed-pre-satisfied",
+      "dispositionWhy": "closed 3e0a9b1cd: both receipts proven at the frozen baseline b8ee3a055 in a worktree at that commit, zero implementation delta; what held it open was a receipt file the migration copied into three quest directories",
+      "stillOpen": false
     },
     {
       "id": "restore-deterministic-cloud-gate-resource-sensitive-execution-contract",
       "epic": "deterministic-cloud-gate",
-      "class": "directly-expressible",
-      "why": "Same shape: eleven named receipts, all passing at this head, all naming real test files run through an existing runner. Blocked only by the shared receipt's inherited status.",
       "blockedBy": [
         "shares a receipt file with two sibling quests"
       ],
-      "missingCapability": null
+      "missingCapability": null,
+      "disposition": "closed-pre-satisfied",
+      "dispositionWhy": "closed 274b4cc94: all eleven receipts proven at the frozen baseline, zero implementation delta, same shared-receipt artifact",
+      "stillOpen": false
     },
     {
       "id": "newcomer-onboarding-friction",
       "epic": "lagrange-devops-onboarding",
-      "class": "directly-expressible",
-      "why": "The recorded probe names a scenario that never existed as code, but the claim's own operative clause is 'npm run test:gate green at closure', which a v2 script probe expresses exactly. Re-expression replaces an unmeasurable probe with the claim's own words; the claim itself is unchanged.",
       "blockedBy": [
         "pre-existing external test:deps no-circular red, 49 cycles in src/control-plane and scripts/solve"
       ],
-      "missingCapability": null
+      "missingCapability": null,
+      "disposition": "superseded",
+      "dispositionWhy": "superseded 581a66026 by newcomer-onboarding-friction-gate-green, which preserves the statement verbatim and measures npm run test:gate, the clause the statement itself names; the sealed probe named a scenario that never existed. The successor sealed already-satisfied and closed.",
+      "stillOpen": false
     },
     {
       "id": "restore-deterministic-cloud-gate-hosted-gate-repeatably-green",
       "epic": "deterministic-cloud-gate",
-      "class": "requires-missing-capability",
-      "why": "Its check requires three successful hosted CI conclusions on one identical published SHA. That cannot be reached before publishing, and landing requires a terminal state, so the quest's own parent recorded the lifecycle circularity this creates.",
       "blockedBy": [
         "publication must precede the evidence its own doneWhen reads"
       ],
-      "missingCapability": "C6 hosted CI conclusions on a published head"
+      "missingCapability": "C6 hosted CI conclusions on a published head",
+      "disposition": "open-awaiting-external-proof",
+      "dispositionWhy": "expressible now: it declares externalProof and closes through note --externally-proven naming the head three hosted runs certify. Needs a published head, which is a sequencing fact rather than a capability gap.",
+      "stillOpen": true
     },
     {
       "id": "rolling-restart-representative-certification",
       "epic": "rolling-restart-certification",
-      "class": "requires-missing-capability",
-      "why": "The sealed bar is a Wilson-95 lower bound of 0.357 on the rolling-restart scenario pass rate over at least fifteen runs of one clean fixed-code window, with six safety counters at zero. Every part of the generating pipeline exists. What does not exist is any way for v2 to observe the verdict: sealed-bar is on the solver's explicit non-measuring list, and minimumRuns, certification and sealedBarsFile are silently dropped by the v2 scenario-harness probe.",
       "blockedBy": [
         "no projector under scripts/checks reads the stat-gate aggregate",
         "live five-node run on the calibrated hardware class"
       ],
-      "missingCapability": "C1 sealed-bar projection, C3 live five-node run"
+      "missingCapability": "C1 sealed-bar projection, C3 live five-node run",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "the observation gap is closed: the generic certification projector landed 4f3cfee46 and its epic is sealed on it. What remains is a live five-node window on the calibrated hardware class.",
+      "stillOpen": true
     },
     {
       "id": "movielens-parallel-reduce-result-chronology",
       "epic": "service-data-affinity-placement",
-      "class": "requires-missing-capability",
-      "why": "Scenario and measurement machinery both exist; three consecutive fresh live MovieLens runs on a five-node cluster do not. Attempt seven is verifier-approved as source only, explicitly not terminal.",
       "blockedBy": [
         "child runtime-service-replace-canonical-target-handoff exhausted, no successor owns the outcome"
       ],
-      "missingCapability": "C3 live five-node run"
+      "missingCapability": "C3 live five-node run",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "three consecutive fresh live MovieLens runs on five nodes",
+      "stillOpen": true
     },
     {
       "id": "ordinary-placement-ready-lease-candidate-admission",
       "epic": "topology-convergence-hardening",
-      "class": "requires-missing-capability",
-      "why": "The patch is verifier-approved and red-on-revert in HEAD. Only the live evidence is stale, last measured 2026-08-14; it needs its probe re-run on release head.",
       "blockedBy": [],
-      "missingCapability": "C3 live five-node run"
+      "missingCapability": "C3 live five-node run",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "the patch is verifier-approved and red-on-revert; only the live evidence is stale",
+      "stillOpen": true
     },
     {
       "id": "replica-projection-stale-leader-route-resync",
       "epic": "topology-convergence-hardening",
-      "class": "requires-missing-capability",
-      "why": "No work of its own was ever done; it inherits a rejection from its parent. Beyond a live run it needs a deterministic reproduction of a projection write failing against stale canonical leader metadata while the partition has a live leader, which the quest states does not exist.",
       "blockedBy": [
         "epic control-plane-truth-local-converged-read Cut 2 decision"
       ],
-      "missingCapability": "C3 live run plus a deterministic reproduction vehicle"
+      "missingCapability": "C3 live run plus a deterministic reproduction vehicle",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "a live run, plus a deterministic reproduction vehicle that does not exist",
+      "stillOpen": true
     },
     {
       "id": "runtime-service-affinity-observer-intent-parity",
       "epic": "topology-convergence-hardening",
-      "class": "requires-missing-capability",
-      "why": "The deterministic discriminator is landed and verifier-approved, and the quest declares it is not terminal closure. It needs a live run whose initial placement engages the observer-to-REPLACE seam, and its own rules-out forbids obtaining that by unchanged repetition. Nothing in the repository can arrange that initial condition.",
       "blockedBy": [
         "child affinity-evidence-normalization never started",
         "affinity lane out of 0.2 scope"
       ],
-      "missingCapability": "C8 an arranged live initial condition"
+      "missingCapability": "C8 an arranged live initial condition",
+      "disposition": "open-blocked-arranged-condition",
+      "dispositionWhy": "needs a live run whose initial placement engages the seam, which its own rules-out forbids obtaining by repetition and nothing can arrange",
+      "stillOpen": true
     },
     {
       "id": "public-path-multinode-baseline",
       "epic": "pilot-readiness-and-public-proof",
-      "class": "requires-missing-capability",
-      "why": "Scenario, registry entry and report schema all exist at this head. Seven streak runs failed at user-table leader spread, whose child is exhausted.",
       "blockedBy": [
         "formation-release-handoff-closure-v4",
         "child user-table-leader-placement-spread exhausted"
       ],
-      "missingCapability": "C3 live three-node Docker run"
+      "missingCapability": "C3 live three-node Docker run",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "a live three-node Docker run; scenario, registry entry and report schema all exist",
+      "stillOpen": true
     },
     {
       "id": "managed-partition-merge-live-validation",
       "epic": "split-merge-transition-integrity",
-      "class": "requires-missing-capability",
-      "why": "The recorded probe names a scenario absent from the tree and from the registry; a differently named partition-merge-under-load scenario exists. The quest's own finding calls the formation-ledger-quorum-concentrated lineage a hard prerequisite.",
       "blockedBy": [
         "formation-ledger-quorum-concentrated lineage"
       ],
-      "missingCapability": "C2 the named scenario, C3 live run"
+      "missingCapability": "C2 the named scenario, C3 live run",
+      "disposition": "open-blocked-missing-scenario",
+      "dispositionWhy": "its doneWhen names a scenario absent from the tree and the registry; a differently named partition-merge-under-load exists, and using it is a semantic change",
+      "stillOpen": true
     },
     {
       "id": "managed-split-cutover-handoff-closure",
       "epic": "release-0-2-five-node-convergence",
-      "class": "requires-operator-seal",
-      "why": "Its epic is one of the four that carry no doneWhen and no authorizes, so nothing bounds what a quest under it may change. It is additionally blocked by a recorded verifier rejection until the prerequisite formation quest lands, and its named scenario does not exist.",
       "blockedBy": [
         "verifier rejection standing until formation-release-handoff-closure-v4 lands"
       ],
-      "missingCapability": "C2 the named scenario, C4 GCP live A/B lane"
+      "missingCapability": "C2 the named scenario, C4 GCP live A/B lane",
+      "disposition": "open-blocked-prerequisite",
+      "dispositionWhy": "its epic is now sealed; it is held by a standing verifier rejection until formation-release-handoff-closure-v4 lands, and its named scenario does not exist",
+      "stillOpen": true
     },
     {
       "id": "oci-container-driver-live-activation-owner-handoff",
       "epic": "service-portability-ladder",
-      "class": "requires-operator-seal",
-      "why": "Its epic carries no doneWhen and no authorizes. The frontier was never attempted, and the parent's triage recorded an open operator question: mint a narrower successor covering only the two unattempted frontiers, or keep the five-frontier seal open until the OCI lane is scheduled.",
       "blockedBy": [
         "OCI lane excluded from 0.2"
       ],
-      "missingCapability": "C2 the named scenario, C5 real Docker host agent and TPM 2.0 device"
+      "missingCapability": "C2 the named scenario, C5 real Docker host agent and TPM 2.0 device",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "its epic is now sealed on the live activation scenario with consecutive 3; needs a real Docker host agent and a TPM 2.0 device, and the scenario to be built",
+      "stillOpen": true
     },
     {
       "id": "oci-container-driver-live-activation-production-engagement",
       "epic": "service-portability-ladder",
-      "class": "requires-operator-seal",
-      "why": "Same epic and the same open operator question. This is the frontier that owns flipping realContainerActivation to true.",
       "blockedBy": [
         "OCI lane excluded from 0.2"
       ],
-      "missingCapability": "C2 the named scenario, C5 real Docker host agent and TPM 2.0 device"
+      "missingCapability": "C2 the named scenario, C5 real Docker host agent and TPM 2.0 device",
+      "disposition": "open-blocked-live-lane",
+      "dispositionWhy": "same epic, same substrate; this is the frontier that owns the capability flip",
+      "stillOpen": true
     }
   ],
   "totals": {
     "directly-expressible": 3,
     "requires-missing-capability": 8,
     "requires-operator-seal": 3
-  }
+  },
+  "refreshedAt": "581a66026",
+  "refreshNote": "Refreshed after the phase-4 capability work landed. The original classification was taken at b8ee3a055 and said what stood between each quest and a measurable v2 claim; this says what each quest's current disposition is. Both are true of their own head, and the first is not corrected by the second.",
+  "dispositionTotals": {
+    "closed-pre-satisfied": 2,
+    "superseded": 1,
+    "open-awaiting-external-proof": 1,
+    "open-blocked-live-lane": 7,
+    "open-blocked-arranged-condition": 1,
+    "open-blocked-missing-scenario": 1,
+    "open-blocked-prerequisite": 1
+  },
+  "residual": 0
 }
