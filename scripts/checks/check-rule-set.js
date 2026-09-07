@@ -196,43 +196,50 @@ function revisionOffences(root, manifest) {
  * @param {Object} current the manifest in the working tree
  * @return {string[]}
  */
-// How many rules the predecessor actually sealed, when this tree still carries
-// it. Absent a predecessor the recorded number is the only account there is.
-function previousRuleCount(previous) {
-  return previous && Array.isArray(previous.rules) ? previous.rules.length :
+// How many rules the predecessor actually sealed. The manifest at the last
+// commit is normally this same revision, not the one it supersedes, so it can
+// only answer this when its revision is the superseded one; otherwise the
+// recorded number is the only account there is and is taken as given.
+function previousRuleCount(previous, supersededRevision) {
+  if (!previous || !Array.isArray(previous.rules)) return undefined;
+  return previous.revision === supersededRevision ? previous.rules.length :
     undefined;
 }
 
 function supersessionOffences(previous, current) {
-  const offences = [];
-  if (typeof current.revision !== 'number') {
-    offences.push(`${MANIFEST} declares no revision`);
-    return offences;
-  }
-  if (current.revision > FIRST_REVISION) {
-    const superseded = current.supersedes || {};
-    if (superseded.revision !== current.revision - FIRST_REVISION) {
-      offences.push(`revision ${current.revision} does not supersede ` +
-        `revision ${current.revision - FIRST_REVISION}`);
-    }
-    if (!COMMIT_SHA.test(String(superseded.head || EMPTY_TEXT))) {
-      offences.push(`revision ${current.revision} names no published head it ` +
-        OFFENCE.NO_HEAD_SUFFIX);
-    }
-    const sealedThen = previousRuleCount(previous);
-    if (sealedThen !== undefined && superseded.rules !== sealedThen) {
-      offences.push(`revision ${current.revision} says it supersedes ` +
-        `${superseded.rules} entries where the predecessor sealed ${sealedThen}`);
-    }
-    if (typeof superseded.reason !== 'string' || superseded.reason === EMPTY_TEXT) {
-      offences.push(`revision ${current.revision} gives no reason for superseding`);
-    }
-  }
-  if (!previous || !Array.isArray(previous.rules)) return offences;
-  if (sealedTriples(previous) !== sealedTriples(current) &&
+  if (typeof current.revision !== 'number') return [`${MANIFEST} declares no revision`];
+  const offences = current.revision > FIRST_REVISION ?
+    supersededOffences(previous, current) : [];
+  if (previous && Array.isArray(previous.rules) &&
+      sealedTriples(previous) !== sealedTriples(current) &&
       previous.revision === current.revision) {
     offences.push(`${OFFENCE.UNREVISED_PREFIX}${current.revision}` +
       OFFENCE.UNREVISED_SUFFIX);
+  }
+  return offences;
+}
+
+// What a revision must say about the one it replaces: which revision it was,
+// the published head it was true of, how many entries it sealed, and why it no
+// longer holds.
+function supersededOffences(previous, current) {
+  const superseded = current.supersedes || {};
+  const offences = [];
+  if (superseded.revision !== current.revision - FIRST_REVISION) {
+    offences.push(`revision ${current.revision} does not supersede ` +
+      `revision ${current.revision - FIRST_REVISION}`);
+  }
+  if (!COMMIT_SHA.test(String(superseded.head || EMPTY_TEXT))) {
+    offences.push(`revision ${current.revision} names no published head it ` +
+      OFFENCE.NO_HEAD_SUFFIX);
+  }
+  if (typeof superseded.reason !== 'string' || superseded.reason === EMPTY_TEXT) {
+    offences.push(`revision ${current.revision} gives no reason for superseding`);
+  }
+  const sealedThen = previousRuleCount(previous, superseded.revision);
+  if (sealedThen !== undefined && superseded.rules !== sealedThen) {
+    offences.push(`revision ${current.revision} says it supersedes ` +
+      `${superseded.rules} entries where the predecessor sealed ${sealedThen}`);
   }
   return offences;
 }

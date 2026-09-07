@@ -365,6 +365,17 @@ test('growing the sealed rule set requires a revision, not an edit', () => {
         {...revised, supersedes: {...revised.supersedes, [field]: value}}),
       [], `a revision that ${why} is refused`);
   }
+  // The manifest at the last commit is normally this same revision rather
+  // than the one it supersedes, so it cannot answer how many the predecessor
+  // sealed. Comparing it as though it could is what made this check pass in a
+  // working tree and fail in the publish gate's worktree at the same head.
+  const sameRevision = {...revised};
+  assert.deepEqual(supersessionOffences(sameRevision, sameRevision), [],
+    'a committed manifest of this revision is not its own predecessor');
+  assert.notDeepEqual(
+    supersessionOffences(previous,
+      {...revised, supersedes: {...revised.supersedes, rules: 99}}),
+    [], 'a misstated predecessor count is still refused when it can be checked');
   // And the sealed manifest in the tree is itself a well-formed revision.
   assert.deepEqual(ruleSetOffences(), []);
 });
