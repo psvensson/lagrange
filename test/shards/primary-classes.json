@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1796,
+    "unit": 1797,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2056,
-  "digest": "fnv1a32-505f122c",
+  "censusSize": 2057,
+  "digest": "fnv1a32-5bcf47e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1731,6 +1731,7 @@
     "test/runtime/wasm-driver-contract-conformance.test.js": "unit",
     "test/runtime/work-class-scheduler.test.js": "unit",
     "test/scripts/acceptance-proof-manifest-runner.test.js": "unit",
+    "test/scripts/action-authority.test.js": "unit",
     "test/scripts/analyze-cl039-link-rate.test.js": "unit",
     "test/scripts/analyze-fix-engagement.test.js": "unit",
     "test/scripts/analyze-formation-release-phases.test.js": "unit",

@@ -14,6 +14,7 @@ quests:
   - solve-v2-phase-3
   - rule-set-revision-26
   - steering-rule-authority-split
+  - action-authority-owner
   - solve-v2-phase-4
   - solve-v2-phase-0
   - solve-v2-phase-1
@@ -27,6 +28,7 @@ authorizes:
   - CHANGELOG.md
   - DEBUGGING.md
   - .githooks
+  - .github
   - .gitignore
   - package.json
   - architecture
@@ -44,6 +46,12 @@ to read in one sitting. Design note and measured inventory:
 
 ## Phases
 
+Scope widening of 2026-09-07 (phase 3.2): `.github` joins the list. Making
+R26's owner real means every outward action this repository performs asks it,
+and the release workflow performs two of them, so the workflow has to pass the
+operator authorization the publisher now requires. Without that the release job
+would refuse on its next run.
+
 Scope widening of 2026-09-06 (phase 3): `architecture` replaces
 `architecture/contracts`, and `CHANGELOG.md` and `DEBUGGING.md` join the list.
 The steering diet moves owner detail to the owner that holds it, so the
@@ -58,7 +66,8 @@ else was added.
 | 2 schema and CLI cutover | `solve-v2-phase-2` | gate: active v2 footprint < 20 MB with the migration corpus grandfathered and intact; v2 solver runs phases 3–4 |
 | 3 steering diet | `solve-v2-phase-3` | landed c0670a2af, published, both workflows green |
 | 3.1 rule-set revision | `steering-rule-authority-split` | operator decision of 2026-09-07: supersede the previous rule set with a manifest-governed one and split the compound rule. Supersedes `rule-set-revision-26`, whose sealed statement claimed a proof of semantic distinctness that no checker can measure. Exact-head green publication is a hard prerequisite for phase 4 |
-| 4 prove it | `solve-v2-phase-4` | — |
+| 3.2 action-authority owner | `action-authority-owner` | operator decision of 2026-09-07: R26's owner key resolves to a diagnosis of scattered enforcement rather than to a component that decides. Making it real is the first executable phase-4 prerequisite; no phase-4 work may reach publication or another outward action before it lands |
+| 4 prove it | `solve-v2-phase-4` | baseline frozen at `b8ee3a055` |
 
 ## Acceptance metrics
 

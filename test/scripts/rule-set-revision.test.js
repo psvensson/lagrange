@@ -22,14 +22,16 @@ import {
   ruleSetManifest, ruleSetOffences, sealedRuleCount, supersessionOffences,
 } from '../../scripts/checks/check-rule-set.js';
 import {epicScopeProblems} from '../../scripts/solve/guards.js';
-import {validatePublishRequest} from '../../scripts/publish-head.js';
+import {
+  ACTION, authorizeAction, isAuthorized,
+} from '../../scripts/action-authority.js';
 
 const ROUTER_MD = 'docs/steering/router.md';
 const ROUTER_DIR = 'docs/steering';
 const PACKAGE = 'package.json';
 const SPLIT_TABLE = 'docs/specs/decision-tables/steering-rule-authority-split.json';
 const SCOPE_MECHANISM = 'scripts/solve/guards.js';
-const AUTHORITY_MECHANISM = 'scripts/publish-head.js';
+const AUTHORITY_MECHANISM = 'scripts/action-authority.js';
 // A change set and a publish request, each shaped so that only one of the two
 // facts under test varies. The scope mechanism never sees the publish request
 // and the authority mechanism never sees the paths, which is what makes the
@@ -40,12 +42,12 @@ const SCOPE_FIXTURE = Object.freeze({
   within: Object.freeze(['docs/a.md', 'solve/quests/a-quest/quest.json']),
   outside: Object.freeze(['docs/a.md', 'src/partition/partition-service.js']),
 });
-const REMOTE_SHA = '1111111111111111111111111111111111111111';
+const RED_HEAD = '1111111111111111111111111111111111111111';
 const AUTHORITY_FIXTURE = Object.freeze({
-  headMessage: 'an ordinary reviewed commit',
-  remoteSha: REMOTE_SHA,
-  authorised: Object.freeze({fixesRed: REMOTE_SHA, reason: 'the head this repairs'}),
-  absent: Object.freeze({fixesRed: REMOTE_SHA, reason: ''}),
+  context: Object.freeze({redHead: RED_HEAD}),
+  authorised: Object.freeze({action: ACTION.PUBLISH_HEAD_ON_RED,
+    head: RED_HEAD, reason: 'the head this repairs'}),
+  absent: null,
 });
 const RULES_MD = 'docs/steering/rules.md';
 const ALWAYS_LOAD_BUDGET = 360;
@@ -243,22 +245,14 @@ function scopeVerdict(scope) {
     .length === 0 ? 'holds' : 'violated';
 }
 
-// R26's mechanism: the publisher refuses an outward action whose operator
-// signal is incomplete. It is given no paths and cannot see any.
+// R26's mechanism: the authority refuses an outward action the operator has
+// not authorized. It is given no paths and cannot see any.
 function authorityVerdict(authorization) {
-  const request = AUTHORITY_FIXTURE[authorization];
-  try {
-    validatePublishRequest({
-      headMessage: AUTHORITY_FIXTURE.headMessage,
-      runner: null,
-      fixesRed: request.fixesRed,
-      reason: request.reason,
-      remoteSha: AUTHORITY_FIXTURE.remoteSha,
-    });
-    return 'holds';
-  } catch {
-    return 'violated';
-  }
+  return isAuthorized(authorizeAction({
+    action: ACTION.PUBLISH_HEAD_ON_RED,
+    signal: AUTHORITY_FIXTURE[authorization],
+    context: AUTHORITY_FIXTURE.context,
+  })) ? 'holds' : 'violated';
 }
 
 function authorityOf(id) {

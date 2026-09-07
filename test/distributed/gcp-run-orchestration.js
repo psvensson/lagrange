@@ -5,8 +5,12 @@
  * behavior is identical, just relocated.
  */
 
+import {ACTION, authorizeAction, isAuthorized} from '../../scripts/action-authority.js';
 import {GCPProvisioner} from './harness/gcp-provisioner.js';
 
+// The configuration key says which project; the operator says whether hosts
+// may be created in it. A config file cannot authorize its own spend.
+const CLOUD_AUTHORIZATION_ENV = 'LAGRANGE_AUTHORIZE_CLOUD_PROJECT';
 const GCP_PROVISION_LOG_PREFIX =
   'GCP: provisioning Compute Engine Docker hosts via Pulumi...\n';
 const GCP_PROVISIONED_LOG_PREFIX = 'GCP: provisioned Docker hosts: ';
@@ -34,6 +38,17 @@ async function provisionGcpDockerHosts(runConfig, verbose) {
       'config.gcp.project is required for GCP auto-provisioning ' +
       '(or set explicit docker.hosts to use existing infrastructure)',
     );
+  }
+  // A configuration key is not an authorization to create cloud hosts.
+  const decision = authorizeAction({
+    action: ACTION.PROVISION_CLOUD_HOSTS,
+    signal: {action: ACTION.PROVISION_CLOUD_HOSTS,
+      project: process.env[CLOUD_AUTHORIZATION_ENV]},
+    context: {project: gcpConfig.project},
+  });
+  if (!isAuthorized(decision)) {
+    throw new Error(`GCP: provisioning hosts in ${gcpConfig.project} is ` +
+      `${decision.outcome}: ${decision.because}`);
   }
   if (verbose) {
     process.stdout.write(GCP_PROVISION_LOG_PREFIX);

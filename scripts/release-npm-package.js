@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
+
+import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {createHash} from 'node:crypto';
 import {
   access,
@@ -43,6 +45,12 @@ const PACKAGE_JSON_FILENAME = 'package.json';
 const CONSUMER_PACKAGE_NAME = 'lagrange-server-install-smoke';
 const MODULE_PACKAGE_TYPE = 'module';
 const TAR_COMMAND = 'tar';
+// The operator names the version they are authorizing, so publishing a
+// different artifact than intended refuses instead of proceeding.
+const AUTHORIZE_OPTION = 'authorize-version';
+const PUBLISH_REFUSED_PREFIX = 'publishing this package is ';
+const NOTHING_AUTHORIZED_ERROR =
+  'publish requires --authorize-version naming the version to publish';
 const RELEASE_COMMAND = Object.freeze({
   VERIFY: 'verify',
   PUBLISH: 'publish',
@@ -89,7 +97,7 @@ const MANIFEST_ERROR = Object.freeze({
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
 const CLI_USAGE =
   'usage: release-npm-package.js verify [--output DIR] [--git-head SHA] ' +
-  'or publish --tarball FILE [--git-head SHA]';
+  'or publish --tarball FILE --authorize-version VERSION [--git-head SHA]';
 
 const RELEASE_OUTCOME = Object.freeze({
   PACKAGE_VERIFIED: 'PACKAGE_VERIFIED',
@@ -550,8 +558,28 @@ async function observePublishedCandidate(candidate) {
   );
 }
 
-async function publishNpmPackage(tarballPath, expectedGitHead) {
+async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion) {
+  // A precondition, not an authorization: with nothing named there is nothing
+  // for the authority to compare, and asking it with the caller's own value on
+  // both sides would be a guard wearing the owner's vocabulary.
+  if (!authorizedVersion) {
+    throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
+      NOTHING_AUTHORIZED_ERROR);
+  }
   const candidate = await inspectTarball(tarballPath);
+  // Ask before touching the registry: what the operator authorized is compared
+  // with what is actually about to be published, so an unintended version is
+  // refused before anything leaves this machine.
+  const authorization = authorizeAction({
+    action: ACTION.PUBLISH_PACKAGE,
+    signal: {action: ACTION.PUBLISH_PACKAGE, version: authorizedVersion},
+    context: {version: candidate.manifest.version},
+  });
+  if (!isAuthorized(authorization)) {
+    throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
+      `${PUBLISH_REFUSED_PREFIX}${authorization.outcome}: ` +
+      `${authorization.because}`);
+  }
   if (expectedGitHead && candidate.gitHead !== expectedGitHead) {
     throw new NpmReleaseError(
       RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
@@ -568,6 +596,10 @@ async function publishNpmPackage(tarballPath, expectedGitHead) {
     throw new NpmReleaseError(existingState,
       `npm registry rejected candidate preflight: ${existingState}`);
   }
+  // Publishing to a public registry cannot be undone. The operator names the
+  // version they intend to publish; the authority compares it with the version
+  // actually about to go out. Reading the version out of the tarball and
+  // presenting it as the authorization would authorize whatever was built.
   const publishResult = run(NPM_COMMAND, [
     'publish',
     candidate.tarballPath,
@@ -636,6 +668,7 @@ async function main() {
     const result = await publishNpmPackage(
       options.tarball,
       options['git-head'],
+      options[AUTHORIZE_OPTION],
     );
     console.log(JSON.stringify({
       outcome: result.outcome,

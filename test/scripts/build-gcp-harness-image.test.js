@@ -63,6 +63,53 @@ test('GCP harness image definition has no baked credentials', (t) => {
   t.end();
 });
 
+const CLOUD_ENV = 'LAGRANGE_AUTHORIZE_CLOUD_PROJECT';
+const AUTHORIZED_PROJECT = 'project-a';
+const CREATE_VERB = 'create';
+const DESCRIBE_VERB = 'describe';
+const JSON_EMPTY_OBJECT = '{}';
+
+// Creating cloud hosts is authorized by the operator naming the project out of
+// band, so every build test states that authorization the way a caller would.
+async function withCloudAuthorization(project, body) {
+  const before = process.env[CLOUD_ENV];
+  if (project === null) delete process.env[CLOUD_ENV];
+  else process.env[CLOUD_ENV] = project;
+  try {
+    await body();
+  } finally {
+    if (before === undefined) delete process.env[CLOUD_ENV];
+    else process.env[CLOUD_ENV] = before;
+  }
+}
+
+// Every build below states the operator authorization the way a caller would;
+// creating cloud hosts is not something a test may do by omission either.
+process.env[CLOUD_ENV] = AUTHORIZED_PROJECT;
+
+test('nothing is created without the operator naming the project', async (t) => {
+  // Behavioural: the refusal reaches the caller before any gcloud command.
+  const ran = [];
+  const collect = {runCommand: (args) => {
+    ran.push(args);
+    if (args[2] === DESCRIBE_VERB) throw notFound();
+    return JSON_EMPTY_OBJECT;
+  }};
+  const target = {project: AUTHORIZED_PROJECT, zone: 'zone-a',
+    builderName: 'builder-a', machineType: 'machine-a'};
+
+  await withCloudAuthorization(null, async () => {
+    await t.rejects(buildHarnessImage({...target}, collect), /refused/u);
+  });
+  // And an authorization for a different project does not carry across.
+  await withCloudAuthorization('another-project', async () => {
+    await t.rejects(buildHarnessImage({...target}, collect), /refused/u);
+  });
+  t.equal(ran.filter((args) => args.includes(CREATE_VERB)).length, 0,
+    'a cloud host was created without an authorization naming its project');
+  t.end();
+});
+
 test('GCP harness image build versions the family and deletes its builder',
   async () => {
     const calls = [];

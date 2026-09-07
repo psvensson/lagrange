@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "action-authority-owner",
+  "statement": "R26's owner key resolves to a component that decides, not to a diagnosis of scattered enforcement. ActionAuthority owns exactly one decision: whether a requested outward or irreversible action is authorized now. It consumes the operator authorization signal for that action, returns a named result of authorized, refused or unavailable, and fails closed - absence, ambiguity, an unreadable record and an unregistered action are all refusals, and unavailable never permits an action. It owns nothing else: publication, evidence storage, package release, cloud execution and Git remain consumers that ask it and then act, and the exemption record store remains the persistence owner and decides nothing. Every outward action this repository performs asks the same owner, so the path is request, decision, execution rather than each executor interpreting signals for itself, and an outward action nobody has registered refuses until its authorization semantics exist.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/action-authority-owner/evidence/receipt.json",
+      "requiredReceipts": [
+        "absent-authorization-refuses-rather-than-failing-open",
+        "an-authorization-for-one-action-does-not-authorize-another",
+        "an-unregistered-outward-action-refuses-by-default",
+        "unavailable-never-permits-an-action",
+        "publication-consumes-the-authority-and-interprets-no-signals",
+        "evidence-replacement-consumes-the-authority",
+        "package-release-consumes-the-authority",
+        "cloud-provisioning-consumes-the-authority",
+        "release-tag-publication-is-registered-and-performed-nowhere",
+        "the-record-store-decides-nothing",
+        "the-authority-performs-no-action",
+        "every-registered-action-declares-its-signal"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-decision-only",
+      "statement": "ActionAuthority decides whether an action is authorized now and does nothing else. It performs no outward action, writes no record, and holds no knowledge of how any action is carried out."
+    },
+    {
+      "id": "fail-closed",
+      "statement": "Absence, ambiguity, an unreadable record and an unregistered action are refusals. Unavailable is a named result that never permits an action; no caller may read it as permission."
+    },
+    {
+      "id": "one-decider",
+      "statement": "The exemption record store stays the persistence owner and decides nothing. No executor interprets an authorization signal for itself; publication in particular stops reading records and asks."
+    },
+    {
+      "id": "no-invented-actions",
+      "statement": "Only outward or irreversible actions this repository actually performs get consumers. An action is registered so that code performing it must ask, but no code is written to perform an action the repository does not already perform - in particular no force-push path is added in order to test that force-push is refused."
+    },
+    {
+      "id": "baseline-frozen",
+      "statement": "b8ee3a055 is the frozen Phase-4 baseline. The rule model is not reopened: R26 already states the invariant and this quest makes its owner real."
+    }
+  ],
+  "sealedAt": "b8ee3a0556e81b5917c72a2dbea3441fef3b8cc0"
+}

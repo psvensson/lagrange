@@ -67,7 +67,9 @@ test('a verified upload returns sha256, size, asset name and URL', () => {
     crypto.createHash('sha256').update('tar bytes').digest('hex'));
   assert.equal(record.bytes, 9);
   assert.equal(record.url, 'https://example.test/quest-a--node-logs.tar.gz');
-  assert.match(gh.calls[0], new RegExp(`^release upload ${EVIDENCE_RELEASE_TAG} .*quest-a--node-logs.tar.gz --clobber$`));
+  // A first upload does not clobber: overwriting what is already published is
+  // a separate, operator-authorized action.
+  assert.match(gh.calls[0], new RegExp(`^release upload ${EVIDENCE_RELEASE_TAG} .*quest-a--node-logs.tar.gz$`));
   assert.match(gh.calls[1], /^release download solve-evidence --pattern quest-a--node-logs.tar.gz --dir /);
   assert.equal(assetName('q', '/tmp/x/y.bin', '/tmp'), 'q--y.bin',
     'outside solve/ the basename is the original name');
@@ -100,4 +102,21 @@ test('an upload the release does not list afterwards is refused', () => {
   assert.throws(() => uploadAndVerify({file, questId: 'quest-c', run: gh.run,
     root: path.dirname(file)}),
   /quest-c--raw\.tar\.gz not listed after upload/u);
+});
+
+test('a replacement clobbers only where the operator asked for one', () => {
+  const file = scratchFile('replaced.tar.gz', 'tar bytes');
+  const asked = fakeGh();
+  uploadAndVerify({file, questId: 'quest-a', replace: true, run: asked.run,
+    root: path.dirname(file)});
+  assert.match(asked.calls[0], /--clobber$/u,
+    'an authorized replacement did not clobber');
+
+  // Something that merely looks like a request is not one, and the refusal
+  // happens before the uploader is reached.
+  const refused = fakeGh();
+  assert.throws(() => uploadAndVerify({file, questId: 'quest-a',
+    replace: 'yes', run: refused.run, root: path.dirname(file)}),
+  /refused/u, 'a replacement proceeded on a signal that was not a request');
+  assert.deepEqual(refused.calls, [], 'the uploader ran despite the refusal');
 });

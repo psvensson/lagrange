@@ -9,7 +9,7 @@
 //   node scripts/solve.js note --id <quest> --exhausted "<why>" | --superseded "<why>" [--by <quest>]
 //   node scripts/solve.js probe --id <quest> | --epic <epic>
 //   node scripts/solve.js land --id <quest>
-//   node scripts/solve.js evidence add <file> --id <quest> [--text "<why>"]
+//   node scripts/solve.js evidence add <file> --id <quest> [--text "<why>"] [--replace]
 //   node scripts/solve.js board
 // Every command accepts --json.
 
@@ -35,7 +35,8 @@ const EVIDENCE_ADD = 'add';
 const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
 const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
   '--exhausted, --superseded';
-const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> [--text "<why>"]';
+const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
+  '[--text "<why>"] [--replace]';
 const NEXT_OWNER_FLAG = 'next-owner';
 const LEGACY_TAG = ', legacy';
 const LIST_SEPARATOR = ', ';
@@ -103,6 +104,7 @@ function cmdLand(root, {flags}) {
 function cmdEvidence(root, {flags, positional}) {
   if (positional[0] !== EVIDENCE_ADD || !positional[1]) throw new SolveError(EVIDENCE_USAGE);
   return evidenceAdd(root, {id: flags.id, file: positional[1], text: flags.text,
+    replace: flags.replace === true,
     tmpdir: os.tmpdir()});
 }
 

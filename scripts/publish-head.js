@@ -3,6 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+
+import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {fileURLToPath} from 'node:url';
 
 import {
@@ -68,16 +70,6 @@ const GIT_COMMAND = 'git';
 const RUNNER_GITHUB = 'github';
 const RUNNER_SELF_HOSTED = 'self-hosted';
 const INVALID_RUNNER_ERROR = 'publish: --runner must be github|self-hosted';
-const SELF_HOSTED_MARKER_ERROR =
-  'publish: --runner self-hosted requires [ci:self-hosted] in the HEAD commit message; ';
-const RUNNER_MARKER_REPAIR =
-  'create a new commit with that marker (do not amend a published commit)';
-const RUNNER_MISMATCH_ERROR =
-  'publish: --runner conflicts with the HEAD commit CI routing marker';
-const FIXES_RED_SHA_ERROR =
-  'publish: --fixes-red must name the current origin/main SHA';
-const FIXES_RED_REASON_ERROR =
-  'publish: --fixes-red requires --reason "<why this fixes red>"';
 const FAST_FORWARD_ERROR = 'publish: HEAD is not a fast-forward of origin/main';
 const RECEIPT_DIRECTORY = 'publish-receipts';
 const WORKTREE_COMMAND = 'worktree';
@@ -96,6 +88,11 @@ const FETCH_COMMAND = 'fetch';
 const HEAD_TO_MAIN_REFSPEC = 'HEAD:refs/heads/main';
 const RUNNER_ARGUMENT = '--runner';
 const FIXES_RED_ARGUMENT = '--fixes-red';
+const RED_REPAIR_REFUSED_PREFIX = 'publish: repairing a red shared branch is ';
+const ROUTING_REFUSED_PREFIX = 'publish: routing this push to ';
+const ROUTING_REFUSED_SUFFIX = '. It requires ';
+const PUSH_REFUSED_PREFIX = 'publish: pushing the gated head is ';
+const RED_REPAIR_REFUSED_SUFFIX = '. It requires ';
 const REASON_ARGUMENT = '--reason';
 const STATUS_COMMAND = 'status';
 const PORCELAIN_ARGUMENT = '--porcelain';
@@ -173,33 +170,46 @@ function remoteMainSha(run, root) {
   return line ? line.split(/\s+/u)[0] : ZERO_SHA;
 }
 
+// Which runner a push routes to is this module's business; whether routing
+// away from the default is authorized is not. The marker in the reviewed head
+// and the caller's explicit request are the two halves of that authority, and
+// the authority requires both.
 function resolvePublishRunner(headMessage, runner) {
   if (runner && runner !== RUNNER_GITHUB && runner !== RUNNER_SELF_HOSTED) {
     throw new Error(INVALID_RUNNER_ERROR);
   }
-  if (runner === RUNNER_SELF_HOSTED &&
-    !headMessage.includes(SELF_HOSTED_RUNNER_MARKER)) {
-    throw new Error(SELF_HOSTED_MARKER_ERROR + RUNNER_MARKER_REPAIR);
+  const marked = headMessage.includes(SELF_HOSTED_RUNNER_MARKER);
+  const requested = runner === RUNNER_SELF_HOSTED;
+  if (!marked && !requested) return RUNNER_GITHUB;
+  const decision = authorizeAction({
+    action: ACTION.ROUTE_SELF_HOSTED_RUNNER,
+    signal: {action: ACTION.ROUTE_SELF_HOSTED_RUNNER, requested},
+    context: {headCarriesMarker: marked},
+  });
+  if (!isAuthorized(decision)) {
+    throw new Error(`${ROUTING_REFUSED_PREFIX}${RUNNER_SELF_HOSTED} is ` +
+      `${decision.outcome}: ${decision.because}${ROUTING_REFUSED_SUFFIX}` +
+      `${decision.requires}`);
   }
-  const routedRunner = headMessage.includes(SELF_HOSTED_RUNNER_MARKER) ?
-    RUNNER_SELF_HOSTED : RUNNER_GITHUB;
-  if (routedRunner === RUNNER_SELF_HOSTED && runner !== RUNNER_SELF_HOSTED) {
-    throw new Error(RUNNER_MISMATCH_ERROR);
-  }
-  if (runner && runner !== routedRunner) {
-    throw new Error(RUNNER_MISMATCH_ERROR);
-  }
-  return routedRunner;
+  return RUNNER_SELF_HOSTED;
 }
 
 export function validatePublishRequest({headMessage, runner, fixesRed, reason,
   remoteSha}) {
   const routedRunner = resolvePublishRunner(headMessage, runner);
-  if (fixesRed && fixesRed !== remoteSha) {
-    throw new Error(FIXES_RED_SHA_ERROR);
-  }
-  if (fixesRed && !String(reason || '').trim()) {
-    throw new Error(FIXES_RED_REASON_ERROR);
+  // Whether a red-branch repair is authorized is not the publisher's decision.
+  // It presents the operator's signal and the context it already knows, and
+  // acts on the answer.
+  if (fixesRed) {
+    const decision = authorizeAction({
+      action: ACTION.PUBLISH_HEAD_ON_RED,
+      signal: {action: ACTION.PUBLISH_HEAD_ON_RED, head: fixesRed, reason},
+      context: {redHead: remoteSha},
+    });
+    if (!isAuthorized(decision)) {
+      throw new Error(`${RED_REPAIR_REFUSED_PREFIX}${decision.outcome}: ` +
+        `${decision.because}${RED_REPAIR_REFUSED_SUFFIX}${decision.requires}`);
+    }
   }
   return routedRunner;
 }
@@ -243,7 +253,11 @@ function assertWorkspaceDependencySources(root, args, log) {
   }).join(LINK_NOTICE_SEPARATOR);
   log(`${LINK_NOTICE_PREFIX}${notice}${NEWLINE}`);
   if (!fs.existsSync(path.join(root, DATA_DIRECTORY)) &&
-    args.allowMissingData !== true) {
+      !isAuthorized(authorizeAction({
+        action: ACTION.PUBLISH_WITHOUT_DATASET,
+        signal: args.allowMissingData === true ?
+          {action: ACTION.PUBLISH_WITHOUT_DATASET, missing: DATA_DIRECTORY} : null,
+      }))) {
     throw new Error(`${DATA_ABSENT_ERROR_PREFIX}${root}${DATA_ABSENT_ERROR_SUFFIX}`);
   }
 }
@@ -333,6 +347,14 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
 }
 
 function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
+  // The push itself is the outward action. It carries a standing authority
+  // rather than a per-push signal, but it asks like everything else, so there
+  // is one place the answer comes from.
+  const decision = authorizeAction({action: ACTION.PUBLISH_HEAD});
+  if (!isAuthorized(decision)) {
+    throw new Error(`${PUSH_REFUSED_PREFIX}${decision.outcome}: ` +
+      `${decision.because}`);
+  }
   checked(run, GIT_COMMAND, [PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
     cwd: worktree,
     env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},

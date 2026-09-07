@@ -18,6 +18,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
+import {ACTION, authorizeAction, isAuthorized} from '../action-authority.js';
+
 const EVIDENCE_RELEASE_TAG = 'solve-evidence';
 const ASSET_SEPARATOR = '--';
 const GH_BINARY = 'gh';
@@ -35,6 +37,7 @@ const GH_UPLOAD = 'upload';
 const GH_DOWNLOAD = 'download';
 const GH_VIEW = 'view';
 const GH_CLOBBER_FLAG = '--clobber';
+const REPLACEMENT_REFUSED_PREFIX = 'evidence add: replacing ';
 const GH_PATTERN_FLAG = '--pattern';
 const GH_DIR_FLAG = '--dir';
 const GH_JSON_FLAG = '--json';
@@ -82,16 +85,32 @@ function assetUrl(name, run) {
  * @return {{sha256: string, bytes: number, asset: string, url: string}}
  */
 function uploadAndVerify({
-  file, questId, run = gh, tmpdir = os.tmpdir(), root = process.cwd(),
+  file, questId, replace = false, run = gh, tmpdir = os.tmpdir(),
+  root = process.cwd(),
 }) {
   const name = assetName(questId, file, root);
   const sha256 = sha256Of(file);
   const bytes = fs.statSync(file).size;
+  // Clobbering an asset that already carries this name cannot be taken back,
+  // so it happens only where the operator asked for a replacement. Without
+  // that, the upload does not clobber and the remote refuses a collision -
+  // there is no path here that silently overwrites.
+  if (replace) {
+    const decision = authorizeAction({
+      action: ACTION.REPLACE_SHARED_EVIDENCE,
+      signal: {action: ACTION.REPLACE_SHARED_EVIDENCE, replace, asset: name},
+    });
+    if (!isAuthorized(decision)) {
+      throw new Error(`${REPLACEMENT_REFUSED_PREFIX}${name} is ` +
+        `${decision.outcome}: ${decision.because}`);
+    }
+  }
   const scratch = fs.mkdtempSync(path.join(tmpdir, SCRATCH_PREFIX));
   try {
     const staged = path.join(scratch, name);
     fs.copyFileSync(file, staged);
-    run([GH_RELEASE, GH_UPLOAD, EVIDENCE_RELEASE_TAG, staged, GH_CLOBBER_FLAG]);
+    run([GH_RELEASE, GH_UPLOAD, EVIDENCE_RELEASE_TAG, staged,
+      ...(replace ? [GH_CLOBBER_FLAG] : [])]);
     const downloadDir = path.join(scratch, VERIFY_DIR);
     fs.mkdirSync(downloadDir);
     run([GH_RELEASE, GH_DOWNLOAD, EVIDENCE_RELEASE_TAG, GH_PATTERN_FLAG, name,

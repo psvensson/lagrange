@@ -268,8 +268,14 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
+          # The authorization is the tag a maintainer pushed. On this path it
+          # is defence in depth rather than a gate: the tarball name above is
+          # built from the same value, and the preflight step already fails the
+          # job when the tag and the manifest disagree. It is a live gate for a
+          # hand-run publish, where nothing else binds the two.
           npm run publish:npm -- \
             --tarball "dist/npm/lagrange-server-${VERSION}.tgz" \
+            --authorize-version "${GITHUB_REF_NAME#v}" \
             --git-head "${{ steps.release.outputs.tagged_commit }}"
 
       - name: Log in to Docker Hub

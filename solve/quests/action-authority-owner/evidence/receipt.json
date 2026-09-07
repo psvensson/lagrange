@@ -1,0 +1,80 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "action-authority-owner",
+  "status": "pass",
+  "generatedAt": "2026-09-07T16:09:18.995Z",
+  "receipts": [
+    {
+      "id": "absent-authorization-refuses-rather-than-failing-open",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^absent authorization refuses rather than failing open$\" test/scripts/action-authority.test.js",
+      "detail": "no registered action proceeds because nothing said no; an action that needs a signal and has none is refused, and the only actions that pass without one are those carrying a declared standing authority"
+    },
+    {
+      "id": "an-authorization-for-one-action-does-not-authorize-another",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an authorization for one action does not authorize another$\" test/scripts/action-authority.test.js",
+      "detail": "a signal names the action it authorizes and is evaluated only under that action's rule, so authority cannot be carried sideways"
+    },
+    {
+      "id": "an-unregistered-outward-action-refuses-by-default",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unregistered outward action refuses by default$\" test/scripts/action-authority.test.js",
+      "detail": "an outward action nobody has written authorization semantics for is refused until they exist, so introducing one cannot open a door by omission"
+    },
+    {
+      "id": "unavailable-never-permits-an-action",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^unavailable never permits an action$\" test/scripts/action-authority.test.js",
+      "detail": "when the authority cannot determine the answer it says so in a named result, and that result is not permission"
+    },
+    {
+      "id": "publication-consumes-the-authority-and-interprets-no-signals",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^publication consumes the authority and interprets no signals$\" test/scripts/action-authority.test.js",
+      "detail": "the publisher asks and then acts; it no longer decides whether a red-branch signal is good, and no longer reads the record store"
+    },
+    {
+      "id": "evidence-replacement-consumes-the-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^evidence replacement consumes the authority$\" test/scripts/action-authority.test.js",
+      "detail": "replacing a shared evidence asset is irreversible and now asks"
+    },
+    {
+      "id": "package-release-consumes-the-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^package release consumes the authority$\" test/scripts/action-authority.test.js",
+      "detail": "publishing to a public registry cannot be taken back and now asks"
+    },
+    {
+      "id": "cloud-provisioning-consumes-the-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^cloud provisioning consumes the authority$\" test/scripts/action-authority.test.js",
+      "detail": "both paths that create cloud hosts ask, rather than provisioning because a configuration key was present"
+    },
+    {
+      "id": "release-tag-publication-is-registered-and-performed-nowhere",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^release tag publication is registered and performed nowhere$\" test/scripts/action-authority.test.js",
+      "detail": "the action is registered so that code performing it must ask, and no code was written to perform it in order to prove that it would be refused"
+    },
+    {
+      "id": "the-record-store-decides-nothing",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the record store decides nothing$\" test/scripts/action-authority.test.js",
+      "detail": "the exemption store remains the persistence owner: it does not reach into the authority and does not name an outcome"
+    },
+    {
+      "id": "the-authority-performs-no-action",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the authority performs no action$\" test/scripts/action-authority.test.js",
+      "detail": "the owner decides and returns; it runs nothing and writes nothing, so it cannot become a second place an outward action happens"
+    },
+    {
+      "id": "every-registered-action-declares-its-signal",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every registered action declares its signal$\" test/scripts/action-authority.test.js",
+      "detail": "each registered action states what would authorize it, so the registry is a set of locks rather than a list of names"
+    }
+  ]
+}

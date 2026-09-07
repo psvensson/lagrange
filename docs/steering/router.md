@@ -22,7 +22,7 @@ nothing below is read by default.
 | `terminal-proof` | `npm run audit:closed-quest-shape` | closing a unit, or deciding what a closed unit keeps |
 | `record-history` | `npm run audit:quest-log-append-only` | correcting something already recorded |
 | `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
-| `action-authority` | the operator signals [`publish-head.js`](../../scripts/publish-head.js) requires before it will act, and the red-branch refusal in [`pre-push`](../../.githooks/pre-push) with its record store [`red-main-exemption.js`](../../scripts/solve/red-main-exemption.js) | taking an action that cannot be taken back, or that leaves this repository |
+| `action-authority` | [`action-authority.js`](../../scripts/action-authority.js) | taking an action that cannot be taken back, or that leaves this repository |
 | `steering` | [`rules.md`](rules.md), this router, `npm run audit:steering-diet` and `npm run audit:rule-set` | adding, moving or removing steering material |
 
 ## Conditional material
@@ -45,17 +45,14 @@ is owned by `npm run audit:doc-audience`, not by this table.
 
 ## Known owner gap
 
-`action-authority` is the one key here that does not resolve to a single
-component, and what it names is narrower than the concern. There is one
-conditional gate, the red-branch refusal, and it fails open when it cannot
-reach CI; the publisher checks the signals it demands and then performs the
-push itself rather than gating it, and an ordinary publish onto a green branch
-needs no operator signal at all. Publishing a package, clobbering a shared
-evidence asset, provisioning cloud hosts and pushing a release tag are behind
-no signal whatever, and nothing refuses a force push. The row names what
-genuinely enforces today rather than a document describing the intent; this
-paragraph is the honest remainder. Closing it is separate work, and the full
-account is on the `rule-set-revision-26` quest.
+Every outward action performed by this repository's own code now asks that
+owner before acting, and an action nobody has registered is refused. What sits
+outside it is the release workflow and the push hook: pushing a container image
+and creating a public release happen in workflow YAML, which cannot ask a
+module, so they are registered but unasked; the pre-push hook decides for
+itself whether the shared branch is red; and nothing refuses a force push or a
+release-tag push, which is true because no code here performs either rather
+than because anything would stop it.
 
 ## When authorities disagree
 

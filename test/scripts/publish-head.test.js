@@ -74,7 +74,8 @@ tap.test('publish validates runner and red-main attribution without mutation', (
   t.throws(() => validatePublishRequest({
     headMessage: 'plain commit', runner: 'self-hosted', fixesRed: null,
     reason: null, remoteSha: 'a'.repeat(40),
-  }), /requires \[ci:self-hosted\]/u);
+  }), /the reviewed head carries no marker for that runner/u,
+  'the authority refuses routing the reviewed head does not carry');
   t.equal(validatePublishRequest({
     headMessage: 'local gate [ci:self-hosted]', runner: 'self-hosted',
     fixesRed: null, reason: null, remoteSha: 'a'.repeat(40),
@@ -82,15 +83,18 @@ tap.test('publish validates runner and red-main attribution without mutation', (
   t.throws(() => validatePublishRequest({
     headMessage: 'local gate [ci:self-hosted]', runner: null, fixesRed: null,
     reason: null, remoteSha: 'a'.repeat(40),
-  }), /conflicts with the HEAD commit CI routing marker/u);
+  }), /routing there was not asked for/u,
+  'the authority refuses a marked head nobody asked to route');
   t.throws(() => validatePublishRequest({
     headMessage: 'local gate [ci:self-hosted]', runner: 'github', fixesRed: null,
     reason: null, remoteSha: 'a'.repeat(40),
-  }), /conflicts with the HEAD commit CI routing marker/u);
+  }), /routing there was not asked for/u,
+  'and refuses when the caller asks for a different runner than the marker');
   t.throws(() => validatePublishRequest({
     headMessage: 'plain commit', runner: null, fixesRed: 'a'.repeat(40),
     reason: 'fix', remoteSha: 'b'.repeat(40),
-  }), /current origin\/main SHA/u);
+  }), /names a head the branch is not red at/u,
+  'the authority refuses a repair attributed to the wrong head');
   t.throws(() => parsePublishArgs(['--runner']), /requires a value/u);
   t.throws(() => parsePublishArgs(['--reason', '--runner', 'github']),
     /requires a value/u);

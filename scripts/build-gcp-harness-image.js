@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
+
+import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import path from 'node:path';
 import process from 'node:process';
 import {createHash} from 'node:crypto';
@@ -8,6 +10,11 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 const DEFAULT_ZONE = 'us-central1-a';
+const PROVISION_REFUSED_PREFIX =
+  'build-gcp-harness-image: creating hosts in ';
+// Named by the operator, out of band from the flags that decide what to
+// build: passing --project both asks for the work and authorizes it.
+const CLOUD_AUTHORIZATION_ENV = 'LAGRANGE_AUTHORIZE_CLOUD_PROJECT';
 const DEFAULT_MACHINE_TYPE = 'e2-standard-2';
 const DEFAULT_SOURCE_IMAGE_FAMILY = 'ubuntu-2204-lts';
 const DEFAULT_SOURCE_IMAGE_PROJECT = 'ubuntu-os-cloud';
@@ -231,6 +238,17 @@ async function waitForImageReady(options, hooks) {
 }
 
 function createBuilder(options, startupScriptPath, runCommand) {
+  // Creating a cloud host spends real money and outlives this process.
+  const decision = authorizeAction({
+    action: ACTION.PROVISION_CLOUD_HOSTS,
+    signal: {action: ACTION.PROVISION_CLOUD_HOSTS,
+      project: process.env[CLOUD_AUTHORIZATION_ENV]},
+    context: {project: options.project},
+  });
+  if (!isAuthorized(decision)) {
+    throw new Error(`${PROVISION_REFUSED_PREFIX}${options.project} is ` +
+      `${decision.outcome}: ${decision.because}`);
+  }
   runCommand([
     GCLOUD.compute, GCLOUD.instances, GCLOUD.create, options.builderName,
     GCLOUD.projectFlag, options.project,

@@ -439,7 +439,8 @@ function evidenceAdd(root, options) {
   const {quest} = openState(root, options.id);
   const file = path.resolve(root, options.file);
   if (!fs.existsSync(file)) refuse(`no file ${options.file}`);
-  const uploaded = uploadAndVerify({file, questId: quest.id, run: options.run,
+  const uploaded = uploadAndVerify({file, questId: quest.id,
+    replace: options.replace === true, run: options.run,
     tmpdir: options.tmpdir, root});
   const entry = appendEntry(root, quest.id, {
     type: ENTRY_TYPE.FINDING,

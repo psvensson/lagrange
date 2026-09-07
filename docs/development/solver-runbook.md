@@ -90,6 +90,28 @@ would mutate the same files, in which case isolate them in worktrees or order
 the writes. Parallelism applies to the work, never to the proof: verification,
 measurement and one-quest-per-commit stay serial.
 
+## Authorizing An Outward Action
+
+An action that cannot be taken back, or that leaves this repository, is
+performed only where the operator's authority for it already exists (R26). One
+component decides that, and every such action in this repository's own code
+asks it before acting. What it wants is what you supplied, never what the
+command could work out for itself:
+
+| Action | What authorizes it |
+| --- | --- |
+| publishing a landed head | the standing authority to publish what has landed; nothing to pass |
+| pushing onto a red shared branch | `--fixes-red <the head it is red at> --reason "<why>"` |
+| routing a push to another runner | the marker in the reviewed head commit *and* `--runner` |
+| gating without the dataset | `--allow-missing-data` |
+| replacing a published evidence asset | `evidence add --replace`; without it the upload does not clobber |
+| publishing the package | `--authorize-version <version>`, which must equal the version about to go out |
+| creating cloud hosts | `LAGRANGE_AUTHORIZE_CLOUD_PROJECT=<project>`, which must equal the project being provisioned |
+
+A refusal names what it wanted. Naming the wrong version, the wrong project or
+the wrong head is a refusal, not a warning: authorizing one thing never
+authorizes another.
+
 ## Publish And Git Exceptions
 
 Normal publication is one command after Solver has landed every intended commit:
