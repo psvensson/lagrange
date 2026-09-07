@@ -179,6 +179,7 @@
     "audit:closed-quest-shape": "node scripts/checks/check-closed-quest-shape.js",
     "audit:steering-diet": "node scripts/checks/check-steering-diet.js",
     "audit:rule-set": "node scripts/checks/check-rule-set.js",
+    "certification:verdict": "node scripts/checks/certification-verdict.js",
     "steering:generate": "node scripts/gen-tools-index.js && node scripts/gen-solve-commands-index.js",
     "steering:check": "npm run steering:generate && git diff --quiet -- docs/steering/generated && node scripts/check-steering-freshness.js",
     "steering:freshness": "node scripts/check-steering-freshness.js",

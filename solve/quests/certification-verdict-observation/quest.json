@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "certification-verdict-observation",
+  "statement": "A certification verdict an existing owner already computes becomes observable by a v2 probe, without that observation becoming a second opinion. The stat gate runs the window, the summary tool classifies it and the sealed-bar file holds the population it must be drawn from; what did not exist was any way for the solver to see the answer, because the v1 sealed-bar metric is on v2's non-measuring list and the scenario-harness probe silently drops the run count, the certification flag and the sealed-bar file. A projector supplies exactly that middle and nothing else: it reads the recorded verdict and the recorded window identity, compares each against what the sealed-bar file seals, and reports what the window does not carry. It recomputes no pass rate, no interval and no classification; a verdict below the bar stays below it even where the numbers would round the other way, a bar lower than the sealed one is refused rather than adopted, and a safety breach is never outweighed by the statistics. It is generic over the scenario, so a second certification does not mean a second checker.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/certification-verdict-observation/evidence/receipt.json",
+      "requiredReceipts": [
+        "a-certified-window-projects-as-satisfied",
+        "the-owner-verdict-is-read-not-recomputed",
+        "a-lowered-bar-is-refused-rather-than-met",
+        "a-safety-breach-outweighs-the-statistics",
+        "a-window-outside-the-sealed-population-is-refused",
+        "an-incomplete-window-is-refused",
+        "an-absent-window-is-not-a-satisfied-one",
+        "the-projector-is-generic-over-the-scenario"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "project-do-not-decide",
+      "statement": "The projector exposes the verdict its owner computed. It never recalculates certification, never derives a pass rate or an interval of its own, and never substitutes an easier measurement for the sealed bar."
+    },
+    {
+      "id": "generic-not-bespoke",
+      "statement": "One projector serves any scenario the sealed-bar file carries. A second certification must not mean a second checker."
+    },
+    {
+      "id": "the-bar-moves-upward-only",
+      "statement": "A window recording a bar lower than the file seals is refused. Acceptance semantics change by re-sealing, never by an aggregate carrying a smaller number."
+    }
+  ],
+  "sealedAt": "91de7bd71825fd0ff6e7a32bb8e4bca87822e360"
+}

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1797,
+    "unit": 1798,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2057,
-  "digest": "fnv1a32-5bcf47e5",
+  "censusSize": 2058,
+  "digest": "fnv1a32-61a4d2c2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1746,6 +1746,7 @@
     "test/scripts/analyze-topology-convergence.test.js": "unit",
     "test/scripts/benchmark-resource-source-provenance.test.js": "unit",
     "test/scripts/build-gcp-harness-image.test.js": "unit",
+    "test/scripts/certification-verdict.test.js": "unit",
     "test/scripts/change-proof-boundary.test.js": "unit",
     "test/scripts/change-selection-taxonomy.test.js": "unit",
     "test/scripts/changed-paths.test.js": "unit",

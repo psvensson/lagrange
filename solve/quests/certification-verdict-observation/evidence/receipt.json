@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "certification-verdict-observation",
+  "status": "pass",
+  "generatedAt": "2026-09-07T18:33:55.354Z",
+  "receipts": [
+    {
+      "id": "a-certified-window-projects-as-satisfied",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a certified window projects as satisfied$\" test/scripts/certification-verdict.test.js",
+      "detail": "the one thing the projector adds: a window the owner certified, drawn from the sealed population, is observable as satisfied"
+    },
+    {
+      "id": "the-owner-verdict-is-read-not-recomputed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the projector reads the owner verdict rather than deciding for itself$\" test/scripts/certification-verdict.test.js",
+      "detail": "where the recorded numbers would clear the bar but the owner classified the window below it, the owner's answer is the answer"
+    },
+    {
+      "id": "a-lowered-bar-is-refused-rather-than-met",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a lowered bar is refused rather than met$\" test/scripts/certification-verdict.test.js",
+      "detail": "an aggregate recording a bar the file does not seal is refused; the projector never adopts the smaller number"
+    },
+    {
+      "id": "a-safety-breach-outweighs-the-statistics",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a safety breach is not outweighed by the statistics$\" test/scripts/certification-verdict.test.js",
+      "detail": "the six safety counters are a floor, not a term in the average"
+    },
+    {
+      "id": "a-window-outside-the-sealed-population-is-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a window the sealed population does not admit is refused$\" test/scripts/certification-verdict.test.js",
+      "detail": "run count, node count, hardware class, workload, failure schedule, certification mode, a clean tree, no stale source and one fingerprint are each compared with what the file seals"
+    },
+    {
+      "id": "an-incomplete-window-is-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a window missing one contributing report is refused$\" test/scripts/certification-verdict.test.js",
+      "detail": "a window has to account for every run it claims"
+    },
+    {
+      "id": "an-absent-window-is-not-a-satisfied-one",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an absent window is not a satisfied one$\" test/scripts/certification-verdict.test.js",
+      "detail": "no certification is not a certification"
+    },
+    {
+      "id": "the-projector-is-generic-over-the-scenario",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the projector is generic over the scenario$\" test/scripts/certification-verdict.test.js",
+      "detail": "any scenario the sealed-bar file carries is projected by naming it, and one it does not carry is refused rather than guessed at"
+    }
+  ]
+}

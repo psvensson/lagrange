@@ -99,6 +99,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `build:bundle` — `node scripts/build-sea.js`
 - `build:sea` — `bash scripts/build-executables.sh`
 
+## certification
+
+- `certification:verdict` — `node scripts/checks/certification-verdict.js`
+
 ## check
 
 - `check:formation` — Local seed-starvation gate: run the formation-only demo with five local node processes and fail unless the formation verdict is PASS and the seed stayed inside its hardware-relative event-loop budget.
@@ -284,4 +288,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-188 scripts indexed; 31 have a curated description, 157 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+189 scripts indexed; 31 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
