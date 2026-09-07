@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "evidence-deletion-authority",
+  "status": "pass",
+  "generatedAt": "2026-09-07T18:26:27.401Z",
+  "receipts": [
+    {
+      "id": "deletion-refuses-without-an-authorization",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a deletion removes only the asset the operator named$\" test/solve/evidence-store.test.js",
+      "detail": "an asset nobody authorized removing is not removed: with no signal the path refuses"
+    },
+    {
+      "id": "an-authorization-for-one-asset-removes-no-other",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a deletion removes only the asset the operator named$\" test/solve/evidence-store.test.js",
+      "detail": "the operator names the asset, and the authority compares it with the asset at hand, so authority cannot be carried sideways"
+    },
+    {
+      "id": "an-authorized-deletion-reaches-the-remote-once",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a deletion removes only the asset the operator named$\" test/solve/evidence-store.test.js",
+      "detail": "on an authorization the path issues exactly one delete for exactly the named asset"
+    },
+    {
+      "id": "the-refusal-happens-before-the-remote-is-reached",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a deletion removes only the asset the operator named$\" test/solve/evidence-store.test.js",
+      "detail": "a refusal is observable as the remote never being called, not merely as an error after the fact"
+    }
+  ]
+}

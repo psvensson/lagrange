@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "evidence-deletion-authority",
+  "statement": "Removing a published evidence asset is an outward, irreversible action, so it has authorization semantics and a consumer that asks. The authority registers deleting a shared evidence asset, requiring the operator to name the asset and refusing when nothing is named or when the named asset is not the one at hand: an authorization to remove one asset removes no other. The evidence store gains a deletion path that asks before it reaches the remote and reaches it only on an authorization, and the solver exposes that path so an operator can use it. The record store still only remembers, the authority still performs nothing, and no asset is deleted to demonstrate any of this.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/evidence-deletion-authority/evidence/receipt.json",
+      "requiredReceipts": [
+        "deletion-refuses-without-an-authorization",
+        "an-authorization-for-one-asset-removes-no-other",
+        "an-authorized-deletion-reaches-the-remote-once",
+        "the-refusal-happens-before-the-remote-is-reached"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-demonstration-deletions",
+      "statement": "Nothing published is deleted in order to prove the path works. The one real deletion this work follows was operator-authorized, bounded to a single named asset, and is already recorded; it is not re-run for a cleaner witness."
+    },
+    {
+      "id": "authority-decides-consumer-acts",
+      "statement": "The evidence store asks and then acts. It does not judge the operator's signal, and the authority neither runs a command nor writes a record."
+    }
+  ],
+  "sealedAt": "706c4810e4cb2cc53a9bbe3dda8f46f84ae8e611"
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "authorized-action-record/1",
+  "action": "delete-shared-evidence",
+  "performedAt": "2026-09-07",
+  "head": "706c4810e4cb2cc53a9bbe3dda8f46f84ae8e611",
+  "authorization": {
+    "grantedBy": "operator",
+    "scope": "deleting exactly the unintended asset action-authority-owner--package.json from the shared solve-evidence release. It does not authorize replacement, deletion of any other asset, modification of the release, or broader cleanup.",
+    "signal": {
+      "action": "delete-shared-evidence",
+      "asset": "action-authority-owner--package.json"
+    },
+    "presentedAs": "solve evidence delete <asset> --authorize-asset <asset>"
+  },
+  "target": {
+    "release": "solve-evidence",
+    "asset": "action-authority-owner--package.json",
+    "sizeBytes": 19420,
+    "createdAt": "2026-09-07T15:53:41Z",
+    "origin": "an independent verifier testing the new --replace flag end to end ran the real CLI and uploaded package.json to the shared release. It disclosed the act and declined to delete the asset, because deleting it is itself an outward action it had no authority for."
+  },
+  "path": {
+    "registered": "the action did not exist, so the authority refused it: an outward action nobody has registered is refused until its semantics exist. The semantics and a consumer were written rather than the boundary bypassed.",
+    "consumer": "scripts/solve/evidence-store.js deleteSharedEvidenceAsset",
+    "decider": "scripts/action-authority.js",
+    "refusesWithout": [
+      "no authorization presented",
+      "an authorization naming a different asset"
+    ]
+  },
+  "result": {
+    "outcome": "deleted",
+    "commandRan": "gh release delete-asset solve-evidence action-authority-owner--package.json --yes"
+  },
+  "postCheck": {
+    "assetsBefore": 40,
+    "assetsAfter": 39,
+    "targetPresentBefore": true,
+    "targetPresentAfter": false,
+    "removed": [
+      "action-authority-owner--package.json"
+    ],
+    "added": [],
+    "otherAssetsUnchanged": true,
+    "otherAssetsDigest": "sha256:917041ab280108a8 (names and sizes of the 39 assets that were not the target, identical before and after)"
+  }
+}

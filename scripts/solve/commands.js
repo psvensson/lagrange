@@ -23,7 +23,7 @@ import {
   staticQualityProblems,
 } from './guards.js';
 import {
-  EVIDENCE_REF_PREFIX, uploadAndVerify,
+  EVIDENCE_REF_PREFIX, deleteSharedEvidenceAsset, uploadAndVerify,
 } from './evidence-store.js';
 
 const TEXT_ENCODING = 'utf8';
@@ -435,6 +435,19 @@ function land(root, options) {
  * @param {{id: string, file: string, tmpdir: string, run?: Function}} options
  * @return {Object}
  */
+/**
+ * Remove one published evidence asset the operator authorized removing. The
+ * quest record is not touched: a deletion undoes an upload that should not have
+ * happened, and inventing a log entry for it would be recording work.
+ * @param {string} root
+ * @param {{asset: string, authorizedAsset: ?string, run?: Function}} options
+ * @return {{asset: string}}
+ */
+function evidenceDelete(root, options) {
+  return deleteSharedEvidenceAsset({asset: options.asset,
+    authorizedAsset: options.authorizedAsset, run: options.run});
+}
+
 function evidenceAdd(root, options) {
   const {quest} = openState(root, options.id);
   const file = path.resolve(root, options.file);
@@ -485,5 +498,5 @@ function board(root) {
 
 export {
   ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
 };

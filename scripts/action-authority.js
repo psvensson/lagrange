@@ -56,6 +56,7 @@ const ACTION = Object.freeze({
   ROUTE_SELF_HOSTED_RUNNER: 'route-self-hosted-runner',
   PUBLISH_WITHOUT_DATASET: 'publish-without-dataset',
   REPLACE_SHARED_EVIDENCE: 'replace-shared-evidence',
+  DELETE_SHARED_EVIDENCE: 'delete-shared-evidence',
   PUBLISH_PACKAGE: 'publish-package',
   PUBLISH_RELEASE_TAG: 'publish-release-tag',
   PROVISION_CLOUD_HOSTS: 'provision-cloud-hosts',
@@ -68,6 +69,7 @@ const ACTION_FIELD = 'action';
 const VERSION_FIELD = 'version';
 const TAG_FIELD = 'tag';
 const PROJECT_FIELD = 'project';
+const ASSET_FIELD = 'asset';
 const UNREGISTERED = 'no authorization semantics are registered for this ' +
   'action; register them before performing it';
 
@@ -81,6 +83,8 @@ const REQUIRES = Object.freeze({
   PROOF_WEAKENING: 'an explicit request to proceed without the missing input, ' +
     'naming it',
   REPLACEMENT: 'an explicit request to replace, naming the asset',
+  DELETION: 'an explicit request naming the asset to delete, matching ' +
+    'the asset at hand',
   PACKAGE: 'an explicit request naming the version the operator intends to ' +
     'publish, matching the candidate',
   TAG: 'an explicit request naming the tag to publish, matching the tag at hand',
@@ -214,6 +218,9 @@ const REGISTRY = Object.freeze({
   [ACTION.REPLACE_SHARED_EVIDENCE]: Object.freeze({
     requires: REQUIRES.REPLACEMENT,
     decide: (signal) => decideReplacement(signal)}),
+  [ACTION.DELETE_SHARED_EVIDENCE]: Object.freeze({
+    requires: REQUIRES.DELETION,
+    decide: intendedRelease(REQUIRES.DELETION, ASSET_FIELD)}),
   [ACTION.PUBLISH_PACKAGE]: Object.freeze({
     requires: REQUIRES.PACKAGE,
     decide: intendedRelease(REQUIRES.PACKAGE, VERSION_FIELD)}),

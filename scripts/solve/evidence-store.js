@@ -38,6 +38,9 @@ const GH_DOWNLOAD = 'download';
 const GH_VIEW = 'view';
 const GH_CLOBBER_FLAG = '--clobber';
 const REPLACEMENT_REFUSED_PREFIX = 'evidence add: replacing ';
+const DELETION_REFUSED_PREFIX = 'evidence delete: deleting ';
+const GH_DELETE_ASSET = 'delete-asset';
+const GH_YES_FLAG = '--yes';
 const GH_PATTERN_FLAG = '--pattern';
 const GH_DIR_FLAG = '--dir';
 const GH_JSON_FLAG = '--json';
@@ -128,7 +131,30 @@ function uploadAndVerify({
   }
 }
 
+/**
+ * Remove one published evidence asset, where the operator authorized removing
+ * that exact asset. Deleting something already shared cannot be taken back, so
+ * the operator names the target and the authority compares it with the target
+ * at hand: an authorization for one asset removes no other.
+ * @param {{asset: string, authorizedAsset: ?string, run?: Function}} options
+ * @return {{asset: string}}
+ */
+function deleteSharedEvidenceAsset({asset, authorizedAsset, run = gh}) {
+  const decision = authorizeAction({
+    action: ACTION.DELETE_SHARED_EVIDENCE,
+    signal: {action: ACTION.DELETE_SHARED_EVIDENCE, asset: authorizedAsset},
+    context: {asset},
+  });
+  if (!isAuthorized(decision)) {
+    throw new Error(`${DELETION_REFUSED_PREFIX}${asset} is ` +
+      `${decision.outcome}: ${decision.because}`);
+  }
+  run([GH_RELEASE, GH_DELETE_ASSET, EVIDENCE_RELEASE_TAG, asset, GH_YES_FLAG]);
+  return {asset};
+}
+
 export {
   ASSET_SEPARATOR, EVIDENCE_RELEASE_TAG, EVIDENCE_REF_PREFIX,
-  FINDING_KIND_EVIDENCE, assetName, sha256Of, uploadAndVerify,
+  FINDING_KIND_EVIDENCE, assetName, deleteSharedEvidenceAsset, sha256Of,
+  uploadAndVerify,
 };

@@ -10,6 +10,7 @@
 //   node scripts/solve.js probe --id <quest> | --epic <epic>
 //   node scripts/solve.js land --id <quest>
 //   node scripts/solve.js evidence add <file> --id <quest> [--text "<why>"] [--replace]
+//   node scripts/solve.js evidence delete <asset> --authorize-asset <asset>
 //   node scripts/solve.js board
 // Every command accepts --json.
 
@@ -20,7 +21,7 @@ import {fileURLToPath} from 'node:url';
 
 import {ENTRY_TYPE, QUEST_STATUS} from './solve/schema.js';
 import {
-  SolveError, board, evidenceAdd, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
 } from './solve/commands.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,11 +33,14 @@ const EXIT_USAGE = 2;
 const JSON_INDENT = 2;
 const LINE_SEPARATOR = '\n';
 const EVIDENCE_ADD = 'add';
+const EVIDENCE_DELETE = 'delete';
+const AUTHORIZE_ASSET_FLAG = 'authorize-asset';
 const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
 const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
   '--exhausted, --superseded';
 const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
-  '[--text "<why>"] [--replace]';
+  '[--text "<why>"] [--replace] | ' +
+  'solve evidence delete <asset> --authorize-asset <asset>';
 const NEXT_OWNER_FLAG = 'next-owner';
 const LEGACY_TAG = ', legacy';
 const LIST_SEPARATOR = ', ';
@@ -102,7 +106,12 @@ function cmdLand(root, {flags}) {
 }
 
 function cmdEvidence(root, {flags, positional}) {
-  if (positional[0] !== EVIDENCE_ADD || !positional[1]) throw new SolveError(EVIDENCE_USAGE);
+  if (!positional[1]) throw new SolveError(EVIDENCE_USAGE);
+  if (positional[0] === EVIDENCE_DELETE) {
+    return evidenceDelete(root, {asset: positional[1],
+      authorizedAsset: flags[AUTHORIZE_ASSET_FLAG]});
+  }
+  if (positional[0] !== EVIDENCE_ADD) throw new SolveError(EVIDENCE_USAGE);
   return evidenceAdd(root, {id: flags.id, file: positional[1], text: flags.text,
     replace: flags.replace === true,
     tmpdir: os.tmpdir()});

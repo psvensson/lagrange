@@ -15,6 +15,7 @@ quests:
   - rule-set-revision-26
   - steering-rule-authority-split
   - action-authority-owner
+  - evidence-deletion-authority
   - solve-v2-phase-4
   - solve-v2-phase-0
   - solve-v2-phase-1

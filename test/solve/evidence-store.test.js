@@ -12,11 +12,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ASSET_SEPARATOR,
-  EVIDENCE_RELEASE_TAG,
-  assetName,
-  sha256Of,
-  uploadAndVerify,
+  ASSET_SEPARATOR, EVIDENCE_RELEASE_TAG, assetName,
+  deleteSharedEvidenceAsset, sha256Of, uploadAndVerify,
 } from '../../scripts/solve/evidence-store.js';
 
 function scratchFile(name, content) {
@@ -51,6 +48,10 @@ function fakeGh({corrupt = false, listed = true} = {}) {
         return JSON.stringify({assets: listed ?
           [...uploaded.keys()].map((name) =>
             ({name, url: `https://example.test/${name}`})) : []});
+      }
+      if (verb === 'release' && action === 'delete-asset') {
+        uploaded.delete(args[3]);
+        return '';
       }
       throw new Error(`unexpected gh ${args.join(' ')}`);
     },
@@ -119,4 +120,28 @@ test('a replacement clobbers only where the operator asked for one', () => {
     replace: 'yes', run: refused.run, root: path.dirname(file)}),
   /refused/u, 'a replacement proceeded on a signal that was not a request');
   assert.deepEqual(refused.calls, [], 'the uploader ran despite the refusal');
+});
+
+test('a deletion removes only the asset the operator named', () => {
+  // Deleting something already published cannot be taken back, so an
+  // authorization for one asset removes no other, and a refusal happens before
+  // the remote is reached.
+  const refused = fakeGh();
+  assert.throws(() => deleteSharedEvidenceAsset({
+    asset: 'quest-a--one.tar.gz', run: refused.run}),
+  /refused/u, 'an asset was deleted with no authorization');
+  assert.throws(() => deleteSharedEvidenceAsset({
+    asset: 'quest-a--one.tar.gz', authorizedAsset: 'quest-a--other.tar.gz',
+    run: refused.run}),
+  /refused/u, 'an authorization for one asset deleted another');
+  assert.deepEqual(refused.calls, [], 'the remote was reached despite refusal');
+
+  const allowed = fakeGh();
+  const removed = deleteSharedEvidenceAsset({
+    asset: 'quest-a--one.tar.gz', authorizedAsset: 'quest-a--one.tar.gz',
+    run: allowed.run});
+  assert.equal(removed.asset, 'quest-a--one.tar.gz');
+  assert.deepEqual(allowed.calls, [
+    `release delete-asset ${EVIDENCE_RELEASE_TAG} quest-a--one.tar.gz --yes`,
+  ]);
 });
