@@ -12,6 +12,8 @@ quests:
   - solve-v2-phase-2
   - quest-log-append-only-exemption
   - solve-v2-phase-3
+  - rule-set-revision-26
+  - steering-rule-authority-split
   - solve-v2-phase-4
   - solve-v2-phase-0
   - solve-v2-phase-1
@@ -54,7 +56,8 @@ else was added.
 | 0 inventory and design note | `solve-v2-phase-0-inventory` | Authorization: review the design note before any deletion |
 | 1 weight | `solve-v2-phase-1-weight` | gate: no tarball tracked, no file > 1 MB under solve/, pre-commit check in place; history purge deferred (amendment 10) |
 | 2 schema and CLI cutover | `solve-v2-phase-2` | gate: active v2 footprint < 20 MB with the migration corpus grandfathered and intact; v2 solver runs phases 3–4 |
-| 3 steering diet | `solve-v2-phase-3` | — |
+| 3 steering diet | `solve-v2-phase-3` | landed c0670a2af, published, both workflows green |
+| 3.1 rule-set revision | `steering-rule-authority-split` | operator decision of 2026-09-07: supersede the previous rule set with a manifest-governed one and split the compound rule. Supersedes `rule-set-revision-26`, whose sealed statement claimed a proof of semantic distinctness that no checker can measure. Exact-head green publication is a hard prerequisite for phase 4 |
 | 4 prove it | `solve-v2-phase-4` | — |
 
 ## Acceptance metrics
@@ -375,3 +378,41 @@ epic's `authorizes` widened from `architecture/contracts` to `architecture`,
 plus `CHANGELOG.md` and `DEBUGGING.md`, because relocation makes the
 architecture tree a destination and any live document pointing at a moved file
 has to be repointed in the same commit.
+
+
+## Rule-set revision report (2026-09-07)
+
+Operator decision: supersede the previous rule set rather than preserve its
+total by merging some other pair. Adversarial verification of `c0670a2af` had
+found a further independently violable invariant, and because the total was
+the acceptance criterion that invariant had been folded into R16 instead of
+admitted.
+
+| Metric | After phase 3 | After the revision |
+| --- | --- | --- |
+| what governs the rule set | the criterion `rules.md <= 25 rules` | the sealed manifest `docs/steering/rule-set.json`, revision 2 |
+| entries | 25, asserted against a literal | 26, derived from the manifest and reported beside it |
+| a written total in the always-load layer | `AGENTS.md` and `rules.md` both stated one | refused by `npm run audit:rule-set` |
+| growing the set | two coordinated file edits | a revision naming the predecessor revision, the published head it supersedes, a reason, and what that predecessor sealed |
+| the authorization invariant | folded into R16 | R26, owner key `action-authority` |
+| always-load lines | 339 | 349 of 360 |
+
+R16 keeps only the scope invariant its existing owner enforces. R26 carries
+the authorization invariant. No other rule was merged, weakened or reworded.
+
+Judgment calls: (1) `action-authority` resolves to what genuinely enforces
+today and to nothing that merely describes it, and the router carries a named
+owner gap saying so: there is one conditional gate that fails open, a record
+store, and a publisher that checks its signals and then acts, while publishing
+a package, clobbering shared evidence, provisioning cloud hosts and pushing a
+release tag are behind no signal at all. Closing that is separate work. (2)
+The first revision quest, `rule-set-revision-26`, was superseded rather than
+edited: its sealed statement claimed the split was *proved* semantic, and no
+checker can measure that, because a rule may not name the implementation that
+decides it. It stays on the record as rejected and superseded.
+`steering-rule-authority-split` claims only what is measured - two deciders
+structurally blind to each other's input, a model checked against them, and
+two rules resolving to owners that share nothing - and records the semantic
+reading as an independent verifier's judgement. (3) Phase 3 is unchanged and
+still closed at `c0670a2af`; the closed quest's receipt there is byte-identical
+and its now-unresolvable command is recorded as a finding rather than repaired.

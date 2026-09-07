@@ -1,6 +1,6 @@
 /**
- * Steering is a routing layer: twenty-five cross-cutting invariants, each
- * naming one owner, plus a table that turns an owner key into a path. These
+ * Steering is a routing layer: cross-cutting invariants, each naming one
+ * owner, plus a table that turns an owner key into a path. These
  * scenarios are the acceptance tests for that shape. The strongest of them is
  * the router falsifier: a rule may not contain any implementation identity,
  * so renaming a checker or moving a file cannot require editing a rule.
@@ -48,7 +48,6 @@ const BASELINE_ALWAYS_LOAD = Object.freeze([
 // project actually defines. Anything else routes an agent nowhere.
 const LINK = /\]\(([^)#\s]+)(?:#[^)]*)?\)/gu;
 const RUN_COMMAND = /`npm run ([\w:-]+)`/gu;
-const EXPECTED_RULES = 25;
 const ALWAYS_LOAD_BUDGET = 360;
 // An implementation identity in a rule is what makes steering grow back: the
 // rule then has to be edited whenever the implementation moves.
@@ -91,14 +90,16 @@ function resolvedAuthorities(cell, scripts) {
   return [...files, ...commands];
 }
 
-test('rules.md holds exactly twenty-five structural rules', () => {
+test('every rule is structurally complete', () => {
+  // How many rules there are is the rule-set manifest's business, not this
+  // check's: a literal here is the count becoming the criterion again.
   const rules = declaredRules();
-  assert.equal(rules.length, EXPECTED_RULES);
+  assert.ok(rules.length > 0);
   assert.deepEqual(rules.flatMap((rule) => rule.problems), [],
     'each rule states one invariant, one owner and one conflict resolution');
   assert.deepEqual(rules.map((rule) => rule.id),
-    Array.from({length: EXPECTED_RULES},
-      (_unused, index) => `R${String(index + 1).padStart(2, '0')}`));
+    rules.map((_unused, index) => `R${String(index + 1).padStart(2, '0')}`),
+    'ids are contiguous from R01');
 });
 
 test('no rule duplicates another rule', () => {

@@ -5,12 +5,17 @@ last_reviewed: 2026-09-06
 
 # Rules
 
-Twenty-five cross-cutting invariants. An agent can violate this repository
-merely by not knowing these before acting; everything else belongs to an
-owner and is consulted when relevant. Each rule states one invariant, names
-one owner through [`router.md`](router.md), and says what to do when the code
-in front of you disagrees. A rule never restates what its owner defines, so
-changing an owner's detail does not change a rule.
+The cross-cutting invariants. An agent can violate this repository merely by
+not knowing these before acting; everything else belongs to an owner and is
+consulted when relevant. Each rule states one invariant, names one owner
+through [`router.md`](router.md), and says what to do when the code in front
+of you disagrees. A rule never restates what its owner defines, so changing an
+owner's detail does not change a rule.
+
+Which rules exist is sealed in a manifest beside this page, one entry per
+independently violable invariant. How many there are follows from that and is
+never itself the criterion. Holding this page to a fixed total once pushed a pair
+of separately owned invariants into one rule to keep the total intact.
 
 ## R01. One semantic owner per concern
 
@@ -117,14 +122,12 @@ changes an owner boundary, starts from a sealed statement with a binary probe.
 **Owner.** `quest-lifecycle`
 **On conflict.** Seal the unit before continuing.
 
-## R16. Authority is bounded and widening is explicit
+## R16. Scope is bounded and widening is explicit
 
-**Invariant.** A unit of work changes only what its scope authorises, and takes
-an irreversible or outward-facing action only where that authority already
-exists; widening either is a recorded decision of the person who holds the
-authority, never a side effect.
+**Invariant.** A unit of work changes only what its declared scope permits;
+widening is a recorded decision, never a side effect.
 **Owner.** `quest-lifecycle`
-**On conflict.** Obtain the wider authority explicitly, or leave the action out.
+**On conflict.** Widen the scope explicitly, or leave the change out.
 
 ## R17. Discoveries outside scope are recorded, not absorbed
 
@@ -190,3 +193,12 @@ Detail lives with its owner and is loaded only when relevant.
 context inform work; the repository's current owners decide it.
 **Owner.** `steering`
 **On conflict.** Verify against the owner before acting on remembered detail.
+
+## R26. An outward or irreversible action waits for authority it lacks
+
+**Invariant.** An action that cannot be taken back, or that leaves this
+repository, is performed only where the operator's authority for it already
+exists.
+**Owner.** `action-authority`
+**On conflict.** Surface the boundary and stop; never infer authority from a
+previous action or from the ease of taking this one.

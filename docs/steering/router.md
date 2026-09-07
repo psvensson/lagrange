@@ -18,11 +18,12 @@ nothing below is read by default.
 | `generated-artifacts` | the producer named in the artifact's own header; `npm run commands` lists the generators | an artifact looks stale, wrong, or worth editing by hand |
 | `guideline-audits` | `npm run audit:guidelines` and the checker each violation names | naming a value, encoding an outcome, or a guideline audit fails |
 | `sealed-acceptance` | the quest's own `quest.json` and [`solve-commands.md`](generated/solve-commands.md) | sealing a claim, or judging whether evidence proves one |
-| `quest-lifecycle` | [`solve-commands.md`](generated/solve-commands.md) and [`solver-quests.md`](workflow-guidelines/solver-quests.md) | starting, recording, scoping or landing a unit of work |
+| `quest-lifecycle` | the landing guard in [`guards.js`](../../scripts/solve/guards.js), plus [`solve-commands.md`](generated/solve-commands.md) and [`solver-quests.md`](workflow-guidelines/solver-quests.md) | starting, recording, scoping or landing a unit of work |
 | `terminal-proof` | `npm run audit:closed-quest-shape` | closing a unit, or deciding what a closed unit keeps |
 | `record-history` | `npm run audit:quest-log-append-only` | correcting something already recorded |
 | `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
-| `steering` | [`rules.md`](rules.md), this router, and `npm run audit:steering-diet` | adding, moving or removing steering material |
+| `action-authority` | the operator signals [`publish-head.js`](../../scripts/publish-head.js) requires before it will act, and the red-branch refusal in [`pre-push`](../../.githooks/pre-push) with its record store [`red-main-exemption.js`](../../scripts/solve/red-main-exemption.js) | taking an action that cannot be taken back, or that leaves this repository |
+| `steering` | [`rules.md`](rules.md), this router, `npm run audit:steering-diet` and `npm run audit:rule-set` | adding, moving or removing steering material |
 
 ## Conditional material
 
@@ -41,6 +42,20 @@ is owned by `npm run audit:doc-audience`, not by this table.
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording, closing or auditing a quest's artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md), [`quest-lifecycle.md`](../development/quest-lifecycle.md), [`quest-closure.md`](../development/quest-closure.md), [`quest-validators.md`](../development/quest-validators.md), [`quest-subagents.md`](../development/quest-subagents.md) |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
+
+## Known owner gap
+
+`action-authority` is the one key here that does not resolve to a single
+component, and what it names is narrower than the concern. There is one
+conditional gate, the red-branch refusal, and it fails open when it cannot
+reach CI; the publisher checks the signals it demands and then performs the
+push itself rather than gating it, and an ordinary publish onto a green branch
+needs no operator signal at all. Publishing a package, clobbering a shared
+evidence asset, provisioning cloud hosts and pushing a release tag are behind
+no signal whatever, and nothing refuses a force push. The row names what
+genuinely enforces today rather than a document describing the intent; this
+paragraph is the honest remainder. Closing it is separate work, and the full
+account is on the `rule-set-revision-26` quest.
 
 ## When authorities disagree
 

@@ -13,8 +13,8 @@ entry point and the only document that prescribes a load order.
 ## Steering Load Order
 
 1. Read this file.
-2. Read [`rules.md`](docs/steering/rules.md): twenty-five cross-cutting
-   invariants you can violate merely by not knowing them.
+2. Read [`rules.md`](docs/steering/rules.md): the cross-cutting invariants you
+   can violate merely by not knowing them.
 3. Consult [`router.md`](docs/steering/router.md) for the owner of whatever
    the work touches. Nothing else is read by default, and no rule holds the
    detail its owner holds.

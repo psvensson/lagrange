@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rule-set-revision-26",
+  "statement": "The rule set is governed by a sealed manifest rather than by a count. The manifest declares one entry per independently violable invariant, each naming exactly one owner key, and rules.md carries exactly one body per entry; the integer 26 is derived from the manifest and is never itself the criterion, so a future rule requires an explicit sealed revision rather than a casual edit. The compound rule adversarial verification found at c0670a2af is split: R16 keeps only the invariant its existing owner actually owns, and the authorization invariant becomes R26 routed to the owner that genuinely holds the authorization boundary. If no such owner exists that is recorded as an owner gap, never papered over with a documentation-only owner. The split is proved semantic rather than editorial by two directional falsifiers: removing operator authorization while the unit stays inside its authorised scope leaves R16 true and fails R26, and leaving the authorised scope while the outward-facing action is properly authorized leaves R26 true and fails R16. Every property the diet already holds survives: ids unique and contiguous, one owner key per rule, every owner key resolving through the router, no implementation identity inside a rule, the transitive always-load path within 360 lines, registered-operation closure green, and every representative task reaching the same owner it reached before.",
+  "epic": "solve-v2",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/rule-set-revision-26/evidence/receipt.json",
+      "requiredReceipts": [
+        "manifest-and-rule-bodies-agree-entry-for-entry",
+        "rule-ids-are-unique-and-contiguous",
+        "one-independently-violable-invariant-per-rule",
+        "exactly-one-owner-key-per-rule",
+        "every-owner-key-resolves-through-the-router",
+        "no-implementation-identity-leaks-into-a-rule",
+        "r16-owner-owns-all-of-r16-and-none-of-r26",
+        "r26-routes-to-the-real-authorization-boundary",
+        "always-load-transitive-path-within-360-lines",
+        "registered-operation-closure-remains-green",
+        "representative-tasks-reach-their-owner-from-always-load",
+        "authorization-removed-inside-scope-fails-r26-only",
+        "scope-left-with-valid-authorization-fails-r16-only"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "manifest-is-authoritative-count-is-derived",
+      "statement": "The primary invariant is that the current rules exactly match the sealed rule-set manifest, one rule per independently violable invariant with exactly one owner key each. The count may be reported and enforced because it follows from the manifest; it must never be the thing the design is fitted to."
+    },
+    {
+      "id": "no-compensating-merge",
+      "statement": "R26 is added by extraction, not by squashing any other pair to preserve a number. No existing rule is merged, weakened or reworded except R16, which loses exactly the invariant that moves to R26."
+    },
+    {
+      "id": "owner-gap-is-recorded-not-invented",
+      "statement": "R26 routes to an owner that genuinely enforces the authorization boundary. If enforcement is scattered or absent, the router names the real mechanisms and the gap is recorded as a finding; a documentation-only owner invented to make R26 green is forbidden."
+    },
+    {
+      "id": "phase-3-is-closed",
+      "statement": "c0670a2af completed phase 3 under its sealed 25-rule criterion and is not reopened, amended or retroactively declared wrong. This revision supersedes the rule set; it does not revise phase 3."
+    },
+    {
+      "id": "split-is-semantic",
+      "statement": "R16 and R26 must be independently falsifiable: each must be violable while the other holds. An editorial split that leaves the two verdicts coupled does not satisfy this quest."
+    }
+  ],
+  "sealedAt": "c0670a2af496aa246a8c5ccd2d23efbe9e54fb52"
+}

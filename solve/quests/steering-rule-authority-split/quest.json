@@ -1,0 +1,59 @@
+{
+  "schema": "solve-quest/2",
+  "id": "steering-rule-authority-split",
+  "statement": "The rule set is governed by a sealed manifest rather than by a count. The manifest declares one entry per independently violable invariant, each naming exactly one owner key, and rules.md carries exactly one body per entry; the number of entries is derived from the manifest and is never the criterion, no always-load document states it, and growing the set requires a revision that names the predecessor revision, the published head it supersedes and a reason. The compound rule found at c0670a2af is split: R16 keeps the scope invariant its existing owner enforces, and the authorization invariant becomes R26 routed to what genuinely enforces the authorization boundary, with the absence of a single owner recorded as a gap rather than papered over. The evidence for the split is bounded and stated as what it is: the two invariants are decided by two real mechanisms whose parameter shapes are disjoint, so neither verdict can move with the other's input; the modelled table agrees with what those mechanisms do; and the two rules resolve to owners that share no authority. That the rule texts state two invariants rather than one is a semantic judgement, made by an independent verifier and recorded, not a property any checker can measure, because a rule may not name the implementation that decides it. Every property the previous revision held survives.",
+  "epic": "solve-v2",
+  "supersedes": {
+    "quest": "rule-set-revision-26",
+    "reason": "its sealed statement claimed the split was proved semantic rather than editorial, which no checker can measure: a rule may not name the implementation that decides it, so the last link from rule text to deciding mechanism is a reading. The rule set, the manifest, the split and the mechanisms are unchanged; only the claim was narrowed to the evidence, and the predecessor stays on the record as rejected and superseded rather than reworded into a true one."
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/steering-rule-authority-split/evidence/receipt.json",
+      "requiredReceipts": [
+        "manifest-and-rule-bodies-agree-entry-for-entry",
+        "rule-ids-are-unique-and-contiguous",
+        "one-independently-violable-invariant-per-rule",
+        "exactly-one-owner-key-per-rule",
+        "every-owner-key-resolves-through-the-router",
+        "no-implementation-identity-leaks-into-a-rule",
+        "r16-owner-owns-all-of-r16-and-none-of-r26",
+        "r26-routes-to-the-real-authorization-boundary",
+        "always-load-transitive-path-within-360-lines",
+        "registered-operation-closure-remains-green",
+        "representative-tasks-reach-their-owner-from-always-load",
+        "the-two-rules-share-no-authority",
+        "authorization-removed-inside-scope-fails-r26-only",
+        "scope-left-with-valid-authorization-fails-r16-only",
+        "neither-verdict-moves-with-the-other-rules-input",
+        "the-modelled-table-matches-the-mechanisms",
+        "growing-the-sealed-set-requires-a-revision",
+        "no-always-load-document-states-a-rule-count"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "manifest-is-authoritative-count-is-derived",
+      "statement": "The criterion is that the current rules match the sealed manifest, one entry per independently violable invariant with exactly one owner key each. The count follows from it and is reported; it is never the thing the design is fitted to."
+    },
+    {
+      "id": "no-compensating-merge",
+      "statement": "R26 is added by extraction, not by squashing any other pair to preserve a number. No existing rule is merged, weakened or reworded except R16, which loses exactly the invariant that moved to R26."
+    },
+    {
+      "id": "owner-gap-is-recorded-not-invented",
+      "statement": "R26 routes to what genuinely enforces the authorization boundary. Where enforcement is scattered, narrower than the concern, or absent, the router says so; a documentation-only owner invented to make R26 green is forbidden."
+    },
+    {
+      "id": "phase-3-is-closed",
+      "statement": "c0670a2af completed phase 3 under its sealed criterion and is not reopened, amended or retroactively declared wrong. This revision supersedes the rule set going forward; it does not revise phase 3."
+    },
+    {
+      "id": "claim-only-the-evidence",
+      "statement": "The proof claims what it measures. Independence of the two deciding mechanisms is measured; equivalence or non-equivalence of two rule texts is not measurable by a checker and is recorded as an independent verifier's judgement instead of asserted as proved."
+    }
+  ],
+  "sealedAt": "c0670a2af496aa246a8c5ccd2d23efbe9e54fb52"
+}

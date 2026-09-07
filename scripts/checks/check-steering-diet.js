@@ -165,18 +165,31 @@ function declaredRules(root = REPO_ROOT) {
   if (lines === null) return [];
   const rules = [];
   let current = null;
+  let field = null;
   for (const line of lines) {
     const heading = RULE_HEADING.exec(line);
     if (heading) {
       current = {id: heading[1], title: heading[2], fields: {}, problems: []};
+      field = null;
       rules.push(current);
       continue;
     }
-    const field = RULE_FIELD.exec(line);
-    if (field && current) {
-      if (current.fields[field[1]]) current.problems.push(`repeats ${field[1]}`);
-      current.fields[field[1]] = field[2];
+    const started = RULE_FIELD.exec(line);
+    if (started && current) {
+      if (current.fields[started[1]]) current.problems.push(`repeats ${started[1]}`);
+      current.fields[started[1]] = started[2];
+      field = started[1];
+      continue;
     }
+    // A field wraps across lines. Reading only its first line would let the
+    // rest of an invariant escape every check made over rule text, so
+    // continuation lines belong to the field until a blank line closes it.
+    if (!current || !field) continue;
+    if (stringTrim(line) === EMPTY_TEXT) {
+      field = null;
+      continue;
+    }
+    current.fields[field] = `${current.fields[field]} ${stringTrim(line)}`;
   }
   for (const rule of rules) {
     for (const name of RULE_FIELDS) {

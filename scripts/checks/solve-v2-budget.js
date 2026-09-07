@@ -16,7 +16,8 @@
  *   and the migrated corpus stays intact
  *   scripts/solve.js + scripts/solve/ <= 6000 lines; test/solve/ <= 6000
  *   docs/steering/ <= 3000 lines; always-load path <= 360 lines incl. AGENTS.md
- *   the retired v1 steering surface stays absent; rules.md <= 25 rules
+ *   the retired v1 steering surface stays absent; the rules match their
+ *   sealed manifest, whose entry count is reported rather than budgeted
  */
 
 import fs from 'node:fs';
@@ -30,6 +31,7 @@ import {closedQuestShapeOffences} from './check-closed-quest-shape.js';
 import {
   alwaysLoadClosure, declaredRules, steeringCorpusLines,
 } from './check-steering-diet.js';
+import {ruleSetOffences, sealedRuleCount} from './check-rule-set.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -53,6 +55,9 @@ const PHASE_ZERO_FLAG = '--phase-0';
 // (every row when none is named) are over budget; the v2 script probe reads
 // it, and the exit code is non-zero when any is.
 const METRIC_FLAG = '--metric';
+const NOT_PRESENT = -1;
+const EMPTY_TEXT = '';
+const UNKNOWN_METRIC_PREFIX = 'solve-v2-budget: no such metric: ';
 const METRIC_ID_SEPARATOR = ',';
 const GIT_BINARY = 'git';
 const GIT_LS_SOLVE = Object.freeze(['ls-files', '-z', 'solve']);
@@ -71,7 +76,6 @@ const SOLVER_LINE_BUDGET = 6000;
 const SOLVER_TEST_LINE_BUDGET = 6000;
 const STEERING_LINE_BUDGET = 3000;
 const ALWAYS_LOAD_LINE_BUDGET = 360;
-const RULES_BUDGET = 25;
 // The retired v1 steering surface: a compiled rule corpus, its query CLI, the
 // generator that produced both, and the domain packs they fed. The diet
 // replaced them with one authored rule set and one router, so their return is
@@ -112,7 +116,8 @@ const METRIC = Object.freeze({
   STEERING_LINES: 'steering-lines',
   ALWAYS_LOAD_LINES: 'always-load-lines',
   RETIRED_STEERING_SURFACES: 'retired-steering-surfaces',
-  RULES_MD_COUNT: 'rules-md-count',
+  RULE_SET_OFFENCES: 'rule-set-offences',
+  SEALED_RULES: 'sealed-rules',
 });
 
 function walk(dir, extensions) {
@@ -174,6 +179,14 @@ function classifySolveFootprint(tracked) {
 // always-load path contains. This file owns only the budgets they must meet.
 function rulesCount() {
   return declaredRules(REPO_ROOT).length;
+}
+
+// The rule set is governed by its sealed manifest, not by an integer. Holding
+// the rules to a literal is what made a previous revision fold two
+// independently violable invariants into one rule to keep the number, so the
+// gate is manifest agreement and the count is reported beside it.
+function ruleSetDisagreements() {
+  return ruleSetOffences(REPO_ROOT).length;
 }
 
 function alwaysLoadLines() {
@@ -254,9 +267,13 @@ const METRIC_ROWS = Object.freeze([
   Object.freeze({id: METRIC.RETIRED_STEERING_SURFACES, budget: 0,
     measure: () => retiredSteeringSurfaces().length, ok: (value) => value === 0,
     detail: () => retiredSteeringSurfaces()}),
-  Object.freeze({id: METRIC.RULES_MD_COUNT, budget: RULES_BUDGET,
-    measure: () => rulesCount(),
-    ok: (value) => value > 0 && value <= RULES_BUDGET}),
+  Object.freeze({id: METRIC.RULE_SET_OFFENCES, budget: 0,
+    measure: () => ruleSetDisagreements(), ok: (value) => value === 0,
+    detail: () => ruleSetOffences(REPO_ROOT).slice(0, DETAIL_LIMIT)}),
+  Object.freeze({id: METRIC.SEALED_RULES, budget: REPORTED_ONLY,
+    measure: () => sealedRuleCount(REPO_ROOT),
+    ok: (value) => value === rulesCount(),
+    detail: () => [`${rulesCount()} rule bodies`]}),
 ]);
 
 /**
@@ -293,9 +310,21 @@ function renderTable(rows) {
 
 function metricMode(argv, rows) {
   const index = arrayIndexOf(argv, METRIC_FLAG);
-  if (index === -1) return null;
-  const ids = arrayFilter(stringSplit(String(argv[index + 1] || ''), METRIC_ID_SEPARATOR), Boolean);
-  const selected = ids.length === 0 ? rows : arrayFilter(rows, (row) => arrayIncludes(ids, row.id));
+  if (index === NOT_PRESENT) return null;
+  const ids = arrayFilter(
+    stringSplit(String(argv[index + 1] || EMPTY_TEXT), METRIC_ID_SEPARATOR), Boolean);
+  // A probe that names a row which no longer exists must not read as success.
+  // Selecting nothing once made a retired measurement report zero failures,
+  // so a receipt kept passing after the row behind it was gone.
+  const unknown = arrayFilter(ids, (id) =>
+    !arraySome(rows, (row) => row.id === id));
+  if (unknown.length > 0) {
+    process.stderr.write(`${UNKNOWN_METRIC_PREFIX}${unknown.join(METRIC_ID_SEPARATOR)}` +
+      LINE_SEPARATOR);
+    return EXIT_OVER_BUDGET;
+  }
+  const selected = ids.length === 0 ? rows :
+    arrayFilter(rows, (row) => arrayIncludes(ids, row.id));
   const over = arrayFilter(selected, (row) => !row.ok).length;
   process.stdout.write(`${over}${LINE_SEPARATOR}`);
   return over === 0 ? EXIT_OK : EXIT_OVER_BUDGET;

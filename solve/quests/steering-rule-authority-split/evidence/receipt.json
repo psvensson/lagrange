@@ -1,0 +1,116 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "steering-rule-authority-split",
+  "status": "pass",
+  "generatedAt": "2026-09-07T06:39:22.091Z",
+  "receipts": [
+    {
+      "id": "manifest-and-rule-bodies-agree-entry-for-entry",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^manifest and rule bodies agree entry for entry$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the sealed manifest is the criterion and the current rules are exactly what it seals; the integer follows from it and is never asserted against a literal"
+    },
+    {
+      "id": "rule-ids-are-unique-and-contiguous",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^rule ids are unique and contiguous$\" test/scripts/rule-set-revision.test.js",
+      "detail": "ids run R01 upward with no gap and no repeat, in the manifest and in the bodies alike"
+    },
+    {
+      "id": "one-independently-violable-invariant-per-rule",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one independently violable invariant per rule$\" test/scripts/rule-set-revision.test.js",
+      "detail": "each manifest entry names one invariant and no two entries name the same one, so a rule cannot quietly carry two"
+    },
+    {
+      "id": "exactly-one-owner-key-per-rule",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^exactly one owner key per rule$\" test/scripts/rule-set-revision.test.js",
+      "detail": "one owner key per entry, and the body names the same owner the manifest does"
+    },
+    {
+      "id": "every-owner-key-resolves-through-the-router",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every owner key resolves through the router$\" test/scripts/rule-set-revision.test.js",
+      "detail": "every owner a rule names has a router row that resolves to something which exists"
+    },
+    {
+      "id": "no-implementation-identity-leaks-into-a-rule",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no implementation identity leaks into a rule$\" test/scripts/rule-set-revision.test.js",
+      "detail": "no rule names a file, a command or a flag, so moving an implementation never requires editing a rule"
+    },
+    {
+      "id": "r16-owner-owns-all-of-r16-and-none-of-r26",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R16 owns all of R16 and none of R26$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the authorization vocabulary is gone from the scope rule entirely: nothing of R26 is left folded into R16"
+    },
+    {
+      "id": "r26-routes-to-the-real-authorization-boundary",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R26 routes to the real authorization boundary$\" test/scripts/rule-set-revision.test.js",
+      "detail": "R26's owner resolves to at least one mechanism that runs, not only to prose, so the rule is not made green by an invented owner"
+    },
+    {
+      "id": "always-load-transitive-path-within-360-lines",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the always-load transitive path is within 360 lines$\" test/scripts/rule-set-revision.test.js",
+      "detail": "adding a rule did not grow the layer an agent must read before acting"
+    },
+    {
+      "id": "registered-operation-closure-remains-green",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^registered-operation closure remains green$\" test/scripts/rule-set-revision.test.js",
+      "detail": "current instruction still refers only to operations the canonical command registry contains"
+    },
+    {
+      "id": "representative-tasks-reach-their-owner-from-always-load",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^representative tasks reach their owner from the always-load layer$\" test/scripts/rule-set-revision.test.js",
+      "detail": "every representative task reaches the same owner it reached before the revision, and none of those owners is a stub"
+    },
+    {
+      "id": "the-two-rules-share-no-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the two rules route to owners that share no authority$\" test/scripts/rule-set-revision.test.js",
+      "detail": "R16 and R26 resolve through the router to disjoint sets of authorities, each containing the mechanism that decides its own rule, so an editorial split that left both pointing at one place would fail here"
+    },
+    {
+      "id": "authorization-removed-inside-scope-fails-r26-only",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^authorization removed inside scope fails R26 only$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the directional falsifier, measured on the mechanisms rather than on a table describing them: the change set stays inside what the sealed scope authorises and R26 alone refuses"
+    },
+    {
+      "id": "scope-left-with-valid-authorization-fails-r16-only",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^scope left with valid authorization fails R16 only$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the converse, measured the same way: the change set reaches a path the sealed scope does not authorise and R16 alone fails, while the outward action carries the signal it needs"
+    },
+    {
+      "id": "neither-verdict-moves-with-the-other-rules-input",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^neither verdict moves with the other rule's input$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the independence itself: the scope mechanism is a function of the paths alone and the authority mechanism of the request alone, so no combination of the two facts makes one verdict depend on the other"
+    },
+    {
+      "id": "the-modelled-table-matches-the-mechanisms",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the modelled table matches what the mechanisms actually do$\" test/scripts/rule-set-revision.test.js",
+      "detail": "the decision table is checked against the mechanisms rather than standing in for them, which is what stops it asserting its own conclusion"
+    },
+    {
+      "id": "growing-the-sealed-set-requires-a-revision",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^growing the sealed rule set requires a revision, not an edit$\" test/scripts/rule-set-revision.test.js",
+      "detail": "a changed rule set carrying the revision it changed is refused, and a revision must name the predecessor revision, the published head it supersedes and a reason"
+    },
+    {
+      "id": "no-always-load-document-states-a-rule-count",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the always-load layer states no rule count$\" test/scripts/rule-set-revision.test.js",
+      "detail": "no document an agent must read before acting says how many rules there are, so the count cannot drift from the manifest or become the criterion again"
+    }
+  ]
+}

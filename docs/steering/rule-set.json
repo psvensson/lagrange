@@ -1,0 +1,143 @@
+{
+  "schema": "rule-set/1",
+  "revision": 2,
+  "note": "The sealed rule set. One entry per independently violable invariant, each naming exactly one owner key, and docs/steering/rules.md carries exactly one body per entry in this order. This manifest is the criterion; the number of entries follows from it and is reported rather than asserted, so a further rule is a deliberate revision of this file and never an edit to a threshold.",
+  "supersedes": {
+    "revision": 1,
+    "rules": 25,
+    "head": "c0670a2af496aa246a8c5ccd2d23efbe9e54fb52",
+    "reason": "Revision 1 held the set to twenty-five. Adversarial verification of that head found a twenty-sixth independently violable invariant, and because the count was the criterion the invariant was folded into R16 rather than admitted. Revision 2 extracts it as R26 and makes the manifest authoritative so the same pressure cannot recur."
+  },
+  "rules": [
+    {
+      "id": "R01",
+      "invariant": "one-semantic-owner-per-concern",
+      "owner": "architecture"
+    },
+    {
+      "id": "R02",
+      "invariant": "owner-interaction-is-itself-owned",
+      "owner": "owner-interactions"
+    },
+    {
+      "id": "R03",
+      "invariant": "authority-is-consumed-not-copied",
+      "owner": "architecture"
+    },
+    {
+      "id": "R04",
+      "invariant": "a-symptom-is-an-owner-defect",
+      "owner": "architecture"
+    },
+    {
+      "id": "R05",
+      "invariant": "derived-material-is-not-an-authority",
+      "owner": "generated-artifacts"
+    },
+    {
+      "id": "R06",
+      "invariant": "scalars-states-and-names-have-owners",
+      "owner": "guideline-audits"
+    },
+    {
+      "id": "R07",
+      "invariant": "a-semantic-outcome-is-a-named-state",
+      "owner": "guideline-audits"
+    },
+    {
+      "id": "R08",
+      "invariant": "a-shared-contract-has-one-canonical-shape",
+      "owner": "contracts"
+    },
+    {
+      "id": "R09",
+      "invariant": "a-sealed-contract-is-superseded-never-reinterpreted",
+      "owner": "sealed-acceptance"
+    },
+    {
+      "id": "R10",
+      "invariant": "durable-authority-excludes-transient-state",
+      "owner": "contracts"
+    },
+    {
+      "id": "R11",
+      "invariant": "one-execution-path-with-explicit-unavailability",
+      "owner": "contracts"
+    },
+    {
+      "id": "R12",
+      "invariant": "load-slows-the-system-never-breaks-it",
+      "owner": "contracts"
+    },
+    {
+      "id": "R13",
+      "invariant": "resource-lifetime-is-owned-and-bounded",
+      "owner": "contracts"
+    },
+    {
+      "id": "R14",
+      "invariant": "mutations-are-idempotent",
+      "owner": "contracts"
+    },
+    {
+      "id": "R15",
+      "invariant": "work-starts-from-one-bounded-sealed-unit",
+      "owner": "quest-lifecycle"
+    },
+    {
+      "id": "R16",
+      "invariant": "a-change-stays-inside-its-declared-scope",
+      "owner": "quest-lifecycle"
+    },
+    {
+      "id": "R17",
+      "invariant": "out-of-scope-discoveries-are-recorded-not-absorbed",
+      "owner": "quest-lifecycle"
+    },
+    {
+      "id": "R18",
+      "invariant": "owners-are-read-before-behaviour-changes",
+      "owner": "architecture"
+    },
+    {
+      "id": "R19",
+      "invariant": "implementation-success-is-not-proof",
+      "owner": "sealed-acceptance"
+    },
+    {
+      "id": "R20",
+      "invariant": "terminal-state-is-not-terminal-proof",
+      "owner": "terminal-proof"
+    },
+    {
+      "id": "R21",
+      "invariant": "recorded-history-is-append-only",
+      "owner": "record-history"
+    },
+    {
+      "id": "R22",
+      "invariant": "a-claim-names-the-head-it-is-true-of",
+      "owner": "publication"
+    },
+    {
+      "id": "R23",
+      "invariant": "no-gate-is-bypassed-to-obtain-a-green-state",
+      "owner": "publication"
+    },
+    {
+      "id": "R24",
+      "invariant": "steering-routes-and-owners-hold-detail",
+      "owner": "steering"
+    },
+    {
+      "id": "R25",
+      "invariant": "memory-informs-and-authority-decides",
+      "owner": "steering"
+    },
+    {
+      "id": "R26",
+      "invariant": "an-outward-or-irreversible-action-needs-existing-authority",
+      "owner": "action-authority"
+    }
+  ]
+}

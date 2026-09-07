@@ -1,0 +1,118 @@
+{
+  "schema": "decision-table-v1",
+  "id": "steering-rule-authority-split",
+  "owner": "steering_owner",
+  "boundary": "rule_set_authority",
+  "inputs": [
+    {
+      "name": "unitStaysWithinAuthorisedScope",
+      "values": [
+        "within",
+        "outside"
+      ]
+    },
+    {
+      "name": "operatorAuthorisedTheOutwardFacingAction",
+      "values": [
+        "authorised",
+        "absent"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "r16",
+      "values": [
+        "holds",
+        "violated"
+      ]
+    },
+    {
+      "name": "r26",
+      "values": [
+        "holds",
+        "violated"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "r16-depends-only-on-scope",
+      "statement": "R16's verdict is a function of unitStaysWithinAuthorisedScope alone. Changing whether the operator authorised the outward-facing action never changes R16."
+    },
+    {
+      "id": "r26-depends-only-on-authorization",
+      "statement": "R26's verdict is a function of operatorAuthorisedTheOutwardFacingAction alone. Changing whether the unit stayed inside its authorised scope never changes R26."
+    },
+    {
+      "id": "the-split-is-semantic-not-editorial",
+      "statement": "Each rule is violable while the other holds, so the two rules are independently falsifiable and neither is a restatement of the other."
+    }
+  ],
+  "rules": [
+    {
+      "id": "both-satisfied",
+      "when": {
+        "unitStaysWithinAuthorisedScope": "within",
+        "operatorAuthorisedTheOutwardFacingAction": "authorised"
+      },
+      "outcome": {
+        "r16": "holds",
+        "r26": "holds"
+      },
+      "reason": "The unit changed only what its scope authorises and the outward-facing action carried the authorization it needed. Nothing is violated.",
+      "invariantRefs": [
+        "r16-depends-only-on-scope",
+        "r26-depends-only-on-authorization"
+      ]
+    },
+    {
+      "id": "authorization-removed-inside-scope",
+      "when": {
+        "unitStaysWithinAuthorisedScope": "within",
+        "operatorAuthorisedTheOutwardFacingAction": "absent"
+      },
+      "outcome": {
+        "r16": "holds",
+        "r26": "violated"
+      },
+      "reason": "The directional falsifier for R26. Removing operator authorization while the unit stays entirely inside its authorised scope leaves R16 true and fails R26 alone, so the authorization invariant is not a consequence of the scope invariant.",
+      "invariantRefs": [
+        "r26-depends-only-on-authorization",
+        "the-split-is-semantic-not-editorial"
+      ]
+    },
+    {
+      "id": "scope-left-with-valid-authorization",
+      "when": {
+        "unitStaysWithinAuthorisedScope": "outside",
+        "operatorAuthorisedTheOutwardFacingAction": "authorised"
+      },
+      "outcome": {
+        "r16": "violated",
+        "r26": "holds"
+      },
+      "reason": "The converse falsifier. Leaving the authorised scope while the outward-facing action remains properly authorized fails R16 alone, so the scope invariant is not a consequence of the authorization invariant.",
+      "invariantRefs": [
+        "r16-depends-only-on-scope",
+        "the-split-is-semantic-not-editorial"
+      ]
+    },
+    {
+      "id": "both-violated",
+      "when": {
+        "unitStaysWithinAuthorisedScope": "outside",
+        "operatorAuthorisedTheOutwardFacingAction": "absent"
+      },
+      "outcome": {
+        "r16": "violated",
+        "r26": "violated"
+      },
+      "reason": "Both invariants fail independently; neither failure causes the other.",
+      "invariantRefs": [
+        "r16-depends-only-on-scope",
+        "r26-depends-only-on-authorization"
+      ]
+    }
+  ]
+}
