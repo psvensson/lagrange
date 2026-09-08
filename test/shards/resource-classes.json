@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2041,
+    "ordinary": 2043,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2058,
-  "digest": "fnv1a32-a93e4d34",
+  "censusSize": 2060,
+  "digest": "fnv1a32-8ce1a320",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -710,6 +710,7 @@
     "test/diagnostics/comparative-efficiency-opportunity-calculator.test.js": "ordinary",
     "test/diagnostics/event-loop-gap-watchdog.test.js": "ordinary",
     "test/diagnostics/failure-class-taxonomy.test.js": "ordinary",
+    "test/diagnostics/formation-turn-attribution.test.js": "ordinary",
     "test/diagnostics/invariant-review.test.js": "ordinary",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "ordinary",
     "test/diagnostics/resource-diagnostics-sampler.test.js": "ordinary",
@@ -1351,6 +1352,7 @@
     "test/raft/liferaft-committed-entry-conflict.test.js": "ordinary",
     "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": "ordinary",
     "test/raft/liferaft-follower-match-index.test.js": "ordinary",
+    "test/raft/liferaft-formation-attribution-interaction.test.js": "ordinary",
     "test/raft/log-truncation-correctness.property.test.js": "ordinary",
     "test/raft/message-group-readiness-delivery-priority.test.js": "ordinary",
     "test/raft/peer-address-resolver.property.test.js": "ordinary",
