@@ -242,6 +242,19 @@
         "test/control-plane/formation-release-handoff-closure.test.js",
         "test/control-plane/formation-release-handoff-consumer-parity.test.js"
       ]
+    },
+    "raft-formation-attribution": {
+      "description": "LifeRaft protocol registration and dispatch map exclusively to raft_protocol formation diagnostics while commit/application maps exclusively to raft_apply, without moving or changing Raft behavior.",
+      "owners": [
+        "src/diagnostics/formation-diagnostics-contract.js",
+        "src/diagnostics/raft-formation-attribution.js",
+        "src/raft/liferaft.js",
+        "src/raft/liferaft-timing-api.js",
+        "src/raft/liferaft-commit-scheduler.js"
+      ],
+      "tests": [
+        "test/raft/liferaft-formation-attribution-interaction.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -464,6 +477,30 @@
       "witnessTests": [
         "test/control-plane/formation-release-handoff-closure.test.js",
         "test/control-plane/formation-release-handoff-consumer-parity.test.js"
+      ]
+    },
+    "raft-protocol-formation-attribution": {
+      "description": "LifeRaft remains the Raft behavior owner and formation diagnostics remains the accounting owner; their interaction maps production protocol callbacks and apply slices into distinct exclusive buckets while inactive attribution is behaviorally transparent.",
+      "endpoints": [
+        {
+          "id": "liferaft-protocol-and-apply-behavior",
+          "owners": [
+            "src/raft/liferaft.js",
+            "src/raft/liferaft-timing-api.js",
+            "src/raft/liferaft-commit-scheduler.js"
+          ]
+        },
+        {
+          "id": "formation-attribution-mapping",
+          "owners": [
+            "src/diagnostics/formation-diagnostics-contract.js",
+            "src/diagnostics/raft-formation-attribution.js"
+          ]
+        }
+      ],
+      "contract": "raft-formation-attribution",
+      "witnessTests": [
+        "test/raft/liferaft-formation-attribution-interaction.test.js"
       ]
     }
   }

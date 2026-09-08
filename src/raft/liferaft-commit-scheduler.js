@@ -1,7 +1,7 @@
 import {performance} from 'node:perf_hooks';
 import {
-  trackRaftFollowerCommitApplySlice,
-} from '../diagnostics/raft-churn-sync-sections.js';
+  runRaftApplySlice,
+} from '../diagnostics/raft-formation-attribution.js';
 
 const COMMIT_APPLY_SLICE_MAX_ENTRIES = 16;
 const COMMIT_APPLY_SLICE_BUDGET_MS = 50;
@@ -87,7 +87,7 @@ async function commitAndApplyEntries(raft, entries) {
     let applied;
     const effects = createCommitApplyEffects();
     try {
-      applied = trackRaftFollowerCommitApplySlice(() =>
+      applied = runRaftApplySlice(() =>
         raft.log.commitAndApplySlice(pending, {
           apply: (command) => applyCommitCommand(raft, command, effects),
           budgetMs: COMMIT_APPLY_SLICE_BUDGET_MS,
