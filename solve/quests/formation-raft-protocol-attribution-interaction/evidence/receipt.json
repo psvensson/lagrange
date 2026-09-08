@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-raft-protocol-attribution-interaction",
+  "status": "pass",
+  "generatedAt": "2026-09-08T20:43:48.716Z",
+  "receipts": [
+    {
+      "id": "liferaft-cohesion-review",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "# LifeRaft attribution interaction cohesion review\n\nQuest: `formation-raft-protocol-attribution-interaction`\n\nReviewed before editing `src/raft/liferaft.js` at committed HEAD\n`1b7ac8d048c7abe11bd99e48a95b5889a1dc46b8`.\n\n## Existing owners\n\n- `src/raft/liferaft.js` is 772 physical lines. It owns the LifeRaft subclass,\n  the patched inbound DATA handler, Raft safety and catch-up behavior, and the\n  subclass overrides that delegate to the upstream LifeRaft protocol. The DATA\n  handler must remain here because its packet decisions and effects are Raft\n  behavior.\n- `src/raft/liferaft-timing-api.js` owns the LifeRaft timing delegation\n  boundary: election-timeout resolution, candidacy deferral, and the guarded\n  heartbeat registration call. It genuinely owns timing registration, so it is\n  the cohesive site for applying a protocol-attribution wrapper around the\n  existing heartbeat delegate. It can likewise own the thin delegation used by\n  the upstream `indefinitely` retry registration, while the public method and\n  retry algorithm remain in LifeRaft and upstream LifeRaft respectively.\n- `src/raft/liferaft-commit-scheduler.js` owns serialized, bounded\n  commit/application slices. The apply call stays there; no apply ordering,\n  yield, rollback, or effect behavior moves.\n- `src/diagnostics/formation-turn-attribution.js` owns exclusive attribution,\n  async propagation, and inactive transparency. It already exposes the only\n  operational attribution entry point, `runFormationOwner`.\n- `src/diagnostics/raft-churn-sync-sections.js` owns event-loop-gap site\n  instrumentation. It names an apply slice but does not own Raft protocol\n  attribution and is not a correct home for DATA or retry dispatch behavior.\n\n## Interaction decision\n\nNo existing owner owns the cross-cutting semantic mapping from Raft activity to\nformation diagnostic buckets. Add\n`src/diagnostics/raft-formation-attribution.js` as the interaction owner. Its\nindependent contract is limited to two typed operations:\n\n1. run protocol registration/dispatch as `raft_protocol`;\n2. run an existing commit/apply sync-section as `raft_apply`.\n\nThe module may compose diagnostic wrappers, but it may not schedule a timer,\ndispatch a packet, retry an operation, apply an entry, or decide Raft state.\nLifeRaft and its existing timing/apply owners call this contract at their\ncurrent behavior sites. No class methods or Raft behavior are extracted into\nthe new module.\n\nThis is not a line-count extraction. The location follows the ownership model\neven if `liferaft.js` remains below, reaches, or crosses the existing static\nboundary. If the cohesive call sites make the checker exceed its limit and an\nindependent verifier finds no owner-correct extraction, implementation stops at\nthe exact verified floor under the operator's supersession procedure; no line\ntrimming, methods bag, baseline edit, exception, or headroom is permitted.\n\n## Required paired proof\n\nThe registered interaction contract must execute the real LifeRaft methods and\nhandler with deterministic timer/log/transport ports. In one proof surface it\nmust show protocol registration and re-arm, unbounded retry generations,\ninbound DATA, distinct apply ownership, exclusive duration partitioning, and an\ninactive A/B whose normalized Raft effects are identical. Reverted interaction\nmappings must make the behavioral owner assertions red while still executing\nthe same LifeRaft behavior paths.\n"
+    },
+    {
+      "id": "owner-interaction-contract-registered",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "the protected coupled-pair registry binds the Raft behavior and formation accounting/mapping endpoints to one typed contract and this exact primary witness"
+    },
+    {
+      "id": "election-heartbeat-registration-and-rearm",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "real LifeRaft constructor registration, two leader heartbeat generations, and two election promotions register and re-arm through production methods with raft_protocol ownership"
+    },
+    {
+      "id": "indefinite-retry-generations",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "the upstream LifeRaft indefinite loop executes three attempts, two timeout/error immediate generations, and completion with every measured segment retained by raft_protocol"
+    },
+    {
+      "id": "inbound-data-production-dispatch",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "EventEmitter delivery enters the installed patched DATA listener and its asynchronous upstream response continuation under raft_protocol"
+    },
+    {
+      "id": "raft-apply-distinct-exclusive",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "an inbound append reaches the production cooperative commit scheduler and charges its durable application slice only to raft_apply while DATA-side log work stays raft_protocol"
+    },
+    {
+      "id": "no-double-attribution",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "the protocol plus apply durations equal busy duration once, and owners plus idle exactly equal the injected-clock window with zero partition delta or overlap"
+    },
+    {
+      "id": "inactive-raft-equivalence",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "current and mapping-reverted modules produce identical normalized heartbeat, retry, DATA, commit/apply, return, state, and timer effects when no attribution window is active"
+    },
+    {
+      "id": "interaction-red-on-revert",
+      "passed": true,
+      "command": "npm run test:file -- test/raft/liferaft-formation-attribution-interaction.test.js",
+      "detail": "module-loader controls remove the exact protocol and apply mappings while retaining production LifeRaft paths: all three protocol claims fall to zero and apply is visibly misattributed to protocol"
+    }
+  ]
+}

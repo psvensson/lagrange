@@ -8,11 +8,14 @@ import {
   runFormationOwner,
 } from '../../src/diagnostics/formation-turn-attribution.js';
 
-function createHarness(extraOptions = {}) {
+function createHarness(
+  extraOptions = {},
+  AttributionClass = FormationTurnAttribution,
+) {
   let nowUs = 0;
   let callbacks = null;
   let enabled = false;
-  const attribution = new FormationTurnAttribution({
+  const attribution = new AttributionClass({
     clock: () => nowUs,
     context: {
       getStore: () => null,
@@ -103,7 +106,7 @@ async function measureReleasedGenerations(AttributionClass) {
   return attribution.stop();
 }
 
-async function loadMutatedAttribution(replacement) {
+async function loadAttributionWithMutation(target, replacement) {
   const contractUrl = new URL(
     '../../src/diagnostics/formation-diagnostics-contract.js',
     import.meta.url,
@@ -117,17 +120,148 @@ async function loadMutatedAttribution(replacement) {
     Buffer.from(contractSource).toString('base64');
   const source = readFileSync(sourceUrl, 'utf8');
   const importSpecifier = './formation-diagnostics-contract.js';
-  const registrationOwner = `    const owner = this.depth > ZERO ?
-      this.activeOwner : this.context.getStore();`;
-  if (!source.includes(registrationOwner)) {
-    throw new Error('formation attribution registration owner changed');
+  if (!source.includes(target)) {
+    throw new Error('formation attribution mutation target changed');
   }
   const mutated = source
     .replace(importSpecifier, contractDataUrl)
-    .replace(registrationOwner, replacement);
+    .replace(target, replacement);
   const moduleUrl = 'data:text/javascript;base64,' +
     Buffer.from(mutated).toString('base64');
   return import(moduleUrl);
+}
+
+async function loadMutatedAttribution(replacement) {
+  const registrationOwner = `    const owner = this.depth > ZERO ?
+      this.activeOwner : this.context.getStore();`;
+  return loadAttributionWithMutation(registrationOwner, replacement);
+}
+
+function activationRollbackState(attribution) {
+  return {
+    asyncOwners: attribution.asyncOwners.size,
+    ownerDurations: attribution.ownerDurationsUs.size,
+    dispatchCounts: attribution.dispatchCounts.size,
+    handoffCounts: attribution.handoffCounts.size,
+    ownerStack: attribution.ownerStack.length,
+    activeOwner: attribution.activeOwner,
+    activeSegmentStartedAtUs: attribution.activeSegmentStartedAtUs,
+    depth: attribution.depth,
+    turnCount: attribution.turnCount,
+    windowStartedAtUs: attribution.windowStartedAtUs,
+    lastClockUs: attribution.lastClockUs,
+    started: attribution.started,
+    completed: attribution.completed,
+  };
+}
+
+function cleanActivationRollbackState() {
+  return {
+    asyncOwners: 0,
+    ownerDurations: 0,
+    dispatchCounts: 0,
+    handoffCounts: 0,
+    ownerStack: 0,
+    activeOwner: null,
+    activeSegmentStartedAtUs: null,
+    depth: 0,
+    turnCount: 0,
+    windowStartedAtUs: null,
+    lastClockUs: null,
+    started: false,
+    completed: false,
+  };
+}
+
+function exerciseFailedActivation(attributionModule) {
+  const AttributionClass = attributionModule.FormationTurnAttribution;
+  const contender = createHarness({}, AttributionClass);
+  let activationCallbacks = null;
+  let activationCount = 0;
+  let hookDisabled = false;
+  let contenderError = null;
+  let contenderStarted = false;
+  const activationFailure = new Error('hook activation failed');
+  const failed = createHarness({
+    hookFactory: (callbacks) => {
+      activationCallbacks = callbacks;
+      return {
+        disable: () => {
+          hookDisabled = true;
+          if (activationCount !== 1) return;
+          try {
+            contender.attribution.start();
+            contenderStarted = true;
+          } catch (error) {
+            contenderError = error;
+          }
+        },
+        enable: () => {
+          activationCount += 1;
+          if (activationCount !== 1) return;
+          activationCallbacks.init(41, 'Immediate', 1);
+          activationCallbacks.before(41);
+          attributionModule.runFormationOwner(
+            FORMATION_OWNER.READINESS,
+            () => {
+              activationCallbacks.init(42, 'Promise', 41);
+              failed.setNow(5);
+            },
+          );
+          throw activationFailure;
+        },
+      };
+    },
+  }, AttributionClass);
+  let observedFailure = null;
+  try {
+    failed.attribution.start();
+  } catch (error) {
+    observedFailure = error;
+  }
+  const rollbackState = activationRollbackState(failed.attribution);
+  if (contenderStarted) {
+    contender.setNow(1);
+    contender.attribution.stop();
+  }
+  return {
+    activationFailure,
+    contender,
+    contenderError,
+    contenderStarted,
+    failed,
+    hookDisabled,
+    observedFailure,
+    rollbackState,
+  };
+}
+
+function exerciseReentrantStopDisable(attributionModule) {
+  const AttributionClass = attributionModule.FormationTurnAttribution;
+  const contender = createHarness({}, AttributionClass);
+  let contenderError = null;
+  let contenderStarted = false;
+  const first = createHarness({
+    hookFactory: () => ({
+      disable: () => {
+        try {
+          contender.attribution.start();
+          contenderStarted = true;
+        } catch (error) {
+          contenderError = error;
+        }
+      },
+      enable: () => {},
+    }),
+  }, AttributionClass);
+  first.attribution.start();
+  first.setNow(1);
+  const snapshot = first.attribution.stop();
+  if (contenderStarted) {
+    contender.setNow(1);
+    contender.attribution.stop();
+  }
+  return {contender, contenderError, contenderStarted, snapshot};
 }
 
 test('formation attribution owner partitions turns into exclusive buckets',
@@ -272,18 +406,27 @@ test('formation attribution validates the complete clock edge lattice', (t) => {
 });
 
 test('invalid terminal clocks cleanly close their one-shot window', (t) => {
-  let clockReads = 0;
+  let terminalNowUs = 0;
   const invalidStop = createHarness({
-    clock: () => {
-      clockReads += 1;
-      return clockReads === 1 ? 0 : Number.NaN;
-    },
+    clock: () => terminalNowUs,
   });
   invalidStop.attribution.start();
+  invalidStop.callbacks().init(51, 'Immediate', 1);
+  invalidStop.callbacks().before(51);
+  invalidStop.attribution.run(FORMATION_OWNER.READINESS, () => {
+    invalidStop.callbacks().init(52, 'Promise', 51);
+    terminalNowUs = 5;
+  });
+  terminalNowUs = Number.NaN;
   t.throws(
     () => invalidStop.attribution.stop(),
     /clock must return a non-negative safe integer/,
     'an invalid stop clock cannot enter a snapshot',
+  );
+  t.same(
+    activationRollbackState(invalidStop.attribution),
+    {...cleanActivationRollbackState(), completed: true},
+    'failed snapshot clears every retained owner, counter, stack, and clock',
   );
   t.equal(
     runFormationOwner(FORMATION_OWNER.READINESS, () => 'inactive'),
@@ -302,6 +445,41 @@ test('invalid terminal clocks cleanly close their one-shot window', (t) => {
   );
   t.equal(backwards.enabled(), false,
     'clock failure still disables the async hook');
+
+  const disableFailure = new Error('hook disable failed');
+  let disableNowUs = 0;
+  const failedDisable = createHarness({
+    clock: () => disableNowUs,
+    hookFactory: (callbacks) => ({
+      disable: () => {
+        throw disableFailure;
+      },
+      enable: () => {
+        callbacks.init(53, 'Immediate', 1);
+        callbacks.before(53);
+      },
+    }),
+  });
+  failedDisable.attribution.start();
+  disableNowUs = 5;
+  let observedDisableFailure = null;
+  try {
+    failedDisable.attribution.stop();
+  } catch (error) {
+    observedDisableFailure = error;
+  }
+  t.equal(observedDisableFailure, disableFailure,
+    'hook disable failure reaches the caller');
+  t.same(
+    activationRollbackState(failedDisable.attribution),
+    {...cleanActivationRollbackState(), completed: true},
+    'failed hook disable clears the complete retained window state',
+  );
+  t.equal(
+    runFormationOwner(FORMATION_OWNER.READINESS, () => 'released'),
+    'released',
+    'failed hook disable still releases the public owner wrapper',
+  );
   t.end();
 });
 
@@ -501,49 +679,93 @@ test('hook activation cannot reentrantly steal the active window', (t) => {
   t.end();
 });
 
-test('failed hook activation rolls back the singleton claim', (t) => {
-  let hookDisabled = false;
-  let activationCount = 0;
-  const activationFailure = new Error('hook activation failed');
-  const failed = createHarness({
-    hookFactory: () => ({
-      disable: () => {
-        hookDisabled = true;
-      },
-      enable: () => {
-        activationCount += 1;
-        if (activationCount === 1) {
-          runFormationOwner(FORMATION_OWNER.READINESS, () => {
-            failed.setNow(5);
-          });
-          throw activationFailure;
+test('clock observation cannot reentrantly steal the active window', (t) => {
+  const contender = createHarness();
+  const clockFailure = new Error('clock observation failed');
+  let contenderError = null;
+  let clockReads = 0;
+  let nowUs = 0;
+  const first = createHarness({
+    clock: () => {
+      clockReads += 1;
+      if (clockReads === 1) {
+        try {
+          contender.attribution.start();
+        } catch (error) {
+          contenderError = error;
         }
-      },
-    }),
+        throw clockFailure;
+      }
+      return nowUs;
+    },
   });
+  let observedFailure = null;
+  try {
+    first.attribution.start();
+  } catch (error) {
+    observedFailure = error;
+  }
+
+  t.equal(observedFailure, clockFailure,
+    'the injected clock failure reaches the caller');
+  t.match(contenderError?.message, /already has an active window/,
+    'singleton ownership is claimed before observing the injected clock');
+  t.equal(contender.attribution.started, false,
+    'the reentrant clock contender never starts');
+  t.equal(first.enabled(), false,
+    'clock failure runs the same hook-disable transaction as activation');
+  t.same(
+    activationRollbackState(first.attribution),
+    cleanActivationRollbackState(),
+    'clock failure resets the complete provisional window before release',
+  );
+
+  nowUs = 6;
+  t.doesNotThrow(() => first.attribution.start(),
+    'the same instance can retry after clock rollback');
+  nowUs = 7;
+  const retrySnapshot = first.attribution.stop();
+  t.equal(retrySnapshot.windowDurationUs, 1,
+    'clock retry starts a fresh accounting window');
+  t.end();
+});
+
+test('failed hook activation rolls back the singleton claim', (t) => {
   const mapClearDescriptor =
     Object.getOwnPropertyDescriptor(Map.prototype, 'clear');
-  let observedFailure = null;
+  let result = null;
   try {
     replaceWritableProperty(Map.prototype, 'clear', () => {
       throw new Error('hostile Map.prototype.clear executed');
     });
-    failed.attribution.start();
-  } catch (error) {
-    observedFailure = error;
+    result = exerciseFailedActivation({
+      FormationTurnAttribution,
+      runFormationOwner,
+    });
   } finally {
     restoreProperty(Map.prototype, 'clear', mapClearDescriptor);
   }
-  t.equal(observedFailure, activationFailure,
+  t.equal(result.observedFailure, result.activationFailure,
     'hook activation failure reaches the caller through captured rollback');
-  t.equal(hookDisabled, true,
+  t.equal(result.hookDisabled, true,
     'failed activation disables any partially enabled hook');
+  t.match(result.contenderError?.message, /already has an active window/,
+    'the singleton stays claimed throughout hook disable and reset');
+  t.equal(result.contenderStarted, false,
+    'the rollback contender cannot start before singleton release');
+  t.equal(result.contender.enabled(), false,
+    'the refused rollback contender never enables its hook');
+  t.same(
+    result.rollbackState,
+    cleanActivationRollbackState(),
+    'every async owner, counter, map, stack, segment, and clock is reset',
+  );
 
-  failed.setNow(6);
-  t.doesNotThrow(() => failed.attribution.start(),
+  result.failed.setNow(6);
+  t.doesNotThrow(() => result.failed.attribution.start(),
     'the same instance can retry after complete activation rollback');
-  failed.setNow(7);
-  const retrySnapshot = failed.attribution.stop();
+  result.failed.setNow(7);
+  const retrySnapshot = result.failed.attribution.stop();
   t.equal(
     ownerRow(retrySnapshot, FORMATION_OWNER.READINESS).durationUs,
     0,
@@ -551,8 +773,111 @@ test('failed hook activation rolls back the singleton claim', (t) => {
   );
   t.equal(retrySnapshot.windowDurationUs, 1,
     'retry starts a fresh accounting window');
+  t.equal(retrySnapshot.turnCount, 0,
+    'retry contains no dispatch count from the failed activation');
+  t.equal(
+    retrySnapshot.owners.some((row) =>
+      row.durationUs !== 0 || row.dispatchCount !== 0 ||
+      row.handoffCount !== 0),
+    false,
+    'retry contains no stale duration, dispatch, or handoff accounting',
+  );
   t.end();
 });
+
+test('activation rollback cleanup and claim order are red on revert',
+  async (t) => {
+    const resetCall = '        resetWindowAccounting(this);';
+    const incompleteResetModule = await loadAttributionWithMutation(
+      resetCall,
+      '        mapClear(this.ownerDurationsUs);',
+    );
+    const incompleteReset = exerciseFailedActivation(incompleteResetModule);
+    t.notSame(
+      incompleteReset.rollbackState,
+      cleanActivationRollbackState(),
+      'removing complete reset leaves provisional activation state visible',
+    );
+    t.ok(incompleteReset.rollbackState.asyncOwners > 0,
+      'the incomplete-reset control retains scheduled async ownership');
+    t.ok(incompleteReset.rollbackState.depth > 0,
+      'the incomplete-reset control retains an active dispatch segment');
+
+    const rollbackBlock = `      try {
+        this.hook.disable();
+      } finally {
+        resetWindowAccounting(this);
+        if (activeAttribution === this) activeAttribution = null;
+      }`;
+    const releaseBeforeDisable = `      if (activeAttribution === this) {
+        activeAttribution = null;
+      }
+      try {
+        this.hook.disable();
+      } finally {
+        resetWindowAccounting(this);
+      }`;
+    const earlyReleaseModule = await loadAttributionWithMutation(
+      rollbackBlock,
+      releaseBeforeDisable,
+    );
+    const earlyRelease = exerciseFailedActivation(earlyReleaseModule);
+    t.equal(earlyRelease.contenderStarted, true,
+      'releasing before disable lets the rollback contender start');
+    t.equal(earlyRelease.contenderError, null,
+      'the early-release control loses the exclusive-window refusal');
+    t.end();
+  });
+
+test('stop keeps the singleton claimed through hook disable and is red on revert',
+  async (t) => {
+    const current = exerciseReentrantStopDisable({
+      FormationTurnAttribution,
+    });
+    t.match(current.contenderError?.message, /already has an active window/,
+      'normal stop refuses a contender until hook disable returns');
+    t.equal(current.contenderStarted, false,
+      'normal stop does not overlap enabled attribution windows');
+    t.equal(current.contender.enabled(), false,
+      'the refused stop contender never enables its hook');
+    t.equal(current.snapshot.windowDurationUs, 1,
+      'exclusive disable ordering preserves the successful snapshot');
+
+    const exclusiveStopBlock = `    } finally {
+      this.started = false;
+      this.completed = true;
+      let hookDisabled = false;
+      try {
+        this.hook.disable();
+        hookDisabled = true;
+      } finally {
+        if (!snapshotReady || !hookDisabled) resetWindowAccounting(this);
+        if (activeAttribution === this) activeAttribution = null;
+      }
+    }`;
+    const earlyReleaseStopBlock = `    } finally {
+      this.started = false;
+      this.completed = true;
+      if (activeAttribution === this) activeAttribution = null;
+      let hookDisabled = false;
+      try {
+        this.hook.disable();
+        hookDisabled = true;
+      } finally {
+        if (!snapshotReady || !hookDisabled) resetWindowAccounting(this);
+      }
+    }`;
+    const earlyReleaseModule = await loadAttributionWithMutation(
+      exclusiveStopBlock,
+      earlyReleaseStopBlock,
+    );
+    const reverted = exerciseReentrantStopDisable(earlyReleaseModule);
+    t.equal(reverted.contenderStarted, true,
+      'releasing before hook disable lets a second enabled window overlap');
+    t.equal(reverted.contenderError, null,
+      'the early-release stop control loses the singleton refusal');
+    t.end();
+  });
 
 test('formation attribution instances refuse stale stop-start replay', (t) => {
   const harness = createHarness();

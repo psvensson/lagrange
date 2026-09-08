@@ -46,16 +46,19 @@ const RECEIPTS = Object.freeze([
   Object.freeze({
     id: 'activation-claim-precedes-hook',
     testFile: TEST_FILE,
-    detail: 'the active-window singleton is claimed before hook activation, ' +
-      'so a reentrant contender never starts and the original window remains ' +
-      'the sole public attribution owner',
+    detail: 'the active-window singleton is claimed before injected clock or ' +
+      'hook activation and stays claimed through activation rollback and ' +
+      'normal hook disable, so reentrant contenders never overlap windows; ' +
+      'exact early-release controls make both refusal proofs red',
   }),
   Object.freeze({
     id: 'activation-failure-full-rollback',
     testFile: TEST_FILE,
-    detail: 'a hook that attributes work and then throws is disabled and all ' +
-      'provisional state is cleared before singleton release, so the same ' +
-      'instance retries as a fresh 1us window with zero stale owner duration',
+    detail: 'a hook dirties async owners, duration/dispatch/handoff maps, ' +
+      'stack, depth, segment, turn count, and clock state before throwing; ' +
+      'disable runs while exclusively claimed, every surface resets, and the ' +
+      'same instance retries as a fresh 1us window, while failed terminal ' +
+      'clock or hook disable also clears retained one-shot state',
   }),
 ]);
 

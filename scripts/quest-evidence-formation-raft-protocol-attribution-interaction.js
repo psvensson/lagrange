@@ -1,34 +1,38 @@
-// Deterministic evidence harness for the formation-raft-protocol-attribution-interaction quest: receipt
-// declarations only. The shared runtime
-// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
-// command and writes the probe artifact. Fill every testFile (a whole
-// test file) or testNamePattern (an anchored ^...$ node:test name) before
-// the receipt can pass; a placeholder receipt fails closed.
+// Deterministic evidence harness for the Raft/formation interaction Quest.
+// The canonical pre-edit cohesion review lives in the migrated Quest record;
+// this harness carries it into the structurally owned terminal receipt.
 
+import {readFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {
   runQuestEvidenceHarness,
 } from './quest-evidence-harness-runtime.js';
 
+const QUEST_ID = 'formation-raft-protocol-attribution-interaction';
 const TEST_FILE =
   'test/raft/liferaft-formation-attribution-interaction.test.js';
+const QUEST_FILE = path.join(
+  'solve',
+  'quests',
+  QUEST_ID,
+  'quest.json',
+);
+const quest = JSON.parse(readFileSync(QUEST_FILE, 'utf8'));
+const COHESION_REVIEW = `${quest.legacy.cohesionReview.lines.join('\n')}\n`;
 
 const RECEIPTS = Object.freeze([
   Object.freeze({
     id: 'liferaft-cohesion-review',
     testFile: TEST_FILE,
-    detail: 'the pre-edit review keeps packet behavior and subclass methods ' +
-      'in LifeRaft, timing registration in its existing timing delegate, ' +
-      'commit ordering in its scheduler, and gives only diagnostic mapping ' +
-      'to the new interaction owner',
+    detail: COHESION_REVIEW,
   }),
   Object.freeze({
     id: 'owner-interaction-contract-registered',
     testFile: TEST_FILE,
     detail: 'the protected coupled-pair registry binds the Raft behavior and ' +
-      'formation diagnostics endpoints to one typed contract and this exact ' +
-      'primary witness',
+      'formation accounting/mapping endpoints to one typed contract and this ' +
+      'exact primary witness',
   }),
   Object.freeze({
     id: 'election-heartbeat-registration-and-rearm',
@@ -81,12 +85,16 @@ const RECEIPTS = Object.freeze([
   }),
 ]);
 
-const QUEST_ID = 'formation-raft-protocol-attribution-interaction';
-const OUTPUT_FILE =
-  'solve/evidence/formation-raft-protocol-attribution-interaction.receipt.json';
+const OUTPUT_FILE = path.join(
+  'solve',
+  'quests',
+  QUEST_ID,
+  'evidence',
+  'receipt.json',
+);
 
 runQuestEvidenceHarness({
   questId: QUEST_ID,
-  outputFile: path.join(...OUTPUT_FILE.split(path.posix.sep)),
+  outputFile: OUTPUT_FILE,
   receipts: RECEIPTS,
 });

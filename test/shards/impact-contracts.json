@@ -247,6 +247,7 @@
       "description": "LifeRaft protocol registration and dispatch map exclusively to raft_protocol formation diagnostics while commit/application maps exclusively to raft_apply, without moving or changing Raft behavior.",
       "owners": [
         "src/diagnostics/formation-diagnostics-contract.js",
+        "src/diagnostics/formation-turn-attribution.js",
         "src/diagnostics/raft-formation-attribution.js",
         "src/raft/liferaft.js",
         "src/raft/liferaft-timing-api.js",
@@ -494,6 +495,7 @@
           "id": "formation-attribution-mapping",
           "owners": [
             "src/diagnostics/formation-diagnostics-contract.js",
+            "src/diagnostics/formation-turn-attribution.js",
             "src/diagnostics/raft-formation-attribution.js"
           ]
         }

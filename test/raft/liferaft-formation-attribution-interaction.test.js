@@ -45,9 +45,9 @@ const IMPACT_CONTRACTS_URL = new URL(
   '../../test/shards/impact-contracts.json',
   import.meta.url,
 );
-const COHESION_REVIEW_URL = new URL(
+const QUEST_RECORD_URL = new URL(
   '../../solve/quests/formation-raft-protocol-attribution-interaction/' +
-    'evidence/cohesion.md',
+    'quest.json',
   import.meta.url,
 );
 
@@ -455,6 +455,9 @@ test('Raft formation attribution has a registered owner-interaction contract',
     const manifest = JSON.parse(readFileSync(IMPACT_CONTRACTS_URL, 'utf8'));
     const contract = manifest.contracts['raft-formation-attribution'];
     const pair = manifest.coupledPairs['raft-protocol-formation-attribution'];
+    const mappingEndpoint = pair.endpoints.find(
+      (endpoint) => endpoint.id === 'formation-attribution-mapping',
+    );
     const witness =
       'test/raft/liferaft-formation-attribution-interaction.test.js';
     t.ok(contract.owners.includes('src/raft/liferaft.js'),
@@ -462,14 +465,21 @@ test('Raft formation attribution has a registered owner-interaction contract',
     t.ok(contract.owners.includes(
       'src/diagnostics/raft-formation-attribution.js'),
     'contract names the interaction owner');
+    t.ok(contract.owners.includes(
+      'src/diagnostics/formation-turn-attribution.js'),
+    'contract retains the formation accounting owner');
     t.equal(pair.contract, 'raft-formation-attribution',
       'coupled pair points at the typed contract');
     t.same(pair.witnessTests, [witness],
       'the exact production-path witness is registered');
     t.equal(pair.endpoints.length, 2,
       'Raft behavior and diagnostics mapping remain separate endpoints');
+    t.ok(mappingEndpoint.owners.includes(
+      'src/diagnostics/formation-turn-attribution.js'),
+    'mapping endpoint protects changes to the accounting implementation');
 
-    const review = readFileSync(COHESION_REVIEW_URL, 'utf8');
+    const quest = JSON.parse(readFileSync(QUEST_RECORD_URL, 'utf8'));
+    const review = `${quest.legacy.cohesionReview.lines.join('\n')}\n`;
     t.match(review, /No existing owner owns the cross-cutting semantic mapping/u,
       'the pre-edit cohesion review records why the interaction owner exists');
     t.match(review, /No class methods or Raft behavior are extracted/u,

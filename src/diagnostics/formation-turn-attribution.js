@@ -145,10 +145,10 @@ class FormationTurnAttribution {
     if (this.started) return this;
     if (this.completed) throw new Error(RESTART_ERROR);
     if (activeAttribution !== null) throw new Error(CONCURRENT_WINDOW_ERROR);
-    this.windowStartedAtUs = this.readClockUs();
     this.started = true;
     activeAttribution = this;
     try {
+      this.windowStartedAtUs = this.readClockUs();
       this.hook.enable();
     } catch (error) {
       this.started = false;
@@ -265,6 +265,7 @@ class FormationTurnAttribution {
 
   stop() {
     if (!this.started) return null;
+    let snapshotReady = false;
     try {
       const windowEndedAtUs = this.readClockUs();
       if (this.depth > ZERO) {
@@ -300,7 +301,7 @@ class FormationTurnAttribution {
         mapGet(this.ownerDurationsUs, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
       const unattributedDispatchCount =
         mapGet(this.dispatchCounts, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
-      return {
+      const snapshot = {
         schemaVersion: 1,
         windowStartedAtUs: this.windowStartedAtUs,
         windowEndedAtUs,
@@ -322,11 +323,19 @@ class FormationTurnAttribution {
         turnCount: this.turnCount,
         owners,
       };
+      snapshotReady = true;
+      return snapshot;
     } finally {
       this.started = false;
       this.completed = true;
-      if (activeAttribution === this) activeAttribution = null;
-      this.hook.disable();
+      let hookDisabled = false;
+      try {
+        this.hook.disable();
+        hookDisabled = true;
+      } finally {
+        if (!snapshotReady || !hookDisabled) resetWindowAccounting(this);
+        if (activeAttribution === this) activeAttribution = null;
+      }
     }
   }
 }
