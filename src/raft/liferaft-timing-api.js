@@ -1,3 +1,7 @@
+import {
+  runRaftProtocolActivity,
+} from '../diagnostics/raft-formation-attribution.js';
+
 const NUMERIC_ONE = 1;
 const DEFAULT_ELECTION_TIMEOUT_MS = 300;
 const CANDIDACY_RELUCTANCE_MULTIPLIER = 4;
@@ -50,12 +54,17 @@ function heartbeatWithEndGuard(raft, duration, baseHeartbeat) {
   if (!raft.timers) {
     return raft;
   }
-  return baseHeartbeat(duration);
+  return runRaftProtocolActivity(() => baseHeartbeat(duration));
+}
+
+function indefinitelyWithProtocolAttribution(baseIndefinitely) {
+  return runRaftProtocolActivity(baseIndefinitely);
 }
 
 export {
   deferRaftCandidacy,
   heartbeatWithEndGuard,
+  indefinitelyWithProtocolAttribution,
   resolveElectionTimeout,
   resolveRaftNowMs,
 };

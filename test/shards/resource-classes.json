@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2134,
+    "ordinary": 2135,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2151,
-  "digest": "fnv1a32-c1a8f2dd",
+  "censusSize": 2152,
+  "digest": "fnv1a32-17ffec11",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1352,6 +1352,7 @@
     "test/raft/liferaft-committed-entry-conflict.test.js": "ordinary",
     "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": "ordinary",
     "test/raft/liferaft-follower-match-index.test.js": "ordinary",
+    "test/raft/liferaft-formation-attribution-interaction.test.js": "ordinary",
     "test/raft/log-truncation-correctness.property.test.js": "ordinary",
     "test/raft/message-group-readiness-delivery-priority.test.js": "ordinary",
     "test/raft/peer-address-resolver.property.test.js": "ordinary",

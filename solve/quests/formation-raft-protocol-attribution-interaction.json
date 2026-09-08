@@ -1,0 +1,103 @@
+{
+  "id": "formation-raft-protocol-attribution-interaction",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "The Raft protocol/formation-attribution interaction gives election and heartbeat registration and re-arm, every indefinite retry generation, and inbound DATA dispatch the exclusive raft_protocol formation owner while commit/application remains exclusively raft_apply; the same production LifeRaft paths retain unchanged Raft scheduling, dispatch, retry, return, and apply behavior when attribution is inactive, and deterministic reverted controls falsify every interaction claim without simulating Raft behavior.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "formation-seed-decoupling-resealed",
+    "planDoc": "solve/epics/formation-seed-decoupling/design.md",
+    "draftedAtCommit": "1b7ac8d048c7abe11bd99e48a95b5889a1dc46b8"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-raft-protocol-attribution-interaction.receipt.json",
+      "requiredReceipts": [
+        "liferaft-cohesion-review",
+        "owner-interaction-contract-registered",
+        "election-heartbeat-registration-and-rearm",
+        "indefinite-retry-generations",
+        "inbound-data-production-dispatch",
+        "raft-apply-distinct-exclusive",
+        "no-double-attribution",
+        "inactive-raft-equivalence",
+        "interaction-red-on-revert"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-raft-protocol-attribution-interaction-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-raft-protocol-attribution-interaction.receipt.json",
+          "requiredReceipts": [
+            "liferaft-cohesion-review",
+            "owner-interaction-contract-registered",
+            "election-heartbeat-registration-and-rearm",
+            "indefinite-retry-generations",
+            "inbound-data-production-dispatch",
+            "raft-apply-distinct-exclusive",
+            "no-double-attribution",
+            "inactive-raft-equivalence",
+            "interaction-red-on-revert"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "interaction-owner-boundary",
+      "statement": "LifeRaft continues to own Raft scheduling, state transitions, retry, packet dispatch, and commit/apply behavior; formation diagnostics continues to own attribution accounting and propagation; this seam owns only the typed mapping between Raft production callbacks and the raft_protocol or raft_apply diagnostic owners. It must not duplicate or reinterpret a Raft decision."
+    },
+    {
+      "id": "cohesion-before-size",
+      "statement": "Before editing liferaft.js, record an ownership/cohesion review of the DATA dispatch, heartbeat/election, indefinite retry, and commit/apply responsibilities. Prefer an existing timing or dispatch owner only where its current contract genuinely owns the responsibility. Any new extraction must be a real interaction owner with an independent typed contract, never a methods bag or line-count split."
+    },
+    {
+      "id": "liferaft-floor-stop",
+      "statement": "Do not tune, waive, baseline, or optimize for the 800-line static gate. If independent verification finds that the cohesive implementation belongs in liferaft.js and no owner-correct extraction exists, stop with the exact independently verified cohesive floor; any later supersession must preserve the old constraint in history and grant no headroom above that floor."
+    },
+    {
+      "id": "production-path-falsifiers",
+      "statement": "Deterministic witnesses must execute production LifeRaft election/heartbeat registration and re-arm, multiple indefinite retry generations, inbound DATA dispatch, and cooperative raft apply. Stubs may provide ports such as clock, log, or transport but may not reproduce the owner logic or call attribution wrappers in place of the production path."
+    },
+    {
+      "id": "exclusive-attribution",
+      "statement": "Raft protocol work is attributed exactly once to raft_protocol, commit/application work remains exactly once in raft_apply, the two owners remain distinct, and their duration plus every other owner partitions the window without nesting, overlap, or double charging."
+    },
+    {
+      "id": "inactive-equivalence",
+      "statement": "With no active formation attribution window, the same production LifeRaft paths preserve callback return/rejection, timer registration and re-arm, retry generations, DATA dispatch effects, commit/apply ordering, and emitted behavior."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Behavioral controls revert each interaction mapping on the production seam and must reach and fail the named owner assertion while the current source passes; structural source checks or exit status alone are not proof."
+    },
+    {
+      "id": "bounded-stage-scope",
+      "statement": "This Quest must not resume scheduler, transport, simulator, calibration, report, scenario-ingestion, fix, or certification work. It must not use Docker, GCP, or live calibration evidence."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "retry-loops",
+    "recovery-replay",
+    "sweep-timer",
+    "transport-delivery",
+    "harness-fidelity"
+  ]
+}

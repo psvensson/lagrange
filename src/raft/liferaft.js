@@ -1,5 +1,8 @@
 import BaseLifeRaft from '@markwylde/liferaft';
 import {
+  runRaftProtocolActivity,
+} from '../diagnostics/raft-formation-attribution.js';
+import {
   guardCommittedEntryWrite,
   isRaftCommittedEntryConflict,
 } from './committed-entry-guard.js';
@@ -20,6 +23,7 @@ import {handleFollowerAppendBatch} from './liferaft-follower-batch.js';
 import {
   deferRaftCandidacy,
   heartbeatWithEndGuard,
+  indefinitelyWithProtocolAttribution,
   resolveElectionTimeout,
   resolveRaftNowMs,
 } from './liferaft-timing-api.js';
@@ -543,7 +547,7 @@ function patchIncomingDataListener(raft) {
     return true;
   };
 
-  const patchedListener = async (packet, write = () => {}) => {
+  const dispatchIncomingData = async (packet, write = () => {}) => {
     // Teardown-race guard. base liferaft's end() (index.js) sets state=STOPPED
     // and nulls raft.timers/election/Log/beat. A packet still in flight on the
     // transport can reach this listener afterwards; the base handler would then
@@ -655,6 +659,9 @@ function patchIncomingDataListener(raft) {
     return result;
   };
 
+  const patchedListener = (packet, write) =>
+    runRaftProtocolActivity(() => dispatchIncomingData(packet, write));
+
   raft.on(RAFT_STATE_CHANGE_EVENT, () => {
     inflightBatchByAddress.clear();
     followerMatchIndexByAddress.clear();
@@ -710,6 +717,11 @@ class LifeRaft extends BaseLifeRaft {
       entries,
       (pending) => super.commitEntries(pending),
     );
+  }
+
+  indefinitely(attempt, fn, timeout) {
+    return indefinitelyWithProtocolAttribution(() =>
+      super.indefinitely(attempt, fn, timeout));
   }
 
   /**
