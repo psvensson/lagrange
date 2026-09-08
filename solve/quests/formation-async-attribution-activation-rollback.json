@@ -1,0 +1,81 @@
+{
+  "id": "formation-async-attribution-activation-rollback",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "Formation attribution activation is transactional: before invoking the injected async-hook activation callback the singleton window is exclusively claimed, and any reentrant activation failure restores all hook, ownership, accounting, stack, counter, and clock state so the same instance can retry as a fresh exclusive window while both async propagation counterexamples remain fixed and red on revert.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "formation-async-attribution-propagation",
+    "planDoc": "solve/epics/formation-seed-decoupling/design.md",
+    "draftedAtCommit": "14df53cccde45bd95c0ba3b2042877c6f6c89ee7"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-async-attribution-propagation.receipt.json",
+      "requiredReceipts": [
+        "exclusive-turn-partition",
+        "awaiting-caller-remains-unattributed",
+        "bootstrap-release-survives-async-generations",
+        "both-counterexamples-red-on-revert",
+        "activation-claim-precedes-hook",
+        "activation-failure-full-rollback"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-async-attribution-activation-rollback-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-async-attribution-propagation.receipt.json",
+          "requiredReceipts": [
+            "exclusive-turn-partition",
+            "awaiting-caller-remains-unattributed",
+            "bootstrap-release-survives-async-generations",
+            "both-counterexamples-red-on-revert",
+            "activation-claim-precedes-hook",
+            "activation-failure-full-rollback"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "async-attribution-only",
+      "statement": "This Quest owns only exclusive turn accounting and async ownership propagation inside the formation diagnostics owner. It must not wire production ingress owners, Raft protocol/apply behavior, report capture, scenario ingestion, scheduler or transport behavior, calibration, Docker, or GCP."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "The awaiting-caller and post-release multi-generation counterexamples must each fail against the exact rejected propagation algorithm that preceded its repair, while the current source passes both."
+    },
+    {
+      "id": "inactive-is-transparent",
+      "statement": "When no attribution window is active, the public owner wrapper must preserve the callback return value and introduce no scheduling or behavior change."
+    },
+    {
+      "id": "successor-discharge-only",
+      "statement": "This successor may cover only the same four source/test paths as formation-async-attribution-propagation and must obtain exact independent approval before it is used to decompose that parent's standing rejected candidates."
+    },
+    {
+      "id": "activation-rollback-is-complete",
+      "statement": "A failed hook activation must keep the singleton claimed during rollback, disable the hook, clear every provisional async owner, duration/count map, stack, segment, counter, and clock boundary, and permit a same-instance retry whose snapshot is indistinguishable from a fresh window."
+    }
+  ],
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "adversarial-js-intrinsics",
+    "recovery-replay"
+  ]
+}
