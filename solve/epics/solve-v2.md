@@ -73,6 +73,39 @@ else was added.
 | 3.2 action-authority owner | `action-authority-owner` | operator decision of 2026-09-07: R26's owner key resolves to a diagnosis of scattered enforcement rather than to a component that decides. Making it real is the first executable phase-4 prerequisite; no phase-4 work may reach publication or another outward action before it lands |
 | 4 prove it | `solve-v2-phase-4` | baseline frozen at `b8ee3a055` |
 
+### Phase 4 execution strategy (operator decision, 2026-09-08)
+
+Quest boundaries do not imply publication boundaries in this phase. Each
+quest keeps its own local landing and commit, while remote publication is
+batched around evidence that inherently needs a published head.
+
+First complete and prove locally: evidence deletion, certification projection,
+pre-satisfied closure, the onboarding quest's actual `test:gate` acceptance,
+the generic post-land/external-proof lifecycle, durable ActionAuthority grants
+consumed by the CI/YAML executor, and the formation and parked-quest inventory
+refresh. Then run the canonical full local proof over that integrated committed
+head and publish one phase-4 candidate. The exact published SHA is the subject
+of the hosted-CI evidence, external-proof closure, R26 CI proof and the relevant
+timed walkthrough. Repairs found by those proofs accumulate as new local quest
+lands and trigger another publication only when a remote proof genuinely needs
+the new head.
+
+After the 14/14 disposition refresh, walkthrough and phase-4 report are
+complete, land the epic closure and perform one final exact-head publish/CI
+cycle. This phase-specific batching supersedes the happy-path instruction to
+publish after each quest; it does not merge quest scope, evidence, landing or
+commit boundaries.
+
+R26 is not a routine operator stop. A noninteractive executor consumes a
+durable, action-, subject- and head-scoped grant issued by ActionAuthority
+before it runs, and is unable to perform the outward action without it. The
+operator is needed only if implementation alternatives would change those
+semantics. Likewise, a derived epic is resolved from current authority using
+authority, supersession and scope before any question is asked. If those rules
+leave a contradiction, v2 records a conflicting-contract blocker. It does not
+manufacture acceptance merely to seal the epic, and escalation is reserved for
+a product-policy choice that phase 4's own sealed acceptance actually requires.
+
 ## Acceptance metrics
 
 Baseline measured 2026-09-06 on 14df53ccc (`--phase-0`, `wc -l` line convention). "After" columns are
