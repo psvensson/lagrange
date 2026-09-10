@@ -9,10 +9,18 @@ import {
 import {
   doesCacheRecordMatchExpectedFields,
 } from './cdc-integration-service-cache-divergence.js';
-import {buildControlPlaneReadAuthority} from
-  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
-  '../control-plane/control-plane-system-table-gateway-constants.js';
+import {
+  CACHE_REPAIR_READ_AUTHORITY,
+  applyAuthoritativeCacheSweep,
+  authoritativeReadRowsAreValid,
+  cacheRepairSatisfiedAfterApply,
+  cacheRecordChangedDuringAuthoritativeAbsenceRead,
+  captureAuthoritativeCacheSweepSnapshot,
+  captureCacheRecordBeforeAbsenceRepair,
+  doesCachedRowSatisfyAuthoritativeRepair,
+  resolveAuthoritativeCacheRepairMutationMode,
+  resolveCacheVisibilityRepairReadAuthority,
+} from './cdc-integration-service-cache-visibility-authority.js';
 
 const {
   AUTHORITATIVE_FALLBACK_OUTCOME,
@@ -40,11 +48,6 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
-const CACHE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
-  authoritativeReadMode:
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-      .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
-});
 
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
@@ -53,6 +56,11 @@ const CACHE_REPAIR_READ_AUTHORITY = buildControlPlaneReadAuthority({
  * writable cache target.
  */
 class CDCIntegrationServiceCacheVisibilityWait {
+  /** @return {Object|null} Atomic pre-read table snapshot. */
+  captureAuthoritativeCacheSweepSnapshot(tableName) {
+    return captureAuthoritativeCacheSweepSnapshot(this, tableName);
+  }
+
   /**
    * Determine whether a table write should wait for cache visibility.
    * Only CDC-propagated tables are guaranteed to appear in SystemTableCache.
@@ -495,13 +503,23 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return buildSystemTableVisibilityResult();
     }
     const primaryKeyField = this.getPrimaryKeyField(tableName);
+    const readAuthority = resolveCacheVisibilityRepairReadAuthority(
+      expectPresent,
+    );
+    const cachedRecordBeforeAuthoritativeRead =
+      captureCacheRecordBeforeAbsenceRepair(
+        this,
+        tableName,
+        key,
+        expectPresent,
+      );
     const queryResult = await this.executeAuthoritativeSystemTableRead(
       tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
       [key],
-      {readAuthority: CACHE_REPAIR_READ_AUTHORITY},
+      {readAuthority},
     );
-    if (!queryResult?.success) {
+    if (!authoritativeReadRowsAreValid(queryResult)) {
       const retryAfterMs = getControlPlaneRetryAfterMs(queryResult);
       if (
         retryAfterMs > 0 ||
@@ -520,8 +538,17 @@ class CDCIntegrationServiceCacheVisibilityWait {
         visibilityState: null,
       });
     }
-    const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
-    const cachedRecord = this.getCacheRecord(tableName, key);
+    const rows = queryResult.rows;
+    const cachedRecordAfterAuthoritativeRead =
+      captureCacheRecordBeforeAbsenceRepair(
+        this,
+        tableName,
+        key,
+        expectPresent,
+      );
+    const cachedRecord = expectPresent ?
+      this.getCacheRecord(tableName, key) :
+      cachedRecordAfterAuthoritativeRead?.record;
     const phase = this.resolveAuthoritativeFallbackPhase(
       options?.fallbackPhase,
     );
@@ -598,6 +625,15 @@ class CDCIntegrationServiceCacheVisibilityWait {
         visibilityState: null,
       });
     }
+    if (cacheRecordChangedDuringAuthoritativeAbsenceRead(
+      tableName,
+      cachedRecordBeforeAuthoritativeRead,
+      cachedRecordAfterAuthoritativeRead,
+    )) {
+      return buildSystemTableVisibilityResult({
+        visibilityState: null,
+      });
+    }
     let cacheRepaired = false;
     if (cachedRecord) {
       this.emitCacheVisibilityDivergence(
@@ -609,15 +645,20 @@ class CDCIntegrationServiceCacheVisibilityWait {
         [primaryKeyField],
         phase,
       );
-      cacheRepaired = this.applyAuthoritativeCacheRepair(
-        tableName,
-        CDC_OPERATION.DELETE,
-        {
-          [primaryKeyField]: key,
-        },
-        key,
-      );
     }
+    const absenceRepairRow = cachedRecord ||
+      cachedRecordBeforeAuthoritativeRead?.record ||
+      {[primaryKeyField]: key};
+    cacheRepaired = this.applyAuthoritativeCacheRepair(
+      tableName,
+      CDC_OPERATION.DELETE,
+      absenceRepairRow,
+      key,
+      {
+        authoritativeObservedAtMs:
+          queryResult.readAuthorityWitness?.observedAtMs,
+      },
+    );
     const authoritativeAbsentRecovered =
       cacheRepaired && !this.hasCacheRecord(tableName, key);
     this.recordAuthoritativeFallbackSignal({
@@ -664,63 +705,64 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return false;
     }
     const canonicalRow = canonicalizeSystemTableRow(tableName, row);
-    const causeId = `authoritative-repair:${tableName}:${key}`;
-    const mutationMode = options?.mutationMode ||
-      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION;
-    const mutationOptions = operation === CDC_OPERATION.UPSERT ?
-      {
-        causeId,
+    const mutationMode = resolveAuthoritativeCacheRepairMutationMode(
+      operation,
+      options?.mutationMode,
+    );
+    const currentRow =
+      typeof this.cacheMutationTarget.get === 'function' ?
+        this.cacheMutationTarget.get(tableName, key) :
+        null;
+    const currentRowSatisfiesRepair =
+      doesCachedRowSatisfyAuthoritativeRepair({
+        tableName,
+        operation,
+        currentRow,
+        authoritativeRow: canonicalRow,
         mutationMode,
-      } :
-      {causeId};
+      });
+    if (currentRowSatisfiesRepair) {
+      // A complete authoritative observation is already the cache state. Keep
+      // reconciliation idempotent at the cache boundary: reapplying the row
+      // would mint a mutation generation and wake every readiness/publication
+      // consumer even though no semantic state changed.
+      return true;
+    }
+    const causeId = `authoritative-repair:${tableName}:${key}`;
+    const mutationOptions = {
+      causeId,
+      mutationMode,
+      authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+      authoritativeReadStartedAtMs:
+        options?.authoritativeReadStartedAtMs,
+    };
     this.cacheMutationTarget.applySystemTableChange(
       tableName,
       operation,
       canonicalRow,
       mutationOptions,
     );
-    return true;
+    return cacheRepairSatisfiedAfterApply({
+      cacheMutationTarget: this.cacheMutationTarget,
+      tableName,
+      operation,
+      authoritativeRow: canonicalRow,
+      mutationMode,
+      key,
+    });
   }
 
-  /**
-   * Anti-entropy backstop for a genuinely-lost DELETE: after a complete
-   * authoritative read of `tableName`, evict cache-only rows that are absent from
-   * that authoritative set (the UPSERT-only catch-up cannot remove a resurrected
-   * row). Rows are canonicalized so their keys align with how the cache stores
-   * them. `readStartedAtMs` guards against evicting a row written after the read
-   * snapshot was taken.
-   *
-   * @param {string} tableName
-   * @param {Array<Object>} authoritativeRows - Complete authoritative row set.
-   * @param {number} [readStartedAtMs] - When the authoritative read began.
-   * @return {number} Count of cache-only rows evicted.
-   * @private
-   */
-  applyAuthoritativeCacheSweep(tableName, authoritativeRows, readStartedAtMs) {
-    if (
-      !this.cacheMutationTarget ||
-      typeof this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth !==
-        'function' ||
-      !Array.isArray(authoritativeRows)
-    ) {
-      return 0;
-    }
-    const canonicalRows = authoritativeRows
-      .filter((row) => row && typeof row === 'object')
-      .map((row) => canonicalizeSystemTableRow(tableName, row));
-    const result = this.cacheMutationTarget.reconcileAgainstAuthoritativeTruth(
-      {[tableName]: canonicalRows},
-      Number.isFinite(readStartedAtMs) ? {evictOlderThanMs: readStartedAtMs} : {},
+  /** Apply a leader-observed absence sweep through the cache owner. */
+  applyAuthoritativeCacheSweep(tableName, authoritativeRows, options = {}) {
+    return applyAuthoritativeCacheSweep(
+      this,
+      tableName,
+      authoritativeRows,
+      options,
     );
-    return Array.isArray(result?.removed) ? result.removed.length : 0;
   }
 
-  /**
-   * Resolve authoritative fallback phase from optional runtime context.
-   * @param {string|undefined|null} phase
-   * @return {string}
-   * @private
-   */
+  /** Resolve authoritative fallback phase from optional runtime context. */
   resolveAuthoritativeFallbackPhase(phase) {
     if (typeof phase === 'string' && phase.length > 0) {
       return normalizeAuthoritativeFallbackPhase(phase);

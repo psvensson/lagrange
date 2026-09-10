@@ -1,7 +1,6 @@
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
-  buildPartitionRowByPartitionId,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
@@ -462,7 +461,7 @@ function addPriorityPartitionId(byTableId, tableId, partitionId) {
 
 function resolveCensusPriorityPartitionIds(
   partitionRows,
-  serviceRows,
+  servicePartitionIds,
   partitionRowByPartitionId,
 ) {
   const byTableId = new MapConstructor();
@@ -475,8 +474,8 @@ function resolveCensusPriorityPartitionIds(
     const tableId = resolvePartitionTableId({partitionId, partitionRow});
     addPriorityPartitionId(byTableId, tableId, partitionId);
   }
-  for (let index = 0; index < serviceRows.length; index += 1) {
-    const partitionId = normalizeCensusServiceRow(serviceRows[index]).partitionId;
+  for (let index = 0; index < servicePartitionIds.length; index += 1) {
+    const partitionId = servicePartitionIds[index];
     const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
     const tableId = resolvePartitionTableId({partitionId, partitionRow});
     addPriorityPartitionId(byTableId, tableId, partitionId);
@@ -501,6 +500,25 @@ function resolveCensusPriorityPartitionIds(
   }
   arraySort(result, (left, right) => left < right ? -1 : left > right ? 1 : 0);
   return result;
+}
+
+// partitionRows has crossed copyCanonicalDenseOwnDataRecordArray immediately
+// before this helper. Reusing those authenticated frozen records here closes
+// the canonical boundary as intended; routing through the public bootstrap
+// resolver would strict-copy the complete partition table a second time.
+function buildCanonicalPartitionRowByPartitionId(partitionRows) {
+  const partitionRowByPartitionId = new MapConstructor();
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    const partitionRow = partitionRows[index];
+    const partitionId = readOwnPrimitiveString(
+      partitionRow,
+      ['partition_id', 'partitionId'],
+    );
+    if (partitionId.length > 0) {
+      mapSet(partitionRowByPartitionId, partitionId, partitionRow);
+    }
+  }
+  return partitionRowByPartitionId;
 }
 
 /**
@@ -581,20 +599,26 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     return null;
   }
   const {eligibleNodeIds, readinessByNodeId} = priorityNodeSnapshot;
-  const partitionRowByPartitionId = buildPartitionRowByPartitionId(partitionRows);
+  const partitionRowByPartitionId =
+    buildCanonicalPartitionRowByPartitionId(partitionRows);
   const readyReplicaStatsByPartitionId = new MapConstructor();
+  const servicePartitionIds = [];
   let observedPriorityServiceRow = false;
   for (let serviceRowIndex = 0;
     serviceRowIndex < serviceRows.length;
     serviceRowIndex += 1) {
     const serviceRow = serviceRows[serviceRowIndex];
-    const normalizedService = normalizeCensusServiceRow(serviceRow);
-    const partitionId = normalizedService.partitionId;
+    const partitionId = readOwnPrimitiveString(
+      serviceRow,
+      SERVICE_PARTITION_ID_FIELDS,
+    );
+    appendOwnArrayValue(servicePartitionIds, partitionId);
     const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
     const tableId = resolvePartitionTableId({partitionId, partitionRow});
     if (!setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId)) {
       continue;
     }
+    const normalizedService = normalizeCensusServiceRow(serviceRow);
     observedPriorityServiceRow = true;
     if (!mapHas(readyReplicaStatsByPartitionId, partitionId)) {
       mapSet(readyReplicaStatsByPartitionId, partitionId, {
@@ -647,7 +671,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
   }
   const priorityPartitionIds = resolveCensusPriorityPartitionIds(
     partitionRows,
-    serviceRows,
+    servicePartitionIds,
     partitionRowByPartitionId,
   );
   if (setSize(eligibleNodeIds) === 0) {

@@ -6,6 +6,9 @@ import {
   copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
+import {copyMapValuesToArray} from '../utils/map-values-array.js';
+import {isTerminalReplicaOperationRecord} from
+  './replica-operation-progress.js';
 
 const CAPACITY_SOURCE_TABLES = Object.freeze([
   TABLES.NODES,
@@ -26,7 +29,6 @@ const mathMax = Math.max;
 const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
 const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
-const objectDefineProperty = Object.defineProperty;
 const objectFreeze = Object.freeze;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setClear = Function.call.bind(Set.prototype.clear);
@@ -98,18 +100,7 @@ function copyRowsByKey(tableName, rows) {
 
 function readRows(sourceRowsByTable, tableName) {
   const byKey = mapGet(sourceRowsByTable, tableName);
-  const rows = [];
-  if (byKey) {
-    mapForEach(byKey, (row) => {
-      objectDefineProperty(rows, rows.length, {
-        configurable: true,
-        enumerable: true,
-        value: row,
-        writable: true,
-      });
-    });
-  }
-  return rows;
+  return byKey ? copyMapValuesToArray(byKey) : [];
 }
 
 function appendNodeId(nodeIds, value) {
@@ -125,6 +116,17 @@ function readPartitionId(record) {
 function readOperationId(record) {
   const value = record?.[COLUMN.OPERATION_ID] ?? record?.operationId;
   return typeof value === 'string' ? value : '';
+}
+
+function readLiveCapacityOperationId(record) {
+  const operationId = readOperationId(record);
+  return operationId && !isTerminalReplicaOperationRecord(record) ?
+    operationId : '';
+}
+
+function capacityOperationMembershipChanged(previousRecord, currentRecord) {
+  return readLiveCapacityOperationId(previousRecord) !==
+    readLiveCapacityOperationId(currentRecord);
 }
 
 function collectDirectNodeIds(nodeIds, previousRecord, currentRecord) {
@@ -351,6 +353,10 @@ class StorageCapacitySemanticProjectionOwner {
       return;
     }
     const {previousRecord, currentRecord} = changedRows;
+    if (tableName === TABLES.REPLICA_OPERATIONS &&
+        !capacityOperationMembershipChanged(previousRecord, currentRecord)) {
+      return;
+    }
     const affectedNodeIds = new SetConstructor();
     collectJoinedCapacityNodeIds(
       affectedNodeIds,

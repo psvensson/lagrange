@@ -853,6 +853,48 @@ test('PartitionService - executeQuery for SELECT', async (t) => {
   await partition.shutdown();
 });
 
+test('PartitionService - repeated local reads reuse one database statement',
+  async (t) => {
+    const preparedSql = [];
+    const executedParams = [];
+    const db = {
+      prepare(sql) {
+        preparedSql.push(sql);
+        return {
+          all(...params) {
+            executedParams.push(params);
+            return [{node_id: params[0] || 'all'}];
+          },
+        };
+      },
+    };
+    const partition = Object.create(PartitionService.prototype);
+    Object.assign(partition, {
+      initialized: true,
+      partitionId: 'nodes-p1',
+      db,
+      logger: {debug() {}, error() {}},
+    });
+
+    const byNodeSql = 'SELECT * FROM nodes WHERE node_id = ?';
+    const allNodesSql = 'SELECT * FROM nodes';
+    await partition.executeLocalQuery(byNodeSql, ['node-a']);
+    await partition.executeLocalQuery(byNodeSql, ['node-b']);
+    await partition.executeLocalQuery(allNodesSql);
+    await partition.executeLocalQuery(byNodeSql, ['node-c']);
+
+    t.same(
+      preparedSql,
+      [byNodeSql, allNodesSql, byNodeSql],
+      'the database owns only its most recently prepared local read',
+    );
+    t.same(
+      executedParams,
+      [['node-a'], ['node-b'], [], ['node-c']],
+      'every execution rebinds the caller parameters',
+    );
+  });
+
 test('PartitionService - updateData modifies records', async (t) => {
   const schema = {
     columns: [

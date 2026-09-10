@@ -8,8 +8,9 @@ import {
   buildControlPlaneCacheReconcileContract,
   canonicalizeSystemTableRow,
   getSystemCachePrimaryKeyFieldOrFallback,
-  hasUsablePrimaryKeyValue,
 } from './control-plane-system-table-gateway-shared.js';
+import {isUsableSystemCacheKey} from
+  '../cache/system-cache-key-descriptor.js';
 import {
   isStaleForExistingRecord,
 } from '../cache/system-table-cache-row-merge.js';
@@ -113,6 +114,11 @@ function hasValidObservationTime(receipt) {
   return Number.isFinite(observedAtMs) && observedAtMs >= 0;
 }
 
+function hasValidReadStartTime(receipt) {
+  const readStartedAtMs = Number(receipt?.readStartedAtMs);
+  return Number.isFinite(readStartedAtMs) && readStartedAtMs >= 0;
+}
+
 function hasValidObservationCause(receipt) {
   return typeof receipt?.causeId === 'string' && receipt.causeId.length > 0;
 }
@@ -124,6 +130,7 @@ function hasCompleteObservationReceipt(receipt, tableName) {
     receipt?.tableName === tableName &&
     receipt?.rowSetComplete === true &&
     hasValidObservationTime(receipt) &&
+    hasValidReadStartTime(receipt) &&
     hasValidObservationCause(receipt),
   );
 }
@@ -149,6 +156,14 @@ function hasAuthoritativeObservationStorage(writableCache, readableCache) {
   );
 }
 
+function observationAdvancesStoredFrontier(receipt, tableName, readableCache) {
+  const currentObservedAtMs =
+    readableCache.getLastAuthoritativeObservedAtMs(tableName);
+  const incomingObservedAtMs = Math.floor(Number(receipt.observedAtMs));
+  return !Number.isFinite(currentObservedAtMs) ||
+    incomingObservedAtMs > currentObservedAtMs;
+}
+
 function validateObservationRequest(options) {
   if (!options.observationRequested) {
     return null;
@@ -170,6 +185,13 @@ function validateObservationRequest(options) {
   )) {
     return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE;
   }
+  if (!observationAdvancesStoredFrontier(
+    options.receipt,
+    options.tableName,
+    options.readableCache,
+  )) {
+    return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID;
+  }
   return null;
 }
 
@@ -178,7 +200,7 @@ function buildCachedRowIndex(rows, primaryKeyField) {
   let invalidKeyCount = 0;
   for (const row of rows) {
     const key = row?.[primaryKeyField] ?? row?.id;
-    if (!hasUsablePrimaryKeyValue(key)) {
+    if (!isUsableSystemCacheKey(key)) {
       invalidKeyCount += 1;
       continue;
     }
@@ -195,7 +217,7 @@ function buildAuthoritativeRowIndex(tableName, rows, primaryKeyField) {
   for (const row of rows) {
     const canonicalRow = canonicalizeSystemTableRow(tableName, row);
     const key = canonicalRow?.[primaryKeyField] ?? canonicalRow?.id;
-    if (!hasUsablePrimaryKeyValue(key)) {
+    if (!isUsableSystemCacheKey(key)) {
       invalidKeyCount += 1;
       continue;
     }
@@ -271,7 +293,7 @@ function applyMissingRowDeletes(options) {
   for (const cachedRow of options.cachedEntries) {
     const key = cachedRow?.[options.primaryKeyField] ?? cachedRow?.id;
     if (
-      !hasUsablePrimaryKeyValue(key) ||
+      !isUsableSystemCacheKey(key) ||
       options.authoritativeKeys.has(String(key))
     ) {
       continue;
@@ -484,7 +506,10 @@ function applyCacheReconciliation(context, indexes) {
     {
       ...(context.causeOptions || {}),
       mutationMode:
-        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION,
+        SYSTEM_TABLE_CACHE_MUTATION_MODE
+          .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
+      authoritativeObservedAtMs: context.receipt.observedAtMs,
+      authoritativeReadStartedAtMs: context.receipt.readStartedAtMs,
     } :
     context.causeOptions;
   const mutationOptions = {

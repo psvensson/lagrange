@@ -5,6 +5,16 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = UNIFIED_REBALANCER_SHARED;
 
+async function hasPriorityRecoveryEligibleNodesForEvaluation(rebalancer) {
+  if (!rebalancer.isControlPlanePriorityPartition()) return false;
+  const decision =
+    await rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot();
+  if (!decision) return false;
+  const eligibleNodeIds =
+    rebalancer.resolvePriorityRecoveryFollowUpEligibleNodeIds(decision);
+  return Boolean(eligibleNodeIds && eligibleNodeIds.length > 0);
+}
+
 const REBALANCER_EVALUATION_METHODS = {
   /**
    * Evaluate if rebalancing is needed.
@@ -59,21 +69,17 @@ const REBALANCER_EVALUATION_METHODS = {
     // no READY target node and are what allow formation-held nodes to become
     // READY. Reapplying the generic empty-ready-set guard here would invert
     // that dependency and recreate the cold-formation deadlock.
-    if (ledgerSurplusDrainPlanningCapability) {
+    if (
+      ledgerSurplusDrainPlanningCapability ||
+      operationCreationGate?.ledgerConcentrationOverTarget === true &&
+        availableNodes.length > UNIFIED_REBALANCER_LITERAL.ZERO
+    ) {
       this.lastSuboptimalSignal = null;
       return true;
     }
 
-    let hasPriorityEligibleNodes = false;
-    if (this.isControlPlanePriorityPartition()) {
-      const decision = await this.getCurrentPriorityRecoveryFollowUpDecisionSnapshot();
-      if (decision) {
-        const eligibleNodeIds = this.resolvePriorityRecoveryFollowUpEligibleNodeIds(decision);
-        if (eligibleNodeIds && eligibleNodeIds.length > 0) {
-          hasPriorityEligibleNodes = true;
-        }
-      }
-    }
+    const hasPriorityEligibleNodes =
+      await hasPriorityRecoveryEligibleNodesForEvaluation(this);
 
     // Skip rebalancing if cache appears unpopulated (no nodes known)
     // This prevents newly joined nodes from making incorrect decisions

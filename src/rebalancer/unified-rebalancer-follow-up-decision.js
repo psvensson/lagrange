@@ -1,10 +1,11 @@
 import {UnifiedRebalancerBudgetPlanning} from './unified-rebalancer-budget-planning.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
-import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
+import {
+  buildPriorityRecoveryFollowUpOperationContexts,
+} from './priority-recovery-follow-up-operation-context-view.js';
 import {
   inheritPriorityRecoverySchedulingOwner,
 } from '../control-plane/priority-recovery-scheduling-owner-policy.js';
@@ -28,11 +29,6 @@ const {
   normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
 } = SHARED;
-
-const {buildPriorityRecoveryOperationContextFromRecord} =
-  UNIFIED_REBALANCER_SHARED;
-const {isReplicaOperationStale, normalizeReplicaOperationRecord} =
-  UNIFIED_REBALANCER_SHARED;
 
 const FOLLOW_UP_REQUIREMENT_STATE_TABLE = Object.freeze([
   Object.freeze([
@@ -216,42 +212,13 @@ function readPlanningSnapshotEligibleNodeIdLists(snapshot) {
 }
 class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning {
   buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId) {
-    const normalizedPartitionId = String(
-      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-    if (
-      normalizedPartitionId.length === 0 ||
-      typeof this.systemTableCache?.getAll !== 'function'
-    ) {
-      return Object.freeze([]);
-    }
-    const replicaOperationRows = readAllSharedRows(
-      this.systemTableCache,
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    );
-    const nowMs = this.nowFn();
-    const operationContexts = replicaOperationRows
-      .filter((operation) => {
-        if (!this.isTrackedInFlightOperation(operation)) {
-          return false;
-        }
-        const normalizedOperation = normalizeReplicaOperationRecord(
-          operation,
-          {nowMs},
-        );
-        return !isReplicaOperationStale(normalizedOperation, {
-          nowMs,
-          staleTimeoutLookbackMs: Number.MAX_SAFE_INTEGER,
-        });
-      })
-      .map((operation) =>
-        buildPriorityRecoveryOperationContextFromRecord(operation),
-      )
-      .filter(
-        (operationContext) =>
-          operationContext?.partitionId === normalizedPartitionId,
-      );
-    return Object.freeze(operationContexts);
+    return buildPriorityRecoveryFollowUpOperationContexts({
+      cache: this.systemTableCache,
+      isTrackedInFlightOperation: (operation) =>
+        this.isTrackedInFlightOperation(operation),
+      nowMs: this.nowFn(),
+      partitionId,
+    });
   }
   resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
     planningSnapshot = null,

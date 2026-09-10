@@ -224,21 +224,41 @@ function isVoterReadyPartitionReplica(row) {
   return true;
 }
 
-function collectPartitionVoterCounts(systemTableCache) {
+function summarizeVoterRows(rows) {
+  return rows.map((row) => ({
+    serviceId: row.service_id,
+    nodeId: row.node_id,
+    raftRole: row.raft_role,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+function collectPartitionVoterSnapshot(systemTableCache) {
   const rows = systemTableCache.filter(
     SYSTEM_TABLE_NAME.SERVICES,
     (row) => isVoterReadyPartitionReplica(row),
   ) || [];
 
-  const byPartition = new Map();
+  const rowsByPartition = new Map();
   for (const row of rows) {
     const partitionId = row.partition_id;
     if (!partitionId) {
       continue;
     }
-    byPartition.set(partitionId, (byPartition.get(partitionId) || 0) + 1);
+    const partitionRows = rowsByPartition.get(partitionId) || [];
+    partitionRows.push(row);
+    rowsByPartition.set(partitionId, partitionRows);
   }
-  return byPartition;
+  return {
+    countsByPartition: new Map(
+      [...rowsByPartition.entries()].map(
+        ([partitionId, partitionRows]) => [partitionId, partitionRows.length],
+      ),
+    ),
+    rowsByPartition,
+  };
 }
 
 function collectInFlightReplicaOperations(systemTableCache) {
@@ -265,8 +285,16 @@ function summarizeReplicaOperations(operations) {
     entityType: operation.entity_type || null,
     entityId: operation.entity_id || null,
     nodeId: operation.node_id || null,
+    sourceNodeId: operation.source_node_id || operation.sourceNodeId || null,
+    sourceReplicaId:
+      operation.source_replica_id || operation.sourceReplicaId || null,
+    targetNodeId: operation.target_node_id || operation.targetNodeId || null,
+    replicaId: operation.replica_id || operation.replicaId || null,
     status: operation.status || null,
     workflowStep: operation.workflow_step || operation.workflowStep || null,
+    createdAt: operation.created_at || operation.createdAt || null,
+    updatedAt: operation.updated_at || operation.updatedAt || null,
+    completedAt: operation.completed_at || operation.completedAt || null,
   }));
 }
 
@@ -294,7 +322,13 @@ function startEventLoopLagSampler(intervalMs) {
   };
 }
 
-function updateOverTargetState(overTargetState, countsByPartition, now) {
+function updateOverTargetState(
+  overTargetState,
+  voterSnapshot,
+  operations,
+  now,
+) {
+  const {countsByPartition, rowsByPartition} = voterSnapshot;
   const partitionIds = new Set([
     ...countsByPartition.keys(),
     ...overTargetState.keys(),
@@ -305,16 +339,45 @@ function updateOverTargetState(overTargetState, countsByPartition, now) {
     const state = overTargetState.get(partitionId) || {
       inOverTargetSince: null,
       maxOverTargetMs: 0,
+      currentWindow: null,
+      maxWindow: null,
     };
 
     if (count > TARGET_VOTER_COUNT) {
       if (state.inOverTargetSince === null) {
         state.inOverTargetSince = now;
+        state.currentWindow = {
+          firstObservedAtMs: now,
+          firstObservedRows: summarizeVoterRows(
+            rowsByPartition.get(partitionId) || [],
+          ),
+          firstObservedOperations: summarizeReplicaOperations(operations),
+          lastObservedAtMs: now,
+          lastObservedRows: [],
+          lastObservedOperations: [],
+        };
       }
+      state.currentWindow.lastObservedAtMs = now;
+      state.currentWindow.lastObservedRows = summarizeVoterRows(
+        rowsByPartition.get(partitionId) || [],
+      );
+      state.currentWindow.lastObservedOperations =
+        summarizeReplicaOperations(operations);
     } else if (state.inOverTargetSince !== null) {
       const duration = now - state.inOverTargetSince;
-      state.maxOverTargetMs = Math.max(state.maxOverTargetMs, duration);
+      if (duration > state.maxOverTargetMs) {
+        state.maxOverTargetMs = duration;
+        state.maxWindow = {
+          ...state.currentWindow,
+          firstObservedToLastObservedMs:
+            state.currentWindow.lastObservedAtMs -
+            state.currentWindow.firstObservedAtMs,
+          firstObservedToClearedSampleMs: duration,
+          clearedSampleAtMs: now,
+        };
+      }
       state.inOverTargetSince = null;
+      state.currentWindow = null;
     }
 
     overTargetState.set(partitionId, state);
@@ -325,8 +388,19 @@ function finalizeOverTargetState(overTargetState, endTimeMs) {
   for (const state of overTargetState.values()) {
     if (state.inOverTargetSince !== null) {
       const duration = endTimeMs - state.inOverTargetSince;
-      state.maxOverTargetMs = Math.max(state.maxOverTargetMs, duration);
+      if (duration > state.maxOverTargetMs) {
+        state.maxOverTargetMs = duration;
+        state.maxWindow = {
+          ...state.currentWindow,
+          firstObservedToLastObservedMs:
+            state.currentWindow.lastObservedAtMs -
+            state.currentWindow.firstObservedAtMs,
+          firstObservedToClearedSampleMs: duration,
+          clearedSampleAtMs: null,
+        };
+      }
       state.inOverTargetSince = null;
+      state.currentWindow = null;
     }
   }
 }
@@ -482,9 +556,15 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
 
       while (Date.now() <= settleDeadline) {
         const now = Date.now();
-        finalCounts = collectPartitionVoterCounts(systemTableCache);
+        const voterSnapshot = collectPartitionVoterSnapshot(systemTableCache);
+        finalCounts = voterSnapshot.countsByPartition;
         finalInFlightOperations = collectInFlightReplicaOperations(systemTableCache);
-        updateOverTargetState(overTargetState, finalCounts, now);
+        updateOverTargetState(
+          overTargetState,
+          voterSnapshot,
+          finalInFlightOperations,
+          now,
+        );
 
         const hasCurrentOverTarget = [...finalCounts.values()].some(
           (count) => count > TARGET_VOTER_COUNT,
@@ -528,6 +608,13 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
         0,
         ...[...overTargetState.values()].map((state) => state.maxOverTargetMs),
       );
+      const maxObservedOverTargetEntry = [...overTargetState.entries()]
+        .sort((left, right) =>
+          right[1].maxOverTargetMs - left[1].maxOverTargetMs)[0] || null;
+      const maxObservedOverTargetEvidence = maxObservedOverTargetEntry ? {
+        partitionId: maxObservedOverTargetEntry[0],
+        ...maxObservedOverTargetEntry[1].maxWindow,
+      } : null;
       const finalQuietElapsedMs = Date.now() - leaderCounter.lastChangeAt;
 
       t.equal(
@@ -550,7 +637,8 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
       t.ok(
         maxObservedOverTargetMs <= MAX_SUSTAINED_OVERTARGET_MS,
         'over-target voter duration should stay bounded (' +
-          `${maxObservedOverTargetMs}ms <= ${MAX_SUSTAINED_OVERTARGET_MS}ms)`,
+          `${maxObservedOverTargetMs}ms <= ${MAX_SUSTAINED_OVERTARGET_MS}ms; ` +
+          `evidence=${JSON.stringify(maxObservedOverTargetEvidence)})`,
       );
       t.notOk(
         [...finalCounts.values()].some((count) => count > TARGET_VOTER_COUNT),
@@ -1117,10 +1205,4 @@ test('Node-join convergence tests do not leak ref-ed handles', async (t) => {
     0,
     `test should not leak ref-ed handles (remaining=${handleNames.join(', ')} details=${JSON.stringify(handleDetails)})`,
   );
-
-  if (process.env.TAP === '1') {
-    setTimeout(() => {
-      process.exit(0);
-    }, 0);
-  }
 });

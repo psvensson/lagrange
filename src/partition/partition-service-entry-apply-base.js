@@ -680,6 +680,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         partitionId: this.partitionId,
       };
     }
+    const readAuthorityWitness =
+      this.buildRemoteReadAuthorityWitness(isWriteOperation);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
       sql: sql.substring(
         0,
@@ -729,8 +731,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         durableCommitWitness: result.durableCommitWitness,
         acceptingNodeId: result.acceptingNodeId,
         acknowledgedAtMs: result.acknowledgedAtMs,
-        readAuthorityWitness:
-          this.buildRemoteReadAuthorityWitness(isWriteOperation),
+        readAuthorityWitness,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.REMOTE_QUERY_FAILED, {

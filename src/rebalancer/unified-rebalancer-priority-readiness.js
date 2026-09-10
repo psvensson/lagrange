@@ -395,15 +395,6 @@ class UnifiedRebalancerPriorityReadinessMethods {
     if (!this.isControlPlanePriorityPartition()) {
       return planningSnapshot;
     }
-    const currentPlacementObservation =
-      this.buildCurrentPriorityPlacementPlanningObservation(planningSnapshot);
-    if (
-      currentPlacementObservation?.state !==
-        PRIORITY_PLACEMENT_STATE.AVAILABLE ||
-      !currentPlacementObservation.priorityPartitionSummary
-    ) {
-      return planningSnapshot;
-    }
     const publishedPriorityPartitionSummary =
       selectPlanningObject([
         planningSnapshot.priorityPartitionSummary,
@@ -413,6 +404,15 @@ class UnifiedRebalancerPriorityReadinessMethods {
       publishedPriorityPartitionSummary &&
       publishedPriorityPartitionSummary.satisfied !== true;
     if (publishedPlacementStillPending) {
+      return planningSnapshot;
+    }
+    const currentPlacementObservation =
+      this.buildCurrentPriorityPlacementPlanningObservation(planningSnapshot);
+    if (
+      currentPlacementObservation?.state !==
+        PRIORITY_PLACEMENT_STATE.AVAILABLE ||
+      !currentPlacementObservation.priorityPartitionSummary
+    ) {
       return planningSnapshot;
     }
     return Object.freeze({

@@ -112,6 +112,25 @@ class SystemTableCacheObservationMethods {
   }
 
   /**
+   * Advance the shared table generation and bind that generation to one key.
+   * The key binding survives row deletion, allowing an owner read to distinguish
+   * an unchanged row from an equal-value mutation that landed while it awaited
+   * authoritative truth.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {number}
+   * @private
+   */
+  recordTableMutation(tableName, key) {
+    const tableMutationRevision = this.bumpTableMutationVersion(tableName);
+    this.mutationVersionByTableKey.get(tableName).set(
+      key,
+      tableMutationRevision,
+    );
+    return tableMutationRevision;
+  }
+
+  /**
    * Monotonic count of applied changes for one table. Version equality across
    * two reads proves no apply landed between them; wall-clock apply
    * timestamps cannot (same-millisecond applies collide).
@@ -120,6 +139,44 @@ class SystemTableCacheObservationMethods {
   getTableMutationVersion(tableName) {
     this.validateTableName(tableName);
     return this.mutationVersionByTableName.get(tableName) || 0;
+  }
+
+  /**
+   * Atomically capture one cloned cache row and its last accepted mutation
+   * generation. JavaScript cannot interleave another apply between these two
+   * synchronous reads, so callers may safely compare snapshots across an await.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {{record: Object|undefined, mutationRevision: number}}
+   */
+  captureRecordMutationSnapshot(tableName, key) {
+    this.validateTableName(tableName);
+    const record = this.tables.get(tableName).get(key);
+    return Object.freeze({
+      record: record ? this.deepClone(record) : undefined,
+      mutationRevision:
+        this.mutationVersionByTableKey.get(tableName).get(key) || 0,
+    });
+  }
+
+  /**
+   * Atomically capture every live row and key-scoped mutation generation for
+   * one table. A complete owner read can compare this immutable pre-read view
+   * with current cache state without erasing mutations that landed meanwhile.
+   * @param {string} tableName
+   * @return {{tableName: string, entries: Array<Object>}}
+   */
+  captureTableMutationSnapshot(tableName) {
+    this.validateTableName(tableName);
+    const keyRevisions = this.mutationVersionByTableKey.get(tableName);
+    const entries = [...this.tables.get(tableName).entries()].map(
+      ([key, record]) => Object.freeze({
+        key,
+        record: deepFreeze(this.deepClone(record)),
+        mutationRevision: keyRevisions.get(key) || 0,
+      }),
+    );
+    return Object.freeze({tableName, entries: Object.freeze(entries)});
   }
 
   /**

@@ -7,13 +7,19 @@ import {ReadOnlySystemTableCache} from
   '../../src/cache/read-only-system-table-cache.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {INITIAL_PARTITION_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
   CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_STRATEGY,
   ControlPlaneSystemTableGateway,
 } from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {registerGatewayCausalTimeWitness} from
+  './dt6-authoritative-observation-causal-time-test-cases.js';
 
 // Quest movielens-authoritative-observation-watermark — deterministic
 // reproduction of the Wave-4 schema-admission failure. A successful complete
@@ -27,6 +33,24 @@ const NEWER_MUTATION_AT_MS = 65_000;
 const PREFLIGHT_CAPTURED_AT_MS = AUTHORITATIVE_OBSERVED_AT_MS + 10;
 const REPAIR_CAUSE_ID = 'authoritative-repair:wave4-schema-admission';
 
+function withLeaderWitness(
+  result,
+  tableName = TABLES.SERVICE_ENDPOINTS,
+  observedAtMs = AUTHORITATIVE_OBSERVED_AT_MS,
+) {
+  return {
+    ...result,
+    readAuthorityWitness: {
+      state: 'observed',
+      partitionId: INITIAL_PARTITION_IDS[tableName],
+      role: 'leader',
+      servingNodeId: 'node-seed',
+      servingReplicaId: 'service-endpoints-p1-r1',
+      observedAtMs,
+    },
+  };
+}
+
 function createFixture(options = {}) {
   const writableCache = new SystemTableCache();
   const gateway = new ControlPlaneSystemTableGateway({
@@ -34,11 +58,11 @@ function createFixture(options = {}) {
     systemTableCache: writableCache,
     now: () => AUTHORITATIVE_OBSERVED_AT_MS,
     cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        return options.authoritativeResult || {
+      async executeAuthoritativeSystemTableRead(tableName) {
+        return withLeaderWitness(options.authoritativeResult || {
           success: true,
           rows: options.authoritativeRows || [],
-        };
+        }, tableName);
       },
     },
   });
@@ -79,6 +103,7 @@ function buildCompleteObservationContract(causeId = REPAIR_CAUSE_ID) {
     scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
     tableName: TABLES.SERVICE_ENDPOINTS,
     observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS,
+    readStartedAtMs: AUTHORITATIVE_OBSERVED_AT_MS,
     causeId,
     rowSetComplete: true,
   };
@@ -179,6 +204,300 @@ t.test(
       'authoritative_observation',
       'the empty-table freshness source remains explicit',
     );
+  },
+);
+
+t.test(
+  'newer complete observation restores a row across an older empty frontier',
+  async (t) => {
+    const priorObservedAtMs = AUTHORITATIVE_OBSERVED_AT_MS - 1000;
+    const row = {
+      endpoint_id: 'endpoint-after-empty-frontier',
+      service_id: 'service-1',
+      node_id: 'node-seed',
+      protocol: 'http',
+      address: '127.0.0.1',
+      port: 8080,
+      health_status: 'healthy',
+      metadata: '{}',
+      created_at: priorObservedAtMs,
+      updated_at: priorObservedAtMs,
+    };
+    const fixture = createFixture({authoritativeRows: [row]});
+    fixture.writableCache.recordAuthoritativeObservation(
+      TABLES.SERVICE_ENDPOINTS,
+      {
+        observedAtMs: priorObservedAtMs,
+        causeId: 'prior-complete-empty-observation',
+      },
+    );
+
+    const mutationCount = await reconcileFreshEvidence(fixture);
+
+    t.equal(mutationCount, 1,
+      'the newer complete receipt performs one proven-present repair');
+    t.same(
+      fixture.readableCache.get(TABLES.SERVICE_ENDPOINTS, row.endpoint_id),
+      row,
+      'complete gateway observation is not fenced by its older empty truth',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+      AUTHORITATIVE_OBSERVED_AT_MS,
+      'the gateway advances the shared frontier after exact reconciliation',
+    );
+  },
+);
+
+t.test(
+  'an older complete receipt cannot regress the cache behind its frontier',
+  async (t) => {
+    const row = {
+      endpoint_id: 'endpoint-from-stale-complete-read',
+      service_id: 'service-1',
+      node_id: 'node-seed',
+      protocol: 'http',
+      address: '127.0.0.1',
+      port: 8080,
+      health_status: 'healthy',
+      metadata: '{}',
+      created_at: OLD_MUTATION_AT_MS,
+      updated_at: OLD_MUTATION_AT_MS,
+    };
+    const fixture = createFixture({authoritativeRows: [row]});
+    const newerObservedAtMs = AUTHORITATIVE_OBSERVED_AT_MS + 1000;
+    fixture.writableCache.recordAuthoritativeObservation(
+      TABLES.SERVICE_ENDPOINTS,
+      {
+        observedAtMs: newerObservedAtMs,
+        causeId: 'newer-complete-observation',
+      },
+    );
+
+    await t.rejects(
+      reconcileFreshEvidence(fixture),
+      new RegExp(
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID,
+      ),
+      'the gateway rejects an out-of-order complete-table receipt',
+    );
+    t.equal(
+      fixture.readableCache.has(
+        TABLES.SERVICE_ENDPOINTS,
+        row.endpoint_id,
+      ),
+      false,
+      'the older receipt cannot install a row behind the current frontier',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+      newerObservedAtMs,
+      'the stored complete-table frontier remains unchanged',
+    );
+  },
+);
+
+t.test(
+  'schema-invalid authoritative keys cannot mint complete-table evidence',
+  async (t) => {
+    const fixture = createFixture({
+      authoritativeRows: [{
+        endpoint_id: {},
+        service_id: 'service-1',
+        node_id: 'node-seed',
+        updated_at: OLD_MUTATION_AT_MS,
+      }],
+    });
+
+    await t.rejects(
+      reconcileFreshEvidence(fixture),
+      new RegExp(
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+      ),
+      'the gateway rejects non-TEXT authoritative primary keys',
+    );
+    t.same(
+      fixture.readableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [],
+      'invalid complete truth cannot install an object-keyed cache row',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+      null,
+      'invalid authoritative keys cannot publish a frontier',
+    );
+  },
+);
+
+t.test(
+  'gateway receipt cannot overtake a delete committed during its read',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const row = {
+      endpoint_id: 'endpoint-deleted-during-gateway-read',
+      service_id: 'service-1',
+      node_id: 'node-seed',
+      protocol: 'http',
+      address: '127.0.0.1',
+      port: 8080,
+      updated_at: 100,
+      updated_at_hlc: '100-0-owner',
+    };
+    cache.applySystemTableChange(
+      TABLES.SERVICE_ENDPOINTS,
+      CDC_OPERATION.UPSERT,
+      row,
+    );
+    let nowMs = 100;
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-seed',
+      systemTableCache: cache,
+      now: () => nowMs,
+      cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          cache.applySystemTableChange(
+            TABLES.SERVICE_ENDPOINTS,
+            CDC_OPERATION.DELETE,
+            {...row, updated_at: 199, updated_at_hlc: '199-0-owner'},
+          );
+          nowMs = 200;
+          return withLeaderWitness(
+            {success: true, rows: [row]},
+            TABLES.SERVICE_ENDPOINTS,
+            100,
+          );
+        },
+      },
+    });
+    const readableCache = new ReadOnlySystemTableCache(cache);
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-seed',
+      systemTableCache: readableCache,
+      cacheMutationTarget: cache,
+      controlPlaneSystemTableGateway: gateway,
+      nowFn: () => nowMs,
+    });
+
+    const authoritativeRead =
+      await discovery.readAuthoritativeSystemTableRows(
+        TABLES.SERVICE_ENDPOINTS,
+        {nowMs, reason: 'control_snapshot'},
+      );
+    t.equal(authoritativeRead.authoritativeObservation.observedAtMs, 100,
+      'the complete-table frontier is captured before the read');
+    t.equal(authoritativeRead.authoritativeObservation.readStartedAtMs, 100,
+      'the receipt carries the local pre-read tombstone boundary');
+    await t.rejects(
+      discovery.applyAuthoritativeSystemTableRows(
+        TABLES.SERVICE_ENDPOINTS,
+        authoritativeRead.rows,
+        REPAIR_CAUSE_ID,
+        {authoritativeObservation: authoritativeRead.authoritativeObservation},
+      ),
+      new RegExp(
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+      ),
+      'the gateway refuses to publish a stale pre-delete row set',
+    );
+    t.equal(cache.has(TABLES.SERVICE_ENDPOINTS, row.endpoint_id), false,
+      'the concurrent delete remains the cache state');
+  },
+);
+
+registerGatewayCausalTimeWitness({
+  t,
+  AdminServiceDiscovery,
+  ReadOnlySystemTableCache,
+  SystemTableCache,
+  CDC_OPERATION,
+  TABLES,
+  ControlPlaneSystemTableGateway,
+  withLeaderWitness,
+  repairCauseId: REPAIR_CAUSE_ID,
+});
+
+t.test(
+  'complete-table authority rejects an unstamped owner replica',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const row = {
+      endpoint_id: 'unstamped-owner-replica-row',
+      service_id: 'service-1',
+      node_id: 'node-follower',
+      updated_at: 100,
+      updated_at_hlc: '100-0-owner',
+    };
+    cache.applySystemTableChange(
+      TABLES.SERVICE_ENDPOINTS,
+      CDC_OPERATION.UPSERT,
+      row,
+    );
+    cache.applySystemTableChange(
+      TABLES.SERVICE_ENDPOINTS,
+      CDC_OPERATION.DELETE,
+      {...row, updated_at: 200, updated_at_hlc: '200-0-owner'},
+    );
+    const completeReadStartedAtMs = Date.now() + 1000;
+    let readAuthority = null;
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-reader',
+      systemTableCache: cache,
+      now: () => completeReadStartedAtMs,
+      cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead(
+          _tableName,
+          _sql,
+          _params,
+          requestOptions,
+        ) {
+          readAuthority = requestOptions?.readAuthority || null;
+          return {success: true, rows: [row]};
+        },
+      },
+    });
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-reader',
+      systemTableCache: new ReadOnlySystemTableCache(cache),
+      cacheMutationTarget: cache,
+      controlPlaneSystemTableGateway: gateway,
+      nowFn: () => completeReadStartedAtMs,
+    });
+    let rejection = null;
+    try {
+      const authoritativeRead =
+        await discovery.readAuthoritativeSystemTableRows(
+          TABLES.SERVICE_ENDPOINTS,
+          {nowMs: completeReadStartedAtMs, reason: 'control_snapshot'},
+        );
+      await discovery.applyAuthoritativeSystemTableRows(
+        TABLES.SERVICE_ENDPOINTS,
+        authoritativeRead.rows,
+        REPAIR_CAUSE_ID,
+        {authoritativeObservation: authoritativeRead.authoritativeObservation},
+      );
+    } catch (error) {
+      rejection = error;
+    }
+
+    t.ok(rejection, 'unstamped success cannot enter complete reconciliation');
+    t.equal(
+      readAuthority?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'complete-table authority disallows unstamped SQL/local fallback',
+    );
+    t.equal(
+      readAuthority?.leaderMode,
+      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      'complete-table authority requires the serving leader',
+    );
+    t.equal(cache.has(TABLES.SERVICE_ENDPOINTS, row.endpoint_id), false,
+      'an unstamped stale row cannot clear the retained delete');
   },
 );
 
@@ -475,7 +794,7 @@ t.test(
       systemTableCache: cacheWithoutObservationStorage,
       cdcIntegrationService: {
         async executeAuthoritativeSystemTableRead() {
-          return {success: true, rows: []};
+          return withLeaderWitness({success: true, rows: []});
         },
       },
     });
@@ -537,7 +856,7 @@ t.test(
       now: () => AUTHORITATIVE_OBSERVED_AT_MS,
       cdcIntegrationService: {
         async executeAuthoritativeSystemTableRead() {
-          return {success: true, rows: []};
+          return withLeaderWitness({success: true, rows: []});
         },
       },
     });

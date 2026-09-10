@@ -95,8 +95,9 @@ const DEFERRED_PUBLICATIONS_CATCHUP_COOLDOWN_MS = 5000;
 // the joiner's routing snapshot kept canonicalLeaderServiceCount 0 for the whole
 // run and every distributed write it coordinated to that partition timed out.
 // The routing-relevant propagated tables now ride the same deferral tick behind
-// their own, wider cooldown and the catch-up's default local-first/owner-fallback
-// read policy (the publications leader pin above is publications-specific).
+// their own, wider cooldown and a leader-preferred owner read. Only a witnessed
+// leader result may sweep cache-only rows after a missed DELETE; follower/local
+// results remain fail-soft hydration inputs.
 const MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG =
   'Deferred non-write-leader propagated cache catch-up failed';
 const DEFERRED_PROPAGATED_CATCHUP_COOLDOWN_MS = 30000;
@@ -358,9 +359,10 @@ class MembershipPublicationCoordinatorReconcile extends
 
   // The sibling sweep for the routing-relevant CDC-propagated system tables (the
   // six in DEFERRED_PROPAGATED_CATCHUP_TABLES). Same deferral tick, own cooldown,
-  // one attempt per table, default catch-up read policy, best-effort: a row this
-  // node missed in the leader's point-in-time fan-out converges within one cooldown
-  // instead of never. Never throws; returns a typed outcome.
+  // one attempt per table, leader-preferred owner read, best-effort: a row this
+  // node missed in the leader's point-in-time fan-out converges within one
+  // cooldown instead of never, and a leader-witnessed complete read may also
+  // sweep a missed DELETE. Never throws; returns a typed outcome.
   async refreshDeferredPropagatedCachesFromAuthority() {
     const service = this.cdcIntegrationService;
     if (
@@ -384,6 +386,11 @@ class MembershipPublicationCoordinatorReconcile extends
         tables: DEFERRED_PROPAGATED_CATCHUP_TABLES,
         maxAttemptsPerTable:
           DEFERRED_PROPAGATED_CATCHUP_MAX_ATTEMPTS_PER_TABLE,
+        readAuthority: buildControlPlaneReadAuthority({
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        }),
       });
     } catch (error) {
       this.logger?.warn?.(MEMBERSHIP_DEFERRED_PROPAGATED_CATCHUP_FAILED_MSG, {
@@ -735,7 +742,6 @@ class MembershipPublicationCoordinatorReconcile extends
         // freshened cache (a node that only wrongly believed it led steps back to the
         // follower path). Cooldown-gated, best-effort (never throws).
         await this.refreshDeferredPublicationsCacheFromAuthority();
-        await this.refreshDeferredPropagatedCachesFromAuthority();
         this._emitConvergenceDecisionTrace({
           decision: CONVERGENCE_DECISION.SKIP,
           reason: CONVERGENCE_REASON.NO_DEFICIT,
@@ -807,6 +813,13 @@ class MembershipPublicationCoordinatorReconcile extends
       });
       return false;
     } finally {
+      // Every publications-owner tick reaches the same bounded routing repair
+      // owner after its higher-priority publication decision, including
+      // no-snapshot, deficit, and error exits. Without this shared release
+      // path a missed SERVICES DELETE can preserve the priority-placement hold
+      // that keeps a membership deficit open, making the former follower and
+      // no-deficit catch-up branches permanently unreachable.
+      await this.refreshDeferredPropagatedCachesFromAuthority();
       this.ownerMembershipReconcileInFlight = false;
     }
   }

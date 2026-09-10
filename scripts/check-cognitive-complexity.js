@@ -28,7 +28,9 @@ const TARGET_THRESHOLD = 20;
 // 2026-09-04: tightened 179 -> 177 after liveness predicate extraction.
 // 2026-09-06: tightened 177 -> 162 after the solve-v2 phase-2 cutover deleted
 // the v1 solver (measured with the checker's tightening hint).
-const BASELINE_COUNT = 162;
+// 2026-09-09: tightened 162 -> 161 after the formation-convergence owner
+// extraction (measured with the checker's tightening hint).
+const BASELINE_COUNT = 161;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -2,6 +2,9 @@ import t from 'tap';
 import {
   ControlPlaneReadinessPublicationPlanningResolution,
 } from '../../src/control-plane/control-plane-readiness-publication-planning-resolution.js';
+import {
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 
 // CL-034: the residual readiness-build cost CL-033's projection memo did not cover.
 // getNodeReadinessSync -> resolveNodeMembershipPublicationPlanningAnswerSync calls
@@ -145,3 +148,66 @@ t.test('merge memo: a stale observedAt beyond the wall-time grace forces a rebui
   resolveMemo.call(ctx, 'seed', iso(20000), {}, null); // 20s later, grace is 15s
   t.equal(builds.length, 2, 'rebuilt once the cached entry aged past the grace');
 });
+
+t.test('async owner answer is not merged again inside the same readiness build',
+  async (t) => {
+    const cache = {
+      addListener() {},
+      filter() {
+        return [];
+      },
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      getTableMutationVersion() {
+        return 0;
+      },
+    };
+    const readiness = new ControlPlaneReadinessService({
+      nodeId: 'seed',
+      now: () => T0,
+      systemTableCache: cache,
+      membershipPublicationService: {
+        async deriveClusterMembershipCandidate(options = {}) {
+          return {
+            publicationEpoch: 20,
+            status: 'PUBLISHED',
+            publishedActiveNodeIds: [options.publisherNodeId],
+          };
+        },
+        getLatestMembershipPublicationEpochStatusForNodeSync() {
+          return {publicationEpoch: 20, status: 'PUBLISHED'};
+        },
+      },
+    });
+    const originalResolve =
+      readiness.resolveMembershipPublicationPlanningSnapshot.bind(readiness);
+    let mergeBuildCount = 0;
+    readiness.resolveMembershipPublicationPlanningSnapshot = (context) => {
+      mergeBuildCount++;
+      return originalResolve(context);
+    };
+    const membershipPublication = null;
+    const answer = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
+      'seed',
+      iso(1),
+      membershipPublication,
+    );
+    t.equal(mergeBuildCount, 1,
+      'the async owner should build one merged planning answer');
+
+    const consumed =
+      readiness.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync({
+        nodeId: 'seed',
+        observedAt: iso(1),
+        membershipPublication,
+        membershipPublicationPlanningSnapshot: answer,
+      });
+    t.equal(mergeBuildCount, 1,
+      'runtime-authority consumption should not rebuild the completed answer');
+    t.equal(consumed, answer,
+      'the same owner-built frozen planning answer should cross the seam');
+  });

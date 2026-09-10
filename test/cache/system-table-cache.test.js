@@ -457,6 +457,79 @@ test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   t.equal(cache.has('nodes', 'node-1'), false, 'Should not exist after delete');
 });
 
+test(
+  'SystemTableCache - record mutation snapshots are key-scoped and survive deletion',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+      node_id: 'node-1',
+      status: 'active',
+      updated_at: 100,
+    });
+    const initial = cache.captureRecordMutationSnapshot('nodes', 'node-1');
+
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+      node_id: 'node-2',
+      status: 'active',
+      updated_at: 100,
+    });
+    const afterUnrelated =
+      cache.captureRecordMutationSnapshot('nodes', 'node-1');
+    t.equal(afterUnrelated.mutationRevision, initial.mutationRevision,
+      'another key must not advance the target-key mutation fence');
+
+    cache.applySystemTableChange(
+      'nodes',
+      CDC_OPERATIONS.UPDATE,
+      initial.record,
+    );
+    const afterEqualApply =
+      cache.captureRecordMutationSnapshot('nodes', 'node-1');
+    t.ok(afterEqualApply.mutationRevision > initial.mutationRevision,
+      'an equal-value apply must still advance the target-key mutation fence');
+
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.DELETE, {
+      node_id: 'node-1',
+      updated_at: 100,
+    });
+    const afterDelete = cache.captureRecordMutationSnapshot('nodes', 'node-1');
+    t.equal(afterDelete.record, undefined,
+      'the snapshot should reflect authoritative local absence after deletion');
+    t.ok(afterDelete.mutationRevision > afterEqualApply.mutationRevision,
+      'the target-key mutation fence must survive removal of the row');
+  },
+);
+
+test(
+  'SystemTableCache - table mutation snapshots atomically retain rows and revisions',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+      node_id: 'node-1',
+      status: 'active',
+      updated_at: 100,
+    });
+    const snapshot = cache.captureTableMutationSnapshot('nodes');
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
+      node_id: 'node-1',
+      status: 'stopping',
+      updated_at: 200,
+    });
+
+    t.equal(snapshot.tableName, 'nodes', 'snapshot identifies its table');
+    t.equal(snapshot.entries.length, 1, 'snapshot contains each pre-read row');
+    t.equal(snapshot.entries[0].record.status, 'active',
+      'later applies cannot mutate the captured row');
+    t.ok(
+      cache.captureRecordMutationSnapshot('nodes', 'node-1').mutationRevision >
+        snapshot.entries[0].mutationRevision,
+      'the captured revision distinguishes a later same-key apply',
+    );
+    t.ok(Object.isFrozen(snapshot) && Object.isFrozen(snapshot.entries),
+      'the table snapshot container is immutable');
+  },
+);
+
 test('SystemTableCache - stale DELETE is ignored when existing row is newer', async (t) => {
   const cache = new SystemTableCache();
 

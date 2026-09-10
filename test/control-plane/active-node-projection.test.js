@@ -241,6 +241,55 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
       'retentionGraceMisses must attribute the stale trim of published node-4 and omit non-baseline node-3',
     );
   });
+test('published-baseline retention normalizes one publication census per ' +
+  'active-node projection', async (t) => {
+  const nodeIds = Array.from({length: 7}, (_value, index) =>
+    `node-baseline-${index + 1}`,
+  );
+  let publicationKindReads = 0;
+  const publicationRow = Object.freeze({
+    publication_id: 'publication-baseline-census',
+    get publication_kind() {
+      publicationKindReads += 1;
+      return 'cluster_membership';
+    },
+    publication_epoch: 28,
+    status: 'PUBLISHED',
+    published_active_node_ids: Object.freeze([...nodeIds]),
+    updated_at: 100,
+  });
+  const projection = resolveActiveNodeViews({
+    nodeRows: nodeIds.map((nodeId) => Object.freeze({
+      node_id: nodeId,
+      status: 'active',
+      connection_state: 'ready',
+      ready_lease_expires_at: 90000,
+      last_heartbeat: 70000,
+    })),
+    connectedNodeIds: Object.freeze([...nodeIds]),
+    readinessEntries: nodeIds.map((nodeId) => Object.freeze({
+      nodeId,
+      dimensions: Object.freeze({
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+      }),
+    })),
+    publicationRows: Object.freeze([publicationRow]),
+    nowMs: 100000,
+  });
+
+  t.same(
+    projection.projectedServingNodeIds,
+    nodeIds,
+    'the published transport-alive cohort keeps its existing retention result',
+  );
+  t.equal(
+    publicationKindReads,
+    3,
+    'the latest and recent-baseline owners each normalize the census once, ' +
+      'independent of candidate-node count',
+  );
+  t.end();
+});
 test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoch but present in a recent prior epoch is re-admitted by the transport-alive grace once its liveness recovers, while a never-published node is not',
   async (t) => {
     const projectionOptions = {

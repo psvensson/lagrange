@@ -1141,6 +1141,47 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
   partition.shutdown();
 });
 
+test(
+  'PartitionService - remote read witness is captured before query execution',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'read-witness-boundary-partition',
+      tableId: 'read-witness-boundary-table',
+      replicaId: 'read-witness-boundary-partition-r1',
+      replicaIds: ['read-witness-boundary-partition-r1'],
+      nodeId: 'node-1',
+      dbPath: ':memory:',
+    });
+    await partition.initialize();
+    partition.role = RaftRole.LEADER;
+    partition.storage.currentTerm = 7;
+    const originalDateNow = Date.now;
+    let nowMs = 100;
+    Date.now = () => nowMs;
+    partition.executeQuery = async () => {
+      nowMs = 200;
+      partition.role = RaftRole.FOLLOWER;
+      partition.storage.currentTerm = 8;
+      return {success: true, rows: [], count: 0};
+    };
+    try {
+      const result = await partition.handleRemoteQuery({
+        sql: 'SELECT * FROM read_witness_boundary_table',
+        params: [],
+      });
+      t.equal(result.readAuthorityWitness.observedAtMs, 100,
+        'the witness exposes the conservative pre-snapshot boundary');
+      t.equal(result.readAuthorityWitness.role, RaftRole.LEADER,
+        'the witness reports the role that entered the local snapshot');
+      t.equal(result.readAuthorityWitness.term, 7,
+        'the witness reports the term that entered the local snapshot');
+    } finally {
+      Date.now = originalDateNow;
+      partition.shutdown();
+    }
+  },
+);
+
 test('PartitionService - executeQuery keeps non-transactional writes out of unrelated active transactions', async (t) => {
   const partition = new PartitionService({
     partitionId: 'test-partition',

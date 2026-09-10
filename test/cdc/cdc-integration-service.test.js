@@ -1257,6 +1257,9 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
       },
     };
     const cacheMutationTarget = {
+      get(_tableName, key) {
+        return key === 'node-1' ? cacheState.row : undefined;
+      },
       applySystemTableChange(_tableName, _operation, record) {
         cacheState.row = {...record};
       },

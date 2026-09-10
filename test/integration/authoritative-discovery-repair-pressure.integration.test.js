@@ -1,5 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js';
 import {
   ControlPlaneSystemTableGateway,
@@ -7,6 +10,9 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+
+const TEST_OWNER_OBSERVED_AT_MS = 1700000000000;
 
 function createRecordingLogger() {
   const entries = {
@@ -82,7 +88,15 @@ test('authoritative discovery repair preserves participant attribution under con
           tableName,
           rows: [],
           count: 0,
-          source: 'local_partition_replica',
+          source: 'owner_rpc_lane',
+          readAuthorityWitness: {
+            state: 'observed',
+            partitionId: INITIAL_PARTITION_IDS[tableName],
+            role: RAFT_ROLE.LEADER,
+            servingNodeId: 'integration-node',
+            servingReplicaId: `${INITIAL_PARTITION_IDS[tableName]}-r1`,
+            observedAtMs: TEST_OWNER_OBSERVED_AT_MS,
+          },
         };
       },
     };

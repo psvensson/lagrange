@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   getStepsHistoryParseMemoStats,
+  memoizedParseStepsHistoryString,
   resetStepsHistoryParseMemo,
 } from '../../src/rebalancer/steps-history-parse-memo.js';
 import {
@@ -10,6 +11,9 @@ import {
 const ROW_COUNT = 50;
 const TICK_COUNT = 8;
 const NOW_MS = 1_000_000;
+const LARGE_HISTORY_DETAIL_LENGTH = 128 * 1024;
+const LARGE_HISTORY_VERSION_COUNT = 64;
+const MAX_RETAINED_SOURCE_BYTES = 4 * 1024 * 1024;
 
 function buildReplicaOperationRows(count) {
   const rows = [];
@@ -77,6 +81,49 @@ test(
     t.ok(
       Object.isFrozen(summary.rows[0].stepsHistory),
       'shared parse is frozen so accidental mutation fails loudly',
+    );
+    t.end();
+  },
+);
+
+test(
+  'steps-history parse memo bounds growing durable-history source bytes',
+  async (t) => {
+    resetStepsHistoryParseMemo();
+    const detail = 'x'.repeat(LARGE_HISTORY_DETAIL_LENGTH);
+    const buildHistory = (version) => JSON.stringify([{
+      step: 'SYNCING',
+      timestamp: NOW_MS + version,
+      detail,
+    }]);
+    let newestHistory = '';
+    let newestParsed = null;
+    for (let version = 0;
+      version < LARGE_HISTORY_VERSION_COUNT;
+      version += 1) {
+      newestHistory = buildHistory(version);
+      newestParsed = memoizedParseStepsHistoryString(newestHistory);
+    }
+    const afterGrowth = getStepsHistoryParseMemoStats();
+    t.ok(
+      afterGrowth.retainedSourceBytes <= MAX_RETAINED_SOURCE_BYTES,
+      'content-key retention stays inside the byte bound',
+    );
+    t.ok(
+      afterGrowth.size < LARGE_HISTORY_VERSION_COUNT,
+      'old growing-history versions are evicted before the entry-count cap',
+    );
+    t.ok(afterGrowth.evictions > 0, 'byte pressure records evictions');
+    t.equal(
+      memoizedParseStepsHistoryString(newestHistory),
+      newestParsed,
+      'the newest bounded entry still serves memo hits',
+    );
+    const oldestHistory = buildHistory(0);
+    t.same(
+      memoizedParseStepsHistoryString(oldestHistory),
+      JSON.parse(oldestHistory),
+      'an evicted history reparses without changing its value',
     );
     t.end();
   },

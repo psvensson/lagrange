@@ -5,7 +5,7 @@
     "admin-diagnostics": 107,
     "architecture-governance": 19,
     "bootstrap-membership": 248,
-    "cdc-metadata": 54,
+    "cdc-metadata": 55,
     "cli-tooling": 96,
     "control-plane": 184,
     "convergence-topology": 76,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2060,
-  "digest": "fnv1a32-433a1c39",
+  "censusSize": 2061,
+  "digest": "fnv1a32-afa31f5b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -309,6 +309,7 @@
     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
+    "test/cdc/cdc-delete-cache-absence-convergence.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.property.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.test.js": "cdc-metadata",
     "test/cdc/cdc-event-delivery.property.test.js": "cdc-metadata",

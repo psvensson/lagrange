@@ -146,6 +146,8 @@ function createVersionedRebalancerStack(entityId) {
   });
   return {
     cache,
+    coordinator,
+    readinessService,
     rebalancer,
     getAllCallsByTable,
     filterCallCount: () => versioned.filterCallCount,
@@ -162,18 +164,193 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
   'generation', async (t) => {
   const stack = createVersionedRebalancerStack('p-sweep-1');
   t.teardown(() => stack.shutdown());
+  const siblingRebalancer = createTestRebalancer({
+    entityId: 'p-sweep-2',
+    entityType: EntityType.PARTITION,
+    nodeId: SWEEP_NODE_ID,
+    systemTableCache: stack.cache,
+    rebalanceCoordinator: stack.coordinator,
+    controlPlaneReadinessService: stack.readinessService,
+  });
+  t.teardown(() => siblingRebalancer.shutdown());
 
   const before = stack.filterCallCount();
   for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
     stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
+    siblingRebalancer.getGlobalTopologyBlockingInFlightOperations();
   }
   t.equal(stack.filterCallCount() - before, 1,
-    'repeated global topology-blocking reads share one ledger scan');
+    'co-resident rebalancers share one global ledger scan');
 
   stack.cache.bump('replica_operations');
   stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
+  siblingRebalancer.getGlobalTopologyBlockingInFlightOperations();
   t.equal(stack.filterCallCount() - before, 2,
-    'a ledger write invalidates the scan memo');
+    'a ledger write invalidates the shared scan exactly once');
+  t.end();
+});
+
+test('entity operation census rejects explicit non-owner rows before ' +
+  'workflow decoding', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+  let stepsHistoryReads = 0;
+  const buildOperation = (entityId) => Object.freeze({
+    operation_id: `op-${entityId}`,
+    entity_id: entityId,
+    entity_type: 'partition',
+    type: 'ADD',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    get steps_history() {
+      stepsHistoryReads += 1;
+      return '[]';
+    },
+  });
+
+  t.equal(
+    stack.rebalancer.isOperationForEntity(buildOperation('p-unrelated')),
+    false,
+    'an explicit different entity is rejected',
+  );
+  t.equal(
+    stepsHistoryReads,
+    0,
+    'rejection does not decode unrelated workflow history',
+  );
+  t.equal(
+    stack.rebalancer.isOperationForEntity(buildOperation('p-sweep-1')),
+    true,
+    'an explicit matching entity retains canonical normalization',
+  );
+  t.equal(
+    stepsHistoryReads,
+    1,
+    'matching rows still pass through the canonical decoder',
+  );
+  t.end();
+});
+
+test('priority follow-up context census decodes only the requested explicit ' +
+  'partition', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+  let stepsHistoryReads = 0;
+  const buildOperation = (partitionId) => Object.freeze({
+    operation_id: `op-${partitionId}`,
+    partition_group_id: partitionId,
+    entity_id: partitionId,
+    entity_type: 'partition',
+    type: 'ADD',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    get steps_history() {
+      stepsHistoryReads += 1;
+      return '[]';
+    },
+  });
+  const originalGetAll = stack.cache.getAll.bind(stack.cache);
+  stack.cache.getAll = (tableName) => tableName === 'replica_operations' ?
+    [buildOperation('p-unrelated'), buildOperation('p-sweep-1')] :
+    originalGetAll(tableName);
+
+  const contexts =
+    stack.rebalancer.buildPriorityRecoveryFollowUpOperationContextsFromCache(
+      'p-sweep-1',
+    );
+  t.equal(contexts.length, 1,
+    'the requested partition retains its operation context');
+  t.equal(contexts[0]?.partitionId, 'p-sweep-1',
+    'the retained context belongs to the requested partition');
+  t.equal(stepsHistoryReads, 3,
+    'unrelated explicit partitions never decode workflow history');
+  t.end();
+});
+
+test('priority-recovery closure evidence builds once per planning snapshot ' +
+  'and ledger generation', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+  const {cache, rebalancer} = stack;
+  const closureWitness = Object.freeze({
+    blockedPartitionIds: Object.freeze(['p-sweep-2']),
+    unresolvedSemanticStateIds: Object.freeze(['needs_operation']),
+  });
+  const planningSnapshot = Object.freeze({
+    priorityPartitionSummary: Object.freeze({
+      blockedPartitions: Object.freeze([
+        Object.freeze({partitionId: 'p-sweep-2', spreadGap: 1}),
+      ]),
+    }),
+    priorityRecoveryClosureWitness: closureWitness,
+    priorityRecoveryDecisionSnapshots: Object.freeze({
+      snapshots: Object.freeze([
+        Object.freeze({
+          partitionId: 'p-sweep-2',
+          semanticState: 'needs_operation',
+          blockerReasons: Object.freeze([
+            'eligible_but_no_operation_created',
+          ]),
+        }),
+      ]),
+    }),
+  });
+  const originalRequirementOwner =
+    rebalancer.isPriorityRecoveryFollowUpOperationRequired;
+  let requirementEvaluations = 0;
+  rebalancer.isPriorityRecoveryFollowUpOperationRequired =
+    function countRequirementEvaluations(snapshot) {
+      requirementEvaluations += 1;
+      return originalRequirementOwner.call(this, snapshot);
+    };
+
+  const evidence = [];
+  for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
+    evidence.push(
+      rebalancer.buildPriorityRecoveryClosureWitnessFollowUpEvidence(
+        planningSnapshot,
+      ),
+    );
+  }
+  t.equal(requirementEvaluations, 1,
+    'one immutable planning snapshot shares one closure-evidence build');
+  t.equal(evidence[0], evidence[SWEEP_CALL_COUNT - 1],
+    'the sweep reuses the same frozen evidence object');
+
+  cache.bump('replica_operations');
+  const afterLedgerWrite =
+    rebalancer.buildPriorityRecoveryClosureWitnessFollowUpEvidence(
+      planningSnapshot,
+    );
+  t.equal(requirementEvaluations, 2,
+    'a replica-operation write invalidates closure evidence');
+  t.not(afterLedgerWrite, evidence[0],
+    'ledger invalidation yields fresh closure evidence');
+
+  const nextPlanningSnapshot = Object.freeze({...planningSnapshot});
+  const afterPlanningChange =
+    rebalancer.buildPriorityRecoveryClosureWitnessFollowUpEvidence(
+      nextPlanningSnapshot,
+    );
+  t.equal(requirementEvaluations, 3,
+    'a new planning snapshot identity never reuses prior evidence');
+  t.not(afterPlanningChange, afterLedgerWrite,
+    'planning invalidation yields fresh closure evidence');
+
+  const mutablePlanningSnapshot = {...planningSnapshot};
+  const beforeMutableReads = requirementEvaluations;
+  const firstMutableEvidence =
+    rebalancer.buildPriorityRecoveryClosureWitnessFollowUpEvidence(
+      mutablePlanningSnapshot,
+    );
+  const secondMutableEvidence =
+    rebalancer.buildPriorityRecoveryClosureWitnessFollowUpEvidence(
+      mutablePlanningSnapshot,
+    );
+  t.equal(requirementEvaluations - beforeMutableReads, 2,
+    'mutable caller snapshots stay outside the identity memo');
+  t.not(firstMutableEvidence, secondMutableEvidence,
+    'mutable caller snapshots keep producing fresh evidence');
   t.end();
 });
 

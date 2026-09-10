@@ -82,12 +82,7 @@ function copyStrictOwnDataRecord(value) {
     if (!isSupportedOwnDataDescriptor(key, descriptor)) {
       return null;
     }
-    objectDefineProperty(copy, key, {
-      value: descriptor.value,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    });
+    copy[key] = descriptor.value;
   }
   return copy;
 }

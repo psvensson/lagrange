@@ -20,6 +20,8 @@ const PARTITION_ID = 'services-p1';
 const KNOWN_NOT_CONVERGED = 'known_not_converged';
 const KNOWN_CONVERGED = 'known_converged';
 const PARTITION_ROW_SOURCE = 'partition_row_replica_count';
+const TRACE_QUEST_LANDING_COMMIT =
+  '5b4ae82dfbeff4d6cc9e1d7e944a8ca19de031fc';
 
 function placementSample(atMs, {
   evidenceState = KNOWN_NOT_CONVERGED,
@@ -221,10 +223,12 @@ test('witness-deterministic', () => {
 
 test('trace-changes-no-behaviour', () => {
   // S6a repairs nothing: the quest's source surface is test/ and scripts/
-  // only. This pins the constraint mechanically for the CANDIDATE tree the
-  // receipts are generated on: no src/ delta against HEAD may accompany the
-  // trace work.
-  const delta = execFileSync('git', ['diff', '--name-only', 'HEAD', '--',
-    'src'], {cwd: REPOSITORY_ROOT, encoding: 'utf8'}).trim();
+  // only. Pin that historical landing commit rather than the current working
+  // tree, which may legitimately contain another Quest's staged source patch.
+  const delta = execFileSync('git', ['diff-tree', '--no-commit-id',
+    '--name-only', '-r', TRACE_QUEST_LANDING_COMMIT, '--', 'src'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8',
+  }).trim();
   assert.equal(delta, '', `unexpected src/ delta: ${delta}`);
 });

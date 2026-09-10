@@ -1055,6 +1055,81 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
       'merged authoritative row should retain freshest heartbeat evidence');
   });
 
+test('CDCIntegrationService - authoritative merge ranks each replica row once',
+  (t) => {
+    let serializations = 0;
+    const rows = Array.from({length: 128}, (_unused, index) => ({
+      node_id: 'node-merge-rank',
+      last_heartbeat: 5_000,
+      detail: index === 127 ? 'complete' : 'partial',
+      toJSON() {
+        serializations += 1;
+        return {
+          node_id: this.node_id,
+          last_heartbeat: this.last_heartbeat,
+          detail: this.detail,
+        };
+      },
+    }));
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: createMockSqlQueryEngine(),
+    });
+    service.initialize();
+
+    const merged = service.mergeAuthoritativeSystemTableRowSets(
+      SYSTEM_TABLE_NAME.NODES,
+      rows.map((row) => [row]),
+    );
+
+    t.equal(serializations, rows.length,
+      'each candidate is serialized once even across many replica copies');
+    t.equal(merged.length, 1, 'replica copies merge by primary key');
+    t.equal(merged[0], rows.at(-1),
+      'the most complete equal-version row remains authoritative');
+    t.end();
+  });
+
+test('CDCIntegrationService - identical flat replica rows skip JSON ranking',
+  (t) => {
+    const sourceRow = {
+      operation_id: 'operation-flat-copy',
+      updated_at: 5_000,
+      status: 'ACTIVE',
+      steps_history: 'x'.repeat(16_384),
+      error: null,
+    };
+    const rows = Array.from({length: 128}, () => ({...sourceRow}));
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: createMockSqlQueryEngine(),
+    });
+    service.initialize();
+
+    const originalStringify = JSON.stringify;
+    let serializations = 0;
+    JSON.stringify = (...args) => {
+      serializations += 1;
+      return originalStringify(...args);
+    };
+    let merged;
+    try {
+      merged = service.mergeAuthoritativeSystemTableRowSets(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        rows.map((row) => [row]),
+      );
+    } finally {
+      JSON.stringify = originalStringify;
+    }
+
+    t.equal(serializations, 0,
+      'equivalent flat replica copies do not enter JSON length ranking');
+    t.equal(merged.length, 1, 'replica copies still merge by primary key');
+    t.equal(merged[0], rows[0],
+      'the first equivalent replica copy remains authoritative');
+    t.end();
+  });
+
 test('CDCIntegrationService - authoritative read re-seeds bootstrap ' +
   'overlay when the owner RPC lane returns partition-not-found (uses ' +
   'installRecoveryRoutingOverlayEntry)', async (t) => {

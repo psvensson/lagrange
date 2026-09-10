@@ -82,3 +82,53 @@ tap.test('admission predicates refuse non-canonical data', (t) => {
   });
   t.end();
 });
+
+tap.test('strict own-data record copies use the null-prototype write owner',
+  async (t) => {
+    const originalDefineProperty = Object.defineProperty;
+    let measuredDefinitions = 0;
+    let measureDefinitions = false;
+    Object.defineProperty = (...args) => {
+      if (measureDefinitions) {
+        measuredDefinitions += 1;
+      }
+      return originalDefineProperty(...args);
+    };
+
+    let copyStrictOwnDataRecord;
+    try {
+      ({copyStrictOwnDataRecord} = await import(
+        '../../src/utils/strict-own-data.js?record-copy-work-count'
+      ));
+    } finally {
+      Object.defineProperty = originalDefineProperty;
+    }
+
+    const source = Object.freeze(Object.fromEntries(
+      Array.from({length: 128}, (_unused, index) => [
+        `field_${index}`,
+        index,
+      ]),
+    ));
+    measureDefinitions = true;
+    const copied = copyStrictOwnDataRecord(source);
+    measureDefinitions = false;
+
+    t.equal(
+      measuredDefinitions,
+      0,
+      'record fields use the null-prototype data-write path',
+    );
+    t.equal(Object.getPrototypeOf(copied), null);
+    t.same({...copied}, source, 'the copied record preserves every value');
+    t.match(
+      Object.getOwnPropertyDescriptor(copied, 'field_0'),
+      {
+        value: 0,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      },
+      'the data descriptor contract is unchanged',
+    );
+  });

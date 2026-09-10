@@ -277,12 +277,14 @@ function isPublishedBaselineMember(nodeId, options = {}) {
   // is still recognized as an already-published member by the transport-alive
   // retention grace, and can be re-admitted once its liveness recovers — instead
   // of being stranded out forever by the baseline ratcheting to the trimmed set.
-  const publishedBaselineNodeIds = normalizeNodeIdList(
-    resolveRecentlyPublishedActiveNodeIds({
-      ...options,
-      requirePublishedMembership: false,
-    }),
-  );
+  const publishedBaselineNodeIds = Array.isArray(
+    options.publishedBaselineNodeIds,
+  ) ? options.publishedBaselineNodeIds : normalizeNodeIdList(
+      resolveRecentlyPublishedActiveNodeIds({
+        ...options,
+        requirePublishedMembership: false,
+      }),
+    );
   return publishedBaselineNodeIds.includes(String(nodeId || '').trim());
 }
 
@@ -467,10 +469,17 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
 
   return true;
 }
-
 function resolveProjectedActiveNodeSelection(options = {}) {
   const nodeRows = Array.isArray(options.nodeRows) ? options.nodeRows : [];
   const readinessByNodeId = buildReadinessByNodeId(options);
+  const publishedBaselineNodeIds = normalizeNodeIdList(
+    resolveRecentlyPublishedActiveNodeIds(options),
+  );
+  const projectionOptions = {
+    ...options,
+    publishedBaselineNodeIds,
+    readinessByNodeId,
+  };
   const nodeRowsById = new Map();
   const recoveryEligibleIncludedNodeIds = new Set();
   const runtimeAuthorityIncludedNodeIds = new Set();
@@ -514,13 +523,13 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       shouldAllowLivenessFallbackProjection(
         nodeRow,
         readinessProjection,
-        options,
+        projectionOptions,
       );
     const swimProtected = isSwimAliveProtected(nodeId, options);
-    const runtimeTransportEvidence = hasRuntimeTransportEvidence(nodeId, {
-      ...options,
-      readinessByNodeId,
-    });
+    const runtimeTransportEvidence = hasRuntimeTransportEvidence(
+      nodeId,
+      projectionOptions,
+    );
     if (nodeRow) {
       if (readinessProjection.hasReadinessEvidence &&
           readinessProjection.projectionEligible !== true &&
@@ -533,7 +542,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
           nodeId,
           nodeRow,
           runtimeTransportEvidence,
-          options,
+          projectionOptions,
         );
         if (retentionMissReason) {
           retentionGraceMisses.push(
@@ -542,10 +551,10 @@ function resolveProjectedActiveNodeSelection(options = {}) {
         }
         continue;
       }
-      const nodeEligible = isCanonicallyActiveNode(nodeRow, {
-        ...options,
-        readinessByNodeId,
-      });
+      const nodeEligible = isCanonicallyActiveNode(
+        nodeRow,
+        projectionOptions,
+      );
       if (nodeEligible) {
         activeNodeIds.push(nodeId);
         if (readinessProjection.projectedByRecoveryEligibility) {

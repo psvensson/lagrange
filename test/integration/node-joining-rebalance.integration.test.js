@@ -66,6 +66,7 @@ function createAlwaysReadyControlPlaneReadinessService() {
     [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
   };
   return {
+    projectNodeLiveness: () => ({readyNow: true}),
     getNodeReadinessSync: (_nodeId, options = {}) => ({
       dimensions: {
         ...dimensions,

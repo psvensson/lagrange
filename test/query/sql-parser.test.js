@@ -4,6 +4,7 @@
  * Requirements: 7.1, 7.3
  */
 
+import {createRequire} from 'node:module';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
@@ -12,6 +13,38 @@ import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
+
+const require = createRequire(import.meta.url);
+const ALL_DIALECT_PARSER_PATH = require.resolve('node-sql-parser');
+const SQLITE_PARSER_PATH = require.resolve(
+  'node-sql-parser/build/sqlite.js',
+);
+const POSTGRESQL_PARSER_PATH = require.resolve(
+  'node-sql-parser/build/postgresql.js',
+);
+
+test('SQLParser loads only its configured dialect parser owners', async (t) => {
+  const sqliteAst = new SQLParser('SELECT 1').parse();
+  const postgresqlAst = new SQLParser(
+    'SELECT $1',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  ).parse();
+
+  t.equal(sqliteAst.type, 'SELECT');
+  t.equal(postgresqlAst.type, 'SELECT');
+  t.notOk(
+    require.cache[ALL_DIALECT_PARSER_PATH],
+    'the all-dialect parser bundle is not retained',
+  );
+  t.ok(
+    require.cache[SQLITE_PARSER_PATH],
+    'the SQLite parser owner is loaded',
+  );
+  t.ok(
+    require.cache[POSTGRESQL_PARSER_PATH],
+    'the PostgreSQL parser owner is loaded',
+  );
+});
 
 test('SQLParser - parses simple SELECT', async (t) => {
   const parser = new SQLParser('SELECT * FROM users');

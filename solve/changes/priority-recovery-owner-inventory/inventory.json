@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "cd48e92de3a22277739752d73d9620f2db82750046f30b363c189e1a65370ddf"
+    "sourceSha256": "0a1a61b4a97d24f1a82fca138d8119f17a3d0fd4e95899f1f721f46111f4d69e"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,18 +17,18 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 65,
-    "publicExportCount": 740,
-    "importEdgeCount": 307,
-    "crossLayerEdgeCount": 92,
-    "layerDirectionViolationCount": 44,
+    "moduleCount": 66,
+    "publicExportCount": 741,
+    "importEdgeCount": 311,
+    "crossLayerEdgeCount": 93,
+    "layerDirectionViolationCount": 45,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
     "confirmedDuplicateAuthorityCount": 0,
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 65,
+    "uniquelyClassifiedModules": 66,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -1910,6 +1910,18 @@
       ],
       "localExports": [
         "resolvePriorityRecoverySupersededTargetDecision"
+      ]
+    },
+    {
+      "path": "src/rebalancer/priority-recovery-follow-up-operation-context-view.js",
+      "owner": "rebalancer",
+      "layer": "raw_observation",
+      "rationale": "observation/evidence surface",
+      "exports": [
+        "buildPriorityRecoveryFollowUpOperationContexts"
+      ],
+      "localExports": [
+        "buildPriorityRecoveryFollowUpOperationContexts"
       ]
     },
     {
@@ -4777,6 +4789,46 @@
       "conformsToLayerDirection": null
     },
     {
+      "from": "src/rebalancer/priority-recovery-follow-up-operation-context-view.js",
+      "specifier": "../bootstrap/system-table-schemas-constants.js",
+      "to": "src/bootstrap/system-table-schemas-constants.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-follow-up-operation-context-view.js",
+      "specifier": "../cache/shared-row-read.js",
+      "to": "src/cache/shared-row-read.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-follow-up-operation-context-view.js",
+      "specifier": "../control-plane/priority-recovery-snapshot-rebalancer.js",
+      "to": "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "canonical_snapshot_reducer",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-follow-up-operation-context-view.js",
+      "specifier": "./replica-operation-liveness.js",
+      "to": "src/rebalancer/replica-operation-liveness.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
       "from": "src/rebalancer/priority-recovery-observation.js",
       "specifier": "../control-plane/priority-recovery-snapshot.js",
       "to": "src/control-plane/priority-recovery-snapshot.js",
@@ -5234,6 +5286,9 @@
     ],
     [
       "src/rebalancer/operation-workflow-priority-recovery-superseded-target-decision.js"
+    ],
+    [
+      "src/rebalancer/priority-recovery-follow-up-operation-context-view.js"
     ],
     [
       "src/rebalancer/priority-recovery-observation.js"

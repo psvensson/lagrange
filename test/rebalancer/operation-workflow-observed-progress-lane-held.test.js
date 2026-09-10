@@ -364,6 +364,49 @@ function createObservedProgressCoordinator({
   });
 }
 
+test('service progress decodes only operation rows that can match its target',
+  async (t) => {
+    const nowMs = Date.now();
+    const operationRow = buildSendingOperationRow(TEST_OPERATION_ID, nowMs);
+    const serviceRow = buildCreatingServiceRow();
+    const coordinator = createObservedProgressCoordinator({
+      operationRow,
+      serviceRow,
+    });
+    const unrelatedRows = [];
+    for (let index = 0; index < 256; index += 1) {
+      unrelatedRows.push({
+        ...buildSendingOperationRow(`unrelated-operation-${index}`, nowMs),
+        target_node_id: `unrelated-node-${index}`,
+      });
+    }
+    const operationRows = [...unrelatedRows, operationRow];
+    let decodedRowCount = 0;
+    const rowToOperation = coordinator.repository.rowToOperation.bind(
+      coordinator.repository,
+    );
+    coordinator.repository.rowToOperation = (row) => {
+      decodedRowCount += 1;
+      return rowToOperation(row);
+    };
+    coordinator.repository.filterReplicaOperationRowsFromCache =
+      (predicate) => operationRows.filter(predicate);
+
+    try {
+      const operationIds = coordinator.workflowOwner
+        .findObservedProgressOperationIds(
+          serviceRow,
+          TEST_CACHE_OPERATION_UPSERT,
+        );
+      t.same(operationIds, [TEST_OPERATION_ID],
+        'the matching operation remains visible to the workflow owner');
+      t.equal(decodedRowCount, 1,
+        'unrelated durable rows do not pay the full operation decoder cost');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test(TEST_LANE_HELD_RETRY_TEST_NAME,
   async (t) => {
     const nowMs = Date.now();

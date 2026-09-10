@@ -12,7 +12,8 @@ import {
 import {
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 } from './unified-rebalancer-topology-drain-methods.js';
-
+import {UNIFIED_REBALANCER_LEDGER_SURPLUS_DRAIN_REPLICA_STATE_METHODS} from './unified-rebalancer-ledger-surplus-drain-replica-state.js';
+import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -437,6 +438,17 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @private
    */
   isOperationForEntity(operation) {
+    const snakeEntityId = operation?.entity_id;
+    const camelEntityId = operation?.entityId;
+    const directEntityId =
+      typeof snakeEntityId === 'string' && snakeEntityId.length > 0 ?
+        snakeEntityId :
+        typeof camelEntityId === 'string' && camelEntityId.length > 0 ?
+          camelEntityId :
+          null;
+    if (directEntityId !== null && directEntityId !== this.entityId) {
+      return false;
+    }
     const normalizedOperation = normalizeReplicaOperationRecord(operation, {
       nowMs: this.nowFn(),
     });
@@ -708,38 +720,21 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @return {Array<Object>}
    */
   getGlobalTopologyBlockingInFlightOperations() {
-    // Memoized on the replica_operations mutation version: planning sweeps
-    // evaluated this global view dozens of times per entity in one
-    // synchronous burst, each running a full-table scan with a per-row
-    // progress-snapshot rebuild (profiled at ~16 percent of seed CPU during
-    // formation). Any ledger write invalidates; the frozen result keeps a
-    // hidden mutator loud.
-    const cache = this.systemTableCache;
-    const version =
-      cache && typeof cache.getTableMutationVersion === 'function' ?
-        cache.getTableMutationVersion(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) :
-        null;
-    const memo = this.globalTopologyBlockingInFlightOperationsMemo;
-    if (version !== null && memo && memo.version === version) {
-      return memo.operations;
-    }
-    const operations = cache.filter(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      (operation) => {
-        if (!this.isTrackedInFlightOperation(operation)) {
-          return false;
-        }
-        return this.isTopologyBlockingInFlightOperation(operation);
-      },
-    );
-    if (version !== null) {
-      this.globalTopologyBlockingInFlightOperationsMemo = {
-        version,
-        operations: Object.freeze(operations),
-      };
-      return this.globalTopologyBlockingInFlightOperationsMemo.operations;
-    }
-    return operations;
+    const prototype = UnifiedRebalancerReplicaState.prototype;
+    const usesCanonicalClassifier =
+      this.isTrackedInFlightOperation ===
+        prototype.isTrackedInFlightOperation &&
+      this.isTopologyBlockingInFlightOperation ===
+        prototype.isTopologyBlockingInFlightOperation &&
+      this.isReplaceRemoveDispatchPhaseOperation ===
+        prototype.isReplaceRemoveDispatchPhaseOperation;
+    return readGlobalTopologyBlockingInFlightOperations({
+      cache: this.systemTableCache,
+      memoOwner: usesCanonicalClassifier ? this.systemTableCache : this,
+      isIncluded: (operation) =>
+        this.isTrackedInFlightOperation(operation) &&
+        this.isTopologyBlockingInFlightOperation(operation),
+    });
   }
 
   /**
@@ -787,12 +782,12 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @private
    */
 }
-
 applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerReplicaState);
 
 Object.assign(
   UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
+  UNIFIED_REBALANCER_LEDGER_SURPLUS_DRAIN_REPLICA_STATE_METHODS,
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 );
 

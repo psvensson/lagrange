@@ -1,3 +1,4 @@
+import {types} from 'node:util';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
   executeLocalSystemTableRead,
@@ -28,6 +29,83 @@ const {
   SYSTEM_TABLE_NAME,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
+const arrayIsArray = Array.isArray;
+const canonicalObjectPrototype = Object.prototype;
+const isProxy = types.isProxy.bind(types);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const JSON_SERIALIZATION_HOOK_PROPERTY = 'toJSON';
+const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
+
+function isFlatJsonValue(value) {
+  return value === null || value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean';
+}
+
+function hasJsonHook(value, prototype) {
+  if (objectGetOwnPropertyDescriptor(
+    value,
+    JSON_SERIALIZATION_HOOK_PROPERTY,
+  )) {
+    return true;
+  }
+  return prototype === canonicalObjectPrototype &&
+    objectGetOwnPropertyDescriptor(
+      canonicalObjectPrototype,
+      JSON_SERIALIZATION_HOOK_PROPERTY,
+    ) !== undefined;
+}
+
+function isInspectableFlatJsonRecord(value) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    arrayIsArray(value) ||
+    isProxy(value)
+  ) {
+    return false;
+  }
+  const prototype = objectGetPrototypeOf(value);
+  return (
+    prototype === canonicalObjectPrototype || prototype === null
+  ) && !hasJsonHook(value, prototype);
+}
+
+function hasEquivalentFlatJsonOwnValue(candidate, existing, key) {
+  const candidateDescriptor = objectGetOwnPropertyDescriptor(candidate, key);
+  const existingDescriptor = objectGetOwnPropertyDescriptor(existing, key);
+  return Boolean(
+    candidateDescriptor &&
+    existingDescriptor &&
+    objectHasOwn(candidateDescriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) &&
+    objectHasOwn(existingDescriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) &&
+    isFlatJsonValue(candidateDescriptor.value) &&
+    candidateDescriptor.value === existingDescriptor.value,
+  );
+}
+
+function areEquivalentFlatJsonRows(candidate, existing) {
+  if (
+    !isInspectableFlatJsonRecord(candidate) ||
+    !isInspectableFlatJsonRecord(existing)
+  ) return false;
+  const candidateKeys = objectKeys(candidate);
+  const existingKeys = objectKeys(existing);
+  if (candidateKeys.length !== existingKeys.length) {
+    return false;
+  }
+  for (const key of candidateKeys) {
+    if (!hasEquivalentFlatJsonOwnValue(candidate, existing, key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function resolveAuthoritativeRowVersion(service, row) {
   if (!row || typeof row !== 'object') {
     return null;
@@ -52,15 +130,51 @@ function resolveAuthoritativeRowVersion(service, row) {
   return null;
 }
 
-function compareAuthoritativeRepairRows(service, candidate, existing) {
-  const candidateVersion = resolveAuthoritativeRowVersion(service, candidate);
-  const existingVersion = resolveAuthoritativeRowVersion(service, existing);
+function getAuthoritativeRepairRowRank(service, row, rowRanks) {
+  const existingRank = rowRanks?.get(row);
+  if (existingRank) return existingRank;
+  const rank = {
+    row,
+    serializedLength: null,
+    version: resolveAuthoritativeRowVersion(service, row),
+  };
+  rowRanks?.set(row, rank);
+  return rank;
+}
+
+function getAuthoritativeRepairRowSerializedLength(rank) {
+  if (rank.serializedLength === null) {
+    rank.serializedLength = JSON.stringify(rank.row).length;
+  }
+  return rank.serializedLength;
+}
+
+function compareAuthoritativeRepairRows(
+  service,
+  candidate,
+  existing,
+  rowRanks = null,
+) {
+  const candidateRank = getAuthoritativeRepairRowRank(
+    service,
+    candidate,
+    rowRanks,
+  );
+  const existingRank = getAuthoritativeRepairRowRank(
+    service,
+    existing,
+    rowRanks,
+  );
+  const candidateVersion = candidateRank.version;
+  const existingVersion = existingRank.version;
 
   if (candidateVersion !== null && existingVersion !== null) {
     if (candidateVersion === existingVersion) {
-      return (
-        JSON.stringify(candidate).length > JSON.stringify(existing).length
-      );
+      if (areEquivalentFlatJsonRows(candidate, existing)) {
+        return false;
+      }
+      return getAuthoritativeRepairRowSerializedLength(candidateRank) >
+        getAuthoritativeRepairRowSerializedLength(existingRank);
     }
     return candidateVersion > existingVersion;
   }
@@ -73,12 +187,18 @@ function compareAuthoritativeRepairRows(service, candidate, existing) {
     return false;
   }
 
-  return JSON.stringify(candidate).length > JSON.stringify(existing).length;
+  if (areEquivalentFlatJsonRows(candidate, existing)) {
+    return false;
+  }
+
+  return getAuthoritativeRepairRowSerializedLength(candidateRank) >
+    getAuthoritativeRepairRowSerializedLength(existingRank);
 }
 
 function mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) {
   const keyField = service.getPrimaryKeyField(tableName);
   const mergedRows = new Map();
+  const rowRanks = new Map();
 
   for (const rowSet of rowSets) {
     const rows = Array.isArray(rowSet) ? rowSet : [];
@@ -88,13 +208,22 @@ function mergeAuthoritativeSystemTableRowSets(service, tableName, rowSets) {
         continue;
       }
       const existing = mergedRows.get(key);
-      if (!existing || compareAuthoritativeRepairRows(service, row, existing)) {
+      if (!existing || compareAuthoritativeRepairRows(
+        service,
+        row,
+        existing,
+        rowRanks,
+      )) {
         mergedRows.set(key, row);
       }
     }
   }
 
   return [...mergedRows.values()];
+}
+
+function localAuthoritativeReadRowsAreUsable(result) {
+  return result?.success === true && Array.isArray(result.rows);
 }
 
 async function queryLocalAuthoritativeSystemTableRows(
@@ -127,11 +256,11 @@ async function queryLocalAuthoritativeSystemTableRows(
         params,
       );
 
-      if (!result || result.success === false) {
+      if (!localAuthoritativeReadRowsAreUsable(result)) {
         continue;
       }
 
-      rowSets.push(Array.isArray(result.rows) ? result.rows : []);
+      rowSets.push(result.rows);
       available = true;
     } catch (error) {
       service.logger.warn(
@@ -544,7 +673,6 @@ export {
   normalizeAuthoritativeReadLocalQueryTransport,
   normalizeLocalSystemTableWriteResult,
   queryLocalAuthoritativeSystemTableRows,
-  resolveAuthoritativeRowVersion,
   shouldRetryOwnerRpcReadViaSqlFallback,
 };
 

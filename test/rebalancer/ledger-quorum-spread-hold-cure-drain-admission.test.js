@@ -55,7 +55,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE} from '../../src/constants/index.js';
+import {NODE_STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   EntityType,
   MoveType,
@@ -96,8 +96,10 @@ const TEST_COHORT_NODE_IDS = Object.freeze([
 ]);
 const TEST_SEED_LEADER_REPLICA_ID = 'replica_operations-p1-r1';
 const TEST_SEED_SURPLUS_REPLICA_ID = 'replica_operations-p1-r2';
+const TEST_SEED_SECOND_SURPLUS_REPLICA_ID = 'replica_operations-p1-r3';
 const TEST_JOINER_REPLICA_ID_B = 'replica_operations-p1-r3';
 const TEST_JOINER_REPLICA_ID_C = 'replica_operations-p1-r4';
+const TEST_PARTIAL_JOINER_REPLICA_ID = 'replace-replica-partial-spread';
 const TEST_SEED_REPLICA_IDS = Object.freeze([
   TEST_SEED_LEADER_REPLICA_ID,
   TEST_SEED_SURPLUS_REPLICA_ID,
@@ -183,6 +185,45 @@ function createSurplusLedgerServiceRows() {
   ];
 }
 
+function createPartialSpreadSurplusLedgerServiceRows() {
+  return [
+    createLedgerVoterServiceRow(
+      TEST_SEED_LEADER_REPLICA_ID, TEST_SEED_NODE_ID, TEST_RAFT_ROLE_LEADER),
+    createLedgerVoterServiceRow(
+      TEST_SEED_SURPLUS_REPLICA_ID, TEST_SEED_NODE_ID,
+      TEST_RAFT_ROLE_FOLLOWER),
+    createLedgerVoterServiceRow(
+      TEST_SEED_SECOND_SURPLUS_REPLICA_ID, TEST_SEED_NODE_ID,
+      TEST_RAFT_ROLE_FOLLOWER),
+    createLedgerVoterServiceRow(
+      TEST_PARTIAL_JOINER_REPLICA_ID, TEST_JOINER_NODE_ID_B,
+      TEST_RAFT_ROLE_FOLLOWER),
+  ];
+}
+
+function createCompletedReplaceOperationRow({
+  sourceReplicaId = TEST_SEED_SURPLUS_REPLICA_ID,
+  targetReplicaId = TEST_JOINER_REPLICA_ID_B,
+} = {}) {
+  return {
+    operation_id: 'completed-replace-with-live-source',
+    type: OperationType.REPLACE,
+    entity_type: EntityType.PARTITION,
+    entity_id: TEST_LEDGER_PARTITION_ID,
+    partition_id: TEST_LEDGER_PARTITION_ID,
+    replica_id: targetReplicaId,
+    source_replica_id: sourceReplicaId,
+    target_node_id: TEST_JOINER_NODE_ID_B,
+    status: ReplicaStatus.REMOVED,
+    workflow_step: WORKFLOW_STEP.REMOVED,
+    completed_at: Date.now(),
+    steps_history: JSON.stringify([{
+      step: WORKFLOW_STEP.PENDING,
+      sourceReplicaId,
+    }]),
+  };
+}
+
 function createFixedTargetPolicyService() {
   return {
     getPolicyForPartition: () => ({
@@ -197,7 +238,10 @@ function createFixedTargetPolicyService() {
 // membership planning snapshot names the whole formation cohort so the
 // published-membership remove-safety lane has evidence instead of failing
 // "unavailable" for harness reasons.
-function createFormationReadinessService(cache, {prioritySpreadSatisfied}) {
+function createFormationReadinessService(
+  cache,
+  {cohortNodeIds = TEST_COHORT_NODE_IDS, prioritySpreadSatisfied},
+) {
   const base = createMockControlPlaneReadinessService({
     systemTableCache: cache,
     defaultRepairEligible: true,
@@ -205,11 +249,11 @@ function createFormationReadinessService(cache, {prioritySpreadSatisfied}) {
   const buildPlanningSnapshot = (nodeId) => ({
     publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
     publishedActiveNodeIdsPresent: true,
-    publishedActiveNodeIds: TEST_COHORT_NODE_IDS,
-    recoveryActiveNodeIds: TEST_COHORT_NODE_IDS,
-    projectedServingNodeIds: TEST_COHORT_NODE_IDS,
+    publishedActiveNodeIds: cohortNodeIds,
+    recoveryActiveNodeIds: cohortNodeIds,
+    projectedServingNodeIds: cohortNodeIds,
     publishedMembershipIncludesTargetNode:
-      TEST_COHORT_NODE_IDS.includes(nodeId),
+      cohortNodeIds.includes(nodeId),
     priorityPartitionSummary: {
       satisfied: prioritySpreadSatisfied,
       requiredDistinctNodeCount: TEST_TARGET_REPLICA_COUNT,
@@ -256,18 +300,20 @@ function installAuthoritativeServicesRead(coordinator, cache) {
   };
 }
 
-function createDrainFixture({joinersBarrierHeld}) {
+function createDrainFixture({
+  cohortNodeIds = TEST_COHORT_NODE_IDS,
+  joinersBarrierHeld,
+  prioritySpreadSatisfied = !joinersBarrierHeld,
+  replicaOperations = [],
+  services = createSurplusLedgerServiceRows(),
+}) {
   const cache = createMockCache({
-    nodes: [
-      createReadyNodeRow(TEST_SEED_NODE_ID),
-      joinersBarrierHeld ?
-        createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_B) :
-        createReadyNodeRow(TEST_JOINER_NODE_ID_B),
-      joinersBarrierHeld ?
-        createBarrierHeldJoinerNodeRow(TEST_JOINER_NODE_ID_C) :
-        createReadyNodeRow(TEST_JOINER_NODE_ID_C),
-    ],
-    services: createSurplusLedgerServiceRows(),
+    nodes: cohortNodeIds.map((nodeId) =>
+      nodeId === TEST_SEED_NODE_ID || !joinersBarrierHeld ?
+        createReadyNodeRow(nodeId) :
+        createBarrierHeldJoinerNodeRow(nodeId),
+    ),
+    services,
     partitions: [
       {
         partition_id: TEST_LEDGER_PARTITION_ID,
@@ -275,14 +321,15 @@ function createDrainFixture({joinersBarrierHeld}) {
         replica_count: TEST_TARGET_REPLICA_COUNT,
       },
     ],
-    replicaOperations: [],
+    replicaOperations,
   });
   const readinessService = createFormationReadinessService(cache, {
+    cohortNodeIds,
     // Live formation truth: with barrier-held joiners the priority spread
     // has NOT converged (the sibling wedge suite pins the same shape);
     // with every node READY at 3 distinct ready nodes the summary is
     // satisfied.
-    prioritySpreadSatisfied: !joinersBarrierHeld,
+    prioritySpreadSatisfied,
   });
   const storageAdmissionService = createAllowAllStorageAdmissionService();
   const tablePolicyService = createFixedTargetPolicyService();
@@ -435,6 +482,143 @@ test('CONTROL (must stay green): with every cohort node READY the same ' +
         JSON.stringify(
           fixture.cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
         ),
+    );
+  } finally {
+    await shutdownFixture(fixture);
+    resetTestEnvironment();
+  }
+});
+
+test('REGRESSION: a completed REPLACE claim cannot hide its still-ACTIVE ' +
+'source from an authorized operation-ledger surplus drain', async (t) => {
+  initializeTestEnvironment();
+  const fixture = createDrainFixture({
+    joinersBarrierHeld: false,
+    replicaOperations: [createCompletedReplaceOperationRow()],
+  });
+  try {
+    const rawVoterRows = fixture.cache
+      .getAll(SYSTEM_TABLE_NAME.SERVICES)
+      .filter((row) =>
+        row.partition_id === TEST_LEDGER_PARTITION_ID &&
+        row.status === ReplicaStatus.ACTIVE &&
+        (row.raft_role === TEST_RAFT_ROLE_LEADER ||
+          row.raft_role === TEST_RAFT_ROLE_FOLLOWER),
+      );
+    t.equal(
+      rawVoterRows.length,
+      TEST_TOTAL_VOTER_COUNT,
+      'the current SERVICES actual reports four ACTIVE voters',
+    );
+
+    const concentration = fixture.coordinator
+      .getOperationLedgerQuorumConcentrationForPartition(
+        TEST_LEDGER_PARTITION_ID,
+      );
+    t.match(
+      concentration,
+      {
+        overTarget: true,
+        totalVoters: TEST_TOTAL_VOTER_COUNT,
+        distinctVoterNodeIds: TEST_COHORT_NODE_IDS,
+      },
+      'the concentration owner authorizes a drain from the same four-voter ' +
+        'actual',
+    );
+    const planningGate = fixture.rebalancer
+      .buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_LEDGER_PARTITION_ID,
+      );
+    t.equal(
+      planningGate?.ledgerSurplusDrainPlanningCapability?.kind,
+      TEST_LEDGER_SURPLUS_DRAIN_CAPABILITY_KIND,
+      'the interaction owner must mint the count-decreasing capability',
+    );
+
+    const result = await fixture.rebalancer.rebalance(TriggerType.PERIODIC);
+    const drainMoveResults = (result.moves || []).filter(
+      isHotNodeSurplusDrainMoveResult,
+    );
+    t.ok(
+      drainMoveResults.length >= 1,
+      'terminal operation history must not make the planner silently see ' +
+        'three replicas while the concentration and authoritative placement ' +
+        'owners see four; got: ' + describeMoveResults([result]),
+    );
+    t.ok(
+      drainMoveResults.some((moveResult) =>
+        moveResult.skipped !== true && moveResult.success !== false,
+      ),
+      'the authoritative four-voter placement must admit the corrective ' +
+        'REMOVE; got: ' + describeMoveResults([result]),
+    );
+  } finally {
+    await shutdownFixture(fixture);
+    resetTestEnvironment();
+  }
+});
+
+test('REGRESSION: with two READY nodes, a 3-1 ledger surplus drains one ' +
+'duplicate before a third spread target exists', async (t) => {
+  initializeTestEnvironment();
+  const partialCohortNodeIds = [
+    TEST_SEED_NODE_ID,
+    TEST_JOINER_NODE_ID_B,
+  ];
+  const fixture = createDrainFixture({
+    cohortNodeIds: partialCohortNodeIds,
+    joinersBarrierHeld: false,
+    prioritySpreadSatisfied: false,
+    services: createPartialSpreadSurplusLedgerServiceRows(),
+    replicaOperations: [createCompletedReplaceOperationRow({
+      sourceReplicaId: TEST_SEED_SECOND_SURPLUS_REPLICA_ID,
+      targetReplicaId: TEST_PARTIAL_JOINER_REPLICA_ID,
+    })],
+  });
+  try {
+    t.equal(
+      fixture.rebalancer.getAvailableNodes().length,
+      partialCohortNodeIds.length,
+      'both currently formed nodes are READY',
+    );
+    const concentration = fixture.coordinator
+      .getOperationLedgerQuorumConcentrationForPartition(
+        TEST_LEDGER_PARTITION_ID,
+      );
+    t.match(
+      concentration,
+      {
+        overTarget: true,
+        totalVoters: TEST_TOTAL_VOTER_COUNT,
+        distinctVoterNodeIds: partialCohortNodeIds,
+      },
+      'the concentration owner reports the live 3-1 partial-spread shape',
+    );
+    const planningGate = fixture.rebalancer
+      .buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_LEDGER_PARTITION_ID,
+      );
+    t.equal(
+      planningGate?.operationCreationRequired,
+      true,
+      'the current-partition recovery lane remains open',
+    );
+
+    const result = await fixture.rebalancer.rebalance(TriggerType.PERIODIC);
+    const drainMoveResults = (result.moves || []).filter(
+      isHotNodeSurplusDrainMoveResult,
+    );
+    t.ok(
+      drainMoveResults.length >= 1,
+      'a non-degrading REMOVE must be planned without waiting for a third ' +
+        'node; got: ' + describeMoveResults([result]),
+    );
+    t.ok(
+      drainMoveResults.some((moveResult) =>
+        moveResult.skipped !== true && moveResult.success !== false,
+      ),
+      'the authoritative 3-1 placement must admit one duplicate drain; got: ' +
+        describeMoveResults([result]),
     );
   } finally {
     await shutdownFixture(fixture);

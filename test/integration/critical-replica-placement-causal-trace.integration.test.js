@@ -39,6 +39,7 @@ import {
   evaluateOperationLedgerQuorumConcentration,
 } from '../../src/rebalancer/operation-ledger-quorum-concentration.js';
 import {
+  TRACE_STAGE,
   classifyPlacementTrace,
   comparePlacementTraces,
 } from './helpers/critical-placement-trace-classifier.js';
@@ -50,6 +51,7 @@ import {
   gracefulJoiningShutdown,
   gracefulShutdown,
   initializeTestEnvironment,
+  stopAllRebalancers,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
@@ -185,9 +187,13 @@ function summarizeLedgerHold(systemTableCache) {
 function buildFirstMissingAnswer(options) {
   const {criticalTrace, criticalSamples, ledgerHoldTimeline,
     activeProbe} = options;
+  const baselineOperationIds = new Set(
+    (criticalSamples[0]?.operations || []).map((row) => row.operation_id),
+  );
   const addLikeOperationsSeen = criticalSamples.some((sample) =>
     (sample.operations || []).some((row) =>
-      ['ADD', 'REPLACE'].includes(String(row.type || '').toUpperCase())));
+      ['ADD', 'REPLACE'].includes(String(row.type || '').toUpperCase()) &&
+      !baselineOperationIds.has(row.operation_id)));
   const engagedEntries = ledgerHoldTimeline.filter(
     (entry) => entry.hold.holdEngaged);
   const firstEntry = ledgerHoldTimeline[0];
@@ -524,19 +530,31 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
           st.ok(answer.predicate &&
             typeof answer.predicate.sampleCount === 'number',
           'the answer carries its measured predicate');
+          const operationRecordedStage = criticalTrace.stages.find(
+            (stage) => stage.stage === TRACE_STAGE.OPERATION_RECORDED,
+          );
+          st.equal(
+            predicate.addLikeOperationsRecordedForTracedPartition,
+            operationRecordedStage?.reached === true,
+            'the terminal predicate agrees with the classifier on whether ' +
+              'a new add-like operation was recorded after baseline',
+          );
           if (criticalTrace.firstMissingStage !== null) {
             st.ok(criticalTrace.firstMissingOwner,
               'a missing transition names its owning module');
-            st.equal(predicate.addLikeOperationsRecordedForTracedPartition,
-              false,
-              'the missing operation_recorded arrow is the measured absence ' +
-              'of any add-like ledger row for the traced partition');
           }
         });
     } finally {
       fs.mkdirSync(path.dirname(TRACE_ARTIFACT_PATH), {recursive: true});
       fs.writeFileSync(TRACE_ARTIFACT_PATH,
         `${JSON.stringify(artifact, null, 2)}\n`);
+      // Quiesce every placement producer before dismantling any node. Once
+      // formation succeeds, many partitions can still have valid follow-up
+      // work in flight; allowing surviving nodes to dispatch while a peer's
+      // transport is being removed turns teardown into a reconnect loop.
+      stopAllRebalancers(bootstrapResult?.partitionServices);
+      stopAllRebalancers(node2JoinService?.partitionServices);
+      stopAllRebalancers(node3JoinService?.partitionServices);
       try {
         await gracefulJoiningShutdown(node3JoinService);
       } catch (error) {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1800,
+    "unit": 1801,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2060,
-  "digest": "fnv1a32-5d3b3512",
+  "censusSize": 2061,
+  "digest": "fnv1a32-0f092ae2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -292,6 +292,7 @@
     "test/cdc/cdc-confirmation-tracker.property.test.js": "unit",
     "test/cdc/cdc-confirmation-tracker.test.js": "unit",
     "test/cdc/cdc-confirmation-wiring.test.js": "unit",
+    "test/cdc/cdc-delete-cache-absence-convergence.test.js": "unit",
     "test/cdc/cdc-emitter.property.test.js": "unit",
     "test/cdc/cdc-emitter.test.js": "unit",
     "test/cdc/cdc-event-delivery.property.test.js": "unit",

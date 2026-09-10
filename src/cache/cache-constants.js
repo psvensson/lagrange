@@ -64,6 +64,10 @@ const CACHE_DEFAULT = Object.freeze({
 const SYSTEM_TABLE_CACHE_MUTATION_MODE = Object.freeze({
   CDC_MERGE: 'cdc_merge',
   AUTHORITATIVE_RECONCILIATION: 'authoritative_reconciliation',
+  AUTHORITATIVE_OBSERVATION_RECONCILIATION:
+    'authoritative_observation_reconciliation',
+  AUTHORITATIVE_ABSENCE_RECONCILIATION:
+    'authoritative_absence_reconciliation',
   AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION:
     'authoritative_service_lifecycle_reconciliation',
 });

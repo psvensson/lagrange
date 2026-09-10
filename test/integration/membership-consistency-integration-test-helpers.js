@@ -475,29 +475,39 @@ function createNodeEntry(nodeId, overrides = {}) {
 }
 
 function createCacheBackedReadinessService(cache) {
-  return {
-    getNodeReadinessSync(nodeId) {
-      const node = cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
-      if (!node) {
-        return {
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
-          },
-        };
-      }
-      const status = String(node.status || '').toLowerCase();
-      const connectionState = String(node.connection_state || '').toLowerCase();
-      const leaseExpiresAt = Number(node.ready_lease_expires_at);
-      const leaseValid = Number.isFinite(leaseExpiresAt) &&
-        leaseExpiresAt > Date.now();
-      const ready = status === String(NODE_STATUS.ACTIVE).toLowerCase() &&
-        connectionState === String(STATE.READY).toLowerCase() &&
-        leaseValid;
+  const getNodeReadinessSync = (nodeId) => {
+    const node = cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
+    if (!node) {
       return {
         dimensions: {
-          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
         },
       };
+    }
+    const status = String(node.status || '').toLowerCase();
+    const connectionState = String(node.connection_state || '').toLowerCase();
+    const leaseExpiresAt = Number(node.ready_lease_expires_at);
+    const leaseValid = Number.isFinite(leaseExpiresAt) &&
+      leaseExpiresAt > Date.now();
+    const ready = status === String(NODE_STATUS.ACTIVE).toLowerCase() &&
+      connectionState === String(STATE.READY).toLowerCase() &&
+      leaseValid;
+    return {
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+      },
+    };
+  };
+  return {
+    getNodeReadinessSync,
+    projectNodeLiveness(nodeId) {
+      const readiness = getNodeReadinessSync(nodeId);
+      return Object.freeze({
+        readyNow:
+          readiness.dimensions[
+            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+          ] === true,
+      });
     },
   };
 }

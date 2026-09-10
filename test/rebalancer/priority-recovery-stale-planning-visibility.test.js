@@ -364,6 +364,43 @@ function createPriorityRebalancer(options = {}) {
 }
 
 test(
+  'UnifiedRebalancer reuses a pending published priority snapshot without ' +
+    'building a discarded current-placement observation',
+  (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStalePlanningSnapshot();
+    const rebalancer = createPriorityRebalancer({planningSnapshot});
+    t.teardown(() => rebalancer.shutdown());
+    let currentPlacementBuilds = 0;
+    rebalancer.buildCurrentPriorityPlacementPlanningObservation = () => {
+      currentPlacementBuilds += 1;
+      return Object.freeze({
+        state: 'available',
+        priorityPartitionSummary: planningSnapshot.priorityPartitionSummary,
+      });
+    };
+
+    const currentPlanningSnapshot =
+      rebalancer.buildCurrentPriorityRecoveryPlanningSnapshot(
+        planningSnapshot,
+      );
+
+    t.equal(
+      currentPlanningSnapshot,
+      planningSnapshot,
+      'pending published placement remains the exact planning authority',
+    );
+    t.equal(
+      currentPlacementBuilds,
+      0,
+      'the unchanged return branch does not build current placement',
+    );
+    t.end();
+  },
+);
+
+test(
   'UnifiedRebalancer planning gate reopens sticky published convergence from current priority placement debt',
   async (t) => {
     initializeTestEnvironment();

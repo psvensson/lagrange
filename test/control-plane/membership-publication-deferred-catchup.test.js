@@ -14,6 +14,9 @@ import {AUTHORITATIVE_READ_SOURCE} from
   '../../src/cdc/cdc-integration-service-shared-constants.js';
 import {TABLES} from '../../src/constants/index.js';
 import {CDC_PROPAGATED_TABLES} from '../../src/cache/cdc-table-policy.js';
+import {INITIAL_PARTITION_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {buildControlPlaneReadAuthority} from
   '../../src/control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {
@@ -58,14 +61,26 @@ function publicationRow(epoch, nowMs) {
 class CacheRepairHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(CacheRepairHost);
 
-function makeAuthorityService(cache, authorityRows) {
+function makeAuthorityService(
+  cache,
+  authorityRows,
+  authoritativeTable = PUBLICATIONS,
+) {
   const service = Object.create(CacheRepairHost.prototype);
   service.cacheMutationTarget = cache;
   service.getPrimaryKeyField = () => 'publication_id';
-  service.executeAuthoritativeSystemTableRead = async () => ({
+  service.executeAuthoritativeSystemTableRead = async (tableName) => ({
     success: true,
     source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
-    rows: authorityRows,
+    rows: tableName === authoritativeTable ? authorityRows : [],
+    readAuthorityWitness: {
+      state: 'observed',
+      partitionId: INITIAL_PARTITION_IDS[tableName],
+      role: RAFT_ROLE.LEADER,
+      servingNodeId: 'N1',
+      servingReplicaId: `${INITIAL_PARTITION_IDS[tableName]}-r1`,
+      observedAtMs: 5000,
+    },
   });
   service.logger = {warn() {}, info() {}, debug() {}, error() {}};
   // The method form the coordinator invokes (CDCIntegrationService exposes this).
@@ -185,7 +200,11 @@ test('late-services-row-converges-after-one-shot-hydration: a services row that 
     status: 'ACTIVE',
     role: 'leader',
   };
-  const service = makeAuthorityService(cache, [lateServicesRow]);
+  const service = makeAuthorityService(
+    cache,
+    [lateServicesRow],
+    TABLES.SERVICES,
+  );
   service.getPrimaryKeyField = () => 'service_id';
   const coordinator = makeDeferringCoordinator(
     {cache, cdcIntegrationService: service, now: () => 5000});
@@ -206,8 +225,8 @@ test('late-services-row-converges-after-one-shot-hydration: a services row that 
 });
 
 test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for ' +
-  'the routing-relevant CDC-propagated tables, on its own cooldown, with the ' +
-  'default catch-up read policy and one attempt per table', async (t) => {
+  'the routing-relevant CDC-propagated tables, on its own cooldown, with an ' +
+  'owner-preferred read and one attempt per table', async (t) => {
   let clock = 1000;
   const seen = [];
   const spyService = {
@@ -233,9 +252,13 @@ test('steady-state-hydration-covers-routing-tables: the sibling sweep asks for '
   'the other routing tables a stale row can strand a write on are swept');
   t.equal(swept.tables.includes(PUBLICATIONS), false,
     'publications keeps its own tighter, leader-pinned sweep');
-  t.equal(swept.readAuthority, undefined,
-    'the sibling sweep uses the catch-up default local-first/owner-fallback policy, ' +
-    'never the publications leader pin');
+  t.same(swept.readAuthority, buildControlPlaneReadAuthority({
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+  }),
+  'the routing sweep prefers the authoritative leader so a witnessed complete ' +
+    'result may remove cache-only rows');
   t.ok(swept.tables.every((tableName) =>
     CDC_PROPAGATED_TABLES.includes(tableName)),
   'every swept table is a CDC-propagated table');
@@ -337,6 +360,14 @@ test('CL-001 variant D DEEPER LAYER (2026-06-18): the catch-up routes through th
           success: true,
           source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
           rows: [publicationRow(40, 2000)],
+          readAuthorityWitness: {
+            state: 'observed',
+            partitionId: INITIAL_PARTITION_IDS[PUBLICATIONS],
+            role: RAFT_ROLE.LEADER,
+            servingNodeId: 'N2',
+            servingReplicaId: `${INITIAL_PARTITION_IDS[PUBLICATIONS]}-r2`,
+            observedAtMs: 5000,
+          },
         } :
         {
           // The node's own local replica is frozen at the stale epoch.
@@ -422,6 +453,142 @@ test('CL-001 variant D OWNER FACE (2026-06-19): a rejoined publications WRITE-LE
     'and its frozen cache converged to the committed epoch 40 (RED on revert: the owner ' +
     'path skipped without ever catching up, serving epoch 19 to the consistency probe ' +
     'forever as publication_epochs_disagree)');
+});
+
+test('a publications write-leader with a membership deficit still sweeps a ' +
+  'missed routing DELETE after driving the higher-priority publication turn',
+async (t) => {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.SERVICES, 'UPSERT', {
+    service_id: 'replica_operations-p1-r4',
+    service_type: 'partition',
+    partition_id: 'replica_operations-p1',
+    node_id: 'N3',
+    status: 'failed',
+    updated_at: 1000,
+  }, {causeId: 'missed-delete'});
+
+  const service = Object.create(CacheRepairHost.prototype);
+  service.cacheMutationTarget = cache;
+  service.getPrimaryKeyField = () => 'id';
+  const readSources = [];
+  service.executeAuthoritativeSystemTableRead =
+    async (tableName, _sql, _params, options = {}) => {
+      const ownerPreferred = options.readAuthority?.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED;
+      const leaderPreferred = options.readAuthority?.leaderMode ===
+        CONTROL_PLANE_READ_LEADER_MODE.PREFERRED;
+      const readsFromLeader = ownerPreferred && leaderPreferred;
+      readSources.push(readsFromLeader ? 'leader' : 'follower');
+      return readsFromLeader ? {
+        success: true,
+        source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+        rows: [],
+        readAuthorityWitness: {
+          state: 'observed',
+          partitionId: INITIAL_PARTITION_IDS[tableName],
+          role: RAFT_ROLE.LEADER,
+          servingNodeId: 'N1',
+          servingReplicaId: `${INITIAL_PARTITION_IDS[tableName]}-r1`,
+          observedAtMs: 5000,
+        },
+      } : {
+        success: true,
+        source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+        rows: cache.getAll(TABLES.SERVICES),
+        readAuthorityWitness: {
+          state: 'observed',
+          partitionId: INITIAL_PARTITION_IDS[tableName],
+          role: RAFT_ROLE.FOLLOWER,
+          servingNodeId: 'N2',
+          servingReplicaId: `${INITIAL_PARTITION_IDS[tableName]}-r2`,
+        },
+      };
+    };
+  service.logger = {warn() {}, info() {}, debug() {}, error() {}};
+  service.hydrateCdcPropagatedTablesFromAuthority = (opts) =>
+    hydrateCdcPropagatedTablesFromAuthority(service, opts);
+  service.canWriteSystemTableLocally = () => true;
+
+  const planningSnapshot = {
+    latestPublishedPublicationRow: publicationRow(19, 1000),
+    latestPublicationRow: publicationRow(19, 1000),
+    nodeRows: [...MEMBERS, 'N4'].map((nodeId) => ({node_id: nodeId})),
+    readinessByNodeId: {},
+  };
+  const coordinator = makeLeaderDriverCoordinator({
+    cache,
+    cdcIntegrationService: service,
+    now: () => 5000,
+    planningSnapshot,
+  });
+  let publicationDriveCount = 0;
+  coordinator.reconcileActiveGateMembershipPublication = async () => {
+    publicationDriveCount += 1;
+  };
+
+  t.equal(cache.getAll(TABLES.SERVICES).length, 1,
+    'the leader begins with the failed service row whose DELETE fan-out it missed');
+  const drove = await coordinator.driveOwnerMembershipReconcile();
+  t.equal(drove, true,
+    'the publication deficit retains the normal owner drive outcome');
+  t.equal(publicationDriveCount, 1,
+    'the membership publication turn runs before the catch-up repair');
+  t.ok(readSources.length > 0 && readSources.every((source) => source === 'leader'),
+    'every routing-table catch-up read prefers its semantic owner leader');
+  t.equal(cache.getAll(TABLES.SERVICES).length, 0,
+    'the same owner tick sweeps the cache-only failed row from authoritative absence');
+});
+
+test('a publications write-leader without a planning snapshot still reaches ' +
+  'the shared routing catch-up in its owner-turn release path', async (t) => {
+  const seen = [];
+  const service = {
+    canWriteSystemTableLocally: () => true,
+    hydrateCdcPropagatedTablesFromAuthority: async (options) => {
+      seen.push(options);
+    },
+  };
+  const coordinator = makeLeaderDriverCoordinator({
+    cache: new SystemTableCache(),
+    cdcIntegrationService: service,
+    now: () => 5000,
+    planningSnapshot: null,
+  });
+
+  const drove = await coordinator.driveOwnerMembershipReconcile();
+  t.equal(drove, false, 'the missing planning snapshot remains a skipped turn');
+  t.equal(seen.length, 1,
+    'the early owner return cannot bypass the shared routing repair path');
+  t.ok(seen[0].tables.includes(TABLES.SERVICES),
+    'the release-path repair includes SERVICES delete convergence');
+});
+
+test('a publications write-leader whose planning read fails still reaches the ' +
+  'shared routing catch-up and releases its in-flight owner turn', async (t) => {
+  const seen = [];
+  const service = {
+    canWriteSystemTableLocally: () => true,
+    hydrateCdcPropagatedTablesFromAuthority: async (options) => {
+      seen.push(options);
+    },
+  };
+  const coordinator = makeLeaderDriverCoordinator({
+    cache: new SystemTableCache(),
+    cdcIntegrationService: service,
+    now: () => 5000,
+    planningSnapshot: null,
+  });
+  coordinator.readPublicationPlanningSnapshot = async () => {
+    throw new Error('owner read failed');
+  };
+
+  const drove = await coordinator.driveOwnerMembershipReconcile();
+  t.equal(drove, false, 'the failed planning turn retains its typed skipped outcome');
+  t.equal(seen.length, 1,
+    'the error exit cannot bypass the shared routing repair path');
+  t.equal(coordinator.ownerMembershipReconcileInFlight, false,
+    'the catch-up release path cannot leave the owner turn latched in flight');
 });
 
 test('CL-001 variant D: deferral stays safe when no CDC catch-up is available',

@@ -14,6 +14,8 @@ import {
   ReadinessPlanningSemanticGenerationTracker,
   planningIdentitiesEqual,
 } from '../../src/control-plane/readiness-planning-semantic-generation.js';
+import {buildDirectGlobalProjection} from
+  '../../src/control-plane/readiness-planning-table-impact-classification.js';
 import {
   readConnectedNodeFingerprint,
   shouldResetReadinessBuildAttempts,
@@ -137,6 +139,22 @@ test('direct planning table classifier keeps raw cadence separate from node ' +
     beforeA,
     fixture.tracker.captureIdentity(NODE_A),
   ), 'a P-verdict-preserving row write leaves planning currency unchanged');
+  const stableGlobalProjection = fixture.tracker.currentGlobalProjection;
+  for (let heartbeatIndex = 2; heartbeatIndex <= 65; heartbeatIndex += 1) {
+    const cadence = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
+      [COLUMN.NODE_ID]: NODE_A,
+      [COLUMN.LAST_HEARTBEAT]: 1_000 + heartbeatIndex,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: 2_000 + heartbeatIndex,
+    });
+    t.equal(cadence.semanticChanged, false,
+      `heartbeat cadence ${heartbeatIndex} remains a semantic no-op`);
+  }
+  t.equal(
+    fixture.tracker.currentGlobalProjection,
+    stableGlobalProjection,
+    'same-key node cadence reuses the global projection instead of ' +
+      'rescanning unrelated control-plane rows',
+  );
 
   const load = fixture.apply(TABLES.NODES, CDC_OPERATION.UPDATE, {
     [COLUMN.CPU_USAGE_PERCENT]: 95,
@@ -145,6 +163,102 @@ test('direct planning table classifier keeps raw cadence separate from node ' +
   t.equal(load.globalChanged, false, 'load is node-local planning evidence');
   t.same(load.affectedNodeIds, [NODE_A],
     'the load change invalidates only its node');
+  t.end();
+});
+
+test('service refresh cadence reuses the unchanged global projection', (t) => {
+  const fixture = createFixture({
+    [TABLES.NODES]: [nodeRow(NODE_A)],
+    [TABLES.SERVICES]: [serviceRow('service-a', NODE_A)],
+  });
+  const firstRefresh = fixture.apply(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
+    [COLUMN.SERVICE_ID]: 'service-a',
+    updated_at: 1_001,
+  });
+  t.equal(firstRefresh.semanticChanged, false,
+    'a timestamp-only service refresh is a semantic no-op');
+  const stableGlobalProjection = fixture.tracker.currentGlobalProjection;
+  for (let refreshIndex = 2; refreshIndex <= 65; refreshIndex += 1) {
+    const refresh = fixture.apply(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
+      [COLUMN.SERVICE_ID]: 'service-a',
+      updated_at: 1_000 + refreshIndex,
+    });
+    t.equal(refresh.semanticChanged, false,
+      `service refresh ${refreshIndex} remains a semantic no-op`);
+  }
+  t.equal(
+    fixture.tracker.currentGlobalProjection,
+    stableGlobalProjection,
+    'same-key service refresh cadence reuses the global projection instead ' +
+      'of rescanning the control-plane rows',
+  );
+  t.end();
+});
+
+test('ordinary service topology churn reuses endpoint-owned global membership',
+  (t) => {
+    const fixture = createFixture({
+      [TABLES.NODES]: [nodeRow(NODE_A)],
+      [TABLES.NODE_ENDPOINTS]: [endpointRow('endpoint-a', NODE_A)],
+      [TABLES.SERVICES]: [serviceRow('service-a', NODE_A)],
+    });
+    fixture.apply(
+      TABLES.NODE_ENDPOINTS,
+      CDC_OPERATION.INSERT,
+      endpointRow('endpoint-b', NODE_A),
+    );
+    const stableGlobalProjection = fixture.tracker.currentGlobalProjection;
+    for (let serviceIndex = 1; serviceIndex <= 64; serviceIndex += 1) {
+      const change = fixture.apply(TABLES.SERVICES, CDC_OPERATION.INSERT,
+        serviceRow(
+          `ordinary-service-${serviceIndex}`,
+          NODE_A,
+          `ratings:p${serviceIndex + 1}`,
+        ));
+      t.equal(change.globalChanged, false,
+        `ordinary service ${serviceIndex} preserves global readiness`);
+      t.same(change.affectedNodeIds, [NODE_A],
+        `ordinary service ${serviceIndex} remains node-local evidence`);
+      t.equal(
+        fixture.tracker.currentGlobalProjection,
+        stableGlobalProjection,
+        `ordinary service ${serviceIndex} does not rescan global rows`,
+      );
+    }
+    t.end();
+  });
+
+test('ordinary replica-operation churn reuses priority global topology', (t) => {
+  const fixture = createFixture({
+    [TABLES.NODES]: [nodeRow(NODE_A)],
+    [TABLES.PARTITIONS]: [{
+      [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
+      [COLUMN.TABLE_ID]: TABLES.CONTROL_PLANE_PUBLICATIONS,
+    }, {
+      [COLUMN.PARTITION_ID]: USER_PARTITION_ID,
+      [COLUMN.TABLE_ID]: 'ratings',
+    }],
+  });
+  fixture.apply(TABLES.NODES, CDC_OPERATION.INSERT, nodeRow(NODE_B));
+  const stableGlobalProjection = fixture.tracker.currentGlobalProjection;
+  for (let operationIndex = 1; operationIndex <= 64; operationIndex += 1) {
+    const change = fixture.apply(
+      TABLES.REPLICA_OPERATIONS,
+      CDC_OPERATION.INSERT,
+      {
+        [COLUMN.OPERATION_ID]: `ordinary-operation-${operationIndex}`,
+        [COLUMN.PARTITION_ID]: USER_PARTITION_ID,
+        [COLUMN.STATUS]: 'pending',
+      },
+    );
+    t.equal(change.semanticChanged, false,
+      `ordinary operation ${operationIndex} stays outside readiness`);
+    t.equal(
+      fixture.tracker.currentGlobalProjection,
+      stableGlobalProjection,
+      `ordinary operation ${operationIndex} does not rescan global rows`,
+    );
+  }
   t.end();
 });
 
@@ -288,6 +402,8 @@ test('priority topology is global while user capacity inputs stay with C',
     );
     t.equal(userOperation.semanticChanged, false,
       'ordinary operation semantics remain capacity-owner inputs');
+    const beforePriorityOperation =
+      fixture.tracker.currentGlobalProjection;
     const priorityOperation = fixture.apply(
       TABLES.REPLICA_OPERATIONS,
       CDC_OPERATION.INSERT,
@@ -299,6 +415,21 @@ test('priority topology is global while user capacity inputs stay with C',
     );
     t.equal(priorityOperation.globalChanged, true,
       'priority operation topology rotates global currency');
+    t.equal(
+      fixture.tracker.currentGlobalProjection.priorityServices,
+      beforePriorityOperation.priorityServices,
+      'operation changes retain the unrelated service projection slice',
+    );
+    t.equal(
+      fixture.tracker.currentGlobalProjection.priorityPartitions,
+      beforePriorityOperation.priorityPartitions,
+      'operation changes retain the unrelated partition projection slice',
+    );
+    t.same(
+      fixture.tracker.currentGlobalProjection,
+      buildDirectGlobalProjection(fixture.tracker.sourceRowsByTable),
+      'slice-local operation rebuilding is exact against a full projection',
+    );
 
     const userService = fixture.apply(TABLES.SERVICES, CDC_OPERATION.UPDATE, {
       [COLUMN.ADDRESS]: 'ws://node-b/user-service-v2',
@@ -317,6 +448,214 @@ test('priority topology is global while user capacity inputs stay with C',
     );
     t.equal(priorityService.globalChanged, true,
       'priority service detail rotates global currency');
+    t.end();
+  });
+
+test('priority service projection normalizes only selected rows once', (t) => {
+  let ordinaryNormalizerProbeReads = 0;
+  let priorityNormalizerProbeReads = 0;
+  const ordinaryService = serviceRow('user-service', NODE_B);
+  const priorityService = serviceRow(
+    'priority-service',
+    NODE_A,
+    PRIORITY_PARTITION_ID,
+  );
+  Object.defineProperty(ordinaryService, 'nodeId', {
+    enumerable: true,
+    get: () => {
+      ordinaryNormalizerProbeReads += 1;
+      return NODE_B;
+    },
+  });
+  Object.defineProperty(priorityService, 'nodeId', {
+    enumerable: true,
+    get: () => {
+      priorityNormalizerProbeReads += 1;
+      return NODE_A;
+    },
+  });
+  const sourceRowsByTable = new Map([
+    [TABLES.PARTITIONS, new Map([
+      [PRIORITY_PARTITION_ID, {
+        [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
+        [COLUMN.TABLE_ID]: TABLES.CONTROL_PLANE_PUBLICATIONS,
+      }],
+      [USER_PARTITION_ID, {
+        [COLUMN.PARTITION_ID]: USER_PARTITION_ID,
+        [COLUMN.TABLE_ID]: 'ratings',
+      }],
+    ])],
+    [TABLES.SERVICES, new Map([
+      ['priority-service', priorityService],
+      ['user-service', ordinaryService],
+    ])],
+  ]);
+
+  const projection = buildDirectGlobalProjection(sourceRowsByTable);
+
+  t.same(
+    projection.priorityServices.map((row) => row.serviceId),
+    ['priority-service'],
+    'only the service attached to a priority partition is projected',
+  );
+  t.equal(
+    ordinaryNormalizerProbeReads,
+    0,
+    'partition prefiltering does not normalize ordinary service payloads',
+  );
+  t.equal(
+    priorityNormalizerProbeReads,
+    1,
+    'a selected priority service is normalized exactly once',
+  );
+  t.end();
+});
+
+test('priority service changes rebuild only the changed semantic row', (t) => {
+  let normalizerProbeReads = 0;
+  const priorityPartition = {
+    [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
+    [COLUMN.TABLE_ID]: TABLES.CONTROL_PLANE_PUBLICATIONS,
+  };
+  const services = Array.from({length: 128}, (_unused, index) => {
+    const row = serviceRow(
+      `priority-service-${index}`,
+      NODE_A,
+      PRIORITY_PARTITION_ID,
+    );
+    Object.defineProperty(row, 'nodeId', {
+      enumerable: true,
+      get: () => {
+        normalizerProbeReads += 1;
+        return NODE_A;
+      },
+    });
+    return row;
+  });
+  const sourceRowsByTable = new Map([
+    [TABLES.PARTITIONS, new Map([
+      [PRIORITY_PARTITION_ID, priorityPartition],
+    ])],
+    [TABLES.SERVICES, new Map(services.map((row) => [
+      row[COLUMN.SERVICE_ID],
+      row,
+    ]))],
+  ]);
+  const previousProjection = buildDirectGlobalProjection(sourceRowsByTable);
+  const previousRecord = services[64];
+  const currentRecord = {
+    ...previousRecord,
+    [COLUMN.ADDRESS]: 'ws://node-a/priority-service-64-v2',
+  };
+  Object.defineProperty(currentRecord, 'nodeId', {
+    enumerable: true,
+    get: () => {
+      normalizerProbeReads += 1;
+      return NODE_A;
+    },
+  });
+  sourceRowsByTable.get(TABLES.SERVICES).set(
+    currentRecord[COLUMN.SERVICE_ID],
+    currentRecord,
+  );
+  normalizerProbeReads = 0;
+
+  const currentProjection = buildDirectGlobalProjection(
+    sourceRowsByTable,
+    previousProjection,
+    TABLES.SERVICES,
+    {currentRecord, previousRecord},
+  );
+
+  t.equal(
+    currentProjection.priorityServices.length,
+    previousProjection.priorityServices.length,
+    'the row-local rebuild preserves the complete priority service slice',
+  );
+  t.equal(
+    currentProjection.priorityServices.find((row) =>
+      row.serviceId === currentRecord[COLUMN.SERVICE_ID]).address,
+    currentRecord[COLUMN.ADDRESS],
+    'the changed priority service semantic row is current',
+  );
+  t.equal(
+    normalizerProbeReads,
+    1,
+    'only the changed priority service row is fully normalized',
+  );
+  t.same(
+    currentProjection,
+    buildDirectGlobalProjection(sourceRowsByTable),
+    'the row-local projection is exact against a full rebuild',
+  );
+  t.end();
+});
+
+test('direct projection does not materialize shadow rows one property at a time',
+  async (t) => {
+    const node = nodeRow(NODE_A);
+    const priorityPartition = {
+      [COLUMN.PARTITION_ID]: PRIORITY_PARTITION_ID,
+      [COLUMN.TABLE_ID]: TABLES.CONTROL_PLANE_PUBLICATIONS,
+    };
+    const services = Array.from({length: 128}, (_unused, index) =>
+      serviceRow(`priority-service-${index}`, NODE_A, PRIORITY_PARTITION_ID));
+    const sourceRows = new Set([node, priorityPartition, ...services]);
+    let sourceRowArrayDefinitions = 0;
+    const originalDefineProperty = Object.defineProperty;
+    const definePropertyDescriptor = Object.getOwnPropertyDescriptor(
+      Object,
+      'defineProperty',
+    );
+    originalDefineProperty(Object, 'defineProperty', {
+      ...definePropertyDescriptor,
+      value: (target, name, descriptor) => {
+        if (Array.isArray(target) && sourceRows.has(descriptor?.value)) {
+          sourceRowArrayDefinitions += 1;
+        }
+        return originalDefineProperty(target, name, descriptor);
+      },
+    });
+    let measuredBuildDirectGlobalProjection;
+    try {
+      const moduleUrl = new URL(
+        '../../src/control-plane/' +
+          'readiness-planning-table-impact-classification.js',
+        import.meta.url,
+      );
+      moduleUrl.searchParams.set('work-count', 'shadow-row-materialization');
+      ({buildDirectGlobalProjection: measuredBuildDirectGlobalProjection} =
+        await import(moduleUrl.href));
+    } finally {
+      originalDefineProperty(
+        Object,
+        'defineProperty',
+        definePropertyDescriptor,
+      );
+    }
+    const sourceRowsByTable = new Map([
+      [TABLES.NODES, new Map([[NODE_A, node]])],
+      [TABLES.NODE_ENDPOINTS, new Map()],
+      [TABLES.PARTITIONS, new Map([
+        [PRIORITY_PARTITION_ID, priorityPartition],
+      ])],
+      [TABLES.SERVICES, new Map(services.map((row) => [
+        row[COLUMN.SERVICE_ID],
+        row,
+      ]))],
+      [TABLES.REPLICA_OPERATIONS, new Map()],
+      [TABLES.CONTROL_PLANE_PUBLICATIONS, new Map()],
+    ]);
+
+    const projection = measuredBuildDirectGlobalProjection(sourceRowsByTable);
+
+    t.equal(projection.priorityServices.length, services.length,
+      'the real projection still consumes every priority service');
+    t.equal(
+      sourceRowArrayDefinitions,
+      0,
+      'shadow Map values are not copied through per-row array definitions',
+    );
     t.end();
   });
 
@@ -342,6 +681,7 @@ test('only the canonical membership publication winner rotates global currency',
     );
     t.equal(superseded.semanticChanged, false,
       'a superseded row does not rotate planning currency');
+    const beforeWinnerChange = fixture.tracker.currentGlobalProjection;
     const winner = fixture.apply(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
       CDC_OPERATION.UPDATE,
@@ -349,6 +689,21 @@ test('only the canonical membership publication winner rotates global currency',
     );
     t.equal(winner.globalChanged, true,
       'winner status/content changes rotate global currency');
+    t.equal(
+      fixture.tracker.currentGlobalProjection.nodeIds,
+      beforeWinnerChange.nodeIds,
+      'publication changes retain the unrelated membership-source slice',
+    );
+    t.equal(
+      fixture.tracker.currentGlobalProjection.priorityServices,
+      beforeWinnerChange.priorityServices,
+      'publication changes retain the unrelated priority-service slice',
+    );
+    t.same(
+      fixture.tracker.currentGlobalProjection,
+      buildDirectGlobalProjection(fixture.tracker.sourceRowsByTable),
+      'slice-local publication rebuilding is exact against a full projection',
+    );
     t.end();
   });
 

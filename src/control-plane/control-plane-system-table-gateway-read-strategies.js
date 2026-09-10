@@ -6,11 +6,14 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
+  INITIAL_PARTITION_IDS,
   canonicalizeSystemTableRow,
   buildAuthoritativeControlPlaneReadRequestOptions,
   normalizePhaseScope,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
+import {isValidLeaderReadAuthorityWitness} from
+  './control-plane-authoritative-read-witness.js';
 
 const COMPLETE_TABLE_READ_SQL_PATTERN =
   /^SELECT\s+\*\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*;?$/iu;
@@ -70,6 +73,23 @@ function isCompleteTableReadRequest(tableName, sql, params) {
     COMPLETE_TABLE_READ_SQL_PATTERN,
   );
   return match?.[1] === tableName;
+}
+
+function canMintAuthoritativeObservationReceipt(options) {
+  const partitionId = INITIAL_PARTITION_IDS[options.tableName] || null;
+  return options.result?.rowSetComplete === true &&
+    isCompleteTableReadRequest(
+      options.tableName,
+      options.sql,
+      options.params,
+    ) &&
+    options.causeId !== null &&
+    Number.isFinite(options.readStartedAtMs) &&
+    options.readStartedAtMs >= 0 &&
+    isValidLeaderReadAuthorityWitness(
+      options.result?.readAuthorityWitness,
+      partitionId,
+    );
 }
 
 const controlPlaneSystemTableGatewayReadStrategyMethods = {
@@ -189,11 +209,14 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       typeof options?.sessionId === 'string' && options.sessionId.length > 0 ?
         options.sessionId :
         null;
-    if (
-      result?.rowSetComplete !== true ||
-      !isCompleteTableReadRequest(tableName, sql, params) ||
-      causeId === null
-    ) {
+    if (!canMintAuthoritativeObservationReceipt({
+      result,
+      tableName,
+      sql,
+      params,
+      causeId,
+      readStartedAtMs: options?.authoritativeReadStartedAtMs,
+    })) {
       return {
         ...result,
         success: false,
@@ -208,7 +231,8 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     const authoritativeObservation = Object.freeze({
       scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
       tableName,
-      observedAtMs: Math.floor(this.now()),
+      observedAtMs: Math.floor(result.readAuthorityWitness.observedAtMs),
+      readStartedAtMs: Math.floor(options.authoritativeReadStartedAtMs),
       causeId,
       rowSetComplete: true,
     });
@@ -317,6 +341,11 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
    * @private
    */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
+    const authoritativeReadStartedAtMs = Math.floor(this.now());
+    const observationOptions = {
+      ...options,
+      authoritativeReadStartedAtMs,
+    };
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     const queryOptions = this.buildQueryOptions(options, {
       tableName,
@@ -364,7 +393,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
             sql,
             params,
             strategy,
-            options,
+            observationOptions,
           );
         }
       }
@@ -397,7 +426,7 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       sql,
       params,
       strategy,
-      options,
+      observationOptions,
     );
   },
 

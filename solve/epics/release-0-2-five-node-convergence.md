@@ -7,6 +7,7 @@ roadmapRow: RM-0.2-five-node-convergence
 graduatesTo: null
 quests:
   - managed-split-cutover-handoff-closure
+  - red-main-multi-join-formation-convergence
 authorizes: []
 ---
 

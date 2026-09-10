@@ -201,6 +201,113 @@ test('NodeService', async (t) => {
     t.ok(stats.platform.nodeVersion, 'should have Node version');
   });
 
+  t.test('samples host statistics only at the configured collection interval', async (t) => {
+    const nodeService = NodeService.getInstance();
+    let now = 1000;
+    let cpuSampleCount = 0;
+    const nodeStatsSource = {
+      cpus: () => {
+        cpuSampleCount++;
+        return [{
+          model: `test-cpu-${cpuSampleCount}`,
+          times: {user: 75, nice: 0, sys: 0, idle: 25, irq: 0},
+        }];
+      },
+      totalmem: () => 1000,
+      freemem: () => 250,
+      platform: () => 'test-platform',
+      arch: () => 'test-arch',
+      hostname: () => 'test-host',
+    };
+    nodeService.initialize({
+      now: () => now,
+      nodeStatsSource,
+    });
+
+    const first = await nodeService.getNodeStats();
+    now += nodeService.statsCollectionIntervalMs - 1;
+    const cached = await nodeService.getNodeStats();
+    now++;
+    const refreshed = await nodeService.getNodeStats();
+
+    t.equal(cpuSampleCount, 2, 'should collect host CPU statistics twice');
+    t.equal(cached, first, 'should reuse one snapshot inside the collection interval');
+    t.equal(first.timestamp, 1000, 'should timestamp the initial owner snapshot');
+    t.equal(first.cpu.model, 'test-cpu-1', 'should use the injected host source');
+    t.equal(refreshed.timestamp, now, 'should refresh exactly at the interval boundary');
+    t.equal(refreshed.cpu.model, 'test-cpu-2', 'should expose the refreshed host sample');
+  });
+
+  t.test('co-resident owners share one host statistics sample', async (t) => {
+    let now = 1000;
+    let cpuSampleCount = 0;
+    const sharedClock = () => now;
+    const sharedHostSource = {
+      cpus: () => {
+        cpuSampleCount++;
+        return [{
+          model: `shared-cpu-${cpuSampleCount}`,
+          times: {user: 75, nice: 0, sys: 0, idle: 25, irq: 0},
+        }];
+      },
+      totalmem: () => 1000,
+      freemem: () => 250,
+      platform: () => 'test-platform',
+      arch: () => 'test-arch',
+      hostname: () => 'test-host',
+    };
+    const firstOwner = new NodeService();
+    const secondOwner = new NodeService();
+    firstOwner.initialize({
+      nodeId: 'first-owner',
+      nodeAddress: 'node://first-owner',
+      nodeStatsSource: sharedHostSource,
+      now: sharedClock,
+    });
+    secondOwner.initialize({
+      nodeId: 'second-owner',
+      nodeAddress: 'node://second-owner',
+      nodeStatsSource: sharedHostSource,
+      now: sharedClock,
+    });
+
+    const first = await firstOwner.getNodeStats();
+    now++;
+    const second = await secondOwner.getNodeStats();
+
+    t.equal(cpuSampleCount, 1, 'should sample the shared host only once');
+    t.equal(first.nodeId, 'first-owner', 'should keep the first owner identity');
+    t.equal(second.nodeId, 'second-owner', 'should keep the second owner identity');
+    t.equal(first.timestamp, 1000, 'should keep the first owner timestamp');
+    t.equal(second.timestamp, 1001, 'should keep the second owner timestamp');
+    t.equal(second.cpu.model, first.cpu.model,
+      'should project the same shared host sample');
+
+    const alternateClockOwner = new NodeService();
+    alternateClockOwner.initialize({
+      nodeId: 'alternate-clock-owner',
+      nodeAddress: 'node://alternate-clock-owner',
+      nodeStatsSource: sharedHostSource,
+      now: () => now,
+    });
+    const alternateClockStats = await alternateClockOwner.getNodeStats();
+    t.equal(cpuSampleCount, 2,
+      'should not share samples across different clock identities');
+    t.equal(alternateClockStats.cpu.model, 'shared-cpu-2',
+      'should sample in the alternate clock domain');
+
+    now = 1000 + firstOwner.statsCollectionIntervalMs;
+    const refreshed = await firstOwner.getNodeStats();
+    t.equal(cpuSampleCount, 3,
+      'should resample at the configured collection boundary');
+    t.equal(refreshed.cpu.model, 'shared-cpu-3',
+      'should expose the refreshed shared host sample');
+
+    await firstOwner.shutdown();
+    await secondOwner.shutdown();
+    await alternateClockOwner.shutdown();
+  });
+
   t.test('get service health', async (t) => {
     const nodeService = NodeService.getInstance();
     nodeService.initialize();

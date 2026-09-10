@@ -12,6 +12,39 @@ const {
   resolveMembershipPublicationReadScope,
 } = SHARED;
 
+const resolvedNodePlanningAnswerContext = new WeakMap();
+
+function rememberResolvedNodePlanningAnswer(
+  owner,
+  nodeId,
+  observedAt,
+  membershipPublication,
+  answer,
+) {
+  if (answer && typeof answer === 'object') {
+    resolvedNodePlanningAnswerContext.set(answer, {
+      membershipPublication,
+      nodeId: nodeId || owner.nodeId,
+      observedAt,
+      owner,
+    });
+  }
+  return answer;
+}
+
+function isResolvedNodePlanningAnswerForContext(
+  owner,
+  provided,
+  context,
+  membershipPublication,
+) {
+  const resolvedContext = resolvedNodePlanningAnswerContext.get(provided);
+  return resolvedContext?.owner === owner &&
+    resolvedContext.nodeId === (context?.nodeId || owner.nodeId) &&
+    resolvedContext.observedAt === context?.observedAt &&
+    resolvedContext.membershipPublication === membershipPublication;
+}
+
 class ControlPlaneReadinessPublicationPlanningResolution extends
   ControlPlaneReadinessPublicationPlanningSnapshot {
   resolveMembershipPublicationPlanningSnapshot(context = {}) {
@@ -524,6 +557,14 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       return this.resolveMembershipPublicationPlanningSnapshot(context);
     }
     const membershipPublication = context?.membershipPublication ?? null;
+    if (isResolvedNodePlanningAnswerForContext(
+      this,
+      provided,
+      context,
+      membershipPublication,
+    )) {
+      return provided;
+    }
     const cached = memo.get(provided);
     if (
       cached !== undefined &&
@@ -575,25 +616,37 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       this.resolveMembershipPublicationPlanningSource(options) ===
       MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW
     ) {
-      return this.buildDirectMembershipPublicationPlanningAnswer(
+      return rememberResolvedNodePlanningAnswer(
+        this,
         nodeId,
         observedAt,
         membershipPublication,
+        this.buildDirectMembershipPublicationPlanningAnswer(
+          nodeId,
+          observedAt,
+          membershipPublication,
+        ),
       );
     }
     const planningSnapshot = await this.getMembershipPublicationPlanningSnapshotBestEffort(
       nodeId,
       observedAt,
     );
-    return this.resolvePriorityRecoveryPlanningAnswer(
+    return rememberResolvedNodePlanningAnswer(
+      this,
       nodeId,
       observedAt,
-      this.resolveMembershipPublicationPlanningSnapshot({
+      membershipPublication,
+      this.resolvePriorityRecoveryPlanningAnswer(
         nodeId,
         observedAt,
-        membershipPublication,
-        membershipPublicationPlanningSnapshot: planningSnapshot,
-      }),
+        this.resolveMembershipPublicationPlanningSnapshot({
+          nodeId,
+          observedAt,
+          membershipPublication,
+          membershipPublicationPlanningSnapshot: planningSnapshot,
+        }),
+      ),
     );
   }
 

@@ -128,8 +128,10 @@ const RATCHET_TARGETS = [
     // double clone moved into one shared rebalancer-integration-doubles helper.
     // 2026-09-06: tightened 800/30731 -> 795/30575 after the solve-v2 phase-2
     // cutover deleted test/solve (checker hint).
+    // 2026-09-09: tightened duplicated lines 30575 -> 30561 after the
+    // formation-convergence owner/test decomposition (checker hint).
     baselineCloneGroupCount: 795,
-    baselineDuplicatedLineCount: 30575,
+    baselineDuplicatedLineCount: 30561,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

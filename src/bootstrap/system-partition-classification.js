@@ -617,7 +617,6 @@ export {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   SYSTEM_PARTITION_CLASS,
   SYSTEM_PARTITION_CLASS_ROWS,
-  buildPartitionRowByPartitionId,
   classifySystemPartition,
   getPartitionRowFromCache,
   isBootstrapCriticalSystemPartitionId,

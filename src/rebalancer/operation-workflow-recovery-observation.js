@@ -273,6 +273,12 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
 
     const matchingRows =
       this.repository.filterReplicaOperationRowsFromCache((row) => {
+        if (!this.canObservedProgressOperationRowMatchService(
+          row,
+          targetNodeId,
+          replicaId,
+          partitionId,
+        )) return false;
         const operation = this.repository.rowToOperation(row);
         if (!this.isObservedProgressOperationShapeCandidate(operation)) {
           return false;
@@ -309,6 +315,33 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
           ),
       ),
     ];
+  }
+
+  canObservedProgressOperationRowMatchService(
+    row,
+    targetNodeId,
+    replicaId,
+    partitionId,
+  ) {
+    if (!row || typeof row !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
+      return false;
+    }
+    if (row.target_node_id === targetNodeId) {
+      return (replicaId.length > 0 && row.replica_id === replicaId) ||
+        (partitionId.length > 0 && row.partition_id === partitionId);
+    }
+    if (row.type !== OperationType.REPLACE ||
+        row.source_node_id !== targetNodeId ||
+        !OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS.has(
+          row.workflow_step,
+        )) {
+      return false;
+    }
+    // A REPLACE source replica lives in steps_history and is owned by the
+    // canonical decoder. Retain every source-node candidate when a concrete
+    // replica is observed; partition-only observations can prefilter exactly.
+    return replicaId.length > 0 ||
+      (partitionId.length > 0 && row.partition_id === partitionId);
   }
 
   isObservedProgressReplaceSourceMatch(

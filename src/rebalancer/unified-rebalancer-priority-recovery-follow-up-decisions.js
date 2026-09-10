@@ -14,6 +14,7 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
+  SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
@@ -443,6 +444,30 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
   buildPriorityRecoveryClosureWitnessFollowUpEvidence(
     planningSnapshot = null,
   ) {
+    // The frozen planning owner snapshot is immutable for its identity, while
+    // the global topology blocker view can change only with the versioned
+    // replica_operations ledger. Surrogate synthesis reads this evidence
+    // several times in one synchronous pass, so retain exactly one generation
+    // per rebalancer instead of repeating every decision census and ranking.
+    // Mutable caller-owned snapshots and unversioned caches stay on the
+    // uncached path.
+    const replicaOperationsVersion =
+      typeof this.systemTableCache?.getTableMutationVersion === 'function' ?
+        this.systemTableCache.getTableMutationVersion(
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        ) :
+        null;
+    const memoEligible =
+      Object.isFrozen(planningSnapshot) &&
+      replicaOperationsVersion !== null;
+    const memo = this.priorityRecoveryClosureWitnessFollowUpEvidenceMemo;
+    if (
+      memoEligible &&
+      memo?.planningSnapshot === planningSnapshot &&
+      memo.replicaOperationsVersion === replicaOperationsVersion
+    ) {
+      return memo.evidence;
+    }
     const closureWitness =
       planningSnapshot?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PRIORITY_RECOVERY_CLOSURE_WITNESS
@@ -519,7 +544,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       needsOperationRawCandidatePartitionIds.filter((partitionId) =>
         !topologyBlockingPartitionIds.has(partitionId),
       );
-    return Object.freeze({
+    const evidence = Object.freeze({
       followUpRequired:
         followUpRequired,
       needsOperationRequired: unresolvedSemanticStateIds.includes(
@@ -537,6 +562,14 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       hasUnblockedCandidate: candidatePartitionIds.length > 0,
       topologyBlockingPartitionIds,
     });
+    if (memoEligible) {
+      this.priorityRecoveryClosureWitnessFollowUpEvidenceMemo = {
+        planningSnapshot,
+        replicaOperationsVersion,
+        evidence,
+      };
+    }
+    return evidence;
   }
 
   normalizePriorityRecoveryClosureWitnessFollowUpSpreadGap(

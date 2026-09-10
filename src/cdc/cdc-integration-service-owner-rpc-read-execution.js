@@ -2,7 +2,8 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {resolveAuthoritativeReadModeContract} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {isValidLeaderReadAuthorityWitness} from
+  '../control-plane/control-plane-authoritative-read-witness.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 
@@ -33,23 +34,30 @@ const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
 ]);
 const AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER = false;
-const AUTHORITATIVE_LEADER_WITNESS_STATE = 'observed';
 const AUTHORITATIVE_LEADER_WITNESS_FAILURE =
   'authoritative_owner_leader_witness_required';
+
+function normalizeAuthoritativeQueryRowSet(queryResult) {
+  const result = queryResult || {
+    success: false,
+    error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
+    rows: [],
+  };
+  const rowsValid = Array.isArray(result.rows);
+  return {
+    ...result,
+    success: result.success === true && !rowsValid ? false : result.success,
+    error: result.success === true && !rowsValid ?
+      CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED :
+      result.error,
+    rows: rowsValid ? result.rows : [],
+    rowCount: rowsValid ? result.rows.length : 0,
+  };
+}
 
 function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
   return queryResult?.success === true &&
     readAuthority?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
-}
-
-function isValidLeaderReadAuthorityWitness(witness, partitionId) {
-  return witness?.state === AUTHORITATIVE_LEADER_WITNESS_STATE &&
-    witness?.partitionId === partitionId &&
-    witness?.role === RAFT_ROLE.LEADER &&
-    typeof witness?.servingNodeId === 'string' &&
-    witness.servingNodeId.length > 0 &&
-    typeof witness?.servingReplicaId === 'string' &&
-    witness.servingReplicaId.length > 0;
 }
 
 function enforceRequiredLeaderReadAuthority(
@@ -208,15 +216,7 @@ async function executeAuthoritativeSqlFallbackRead(
   );
 
   return {
-    ...(queryResult || {
-      success: false,
-      error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
-      rows: [],
-    }),
-    rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
-    rowCount: Array.isArray(queryResult?.rows) ?
-      queryResult.rows.length :
-      0,
+    ...normalizeAuthoritativeQueryRowSet(queryResult),
     source: AUTHORITATIVE_SQL_FALLBACK_SOURCE,
     usedSqlFallback: true,
     localReadHit: false,
@@ -323,15 +323,7 @@ function buildOwnerRpcReadResult({
   queryResult,
 }) {
   return {
-    ...(queryResult || {
-      success: false,
-      error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
-      rows: [],
-    }),
-    rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
-    rowCount: Array.isArray(queryResult?.rows) ?
-      queryResult.rows.length :
-      0,
+    ...normalizeAuthoritativeQueryRowSet(queryResult),
     source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
     localReadHit: false,
     localReplicaFallbackHit: false,

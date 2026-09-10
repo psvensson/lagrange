@@ -77,17 +77,15 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
           CDC_ERROR_MSG.DELETE_FAILED,
         );
       }
-      let visibilityResult = buildSystemTableVisibilityResult();
-      if (
-        typeof result.affectedRows !== 'number' ||
-        result.affectedRows > 0
-      ) {
-        visibilityResult = normalizeSystemTableVisibilityResult(
-          await context.waitForCacheUpdate(tableName, id, false, {
-            allowPendingVisibility: options?.allowPendingVisibility === true,
-          }),
-        );
-      }
+      // A zero-row DELETE is an idempotent durable success, not proof that this
+      // node's cache already observed the earlier deletion. Reassert the same
+      // absence postcondition for every successful DELETE so a lost CDC event
+      // cannot leave a stale row indefinitely.
+      const visibilityResult = normalizeSystemTableVisibilityResult(
+        await context.waitForCacheUpdate(tableName, id, false, {
+          allowPendingVisibility: options?.allowPendingVisibility === true,
+        }),
+      );
       context.stats.deletes++;
       context.logger.debug(CDC_LOG_MSG.DELETED_ROW, {
         tableName,

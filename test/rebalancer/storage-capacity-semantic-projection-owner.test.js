@@ -118,6 +118,30 @@ test('a live operation owns post-expiry capacity until it becomes terminal',
       'no false expiry timer is armed for live work');
 
     fixture.timeSource.advance(5);
+    let projectionBuilds = 0;
+    const build = fixture.service.buildCapacitySemanticProjection;
+    fixture.service.buildCapacitySemanticProjection = function(...args) {
+      projectionBuilds += 1;
+      return build.apply(this, args);
+    };
+    fixture.operation[COLUMN.STATUS] = 'pending';
+    fixture.operation.workflow_step = 'sending';
+    fixture.service.recordCapacitySourceChange(
+      TABLES.REPLICA_OPERATIONS,
+      CDC_OPERATION.UPDATE,
+      fixture.operation,
+      fixture.timeSource.now(),
+    );
+
+    const afterLiveProgress = fixture.service.getCapacitySemanticIdentity(
+      NODE_A,
+      fixture.timeSource.now(),
+    );
+    t.equal(projectionBuilds, 0,
+      'nonterminal workflow progress does not rebuild capacity semantics');
+    t.equal(afterLiveProgress.projection, before.projection,
+      'nonterminal workflow progress retains capacity projection identity');
+
     fixture.operation[COLUMN.STATUS] = 'active';
     fixture.operation.workflow_step = 'active';
     fixture.service.recordCapacitySourceChange(
@@ -133,6 +157,8 @@ test('a live operation owns post-expiry capacity until it becomes terminal',
     );
     t.equal(after.projection.capacity.reservedBytes, 0,
       'the terminal operation releases the already-expired reservation');
+    t.equal(projectionBuilds, 1,
+      'the live-to-terminal transition reprojects capacity exactly once');
     t.equal(after.generation, before.generation + 1,
       'the authoritative operation change advances capacity semantics once');
     fixture.service.shutdownCapacitySemanticProjection();
@@ -347,6 +373,101 @@ test('co-due expiry delivery is reentrant-safe and progresses before observer ' 
   fixture.service.shutdownCapacitySemanticProjection();
   t.end();
 });
+
+test('partition attribution avoids per-row property definitions while copying',
+  async (t) => {
+    const partition = {
+      [COLUMN.PARTITION_ID]: 'ratings:p1',
+      [COLUMN.TABLE_ID]: 'ratings',
+    };
+    const services = Array.from({length: 128}, (_unused, index) => ({
+      [COLUMN.NODE_ID]: NODE_A,
+      [COLUMN.PARTITION_ID]: 'ratings:p1',
+      [COLUMN.SERVICE_ID]: `ratings-service-${index}`,
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.STATUS]: 'active',
+    }));
+    const rowsByTable = new Map([
+      [TABLES.NODES, [{
+        [COLUMN.NODE_ID]: NODE_A,
+        [COLUMN.STORAGE_BUDGET_BYTES]: 1_000,
+      }]],
+      [TABLES.PARTITIONS, [partition]],
+      [TABLES.SERVICES, services],
+      [TABLES.STORAGE_RESERVATIONS, []],
+      [TABLES.REPLICA_OPERATIONS, []],
+    ]);
+    let rowArrayDefinitions = 0;
+    const originalDefineProperty = Object.defineProperty;
+    const definePropertyDescriptor = Object.getOwnPropertyDescriptor(
+      Object,
+      'defineProperty',
+    );
+    originalDefineProperty(Object, 'defineProperty', {
+      ...definePropertyDescriptor,
+      value: (target, name, descriptor) => {
+        if (Array.isArray(target)) rowArrayDefinitions += 1;
+        return originalDefineProperty(target, name, descriptor);
+      },
+    });
+    let MeasuredOwner;
+    try {
+      const moduleUrl = new URL(
+        '../../src/rebalancer/' +
+          'storage-capacity-semantic-projection-owner.js',
+        import.meta.url,
+      );
+      moduleUrl.searchParams.set('work-count', 'shadow-row-materialization');
+      ({StorageCapacitySemanticProjectionOwner: MeasuredOwner} =
+        await import(moduleUrl.href));
+    } finally {
+      originalDefineProperty(
+        Object,
+        'defineProperty',
+        definePropertyDescriptor,
+      );
+    }
+    const timeSource = new VirtualTimeSource({startMs: NOW_MS});
+    const owner = new MeasuredOwner({
+      service: {
+        buildCapacitySemanticProjection(nodeId) {
+          return Object.freeze({
+            capacity: Object.freeze({
+              availableBytes: 1_000,
+              budgetBytes: 1_000,
+              nodeId,
+              pressureState: 'normal',
+              reservedBytes: 0,
+              usedBytes: 0,
+              utilizationPercent: 0,
+            }),
+            nextSemanticChangeAtMs: null,
+          });
+        },
+        getSystemTableRowsSync(tableName) {
+          return rowsByTable.get(tableName) || [];
+        },
+      },
+      timeSource,
+    });
+    owner.getIdentity(NODE_A, NOW_MS);
+    rowArrayDefinitions = 0;
+
+    owner.recordSourceChange(
+      TABLES.PARTITIONS,
+      CDC_OPERATION.UPDATE,
+      {...partition, state: 'active'},
+      NOW_MS,
+    );
+
+    t.equal(
+      rowArrayDefinitions,
+      0,
+      'the real partition join uses native safe materialization for shadow rows',
+    );
+    owner.shutdown();
+    t.end();
+  });
 
 test('stale and synchronously-fired timer callbacks cannot double-transition',
   (t) => {

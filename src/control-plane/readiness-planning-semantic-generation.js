@@ -7,6 +7,7 @@ import {
 } from '../utils/strict-own-data.js';
 import {
   buildDirectGlobalProjection,
+  canReuseDirectGlobalProjection,
   classifyShadowTableImpact,
   classifyTableImpact,
   copySourceRowsSnapshot,
@@ -357,9 +358,19 @@ class ReadinessPlanningSemanticGenerationTracker {
     }
     const currentRecord = operation === CDC_OPERATION.DELETE ?
       null : mapGet(byKey, key);
-    const currentGlobalProjection = buildDirectGlobalProjection(
+    const currentGlobalProjection = canReuseDirectGlobalProjection(
+      tableName,
+      operation,
+      previousRecord,
+      currentRecord,
       this.sourceRowsByTable,
-    );
+      previousGlobalProjection,
+    ) ? previousGlobalProjection : buildDirectGlobalProjection(
+        this.sourceRowsByTable,
+        previousGlobalProjection,
+        tableName,
+        {currentRecord, previousRecord},
+      );
     this.currentGlobalProjection = currentGlobalProjection;
     return classifyShadowTableImpact(
       tableName,

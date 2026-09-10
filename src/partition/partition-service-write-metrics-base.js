@@ -5,6 +5,8 @@ import {
 } from './partition-service-raft-write-commit.js';
 import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
+import {preparePartitionReadStatement} from
+  './partition-read-statement-owner.js';
 
 
 const {
@@ -52,8 +54,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       ),
     });
     try {
-      const stmt = this.db.prepare(sql);
       const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
+      const stmt = isSelect ?
+        preparePartitionReadStatement(this.db, sql) :
+        this.db.prepare(sql);
       if (isSelect) {
         const sqliteStartMs = Date.now();
         const rows = collectBoundedSqliteRows(stmt, params, {
@@ -138,8 +142,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       bootstrap: true,
     });
     try {
-      const stmt = this.db.prepare(sql);
       const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
+      const stmt = isSelect ?
+        preparePartitionReadStatement(this.db, sql) :
+        this.db.prepare(sql);
       if (isSelect) {
         const rows = stmt.all(...params);
         return {

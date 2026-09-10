@@ -463,14 +463,13 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     }
     const ledgerSurplusDrainPlanningCapability =
       buildLedgerSurplusDrainPlanningCapability(ledgerConcentration);
-    if (!ledgerSurplusDrainPlanningCapability) {
-      return null;
-    }
     return Object.freeze({
       operationCreationRequired: true,
       operationCreationPartitionId: partitionId,
       operationCreationScope:
         PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
+      ledgerConcentrationOverTarget:
+        ledgerConcentration.overTarget === true,
       ledgerSurplusDrainPlanningCapability,
     });
   },

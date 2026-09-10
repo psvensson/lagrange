@@ -67,16 +67,6 @@ import {
 // ============================================================================
 
 test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) => {
-  t.teardown(() => {
-    if (process.env.TAP === '1') {
-      setTimeout(() => {
-        if (!process.exitCode || process.exitCode === 0) {
-          process.exit(0);
-        }
-      }, 1000);
-    }
-  });
-
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -136,6 +126,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   await t.test('rebalancer sees stale membership during CDC propagation', async (t) => {
     const leaderCache = new SystemTableCache();
     const rebalancerCache = new SystemTableCache();
+    let rebalancer = null;
 
     const cdcService = createRealisticCDCService(
       leaderCache,
@@ -154,7 +145,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       );
 
       // Create rebalancer using the follower cache
-      const rebalancer = new UnifiedRebalancer({
+      rebalancer = new UnifiedRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         systemTableCache: rebalancerCache,
@@ -188,9 +179,8 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const availableNodesAfter = rebalancer.getAvailableNodes();
       t.equal(availableNodesAfter.length, 2,
         'rebalancer should see updated membership (2 nodes)');
-
-      rebalancer.shutdown();
     } finally {
+      rebalancer?.shutdown();
       cdcService.cleanup();
     }
   });
@@ -549,6 +539,8 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       wsPort: seedWsPort,
       config: TEST_CONFIG.bootstrap,
     });
+    let rebalancer1 = null;
+    let rebalancer2 = null;
 
     try {
       // Bootstrap seed node
@@ -575,7 +567,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       );
 
       // Create two rebalancers simulating partition leaders on different nodes
-      const rebalancer1 = new UnifiedRebalancer({
+      rebalancer1 = new UnifiedRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         systemTableCache,
@@ -587,7 +579,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         nodeId: seedNodeId,
       });
 
-      const rebalancer2 = new UnifiedRebalancer({
+      rebalancer2 = new UnifiedRebalancer({
         entityId: 'partition-2',
         entityType: EntityType.PARTITION,
         systemTableCache,
@@ -631,10 +623,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       // Both may generate moves targeting the same nodes
       const allMoves = [...result1.moves, ...result2.moves];
       t.ok(Array.isArray(allMoves), 'should have moves array');
-
-      rebalancer1.shutdown();
-      rebalancer2.shutdown();
     } finally {
+      rebalancer1?.shutdown();
+      rebalancer2?.shutdown();
       await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }

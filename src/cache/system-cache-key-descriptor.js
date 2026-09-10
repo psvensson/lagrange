@@ -81,10 +81,21 @@ function getSystemCachePrimaryKeyFieldOrFallback(
   return keyField || fallback;
 }
 
+function resolveSystemCacheRowKey(tableName, row) {
+  const keyField = getSystemCachePrimaryKeyField(tableName);
+  return row?.[keyField] || row?.[SYSTEM_CACHE_KEY_FALLBACK];
+}
+
+function isUsableSystemCacheKey(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 export {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG,
   SYSTEM_CACHE_KEY_FALLBACK,
   getSystemCachePrimaryKeyField,
   getSystemCachePrimaryKeyFieldOrFallback,
+  isUsableSystemCacheKey,
+  resolveSystemCacheRowKey,
 };

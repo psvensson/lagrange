@@ -22,13 +22,16 @@ import {
   buildAuthoritativeServiceLifecycleCacheReplacement,
   buildAuthoritativeSystemTableCacheReplacement,
 } from './system-table-cache-authoritative-reconciliation.js';
+import {reconcileSystemTableCacheAgainstAuthoritativeTruth} from
+  './system-table-cache-authoritative-absence-sweep.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   getSystemCachePrimaryKeyField,
+  isUsableSystemCacheKey,
+  resolveSystemCacheRowKey,
 } from './system-cache-key-descriptor.js';
 import {
   applyStaleRowBackfill,
-  getRecordHlc,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordTimestamp,
@@ -38,6 +41,8 @@ import {
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
+import {SystemTableCacheTombstoneStore} from
+  './system-table-cache-tombstone-store.js';
 import {
   assignSystemTableCacheObservationMethods,
   getSharedRowReadStats,
@@ -53,21 +58,6 @@ import {
 const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
 
 /**
- * How long a DELETE tombstone is retained before it is GC'd. The bound must
- * outlast any in-flight reorder/catch-up window so a late causally-older write is
- * still fenced, while keeping tombstone memory bounded. The anti-entropy sweep is
- * the durable backstop once a tombstone expires.
- */
-const TOMBSTONE_TTL_MS = 30000;
-
-/**
- * Hard cap on retained tombstones per table. Bounds memory for tables whose keys
- * are deleted and never re-written (so the TTL, which is only enforced on access,
- * cannot leak unboundedly): when exceeded, the oldest tombstones are evicted.
- */
-const TOMBSTONE_MAX_PER_TABLE = 1024;
-
-/**
  * Primary key field names for each system table.
  */
 const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
@@ -76,6 +66,79 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
  * CDC operation types.
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
+
+function isAuthoritativeUpsertMode(mutationMode) {
+  return mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
+    mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_OBSERVATION_RECONCILIATION ||
+    mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION;
+}
+
+function mutationOperationCompatible(mutationMode, operation) {
+  const absenceMode = mutationMode ===
+    SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION;
+  return (!isAuthoritativeUpsertMode(mutationMode) ||
+      operation === CDC_OPERATIONS.UPSERT) &&
+    (!absenceMode || operation === CDC_OPERATIONS.DELETE);
+}
+
+function mutationTableCompatible(mutationMode, tableName) {
+  return mutationMode !==
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION ||
+    tableName === TABLES.SERVICES;
+}
+
+function mutationObservationCompatible(
+  mutationMode,
+  options,
+  currentObservedAtMs,
+) {
+  const completeObservationMode = mutationMode ===
+    SYSTEM_TABLE_CACHE_MUTATION_MODE
+      .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
+  if (!completeObservationMode) {
+    return true;
+  }
+  const observedAtMs = Number(options?.authoritativeObservedAtMs);
+  const readStartedAtMs = Number(options?.authoritativeReadStartedAtMs);
+  return Number.isFinite(observedAtMs) &&
+    observedAtMs >= 0 &&
+    Number.isFinite(readStartedAtMs) &&
+    readStartedAtMs >= 0 &&
+    (
+      !Number.isFinite(currentObservedAtMs) ||
+      Math.floor(observedAtMs) > currentObservedAtMs
+    );
+}
+
+function cacheWriteIsFenced(options) {
+  if (options.operation === CDC_OPERATIONS.DELETE) {
+    return false;
+  }
+  if (options.completeAuthoritativePresence) {
+    return options.cache.tombstoneStore.completeObservationWriteIsFenced(
+      options.tableName,
+      options.key,
+      Math.floor(Number(options.authoritativeObservedAtMs)),
+      Math.floor(Number(options.authoritativeReadStartedAtMs)),
+    );
+  }
+  return options.cache.tombstoneStore.writeIsFenced(
+    options.tableName,
+    options.key,
+    options.data,
+    {
+      keyPresent: options.table.has(options.key),
+      authoritativeObservedAtMs:
+        options.cache.getLastAuthoritativeObservedAtMs(options.tableName),
+    },
+  );
+}
 
 /**
  * SystemTableCache provides in-memory caching for system tables.
@@ -88,10 +151,6 @@ class SystemTableCache {
    */
   constructor() {
     this.tables = new Map();
-    // DELETE tombstones: tableName -> Map(key -> {hlc, updatedAt, deletedAtMs}).
-    // A tombstone fences a later-delivered, causally-older write from resurrecting
-    // a deleted row (the reorder case), and is GC'd after a durable-aware bound.
-    this.tombstones = new Map();
     this.appliedSchemaVersions = new Map();
     this.lastAppliedAtMsByTableName = new Map();
     this.lastAppliedCauseIdByTableName = new Map();
@@ -103,6 +162,10 @@ class SystemTableCache {
     // change since capture" exactly, so multi-table snapshot reuse never has
     // to infer table freshness from another table's watermark.
     this.mutationVersionByTableName = new Map();
+    // The last shared table generation applied to each key. Entries deliberately
+    // survive row deletion so an authoritative read can fence equal-value
+    // same-key mutations without being blocked by unrelated table traffic.
+    this.mutationVersionByTableKey = new Map();
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
@@ -114,127 +177,16 @@ class SystemTableCache {
     // Initialize empty maps for each system table
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
-      this.tombstones.set(tableName, new Map());
       this.lastCdcObservationByTableName.set(tableName, new Map());
+      this.mutationVersionByTableKey.set(tableName, new Map());
     }
-  }
-
-  /**
-   * Read the version stamps used for tombstone fencing from a record/tombstone.
-   * @param {Object} source - Record or tombstone carrying version stamps.
-   * @return {{hlc: Object|null, updatedAt: number}}
-   */
-  versionStampsOf(source) {
-    return {
-      hlc: getRecordHlc(source),
-      updatedAt: getRecordTimestamp(source),
-    };
-  }
-
-  /**
-   * Whether an incoming write is causally NEWER than a tombstone (a genuine
-   * re-create after delete) rather than a late, causally-older resurrecting write.
-   * Prefers the origin HLC; falls back to wall-clock `updated_at`; when neither is
-   * comparable it does NOT fence (avoids blocking writes that carry no version).
-   * @param {Object} data - Incoming write record.
-   * @param {Object} tombstone - Stored tombstone.
-   * @return {boolean} True when the write supersedes the tombstone.
-   */
-  writeSupersedesTombstone(data, tombstone) {
-    const incoming = this.versionStampsOf(data);
-    if (incoming.hlc && tombstone.hlc) {
-      return incoming.hlc.compare(tombstone.hlc) > 0;
-    }
-    if (Number.isFinite(incoming.updatedAt) &&
-        Number.isFinite(tombstone.updatedAt)) {
-      // Without an HLC, wall-clock cannot distinguish an equal-millisecond
-      // re-create from the deleted state, so fence ONLY a strictly-older write.
-      // Equal-or-newer supersedes — avoids wrongly fencing a legitimate recreate.
-      return incoming.updatedAt >= tombstone.updatedAt;
-    }
-    return true;
-  }
-
-  /**
-   * Drop a tombstone once it has outlived the retention bound.
-   * @param {Map} tombstoneTable - Per-table tombstone map.
-   * @param {string} key - Row key.
-   * @param {Object} tombstone - Stored tombstone.
-   * @param {number} nowMs - Current epoch ms.
-   * @return {boolean} True when the tombstone was expired and removed.
-   */
-  evictExpiredTombstone(tombstoneTable, key, tombstone, nowMs) {
-    if (nowMs - tombstone.deletedAtMs > TOMBSTONE_TTL_MS) {
-      tombstoneTable.delete(key);
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Record a DELETE tombstone for a key, keeping the causally-latest delete.
-   * @param {string} tableName - System table name.
-   * @param {string} key - Row key.
-   * @param {Object} data - DELETE record carrying the delete's version stamps.
-   */
-  recordTombstone(tableName, key, data) {
-    const tombstoneTable = this.tombstones.get(tableName);
-    if (!tombstoneTable) {
-      return;
-    }
-    const incoming = this.versionStampsOf(data);
-    const existing = tombstoneTable.get(key);
-    if (existing && !this.writeSupersedesTombstone(data, existing)) {
-      return;
-    }
-    tombstoneTable.set(key, {
-      hlc: incoming.hlc,
-      updatedAt: incoming.updatedAt,
-      deletedAtMs: Date.now(),
+    this.tombstoneStore = new SystemTableCacheTombstoneStore(SYSTEM_TABLES, {
+      onEvict: (tableName, key) => {
+        if (!this.tables.get(tableName).has(key)) {
+          this.mutationVersionByTableKey.get(tableName).delete(key);
+        }
+      },
     });
-    this.pruneTombstones(tombstoneTable);
-  }
-
-  /**
-   * Bound a per-table tombstone map: drop expired entries, then evict the oldest
-   * (by delete time) until the map is within the hard cap. Insertion order in a
-   * Map is chronological, so the first keys are the oldest.
-   * @param {Map} tombstoneTable - Per-table tombstone map.
-   */
-  pruneTombstones(tombstoneTable) {
-    const nowMs = Date.now();
-    for (const [key, tombstone] of tombstoneTable) {
-      this.evictExpiredTombstone(tombstoneTable, key, tombstone, nowMs);
-    }
-    while (tombstoneTable.size > TOMBSTONE_MAX_PER_TABLE) {
-      const oldestKey = tombstoneTable.keys().next().value;
-      tombstoneTable.delete(oldestKey);
-    }
-  }
-
-  /**
-   * Decide whether a write to `key` is fenced by an active DELETE tombstone. A
-   * superseding (causally-newer) write clears the tombstone and proceeds; an
-   * older/concurrent write is rejected so a reordered DELETE cannot be undone.
-   * @param {string} tableName - System table name.
-   * @param {string} key - Row key.
-   * @param {Object} data - Incoming write record.
-   * @return {boolean} True when the write must be rejected.
-   */
-  writeIsFencedByTombstone(tableName, key, data) {
-    const tombstoneTable = this.tombstones.get(tableName);
-    const tombstone = tombstoneTable?.get(key);
-    if (!tombstone) {
-      return false;
-    }
-    if (this.evictExpiredTombstone(tombstoneTable, key, tombstone, Date.now())) {
-      return false;
-    }
-    if (this.writeSupersedesTombstone(data, tombstone)) {
-      tombstoneTable.delete(key);
-      return false;
-    }
-    return true;
   }
 
   /**
@@ -260,60 +212,11 @@ class SystemTableCache {
    * @return {{removed: Array<{tableName: string, key: string}>}}
    */
   reconcileAgainstAuthoritativeTruth(truthSnapshot = {}, options = {}) {
-    const evictOlderThanMs = Number.isFinite(options.evictOlderThanMs) ?
-      options.evictOlderThanMs : null;
-    const removed = [];
-    for (const [tableName, authoritativeRows] of Object.entries(truthSnapshot)) {
-      if (!this.tables.has(tableName)) {
-        continue;
-      }
-      // A non-array value is NOT a valid "complete authoritative set" — treating it
-      // as empty would wipe the whole table. Skip it (leave the cache untouched).
-      if (!Array.isArray(authoritativeRows)) {
-        continue;
-      }
-      const table = this.tables.get(tableName);
-      const pkField = getSystemCachePrimaryKeyField(tableName);
-      const authoritativeKeys = new Set(
-        authoritativeRows
-          // Derive keys exactly as applySystemTableChange does (`||` fallback) so
-          // they align with how rows are stored; a mismatch would evict live rows.
-          .map((row) => row?.[pkField] || row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK])
-          .filter((key) => typeof key !== 'undefined'),
-      );
-      for (const key of [...table.keys()]) {
-        if (authoritativeKeys.has(key)) {
-          continue;
-        }
-        const evicted = table.get(key);
-        if (evictOlderThanMs !== null) {
-          const rowTimestamp = getRecordTimestamp(evicted);
-          if (Number.isFinite(rowTimestamp) && rowTimestamp >= evictOlderThanMs) {
-            continue;
-          }
-        }
-        table.delete(key);
-        this.lastCdcObservationByTableName.get(tableName).delete(key);
-        removed.push({tableName, key});
-        this.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {
-          tableName,
-          key,
-        });
-        this.lastAppliedAtMsByTableName.set(tableName, Date.now());
-        const tableMutationRevision =
-          this.bumpTableMutationVersion(tableName);
-        this.notifyListeners(
-          tableName,
-          CDC_OPERATIONS.DELETE,
-          this.deepClone(evicted),
-          Object.freeze({
-            causeId: normalizeCauseId(null),
-            tableMutationRevision,
-          }),
-        );
-      }
-    }
-    return {removed};
+    return reconcileSystemTableCacheAgainstAuthoritativeTruth(
+      this,
+      truthSnapshot,
+      options,
+    );
   }
 
   /**
@@ -333,25 +236,41 @@ class SystemTableCache {
     const causeId = normalizeCauseId(options?.causeId);
     const mutationMode = options?.mutationMode ||
       SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
-    this.validateMutationMode(mutationMode, operation, tableName);
+    this.validateMutationMode(mutationMode, operation, tableName, options);
 
     // Get the primary key field for this table
     const pkField = getSystemCachePrimaryKeyField(tableName);
-    const key = data[pkField] || data[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
+    const key = resolveSystemCacheRowKey(tableName, data);
 
     if (!data || typeof key === 'undefined') {
       throw new Error(CACHE_ERROR_MSG.primaryKeyMissing(pkField));
     }
+    this.validateMutationKey(mutationMode, operation, key);
 
     const table = this.tables.get(tableName);
+    const authoritativeAbsence = mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_ABSENCE_RECONCILIATION;
+    const completeAuthoritativePresence = mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
     let recordForNotification = null;
     let incomingVersionAccepted = false;
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
     // a reordered, causally-older resurrection — reject it. A causally-newer write
     // clears the tombstone inside the check and proceeds (legitimate re-create).
-    if (operation !== CDC_OPERATIONS.DELETE &&
-        this.writeIsFencedByTombstone(tableName, key, data)) {
+    if (cacheWriteIsFenced({
+      cache: this,
+      table,
+      tableName,
+      operation,
+      key,
+      data,
+      completeAuthoritativePresence,
+      authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+      authoritativeReadStartedAtMs:
+        options?.authoritativeReadStartedAtMs,
+    })) {
       this.logger.debug(CACHE_LOG_MSG.WRITE_FENCED_BY_TOMBSTONE, {
         tableName,
         key,
@@ -474,7 +393,10 @@ class SystemTableCache {
           break;
         } else if (
           mutationMode ===
-          SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION
+            SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
+          mutationMode ===
+            SYSTEM_TABLE_CACHE_MUTATION_MODE
+              .AUTHORITATIVE_OBSERVATION_RECONCILIATION
         ) {
           table.set(
             key,
@@ -492,7 +414,15 @@ class SystemTableCache {
       if (!table.has(key)) {
         // Reorder case: the DELETE arrived before its INSERT. Leave a tombstone so
         // the late INSERT cannot resurrect the row.
-        this.recordTombstone(tableName, key, data);
+        this.tombstoneStore.record(
+          tableName,
+          key,
+          data,
+          {
+            authoritativeAbsence,
+            authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+          },
+        );
         this.logger.debug(CACHE_LOG_MSG.DELETE_ON_MISSING_KEY_IGNORED, {
           tableName,
           key,
@@ -513,7 +443,15 @@ class SystemTableCache {
         }
         recordForNotification = existing;
         table.delete(key);
-        this.recordTombstone(tableName, key, data);
+        this.tombstoneStore.record(
+          tableName,
+          key,
+          data,
+          {
+            authoritativeAbsence,
+            authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+          },
+        );
         incomingVersionAccepted = true;
       }
       break;
@@ -541,7 +479,7 @@ class SystemTableCache {
       });
       this.lastAppliedAtMsByTableName.set(tableName, Date.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
-      const tableMutationRevision = this.bumpTableMutationVersion(tableName);
+      const tableMutationRevision = this.recordTableMutation(tableName, key);
       this.notifyListeners(
         tableName,
         operation,
@@ -558,8 +496,8 @@ class SystemTableCache {
   clear() {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.get(tableName).clear();
-      this.tombstones.get(tableName).clear();
     }
+    this.tombstoneStore.clear();
     this.appliedSchemaVersions.clear();
     this.lastAppliedAtMsByTableName.clear();
     this.lastAppliedCauseIdByTableName.clear();
@@ -567,6 +505,7 @@ class SystemTableCache {
     this.lastAuthoritativeObservedCauseIdByTableName.clear();
     for (const tableName of SYSTEM_TABLES) {
       this.lastCdcObservationByTableName.get(tableName).clear();
+      this.mutationVersionByTableKey.get(tableName).clear();
     }
     this.mutationVersionByTableName.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
@@ -618,25 +557,28 @@ class SystemTableCache {
    * @throws {Error} If the mode is unknown or incompatible with the operation.
    * @private
    */
-  validateMutationMode(mutationMode, operation, tableName) {
+  validateMutationMode(mutationMode, operation, tableName, options = {}) {
     const modeKnown = Object.values(
       SYSTEM_TABLE_CACHE_MUTATION_MODE,
     ).includes(mutationMode);
-    const authoritativeMode =
-      mutationMode ===
-        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
-      mutationMode ===
-        SYSTEM_TABLE_CACHE_MUTATION_MODE
-          .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION;
-    const operationCompatible =
-      !authoritativeMode ||
-      operation === CDC_OPERATIONS.UPSERT;
-    const tableCompatible =
-      mutationMode !==
-        SYSTEM_TABLE_CACHE_MUTATION_MODE
-          .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION ||
-      tableName === TABLES.SERVICES;
-    if (!modeKnown || !operationCompatible || !tableCompatible) {
+    if (!modeKnown || !mutationOperationCompatible(mutationMode, operation) ||
+        !mutationTableCompatible(mutationMode, tableName) ||
+        !mutationObservationCompatible(
+          mutationMode,
+          options,
+          this.getLastAuthoritativeObservedAtMs(tableName),
+        )) {
+      throw new Error(
+        CACHE_ERROR_MSG.invalidMutationMode(mutationMode, operation),
+      );
+    }
+  }
+
+  validateMutationKey(mutationMode, operation, key) {
+    const completeObservationMode = mutationMode ===
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_OBSERVATION_RECONCILIATION;
+    if (completeObservationMode && !isUsableSystemCacheKey(key)) {
       throw new Error(
         CACHE_ERROR_MSG.invalidMutationMode(mutationMode, operation),
       );

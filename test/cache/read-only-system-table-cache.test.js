@@ -124,6 +124,16 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     '42',
     'should forward getAppliedSchemaVersion to underlying cache',
   );
+  const snapshot = readOnly.captureRecordMutationSnapshot('nodes', 'node-1');
+  t.equal(snapshot.record.id, 'node-1',
+    'should forward the record side of a key-scoped mutation snapshot');
+  t.equal(typeof snapshot.mutationRevision, 'number',
+    'should forward the key-scoped mutation revision');
+  const tableSnapshot = readOnly.captureTableMutationSnapshot('nodes');
+  t.equal(tableSnapshot.tableName, 'nodes',
+    'should forward the table snapshot identity');
+  t.equal(tableSnapshot.entries.length, 2,
+    'should forward every table row with its key revision');
 });
 
 test('createReadOnlyCache - blocks applySystemTableChange', async (t) => {

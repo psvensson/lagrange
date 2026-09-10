@@ -28,12 +28,16 @@ import {
   NODE_SERVICE_SUBSYSTEM,
   NODE_STATUS,
 } from './node-constants.js';
-import {NUM, STRING} from '../constants/index.js';
+import {sampleNodeHostStatistics} from './node-host-statistics-sampler.js';
 
 /**
  * Node status enumeration.
  */
 const NodeStatus = NODE_STATUS;
+
+function resolveNodeServiceClock(options) {
+  return typeof options.now === 'function' ? options.now : Date.now;
+}
 
 /**
  * NodeService is the administrative component present on every node.
@@ -63,6 +67,8 @@ class NodeService extends EventEmitter {
     this.statsCollectionIntervalMs = NODE_SERVICE_DEFAULT.STATS_COLLECTION_INTERVAL_MS;
     this.statsInterval = null;
     this.lastStats = null;
+    this.nodeStatsSource = os;
+    this.now = Date.now;
     this.startTime = null;
     this.logger = null;
     this.config = null;
@@ -101,6 +107,8 @@ class NodeService extends EventEmitter {
    * @param {Object} options - Configuration options.
    * @param {string} options.nodeId - Optional node ID (generated if not provided).
    * @param {string} options.nodeAddress - Optional node address.
+   * @param {Object} options.nodeStatsSource - Optional host-statistics source.
+   * @param {Function} options.now - Optional clock for statistics snapshots.
    */
   initialize(options = {}) {
     if (this.initialized) {
@@ -124,6 +132,9 @@ class NodeService extends EventEmitter {
     this.statsCollectionIntervalMs =
       this.config.get(NODE_CONFIG_KEY.STATS_COLLECTION_INTERVAL_MS) ||
       NODE_SERVICE_DEFAULT.STATS_COLLECTION_INTERVAL_MS;
+    this.nodeStatsSource = options.nodeStatsSource || os;
+    this.now = resolveNodeServiceClock(options);
+    this.lastStats = null;
 
     // Initialize thread manager
     this.threadManager = ServiceThreadManager.getInstance();
@@ -140,7 +151,7 @@ class NodeService extends EventEmitter {
         initialState: NodeState.STARTING,
       }));
 
-    this.startTime = Date.now();
+    this.startTime = this.now();
 
     // Default node-service initialization owns lifecycle transitions.
     // Join/bootstrap flows can pass autoTransitionLifecycle=false and provide
@@ -334,27 +345,25 @@ class NodeService extends EventEmitter {
 
   /**
    * Get node statistics including CPU, memory, and disk usage.
-   * @return {Promise<Object>} Node statistics.
-   */
+  * @return {Promise<Object>} Node statistics.
+  */
   async getNodeStats() {
-    const cpus = os.cpus();
-    const totalMemory = os.totalmem();
-    const freeMemory = os.freemem();
-    const usedMemory = totalMemory - freeMemory;
-
-    // Calculate CPU usage
-    let totalIdle = 0;
-    let totalTick = 0;
-    for (const cpu of cpus) {
-      for (const type of Object.keys(cpu.times)) {
-        totalTick += cpu.times[type];
-      }
-      totalIdle += cpu.times.idle;
+    const now = this.now();
+    const snapshotAgeMs = this.lastStats ? now - this.lastStats.timestamp : null;
+    if (
+      this.lastStats &&
+      snapshotAgeMs >= 0 &&
+      snapshotAgeMs < this.statsCollectionIntervalMs
+    ) {
+      return this.lastStats;
     }
-    const cpuUsagePercent = ((totalTick - totalIdle) / totalTick) * NUM.HUNDRED;
 
-    // Memory usage
-    const memoryUsagePercent = (usedMemory / totalMemory) * NUM.HUNDRED;
+    const hostStats = sampleNodeHostStatistics(
+      this.nodeStatsSource,
+      this.now,
+      now,
+      this.statsCollectionIntervalMs,
+    );
 
     // Get pool stats from thread manager
     const poolStats = this.threadManager?.getPoolStats() || {};
@@ -363,18 +372,18 @@ class NodeService extends EventEmitter {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       status: this.status,
-      uptime: Date.now() - this.startTime,
-      timestamp: Date.now(),
+      uptime: now - this.startTime,
+      timestamp: now,
       cpu: {
-        count: cpus.length,
-        model: cpus[0]?.model || STRING.UNKNOWN,
-        usagePercent: Math.round(cpuUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
+        count: hostStats.cpuCount,
+        model: hostStats.cpuModel,
+        usagePercent: hostStats.cpuUsagePercent,
       },
       memory: {
-        totalBytes: totalMemory,
-        usedBytes: usedMemory,
-        freeBytes: freeMemory,
-        usagePercent: Math.round(memoryUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
+        totalBytes: hostStats.totalMemory,
+        usedBytes: hostStats.usedMemory,
+        freeBytes: hostStats.freeMemory,
+        usagePercent: hostStats.memoryUsagePercent,
       },
       services: {
         total: this.services.size,
@@ -383,10 +392,10 @@ class NodeService extends EventEmitter {
       },
       threadPool: poolStats,
       platform: {
-        os: os.platform(),
-        arch: os.arch(),
+        os: hostStats.platform,
+        arch: hostStats.arch,
         nodeVersion: process.version,
-        hostname: os.hostname(),
+        hostname: hostStats.hostname,
       },
     };
 

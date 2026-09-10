@@ -1,7 +1,10 @@
 import {
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_READ_OUTCOME,
+  CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
@@ -16,6 +19,21 @@ import {
   resolveAuthoritativeReadModeContract,
   resolveReadProfileOptions,
 } from './control-plane-system-table-gateway-shared.js';
+
+function enforceCompleteObservationAuthority(options) {
+  if (
+    options?.authoritativeObservationScope !==
+    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
+  ) {
+    return options;
+  }
+  return {
+    ...options,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+  };
+}
 
 const controlPlaneSystemTableGatewayReadDispatchMethods = {
   async readRows(tableName, sql, params = [], options = {}) {
@@ -50,7 +68,9 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
     const strategy = normalizeReadStrategy(readIntent?.strategy);
     const sql = readIntent?.sql || null;
     const params = Array.isArray(readIntent?.params) ? readIntent.params : [];
-    const profiledOptions = resolveReadProfileOptions(options);
+    const profiledOptions = enforceCompleteObservationAuthority(
+      resolveReadProfileOptions(options),
+    );
     const mergedOptions = {
       ...profiledOptions,
       strategy,

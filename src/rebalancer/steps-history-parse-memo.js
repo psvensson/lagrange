@@ -27,12 +27,36 @@
  */
 
 const PARSE_MEMO_MAX_ENTRIES = 4096;
+// A replica_operations row mints a distinct, monotonically growing JSON value
+// at each durable transition. An entry-count-only cap therefore retains every
+// historical prefix plus its parsed graph and grows quadratically with one
+// busy operation. Keep enough recent source for hot-tick hits while bounding
+// the UTF-16 content keys that make those obsolete graphs reachable.
+const PARSE_MEMO_MAX_RETAINED_SOURCE_BYTES = 4 * 1024 * 1024;
+const UTF16_BYTES_PER_CODE_UNIT = 2;
 
 const EMPTY_FROZEN = Object.freeze([]);
 
 const parseMemo = new Map();
 let memoHits = 0;
 let memoMisses = 0;
+let memoEvictions = 0;
+let memoRetainedSourceBytes = 0;
+
+function getSourceByteLength(stepsHistoryString) {
+  return stepsHistoryString.length * UTF16_BYTES_PER_CODE_UNIT;
+}
+
+function evictOldestMemoEntry() {
+  const oldestKey = parseMemo.keys().next().value;
+  if (typeof oldestKey !== 'string') {
+    return false;
+  }
+  parseMemo.delete(oldestKey);
+  memoRetainedSourceBytes -= getSourceByteLength(oldestKey);
+  memoEvictions += 1;
+  return true;
+}
 
 /**
  * Parse a non-empty steps_history JSON string into an array, returning [] on
@@ -65,23 +89,36 @@ function memoizedParseStepsHistoryString(stepsHistoryString) {
   }
   memoMisses += 1;
   const parsed = parseStepsHistoryJson(stepsHistoryString);
-  if (parseMemo.size >= PARSE_MEMO_MAX_ENTRIES) {
-    const oldestKey = parseMemo.keys().next().value;
-    parseMemo.delete(oldestKey);
+  const sourceBytes = getSourceByteLength(stepsHistoryString);
+  if (sourceBytes > PARSE_MEMO_MAX_RETAINED_SOURCE_BYTES) {
+    return parsed;
+  }
+  while (
+    parseMemo.size >= PARSE_MEMO_MAX_ENTRIES ||
+    memoRetainedSourceBytes + sourceBytes >
+      PARSE_MEMO_MAX_RETAINED_SOURCE_BYTES
+  ) {
+    if (!evictOldestMemoEntry()) {
+      break;
+    }
   }
   parseMemo.set(stepsHistoryString, parsed);
+  memoRetainedSourceBytes += sourceBytes;
   return parsed;
 }
 
 /**
  * Engagement counters for the directed micro-repro: a real hit stream proves
  * the memo avoids the re-parse rather than silently no-op'ing.
- * @return {{hits: number, misses: number, size: number}}
+ * @return {{evictions: number, hits: number, misses: number,
+ *   retainedSourceBytes: number, size: number}}
  */
 function getStepsHistoryParseMemoStats() {
   return {
+    evictions: memoEvictions,
     hits: memoHits,
     misses: memoMisses,
+    retainedSourceBytes: memoRetainedSourceBytes,
     size: parseMemo.size,
   };
 }
@@ -93,6 +130,8 @@ function resetStepsHistoryParseMemo() {
   parseMemo.clear();
   memoHits = 0;
   memoMisses = 0;
+  memoEvictions = 0;
+  memoRetainedSourceBytes = 0;
 }
 
 export {

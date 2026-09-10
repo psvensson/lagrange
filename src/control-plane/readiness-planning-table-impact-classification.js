@@ -9,24 +9,24 @@
 import {
   CDC_OPERATION,
   COLUMN,
-  FIELD,
   TABLES,
 } from '../constants/index.js';
 import {
   isDeepStrictEqual,
 } from 'node:util';
 import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
-import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
 import {
   hasCanonicalActiveService,
-  hasCanonicalWebSocketEndpoint,
   isCanonicalWebSocketEndpointRow,
-  resolveLatestPublicationRow,
 } from './active-node-projection.js';
+import {
+  DIRECT_GLOBAL_PROJECTION_FIELD,
+  buildDirectGlobalProjection,
+  isPriorityPartitionFromProjection,
+  projectedListIncludes,
+} from './readiness-planning-global-projection.js';
 import {
   normalizeNodeEndpointRow,
   normalizeServiceRow,
@@ -35,54 +35,19 @@ import {
   copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
-
-const SEMANTIC_RECORD_COLUMN = Object.freeze({
-  PARTITION_KEY_END: 'partition_key_end',
-  PARTITION_KEY_START: 'partition_key_start',
-  PARTITION_VERSION: 'partition_version',
-  REPLICA_COUNT: 'replica_count',
-  SOURCE_NODE_ID: 'source_node_id',
-  TABLE_NAME: 'table_name',
-  WORKFLOW_STEP: 'workflow_step',
-});
-
-const SEMANTIC_RECORD_FIELD = Object.freeze({
-  LEADER_NODE_ID: 'leaderNodeId',
-  PARTITION_KEY_END: 'partitionKeyEnd',
-  PARTITION_KEY_START: 'partitionKeyStart',
-  PARTITION_VERSION: 'partitionVersion',
-  REPLICA_COUNT: 'replicaCount',
-  TABLE_ID: 'tableId',
-  TABLE_NAME: 'tableName',
-  WORKFLOW_STEP: 'workflowStep',
-});
+import {copyMapValuesToArray} from '../utils/map-values-array.js';
 
 const MapConstructor = Map;
-const SetConstructor = Set;
-const setAdd = Function.call.bind(Set.prototype.add);
-const setHas = Function.call.bind(Set.prototype.has);
-
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
-const mapForEach = Function.call.bind(Map.prototype.forEach);
-
 const mapGet = Function.call.bind(Map.prototype.get);
-
 const mapSet = Function.call.bind(Map.prototype.set);
-
-const arrayFilter = Function.call.bind(Array.prototype.filter);
-
-const arrayMap = Function.call.bind(Array.prototype.map);
-
-const arraySort = Function.call.bind(Array.prototype.sort);
 
 const objectDefineProperty = Object.defineProperty;
 
 const objectFreeze = Object.freeze;
 
 const stringConstructor = String;
-
-const stringLocaleCompare = Function.call.bind(String.prototype.localeCompare);
 
 const CONSERVATIVE_GLOBAL_SOURCE_TABLES = objectFreeze([
   TABLES.SERVICES,
@@ -167,11 +132,7 @@ function copySourceRowsByKey(tableName, rows) {
 
 function readRowsFromShadow(sourceRowsByTable, tableName) {
   const byKey = mapGet(sourceRowsByTable, tableName);
-  const rows = [];
-  if (byKey) {
-    mapForEach(byKey, (row) => defineValue(rows, rows.length, row));
-  }
-  return rows;
+  return byKey ? copyMapValuesToArray(byKey) : [];
 }
 
 function readNormalizedEndpointNodeId(record) {
@@ -190,198 +151,94 @@ function readNormalizedServiceNodeId(record) {
   }
 }
 
-function isPriorityPartitionRecord(record) {
-  try {
-    return classifySystemPartition({partitionRow: record})
-      .priorityControlPlane === true;
-  } catch {
-    return false;
-  }
-}
-
-// One pass over the partition rows per projection build: the index answers
-// "is this partition priority?" for every service and operation row in O(1)
-// instead of rescanning the partition rows per row (measured 34 ms/event at
-// 1000 partitions × 3000 services before indexing).
-function buildPriorityPartitionIndex(partitionRows) {
-  const knownPartitionIds = new SetConstructor();
-  const priorityPartitionIds = new SetConstructor();
-  for (let index = 0; index < partitionRows.length; index += 1) {
-    const row = partitionRows[index];
-    const partitionId = row?.[COLUMN.PARTITION_ID] ?? row?.partitionId;
-    if (typeof partitionId !== 'string') continue;
-    setAdd(knownPartitionIds, partitionId);
-    if (isPriorityPartitionRecord(row)) setAdd(priorityPartitionIds, partitionId);
-  }
-  return objectFreeze({knownPartitionIds, priorityPartitionIds});
-}
-
-function isPriorityPartitionId(partitionId, partitionIndex) {
-  if (setHas(partitionIndex.knownPartitionIds, partitionId)) {
-    return setHas(partitionIndex.priorityPartitionIds, partitionId);
-  }
-  try {
-    return classifySystemPartition({partitionId}).priorityControlPlane === true;
-  } catch {
-    return false;
-  }
-}
-
-function readAliasedValue(record, fieldName, aliasName) {
-  const primary = record?.[fieldName];
-  if (primary !== undefined && primary !== null) return primary;
-  const alternate = record?.[aliasName];
-  return alternate === undefined || alternate === null ? null : alternate;
-}
-
-function buildPriorityPartitionSemanticRecord(record) {
-  return objectFreeze({
-    leaderNodeId: readAliasedValue(
-      record,
-      COLUMN.LEADER_NODE_ID,
-      SEMANTIC_RECORD_FIELD.LEADER_NODE_ID,
-    ),
-    partitionId: readAliasedValue(
-      record,
-      COLUMN.PARTITION_ID,
-      FIELD.PARTITION_ID,
-    ),
-    partitionKeyEnd: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.PARTITION_KEY_END,
-      SEMANTIC_RECORD_FIELD.PARTITION_KEY_END,
-    ),
-    partitionKeyStart: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.PARTITION_KEY_START,
-      SEMANTIC_RECORD_FIELD.PARTITION_KEY_START,
-    ),
-    partitionVersion: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.PARTITION_VERSION,
-      SEMANTIC_RECORD_FIELD.PARTITION_VERSION,
-    ),
-    replicaCount: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.REPLICA_COUNT,
-      SEMANTIC_RECORD_FIELD.REPLICA_COUNT,
-    ),
-    state: record?.state ?? null,
-    tableId: readAliasedValue(record, COLUMN.TABLE_ID, SEMANTIC_RECORD_FIELD.TABLE_ID),
-    tableName: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.TABLE_NAME,
-      SEMANTIC_RECORD_FIELD.TABLE_NAME,
-    ),
-  });
-}
-
-function buildPriorityOperationSemanticRecord(record) {
-  return objectFreeze({
-    entityId: readAliasedValue(record, COLUMN.ENTITY_ID, FIELD.ENTITY_ID),
-    entityType: readAliasedValue(record, COLUMN.ENTITY_TYPE, FIELD.ENTITY_TYPE),
-    operationId: readAliasedValue(
-      record,
-      COLUMN.OPERATION_ID,
-      FIELD.OPERATION_ID,
-    ),
-    partitionId: readAliasedValue(
-      record,
-      COLUMN.PARTITION_ID,
-      FIELD.PARTITION_ID,
-    ),
-    replicaId: readAliasedValue(record, COLUMN.REPLICA_ID, FIELD.REPLICA_ID),
-    sourceNodeId: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.SOURCE_NODE_ID,
-      FIELD.SOURCE_NODE_ID,
-    ),
-    status: record?.[COLUMN.STATUS] ?? null,
-    targetNodeId: readAliasedValue(
-      record,
-      COLUMN.TARGET_NODE_ID,
-      FIELD.TARGET_NODE_ID,
-    ),
-    type: record?.type ?? null,
-    workflowStep: readAliasedValue(
-      record,
-      SEMANTIC_RECORD_COLUMN.WORKFLOW_STEP,
-      SEMANTIC_RECORD_FIELD.WORKFLOW_STEP,
-    ),
-  });
-}
-
-function sortSemanticRecords(records, readKey) {
-  return arraySort(records, (left, right) => stringLocaleCompare(
-    stringConstructor(readKey(left) ?? ''),
-    stringConstructor(readKey(right) ?? ''),
-  ));
-}
-
-function buildDirectGlobalProjection(sourceRowsByTable) {
-  const nodeRows = readRowsFromShadow(sourceRowsByTable, TABLES.NODES);
-  const endpointRows = readRowsFromShadow(
-    sourceRowsByTable,
-    TABLES.NODE_ENDPOINTS,
-  );
+function serviceFallbackMembershipUnchanged(
+  previousRecord,
+  currentRecord,
+  sourceRowsByTable,
+  projection,
+) {
+  const nodeIds = [];
+  appendUniqueNodeId(nodeIds, readNormalizedServiceNodeId(previousRecord));
+  appendUniqueNodeId(nodeIds, readNormalizedServiceNodeId(currentRecord));
+  if (nodeIds.length === 0) return false;
   const serviceRows = readRowsFromShadow(sourceRowsByTable, TABLES.SERVICES);
-  const partitionRows = readRowsFromShadow(
+  for (let index = 0; index < nodeIds.length; index += 1) {
+    const nodeId = nodeIds[index];
+    if (projectedListIncludes(
+      projection,
+      DIRECT_GLOBAL_PROJECTION_FIELD.ENDPOINT_NODE_IDS,
+      nodeId,
+      (candidate) => candidate,
+    )) continue;
+    const previousPresent = projectedListIncludes(
+      projection,
+      DIRECT_GLOBAL_PROJECTION_FIELD.SERVICE_FALLBACK_NODE_IDS,
+      nodeId,
+      (candidate) => candidate,
+    );
+    if (previousPresent !== hasCanonicalActiveService(nodeId, serviceRows)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function canReuseOrdinaryTopologyProjection(
+  tableName,
+  previousRecord,
+  currentRecord,
+  sourceRowsByTable,
+  projection,
+) {
+  if (!projection || (!previousRecord && !currentRecord)) return false;
+  const records = [previousRecord, currentRecord];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record) continue;
+    const partitionId = tableName === TABLES.SERVICES ?
+      normalizeServiceRow(record).partitionId :
+      record?.[COLUMN.PARTITION_ID] ?? record?.partitionId;
+    if (isPriorityPartitionFromProjection(
+      partitionId,
+      sourceRowsByTable,
+      projection,
+    )) return false;
+  }
+  return tableName === TABLES.REPLICA_OPERATIONS ||
+    serviceFallbackMembershipUnchanged(
+      previousRecord,
+      currentRecord,
+      sourceRowsByTable,
+      projection,
+    );
+}
+
+function canReuseDirectGlobalProjection(
+  tableName,
+  operation,
+  previousRecord,
+  currentRecord,
+  sourceRowsByTable,
+  projection,
+) {
+  if (tableName === TABLES.STORAGE_RESERVATIONS) return true;
+  const sameKeyUpdate = previousRecord && currentRecord &&
+    (operation === CDC_OPERATION.UPDATE ||
+      operation === CDC_OPERATION.UPSERT);
+  if (sameKeyUpdate && tableName === TABLES.NODES) return true;
+  if (sameKeyUpdate && tableName === TABLES.SERVICES && isDeepStrictEqual(
+    localSemanticRecord(tableName, previousRecord),
+    localSemanticRecord(tableName, currentRecord),
+  )) return true;
+  if (tableName !== TABLES.SERVICES &&
+      tableName !== TABLES.REPLICA_OPERATIONS) return false;
+  return canReuseOrdinaryTopologyProjection(
+    tableName,
+    previousRecord,
+    currentRecord,
     sourceRowsByTable,
-    TABLES.PARTITIONS,
+    projection,
   );
-  const operationRows = readRowsFromShadow(
-    sourceRowsByTable,
-    TABLES.REPLICA_OPERATIONS,
-  );
-  const publicationRows = readRowsFromShadow(
-    sourceRowsByTable,
-    TABLES.CONTROL_PLANE_PUBLICATIONS,
-  );
-  const nodeIds = arraySort(arrayFilter(
-    arrayMap(nodeRows, (row) => readNodeId(row)),
-    (nodeId) => nodeId.length > 0,
-  ));
-  const endpointNodeIds = arrayFilter(nodeIds, (nodeId) =>
-    hasCanonicalWebSocketEndpoint(nodeId, endpointRows),
-  );
-  const serviceFallbackNodeIds = arrayFilter(nodeIds, (nodeId) =>
-    !hasCanonicalWebSocketEndpoint(nodeId, endpointRows) &&
-      hasCanonicalActiveService(nodeId, serviceRows),
-  );
-  const partitionIndex = buildPriorityPartitionIndex(partitionRows);
-  const priorityPartitions = sortSemanticRecords(
-    arrayMap(
-      arrayFilter(partitionRows, isPriorityPartitionRecord),
-      buildPriorityPartitionSemanticRecord,
-    ),
-    (row) => row.partitionId,
-  );
-  const priorityServices = sortSemanticRecords(
-    arrayMap(arrayFilter(serviceRows, (row) => {
-      const normalized = normalizeServiceRow(row);
-      return isPriorityPartitionId(normalized.partitionId, partitionIndex);
-    }), (row) => objectFreeze(normalizeServiceRow(row))),
-    (row) => row.serviceId,
-  );
-  const priorityOperations = sortSemanticRecords(
-    arrayMap(
-      arrayFilter(operationRows, (row) => isPriorityPartitionId(
-        row?.[COLUMN.PARTITION_ID] ?? row?.partitionId,
-        partitionIndex,
-      )),
-      buildPriorityOperationSemanticRecord,
-    ),
-    (row) => row.operationId,
-  );
-  return objectFreeze({
-    endpointNodeIds: objectFreeze(endpointNodeIds),
-    membershipPublication: resolveLatestPublicationRow({publicationRows}),
-    nodeIds: objectFreeze(nodeIds),
-    priorityOperations: objectFreeze(priorityOperations),
-    priorityPartitions: objectFreeze(priorityPartitions),
-    priorityServices: objectFreeze(priorityServices),
-    serviceFallbackNodeIds: objectFreeze(serviceFallbackNodeIds),
-  });
 }
 
 function localSemanticRecord(tableName, record) {
@@ -525,6 +382,7 @@ function copySourceRowsSnapshot(cache) {
 
 export {
   buildDirectGlobalProjection,
+  canReuseDirectGlobalProjection,
   classifyShadowTableImpact,
   classifyTableImpact,
   copySourceRowsSnapshot,

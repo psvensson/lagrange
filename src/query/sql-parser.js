@@ -5,7 +5,9 @@
  * Requirements: 7.1, 7.3
  */
 
-import nodeSqlParser from 'node-sql-parser';
+import sqliteNodeSqlParser from 'node-sql-parser/build/sqlite.js';
+import postgresqlNodeSqlParser from
+  'node-sql-parser/build/postgresql.js';
 
 
 const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
@@ -14,7 +16,8 @@ const CREATE_TABLE_PREFIX_PATTERN = /^\s*CREATE\s+TABLE\b/iu;
 const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
   /\s+WITH\s*\(\s*split_storage_threshold\s*=\s*(\d+)\s*\)\s*;?\s*$/iu;
 
-const {Parser} = nodeSqlParser;
+const {Parser: SQLiteParser} = sqliteNodeSqlParser;
+const {Parser: PostgreSQLParser} = postgresqlNodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
@@ -206,7 +209,9 @@ class SQLParser {
   constructor(sql, options = {}) {
     this.sql = sql;
     this.dialect = options.dialect || PARSER_DIALECT.SQLITE;
-    this.parser = new Parser();
+    this.parser = this.dialect === PARSER_DIALECT.POSTGRESQL ?
+      new PostgreSQLParser() :
+      new SQLiteParser();
     this.logger = this.initLogger();
     this.positionalParams = [];
     this.parameterCounter = 0;

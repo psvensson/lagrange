@@ -15,6 +15,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {ADMIN_SERVICE_DISCOVERY} from '../../src/admin/admin-constants.js';
@@ -41,6 +42,7 @@ import {
   gracefulJoiningShutdown,
   gracefulShutdown,
   initializeTestEnvironment,
+  stopAllRebalancers,
   TEST_CONFIG,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -63,6 +65,7 @@ const WAIT_TIMEOUT_MS = 10000 * TEST_MACHINE_FACTOR;
 const POLL_INTERVAL_MS = 50;
 const SERVICE_DISCOVERY_QUERY_PREFIX = 'SELECT * FROM service_discovery_local';
 const METADATA_MIN_LENGTH = 1;
+const CDC_APPLIED_EVENT = 'cdcApplied';
 
 function getAllMessageGroupServices(bootstrapResult, joinResults) {
   const seedMessageGroups = bootstrapResult?.messageGroupServices ?
@@ -296,6 +299,12 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
 
       const beforeAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
       const beforeWatermark = systemTableCache.getAppliedSchemaVersion(TABLES.NODES);
+      if (beforeWatermark !== null) {
+        follower.hlcClock.update(
+          HLCTimestamp.fromString(String(beforeWatermark)),
+        );
+      }
+      const forwardedTimestamp = follower.hlcClock.now().toString();
 
       // Forward the event for a SYNTHETIC node row, not the seed's own row:
       // the seed's background stats/heartbeat writer keeps rewriting its row
@@ -311,28 +320,50 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
         [COLUMN.NODE_ID]: syntheticNodeId,
         [COLUMN.CPU_USAGE_PERCENT]: nextCpu,
         [COLUMN.UPDATED_AT]: Date.now(),
+        [COLUMN.UPDATED_AT_HLC]: forwardedTimestamp,
       };
+      const beforeSyntheticMutation =
+        systemTableCache.captureRecordMutationSnapshot(
+          TABLES.NODES,
+          syntheticNodeId,
+        );
 
-      // Observe the apply through the cache-change event stream, not through
-      // live row state or getLastAppliedCauseId: the seed's own background
-      // stats/heartbeat CDC traffic keeps rewriting the nodes row (both the
-      // cpu value and the last-applied metadata are moving targets), which
-      // was the historical ~1/3 flake in this subtest. The notification for
-      // OUR causeId carries the record snapshot as applied — that is the
-      // stable evidence the forwarded event landed.
-      let notifiedRecord = null;
-      const causeIdListener = (tableName, _operation, record, metadata) => {
-        if (tableName === TABLES.NODES && metadata?.causeId === causeId) {
-          notifiedRecord = record;
+      // Observe the message-group owner's synchronous completion event rather
+      // than the cache's intentionally deferred listener notification. Under
+      // formation churn that setImmediate notification may be delayed after
+      // the mutation has already landed. Pair the owner event with the cache's
+      // key-scoped mutation revision: even if an authoritative-absence sweep
+      // promptly removes this synthetic row, only an accepted prior mutation
+      // can have advanced its key revision.
+      let appliedEvent = null;
+      const causeIdListener = (event) => {
+        if (event?.tableName === TABLES.NODES && event?.causeId === causeId) {
+          appliedEvent = event;
         }
       };
-      systemTableCache.onCacheChange(causeIdListener);
+      for (const messageGroup of messageGroups) {
+        messageGroup.on(CDC_APPLIED_EVENT, causeIdListener);
+      }
 
       try {
-        await follower.applyCDCEvent(TABLES.NODES, CDC_OPERATION.UPDATE, updateRow, {causeId});
+        await follower.applyCDCEvent(
+          TABLES.NODES,
+          CDC_OPERATION.UPDATE,
+          updateRow,
+          {causeId, timestamp: forwardedTimestamp},
+        );
 
         const watermarkAdvanced = await waitFor(() => {
-          if (!notifiedRecord) {
+          if (!appliedEvent) {
+            return false;
+          }
+          const afterSyntheticMutation =
+            systemTableCache.captureRecordMutationSnapshot(
+              TABLES.NODES,
+              syntheticNodeId,
+            );
+          if (afterSyntheticMutation.mutationRevision <=
+              beforeSyntheticMutation.mutationRevision) {
             return false;
           }
           const afterAppliedAtMs = systemTableCache.getLastAppliedAtMs(TABLES.NODES);
@@ -345,17 +376,24 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
           if (!(afterAppliedAtMs >= beforeAppliedAtMs)) {
             return false;
           }
-          return String(afterWatermark || '') !== String(beforeWatermark || '');
+          if (afterWatermark === null) {
+            return false;
+          }
+          return HLCTimestamp.fromString(String(afterWatermark)).compare(
+            HLCTimestamp.fromString(forwardedTimestamp),
+          ) >= 0;
         }, WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
 
         t.equal(watermarkAdvanced, true, 'cache should apply forwarded CDC event and advance watermarks');
         t.equal(
-          notifiedRecord?.[COLUMN.CPU_USAGE_PERCENT],
+          appliedEvent?.data?.[COLUMN.CPU_USAGE_PERCENT],
           nextCpu,
-          'cache change notification should carry the forwarded record for the updated table',
+          'message-group completion should carry the forwarded record for the updated table',
         );
       } finally {
-        systemTableCache.offCacheChange(causeIdListener);
+        for (const messageGroup of messageGroups) {
+          messageGroup.off(CDC_APPLIED_EVENT, causeIdListener);
+        }
       }
     });
 
@@ -417,6 +455,14 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
   } finally {
     if (adminApi) {
       await adminApi.shutdown().catch(() => {});
+    }
+    // Quiesce every placement producer before dismantling any node. Stopping
+    // only the node currently being removed leaves surviving rebalancers free
+    // to dispatch into disappearing transports and turns cleanup into a
+    // reconnect loop.
+    stopAllRebalancers(bootstrapResult?.partitionServices);
+    for (const joiningService of joiningServices) {
+      stopAllRebalancers(joiningService?.partitionServices);
     }
     for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
       await gracefulJoiningShutdown(joiningServices[index]);

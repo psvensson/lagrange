@@ -17,6 +17,47 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
+function resolveLedgerSurplusDrainTargetState(
+  targetState,
+  currentReplicas,
+  ledgerSurplusDrainPlanningCapability,
+  readyNodeLedgerSurplusDrainPlanning,
+) {
+  if (ledgerSurplusDrainPlanningCapability) {
+    // The concentration owner authorizes exactly one operation for this
+    // state: a count-decreasing ledger surplus drain whose retained target
+    // nodes came from the admission owner's authoritative voter placement.
+    // Its minting evidence is the authorization, REGARDLESS of how many nodes
+    // the READY projection reports. Keep the generic placement diagnostics
+    // and inventory snapshot; only the target state is retargeted.
+    return Object.freeze({
+      ...targetState,
+      targetReplicaCount:
+        ledgerSurplusDrainPlanningCapability.targetReplicaCount,
+      targetNodes: Object.freeze([
+        ...ledgerSurplusDrainPlanningCapability.targetNodeIds,
+      ]),
+      degraded: false,
+      degradedReason: null,
+      noReadyNodePlanningKind: ledgerSurplusDrainPlanningCapability.kind,
+    });
+  } else if (
+    readyNodeLedgerSurplusDrainPlanning &&
+    currentReplicas.length > targetState.targetReplicaCount
+  ) {
+    // During serial formation a completed REPLACE can leave a 3-1 ledger
+    // actual across the only two READY nodes. Treat the current READY
+    // placement as non-degraded only for this count-decreasing pass: the
+    // monotonic remove classifier and placement fence preserve both nodes.
+    return Object.freeze({
+      ...targetState,
+      degraded: false,
+      degradedReason: null,
+    });
+  }
+  return targetState;
+}
+
 class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
   async executeRebalancingMoves(moves, context = {}) {
     const normalizedMoves = Array.isArray(moves) ? moves : [];
@@ -152,7 +193,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     const effectivePolicy = policy || (await this.getPolicy());
     const inventorySourceStateBefore =
       this.movePlanner.captureReplicaInventorySourceState();
-    const currentReplicas = this.getCurrentReplicas();
+    let currentReplicas = this.getCurrentReplicas();
     const availableNodes = this.getAvailableNodes();
     const operationCreationGate =
       this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
@@ -160,6 +201,10 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       );
     const ledgerSurplusDrainPlanningCapability =
       operationCreationGate?.ledgerSurplusDrainPlanningCapability || null;
+    const readyNodeLedgerSurplusDrainPlanning =
+      !ledgerSurplusDrainPlanningCapability &&
+      operationCreationGate?.ledgerConcentrationOverTarget === true &&
+      availableNodes.length > UNIFIED_REBALANCER_LITERAL.ZERO;
     if (
       availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO &&
       !ledgerSurplusDrainPlanningCapability
@@ -173,36 +218,24 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       });
     }
 
-    let targetState = await this.movePlanner.calculateTargetState(
+    const calculatedTargetState = await this.movePlanner.calculateTargetState(
       currentReplicas,
       effectivePolicy,
       inventorySourceStateBefore,
     );
-    if (ledgerSurplusDrainPlanningCapability) {
-      // The concentration owner authorizes exactly one operation for this
-      // state: a count-decreasing ledger surplus drain whose retained target
-      // nodes came from the admission owner's authoritative voter placement.
-      // The capability's own minting evidence is the authorization, so it is
-      // honored REGARDLESS of how many nodes the READY projection reports:
-      // an engaged quorum-spread hold withholds joiner READY leases, and a
-      // partial READY view (for example only the seed) would otherwise
-      // relabel this remove-only plan as degraded, invert its target set,
-      // and silently drop the drain the hold is waiting for (quest
-      // ledger-quorum-spread-hold-cure-drain-admission; DT invariant
-      // cure-stays-admissible). Keep the generic placement diagnostics and
-      // inventory snapshot; only the target state is retargeted.
-      targetState = Object.freeze({
-        ...targetState,
-        targetReplicaCount:
-          ledgerSurplusDrainPlanningCapability.targetReplicaCount,
-        targetNodes: Object.freeze([
-          ...ledgerSurplusDrainPlanningCapability.targetNodeIds,
-        ]),
-        degraded: false,
-        degradedReason: null,
-        noReadyNodePlanningKind: ledgerSurplusDrainPlanningCapability.kind,
-      });
-    }
+    currentReplicas = this.restoreLedgerSurplusDrainActiveVoters(
+      currentReplicas,
+      ledgerSurplusDrainPlanningCapability ||
+        readyNodeLedgerSurplusDrainPlanning && {
+          targetNodeIds: calculatedTargetState.targetNodes,
+        },
+    );
+    const targetState = resolveLedgerSurplusDrainTargetState(
+      calculatedTargetState,
+      currentReplicas,
+      ledgerSurplusDrainPlanningCapability,
+      readyNodeLedgerSurplusDrainPlanning,
+    );
     const planningMembershipPublicationEpoch =
       this.resolvePublishedMembershipPlanningEpoch();
     const calculatedMoves = this.movePlanner.calculateMoves(

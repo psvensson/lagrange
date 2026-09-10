@@ -273,8 +273,8 @@ test('one planning pass shares its priority operation-creation gate',
 );
 
 test(
-  'ledger concentration owner issues only a spread-preserving zero-READY ' +
-    'surplus-drain capability',
+  'ledger concentration owner reserves the zero-READY drain capability for ' +
+    'target-wide spread while keeping partial-spread planning explicit',
   (t) => {
     initializeTestEnvironment();
     const rebalancer = createRebalancer({
@@ -299,6 +299,11 @@ test(
         'replica_operations-p1',
       );
     t.equal(gate.operationCreationRequired, true, 'cure creation is required');
+    t.equal(
+      gate.ledgerConcentrationOverTarget,
+      true,
+      'the gate carries the concentration owner\'s over-target evidence',
+    );
     t.strictSame(
       gate.ledgerSurplusDrainPlanningCapability,
       {
@@ -321,14 +326,26 @@ test(
           totalVoters: 4,
           distinctVoterNodeIds: Object.freeze(['seed-node', 'joiner-1']),
         });
-    const unsafeGate =
+    const readyNodeOnlyGate =
       rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
         'replica_operations-p1',
       );
+    t.match(
+      readyNodeOnlyGate,
+      {
+        operationCreationRequired: true,
+        operationCreationPartitionId: 'replica_operations-p1',
+        operationCreationScope: 'current_partition',
+        ledgerConcentrationOverTarget: true,
+        ledgerSurplusDrainPlanningCapability: null,
+      },
+      'partial spread remains a named current-partition planning obligation',
+    );
     t.equal(
-      unsafeGate,
+      readyNodeOnlyGate.ledgerSurplusDrainPlanningCapability,
       null,
-      'zero-READY bypass fails closed without target-wide distinct placement',
+      'zero-READY bypass still fails closed without target-wide distinct ' +
+        'placement',
     );
     rebalancer.shutdown();
     t.end();
