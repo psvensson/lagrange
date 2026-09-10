@@ -6,13 +6,15 @@ import {connectRaftCluster, driveNetwork} from
   '../distributed/harness/raft-network-host.js';
 import {PctScheduler} from '../../src/time/pct-scheduler.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT6 item 3 — turn the hosted control plane into a FALSIFIER over the DELIVERY-ORDER space: drive
 // the real CL-039 publication fail-back (step 7's real owner driver + real quorum-gated raft.command
@@ -48,7 +50,6 @@ import {TABLES} from '../../src/constants/index.js';
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
-const ownerProto = MembershipPublicationCoordinatorReconcile.prototype;
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
 function clusterOptions(seed) {
@@ -79,10 +80,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
       state.committedRow = command.row;
     }
   });
-  const coordinator = {
-    driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
@@ -138,7 +136,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
   coordinator.startOwnerMembershipDriver({
     enabled: true,
     intervalMs: 20,
@@ -188,6 +186,9 @@ async function runFailbackUnderPct(seed) {
   await driveNetwork(net, {untilMs: 600, stepMs: 5});
   const leaderA = leaderOf(rafts);
   if (!leaderA) {
+    assertMembershipPublicationOwnerDriverHostsHealthy(
+      [...pubs.values()].map(({coordinator}) => coordinator),
+    );
     IDS.forEach((id) => pubs.get(id).coordinator.stopOwnerMembershipDriver());
     IDS.forEach((id) => rafts.get(id).end());
     return {leaderA: null, leaderB: null, converged: false,
@@ -230,6 +231,9 @@ async function runFailbackUnderPct(seed) {
     .filter(([, fingerprints]) => fingerprints.size > 1)
     .map(([index]) => index);
 
+  assertMembershipPublicationOwnerDriverHostsHealthy(
+    [...pubs.values()].map(({coordinator}) => coordinator),
+  );
   IDS.forEach((id) => pubs.get(id).coordinator.stopOwnerMembershipDriver());
   IDS.forEach((id) => rafts.get(id).end());
   return {leaderA, leaderB, versions, converged, divergentCommittedIndexes, reorders, reason: null};

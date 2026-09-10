@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "membership-publication-owner-dt-harness-contract",
+  "class": "fix",
+  "statement": "The deterministic DT4/DT6 membership-publication handoff scenarios host the complete production MembershipPublicationCoordinatorReconcile prototype instead of copying a stale method subset, expose any rejected driver tick instead of silently swallowing it, and are selected as one active-gate publication-owner proof family whenever the publication leadership/reconcile boundary changes; production behavior, timeouts, retries, cadence, heap, and ratchets remain unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/membership-publication-owner-dt-harness-contract/evidence/receipt.json",
+      "requiredReceipts": [
+        "publish-failure-classified",
+        "prototype-complete-publication-host",
+        "dt-publication-handoff-family-green",
+        "publication-owner-impact-selection",
+        "unchanged-production-and-budgets"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "real-owner-prototype",
+      "statement": "Use the real MembershipPublicationCoordinatorReconcile prototype and its real driver. Do not copy its policy, stub the newly required method at each call site, or locally reconstruct leadership, deficit, retry, or catch-up semantics."
+    },
+    {
+      "id": "non-vacuous-driver-health",
+      "statement": "A rejected owner-driver tick must be observable to the scenario, and the family must prove repeated phase progress rather than passing from one action per term while the in-flight latch remains stuck."
+    },
+    {
+      "id": "proof-selection",
+      "statement": "Changes to the publication write-leadership and membership-publication reconcile owners must select the DT4/DT6 handoff family through the registered active-gate impact contract; do not add a broad fallback selector."
+    },
+    {
+      "id": "no-production-or-budget-change",
+      "statement": "This is a harness and proof-selection repair. Do not change src/, timeouts, retries, publication cadence, heap, or ratchet baselines."
+    },
+    {
+      "id": "independent-harness-verification",
+      "statement": "Obtain category-complete independent harness-fidelity and owner-interaction verification before landing."
+    },
+    {
+      "id": "release-publication",
+      "statement": "After all fixes land, publish through the repository publisher against red origin/main head 9bf8bc0df749d1136fe8d19c163ba433d358a0fa, then follow RELEASE.md for the 0.2.0 metadata commit, exact-SHA CI gate, preflight, annotated tag, and artifact verification."
+    }
+  ],
+  "sealedAt": "8b0383c329e93fa013fa0c86271ffe5f884537e1"
+}

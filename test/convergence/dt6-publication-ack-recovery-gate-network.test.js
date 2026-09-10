@@ -5,8 +5,6 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftCluster, driveNetwork} from
   '../distributed/harness/raft-network-host.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {acknowledgeMembershipPublication} from
@@ -18,6 +16,10 @@ import {
 import {MEMBERSHIP_PUBLICATION_STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT6 step 8 — drive the REAL acknowledgement -> recovery-gate pipeline on top of step 7's real
 // quorum-gated commit. Step 7 proved a publication COMMITS through a real raft log (real majority),
@@ -59,7 +61,6 @@ import {TABLES} from '../../src/constants/index.js';
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
-const ownerProto = MembershipPublicationCoordinatorReconcile.prototype;
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
 function clusterOptions(seed) {
@@ -136,10 +137,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
     }
   });
 
-  const coordinator = {
-    driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
@@ -201,7 +199,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
   coordinator.startOwnerMembershipDriver({
     enabled: true,
     intervalMs: 20,
@@ -319,6 +317,9 @@ async function runAckFailback(seed) {
     IDS.map((id) => [id, gateForEpoch(pubs.get(id), 2)]),
   );
 
+  assertMembershipPublicationOwnerDriverHostsHealthy(
+    [...pubs.values()].map(({coordinator}) => coordinator),
+  );
   IDS.forEach((id) => pubs.get(id).stop());
   IDS.forEach((id) => rafts.get(id).end());
   return {leaderA, leaderB, afterAckV1, afterFailback, afterHeal};

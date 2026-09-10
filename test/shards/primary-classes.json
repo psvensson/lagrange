@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1801,
+    "unit": 1802,
     "integration": 74,
     "bootstrap": 179,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2061,
-  "digest": "fnv1a32-0f092ae2",
+  "censusSize": 2062,
+  "digest": "fnv1a32-22f9a46f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -680,6 +680,7 @@
     "test/convergence/dt6-replacement-leader-pending-spike.test.js": "unit",
     "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": "unit",
     "test/convergence/dt6-zombie-transaction-lifecycle.test.js": "unit",
+    "test/convergence/membership-publication-owner-driver-host.test.js": "unit",
     "test/debug-runtime/breakpoint-manager.integration.test.js": "integration",
     "test/debug-runtime/breakpoint-manager.test.js": "unit",
     "test/debug-runtime/dap-server-callback.integration.test.js": "integration",

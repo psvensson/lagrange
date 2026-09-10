@@ -8,7 +8,7 @@
     "cdc-metadata": 55,
     "cli-tooling": 96,
     "control-plane": 184,
-    "convergence-topology": 76,
+    "convergence-topology": 77,
     "distributed-harness": 166,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2061,
-  "digest": "fnv1a32-afa31f5b",
+  "censusSize": 2062,
+  "digest": "fnv1a32-9c4f197b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -697,6 +697,7 @@
     "test/convergence/dt6-replacement-leader-pending-spike.test.js": "convergence-topology",
     "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": "convergence-topology",
     "test/convergence/dt6-zombie-transaction-lifecycle.test.js": "convergence-topology",
+    "test/convergence/membership-publication-owner-driver-host.test.js": "convergence-topology",
     "test/debug-runtime/breakpoint-manager.integration.test.js": "admin-diagnostics",
     "test/debug-runtime/breakpoint-manager.test.js": "admin-diagnostics",
     "test/debug-runtime/dap-server-callback.integration.test.js": "admin-diagnostics",

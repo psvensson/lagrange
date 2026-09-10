@@ -4,9 +4,11 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftCluster, driveNetwork} from
   '../distributed/harness/raft-network-host.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT6 step 5 — the first REAL CONTROL-PLANE subsystem hosted alongside the real raft cluster
 // on the VirtualNetwork. Steps 2–4 built the consensus layer (a real liferaft cluster electing
@@ -29,8 +31,6 @@ import {TABLES} from '../../src/constants/index.js';
 // is WHICH node acts as the publication owner over time, and that it tracks real raft leadership.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
-const ownerProto = MembershipPublicationCoordinatorReconcile.prototype;
-
 function clusterOptions(seed) {
   return (id) => ({
     'election min': '100 ms',
@@ -56,10 +56,7 @@ function leaderOf(rafts) {
 // path (past the leadership gate) — the "this node is acting as the publication owner" signal.
 function hostOwnerDriver(net, raft, nodeId) {
   const counters = {gatePasses: 0};
-  const coordinator = {
-    driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null},
     cdcIntegrationService: {
@@ -76,7 +73,7 @@ function hostOwnerDriver(net, raft, nodeId) {
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
   coordinator.startOwnerMembershipDriver({
     enabled: true,
     intervalMs: 20,
@@ -119,6 +116,9 @@ async function runControlPlaneMigration(seed) {
   await driveNetwork(net, {untilMs: 1700, stepMs: 5});
   const healEnd = snapshot();
 
+  assertMembershipPublicationOwnerDriverHostsHealthy(
+    [...owners.values()].map(({coordinator}) => coordinator),
+  );
   IDS.forEach((id) => {
     owners.get(id).coordinator.stopOwnerMembershipDriver();
     rafts.get(id).end();

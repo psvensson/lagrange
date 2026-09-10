@@ -5,13 +5,15 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftCluster, driveNetwork} from
   '../distributed/harness/raft-network-host.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT6 step 7 — the CL-039 publication fail-back with a REAL QUORUM-GATED COMMIT. Step 6 proved
 // the new owner RE-DETECTS the deficit and re-drives (the real decision + real row), but modelled
@@ -47,7 +49,6 @@ import {TABLES} from '../../src/constants/index.js';
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
-const ownerProto = MembershipPublicationCoordinatorReconcile.prototype;
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
 function clusterOptions(seed) {
@@ -80,10 +81,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
       state.committedRow = command.row;
     }
   });
-  const coordinator = {
-    driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
@@ -147,7 +145,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
   coordinator.startOwnerMembershipDriver({
     enabled: true,
     intervalMs: 20,
@@ -221,6 +219,9 @@ async function runQuorumFailback(seed) {
     divergentCommittedIndexes,
   };
 
+  assertMembershipPublicationOwnerDriverHostsHealthy(
+    [...pubs.values()].map(({coordinator}) => coordinator),
+  );
   IDS.forEach((id) => {
     pubs.get(id).coordinator.stopOwnerMembershipDriver();
     rafts.get(id).end();

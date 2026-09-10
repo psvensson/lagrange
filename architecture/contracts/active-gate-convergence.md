@@ -31,6 +31,10 @@
     {
       "owner": "control_plane_system_table_gateway_owner",
       "boundary": "serving_leader_complete_table_observation"
+    },
+    {
+      "owner": "membership_publication_owner",
+      "boundary": "write_leader_handoff"
     }
   ],
   "failureClasses": [
@@ -66,6 +70,10 @@
     {
       "id": "complete-observation-single-gateway-owner",
       "statement": "Only control_plane_system_table_gateway_owner validates and mints complete-table authoritative observation evidence, and it does so only from the canonical partition's serving-leader read witness; transports, repair callers, and harnesses cannot assert an equivalent receipt."
+    },
+    {
+      "id": "publication-write-leader-handoff-reentrant",
+      "statement": "membership_publication_owner follows the live control_plane_publications write leader across migration and remains re-entrant after every bounded owner tick; cache repair is a subordinate best-effort phase and cannot become a hidden second owner or permanently latch the publication driver in flight."
     },
     {
       "id": "failed-repair-backoff-non-bypassable",
@@ -121,6 +129,7 @@
       "snapshot coverage is accepted for the current owner epoch",
       "control-plane system-table gateway validates a serving-leader read witness and mints the complete-table observation receipt",
       "authoritative discovery repair owner admits, reuses, or defers refresh work with typed retry evidence",
+      "membership publication owner follows live write leadership and durably republishes the active membership after owner migration",
       "membership publication is written and read back as durably visible",
       "the startup active-gate owner adjudicates cluster ACTIVE from canonical evidence",
       "the node enters the published set or retains a typed retry or owner-wake obligation"
@@ -129,6 +138,7 @@
       "startup_active_gate_owner / snapshot_coverage owns the cluster-ACTIVE decision plus publication and coverage convergence",
       "authoritative_discovery_repair_owner / repair_admission_backoff owns repair admission, failure backoff, retry-after, and repair-result reuse",
       "control_plane_system_table_gateway_owner / serving_leader_complete_table_observation owns validation and minting of complete-table authoritative observation receipts from the canonical partition's serving leader",
+      "membership_publication_owner / write_leader_handoff owns live publication leadership, repeated reconcile admission, and durable fail-back across leader migration",
       "operation_workflow_owner / rebalancer_handoff preserves coverage and recoverable follow-up across handoff",
       "admin, diagnostics, and harness consumers submit observation intent and render owner outcomes; they do not own repair admission or cluster-ACTIVE semantics"
     ],
@@ -194,6 +204,18 @@
       "owner": "startup_active_gate_owner",
       "boundary": "snapshot_coverage",
       "transition": "forceControlSnapshotRepair keeps the repair deferral binding while consuming the repair owner's advanced authoritative observation to re-evaluate the sole ACTIVE decision"
+    },
+    {
+      "path": "src/control-plane/control-plane-publications-leadership.js",
+      "owner": "membership_publication_owner",
+      "boundary": "write_leader_handoff",
+      "transition": "resolveControlPlanePublicationsLeadership gives the live local Raft role authoritative precedence so a migrated publication owner takes over and a healed former leader steps down"
+    },
+    {
+      "path": "src/control-plane/membership-publication-coordinator-reconcile.js",
+      "owner": "membership_publication_owner",
+      "boundary": "write_leader_handoff",
+      "transition": "driveOwnerMembershipReconcile gates every tick on current write leadership, bounds the publication attempt, performs subordinate cache repair, and releases its in-flight admission for the next owner decision"
     },
     {
       "path": "src/control-plane/control-plane-snapshot-owner-evidence-advance.js",
@@ -347,8 +369,10 @@ The runtime bindings are
 `src/control-plane/membership-publication-active-gate-reconcile.js`,
 `src/control-plane/publication-active-gate-handoff-contract-evidence.js`,
 `src/control-plane/control-plane-authoritative-read-witness.js`,
+`src/control-plane/control-plane-publications-leadership.js`,
 `src/control-plane/control-plane-system-table-gateway-read-dispatch.js`,
 `src/control-plane/control-plane-system-table-gateway-read-strategies.js`,
+`src/control-plane/membership-publication-coordinator-reconcile.js`,
 `src/control-plane/control-plane-snapshot-owner.js`,
 `src/control-plane/control-plane-snapshot-owner-evidence-advance.js`,
 `src/admin/admin-service-discovery.js`,

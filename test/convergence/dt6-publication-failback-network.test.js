@@ -4,13 +4,15 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftCluster, driveNetwork} from
   '../distributed/harness/raft-network-host.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
-import {MembershipPublicationCoordinatorReconcile} from
-  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
   '../../src/control-plane/membership-publication-row-contract.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT6 step 6 — the CL-039 publication FAIL-BACK, end-to-end with REAL publication-decision and
 // REAL published-row materialisation. Step 5 observed only the owner GATE (which node may
@@ -42,8 +44,6 @@ import {TABLES} from '../../src/constants/index.js';
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
-const ownerProto = MembershipPublicationCoordinatorReconcile.prototype;
-
 function clusterOptions(seed) {
   return (id) => ({
     'election min': '100 ms',
@@ -68,10 +68,7 @@ function leaderOf(rafts) {
 // computation reports the full membership missing -> the driver drives the reconcile).
 function hostPublisher(net, raft, nodeId, store) {
   const counters = {commits: 0, rejectedStaleWrites: 0};
-  const coordinator = {
-    driveOwnerMembershipReconcile: ownerProto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: ownerProto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: ownerProto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
@@ -123,7 +120,7 @@ function hostPublisher(net, raft, nodeId, store) {
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
   coordinator.startOwnerMembershipDriver({
     enabled: true,
     intervalMs: 20,
@@ -172,6 +169,9 @@ async function runPublicationFailback(seed) {
   await driveNetwork(net, {untilMs: 1500, stepMs: 5});
   const afterHeal = {store: {...store}, oldLeaderState: rafts.get(leaderA).state};
 
+  assertMembershipPublicationOwnerDriverHostsHealthy(
+    [...pubs.values()].map(({coordinator}) => coordinator),
+  );
   IDS.forEach((id) => {
     pubs.get(id).coordinator.stopOwnerMembershipDriver();
     rafts.get(id).end();

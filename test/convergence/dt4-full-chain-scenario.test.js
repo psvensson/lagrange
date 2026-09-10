@@ -3,8 +3,9 @@ import LifeRaft from '../../src/raft/liferaft.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
-  MembershipPublicationCoordinatorReconcile,
-} from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+  assertMembershipPublicationOwnerDriverHostsHealthy,
+  createMembershipPublicationOwnerDriverHost,
+} from './membership-publication-owner-driver-host.js';
 
 // DT4 — the full freeze→leadership→publication-stall chain (CL-039 L1→TT), in-process
 // and deterministic. The companion L1→L2 scenario (dt4-freeze-leadership-scenario)
@@ -57,11 +58,7 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
   };
 
   let snapshotReads = 0; // increments only AFTER the owner-driver's leadership gate
-  const proto = MembershipPublicationCoordinatorReconcile.prototype;
-  const coordinator = {
-    driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
-    startOwnerMembershipDriver: proto.startOwnerMembershipDriver,
-    stopOwnerMembershipDriver: proto.stopOwnerMembershipDriver,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId: 'seed',
     // No partition-row / services witness: force resolution onto the Tier-0
     // raft-role path (the cache tiers lag and are not the signal here).
@@ -76,15 +73,8 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
     reconcileActiveGateMembershipPublication: async () => {},
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
-    // CL-001 variant D: the follower-skip and owner no-deficit paths hydrate the
-    // local cache from authority via this real prototype method; stub it as a
-    // best-effort no-op so the leadership-gate behaviour stays isolated.
-    refreshDeferredPublicationsCacheFromAuthority: async () => {},
-    // Sibling steady-state sweep for the other CDC-propagated tables
-    // (joiner-services-cache-late-row-convergence) on the same defer tick.
-    refreshDeferredPropagatedCachesFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
 
   // The owner-driver runs on the SAME virtual clock as the raft node.
   coordinator.startOwnerMembershipDriver({
@@ -122,6 +112,7 @@ t.test('freeze→leadership-loss→publication-stall (CL-039 L1→TT)', async (t
   // And the gate itself reports NOT the owner now.
   const deferred = await coordinator.driveOwnerMembershipReconcile.call(coordinator);
   t.equal(deferred, false, 'driveOwnerMembershipReconcile returns false (deferred) when not leader');
+  assertMembershipPublicationOwnerDriverHostsHealthy([coordinator]);
 });
 
 t.test('regaining leadership lets the publication advance again', async (t) => {
@@ -131,9 +122,7 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
   seed.change({state: LifeRaft.FOLLOWER}); // start NOT the leader
 
   let snapshotReads = 0;
-  const proto = MembershipPublicationCoordinatorReconcile.prototype;
-  const coordinator = {
-    driveOwnerMembershipReconcile: proto.driveOwnerMembershipReconcile,
+  const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId: 'seed',
     systemTableCache: {get: () => null, find: () => null},
     cdcIntegrationService: {
@@ -150,15 +139,8 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
     reconcileActiveGateMembershipPublication: async () => {},
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
-    // CL-001 variant D: the follower-skip and owner no-deficit paths hydrate the
-    // local cache from authority via this real prototype method; stub it as a
-    // best-effort no-op so the leadership-gate behaviour stays isolated.
-    refreshDeferredPublicationsCacheFromAuthority: async () => {},
-    // Sibling steady-state sweep for the other CDC-propagated tables
-    // (joiner-services-cache-late-row-convergence) on the same defer tick.
-    refreshDeferredPropagatedCachesFromAuthority: async () => {},
     logger: {warn: () => {}, info: () => {}, debug: () => {}, error: () => {}},
-  };
+  });
 
   await coordinator.driveOwnerMembershipReconcile.call(coordinator);
   t.equal(snapshotReads, 0, 'no advance while not the leader');
@@ -166,4 +148,5 @@ t.test('regaining leadership lets the publication advance again', async (t) => {
   seed.change({state: LifeRaft.LEADER}); // leadership fails back to the seed
   await coordinator.driveOwnerMembershipReconcile.call(coordinator);
   t.equal(snapshotReads, 1, 'publication advances again once leadership returns');
+  assertMembershipPublicationOwnerDriverHostsHealthy([coordinator]);
 });

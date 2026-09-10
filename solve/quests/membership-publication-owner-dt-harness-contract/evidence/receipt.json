@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "membership-publication-owner-dt-harness-contract",
+  "generatedAt": "2026-09-10T05:09:00.000Z",
+  "receipts": [
+    {
+      "id": "publish-failure-classified",
+      "passed": true,
+      "command": "npm run publish -- --fixes-red 9bf8bc0df749d1136fe8d19c163ba433d358a0fa --reason <recorded reason>",
+      "detail": "Exact HEAD 8b0383c329e93fa013fa0c86271ffe5f884537e1 passed five hardening stages, then test:fast failed four DT6 publication handoff files twice; nothing was pushed. All four used partial plain-object copies of MembershipPublicationCoordinatorReconcile. The current production finally path calls refreshDeferredPropagatedCachesFromAuthority before clearing ownerMembershipReconcileInFlight; the missing copied method rejected and left the latch true after the first owner tick. The PCT sibling used the same stale host but its final-state oracle could pass after one action per term. Retained fast-test SHA-256: cc6410cc223f07dcd58fbbbf6585b08bb6221dab9cd94488bbc1f3d8920fd28b."
+    },
+    {
+      "id": "prototype-complete-publication-host",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/convergence/membership-publication-owner-driver-host.test.js",
+      "detail": "PASS: 3 assertions. The shared host inherits the complete production MembershipPublicationCoordinatorReconcile prototype, forbids copied driver lifecycle methods, records any tick rejection that the interval owner would otherwise swallow, proves two successive owner ticks reach planning, and rejects a latched in-flight owner at scenario completion."
+    },
+    {
+      "id": "dt-publication-handoff-family-green",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/convergence/membership-publication-owner-driver-host.test.js test/convergence/dt4-full-chain-scenario.test.js test/convergence/dt6-control-plane-migration-network.test.js test/convergence/dt6-publication-failback-network.test.js test/convergence/dt6-publication-ack-recovery-gate-network.test.js test/convergence/dt6-publication-quorum-failback-network.test.js test/convergence/dt6-publication-failback-pct-search.test.js test/control-plane/owner-membership-driver.test.js test/control-plane/membership-publication-deferred-catchup.test.js",
+      "detail": "PASS: 9 files and 337 assertions. Every real-driver DT4/DT6 host now uses the shared prototype-complete boundary and asserts no rejected or latched tick after its phase sequence; the four publication failures and the formerly under-constrained PCT sibling are green together with the direct driver and catch-up owner tests."
+    },
+    {
+      "id": "publication-owner-impact-selection",
+      "passed": true,
+      "command": "npm run audit:impact-contracts && node scripts/run-test-files.js --jobs=1 test/scripts/impact-contract-registry.test.js test/scripts/select-change-tests.test.js test/scripts/change-selection-taxonomy.test.js test/scripts/impact-proof-cone.test.js test/solve/guards.test.js",
+      "detail": "PASS: registry 18 contracts/9 pairs (sha256 faedcab81569a6ae5dd143f770ba1c0131f97a933c8cc28744b0ec7512ccab66) and 90 selector/guard assertions. The durable host witness proves both publication leadership and reconcile provider changes select all seven DT4/DT6 handoff witnesses through impact-witness: active-gate-convergence."
+    },
+    {
+      "id": "unchanged-production-and-budgets",
+      "passed": true,
+      "command": "git diff --check; npm run lint; npm run test:complexity; npm run audit:file-size; npm run audit:shards; npm run audit:runtime-grammar; npm run model:contract-records; npm run test:metadata-gateway:audit",
+      "detail": "PASS. The attempt changes architecture/contract, Quest, generated test classifications, impact registry, and test-harness paths only: no src/, production timeout, retry, cadence, heap, or ratchet baseline changed. Lint, the 1822/1822 complexity ratchet, 27/27 source and 21/21 test file-size ratchets, 2062-test shard classification, runtime grammar/state-machine pressure, contract records, and metadata gateway audits pass."
+    }
+  ]
+}
