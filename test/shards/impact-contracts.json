@@ -227,6 +227,26 @@
         "test/convergence/membership-publication-owner-driver-host.test.js"
       ]
     },
+    "admin-cache-owner-lifecycle": {
+      "description": "The Admin WebSocket notification subscription and its cache-bound snapshot and repair children transition one coherent read/mutation cache owner pair: same-owner binding is idempotent, handoff generation-fences in-flight and reusable state, and serialized shutdown/restart cannot strand or resurrect a listener.",
+      "owners": [
+        "src/admin/admin-websocket-api-base.js",
+        "src/admin/admin-websocket-lifecycle-methods.js",
+        "src/admin/admin-websocket-lifecycle-state.js",
+        "src/admin/admin-cache-owner-state.js",
+        "src/admin/admin-control-snapshot-local-build-base.js",
+        "src/admin/admin-control-snapshot-repair-orchestration.js",
+        "src/admin/admin-preflight-snapshot.js",
+        "src/admin/admin-service-discovery.js",
+        "src/admin/admin-service-discovery-repair-"
+      ],
+      "tests": [
+        "test/admin/admin-websocket-api-shutdown-state.test.js",
+        "test/admin/admin-service-discovery.test.js",
+        "test/cache/system-table-cache.test.js",
+        "test/integration/admin-cdc-propagation.integration.test.js"
+      ]
+    },
     "operation-ledger-self-move-interlock": {
       "description": "The operation-ledger self-move interlock: hold registration at createOperation, engagement at the dispatching owner's PENDING -> SENDING claim (a foreign holder resolved through the authoritative lifecycle read), and release only by the holder's own terminal row stay one owner contract across the hold policy, the hold state, the admission lanes and the dispatch gate.",
       "owners": [
@@ -445,6 +465,38 @@
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js",
         "test/active-gate/active-gate-authoritative-repair-convergence.test.js"
+      ]
+    },
+    "admin-notification-repair-cache-owner-handoff": {
+      "description": "Admin notification lifecycle transitions and cache-bound snapshot/repair state must observe the same cache owner generation, so shutdown cannot rebind delivery and an old repair completion or deferral cannot govern a replacement cache.",
+      "endpoints": [
+        {
+          "id": "notification-lifecycle",
+          "owners": [
+            "src/admin/admin-websocket-api-base.js",
+            "src/admin/admin-websocket-lifecycle-methods.js",
+            "src/admin/admin-websocket-lifecycle-state.js"
+          ]
+        },
+        {
+          "id": "cache-bound-child-state",
+          "owners": [
+            "src/admin/admin-control-snapshot-local-build-base.js",
+            "src/admin/admin-control-snapshot-repair-orchestration.js",
+            "src/admin/admin-preflight-snapshot.js",
+            "src/admin/admin-cache-owner-state.js",
+            "src/admin/admin-service-discovery.js",
+            "src/admin/admin-service-discovery-repair-cache-methods.js",
+            "src/admin/admin-service-discovery-repair-methods.js"
+          ]
+        }
+      ],
+      "contract": "admin-cache-owner-lifecycle",
+      "witnessTests": [
+        "test/admin/admin-websocket-api-shutdown-state.test.js",
+        "test/admin/admin-service-discovery.test.js",
+        "test/cache/system-table-cache.test.js",
+        "test/integration/admin-cdc-propagation.integration.test.js"
       ]
     },
     "operation-ledger-self-move-hold-dispatch": {

@@ -100,14 +100,19 @@ function assignAdminServiceDiscoveryRepairMethods(
           tableCount: 0,
         };
       }
-      this.authoritativeDiscoveryRepairPromise =
-        this.executeAuthoritativeDiscoveryCacheRepairRun(
-          repairTableNames,
-          options,
-          now,
-        ).finally(() => {
+      const cacheOwner = this.captureCacheOwner();
+      const repairPromise = this.executeAuthoritativeDiscoveryCacheRepairRun(
+        repairTableNames,
+        options,
+        now,
+        cacheOwner,
+      );
+      const trackedRepairPromise = repairPromise.finally(() => {
+        if (this.authoritativeDiscoveryRepairPromise === trackedRepairPromise) {
           this.authoritativeDiscoveryRepairPromise = null;
-        });
+        }
+      });
+      this.authoritativeDiscoveryRepairPromise = trackedRepairPromise;
       return this.authoritativeDiscoveryRepairPromise;
     }
 
@@ -115,6 +120,7 @@ function assignAdminServiceDiscoveryRepairMethods(
       repairTableNames,
       options,
       now,
+      cacheOwner,
     ) {
       const repairState = this.createAuthoritativeDiscoveryRepairState();
       const causeId = this.buildAuthoritativeDiscoveryRepairCauseId(
@@ -126,18 +132,24 @@ function assignAdminServiceDiscoveryRepairMethods(
         repairTableNames,
         options,
         now,
+        cacheOwner,
       );
-      if (repairState.failedTables.length === 0) {
+      if (
+        repairState.failedTables.length === 0 &&
+        repairState.staleOwner !== true
+      ) {
         await this.applyAuthoritativeDiscoveryRepairRowsIntoState(
           repairState,
           repairTableNames,
           causeId,
+          cacheOwner,
         );
       }
       return this.finalizeAuthoritativeDiscoveryCacheRepairRun(
         repairState,
         repairTableNames,
         options,
+        cacheOwner,
       );
     }
 
@@ -150,6 +162,7 @@ function assignAdminServiceDiscoveryRepairMethods(
         failedTables: [],
         errors: [],
         errorSummaries: [],
+        staleOwner: false,
       };
     }
 
@@ -166,8 +179,13 @@ function assignAdminServiceDiscoveryRepairMethods(
       repairTableNames,
       options,
       now,
+      cacheOwner,
     ) {
       for (const tableName of repairTableNames) {
+        if (!this.isCurrentCacheOwner(cacheOwner)) {
+          repairState.staleOwner = true;
+          return;
+        }
         try {
           const result = await this.readAuthoritativeSystemTableRows(
             tableName,
@@ -180,6 +198,10 @@ function assignAdminServiceDiscoveryRepairMethods(
               queryTimeoutMs: options.queryTimeoutMs,
             },
           );
+          if (!this.isCurrentCacheOwner(cacheOwner)) {
+            repairState.staleOwner = true;
+            return;
+          }
           repairState.authoritativeRowsByTable.set(tableName, {
             tableName: result.tableName,
             rows: result.rows,
@@ -202,8 +224,13 @@ function assignAdminServiceDiscoveryRepairMethods(
       repairState,
       repairTableNames,
       causeId,
+      cacheOwner,
     ) {
       for (const tableName of repairTableNames) {
+        if (!this.isCurrentCacheOwner(cacheOwner)) {
+          repairState.staleOwner = true;
+          return;
+        }
         const result = repairState.authoritativeRowsByTable.get(tableName);
         try {
           repairState.repairedRowCount +=
@@ -214,8 +241,13 @@ function assignAdminServiceDiscoveryRepairMethods(
               {
                 authoritativeObservation:
                   result?.authoritativeObservation || null,
+                cacheOwner,
               },
             );
+          if (!this.isCurrentCacheOwner(cacheOwner)) {
+            repairState.staleOwner = true;
+            return;
+          }
           repairState.repairedTableCount += 1;
           repairState.repairedTableNames.push(tableName);
         } catch (error) {
@@ -248,7 +280,21 @@ function assignAdminServiceDiscoveryRepairMethods(
       repairState,
       repairTableNames,
       options,
+      cacheOwner,
     ) {
+      if (
+        repairState.staleOwner === true ||
+        !this.isCurrentCacheOwner(cacheOwner)
+      ) {
+        return {
+          applied: false,
+          skipped: true,
+          staleOwner: true,
+          tableCount: 0,
+          requestedTableCount: repairTableNames.length,
+          requestedTableNames: [...repairTableNames],
+        };
+      }
       const completedAtMs = this.nowFn();
       this.lastAuthoritativeDiscoveryRepairAtMs = completedAtMs;
       const outcome = this.resolveAuthoritativeDiscoveryRepairOutcome(

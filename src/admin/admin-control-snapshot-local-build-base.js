@@ -31,6 +31,7 @@ import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/public
 import {
   buildCurrentPriorityPlacementObservation,
 } from './admin-control-snapshot-current-priority-placement.js';
+import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -382,7 +383,7 @@ function attachControlSnapshotObservationMode(snapshot, options = {}) {
  * Cross-module callbacks (partition services resolution) are injected
  * as functions so this module has no back-reference to AdminWebSocketAPI.
  */
-class AdminControlSnapshotLocalBuildBase {
+class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
   /**
    * @param {Object} deps
    * @param {Object} deps.systemTableCache
@@ -390,9 +391,8 @@ class AdminControlSnapshotLocalBuildBase {
    * @param {Function|null} deps.resolveLocalPartitionServices
    */
   constructor(deps = {}) {
-    this.systemTableCache = deps.systemTableCache || null;
+    super(deps.systemTableCache, deps.cacheMutationTarget);
     this.nodeId = deps.nodeId || null;
-    this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.messageRouter = deps.messageRouter || null;
     this.cdcIntegrationService = deps.cdcIntegrationService || null;
@@ -424,20 +424,29 @@ class AdminControlSnapshotLocalBuildBase {
     this.nowFn =
       typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
   }
+
   /**
    * Build local control snapshot payload from system cache only.
    * @return {Object}
    */
   async buildLocalControlSnapshot(options = {}) {
+    return this.resolveCacheOwnerSnapshot(
+      (cacheOwner) =>
+        this.buildLocalControlSnapshotForCacheOwner(cacheOwner, options),
+    );
+  }
+
+  async buildLocalControlSnapshotForCacheOwner(cacheOwner, options = {}) {
+    const systemTableCache = cacheOwner.systemTableCache;
     if (
-      !this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== 'function'
+      !systemTableCache ||
+      typeof systemTableCache.getAll !== 'function'
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
     }
-    const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
-    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
-    const replicaOperationRows = this.systemTableCache.getAll(
+    const tableRows = systemTableCache.getAll(TABLES.TABLES);
+    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS);
+    const replicaOperationRows = systemTableCache.getAll(
       TABLES.REPLICA_OPERATIONS,
     );
     const capturedAt = this.nowFn();
@@ -462,12 +471,15 @@ class AdminControlSnapshotLocalBuildBase {
           options.allowAuthoritativePublishedMembershipRecovery === true,
         boundedObservationProbe: options.boundedObservationProbe === true,
       });
-    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
-    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-    const nodeEndpointRows = this.systemTableCache.getAll(
+    if (!this.isCurrentCacheOwner(cacheOwner)) {
+      return null;
+    }
+    const nodeRows = systemTableCache.getAll(TABLES.NODES);
+    const serviceRows = systemTableCache.getAll(TABLES.SERVICES);
+    const nodeEndpointRows = systemTableCache.getAll(
       TABLES.NODE_ENDPOINTS,
     );
-    const publicationRows = this.systemTableCache.getAll(
+    const publicationRows = systemTableCache.getAll(
       TABLES.CONTROL_PLANE_PUBLICATIONS,
     );
     const publicationRowsForActiveNodeResolution = Array.isArray(
@@ -583,6 +595,9 @@ class AdminControlSnapshotLocalBuildBase {
               reconcileAuthoritativeMembershipPublication: true,
             },
           );
+        if (!this.isCurrentCacheOwner(cacheOwner)) {
+          return null;
+        }
         if (
           membershipPublicationHandoffOutcome &&
           typeof membershipPublicationHandoffOutcome === 'object'

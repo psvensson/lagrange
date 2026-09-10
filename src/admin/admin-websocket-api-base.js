@@ -2,6 +2,9 @@ import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {
   ADMIN_WEBSOCKET_TEST_RUN_ROUTE_METHODS,
 } from './admin-websocket-test-run-route-methods.js';
+import {
+  ADMIN_WEBSOCKET_LIFECYCLE_STATE,
+} from './admin-websocket-lifecycle-state.js';
 
 const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
@@ -56,6 +59,7 @@ const ADMIN_FIELD = Object.freeze({
   LOCAL_DUMP_HANDLER: 'executeLocalCacheDumpEnvelope',
   LIVE_MAP: 'liveQueryMap',
   MUTATION_TARGET: 'cacheMutationTarget',
+  NOTIFICATION_LISTENER: 'cacheChangeListener',
   PREFLIGHT_FRESHNESS: 'buildPreflightCacheFreshnessSummary',
   READINESS_LIMIT_MS: 'loadLaneReadinessCacheMaxAgeMs',
   REPAIR_HOOK: 'ensureAuthoritativeDiscoveryCacheRepair',
@@ -198,7 +202,13 @@ class AdminWebSocketAPIBase {
     this.fastify = null;
     this.initialized = false;
     this.listening = false;
+    this.lifecycleState = ADMIN_WEBSOCKET_LIFECYCLE_STATE.CREATED;
+    this.lifecycleTransitionTail = Promise.resolve();
     this.clients = new Set();
+    this[ADMIN_FIELD.NOTIFICATION_LISTENER] =
+      (tableName, operation, record) => {
+        this.broadcastCDCEvent(tableName, operation, record);
+      };
     this.controlSnapshot = new AdminControlSnapshot({
       [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
@@ -272,12 +282,24 @@ class AdminWebSocketAPIBase {
   }
   subscribeToCacheNotifications() {
     if (
+      this.lifecycleState !== ADMIN_WEBSOCKET_LIFECYCLE_STATE.STOPPING &&
+      this.lifecycleState !== ADMIN_WEBSOCKET_LIFECYCLE_STATE.STOPPED &&
       this.systemTableCache &&
       typeof this.systemTableCache.onCacheChange === 'function'
     ) {
-      this.systemTableCache.onCacheChange((tableName, operation, record) => {
-        this.broadcastCDCEvent(tableName, operation, record);
-      });
+      this.systemTableCache.onCacheChange(
+        this[ADMIN_FIELD.NOTIFICATION_LISTENER],
+      );
+    }
+  }
+  unsubscribeFromCacheNotifications() {
+    if (
+      this.systemTableCache &&
+      typeof this.systemTableCache.offCacheChange === 'function'
+    ) {
+      this.systemTableCache.offCacheChange(
+        this[ADMIN_FIELD.NOTIFICATION_LISTENER],
+      );
     }
   }
   initLogger() {
@@ -291,31 +313,59 @@ class AdminWebSocketAPIBase {
     }
     return console;
   }
-  async initialize(port, options = {}) {
+  initialize(port, options = {}) {
+    const transition = this.lifecycleTransitionTail.then(() =>
+      this.initializeAdminServer(port, options),
+    );
+    this.lifecycleTransitionTail = transition.catch(() => undefined);
+    return transition;
+  }
+  async initializeAdminServer(port, options = {}) {
     if (this.initialized) {
       return;
     }
 
+    this.lifecycleState = ADMIN_WEBSOCKET_LIFECYCLE_STATE.STARTING;
+    this[ADMIN_FIELD.SUBSCRIBE_CHANGES]();
+
     const listenPort = port !== undefined ? port : this.port;
     const shouldListen = options.listen !== false;
     const listenHost = options.host || ADMIN_DEFAULT.HOST;
-    assertAdminBindAllowed(shouldListen, listenHost, options);
+    try {
+      assertAdminBindAllowed(shouldListen, listenHost, options);
+      this.fastify = Fastify({
+        logger: false,
+      });
+      await this.fastify.register(websocket);
+      this.registerRoutes();
 
-    this.fastify = Fastify({
-      logger: false,
-    });
-    await this.fastify.register(websocket);
-    this.registerRoutes();
+      await startAdminListener(this, shouldListen, listenPort, listenHost);
 
-    await startAdminListener(this, shouldListen, listenPort, listenHost);
+      this.initialized = true;
+      this.lifecycleState = ADMIN_WEBSOCKET_LIFECYCLE_STATE.RUNNING;
 
-    this.initialized = true;
-
-    this.logger.info(ADMIN_LOG_MSG.STARTED, {
-      port: this.listening ? listenPort : null,
-      listen: this.listening,
-      nodeId: this.nodeId,
-    });
+      this.logger.info(ADMIN_LOG_MSG.STARTED, {
+        port: this.listening ? listenPort : null,
+        listen: this.listening,
+        nodeId: this.nodeId,
+      });
+    } catch (error) {
+      const failedFastify = this.fastify;
+      this.fastify = null;
+      this.initialized = false;
+      this.listening = false;
+      this.lifecycleState = ADMIN_WEBSOCKET_LIFECYCLE_STATE.STOPPED;
+      this.unsubscribeFromCacheNotifications();
+      try {
+        await failedFastify?.close();
+      } catch (closeError) {
+        this.logger.warn(ADMIN_LOG_MSG.INITIALIZATION_CLEANUP_ERROR, {
+          nodeId: this.nodeId,
+          error: closeError.message,
+        });
+      }
+      throw error;
+    }
   }
   registerRoutes() {
     this.fastify.get(ADMIN_ROUTE.ROOT, async (_request, reply) => {

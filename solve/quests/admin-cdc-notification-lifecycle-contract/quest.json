@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-cdc-notification-lifecycle-contract",
+  "class": "fix",
+  "epic": "release-0-2-five-node-convergence",
+  "statement": "The production admin CDC surface owns exactly one live SystemTableCache notification subscription: construction and repeated same-cache binding never duplicate delivery, cache handoff prevents the retired cache from delivering while the replacement remains live, shutdown detaches delivery, and the unchanged release-blocking admin CDC integration passes repeatedly under the release environment without timeout or listener leakage; cache mutation, tombstone fencing, CDC operation payloads, and non-admin subscribers remain unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/admin-cdc-notification-lifecycle-contract/evidence/receipt.json",
+      "requiredReceipts": [
+        "release-failure-classified",
+        "single-owned-admin-cache-subscription",
+        "cache-handoff-and-shutdown-continuity",
+        "release-admin-cdc-integration-stress",
+        "red-on-revert-lifecycle-witness",
+        "unchanged-cache-cdc-contract-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "systemic-owner-boundary-first",
+      "statement": "Treat the release failure as an observer-lifecycle boundary problem until cache mutation, listener scheduling, admin subscription ownership, initialization, handoff, shutdown, test teardown, and release-runner behavior have been traced together; do not patch one missed assertion locally."
+    },
+    {
+      "id": "one-admin-subscription-owner",
+      "statement": "AdminWebSocketAPI owns one stable cache listener and one explicit bind/unbind lifecycle. Rebinding the same cache is idempotent, replacing a cache detaches the prior cache first, and shutdown releases the subscription."
+    },
+    {
+      "id": "no-wait-or-runner-tuning",
+      "statement": "Do not raise timeouts, add sleeps, weaken assertions, skip or quarantine the integration, reduce release proof, or change runner retry/concurrency policy to make the witness green."
+    },
+    {
+      "id": "preserve-cache-semantics",
+      "statement": "Do not weaken SystemTableCache tombstone fencing, mutation ordering, asynchronous listener isolation, CDC table classification, or error isolation for other subscribers."
+    },
+    {
+      "id": "real-production-witness",
+      "statement": "The regression must exercise the production AdminWebSocketAPI and SystemTableCache path, prove repeated lifecycle plateau and stale-cache non-delivery, and fail when the ownership repair is reverted."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "After the last source-changing attempt and before landing, obtain category-complete independent lifecycle, owner-boundary, and harness-fidelity verification and record it through Solver."
+    },
+    {
+      "id": "forward-release-repair",
+      "statement": "The immutable v0.2.0 tag is never moved or deleted. If source bytes change, publish the exact landed head and cut the next 0.2 patch release only after exact-SHA CI and release preflight pass."
+    }
+  ],
+  "sealedAt": "07f7935549f4cbef630716a5195d984db4d7f132"
+}

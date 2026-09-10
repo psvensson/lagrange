@@ -35,6 +35,7 @@ import {
 } from './admin-helpers.js';
 import {evaluatePartitionReplicaTopology} from
   './admin-shared-metadata-consistency.js';
+import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const EMPTY_STRING = '';
@@ -119,7 +120,7 @@ function calculateCacheStalenessMs(capturedAtMs, observedAtMs) {
  * are injected as functions so this module has no back-reference to
  * AdminWebSocketAPI.
  */
-class AdminPreflightSnapshot {
+class AdminPreflightSnapshot extends AdminCacheOwnerState {
   /**
    * @param {Object} deps
    * @param {Object} deps.systemTableCache
@@ -132,10 +133,9 @@ class AdminPreflightSnapshot {
    * @param {Function|null} deps.buildControlPlaneDiagnosticsSnapshot
    */
   constructor(deps = {}) {
-    this.systemTableCache = deps.systemTableCache || null;
+    super(deps.systemTableCache, deps.cacheMutationTarget);
     this.nodeId = deps.nodeId || null;
     this.messageRouter = deps.messageRouter || null;
-    this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.buildLocalServiceDiscoverySnapshot =
       typeof deps.buildLocalServiceDiscoverySnapshot === 'function' ?
@@ -162,6 +162,13 @@ class AdminPreflightSnapshot {
    * @return {Object}
    */
   async buildLocalPreflightCriticalPathSnapshot() {
+    return this.resolveCacheOwnerSnapshot(
+      (cacheOwner) =>
+        this.buildLocalPreflightCriticalPathSnapshotForCacheOwner(cacheOwner),
+    );
+  }
+
+  async buildLocalPreflightCriticalPathSnapshotForCacheOwner(cacheOwner) {
     const capturedAtMs = Date.now();
     const nodeAddress = this.resolvePreflightSnapshotNodeAddress();
     const routerConnectivity =
@@ -176,6 +183,9 @@ class AdminPreflightSnapshot {
     const discovery = this.buildPreflightDiscoverySummary();
     const controlPlaneDiagnostics =
       await this.resolveControlPlaneDiagnosticsSnapshot();
+    if (!this.isCurrentCacheOwner(cacheOwner)) {
+      return null;
+    }
 
     return {
       schemaVersion:
@@ -198,7 +208,12 @@ class AdminPreflightSnapshot {
    * authoritative repair.
    * @return {Promise<Object>}
    */
-  async resolvePreflightCriticalPathSnapshot() {
+  resolvePreflightCriticalPathSnapshot() {
+    return this.resolveCacheOwnerSnapshot(() =>
+      this.resolvePreflightCriticalPathSnapshotAttempt());
+  }
+
+  async resolvePreflightCriticalPathSnapshotAttempt() {
     const snapshot = await this.buildLocalPreflightCriticalPathSnapshot();
     const repairEvaluation =
       this.evaluateAuthoritativePreflightRepair(snapshot);

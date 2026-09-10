@@ -244,7 +244,12 @@ class AdminControlSnapshotRepairOrchestration extends AdminControlSnapshotLocalB
    * cache repair when partition topology appears incomplete.
    * @return {Promise<Object>}
    */
-  async resolveLocalControlSnapshot(options = {}) {
+  resolveLocalControlSnapshot(options = {}) {
+    return this.resolveCacheOwnerSnapshot(() =>
+      this.resolveLocalControlSnapshotAttempt(options));
+  }
+
+  async resolveLocalControlSnapshotAttempt(options = {}) {
     const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
     const allowAuthoritativeRepair = options.allowAuthoritativeRepair === true;
     let snapshot = null;

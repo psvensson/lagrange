@@ -286,19 +286,33 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       if (this.authoritativeDiscoveryEvidenceProbePromise) {
         return this.authoritativeDiscoveryEvidenceProbePromise;
       }
-      this.authoritativeDiscoveryEvidenceProbePromise =
-        this.executeAuthoritativeDiscoveryEvidenceRevisionProbe(options)
-          .finally(() => {
-            this.authoritativeDiscoveryEvidenceProbePromise = null;
-          });
+      const cacheOwner = this.captureCacheOwner();
+      const probePromise =
+        this.executeAuthoritativeDiscoveryEvidenceRevisionProbe(
+          options,
+          cacheOwner,
+        );
+      const trackedProbePromise = probePromise.finally(() => {
+        if (
+          this.authoritativeDiscoveryEvidenceProbePromise ===
+          trackedProbePromise
+        ) {
+          this.authoritativeDiscoveryEvidenceProbePromise = null;
+        }
+      });
+      this.authoritativeDiscoveryEvidenceProbePromise = trackedProbePromise;
       return this.authoritativeDiscoveryEvidenceProbePromise;
     }
 
-    async executeAuthoritativeDiscoveryEvidenceRevisionProbe(options = {}) {
+    async executeAuthoritativeDiscoveryEvidenceRevisionProbe(
+      options = {},
+      cacheOwner = null,
+    ) {
       if (
-        !this.systemTableCache ||
-        !this.cacheMutationTarget ||
-        typeof this.cacheMutationTarget.applySystemTableChange !==
+        !this.isCurrentCacheOwner(cacheOwner) ||
+        !cacheOwner.systemTableCache ||
+        !cacheOwner.cacheMutationTarget ||
+        typeof cacheOwner.cacheMutationTarget.applySystemTableChange !==
           'function' ||
         !this.canReadAuthoritativeDiscoveryRows()
       ) {
@@ -309,7 +323,7 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
         options,
         this.resolveAuthoritativeDiscoveryEvidenceProbeTables(failureState),
       );
-      if (!probe) {
+      if (!probe || !this.isCurrentCacheOwner(cacheOwner)) {
         return null;
       }
       return {
@@ -489,11 +503,15 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       causeId,
       options = {},
     ) {
+      const cacheOwner = options.cacheOwner || this.captureCacheOwner();
+      if (!this.isCurrentCacheOwner(cacheOwner)) {
+        return 0;
+      }
       const authoritativeRows = Array.isArray(rows) ?
         rows :
         ADMIN_CACHE_DUMP.EMPTY;
       const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
-      const cachedRows = this.systemTableCache.getAll(tableName);
+      const cachedRows = cacheOwner.systemTableCache.getAll(tableName);
       const result =
         await this.controlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows(
           tableName,
@@ -504,8 +522,8 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
             reconcileIntent:
               CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
             cachedRows,
-            cacheMutationTarget: this.cacheMutationTarget,
-            systemTableCache: this.systemTableCache,
+            cacheMutationTarget: cacheOwner.cacheMutationTarget,
+            systemTableCache: cacheOwner.systemTableCache,
             authoritativeObservation:
               options.authoritativeObservation || null,
           },

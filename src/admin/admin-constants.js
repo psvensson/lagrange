@@ -210,6 +210,8 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'Control snapshot scope must be "local"',
   CONTROL_SNAPSHOT_UNAVAILABLE:
     'Control snapshot unavailable because system cache is not configured',
+  CACHE_OWNER_TRANSITION_UNAVAILABLE:
+    'Admin cache owner transition requires typed child participants',
   CDC_DIAGNOSTICS_UNAVAILABLE:
     'CDC diagnostics unavailable because system cache is not configured',
   PARTITION_DIAGNOSTICS_UNAVAILABLE:
@@ -281,6 +283,9 @@ const ADMIN_LOG_MSG = Object.freeze({
   LIVE_QUERY_SUBSCRIBE_FAILED: 'Live query subscribe failed',
   SHUTDOWN: 'Admin WebSocket API shutdown',
   SERVER_CLOSE_ERROR: 'Error closing HTTP server',
+  CLIENT_TERMINATE_ERROR: 'Error terminating Admin WebSocket client',
+  INITIALIZATION_CLEANUP_ERROR:
+    'Error closing Admin WebSocket API after initialization failure',
 });
 
 const ADMIN_CACHE_DUMP = Object.freeze({

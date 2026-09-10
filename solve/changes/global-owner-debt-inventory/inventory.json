@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429919,
-        "sha256": "bdbba09b9f0ed72b03cc82debe07a337e2fbbb080d68e34dfef22e5a8462a91c"
+        "bytes": 429939,
+        "sha256": "6ea9591e919b42b7a29df7454f98797f52cae6522c96f115f03587c47972f988"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 37129,
-        "sha256": "10a2e7603effaa4d16baf834a80c1f97427b29daeb11713209b510d528413d32"
+        "sha256": "dd11fc30f89688ab948dce90709d9bd9d99b2cc6748f9d9185d23421a72b9db7"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2480784,
-        "sha256": "5969e010a716e8aaf0730b4a3c33c06a8b0f34957fb5f87c35081aa33563532c"
+        "bytes": 2481367,
+        "sha256": "9e2a913e51c90fa27f728d366aef13a1b578e5bdeb5f58520a32c81a64dc8c15"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "890a4cdd82e71032ef5f0718108f4f7e6931e10da67a1a4911eaed50b02011fc"
+        "sha256": "77d6c33ad83ddb36833c0c0fac31a0aa81407e8829f7401c34cbb6fd8d798192"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "ecbcac0e4c0b0b6aaa6833ca053418003cc633879db2197bff0422715de02ab5"
+        "sha256": "a26849fc0970639e2de15f90ae383c5aed07f500068745180b76181026d1a8ed"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "94325dc4e5785ccfcd2140c746d10f1076c18f12f4b6c28e3672d99466e0729a"
+    "inputDigest": "9c96a834d05749e20281c6dc0227e5b5bf04e11db4746db0b38346e0347f0af2"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429919,
-        "sha256": "bdbba09b9f0ed72b03cc82debe07a337e2fbbb080d68e34dfef22e5a8462a91c"
+        "bytes": 429939,
+        "sha256": "6ea9591e919b42b7a29df7454f98797f52cae6522c96f115f03587c47972f988"
       },
       "declaredCount": 1822,
       "observedCount": 1822,
@@ -79,7 +79,7 @@
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 37129,
-        "sha256": "10a2e7603effaa4d16baf834a80c1f97427b29daeb11713209b510d528413d32"
+        "sha256": "dd11fc30f89688ab948dce90709d9bd9d99b2cc6748f9d9185d23421a72b9db7"
       },
       "declaredCount": 161,
       "observedCount": 161,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "890a4cdd82e71032ef5f0718108f4f7e6931e10da67a1a4911eaed50b02011fc"
+          "sha256": "77d6c33ad83ddb36833c0c0fac31a0aa81407e8829f7401c34cbb6fd8d798192"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "ecbcac0e4c0b0b6aaa6833ca053418003cc633879db2197bff0422715de02ab5"
+          "sha256": "a26849fc0970639e2de15f90ae383c5aed07f500068745180b76181026d1a8ed"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2480784,
-        "sha256": "5969e010a716e8aaf0730b4a3c33c06a8b0f34957fb5f87c35081aa33563532c"
+        "bytes": 2481367,
+        "sha256": "9e2a913e51c90fa27f728d366aef13a1b578e5bdeb5f58520a32c81a64dc8c15"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "b2a88943598eea6b68a2beac4c3a15d4188f9601016fc87879419c57d7b9e61f",
-      "moduleCount": 4982,
-      "edgeCount": 21988,
+      "sourceDigest": "470d2d42b9eee592a46c56e99cd2a4c050063ed6ca333cce8d901f58b94196a4",
+      "moduleCount": 4984,
+      "edgeCount": 21992,
       "unresolvedCount": 34
     }
   },
@@ -184,7 +184,7 @@
     "sourceSignalCount": 2641,
     "assignedSignalCount": 2641,
     "uniqueAssignmentCount": 2641,
-    "digest": "318be41035b204a4dec9473a111de99c5e19934e86ed3723c2bcaf30cba5ea0d"
+    "digest": "9563bacf75e3f7e71235e94893320ef853d6f6ccbe87ee362c36f57d2c64a71e"
   },
   "signalCounts": {
     "cognitive": 161,
@@ -442,7 +442,7 @@
       "cloneTouches": 93,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 38,
+      "importIn": 39,
       "importOut": 397,
       "score": 418.6,
       "topPaths": [
@@ -527,7 +527,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 40,
-      "importOut": 86,
+      "importOut": 87,
       "score": 282.6,
       "topPaths": [
         "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
@@ -807,7 +807,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 53,
-      "importOut": 73,
+      "importOut": 75,
       "score": 179.6,
       "topPaths": [
         "src/admin/admin-websocket-message-dispatch-methods.js",
@@ -1309,7 +1309,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 563,
+      "importIn": 562,
       "importOut": 43,
       "score": 56,
       "topPaths": [
@@ -1365,7 +1365,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 125,
+      "importIn": 126,
       "importOut": 25,
       "score": 52.6,
       "topPaths": [
@@ -2677,7 +2677,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 14,
-      "importOut": 38,
+      "importOut": 39,
       "score": 8,
       "topPaths": [
         "src/admin/admin-websocket-api-base.js",

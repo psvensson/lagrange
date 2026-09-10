@@ -11,85 +11,26 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {AddressManager} from '../../src/address/address-manager.js';
-import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
+import {
+  cleanupTestEnvironment,
+  getUniquePort,
+  initializeTestEnvironment,
+} from './helpers/cluster-test-helpers.js';
 
-// Use random ports to avoid conflicts between test runs
-function getRandomPort() {
-  return 30000 + Math.floor(Math.random() * 20000);
-}
-
-/**
- * Initialize test environment with fast Raft elections.
- */
-function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  NodeService.resetInstance();
-  AddressManager.resetInstance();
-  ServiceThreadManager.resetInstance();
-
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    node: {id: 'test-node'},
-    logging: {level: 'error'},
-    transport: {wsHost: '127.0.0.1'},
-    raft: {
-      electionTimeoutMinMs: 100,
-      electionTimeoutMaxMs: 200,
-      heartbeatIntervalMs: 50,
-    },
-    rebalancer: {
-      periodicCheckIntervalMs: 1000,
-      periodicCheckJitterMs: 100,
-      stabilizationPeriodMs: 1000,
-    },
-  });
-
-  const logging = LoggingService.getInstance();
-  logging.initialize({level: 'error'});
-}
-
-/**
- * Clean up test environment.
- */
-async function cleanupTestEnvironment() {
-  try {
-    await NodeService.getInstance().shutdown().catch(() => {});
-  } catch {
-    // Ignore
-  }
-  try {
-    await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  } catch {
-    // Ignore
-  }
-  try {
-    await LoggingService.getInstance().shutdown().catch(() => {});
-  } catch {
-    // Ignore
-  }
-  NodeService.resetInstance();
-  ServiceThreadManager.resetInstance();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  AddressManager.resetInstance();
+function nextCausalTimestamp(systemTableCache, tableName) {
+  const authoritativeObservedAtMs = Number(
+    systemTableCache.getLastAuthoritativeObservedAtMs(tableName),
+  );
+  return Math.max(
+    Date.now(),
+    Number.isFinite(authoritativeObservedAtMs) ?
+      authoritativeObservedAtMs + 1 :
+      0,
+  );
 }
 
 test('Admin CDC propagation', async (t) => {
-  t.teardown(() => {
-    if (process.env.TAP === '1') {
-      setTimeout(() => {
-        if (!process.exitCode || process.exitCode === 0) {
-          process.exit(0);
-        }
-      }, 1000);
-    }
-  });
-
   t.beforeEach(() => {
     initializeTestEnvironment();
   });
@@ -105,7 +46,7 @@ test('Admin CDC propagation', async (t) => {
     // mechanism that enables real-time updates to admin clients.
     // =========================================================================
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
-    const seedWsPort = getRandomPort();
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
@@ -162,12 +103,13 @@ test('Admin CDC propagation', async (t) => {
       // Simulate a CDC event by directly updating the cache
       // This mimics what happens when a partition leader broadcasts a CDC event
       const testNodeId = '550e8400-e29b-41d4-a716-446655440099';
+      const causalTimestamp = nextCausalTimestamp(systemTableCache, 'nodes');
       const testNodeRecord = {
         node_id: testNodeId,
         node_address: 'ws://127.0.0.1:9999',
         status: 'active',
-        created_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: causalTimestamp,
+        updated_at: causalTimestamp,
       };
 
       // Insert into cache (simulating CDC event from partition)
@@ -206,7 +148,7 @@ test('Admin CDC propagation', async (t) => {
       // This test verifies that the cache instance is truly shared
       // =======================================================================
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440030';
-      const seedWsPort = getRandomPort();
+      const seedWsPort = getUniquePort();
 
       const bootstrapService = new BootstrapService({
         nodeId: seedNodeId,
@@ -286,7 +228,7 @@ test('Admin CDC propagation', async (t) => {
     // This test verifies that all CDC operation types are properly propagated
     // =========================================================================
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440040';
-    const seedWsPort = getRandomPort();
+    const seedWsPort = getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
@@ -327,11 +269,21 @@ test('Admin CDC propagation', async (t) => {
 
       // Test INSERT
       const testNodeId = '550e8400-e29b-41d4-a716-446655440098';
+      const causalTimestamp = nextCausalTimestamp(systemTableCache, 'nodes');
+      const versionBeforeInsert =
+        systemTableCache.getTableMutationVersion('nodes');
       systemTableCache.applySystemTableChange('nodes', 'INSERT', {
         node_id: testNodeId,
         node_address: 'ws://127.0.0.1:9998',
         status: 'active',
+        created_at: causalTimestamp,
+        updated_at: causalTimestamp,
       });
+      t.equal(
+        systemTableCache.getTableMutationVersion('nodes'),
+        versionBeforeInsert + 1,
+        'causally versioned INSERT should be accepted before notification',
+      );
 
       // Wait for setImmediate callbacks to execute (cache notifications are async)
       await new Promise((resolve) => setImmediate(resolve));
@@ -340,14 +292,23 @@ test('Admin CDC propagation', async (t) => {
         (e) => e.tableName === 'nodes' && e.record?.node_id === testNodeId,
       );
       t.ok(insertEvent, 'should receive INSERT event');
-      t.equal(insertEvent.operation, 'INSERT', 'first set should be INSERT');
+      t.equal(insertEvent?.operation, 'INSERT', 'first set should be INSERT');
 
       // Test UPDATE (set same key again)
+      const versionBeforeUpdate =
+        systemTableCache.getTableMutationVersion('nodes');
       systemTableCache.applySystemTableChange('nodes', 'UPDATE', {
         node_id: testNodeId,
         node_address: 'ws://127.0.0.1:9998',
         status: 'inactive',
+        created_at: causalTimestamp,
+        updated_at: causalTimestamp + 1,
       });
+      t.equal(
+        systemTableCache.getTableMutationVersion('nodes'),
+        versionBeforeUpdate + 1,
+        'causally newer UPDATE should be accepted before notification',
+      );
 
       // Wait for setImmediate callbacks to execute (cache notifications are async)
       await new Promise((resolve) => setImmediate(resolve));
@@ -358,10 +319,24 @@ test('Admin CDC propagation', async (t) => {
                e.operation === 'UPDATE',
       );
       t.ok(updateEvent, 'should receive UPDATE event');
-      t.equal(updateEvent.record.status, 'inactive', 'updated status should be inactive');
+      t.equal(
+        updateEvent?.record?.status,
+        'inactive',
+        'updated status should be inactive',
+      );
 
       // Test DELETE
-      systemTableCache.applySystemTableChange('nodes', 'DELETE', {node_id: testNodeId});
+      const versionBeforeDelete =
+        systemTableCache.getTableMutationVersion('nodes');
+      systemTableCache.applySystemTableChange('nodes', 'DELETE', {
+        node_id: testNodeId,
+        updated_at: causalTimestamp + 2,
+      });
+      t.equal(
+        systemTableCache.getTableMutationVersion('nodes'),
+        versionBeforeDelete + 1,
+        'causally newer DELETE should be accepted before notification',
+      );
 
       // Wait for setImmediate callbacks to execute (cache notifications are async)
       await new Promise((resolve) => setImmediate(resolve));

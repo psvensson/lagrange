@@ -78,6 +78,7 @@ import {
   summarizeAuthoritativeRepairError,
 } from './admin-service-discovery-authoritative-repair-failures.js';
 import {assignAdminServiceDiscoveryReadinessMethods} from './admin-service-discovery-readiness-methods.js';
+import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
 import {assignAdminServiceDiscoveryRepairMethods} from './admin-service-discovery-repair-methods.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
@@ -399,7 +400,7 @@ function parseServiceDiscoverySqlQuery(sql) {
  * operations, SQL execution) are injected as functions so this module
  * has no back-reference to AdminWebSocketAPI.
  */
-class AdminServiceDiscovery {
+class AdminServiceDiscovery extends AdminCacheOwnerState {
   /**
    * @param {Object} deps
    * @param {Object} deps.systemTableCache
@@ -412,11 +413,10 @@ class AdminServiceDiscovery {
    * @param {Function} deps.buildControlSnapshotReplicaOperationSummary
    */
   constructor(deps = {}) {
-    this.systemTableCache = deps.systemTableCache || null;
+    super(deps.systemTableCache, deps.cacheMutationTarget);
     this.nodeId = deps.nodeId || null;
     this.logger = deps.logger || null;
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
-    this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.partitionServicesProvider =
       typeof deps.partitionServicesProvider === 'function' ?
         deps.partitionServicesProvider :
@@ -445,7 +445,21 @@ class AdminServiceDiscovery {
     this.lastAuthoritativeDiscoveryRepairCompletedAtMs = 0;
     this.lastAuthoritativeDiscoveryRepairResult = null;
     this.lastAuthoritativeDiscoveryRepairFailureState = null;
-  } /**
+  }
+
+  setCacheOwner(systemTableCache, cacheMutationTarget) {
+    if (!super.setCacheOwner(systemTableCache, cacheMutationTarget)) {
+      return;
+    }
+    this.authoritativeDiscoveryRepairPromise = null;
+    this.authoritativeDiscoveryEvidenceProbePromise = null;
+    this.lastAuthoritativeDiscoveryRepairAtMs = 0;
+    this.lastAuthoritativeDiscoveryRepairCompletedAtMs = 0;
+    this.lastAuthoritativeDiscoveryRepairResult = null;
+    this.lastAuthoritativeDiscoveryRepairFailureState = null;
+  }
+
+  /**
    * Build local service-discovery snapshot from system cache only.
    * @param {Object} [options={}]
    * @return {Object}
@@ -513,7 +527,12 @@ class AdminServiceDiscovery {
    * @param {Object} [options={}]
    * @return {Promise<Object>}
    */
-  async resolveServiceDiscoverySnapshot(options = {}) {
+  resolveServiceDiscoverySnapshot(options = {}) {
+    return this.resolveCacheOwnerSnapshot(() =>
+      this.resolveServiceDiscoverySnapshotAttempt(options));
+  }
+
+  async resolveServiceDiscoverySnapshotAttempt(options = {}) {
     const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
     if (
       this.controlPlaneSnapshotOwner &&

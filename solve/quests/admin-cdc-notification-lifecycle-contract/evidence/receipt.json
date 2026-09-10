@@ -1,0 +1,44 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "admin-cdc-notification-lifecycle-contract",
+  "generatedAt": "2026-09-10T10:18:03.000Z",
+  "receipts": [
+    {
+      "id": "release-failure-classified",
+      "passed": true,
+      "command": "gh run view 34444694916 --log",
+      "detail": "The release failed only in admin-cdc-propagation's third INSERT witness before any npm, Docker, Helm, SEA, or GitHub publication. A deterministic probe showed an undated absent-key INSERT is correctly fenced after authoritative absence, while updated_at=observedAt+1 is admitted; the blocker was scenario causality, not notification latency or cache correctness."
+    },
+    {
+      "id": "single-owned-admin-cache-subscription",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/admin/admin-websocket-api-shutdown-state.test.js",
+      "detail": "96 assertions prove one stable production Admin listener, same-cache idempotence, typed and atomic owner handoff, old-cache non-delivery, shutdown detachment, restart restoration, and fulfilled or rejected retired-owner attempts being discarded and re-driven."
+    },
+    {
+      "id": "cache-handoff-and-shutdown-continuity",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/admin/admin-websocket-api-shutdown-state.test.js test/admin/admin-service-discovery.test.js test/admin/admin-control-snapshot.test.js test/admin/admin-preflight-snapshot.test.js test/cache/system-table-cache.test.js test/integration/admin-cdc-propagation.integration.test.js",
+      "detail": "The 970-assertion protected cone covers shutdown/handoff and shutdown/restart overlap, mixed snapshots plus fulfilled and rejected retired attempts across every awaited resolver boundary, old/new repair and probe overlap, reconcile fencing, failure-backoff reset, listener continuity, and unchanged cache behavior."
+    },
+    {
+      "id": "release-admin-cdc-integration-stress",
+      "passed": true,
+      "command": "for run_index in $(seq 1 10); do TAP_TIMEOUT_FLOOR=120 LAGRANGE_RETRY_FAILED_ONCE=0 LAGRANGE_TEST_MACHINE_FACTOR=3 node scripts/run-test-files.js --jobs=1 test/integration/admin-cdc-propagation.integration.test.js || exit 1; done",
+      "detail": "The exact release-environment integration passed 10/10 consecutive primary runs with retries disabled: 290 assertions and no missed mutation, timeout, listener leak, or teardown failure."
+    },
+    {
+      "id": "red-on-revert-lifecycle-witness",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/admin/admin-websocket-api-shutdown-state.test.js with each production owner-boundary attempt absent",
+      "detail": "The retained red sequence in log.ndjson reached production assertions before each repair: 10/23 failures for listener ownership, 14/39 for shutdown/restart and repair ownership, 9/78 for mixed builders and raw fallback, 7/88 for fulfilled complete-resolver stale-owner escape, and 6/96 for rejected stale-owner escape. Each corresponding witness is green on the final source."
+    },
+    {
+      "id": "unchanged-cache-cdc-contract-and-static-gates",
+      "passed": true,
+      "command": "npm test && npm run test:static",
+      "detail": "The final 436-file widened selection passed 18,657 assertions including all 16 exclusive integrations. Full static passed with unchanged ratchets (unused 1438, cycles 0, source duplication 57 groups/1845 lines, test duplication 793 groups/30519 lines, cyclomatic 1822, cognitive 161, source size 27, test size 21), all policy/impact/docs/lint gates green, and no src/cache or CDC core production change."
+    }
+  ]
+}
