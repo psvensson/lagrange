@@ -10,6 +10,25 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-09-10
+
+This forward patch preserves the immutable `v0.2.0` tag after its release
+workflow stopped before publishing npm, Docker, Helm, SEA, or GitHub artifacts.
+Formation health at cut time: `formation health: 0/0 passed (0%), 0 with a
+starved seed`.
+
+### Fixed
+- The admin CDC release scenario now uses the canonical isolated fixture and
+  authors monotonically causal mutation timestamps, so a legitimate
+  authoritative-absence fence cannot discard its synthetic INSERT.
+- Admin notification ownership is stable and serialized across same-cache
+  binding, cache handoff, shutdown, and restart, with typed atomic propagation
+  to every cache-backed child owner.
+- Admin control, preflight, and service-discovery work is generation-bound
+  across every awaited boundary: fulfilled or rejected retired-owner work is
+  discarded and re-driven, current-owner failures remain visible, and repeated
+  owner churn fails closed at a bounded attempt count.
+
 ## [0.2.0] — 2026-09-10
 
 The 0.2 _Stable Core_ work (`RM-0.2-*` rows in
@@ -295,7 +314,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/psvensson/lagrange/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0
