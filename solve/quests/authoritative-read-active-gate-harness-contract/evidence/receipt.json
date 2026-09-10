@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "authoritative-read-active-gate-harness-contract",
+  "generatedAt": "2026-09-10T04:22:51.000Z",
+  "receipts": [
+    {
+      "id": "publish-failure-classified",
+      "passed": true,
+      "command": "npm run publish",
+      "detail": "Exact landed HEAD a8f546c3447465795e960004c2944b015937cb42 passed five publication stages, then test:fast failed the active-gate authoritative-repair convergence witness twice with stale_usable instead of fresh; nothing was pushed. The sealed parent 9bf8bc0df749d1136fe8d19c163ba433d358a0fa passes the same 3-assertion file."
+    },
+    {
+      "id": "canonical-leader-witness-fixture",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+      "detail": "PASS: 4 assertions in 650ms. The CDC fixture now supplies the canonical partition's typed serving-leader readAuthorityWitness; the gateway alone derives complete-table evidence. A distinct remote authority clock advances while the repair owner's local backoff clock stays fixed, proving convergence without expiring or bypassing the backoff."
+    },
+    {
+      "id": "gateway-active-gate-impact-selection",
+      "passed": true,
+      "command": "npm run audit:impact-contracts && node scripts/run-test-files.js --jobs=1 test/scripts/impact-contract-registry.test.js test/scripts/select-change-tests.test.js test/scripts/change-selection-taxonomy.test.js test/scripts/impact-proof-cone.test.js test/solve/guards.test.js",
+      "detail": "PASS: registry 18 contracts/9 pairs (sha256 aac6ec883b1ec30798019fb64f84879d354ba19a654d1e435455dcbc524d70cc) and 90 selection/guard assertions. The active-gate witness directly proves each authoritative-observation gateway provider selects it for impact-witness: active-gate-convergence, and both the contract and protected pair register the exact combined witness."
+    },
+    {
+      "id": "paired-active-gate-contract-green",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/active-gate/active-gate-authoritative-repair-convergence.test.js test/admin/admin-service-discovery.test.js test/admin/admin-control-snapshot.test.js test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js test/admin/admin-control-snapshot-retry-decision.test.js",
+      "detail": "PASS: 5 files and 591 assertions. Persistent repair failure remains bounded and non-bypassable while a newer serving-leader observation re-drives the sole ACTIVE owner before backoff expiry. The adjoining gateway observation cone also passes 424 assertions; the unchanged PressureGovernor queue/deadline suite passes 95."
+    },
+    {
+      "id": "unchanged-production-and-budgets",
+      "passed": true,
+      "command": "git diff --check; npm run lint; npm run test:complexity; npm run audit:file-size; npm run audit:runtime-grammar; npm run model:contract-records; npm run test:metadata-gateway:audit",
+      "detail": "PASS. The follow-up changes only architecture/contract, Quest, registry, and test-harness paths: no src/, production timing, retry, cadence, heap, or ratchet baseline changed. Lint, the 1822/1822 complexity ratchet, 27/27 source and 21/21 test file-size ratchets, runtime grammar/state-machine pressure, system contract records, and unified metadata gateway audits all pass."
+    }
+  ]
+}

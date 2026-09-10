@@ -27,6 +27,10 @@
     {
       "owner": "authoritative_discovery_repair_owner",
       "boundary": "repair_admission_backoff"
+    },
+    {
+      "owner": "control_plane_system_table_gateway_owner",
+      "boundary": "serving_leader_complete_table_observation"
     }
   ],
   "failureClasses": [
@@ -58,6 +62,10 @@
     {
       "id": "cluster-active-single-decision-owner",
       "statement": "Only startup_active_gate_owner decides cluster ACTIVE; node lifecycle status, membership publication counts, cache coverage, and admin or harness projections are evidence or presentation and cannot independently authorize convergence."
+    },
+    {
+      "id": "complete-observation-single-gateway-owner",
+      "statement": "Only control_plane_system_table_gateway_owner validates and mints complete-table authoritative observation evidence, and it does so only from the canonical partition's serving-leader read witness; transports, repair callers, and harnesses cannot assert an equivalent receipt."
     },
     {
       "id": "failed-repair-backoff-non-bypassable",
@@ -111,6 +119,7 @@
     "phaseChain": [
       "owner reconcile identifies an eligible active node",
       "snapshot coverage is accepted for the current owner epoch",
+      "control-plane system-table gateway validates a serving-leader read witness and mints the complete-table observation receipt",
       "authoritative discovery repair owner admits, reuses, or defers refresh work with typed retry evidence",
       "membership publication is written and read back as durably visible",
       "the startup active-gate owner adjudicates cluster ACTIVE from canonical evidence",
@@ -119,6 +128,7 @@
     "ownerBoundaryMap": [
       "startup_active_gate_owner / snapshot_coverage owns the cluster-ACTIVE decision plus publication and coverage convergence",
       "authoritative_discovery_repair_owner / repair_admission_backoff owns repair admission, failure backoff, retry-after, and repair-result reuse",
+      "control_plane_system_table_gateway_owner / serving_leader_complete_table_observation owns validation and minting of complete-table authoritative observation receipts from the canonical partition's serving leader",
       "operation_workflow_owner / rebalancer_handoff preserves coverage and recoverable follow-up across handoff",
       "admin, diagnostics, and harness consumers submit observation intent and render owner outcomes; they do not own repair admission or cluster-ACTIVE semantics"
     ],
@@ -162,6 +172,30 @@
       "transition": "resolvePublicationActiveGateHandoffMissingPublishedNodeIds derives the missingPublished residual (expected minus published) that the drain must drive to zero"
     },
     {
+      "path": "src/control-plane/control-plane-authoritative-read-witness.js",
+      "owner": "control_plane_system_table_gateway_owner",
+      "boundary": "serving_leader_complete_table_observation",
+      "transition": "isValidLeaderReadAuthorityWitness accepts observation evidence only from the canonical partition's identified serving leader with replica identity and causal observation time"
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
+      "owner": "control_plane_system_table_gateway_owner",
+      "boundary": "serving_leader_complete_table_observation",
+      "transition": "a complete-table observation request is forced through owner-RPC-required, leader-required authoritative read routing before it can reach receipt minting"
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+      "owner": "control_plane_system_table_gateway_owner",
+      "boundary": "serving_leader_complete_table_observation",
+      "transition": "the gateway alone mints a cause-scoped complete-table receipt, preserving the serving leader's observedAtMs separately from the gateway-local readStartedAtMs; shape-compatible caller objects are not evidence"
+    },
+    {
+      "path": "src/control-plane/control-plane-snapshot-owner.js",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "transition": "forceControlSnapshotRepair keeps the repair deferral binding while consuming the repair owner's advanced authoritative observation to re-evaluate the sole ACTIVE decision"
+    },
+    {
       "path": "src/control-plane/control-plane-snapshot-owner-evidence-advance.js",
       "owner": "startup_active_gate_owner",
       "boundary": "snapshot_coverage",
@@ -172,6 +206,18 @@
       "owner": "authoritative_discovery_repair_owner",
       "boundary": "authoritative_repair_admission",
       "transition": "probeAuthoritativeDiscoveryEvidenceRevision answers the current authoritative evidence revision for the deferred repair's own failed table(s) as an observation-only typed read; it admits no repair, records no attempt, and leaves the failure-deferral (keyed by repair tables + failure class + time, no bypassReuse guard) fully binding"
+    },
+    {
+      "path": "src/admin/admin-service-discovery-repair-methods.js",
+      "owner": "authoritative_discovery_repair_owner",
+      "boundary": "repair_admission_backoff",
+      "transition": "ensureAuthoritativeDiscoveryCacheRepair serializes admission and records the owner-local completedAtMs/retryAtMs failure revision whose backoff remains binding while remote evidence is probed"
+    },
+    {
+      "path": "src/admin/admin-service-discovery.js",
+      "owner": "authoritative_discovery_repair_owner",
+      "boundary": "repair_admission_backoff",
+      "transition": "the owner composition root binds authoritative reads, cache reconciliation, repair admission, failure deferral, and evidence probing into the one AdminServiceDiscovery owner path"
     },
     {
       "path": "src/admin/admin-service-discovery-repair-cache-methods.js",
@@ -287,12 +333,26 @@ Liveness is paired with that safety rule: once the evidence described by a
 deferred observation materially advances, or repair/retry ownership advances,
 the ACTIVE decision must remain reachable through the canonical owner path.
 
+Complete-table authoritative observation receipts belong only to
+`control_plane_system_table_gateway_owner`. The gateway requires a typed
+serving-leader witness for the table's canonical partition and preserves the
+leader's causal observation time independently from its local read-start time.
+Transport results, repair callers, diagnostics, and harnesses may supply or
+consume the typed witness, but they cannot mint an equivalent receipt.
+
 ## Runtime Bindings
 
 The runtime bindings are
 `src/rebalancer/operation-workflow-owner-ports.js`,
 `src/control-plane/membership-publication-active-gate-reconcile.js`,
 `src/control-plane/publication-active-gate-handoff-contract-evidence.js`,
+`src/control-plane/control-plane-authoritative-read-witness.js`,
+`src/control-plane/control-plane-system-table-gateway-read-dispatch.js`,
+`src/control-plane/control-plane-system-table-gateway-read-strategies.js`,
+`src/control-plane/control-plane-snapshot-owner.js`,
+`src/control-plane/control-plane-snapshot-owner-evidence-advance.js`,
+`src/admin/admin-service-discovery.js`,
+`src/admin/admin-service-discovery-repair-methods.js`,
 `src/admin/admin-service-discovery-repair-cache-methods.js`, and
 `src/admin/admin-control-snapshot-active-gate-handoff-projection.js`.
 Owner-boundary changes update this contract and validate the applicable model
@@ -358,11 +418,13 @@ stale observation.
 
 The binding ownership split is:
 
-1. `authoritative_discovery_repair_owner` decides whether repair is admitted,
+1. `control_plane_system_table_gateway_owner` validates the serving-leader read
+   witness and alone mints complete-table authoritative observation evidence.
+2. `authoritative_discovery_repair_owner` decides whether repair is admitted,
    reused, deferred, or unavailable and owns retry/backoff timing.
-2. `startup_active_gate_owner` decides whether the cluster has crossed ACTIVE
+3. `startup_active_gate_owner` decides whether the cluster has crossed ACTIVE
    convergence using canonical owner evidence.
-3. Admin, diagnostics, and harness callers express observation/freshness intent
+4. Admin, diagnostics, and harness callers express observation/freshness intent
    and render the typed outcomes. They do not decide either semantic question.
 
 Forbidden local fixes:
@@ -376,6 +438,8 @@ Forbidden local fixes:
 - shortening a backoff or polling interval as the primary liveness mechanism;
 - allowing a stale deferred observation to remain a terminal veto after the
   relevant owner evidence/revision has advanced.
+- accepting a caller-forged complete-table observation or replacing the serving
+  leader's causal observation time with a reader-local wall clock.
 
 A valid change must prove both sides in one deterministic coupled witness:
 failed-repair pressure remains bounded **and** newer evidence/retry ownership

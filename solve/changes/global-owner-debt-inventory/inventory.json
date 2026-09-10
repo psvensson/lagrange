@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 429919,
-        "sha256": "f43d0cbfdf79c6e4613b057a27fccbd401ccffe90333cca870bdf42bdc614dc6"
+        "sha256": "bdbba09b9f0ed72b03cc82debe07a337e2fbbb080d68e34dfef22e5a8462a91c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2478650,
-        "sha256": "44cd8d0c9e3d51704e24dd2e1e821bb44846b66e21d0d5a5e90fdd4d3e8b4cda"
+        "bytes": 2479546,
+        "sha256": "e57ef56629124f59f92dd0e41c12d0602ca408320dbac7db80e412f3f3a0c03a"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "088b2c7e4f88d4ceb961d6d1c9d5bfd162de5f95436ee27e74d4fba22d6d93a0"
+        "sha256": "6ba549ae9d38ad7d2aec30d104e7cef7a42ab0546d7c2526afff2bcce7d7e08d"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "23b3c5764f5e5dd7e44aaffbb8ead1d80d1fbf98c7f7389160967b1ed7aa0963"
+    "inputDigest": "de2da000660c66671bfce93e80e3decc734be8fda53101c9baff8d8f453af9ff"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 429919,
-        "sha256": "f43d0cbfdf79c6e4613b057a27fccbd401ccffe90333cca870bdf42bdc614dc6"
+        "sha256": "bdbba09b9f0ed72b03cc82debe07a337e2fbbb080d68e34dfef22e5a8462a91c"
       },
       "declaredCount": 1822,
       "observedCount": 1822,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "088b2c7e4f88d4ceb961d6d1c9d5bfd162de5f95436ee27e74d4fba22d6d93a0"
+          "sha256": "6ba549ae9d38ad7d2aec30d104e7cef7a42ab0546d7c2526afff2bcce7d7e08d"
         },
         "cloneGroups": 795,
         "duplicatedLines": 30561,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2478650,
-        "sha256": "44cd8d0c9e3d51704e24dd2e1e821bb44846b66e21d0d5a5e90fdd4d3e8b4cda"
+        "bytes": 2479546,
+        "sha256": "e57ef56629124f59f92dd0e41c12d0602ca408320dbac7db80e412f3f3a0c03a"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "80d1efd9f3a96605fa16a4cc20c49dac73a86acbfd367bdf03a61bc91cba3b1d",
-      "moduleCount": 4979,
-      "edgeCount": 21969,
+      "sourceDigest": "15afc771d142584ea4371a27b35e568dd0f0e3f93b089d0693a664347e324565",
+      "moduleCount": 4980,
+      "edgeCount": 21977,
       "unresolvedCount": 34
     }
   },
@@ -184,7 +184,7 @@
     "sourceSignalCount": 2643,
     "assignedSignalCount": 2643,
     "uniqueAssignmentCount": 2643,
-    "digest": "8b83505dc14304120aaebb8cbf552b6b66307c0a0141626ade1b8dad6c98942b"
+    "digest": "509b6845cb156569da45c9fb22b2b90482eedacc23d668f4c869a16fb544247d"
   },
   "signalCounts": {
     "cognitive": 161,
@@ -274,7 +274,7 @@
       "cloneTouches": 6,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 643,
+      "importIn": 644,
       "importOut": 413,
       "score": 1192.3,
       "topPaths": [
@@ -359,7 +359,7 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 74,
-      "importOut": 288,
+      "importOut": 290,
       "score": 664.3,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
@@ -1226,7 +1226,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 223,
+      "importIn": 224,
       "importOut": 53,
       "score": 72,
       "topPaths": [

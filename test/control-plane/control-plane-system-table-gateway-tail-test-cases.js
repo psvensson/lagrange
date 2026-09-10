@@ -6,6 +6,8 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
 import {
   registerControlPlaneSystemTableGatewayReadCoalescingTests,
 } from './control-plane-system-table-gateway-read-coalescing-test-cases.js';
+import {createImmediatePressureGovernor} from
+  './control-plane-system-table-gateway-pressure-test-fixture.js';
 
 export function registerControlPlaneSystemTableGatewayTailTests({
   test,
@@ -728,6 +730,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     let sqlFallbackUsed = false;
     const gateway = new ControlPlaneSystemTableGateway({
       nodeId: 'node-gateway',
+      pressureGovernor: createImmediatePressureGovernor(),
       messageRouter: {
         getOutboundPressureSummary() {
           return {
@@ -803,6 +806,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       let authoritativeCalls = 0;
       const gateway = new ControlPlaneSystemTableGateway({
         nodeId: `node-gateway-${testCase.name}`,
+        pressureGovernor: createImmediatePressureGovernor(),
         messageRouter: {
           getOutboundPressureSummary() {
             return {
@@ -1282,6 +1286,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     let sqlCalls = 0;
     const gateway = new ControlPlaneSystemTableGateway({
       nodeId: 'node-gateway',
+      pressureGovernor: createImmediatePressureGovernor(),
       messageRouter: {
         getOutboundPressureSummary() {
           return {

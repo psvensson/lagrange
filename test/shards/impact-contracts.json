@@ -198,10 +198,15 @@
       ]
     },
     "active-gate-convergence": {
-      "description": "The canonical active-gate system contract: authoritative discovery repair pressure containment and startup ACTIVE convergence stay compatible, callers cannot bypass failed-repair backoff, and stale deferred evidence cannot become a permanent ACTIVE veto after newer owner evidence exists.",
+      "description": "The canonical active-gate system contract: the control-plane read gateway derives complete-table evidence only from a serving-leader witness, authoritative discovery repair pressure containment and startup ACTIVE convergence stay compatible, callers cannot bypass failed-repair backoff, and stale deferred evidence cannot become a permanent ACTIVE veto after newer owner evidence exists.",
       "owners": [
-        "src/admin/admin-service-discovery-repair-cache-methods.js",
+        "src/admin/admin-service-discovery.js",
+        "src/admin/admin-service-discovery-repair-",
         "src/admin/admin-control-snapshot-active-gate-handoff-projection.js",
+        "src/control-plane/control-plane-authoritative-read-witness.js",
+        "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
+        "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+        "src/control-plane/control-plane-snapshot-owner",
         "src/control-plane/membership-publication-active-gate-reconcile.js",
         "src/control-plane/publication-active-gate-handoff-contract-evidence.js"
       ],
@@ -209,7 +214,8 @@
         "test/admin/admin-service-discovery.test.js",
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
-        "test/admin/admin-control-snapshot-retry-decision.test.js"
+        "test/admin/admin-control-snapshot-retry-decision.test.js",
+        "test/active-gate/active-gate-authoritative-repair-convergence.test.js"
       ]
     },
     "operation-ledger-self-move-interlock": {
@@ -409,12 +415,15 @@
         {
           "id": "repair-admission-backoff",
           "owners": [
-            "src/admin/admin-service-discovery-repair-cache-methods.js"
+            "src/admin/admin-service-discovery-repair-cache-methods.js",
+            "src/admin/admin-service-discovery-repair-methods.js"
           ]
         },
         {
           "id": "cluster-active-convergence",
           "owners": [
+            "src/control-plane/control-plane-snapshot-owner.js",
+            "src/control-plane/control-plane-snapshot-owner-evidence-advance.js",
             "src/control-plane/membership-publication-active-gate-reconcile.js",
             "src/control-plane/publication-active-gate-handoff-contract-evidence.js"
           ]
@@ -425,7 +434,8 @@
         "test/admin/admin-service-discovery.test.js",
         "test/admin/admin-control-snapshot.test.js",
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
-        "test/admin/admin-control-snapshot-retry-decision.test.js"
+        "test/admin/admin-control-snapshot-retry-decision.test.js",
+        "test/active-gate/active-gate-authoritative-repair-convergence.test.js"
       ]
     },
     "operation-ledger-self-move-hold-dispatch": {

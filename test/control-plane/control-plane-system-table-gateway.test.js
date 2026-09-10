@@ -28,7 +28,8 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {registerControlPlaneSystemTableGatewayTailTests} from './control-plane-system-table-gateway-tail-test-cases.js';
-
+import {createImmediatePressureGovernor} from
+  './control-plane-system-table-gateway-pressure-test-fixture.js';
 const GATEWAY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
 const GATEWAY_ROUTING_IDENTITY_MISSING = 'missing';
 const GATEWAY_REPLACE_PENDING_SERVICE_KEY = 'services:svc-1';
@@ -1376,6 +1377,7 @@ test('ControlPlaneSystemTableGateway emits shared pressure diagnostics with ' +
   const metricEvents = [];
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'pressure-gateway-node',
+    pressureGovernor: createImmediatePressureGovernor(),
     logger: {
       info(tag, data) {
         metricEvents.push({tag, data});
@@ -1422,6 +1424,7 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
   const warnings = [];
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: 'defer-gateway-node',
+    pressureGovernor: createImmediatePressureGovernor(),
     logger: {
       info() {},
       warn(message, data) {

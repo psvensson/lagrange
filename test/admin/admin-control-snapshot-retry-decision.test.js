@@ -1,7 +1,10 @@
+import {mock} from 'node:test';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {
   CONTROL_SNAPSHOT_RETRY_DECISION,
+  CONTROL_SNAPSHOT_RETRY_DELAY_MS,
   evaluateControlSnapshotRetryDecision,
 } from '../../src/admin/admin-control-snapshot-retry-decision.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -40,6 +43,18 @@ function createRowsResult(row) {
     success: true,
     rows: [row],
   };
+}
+
+async function resolveWithMockedRetryDelay(operation) {
+  mock.timers.enable({apis: ['setTimeout']});
+  try {
+    const pending = operation();
+    await Promise.resolve();
+    mock.timers.tick(CONTROL_SNAPSHOT_RETRY_DELAY_MS);
+    return await pending;
+  } finally {
+    mock.timers.reset();
+  }
 }
 
 test('control snapshot retry decision retries pressure and timeout errors',
@@ -318,9 +333,10 @@ test('admin websocket control snapshot query retries pressure observations',
       return createRowsResult(CONTROL_SNAPSHOT_ROW);
     };
 
-    const result = await api.buildControlSnapshotQueryResult({
-      activeClientId: 'client-1',
-    });
+    const result = await resolveWithMockedRetryDelay(() =>
+      api.buildControlSnapshotQueryResult({
+        activeClientId: 'client-1',
+      }));
 
     t.equal(
       buildCount,
@@ -370,10 +386,11 @@ test('admin websocket control snapshot retries consume one absolute caller budge
       return createRowsResult(CONTROL_SNAPSHOT_ROW);
     };
 
-    const result = await api.buildControlSnapshotQueryResult({
-      activeClientId: 'client-deadline',
-      queryTimeoutMs: 15000,
-    });
+    const result = await resolveWithMockedRetryDelay(() =>
+      api.buildControlSnapshotQueryResult({
+        activeClientId: 'client-deadline',
+        queryTimeoutMs: 15000,
+      }));
 
     t.same(
       observedTimeouts,
@@ -501,14 +518,14 @@ test('admin websocket control snapshot rechecks the caller budget after retry de
       }
       return createRowsResult(CONTROL_SNAPSHOT_ROW);
     };
-    const expiryTimer = setTimeout(() => {
-      nowMs += 1501;
-    }, 50);
-    t.teardown(() => clearTimeout(expiryTimer));
-
-    const result = await api.buildControlSnapshotQueryResult({
-      activeClientId: 'client-delay-expiry',
-      queryTimeoutMs: 15000,
+    const result = await resolveWithMockedRetryDelay(() => {
+      setTimeout(() => {
+        nowMs += 1501;
+      }, 50);
+      return api.buildControlSnapshotQueryResult({
+        activeClientId: 'client-delay-expiry',
+        queryTimeoutMs: 15000,
+      });
     });
 
     t.same(

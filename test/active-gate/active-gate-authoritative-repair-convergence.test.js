@@ -15,17 +15,17 @@
 //     keeps the e2797b6c8 failure backoff binding; callers (including the
 //     forceAuthoritativeRepair/bypassReuse:true harness escalation) cannot
 //     bypass the failure deferral, and the repair attempt count stays bounded.
-//   * convergence-after-evidence-advances (RED today): after a transient
+//   * convergence-after-evidence-advances (must stay green): after a transient
 //     repair failure defers, the underlying authoritative/cache/discovery
 //     evidence advances; the active-gate owner must be re-driven by that
 //     evidence and converge cluster-ACTIVE WITHOUT weakening the backoff and
-//     WITHOUT waiting for the deferral to time out. Today there is no
-//     level-trigger, so this is red for the right reason.
+//     WITHOUT waiting for the deferral to time out. The fixture keeps the
+//     repair owner's backoff clock fixed while advancing the distinct remote
+//     serving-leader observation clock, so it exercises the real causal edge.
 //
-// The file uses raw node:test (not tap) so each top-level scenario is
-// independently selectable with --test-name-pattern: the quest evidence
-// harness runs the green scenarios for the must-stay-green receipts and the
-// convergence scenario alone for the honest RED receipt.
+// The file uses raw node:test (not tap) so each top-level scenario remains
+// independently selectable with --test-name-pattern. The paired behavioral
+// witness and its proof-selection binding are kept in one deterministic file.
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,6 +34,9 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
 import {TABLES} from '../../src/constants/index.js';
+import {INITIAL_PARTITION_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js';
 import {
   ControlPlaneSystemTableGateway,
@@ -48,6 +51,10 @@ import {
 import {
   AUTHORITATIVE_REPAIR_TRIGGER,
 } from '../../src/admin/admin-authoritative-repair-policy.js';
+import {selectChangedTests} from
+  '../../scripts/checks/change-selection.js';
+import {REASON_IMPACT_WITNESS} from
+  '../../scripts/checks/change-selection-constants.js';
 
 // ── hoisted constants ──────────────────────────────────────────────────────
 const REPAIR_NODE_ID = 'active-gate-repair-owner-node';
@@ -59,7 +66,7 @@ const FAILURE_ERROR_MESSAGE =
   'Distributed operation failed due to participant failures';
 const FAILURE_PARTICIPANT_MESSAGE = 'timeout waiting for participant';
 const AUTHORITATIVE_READ_SOURCE = 'local_partition_replica';
-const OBSERVATION_SCOPE_COMPLETE_TABLE = 'complete_table';
+const AUTHORITATIVE_LEADER_WITNESS_STATE = 'observed';
 const OFF_PATH_SQL_ERROR = 'witness must stay on the authoritative read path';
 const TRANSIENT_RETRY_HINT_MS = 250;
 const CLUSTER_START_MS = 1_000_000;
@@ -79,12 +86,29 @@ const REASON_BASE = 'active-gate-witness';
 const EXPECTED_FIRST_FAILURE_CLASS = 'pressure_or_timeout';
 const MIN_DEFER_RETRY_AFTER_MS = 1;
 const CALLER_ROUNDS = 5;
+const ACTIVE_GATE_CONTRACT_ID = 'active-gate-convergence';
+const ACTIVE_GATE_PAIR_ID = 'active-gate-authoritative-repair-backoff';
+const ACTIVE_GATE_WITNESS_PATH =
+  'test/active-gate/active-gate-authoritative-repair-convergence.test.js';
+const EXPECTED_IMPACT_REASON =
+  `${REASON_IMPACT_WITNESS}: ${ACTIVE_GATE_CONTRACT_ID}`;
+const AUTHORITATIVE_OBSERVATION_PROVIDER_PATHS = Object.freeze([
+  'src/control-plane/control-plane-authoritative-read-witness.js',
+  'src/control-plane/control-plane-system-table-gateway-read-dispatch.js',
+  'src/control-plane/control-plane-system-table-gateway-read-strategies.js',
+]);
 const INVENTORY_RELATIVE_PATH = path.join(
   '..',
   '..',
   'architecture',
   'active-definitions-inventory.md',
 );
+const IMPACT_CONTRACTS_RELATIVE_PATH = path.join(
+  '..',
+  'shards',
+  'impact-contracts.json',
+);
+const REPOSITORY_ROOT_RELATIVE_PATH = path.join('..', '..');
 
 // ── controllable clock (fake timers via the owner's injected nowFn) ────────
 function createControllableClock(startMs) {
@@ -106,7 +130,7 @@ function createControllableClock(startMs) {
 // This is the REAL repair-failure injection point: the gateway's CDC
 // integration service. Flipping `behavior.fail` models the transient vs
 // persistent authoritative-read outcome without touching product code.
-function createAuthoritativeReadTransport(behavior, clock) {
+function createAuthoritativeReadTransport(behavior, authorityClock) {
   const readTableNames = [];
   return {
     readTableNames,
@@ -129,15 +153,20 @@ function createAuthoritativeReadTransport(behavior, clock) {
           }],
         };
       }
+      const partitionId = INITIAL_PARTITION_IDS[tableName];
       return {
         success: true,
         tableName,
         rows: [],
         count: 0,
         source: AUTHORITATIVE_READ_SOURCE,
-        authoritativeObservation: {
-          scope: OBSERVATION_SCOPE_COMPLETE_TABLE,
-          authoritativeObservedAtMs: clock.read(),
+        readAuthorityWitness: {
+          state: AUTHORITATIVE_LEADER_WITNESS_STATE,
+          partitionId,
+          role: RAFT_ROLE.LEADER,
+          servingNodeId: REPAIR_NODE_ID,
+          servingReplicaId: `${partitionId}-r1`,
+          observedAtMs: authorityClock.read(),
         },
       };
     },
@@ -191,6 +220,7 @@ function createControlSnapshotCollaborator(state) {
 // ── real-path harness ──────────────────────────────────────────────────────
 function createActiveGateRepairHarness(options = {}) {
   const clock = createControllableClock(CLUSTER_START_MS);
+  const authorityClock = createControllableClock(CLUSTER_START_MS);
   const behavior = {
     fail: options.startFailing === true,
     retryHintMs: TRANSIENT_RETRY_HINT_MS,
@@ -200,9 +230,13 @@ function createActiveGateRepairHarness(options = {}) {
     cacheMutationCount: 0,
     stuckWatermarkMs: 0,
   };
-  const transport = createAuthoritativeReadTransport(behavior, clock);
+  const transport = createAuthoritativeReadTransport(
+    behavior,
+    authorityClock,
+  );
   const gateway = new ControlPlaneSystemTableGateway({
     nodeId: REPAIR_NODE_ID,
+    now: clock.nowFn,
     cdcIntegrationService: transport,
     sqlQueryEngine: {
       async executeQuery() {
@@ -232,6 +266,7 @@ function createActiveGateRepairHarness(options = {}) {
   });
   return {
     clock,
+    authorityClock,
     behavior,
     state,
     transport,
@@ -346,28 +381,19 @@ test('convergence-after-evidence-advances: the active-gate owner is re-driven an
 
     // (3) The underlying authoritative/cache/discovery evidence SUBSEQUENTLY
     // advances: the authoritative source now has the rows (nodes ready,
-    // coverage gap closed), modeled by the authoritative read now succeeding.
-    // The repair backoff itself has NOT expired (we never advanced the clock),
-    // and we do NOT weaken it. The local cache, however, is still stale until
-    // a repair actually applies the advanced rows.
+    // coverage gap closed), modeled by the authoritative read now succeeding
+    // with a serving-leader observation newer than the failed repair. The
+    // repair backoff itself has NOT expired: its separate owner-local clock
+    // remains fixed. The local cache is still stale until repair applies rows.
     harness.behavior.fail = false;
+    harness.authorityClock.advance(1);
 
-    // (4) Desired end-state: WITHOUT weakening the backoff, the active-gate
+    // (4) WITHOUT weakening the backoff, the active-gate
     // owner is re-driven by the advanced evidence and cluster-ACTIVE converges
-    // (a fresh/READY observation). This is the level-trigger the quest
-    // requires. Today the only re-evaluation is the same forced path that
-    // re-reads the deferred repair decision and rebuilds from the stale cache,
-    // so this is RED for the right reason: the missing evidence-driven
-    // re-drive, NOT a widened timeout and NOT a backoff bypass.
-    //
-    // RED today: control-plane-snapshot-owner.js forceControlSnapshotRepair
-    // re-evaluates the rebuilt snapshot but has no level-trigger that
-    // invalidates the stale repair-deferred observation when the underlying
-    // lifecycle/publication/discovery evidence advances; the deferral
-    // (admin-service-discovery-repair-cache-methods.js
-    // resolveRecentAuthoritativeDiscoveryRepairFailure) is keyed only by
-    // repair tables + failure class + time, so the rebuilt snapshot stays
-    // stale_usable until the backoff expires or a periodic poll notices.
+    // (a fresh/READY observation). The gateway, not this fixture, derives the
+    // complete-table observation from the canonical serving-leader witness;
+    // the repair owner then exposes that advanced revision to the sole ACTIVE
+    // owner without re-admitting repair.
     const convergedSnapshot = await forceActiveGateSnapshot(
       harness.snapshotOwner,
       harness.clock,
@@ -384,6 +410,41 @@ test('convergence-after-evidence-advances: the active-gate owner is re-driven an
       'the converged observation carries the READY contract state',
     );
   });
+
+test('proof-selection: authoritative-observation gateway changes select the ' +
+  'combined active-gate witness and the protected pair registers it', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const repositoryRoot = path.resolve(here, REPOSITORY_ROOT_RELATIVE_PATH);
+  const registry = JSON.parse(readFileSync(
+    path.join(here, IMPACT_CONTRACTS_RELATIVE_PATH),
+    'utf8',
+  ));
+  const contract = registry.contracts[ACTIVE_GATE_CONTRACT_ID];
+  const pair = registry.coupledPairs[ACTIVE_GATE_PAIR_ID];
+
+  assert.ok(contract, `registry carries ${ACTIVE_GATE_CONTRACT_ID}`);
+  assert.ok(pair, `registry carries ${ACTIVE_GATE_PAIR_ID}`);
+  assert.ok(contract.tests.includes(ACTIVE_GATE_WITNESS_PATH),
+    'the combined witness is an exact test of the impact contract');
+  assert.ok(pair.witnessTests.includes(ACTIVE_GATE_WITNESS_PATH),
+    'the protected pair requires the combined anti-storm/liveness witness');
+
+  for (const providerPath of AUTHORITATIVE_OBSERVATION_PROVIDER_PATHS) {
+    assert.ok(contract.owners.includes(providerPath),
+      `${providerPath} owns the authoritative-observation contract edge`);
+    const selection = selectChangedTests({
+      root: repositoryRoot,
+      changedPaths: [providerPath],
+    });
+    const witness = selection.tests.find(
+      (candidate) => candidate.path === ACTIVE_GATE_WITNESS_PATH,
+    );
+    assert.ok(witness,
+      `${providerPath} must select the combined active-gate witness`);
+    assert.ok(witness.reasons.includes(EXPECTED_IMPACT_REASON),
+      `${providerPath} selects it through ${EXPECTED_IMPACT_REASON}`);
+  }
+});
 
 // ── Deliverable 1 (receipt target): the inventory doc exists & classifies ──
 test('active-definitions-inventory: the inventory doc exists and classifies the four ACTIVE definitions',
