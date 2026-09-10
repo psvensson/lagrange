@@ -77,6 +77,10 @@ jobs:
         run: |
           npm install --global npm@11.7.0
           npm ci
+          # The GCP harness deliberately keeps Pulumi out of the ordinary
+          # package manifest. Install its exact optional boundary here, where
+          # provision() is actually exercised, without rewriting the lockfile.
+          npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
 
       - name: Fetch MovieLens dataset (digest-pinned)
         run: |

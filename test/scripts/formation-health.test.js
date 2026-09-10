@@ -15,6 +15,13 @@ import {
   runFormationHealth,
 } from '../../scripts/checks/formation-health.js';
 
+const FORMATION_HEALTH_WORKFLOW_PATH = '.github/workflows/formation-health.yml';
+const DEPENDENCY_POLICY_PATH = 'dependency-policy.json';
+const PULUMI_PACKAGE_NAMES = ['@pulumi/pulumi', '@pulumi/gcp'];
+const PINNED_PULUMI_INSTALL =
+  'npm install --no-save --package-lock=false ' +
+  '@pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1';
+
 function liveReport({passed, verdict, reason, seedStarved, blockedMs}) {
   return {
     timestamp: '2026-09-05T19:10:11.628Z',
@@ -73,6 +80,40 @@ test('parseArguments reads report, gcp, summary, trend and limit', (t) => {
     {report: 'r.json', gcp: true, summary: true, trend: 't.ndjson', limit: 5},
   );
   t.equal(parseArguments(['--limit', 'nope']).limit, 20);
+  t.end();
+});
+
+test('scheduled GCP health installs only its pinned optional boundary', (t) => {
+  const workflow = fs.readFileSync(FORMATION_HEALTH_WORKFLOW_PATH, 'utf8');
+  const dependencyPolicy = JSON.parse(
+    fs.readFileSync(DEPENDENCY_POLICY_PATH, 'utf8'),
+  );
+  const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const declaredPackages = new Set([
+    ...Object.keys(packageJson.dependencies || {}),
+    ...Object.keys(packageJson.devDependencies || {}),
+    ...Object.keys(packageJson.optionalDependencies || {}),
+  ]);
+
+  for (const packageName of PULUMI_PACKAGE_NAMES) {
+    t.notOk(declaredPackages.has(packageName),
+      `${packageName} stays outside the ordinary npm ci boundary`);
+    t.equal(
+      dependencyPolicy.optionalExternals[packageName]?.owner,
+      'test/distributed/harness/gcp-provisioner.js',
+      `${packageName} remains owned by the GCP provisioner boundary`,
+    );
+  }
+  const ciIndex = workflow.indexOf('npm ci');
+  const optionalInstallIndex = workflow.indexOf(PINNED_PULUMI_INSTALL);
+  const healthRunIndex = workflow.indexOf(
+    'npm run health:formation -- --gcp',
+  );
+  t.ok(ciIndex >= 0, 'the workflow starts from the ordinary clean install');
+  t.ok(optionalInstallIndex > ciIndex,
+    'the optional boundary is restored after npm ci removes ambient packages');
+  t.ok(healthRunIndex > optionalInstallIndex,
+    'the provisioner cannot run before its optional boundary is installed');
   t.end();
 });
 

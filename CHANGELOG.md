@@ -10,24 +10,27 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-10
+
 The 0.2 _Stable Core_ work (`RM-0.2-*` rows in
-`docs/development/agpl-feature-map.md`), landed on `main` with Solver-verified
-evidence and not yet tagged. The release process changed on 2026-09-05
+`docs/development/agpl-feature-map.md`) landed on `main` with Solver-verified
+evidence. The release process changed on 2026-09-05
 (`RELEASE.md`): a tag proves what is deterministic about its bytes (full
 corpus green on the exact SHA, artifacts built and smoke-tested by the tag
 workflow, an honest changelog), and five-node formation is a measured
 standing signal rather than a release gate.
 
-Formation health on 103786ef3 (2026-09-05, one node per GCP VM): the
-five-node MovieLens formation FAILED with `seed_event_loop_starved` — the
-seed's event loop was blocked for 49.8 s unexplained inside a 135 s
-formation window, the critical-topology settling blocker read
-`node_ready_lease_incomplete` 521 times with all five nodes unready in most
-samples, the critical system-partition spread gap stayed at 6 with no
-operation in flight, and schema admission ended in `control_plane_pressure`.
-A bounded three-run five-node GCP formation-only streak last passed on
-2026-08-30 (completion 42.8 s / 38.1 s / 35.9 s); the last full MovieLens
-pass on GCP was 2026-08-30.
+Formation health at cut time: `formation health: 0/1 passed (0%), 0 with a
+starved seed`. The 2026-09-10 scheduled record on `9bf8bc0` was `UNKNOWN` with
+`seed_log_unavailable`: the run never provisioned because the workflow's
+ordinary `npm ci` omitted the GCP harness's deliberately optional Pulumi
+packages. This release repairs that installation boundary; the record is not
+a formation verdict. The latest actual measurement remains the 2026-09-05 run
+on `103786ef3`: five-node MovieLens formation failed with
+`seed_event_loop_starved` after 49.8 s of unexplained seed blocking inside a
+135 s window. A bounded three-run five-node GCP formation-only streak last
+passed on 2026-08-30 (42.8 s / 38.1 s / 35.9 s), also the date of the last
+full MovieLens GCP pass.
 
 ### Added
 - Five-node cold formation: an operation-ledger formation barrier with a
@@ -167,6 +170,17 @@ pass on GCP was 2026-08-30.
   table.
 
 ### Fixed
+- Seven-node formation no longer strands critical system tables in seed-only
+  placement: authoritative absence is causally fenced against stale cache
+  resurrection, including delete/recreate and CDC/tombstone races, and repair
+  continues through the serving-leader authority path until placement spreads.
+- Membership-publication owner scenarios now use one prototype-complete
+  coordinator host. Repeated real driver ticks expose rejected async refreshes
+  and cannot leave the in-flight latch silently stuck after the first tick.
+- The scheduled GCP formation-health workflow installs the exact-pinned Pulumi
+  boundary that its provisioner dynamically imports; a contract test keeps the
+  packages optional for ordinary installs while preventing another no-run
+  `seed_log_unavailable` health record.
 - The formation-release GCP analyzer classifies a generation revoked by a
   valid disconnect after the authority began draining as teardown-truncated
   rather than stranded, and the reverted-control verdict reads the analyzer's
@@ -281,6 +295,7 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0

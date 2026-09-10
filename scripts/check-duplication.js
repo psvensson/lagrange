@@ -130,8 +130,10 @@ const RATCHET_TARGETS = [
     // cutover deleted test/solve (checker hint).
     // 2026-09-09: tightened duplicated lines 30575 -> 30561 after the
     // formation-convergence owner/test decomposition (checker hint).
-    baselineCloneGroupCount: 795,
-    baselineDuplicatedLineCount: 30561,
+    // 2026-09-10: tightened 795/30561 -> 793/30519 after the publication-owner
+    // harnesses converged on one prototype-complete fixture (checker hint).
+    baselineCloneGroupCount: 793,
+    baselineDuplicatedLineCount: 30519,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
