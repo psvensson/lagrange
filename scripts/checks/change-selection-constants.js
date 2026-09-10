@@ -63,6 +63,13 @@ export const WORKSPACE_INJECTION_ENV = 'LAGRANGE_WORKSPACE_INJECTIONS';
 export const CHECK_BASE_ENV = 'LAGRANGE_CHECK_BASE';
 
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
+export const SAFETY_SPINE_TESTS_FIELD = 'tests';
+export const INVALID_SAFETY_SPINE_PROBLEM =
+  'safety spine must contain a nonempty unique own-data string array';
+export const INVALID_EXECUTION_PLAN_INPUT_PROBLEM =
+  'execution plan requires an own-data option record';
+export const INVALID_SELECTION_RESULT_PROBLEM =
+  'change selector returned an invalid own-data result';
 export const IMPACT_CONTRACTS_PATH = 'test/shards/impact-contracts.json';
 
 // WHY modular proof is unsafe. REFUSED is still one outcome - the selector
@@ -139,6 +146,21 @@ export const NEVER_INERT_PREFIXES = Object.freeze([
 
 export const PACKAGE_MANIFEST_PATH = 'package.json';
 export const PACKAGE_LOCKFILE_PATH = 'package-lock.json';
+export const LOCKFILE_PACKAGES_FIELD = 'packages';
+export const LOCKFILE_ROOT_PACKAGE_KEY = '';
+
+// JSON number-token characters used by the semantic lockfile comparison.
+// Keep the grammar vocabulary here so the safety parser consumes one owned
+// definition rather than restating syntax literals throughout its scanner.
+export const JSON_DIGIT_MIN = '0';
+export const JSON_DIGIT_MAX = '9';
+export const JSON_STRING_ESCAPE = '\\';
+export const JSON_STRING_QUOTE = '"';
+export const JSON_NUMBER_MINUS = '-';
+export const JSON_NUMBER_PLUS = '+';
+export const JSON_NUMBER_DECIMAL = '.';
+export const JSON_NUMBER_EXPONENT_LOWER = 'e';
+export const JSON_NUMBER_EXPONENT_UPPER = 'E';
 // The refusal banner is the ONE phrase a caller can grep for. It must appear
 // for every refusal code, not only the release-proof one: a caller who learns
 // to look for it must never meet a refusal that omits it.

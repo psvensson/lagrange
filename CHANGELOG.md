@@ -28,6 +28,10 @@ starved seed`.
   across every awaited boundary: fulfilled or rejected retired-owner work is
   discarded and re-driven, current-owner failures remain visible, and repeated
   owner churn fails closed at a bounded attempt count.
+- Change-scoped CI now compares the semantic installed dependency graph in
+  `package-lock.json`, so a coordinated root version-only release edit runs the
+  release-packaging proof while real graph changes and unreadable lockfiles
+  still require the full release proof.
 
 ## [0.2.0] — 2026-09-10
 

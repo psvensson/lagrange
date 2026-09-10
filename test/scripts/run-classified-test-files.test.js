@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import {
@@ -18,6 +22,7 @@ const TOOLCHAIN = 'test/examples/service-compiler-account-summary-parity.test.js
 const INTEGRATION = 'test/integration/admin-cdc-propagation.integration.test.js';
 const SHARED_OUTPUT =
   'test/scripts/exact-election-evidence-same-turn-model-contract.test.js';
+const UTF8 = 'utf8';
 
 test('one classified plan owns concurrency for every test source', () => {
   const plan = planClassifiedTestFiles(root,
@@ -71,4 +76,151 @@ test('the classified plan fails closed on duplicates and unknown paths', () => {
     /duplicate/u);
   assert.throws(() => planClassifiedTestFiles(
     root, ['test/not-present.test.js']), /unclassified or missing/u);
+});
+
+test('inherited classifications cannot admit an unknown executable path', () => {
+  const unknown = 'test/not-present.test.js';
+  try {
+    Reflect.defineProperty(Object.prototype, unknown, {
+      configurable: true,
+      enumerable: true,
+      value: RESOURCE_CLASS_ORDINARY,
+    });
+    assert.throws(() => planClassifiedTestFiles(root, [unknown]),
+      /unclassified or missing/u);
+  } finally {
+    Reflect.deleteProperty(Object.prototype, unknown);
+  }
+});
+
+test('inherited runner options cannot replace the root or child launcher', () => {
+  let calls = 0;
+  try {
+    Reflect.defineProperty(Object.prototype, 'root', {
+      configurable: true,
+      value: '/not-the-repository',
+    });
+    const status = runClassifiedTestFiles([ORDINARY], {
+      spawn() {
+        calls += 1;
+        return {status: 0};
+      },
+    });
+    assert.equal(status, 0);
+    assert.equal(calls, 1,
+      'an inherited root must not redirect classification');
+  } finally {
+    Reflect.deleteProperty(Object.prototype, 'root');
+  }
+
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lagrange-classified-runner-'));
+  const fixture = 'test/fixture.test.js';
+  let inheritedCalls = 0;
+  try {
+    fs.mkdirSync(path.join(fixtureRoot, 'test'), {recursive: true});
+    fs.mkdirSync(path.join(fixtureRoot, 'scripts'), {recursive: true});
+    fs.writeFileSync(path.join(fixtureRoot, fixture), '');
+    fs.writeFileSync(path.join(fixtureRoot, 'scripts', 'run-test-files.js'), '');
+    Reflect.defineProperty(Object.prototype, 'spawn', {
+      configurable: true,
+      value() {
+        inheritedCalls += 1;
+        return {status: 0};
+      },
+    });
+    assert.equal(runClassifiedTestFiles([fixture], {root: fixtureRoot}), 0);
+    assert.equal(inheritedCalls, 0,
+      'an inherited launcher must not replace the real child process');
+  } finally {
+    Reflect.deleteProperty(Object.prototype, 'spawn');
+    fs.rmSync(fixtureRoot, {recursive: true, force: true});
+  }
+});
+
+test('runner option accessors are rejected without execution', () => {
+  let getterReads = 0;
+  const options = {root};
+  Reflect.defineProperty(options, 'spawn', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      getterReads += 1;
+      return () => ({status: 0});
+    },
+  });
+  assert.throws(() => runClassifiedTestFiles([ORDINARY], options),
+    /own-data options/u);
+  assert.equal(getterReads, 0);
+});
+
+test('post-import collection replacement cannot erase executable delivery', () => {
+  const source = `
+    import {runClassifiedTestFiles} from './scripts/run-classified-test-files.js';
+    const input = '${ORDINARY}';
+    const replacements = [
+      ['array-filter', Array.prototype, 'filter', function filter() { return []; }],
+      ['array-map', Array.prototype, 'map', function map() { return []; }],
+      ['array-push', Array.prototype, 'push', function push() { return this.length; }],
+      ['array-slice', Array.prototype, 'slice', function slice() { return []; }],
+      ['array-sort', Array.prototype, 'sort', function sort() { return []; }],
+      ['array-iterator', Array.prototype, Symbol.iterator, function iterator() {
+        return {next: () => ({done: true})};
+      }],
+      ['object-from-entries', Object, 'fromEntries', () => ({})],
+      ['set-has', Set.prototype, 'has', () => true],
+      ['set-iterator', Set.prototype, Symbol.iterator, function iterator() {
+        return {next: () => ({done: true})};
+      }],
+      ['map-get', Map.prototype, 'get', () => 'occupied'],
+      ['map-set', Map.prototype, 'set', function set() { return this; }],
+    ];
+    const outcomes = [];
+    for (let index = 0; index < replacements.length; index += 1) {
+      const [name, owner, key, replacement] = replacements[index];
+      const original = owner[key];
+      const calls = [];
+      try {
+        Reflect.set(owner, key, replacement);
+        const status = runClassifiedTestFiles([input], {
+          root: process.cwd(),
+          spawn(command, args) {
+            calls[calls.length] = {command, args};
+            return {status: 0};
+          },
+        });
+        outcomes[outcomes.length] = {calls, name, status};
+      } catch (error) {
+        outcomes[outcomes.length] = {error: error.message, name};
+      } finally {
+        Reflect.set(owner, key, original);
+      }
+    }
+    process.stdout.write(JSON.stringify(outcomes));
+  `;
+  const result = spawnSync(process.execPath,
+    ['--input-type=module', '--eval', source],
+    {cwd: root, encoding: UTF8});
+  assert.equal(result.status, 0, result.stderr);
+  const outcomes = JSON.parse(result.stdout.split('\n').at(-1));
+  for (const outcome of outcomes) {
+    if (outcome.error) continue;
+    assert.equal(outcome.status, 0, outcome.name);
+    assert.equal(outcome.calls.length, 1,
+      `${outcome.name}: success must deliver the admitted test`);
+    assert.equal(outcome.calls[0].args.at(-1), ORDINARY, outcome.name);
+  }
+  const filterOutcome = outcomes.find(({name}) => name === 'array-filter');
+  assert.equal(filterOutcome.status, 0);
+  assert.equal(filterOutcome.calls.length, 1,
+    'the verifier falsifier must execute rather than merely fail closed');
+});
+
+test('the library refuses an empty explicit test set', () => {
+  assert.throws(() => runClassifiedTestFiles([], {
+    root,
+    spawn() {
+      throw new Error('an empty plan must fail before spawn');
+    },
+  }), /no test files/u);
 });

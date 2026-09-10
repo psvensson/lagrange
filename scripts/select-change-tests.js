@@ -29,9 +29,25 @@ import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import {isDeepStrictEqual} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
+import {
+  appendArrayValue,
+  copyOwnDataArray,
+  copyOwnDataRecord,
+  copyOwnStringArray,
+  createOrderedStringMap,
+  createOrderedStringSet,
+  orderedStringMapGet,
+  orderedStringMapHas,
+  orderedStringMapKeys,
+  orderedStringMapSet,
+  orderedStringSetAdd,
+  orderedStringSetValues,
+  sortStrings,
+} from './checks/change-proof-string-collections.js';
 import {
   changedRecords,
   resolvedCheckBase,
@@ -39,13 +55,31 @@ import {
   vanishedPaths,
 } from './checks/changed-paths.js';
 import {
+  JSON_DIGIT_MAX,
+  JSON_DIGIT_MIN,
+  JSON_NUMBER_DECIMAL,
+  JSON_NUMBER_EXPONENT_LOWER,
+  JSON_NUMBER_EXPONENT_UPPER,
+  JSON_NUMBER_MINUS,
+  JSON_NUMBER_PLUS,
+  JSON_STRING_ESCAPE,
+  JSON_STRING_QUOTE,
+  INVALID_EXECUTION_PLAN_INPUT_PROBLEM,
+  INVALID_SELECTION_RESULT_PROBLEM,
+  LOCKFILE_PACKAGES_FIELD,
+  LOCKFILE_ROOT_PACKAGE_KEY,
   PACKAGE_MANIFEST_PATH,
+  PACKAGE_LOCKFILE_PATH,
+  INVALID_SAFETY_SPINE_PROBLEM,
   REASON_SAFETY_SPINE,
   REFUSAL_RELEASE_PROOF_REQUIRED,
   REFUSAL_BANNER,
   RELEASE_PROOF_HINT,
   SAFETY_SPINE_PATH,
+  SAFETY_SPINE_TESTS_FIELD,
+  SELECTION_PRECISE,
   SELECTION_REFUSED,
+  SELECTION_WIDENED,
 } from './checks/change-selection-constants.js';
 import {runClassifiedTestFiles} from './run-classified-test-files.js';
 
@@ -72,10 +106,36 @@ const USAGE =
   '[--explain] [--list]\n';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const jsonParse = JSON.parse.bind(JSON);
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectHasOwn = Object.hasOwn;
+const objectIs = Object.is;
+const objectKeys = Object.keys;
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const toNumber = Number;
+const NEGATIVE_ZERO = -0;
 
 export function loadSafetySpine(spineRoot = root) {
-  return JSON.parse(
-    fs.readFileSync(path.join(spineRoot, SAFETY_SPINE_PATH), UTF8)).tests;
+  const manifest = copyOwnDataRecord(jsonParse(
+    fs.readFileSync(path.join(spineRoot, SAFETY_SPINE_PATH), UTF8)));
+  return requireValidSafetySpine(manifest?.[SAFETY_SPINE_TESTS_FIELD]);
+}
+
+function requireValidSafetySpine(value) {
+  const tests = copyOwnStringArray(value);
+  if (!tests || tests.length === 0) {
+    throw new Error(INVALID_SAFETY_SPINE_PROBLEM);
+  }
+  const unique = createOrderedStringSet(tests);
+  if (orderedStringSetValues(unique).length !== tests.length) {
+    throw new Error(INVALID_SAFETY_SPINE_PROBLEM);
+  }
+  return tests;
 }
 
 // Both sides of a rename and the vanished side of a deletion: a change that
@@ -91,7 +151,7 @@ export function changedPathsBetween(base, head, gitRoot = root) {
 // a vanished source file must still prove its former owner.
 export function vanishedPathsBetween(base, head, gitRoot = root) {
   const records = changedRecords({root: gitRoot, base, head});
-  return records === null ? new Set() : vanishedPaths(records);
+  return records === null ? createOrderedStringSet() : vanishedPaths(records);
 }
 
 // Which top-level package.json keys differ between the two states. Computed
@@ -104,57 +164,227 @@ export function vanishedPathsBetween(base, head, gitRoot = root) {
 // uncommitted `dependencies` edit and let a dependency change - the broadest
 // change there is - take the modular path.
 export function changedPackageFields(base, head, gitRoot = root) {
-  const parse = (text) => {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
+  const changed = createOrderedStringSet();
+  const comparisons = jsonStateComparisons(
+    PACKAGE_MANIFEST_PATH, base, head, gitRoot);
+  for (let comparisonIndex = 0;
+    comparisonIndex < comparisons.length;
+    comparisonIndex += 1) {
+    const before = copyOwnDataRecord(comparisons[comparisonIndex][0]);
+    const after = copyOwnDataRecord(comparisons[comparisonIndex][1]);
+    if (!before || !after) return null;
+    const keys = createOrderedStringSet(objectKeys(before));
+    const afterKeys = objectKeys(after);
+    for (let index = 0; index < afterKeys.length; index += 1) {
+      orderedStringSetAdd(keys, afterKeys[index]);
     }
-  };
-  const fromRevision = (revision) => {
-    const result = spawnSync('git',
-      ['show', `${revision}:${PACKAGE_MANIFEST_PATH}`],
-      {cwd: gitRoot, encoding: UTF8});
-    return result.status === 0 ? parse(result.stdout) : null;
-  };
-  const fromWorktree = () => {
-    try {
-      return parse(fs.readFileSync(
-        path.join(gitRoot, PACKAGE_MANIFEST_PATH), UTF8));
-    } catch {
-      return null;
+    const keyValues = orderedStringSetValues(keys);
+    for (let index = 0; index < keyValues.length; index += 1) {
+      const key = keyValues[index];
+      const beforeOwn = objectHasOwn(before, key);
+      const afterOwn = objectHasOwn(after, key);
+      if (beforeOwn !== afterOwn ||
+          (beforeOwn && !isDeepStrictEqual(before[key], after[key]))) {
+        orderedStringSetAdd(changed, key);
+      }
     }
-  };
-  const before = fromRevision(base || DEFAULT_HEAD);
-  const after = head ? fromRevision(head) : fromWorktree();
-  if (!before || !after) return null;
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  return [...keys].filter((key) =>
-    JSON.stringify(before[key]) !== JSON.stringify(after[key])).sort();
+  }
+  return sortStrings(orderedStringSetValues(changed));
+}
+
+function parseJson(text) {
+  try {
+    if (hasPotentiallyLossyJsonNumber(text)) return null;
+    return jsonParse(text);
+  } catch {
+    return null;
+  }
+}
+
+function isDigit(character) {
+  return character >= JSON_DIGIT_MIN && character <= JSON_DIGIT_MAX;
+}
+
+// Native JSON.parse rounds integers beyond Number's safe range and may also
+// collapse distinct decimal/exponent spellings. Those forms are not needed by
+// package manifests or npm lockfiles, so treat their presence as an unavailable
+// semantic comparison and let the selector fail closed instead of guessing.
+function hasPotentiallyLossyJsonNumber(text) {
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === JSON_STRING_ESCAPE) {
+        escaped = true;
+      } else if (character === JSON_STRING_QUOTE) {
+        inString = false;
+      }
+      continue;
+    }
+    if (character === JSON_STRING_QUOTE) {
+      inString = true;
+      continue;
+    }
+    if (character !== JSON_NUMBER_MINUS && !isDigit(character)) continue;
+    let end = index + 1;
+    while (
+      end < text.length &&
+      (isDigit(text[end]) || text[end] === JSON_NUMBER_DECIMAL ||
+        text[end] === JSON_NUMBER_EXPONENT_LOWER ||
+        text[end] === JSON_NUMBER_EXPONENT_UPPER ||
+        text[end] === JSON_NUMBER_PLUS || text[end] === JSON_NUMBER_MINUS)
+    ) {
+      end += 1;
+    }
+    const token = stringSlice(text, index, end);
+    const numericValue = toNumber(token);
+    if (
+      stringIncludes(token, JSON_NUMBER_DECIMAL) ||
+      stringIncludes(token, JSON_NUMBER_EXPONENT_LOWER) ||
+      stringIncludes(token, JSON_NUMBER_EXPONENT_UPPER) ||
+      !numberIsSafeInteger(numericValue) ||
+      objectIs(numericValue, NEGATIVE_ZERO)
+    ) {
+      return true;
+    }
+    index = end - 1;
+  }
+  return false;
+}
+
+function jsonFromRevision(relativePath, revision, gitRoot) {
+  const result = spawnSync('git', ['show', `${revision}:${relativePath}`],
+    {cwd: gitRoot, encoding: UTF8});
+  return result.status === 0 ? parseJson(result.stdout) : null;
+}
+
+function jsonFromWorktree(relativePath, gitRoot) {
+  try {
+    return parseJson(fs.readFileSync(path.join(gitRoot, relativePath), UTF8));
+  } catch {
+    return null;
+  }
+}
+
+// changedRecords defines one proof input as the union of a committed range and
+// current dirty state. Semantic JSON classification must use the same two
+// comparisons or an explicit --head could make a visible dirty path disappear
+// from the field/graph decision.
+function jsonStateComparisons(relativePath, base, head, gitRoot) {
+  const comparisons = [];
+  if (base) {
+    appendArrayValue(comparisons, [
+      jsonFromRevision(relativePath, base, gitRoot),
+      jsonFromRevision(relativePath, head || DEFAULT_HEAD, gitRoot),
+    ]);
+  }
+  appendArrayValue(comparisons, [
+    jsonFromRevision(relativePath, DEFAULT_HEAD, gitRoot),
+    jsonFromWorktree(relativePath, gitRoot),
+  ]);
+  return comparisons;
+}
+
+function lockfileDependencyGraph(lockfile) {
+  const graph = copyOwnDataRecord(lockfile);
+  if (
+    !graph ||
+    !objectHasOwn(graph, LOCKFILE_PACKAGES_FIELD)
+  ) {
+    return null;
+  }
+  const packages = copyOwnDataRecord(graph.packages);
+  if (!packages || !objectHasOwn(packages, LOCKFILE_ROOT_PACKAGE_KEY)) {
+    return null;
+  }
+  const packagePaths = objectKeys(packages);
+  for (let index = 0; index < packagePaths.length; index += 1) {
+    const packagePath = packagePaths[index];
+    const packageRecord = copyOwnDataRecord(packages[packagePath]);
+    if (!packageRecord) return null;
+    packages[packagePath] = packageRecord;
+  }
+  const rootPackage = packages[LOCKFILE_ROOT_PACKAGE_KEY];
+  graph.packages = packages;
+  delete graph.version;
+  delete rootPackage.version;
+  return graph;
+}
+
+// package-lock.json mixes root release identity with installed graph state.
+// Compare the graph rather than the path: changing only the package's own
+// version still needs packaging proof, but it does not need the full release
+// proof reserved for a dependency graph that every subsystem consumes.
+export function lockfileDependencyGraphChanged(base, head, gitRoot = root) {
+  let unavailable = false;
+  const comparisons = jsonStateComparisons(
+    PACKAGE_LOCKFILE_PATH, base, head, gitRoot);
+  for (let index = 0; index < comparisons.length; index += 1) {
+    const beforeState = comparisons[index][0];
+    const afterState = comparisons[index][1];
+    const before = lockfileDependencyGraph(beforeState);
+    const after = lockfileDependencyGraph(afterState);
+    if (!before || !after) {
+      unavailable = true;
+    } else if (!isDeepStrictEqual(before, after)) {
+      return true;
+    }
+  }
+  return unavailable ? null : false;
 }
 
 // The union. The spine is added HERE, unconditionally, never by the selector.
-export function buildExecutionPlan({
-  changedPaths,
-  packageFields,
-  vanished = new Set(),
-  planRoot = root,
-  selector = selectChangedTests,
-  spine = loadSafetySpine,
-}) {
-  const selection = selector({
+export function buildExecutionPlan(options) {
+  const input = copyOwnDataRecord(options);
+  if (!input) throw new Error(INVALID_EXECUTION_PLAN_INPUT_PROBLEM);
+  const {
+    changedPaths: changedPathInput,
+    packageFields: packageFieldInput,
+    lockfileGraphChanged,
+    vanished = createOrderedStringSet(),
+    planRoot = root,
+    selector = selectChangedTests,
+    spine = loadSafetySpine,
+  } = input;
+  const changedPaths = copyOwnStringArray(changedPathInput);
+  const packageFields = packageFieldInput === null ||
+    packageFieldInput === undefined ? packageFieldInput :
+    copyOwnStringArray(packageFieldInput);
+  if (!changedPaths ||
+      (packageFieldInput !== null && packageFieldInput !== undefined &&
+        !packageFields) ||
+      typeof planRoot !== 'string' || planRoot.length === 0 ||
+      typeof selector !== 'function' || typeof spine !== 'function') {
+    throw new Error(INVALID_EXECUTION_PLAN_INPUT_PROBLEM);
+  }
+  const selection = normalizeSelection(selector({
     root: planRoot,
     changedPaths,
     changedPackageFields: packageFields,
+    lockfileGraphChanged,
     vanishedPaths: vanished,
-  });
-  const selected = selection.tests || [];
-  const spineTests = spine(planRoot);
-  const merged = new Map();
-  for (const testPath of spineTests) merged.set(testPath, [REASON_SAFETY_SPINE]);
-  for (const entry of selected) {
-    const existing = merged.get(entry.path) || [];
-    merged.set(entry.path, [...new Set([...existing, ...entry.reasons])]);
+  }));
+  const selected = selection.tests;
+  const spineTests = requireValidSafetySpine(spine(planRoot));
+  const merged = createOrderedStringMap();
+  for (let index = 0; index < spineTests.length; index += 1) {
+    addPlanReasons(merged, spineTests[index], [REASON_SAFETY_SPINE]);
+  }
+  for (let index = 0; index < selected.length; index += 1) {
+    const entry = selected[index];
+    addPlanReasons(merged, entry.path, entry.reasons);
+  }
+  const tests = [];
+  const testPaths = sortStrings(orderedStringMapKeys(merged));
+  for (let index = 0; index < testPaths.length; index += 1) {
+    const testPath = testPaths[index];
+    appendArrayValue(tests, {
+      path: testPath,
+      reasons: orderedStringSetValues(orderedStringMapGet(merged, testPath)),
+    });
   }
   return {
     kind: selection.kind,
@@ -164,9 +394,66 @@ export function buildExecutionPlan({
     changedPaths,
     spineCount: spineTests.length,
     selectedCount: selected.length,
-    tests: [...merged.keys()].sort()
-      .map((testPath) => ({path: testPath, reasons: merged.get(testPath)})),
+    tests,
   };
+}
+
+function normalizeSelection(value) {
+  const selection = copyOwnDataRecord(value);
+  if (!selection ||
+      (selection.kind !== SELECTION_PRECISE &&
+        selection.kind !== SELECTION_WIDENED &&
+        selection.kind !== SELECTION_REFUSED)) {
+    throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+  }
+  const sourceTests = copyOwnDataArray(selection.tests);
+  const tests = [];
+  const selectedPaths = createOrderedStringSet();
+  if (!sourceTests) throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+  for (let index = 0; index < sourceTests.length; index += 1) {
+    const entry = copyOwnDataRecord(sourceTests[index]);
+    const reasons = copyOwnStringArray(entry?.reasons);
+    if (!entry || typeof entry.path !== 'string' || entry.path.length === 0 ||
+        !reasons || reasons.length === 0 ||
+        orderedStringSetValues(selectedPaths).length !== index) {
+      throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+    }
+    orderedStringSetAdd(selectedPaths, entry.path);
+    appendArrayValue(tests, {path: entry.path, reasons});
+  }
+  if (orderedStringSetValues(selectedPaths).length !== tests.length ||
+      (selection.kind === SELECTION_REFUSED && tests.length > 0)) {
+    throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+  }
+  const subsystems = selection.subsystems === undefined ? [] :
+    copyOwnStringArray(selection.subsystems);
+  const refusals = selection.refusals === undefined ? [] :
+    copyOwnStringArray(selection.refusals);
+  const refusalCode = selection.refusalCode === undefined ? null :
+    selection.refusalCode;
+  if (!subsystems || !refusals ||
+      (refusalCode !== null && typeof refusalCode !== 'string') ||
+      (selection.kind === SELECTION_REFUSED &&
+        (refusalCode === null || refusalCode.length === 0))) {
+    throw new Error(INVALID_SELECTION_RESULT_PROBLEM);
+  }
+  return {
+    kind: selection.kind,
+    refusalCode,
+    refusals,
+    subsystems,
+    tests,
+  };
+}
+
+function addPlanReasons(plan, testPath, reasons) {
+  if (!orderedStringMapHas(plan, testPath)) {
+    orderedStringMapSet(plan, testPath, createOrderedStringSet());
+  }
+  const ownedReasons = orderedStringMapGet(plan, testPath);
+  for (let index = 0; index < reasons.length; index += 1) {
+    orderedStringSetAdd(ownedReasons, reasons[index]);
+  }
 }
 
 // The ONE refusal rendering, shared by the dry run and the real command, so a
@@ -177,46 +464,69 @@ export function buildExecutionPlan({
 // the expensive command instead of fixing the taxonomy.
 function renderRefusal(plan) {
   const lines = [REFUSAL_BANNER, `${INDENT}${LABEL_REASON} ${plan.refusalCode}`];
-  for (const refusal of plan.refusals) lines.push(INDENT + refusal);
-  if (plan.refusalCode === REFUSAL_RELEASE_PROOF_REQUIRED) {
-    lines.push(INDENT + RELEASE_PROOF_HINT);
+  for (let index = 0; index < plan.refusals.length; index += 1) {
+    appendArrayValue(lines, INDENT + plan.refusals[index]);
   }
-  return lines.join(NEWLINE) + NEWLINE;
+  if (plan.refusalCode === REFUSAL_RELEASE_PROOF_REQUIRED) {
+    appendArrayValue(lines, INDENT + RELEASE_PROOF_HINT);
+  }
+  return arrayJoin(lines, NEWLINE) + NEWLINE;
 }
 
 function renderExplain(plan) {
   const lines = [LABEL_CHANGED];
-  for (const changed of plan.changedPaths) lines.push(INDENT + changed);
-  if (plan.kind === SELECTION_REFUSED) {
-    lines.push(BLANK, LABEL_SELECTION, `${INDENT}${REFUSED_LABEL}`, BLANK);
-    return lines.join(NEWLINE) + NEWLINE + renderRefusal(plan);
+  for (let index = 0; index < plan.changedPaths.length; index += 1) {
+    appendArrayValue(lines, INDENT + plan.changedPaths[index]);
   }
-  lines.push(BLANK, LABEL_SUBSYSTEMS);
-  for (const subsystem of plan.subsystems) lines.push(INDENT + subsystem);
-  const byReason = new Map();
-  for (const entry of plan.tests) {
-    for (const reason of entry.reasons) {
-      if (!byReason.has(reason)) byReason.set(reason, []);
-      byReason.get(reason).push(entry.path);
+  if (plan.kind === SELECTION_REFUSED) {
+    appendArrayValue(lines, BLANK);
+    appendArrayValue(lines, LABEL_SELECTION);
+    appendArrayValue(lines, `${INDENT}${REFUSED_LABEL}`);
+    appendArrayValue(lines, BLANK);
+    return arrayJoin(lines, NEWLINE) + NEWLINE + renderRefusal(plan);
+  }
+  appendArrayValue(lines, BLANK);
+  appendArrayValue(lines, LABEL_SUBSYSTEMS);
+  for (let index = 0; index < plan.subsystems.length; index += 1) {
+    appendArrayValue(lines, INDENT + plan.subsystems[index]);
+  }
+  const byReason = createOrderedStringMap();
+  for (let testIndex = 0; testIndex < plan.tests.length; testIndex += 1) {
+    const entry = plan.tests[testIndex];
+    for (let reasonIndex = 0;
+      reasonIndex < entry.reasons.length;
+      reasonIndex += 1) {
+      const reason = entry.reasons[reasonIndex];
+      if (!orderedStringMapHas(byReason, reason)) {
+        orderedStringMapSet(byReason, reason, []);
+      }
+      appendArrayValue(orderedStringMapGet(byReason, reason), entry.path);
     }
   }
-  lines.push(BLANK, LABEL_SELECTED_BY);
-  for (const reason of [...byReason.keys()].sort()) {
-    lines.push(
-      `${INDENT}${reason}: ${byReason.get(reason).length}${TESTS_SUFFIX}`);
+  appendArrayValue(lines, BLANK);
+  appendArrayValue(lines, LABEL_SELECTED_BY);
+  const reasons = sortStrings(orderedStringMapKeys(byReason));
+  for (let index = 0; index < reasons.length; index += 1) {
+    const reason = reasons[index];
+    appendArrayValue(lines, `${INDENT}${reason}: ` +
+      `${orderedStringMapGet(byReason, reason).length}${TESTS_SUFFIX}`);
   }
-  lines.push(BLANK, LABEL_SELECTION, `${INDENT}${plan.kind}`);
-  lines.push(BLANK, LABEL_TOTAL,
+  appendArrayValue(lines, BLANK);
+  appendArrayValue(lines, LABEL_SELECTION);
+  appendArrayValue(lines, `${INDENT}${plan.kind}`);
+  appendArrayValue(lines, BLANK);
+  appendArrayValue(lines, LABEL_TOTAL);
+  appendArrayValue(lines,
     `${INDENT}${plan.tests.length}${UNIQUE_TESTS_SUFFIX}`);
-  return lines.join(NEWLINE) + NEWLINE;
+  return arrayJoin(lines, NEWLINE) + NEWLINE;
 }
 
 // An optional flag that is present but has no value is a usage error, never a
 // silently ignored one: `--base` with a missing sha must not quietly downgrade
 // to a worktree-only proof.
 function flagValue(argv, flag) {
-  if (!argv.includes(flag)) return {present: false, value: null};
-  return {present: true, value: argv[argv.indexOf(flag) + 1] || null};
+  if (!arrayIncludes(argv, flag)) return {present: false, value: null};
+  return {present: true, value: argv[arrayIndexOf(argv, flag) + 1] || null};
 }
 
 function parseInvocation(argv) {
@@ -227,13 +537,13 @@ function parseInvocation(argv) {
     base: resolvedCheckBase(base.value),
     head: head.value,
     headRevision: head.value || DEFAULT_HEAD,
-    explain: argv.includes(EXPLAIN_FLAG),
-    list: argv.includes(LIST_FLAG),
+    explain: arrayIncludes(argv, EXPLAIN_FLAG),
+    list: arrayIncludes(argv, LIST_FLAG),
   };
 }
 
 function main() {
-  const invocation = parseInvocation(process.argv.slice(2));
+  const invocation = parseInvocation(arraySlice(process.argv, 2));
   if (!invocation.valid) {
     process.stderr.write(USAGE);
     process.exitCode = 1;
@@ -250,6 +560,8 @@ function main() {
   const plan = buildExecutionPlan({
     changedPaths,
     packageFields: changedPackageFields(invocation.base, invocation.head),
+    lockfileGraphChanged: lockfileDependencyGraphChanged(
+      invocation.base, invocation.head),
     vanished: vanishedPathsBetween(invocation.base, invocation.headRevision),
   });
 
@@ -265,14 +577,22 @@ function main() {
   }
   if (invocation.list) {
     process.stdout.write(
-      plan.tests.map((entry) => entry.path).join(NEWLINE) + NEWLINE);
+      arrayJoin(planTestPaths(plan), NEWLINE) + NEWLINE);
     return;
   }
   process.stdout.write(
     `${plan.kind}: ${plan.tests.length}${TESTS_SUFFIX} ` +
     `(${plan.spineCount} spine, ${plan.selectedCount} selected)${NEWLINE}`);
   process.exitCode = runClassifiedTestFiles(
-    plan.tests.map((entry) => entry.path), {root});
+    planTestPaths(plan), {root});
+}
+
+function planTestPaths(plan) {
+  const paths = [];
+  for (let index = 0; index < plan.tests.length; index += 1) {
+    appendArrayValue(paths, plan.tests[index].path);
+  }
+  return paths;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

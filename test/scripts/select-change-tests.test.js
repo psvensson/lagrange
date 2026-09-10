@@ -16,6 +16,7 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
@@ -56,6 +57,140 @@ test('every safety-spine entry is a real, classified test', () => {
     assert.ok(classes[spineTest],
       `${spineTest} is in the safety spine but is unclassified`);
   }
+});
+
+test('the safety spine rejects inherited or empty test authority', () => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lagrange-safety-spine-'));
+  const shardDirectory = path.join(fixtureRoot, 'test', 'shards');
+  fs.mkdirSync(shardDirectory, {recursive: true});
+  const manifestPath = path.join(fixtureRoot, 'test', 'shards',
+    'safety-spine.json');
+  let getterReads = 0;
+  try {
+    fs.writeFileSync(manifestPath, '{}\n');
+    Reflect.defineProperty(Object.prototype, 'tests', {
+      configurable: true,
+      get() {
+        getterReads += 1;
+        return [];
+      },
+    });
+    assert.throws(() => loadSafetySpine(fixtureRoot), /safety spine/u);
+    assert.equal(getterReads, 0,
+      'an inherited accessor must never become spine authority');
+    Reflect.deleteProperty(Object.prototype, 'tests');
+    fs.writeFileSync(manifestPath, '{"tests": []}\n');
+    assert.throws(() => loadSafetySpine(fixtureRoot), /safety spine/u);
+  } finally {
+    Reflect.deleteProperty(Object.prototype, 'tests');
+    fs.rmSync(fixtureRoot, {recursive: true, force: true});
+  }
+});
+
+test('the plan rejects an injected empty safety spine', () => {
+  assert.throws(() => plan(['src/query/sql-query-engine.js'], {
+    spine: () => [],
+  }), /safety spine/u);
+});
+
+test('the plan rejects non-data and non-string spine arrays', () => {
+  let getterReads = 0;
+  const inheritedIndex = [];
+  inheritedIndex.length = 1;
+  Reflect.setPrototypeOf(inheritedIndex, {0: 'test/scripts/inherited.test.js'});
+  const accessorIndex = [];
+  Reflect.defineProperty(accessorIndex, 0, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      getterReads += 1;
+      return 'test/scripts/accessor.test.js';
+    },
+  });
+  for (const invalid of [
+    {},
+    [Object('test/scripts/boxed.test.js')],
+    [''],
+    ['test/scripts/duplicate.test.js', 'test/scripts/duplicate.test.js'],
+    inheritedIndex,
+    accessorIndex,
+  ]) {
+    assert.throws(() => plan(['src/query/sql-query-engine.js'], {
+      spine: () => invalid,
+    }), /safety spine/u);
+  }
+  assert.equal(getterReads, 0,
+    'a spine entry accessor must never execute during validation');
+});
+
+test('inherited plan collaborators cannot replace release refusal or spine', () => {
+  const inheritedSelector = () => ({
+    kind: SELECTION_PRECISE,
+    subsystems: [],
+    tests: [],
+  });
+  const inheritedSpine = () => ['test/address/address-manager.test.js'];
+  try {
+    Reflect.defineProperty(Object.prototype, 'selector', {
+      configurable: true,
+      value: inheritedSelector,
+    });
+    Reflect.defineProperty(Object.prototype, 'spine', {
+      configurable: true,
+      value: inheritedSpine,
+    });
+    Reflect.defineProperty(Object.prototype, 'planRoot', {
+      configurable: true,
+      value: '/not-the-repository',
+    });
+    const result = buildExecutionPlan({
+      changedPaths: ['package.json'],
+      packageFields: ['dependencies'],
+      lockfileGraphChanged: true,
+    });
+    assert.equal(result.kind, SELECTION_REFUSED);
+    assert.equal(result.refusalCode, 'RELEASE_PROOF_REQUIRED');
+    assert.equal(result.spineCount, spine.length);
+  } finally {
+    Reflect.deleteProperty(Object.prototype, 'selector');
+    Reflect.deleteProperty(Object.prototype, 'spine');
+    Reflect.deleteProperty(Object.prototype, 'planRoot');
+  }
+});
+
+test('plan option and selector-result accessors never become authority', () => {
+  let optionReads = 0;
+  const options = {
+    changedPaths: ['src/query/sql-query-engine.js'],
+  };
+  Reflect.defineProperty(options, 'selector', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      optionReads += 1;
+      return () => ({kind: SELECTION_PRECISE, tests: []});
+    },
+  });
+  assert.throws(() => buildExecutionPlan(options), /own-data option/u);
+  assert.equal(optionReads, 0);
+
+  let resultReads = 0;
+  assert.throws(() => plan(['src/query/sql-query-engine.js'], {
+    selector: () => {
+      const result = {kind: SELECTION_PRECISE};
+      Reflect.defineProperty(result, 'tests', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          resultReads += 1;
+          return [];
+        },
+      });
+      return result;
+    },
+  }), /selector returned/u);
+  assert.equal(resultReads, 0);
 });
 
 test('a selector returning NOTHING still runs the entire safety spine', () => {
@@ -148,6 +283,30 @@ test('package.json metadata still proves the packaging subsystem', () => {
   assert.ok(selection.subsystems.includes('release-packaging'));
   assert.ok(!selection.subsystems.includes('test-infrastructure'));
 });
+
+test('lockfile root release metadata still proves packaging modularly', () => {
+  const selection = selectChangedTests({
+    root,
+    changedPaths: ['package-lock.json'],
+    lockfileGraphChanged: false,
+  });
+  assert.notEqual(selection.kind, SELECTION_REFUSED,
+    'root release metadata does not change the installed dependency graph');
+  assert.ok(selection.subsystems.includes('release-packaging'),
+    'the lockfile release metadata remains proved rather than inert');
+});
+
+for (const lockfileGraphChanged of [true, null, undefined]) {
+  test(`lockfile graph state ${String(lockfileGraphChanged)} fails closed`, () => {
+    const selection = selectChangedTests({
+      root,
+      changedPaths: ['package-lock.json'],
+      lockfileGraphChanged,
+    });
+    assert.equal(selection.kind, SELECTION_REFUSED);
+    assert.equal(selection.refusalCode, 'RELEASE_PROOF_REQUIRED');
+  });
+}
 
 for (const field of ['exports', 'dependencies']) {
   test(`package.json ${field} still demands a release proof`, () => {

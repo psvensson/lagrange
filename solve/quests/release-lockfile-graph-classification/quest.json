@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-lockfile-graph-classification",
+  "class": "fix",
+  "epic": "release-0-2-five-node-convergence",
+  "statement": "Change-scoped CI distinguishes package-lock root release metadata from the installed dependency graph: a coordinated version-only release edit receives the release-packaging modular proof, while any dependency graph change, missing comparison, or malformed lockfile still refuses with RELEASE_PROOF_REQUIRED.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/release-lockfile-graph-classification/evidence/receipt.json",
+      "requiredReceipts": [
+        "red-main-failure-classified",
+        "lockfile-graph-semantic-owner",
+        "release-version-only-modular-proof",
+        "dependency-change-still-refuses",
+        "selector-contract-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "semantic-not-path-exemption",
+      "statement": "Do not exempt package-lock.json by path or by its presence beside package.json; compare the before/after lockfile graph and fail closed when that comparison is unavailable."
+    },
+    {
+      "id": "preserve-release-proof-escalation",
+      "statement": "Any package dependency, lockfile dependency node, resolution, integrity, engine, peer, bin, or other installed-graph change must continue to refuse modular proof with RELEASE_PROOF_REQUIRED."
+    },
+    {
+      "id": "release-metadata-remains-proved",
+      "statement": "A root version-only package-lock change is not inert: it routes through the existing release-packaging subsystem together with package.json and the remaining release metadata."
+    },
+    {
+      "id": "no-ci-bypass",
+      "statement": "Do not rerun, skip, weaken, or route around the red CI gate; repair the selector contract and require fresh exact-SHA CI before tagging."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "After the final source attempt, obtain independent verification of version-only admission, real graph-change refusal, malformed/missing fail-closed behavior, and end-to-end range derivation before landing."
+    }
+  ],
+  "sealedAt": "7afd761aa8cc3b29a7b0dd6ddce07f7f4e940554"
+}

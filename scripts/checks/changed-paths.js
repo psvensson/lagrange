@@ -35,13 +35,27 @@ import {
   CHECK_BASE_ENV,
   WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
+import {
+  appendArrayValue,
+  appendArrayValues,
+  createOrderedStringMap,
+  createOrderedStringSet,
+  orderedStringMapHas,
+  orderedStringMapSet,
+  orderedStringMapValues,
+  orderedStringSetAdd,
+  orderedStringSetHas,
+  orderedStringSetValues,
+  sortByStringProjection,
+  sortStrings,
+  stringCollectionHas,
+} from './change-proof-string-collections.js';
 
 // Intrinsics captured at module load. Every string below arrives from `git`,
 // which is external data by the adversarial-intrinsics rule: a replaced
 // String.prototype.startsWith could turn a deletion into a modification and
 // quietly remove its owner from the proof.
 const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -79,11 +93,13 @@ function git(root, args) {
 
 function parseNameStatus(lines) {
   const records = [];
-  for (const line of lines || []) {
+  const sourceLines = lines || [];
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    const line = sourceLines[index];
     const fields = stringSplit(line, TAB);
     const code = fields[0];
     if (stringStartsWith(code, STATUS_RENAMED_PREFIX)) {
-      records.push({
+      appendArrayValue(records, {
         status: CHANGE_RENAMED,
         oldPath: fields[1],
         path: fields[2],
@@ -91,10 +107,11 @@ function parseNameStatus(lines) {
       continue;
     }
     if (stringStartsWith(code, STATUS_DELETED_PREFIX)) {
-      records.push({status: CHANGE_DELETED, oldPath: fields[1], path: null});
+      appendArrayValue(records,
+        {status: CHANGE_DELETED, oldPath: fields[1], path: null});
       continue;
     }
-    records.push({
+    appendArrayValue(records, {
       status: stringStartsWith(code, STATUS_ADDED_PREFIX) ?
         CHANGE_ADDED : CHANGE_MODIFIED,
       oldPath: null,
@@ -105,13 +122,16 @@ function parseNameStatus(lines) {
 }
 
 function dedupe(records) {
-  const seen = new Map();
-  for (const record of records) {
+  const seen = createOrderedStringMap();
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
     const key = `${record.status}:${record.oldPath || ''}:${record.path || ''}`;
-    if (!seen.has(key)) seen.set(key, record);
+    if (!orderedStringMapHas(seen, key)) {
+      orderedStringMapSet(seen, key, record);
+    }
   }
-  return [...seen.values()].sort((left, right) =>
-    (left.path || left.oldPath).localeCompare(right.path || right.oldPath));
+  return sortByStringProjection(orderedStringMapValues(seen),
+    (record) => record.path || record.oldPath);
 }
 
 // An explicit flag wins; otherwise the environment supplies the range. Resolved
@@ -128,8 +148,8 @@ export function resolvedCheckBase(explicitBase = null, env = process.env) {
 // not.
 export function declaredWorkspaceInjections(env = process.env) {
   const declared = env[WORKSPACE_INJECTION_ENV];
-  if (!declared) return new Set();
-  return new Set(
+  if (!declared) return createOrderedStringSet();
+  return createOrderedStringSet(
     arrayFilter(stringSplit(declared, INJECTION_SEPARATOR), Boolean));
 }
 
@@ -138,8 +158,10 @@ export function declaredWorkspaceInjections(env = process.env) {
 // repository content and must reach the taxonomy.
 export function isWorkspaceInjection(candidate, injections) {
   if (!candidate || injections.size === 0) return false;
-  if (injections.has(candidate)) return true;
-  for (const injection of injections) {
+  if (stringCollectionHas(injections, candidate)) return true;
+  const values = orderedStringSetValues(injections);
+  for (let index = 0; index < values.length; index += 1) {
+    const injection = values[index];
     if (stringStartsWith(candidate, `${injection}${PATH_SEPARATOR}`)) {
       return true;
     }
@@ -162,15 +184,19 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
     const committed = git(root,
       [DIFF, NAME_STATUS, RENAME_DETECTION, `${base}..${head}`]);
     if (committed === null) return null;
-    records.push(...parseNameStatus(committed));
+    appendArrayValues(records, parseNameStatus(committed));
   }
-  records.push(...parseNameStatus(
+  appendArrayValues(records, parseNameStatus(
     git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, DEFAULT_HEAD])));
-  records.push(...parseNameStatus(
+  appendArrayValues(records, parseNameStatus(
     git(root, [DIFF, NAME_STATUS, RENAME_DETECTION, CACHED])));
-  for (const untracked of git(root,
-    [LS_FILES, OTHERS, EXCLUDE_STANDARD]) || []) {
-    records.push({status: CHANGE_ADDED, oldPath: null, path: untracked});
+  const untrackedPaths = git(root, [LS_FILES, OTHERS, EXCLUDE_STANDARD]) || [];
+  for (let index = 0; index < untrackedPaths.length; index += 1) {
+    appendArrayValue(records, {
+      status: CHANGE_ADDED,
+      oldPath: null,
+      path: untrackedPaths[index],
+    });
   }
   const injections = declaredWorkspaceInjections();
   return dedupe(arrayFilter(records, (record) =>
@@ -181,12 +207,14 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
 // Every path a change touches SEMANTICALLY, including the vanished side of a
 // deletion and both sides of a rename. This is what the selector must classify.
 export function semanticPaths(records) {
-  const paths = new Set();
-  for (const record of records || []) {
-    if (record.path) paths.add(record.path);
-    if (record.oldPath) paths.add(record.oldPath);
+  const paths = createOrderedStringSet();
+  const sourceRecords = records || [];
+  for (let index = 0; index < sourceRecords.length; index += 1) {
+    const record = sourceRecords[index];
+    if (record.path) orderedStringSetAdd(paths, record.path);
+    if (record.oldPath) orderedStringSetAdd(paths, record.oldPath);
   }
-  return [...paths].sort();
+  return sortStrings(orderedStringSetValues(paths));
 }
 
 // Paths this change made VANISH: the old side of a deletion or rename, unless
@@ -194,14 +222,17 @@ export function semanticPaths(records) {
 // cannot be run and cannot be under-tested, so it must not be mistaken for an
 // unclassified one - deleting a test would otherwise refuse the whole proof.
 export function vanishedPaths(records) {
-  const present = new Set();
-  for (const record of records || []) {
-    if (record.path) present.add(record.path);
+  const sourceRecords = records || [];
+  const present = createOrderedStringSet();
+  for (let index = 0; index < sourceRecords.length; index += 1) {
+    const record = sourceRecords[index];
+    if (record.path) orderedStringSetAdd(present, record.path);
   }
-  const vanished = new Set();
-  for (const record of records || []) {
-    if (record.oldPath && !present.has(record.oldPath)) {
-      vanished.add(record.oldPath);
+  const vanished = createOrderedStringSet();
+  for (let index = 0; index < sourceRecords.length; index += 1) {
+    const record = sourceRecords[index];
+    if (record.oldPath && !orderedStringSetHas(present, record.oldPath)) {
+      orderedStringSetAdd(vanished, record.oldPath);
     }
   }
   return vanished;
@@ -209,9 +240,14 @@ export function vanishedPaths(records) {
 
 // Paths that still exist, which is all a static checker can open.
 export function existingPaths(records) {
-  return [...new Set(arrayMap(
-    arrayFilter(records || [], (record) => record.path),
-    (record) => record.path))].sort();
+  const paths = createOrderedStringSet();
+  const sourceRecords = records || [];
+  for (let index = 0; index < sourceRecords.length; index += 1) {
+    if (sourceRecords[index].path) {
+      orderedStringSetAdd(paths, sourceRecords[index].path);
+    }
+  }
+  return sortStrings(orderedStringSetValues(paths));
 }
 
 const JAVASCRIPT_SUFFIXES = ['.js', '.mjs', '.cjs'];

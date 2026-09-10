@@ -22,9 +22,8 @@
 // tree, which is precisely what this workflow promises never to do.
 
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
@@ -34,86 +33,20 @@ import {
 } from '../../scripts/checks/change-selection-constants.js';
 import {testsForSubsystem} from '../../scripts/check-subsystem.js';
 import {loadSafetySpine} from '../../scripts/select-change-tests.js';
+import {createChangeProofFixture} from './change-proof-fixture.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
-const ORCHESTRATOR = 'scripts/select-change-tests.js';
-const RUNNER = 'scripts/run-classified-test-files.js';
 const BANNER = 'MODULAR PROOF NOT SAFE';
 const RELEASE_COMMAND = 'npm run check:release';
 // Any word a reader could mistake for a behavioural result.
 const SUCCESS_WORDS = /\b(pass|passed|passing|ok \d+|# pass)\b/i;
 
-// The fixture is a DIFFERENT repository, so it must not inherit the surrounding
-// job's proof range or workspace declarations. CI exports LAGRANGE_CHECK_BASE;
-// a child inheriting it tried to diff a SHA that does not exist in the fixture
-// and failed with "cannot diff" instead of refusing. Locally the variable is
-// unset, so only a hosted run could expose this.
-function fixtureEnv() {
-  const env = {...process.env};
-  delete env[CHECK_BASE_ENV];
-  delete env[WORKSPACE_INJECTION_ENV];
-  return env;
-}
-
-const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'change-proof-'));
-const repo = path.join(workspace, 'repo');
-const sentinel = path.join(workspace, 'runner-invocation.json');
-
-function git(args) {
-  execFileSync('git', args, {cwd: repo, encoding: UTF8, stdio: 'pipe'});
-}
-
-function buildFixtureRepo() {
-  fs.mkdirSync(path.join(repo, 'test'), {recursive: true});
-  // The orchestrator resolves its root from its own location, so the copy is
-  // what makes the fixture the repository under test. Whole directories rather
-  // than a hand-listed import closure: a list would go stale the first time the
-  // selector grew a dependency, and it would go stale silently.
-  fs.cpSync(path.join(root, 'scripts'), path.join(repo, 'scripts'),
-    {recursive: true});
-  fs.cpSync(path.join(root, 'test/shards'), path.join(repo, 'test/shards'),
-    {recursive: true});
-  fs.copyFileSync(path.join(root, 'package.json'),
-    path.join(repo, 'package.json'));
-  fs.writeFileSync(path.join(repo, RUNNER),
-    'import fs from \'node:fs\';\n' +
-    'export function runClassifiedTestFiles(files) {\n' +
-    `  fs.writeFileSync(${JSON.stringify(sentinel)}, JSON.stringify(files));\n` +
-    '  return 0;\n' +
-    '}\n', UTF8);
-  git(['init', '--quiet']);
-  git(['config', 'user.email', 'fixture@example.invalid']);
-  git(['config', 'user.name', 'fixture']);
-  git(['add', '.']);
-  git(['commit', '--quiet', '-m', 'base']);
-}
-
-// Run the command over a constructed working-tree change, then restore the
-// fixture. `git reset --hard` is confined to the temporary copy by the
-// assertion below, which is cheap insurance against a future refactor pointing
-// this at a real checkout.
-function proofFor(changes) {
-  assert.ok(repo.startsWith(os.tmpdir()),
-    'the fixture must never be a real checkout');
-  fs.rmSync(sentinel, {force: true});
-  for (const [relative, contents] of Object.entries(changes)) {
-    const absolute = path.join(repo, relative);
-    fs.mkdirSync(path.dirname(absolute), {recursive: true});
-    fs.writeFileSync(absolute, contents, UTF8);
-  }
-  const result = spawnSync(process.execPath, [ORCHESTRATOR],
-    {cwd: repo, encoding: UTF8, env: fixtureEnv()});
-  const invocation = fs.existsSync(sentinel) ?
-    JSON.parse(fs.readFileSync(sentinel, UTF8)) : null;
-  git(['reset', '--hard', '--quiet']);
-  git(['clean', '-fdq']);
-  return {
-    status: result.status,
-    output: `${result.stdout}${result.stderr}`,
-    invocation,
-  };
-}
+const {proofFor, repo} = createChangeProofFixture({
+  root,
+  checkBaseEnvironment: CHECK_BASE_ENV,
+  workspaceInjectionEnvironment: WORKSPACE_INJECTION_ENV,
+});
 
 function withDependency(name) {
   const manifest = JSON.parse(
@@ -122,7 +55,6 @@ function withDependency(name) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-buildFixtureRepo();
 const spine = loadSafetySpine(root);
 
 test('the npm vocabulary is wired to the change proof', () => {

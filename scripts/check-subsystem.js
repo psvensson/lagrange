@@ -39,11 +39,27 @@ const FLAG_PREFIX = '-';
 const KNOWN_SUBSYSTEMS_LABEL = '  known subsystems: ';
 const SUBSYSTEMS_LABEL = 'subsystems: ';
 const SELECTED_LABEL = ' test(s)';
+const MANIFEST_CLASSES_FIELD = 'classes';
 const EMPTY_SELECTION_PROBLEM =
   'subsystem selected no tests; refusing to report success on an empty run';
 const STALE_CLASSIFICATION_PROBLEM =
   'subsystem classification is stale; run node ' +
   'scripts/generate-test-subsystem-classes.js';
+
+// The subsystem manifest is evidence admitted by the change-proof selector.
+// Capture every intrinsic used to derive its test set before consumer code can
+// replace one and turn an owned subsystem into a convincing empty selection.
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIsArray = Array.isArray;
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const jsonParse = JSON.parse.bind(JSON);
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,27 +75,33 @@ function verifyClassificationFresh() {
 }
 
 export function testsForSubsystem(subsystem, manifestRoot = root) {
-  const manifest = JSON.parse(fs.readFileSync(
+  const manifest = jsonParse(fs.readFileSync(
     path.join(manifestRoot, SUBSYSTEM_MANIFEST_PATH), UTF8));
-  return Object.keys(manifest.classes).sort()
-    .filter((testPath) => manifest.classes[testPath] === subsystem);
+  if (!manifest || typeof manifest !== 'object' || arrayIsArray(manifest) ||
+      !objectHasOwn(manifest, MANIFEST_CLASSES_FIELD) || !manifest.classes ||
+      typeof manifest.classes !== 'object' || arrayIsArray(manifest.classes)) {
+    return [];
+  }
+  const paths = arraySort(objectKeys(manifest.classes));
+  return arrayFilter(paths,
+    (testPath) => manifest.classes[testPath] === subsystem);
 }
 
 function main() {
-  const args = process.argv.slice(2);
-  const list = args.includes(LIST_FLAG);
-  const subsystem = args.find(
-    (argument) => !argument.startsWith(FLAG_PREFIX));
+  const args = arraySlice(process.argv, 2);
+  const list = arrayIncludes(args, LIST_FLAG);
+  const subsystem = arrayFind(args,
+    (argument) => !stringStartsWith(argument, FLAG_PREFIX));
   if (!subsystem) {
     process.stderr.write(USAGE);
     process.stderr.write(
-      `${SUBSYSTEMS_LABEL}${SUBSYSTEMS.join(LIST_SEPARATOR)}${NEWLINE}`);
+      `${SUBSYSTEMS_LABEL}${arrayJoin(SUBSYSTEMS, LIST_SEPARATOR)}${NEWLINE}`);
     process.exitCode = 1;
     return;
   }
-  if (!SUBSYSTEMS.includes(subsystem)) {
+  if (!arrayIncludes(SUBSYSTEMS, subsystem)) {
     fail(`${UNKNOWN_SUBSYSTEM_PROBLEM}: ${subsystem}${NEWLINE}` +
-      `${KNOWN_SUBSYSTEMS_LABEL}${SUBSYSTEMS.join(LIST_SEPARATOR)}`);
+      `${KNOWN_SUBSYSTEMS_LABEL}${arrayJoin(SUBSYSTEMS, LIST_SEPARATOR)}`);
     return;
   }
   if (!verifyClassificationFresh()) {
@@ -92,7 +114,7 @@ function main() {
     return;
   }
   if (list) {
-    process.stdout.write(`${tests.join(NEWLINE)}${NEWLINE}`);
+    process.stdout.write(`${arrayJoin(tests, NEWLINE)}${NEWLINE}`);
     return;
   }
   process.stdout.write(

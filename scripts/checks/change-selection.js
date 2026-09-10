@@ -36,6 +36,19 @@ import path from 'node:path';
 import {testsForSubsystem} from '../check-subsystem.js';
 import {withoutWorkspaceInjections} from './changed-paths.js';
 import {
+  appendArrayValue,
+  createOrderedStringMap,
+  createOrderedStringSet,
+  orderedStringMapGet,
+  orderedStringMapHas,
+  orderedStringMapKeys,
+  orderedStringMapSet,
+  orderedStringSetAdd,
+  orderedStringSetValues,
+  sortStrings,
+  stringCollectionHas,
+} from './change-proof-string-collections.js';
+import {
   IMPACT_CONTRACTS_PATH,
   INERT_PATH_RULES,
   REASON_CHANGED_TEST,
@@ -76,6 +89,7 @@ import {
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIsArray = Array.isArray;
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -85,6 +99,11 @@ const regExpTest = Function.call.bind(RegExp.prototype.test);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const jsonParse = JSON.parse.bind(JSON);
+const objectEntries = Object.entries;
+const objectFromEntries = Object.fromEntries;
+const objectKeys = Object.keys;
+const objectValues = Object.values;
 
 const UTF8 = 'utf8';
 const TEST_SUFFIX = '.test.js';
@@ -100,7 +119,7 @@ const EXCLUDE_STANDARD = '--exclude-standard';
 
 function readJson(root, relative) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, relative), UTF8));
+    return jsonParse(fs.readFileSync(path.join(root, relative), UTF8));
   } catch {
     return null;
   }
@@ -127,27 +146,39 @@ export function subsystemForSourcePath(changedPath) {
 
 function contractWitnesses(contracts, changedPath) {
   const witnesses = [];
-  for (const [id, contract] of Object.entries(contracts?.contracts || {})) {
+  const ownedContracts = contracts?.contracts || {};
+  const ids = objectKeys(ownedContracts);
+  for (let index = 0; index < ids.length; index += 1) {
+    const id = ids[index];
+    const contract = ownedContracts[id];
     if (!arraySome(contract.owners || [],
       (owner) => stringStartsWith(changedPath, owner))) {
       continue;
     }
-    witnesses.push({id, tests: contract.tests || []});
+    appendArrayValue(witnesses, {id, tests: contract.tests || []});
   }
   return witnesses;
 }
 
 function coupledWitnesses(contracts, changedPath) {
   const witnesses = [];
-  for (const [id, pair] of Object.entries(contracts?.coupledPairs || {})) {
+  const ownedPairs = contracts?.coupledPairs || {};
+  const ids = objectKeys(ownedPairs);
+  for (let index = 0; index < ids.length; index += 1) {
+    const id = ids[index];
+    const pair = ownedPairs[id];
     const endpoints = pair.endpoints || [];
     const touched = arrayFind(endpoints, (endpoint) =>
       arraySome(endpoint.owners || [],
         (owner) => stringStartsWith(changedPath, owner)));
     if (!touched) continue;
-    for (const endpoint of endpoints) {
+    for (let endpointIndex = 0;
+      endpointIndex < endpoints.length;
+      endpointIndex += 1) {
+      const endpoint = endpoints[endpointIndex];
       if (endpoint.id === touched.id) continue;
-      witnesses.push({id: `${id}:${endpoint.id}`, owners: endpoint.owners || []});
+      appendArrayValue(witnesses,
+        {id: `${id}:${endpoint.id}`, owners: endpoint.owners || []});
     }
   }
   return witnesses;
@@ -156,38 +187,51 @@ function coupledWitnesses(contracts, changedPath) {
 // A contract names witness tests directly, as files or directories. No import
 // graph is consulted: the registry is curated, so its witnesses are authority.
 function expandWitness(classes, entries) {
-  const tests = new Set();
-  for (const entry of entries) {
+  const tests = createOrderedStringSet();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
     if (stringEndsWith(entry, TEST_SUFFIX)) {
-      if (classes[entry]) tests.add(entry);
+      if (classes[entry]) orderedStringSetAdd(tests, entry);
       continue;
     }
-    for (const testPath of Object.keys(classes)) {
-      if (stringStartsWith(testPath, entry)) tests.add(testPath);
+    const classPaths = objectKeys(classes);
+    for (let pathIndex = 0;
+      pathIndex < classPaths.length;
+      pathIndex += 1) {
+      const testPath = classPaths[pathIndex];
+      if (stringStartsWith(testPath, entry)) {
+        orderedStringSetAdd(tests, testPath);
+      }
     }
   }
-  return tests;
+  return orderedStringSetValues(tests);
 }
 
 function addReason(plan, testPath, reason) {
-  if (!plan.has(testPath)) plan.set(testPath, new Set());
-  plan.get(testPath).add(reason);
+  if (!orderedStringMapHas(plan, testPath)) {
+    orderedStringMapSet(plan, testPath, createOrderedStringSet());
+  }
+  orderedStringSetAdd(orderedStringMapGet(plan, testPath), reason);
 }
 
 // Which package.json edits are safe to prove modularly. `changedPackageFields`
 // is supplied by the caller (it needs both revisions to compute); when it is
 // unavailable we fail closed to a release proof rather than guessing.
-export function packageChangeRequiresRelease(changedPaths, changedPackageFields) {
+export function packageChangeRequiresRelease(
+  changedPaths,
+  changedPackageFields,
+  lockfileGraphChanged,
+) {
   const shipping = arrayFilter(changedPaths,
     (changedPath) => arrayIncludes(RELEASE_SURFACE_PATHS, changedPath));
   if (shipping.length > 0) {
     return `${RELEASE_SURFACE_PROBLEM}: ${arrayJoin(shipping, PROBLEM_SEPARATOR)}`;
   }
   if (arrayIncludes(changedPaths, PACKAGE_LOCKFILE_PATH)) {
-    return LOCKFILE_RELEASE_PROBLEM;
+    if (lockfileGraphChanged !== false) return LOCKFILE_RELEASE_PROBLEM;
   }
   if (!arrayIncludes(changedPaths, PACKAGE_MANIFEST_PATH)) return null;
-  if (!Array.isArray(changedPackageFields)) {
+  if (!arrayIsArray(changedPackageFields)) {
     return PACKAGE_FIELDS_UNKNOWN_PROBLEM;
   }
   const surface = arrayFilter(changedPackageFields,
@@ -223,10 +267,14 @@ export function candidatePaths(root) {
   // what counts as repository content.
   const untracked = withoutWorkspaceInjections(
     list([LS_FILES, OTHERS, EXCLUDE_STANDARD]));
+  const candidates = createOrderedStringSet(tracked);
+  for (let index = 0; index < untracked.length; index += 1) {
+    orderedStringSetAdd(candidates, untracked[index]);
+  }
   return {
     tracked,
     untracked,
-    candidates: [...new Set([...tracked, ...untracked])],
+    candidates: orderedStringSetValues(candidates),
   };
 }
 
@@ -266,17 +314,18 @@ export function taxonomyCensus(root) {
     [CATEGORY_RELEASE_PROOF]: [],
   };
   const problems = [];
-  for (const candidatePath of candidates) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidatePath = candidates[index];
     const verdict = categoryForPath(candidatePath, classes);
     if (!verdict.category) {
-      problems.push(`${candidatePath}: ${verdict.problem}`);
+      appendArrayValue(problems, `${candidatePath}: ${verdict.problem}`);
       continue;
     }
-    buckets[verdict.category].push(candidatePath);
+    appendArrayValue(buckets[verdict.category], candidatePath);
   }
-  const counts = Object.fromEntries(arrayMap(
-    Object.entries(buckets), ([key, list]) => [key, list.length]));
-  const sum = arrayReduce(Object.values(counts), (total, n) => total + n, 0);
+  const counts = objectFromEntries(arrayMap(
+    objectEntries(buckets), ([key, list]) => [key, list.length]));
+  const sum = arrayReduce(objectValues(counts), (total, n) => total + n, 0);
   return {
     trackedCount: tracked.length,
     untrackedCount: untracked.length,
@@ -309,9 +358,9 @@ function admitChangedTest(evidence, changedPath, classes, vanished) {
   // silently skipped, and its removal still widens through the classification
   // manifest, which audit:shards forces to be regenerated. Refusing here would
   // make deleting any test demand a full release proof.
-  if (vanished.has(changedPath)) return;
+  if (stringCollectionHas(vanished, changedPath)) return;
   if (!classes[changedPath]) {
-    evidence.refusals.push(
+    appendArrayValue(evidence.refusals,
       `${REFUSED_UNCLASSIFIED_TEST_PROBLEM}: ${changedPath}`);
     return;
   }
@@ -321,16 +370,25 @@ function admitChangedTest(evidence, changedPath, classes, vanished) {
 function admitChangedSource(evidence, changedPath, classes, contracts) {
   const owner = subsystemForSourcePath(changedPath);
   if (!owner.subsystem) {
-    evidence.refusals.push(`${REFUSED_UNKNOWN_OWNER_PROBLEM} ${changedPath}` +
-      (owner.ambiguous ?
-        ` [${arrayJoin(owner.ambiguous, AMBIGUITY_SEPARATOR)}]` : ''));
+    appendArrayValue(evidence.refusals,
+      `${REFUSED_UNKNOWN_OWNER_PROBLEM} ${changedPath}` +
+        (owner.ambiguous ?
+          ` [${arrayJoin(owner.ambiguous, AMBIGUITY_SEPARATOR)}]` : ''));
     return;
   }
   evidence.sourceChanged = true;
-  evidence.subsystems.add(owner.subsystem);
+  orderedStringSetAdd(evidence.subsystems, owner.subsystem);
 
-  for (const witness of contractWitnesses(contracts, changedPath)) {
-    for (const testPath of expandWitness(classes, witness.tests)) {
+  const impactWitnesses = contractWitnesses(contracts, changedPath);
+  for (let witnessIndex = 0;
+    witnessIndex < impactWitnesses.length;
+    witnessIndex += 1) {
+    const witness = impactWitnesses[witnessIndex];
+    const witnessTests = expandWitness(classes, witness.tests);
+    for (let testIndex = 0;
+      testIndex < witnessTests.length;
+      testIndex += 1) {
+      const testPath = witnessTests[testIndex];
       addReason(evidence.plan, testPath,
         `${REASON_IMPACT_WITNESS}${REASON_SEPARATOR}${witness.id}`);
     }
@@ -339,15 +397,26 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
   // owning subsystem joins the selection rather than a guess at its tests. The
   // pair id is remembered so --explain can say a test is here because of a
   // declared coupling rather than because its own area changed.
-  for (const witness of coupledWitnesses(contracts, changedPath)) {
-    for (const ownerPath of witness.owners) {
+  const coupled = coupledWitnesses(contracts, changedPath);
+  for (let witnessIndex = 0;
+    witnessIndex < coupled.length;
+    witnessIndex += 1) {
+    const witness = coupled[witnessIndex];
+    for (let ownerIndex = 0;
+      ownerIndex < witness.owners.length;
+      ownerIndex += 1) {
+      const ownerPath = witness.owners[ownerIndex];
       const opposite = subsystemForSourcePath(ownerPath);
       if (!opposite.subsystem) continue;
-      evidence.subsystems.add(opposite.subsystem);
-      if (!evidence.coupledBy.has(opposite.subsystem)) {
-        evidence.coupledBy.set(opposite.subsystem, new Set());
+      orderedStringSetAdd(evidence.subsystems, opposite.subsystem);
+      if (!orderedStringMapHas(evidence.coupledBy, opposite.subsystem)) {
+        orderedStringMapSet(
+          evidence.coupledBy, opposite.subsystem, createOrderedStringSet());
       }
-      evidence.coupledBy.get(opposite.subsystem).add(witness.id);
+      orderedStringSetAdd(
+        orderedStringMapGet(evidence.coupledBy, opposite.subsystem),
+        witness.id,
+      );
     }
   }
 }
@@ -362,7 +431,7 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
 // classifying PATHS, and teaching it to read JSON fields would give it a second
 // kind of authority. This is the boundary where changedPackageFields exists.
 export function packageDevToolingSubsystem(changedPackageFields) {
-  if (!Array.isArray(changedPackageFields) ||
+  if (!arrayIsArray(changedPackageFields) ||
     changedPackageFields.length === 0) {
     return null;
   }
@@ -381,13 +450,14 @@ function collectChangeEvidence({
   packageSubsystem,
 }) {
   const evidence = {
-    plan: new Map(),
-    subsystems: new Set(),
-    coupledBy: new Map(),
+    plan: createOrderedStringMap(),
+    subsystems: createOrderedStringSet(),
+    coupledBy: createOrderedStringMap(),
     refusals: [],
     sourceChanged: false,
   };
-  for (const changedPath of changedPaths) {
+  for (let index = 0; index < changedPaths.length; index += 1) {
+    const changedPath = changedPaths[index];
     if (isInertPath(changedPath)) continue;
     if (stringEndsWith(changedPath, TEST_SUFFIX)) {
       admitChangedTest(evidence, changedPath, classes, vanished);
@@ -395,7 +465,7 @@ function collectChangeEvidence({
     }
     if (changedPath === PACKAGE_MANIFEST_PATH && packageSubsystem) {
       evidence.sourceChanged = true;
-      evidence.subsystems.add(packageSubsystem);
+      orderedStringSetAdd(evidence.subsystems, packageSubsystem);
       continue;
     }
     admitChangedSource(evidence, changedPath, classes, contracts);
@@ -413,10 +483,11 @@ export function selectChangedTests({
   root,
   changedPaths,
   changedPackageFields,
-  vanishedPaths = new Set(),
+  lockfileGraphChanged,
+  vanishedPaths = createOrderedStringSet(),
 }) {
   const releaseProblem = packageChangeRequiresRelease(
-    changedPaths, changedPackageFields);
+    changedPaths, changedPackageFields, lockfileGraphChanged);
   if (releaseProblem) {
     return refusedSelection(
       REFUSAL_RELEASE_PROOF_REQUIRED, [releaseProblem], []);
@@ -433,26 +504,46 @@ export function selectChangedTests({
   });
   if (evidence.refusals.length > 0) {
     return refusedSelection(REFUSAL_UNKNOWN_SCOPE, evidence.refusals,
-      [...evidence.subsystems]);
+      orderedStringSetValues(evidence.subsystems));
   }
 
-  for (const subsystem of evidence.subsystems) {
-    for (const testPath of testsForSubsystem(subsystem, root)) {
+  const subsystems = orderedStringSetValues(evidence.subsystems);
+  for (let subsystemIndex = 0;
+    subsystemIndex < subsystems.length;
+    subsystemIndex += 1) {
+    const subsystem = subsystems[subsystemIndex];
+    const subsystemTests = testsForSubsystem(subsystem, root);
+    for (let testIndex = 0;
+      testIndex < subsystemTests.length;
+      testIndex += 1) {
+      const testPath = subsystemTests[testIndex];
       addReason(evidence.plan, testPath,
         `${REASON_SUBSYSTEM}${REASON_SEPARATOR}${subsystem}`);
-      for (const pairId of evidence.coupledBy.get(subsystem) || []) {
+      const pairIds = orderedStringMapGet(evidence.coupledBy, subsystem);
+      const coupledReasons = pairIds ? orderedStringSetValues(pairIds) : [];
+      for (let pairIndex = 0;
+        pairIndex < coupledReasons.length;
+        pairIndex += 1) {
+        const pairId = coupledReasons[pairIndex];
         addReason(evidence.plan, testPath,
           `${REASON_COUPLED_WITNESS}${REASON_SEPARATOR}${pairId}`);
       }
     }
   }
 
+  const tests = [];
+  const plannedPaths = sortStrings(orderedStringMapKeys(evidence.plan));
+  for (let index = 0; index < plannedPaths.length; index += 1) {
+    const testPath = plannedPaths[index];
+    appendArrayValue(tests, {
+      path: testPath,
+      reasons: sortStrings(orderedStringSetValues(
+        orderedStringMapGet(evidence.plan, testPath))),
+    });
+  }
   return {
     kind: evidence.sourceChanged ? SELECTION_WIDENED : SELECTION_PRECISE,
-    subsystems: [...evidence.subsystems].sort(),
-    tests: arrayMap([...evidence.plan.keys()].sort(), (testPath) => ({
-      path: testPath,
-      reasons: [...evidence.plan.get(testPath)].sort(),
-    })),
+    subsystems: sortStrings(subsystems),
+    tests,
   };
 }

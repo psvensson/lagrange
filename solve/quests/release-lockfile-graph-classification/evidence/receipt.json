@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "release-lockfile-graph-classification",
+  "generatedAt": "2026-09-10T23:42:40.000Z",
+  "receipts": [
+    {
+      "id": "red-main-failure-classified",
+      "passed": true,
+      "command": "gh run view 34469034080 --log-failed",
+      "detail": "Exact-SHA CI passed fast-static and then refused before spawning tests because the selector treated the release-only package-lock root version change as an installed dependency graph change. Repository-health run 34469034011 passed on the same SHA."
+    },
+    {
+      "id": "lockfile-graph-semantic-owner",
+      "passed": true,
+      "command": "node --input-type=module -e import lockfileDependencyGraphChanged for 07f793..working-tree",
+      "detail": "The changed-path owner, pure selector, orchestrator, subsystem participant, and classified delivery runner share captured or intrinsic-independent proof operations, so mutable Set/Map/Array/Object/JSON behavior cannot erase changed paths, subsystems, reasons, the safety spine, subsystem tests, lanes, batches, or executable tests. Every typed option record, selector result, package/lock record, classification, and safety-spine entry is admitted only from own data; inherited values and accessors cannot replace roots, selectors, spines, launchers, graph fields, or selected tests. Every lockfile field except top-level version and packages[''].version is compared with key-order-insensitive strict deep equality, without JSON serialization, and every packages row must be an own-data record. Decimal, exponent, unsafe-integer, negative-zero, or structurally malformed JSON fails closed. The failed CI range reports failedCiRange=false."
+    },
+    {
+      "id": "release-version-only-modular-proof",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/scripts/change-proof-boundary.test.js test/scripts/change-proof-package-range.test.js test/scripts/change-proof-lockfile-safety.test.js test/scripts/change-proof-own-authority.test.js test/scripts/change-proof-collection-safety.test.js test/scripts/change-proof-subsystem-participant-safety.test.js test/scripts/change-proof-transitive-lockfile-shape.test.js test/scripts/changed-paths.test.js test/scripts/check-base-range.test.js test/scripts/check-subsystem.test.js test/scripts/run-classified-test-files.test.js test/scripts/select-change-tests.test.js test/scripts/change-selection-taxonomy.test.js test/scripts/selection-golden-corpus.test.js test/scripts/workspace-injection-candidates.test.js",
+      "detail": "The 99-assertion focused contract proves both the pure selector and executable command admit a coordinated version-only package.json/package-lock edit, invoke the release-packaging subsystem plus an own-data nonempty safety spine, and deliver every successful classified input to a child process. The classified-runner contract is itself now in the unconditional spine. Startup Set and Map replacement produces the exact 37-test plan (29 spine, 10 packaging-selected, two overlaps); the Array.filter delivery falsifier exits 0 with one exact spawn; inherited selector/spine values preserve typed release refusal and the canonical spine; and an inherited launcher is ignored while a real child runs. Every bounded regression file completes below the two-second unit budget."
+    },
+    {
+      "id": "dependency-change-still-refuses",
+      "passed": true,
+      "command": "node scripts/run-test-files.js --jobs=1 test/scripts/change-proof-package-range.test.js test/scripts/change-proof-lockfile-safety.test.js test/scripts/change-proof-own-authority.test.js test/scripts/change-proof-collection-safety.test.js test/scripts/change-proof-subsystem-participant-safety.test.js test/scripts/change-proof-transitive-lockfile-shape.test.js test/scripts/select-change-tests.test.js",
+      "detail": "Retained witnesses prove root and dirty transitive dependency mutations refuse before spawning tests; malformed transitive package rows, decimal/exponent/unsafe-integer/negative-zero JSON, dirty deletion, or own-authority deletion refuse; unchanged negative zero in both graph states also refuses; dirty package dependency fields remain visible with explicit --head; and true, null, or unavailable graph state all retain RELEASE_PROOF_REQUIRED. Inherited toJSON, dependencies, packages, root rows, classifications, safety-spine tests, selector/spine/planRoot collaborators, or runner root/spawn options; inherited/accessor array and option entries; invalid selector results; and replacement of Set/Map/Array/Object/JSON behavior cannot hide changes, erase participants, empty the plan, admit unknown executables, or report successful zero-spawn delivery. Only an explicit semantic false across both committed and working comparisons is modular."
+    },
+    {
+      "id": "selector-contract-and-static-gates",
+      "passed": true,
+      "command": "npm test && npm run test:static",
+      "detail": "The final selected test-infrastructure proof passed 143 files and 3,205 assertions including all four exclusive files and the 29-test unconditional spine. Full static passed with unchanged unused, size, complexity, cycle, duplication, policy, documentation, steering, and lint ratchets; the dependency graph grew only by consumers of the shared proof-collection owner, and the test census remains 2,068 after four adversarial suites. The audits report zero new literal-owner, decision-boundary, or ambient-intrinsic violations. The original 07f793..7afd release graph comparison is semantically unchanged and routes through release-packaging instead of refusing."
+    }
+  ]
+}
