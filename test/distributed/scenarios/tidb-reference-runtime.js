@@ -12,7 +12,6 @@ const DEFAULT_TIKV_PORT = 8710;
 const DEFAULT_TIDB_PORT = 8720;
 const DEFAULT_TIDB_STATUS_PORT = 8721;
 const HOST_NETWORK = 'host';
-const ZERO = 0;
 
 const DEFAULT_IMAGES = Object.freeze({
   pd: 'pingcap/pd:v8.5.8',
@@ -174,8 +173,8 @@ function requireCommonImageId(component, inspections) {
     1,
     `${component} image identity differs across comparator hosts`,
   );
-  assert.ok(imageIds[ZERO], `${component} image identity is missing`);
-  return imageIds[ZERO];
+  assert.ok(imageIds[0], `${component} image identity is missing`);
+  return imageIds[0];
 }
 
 async function removeContainerQuietly(provider, container) {
@@ -213,7 +212,7 @@ class TiDbReferenceRuntime {
       ]);
       return {pd, tikv};
     }));
-    const primary = this.hosts[ZERO];
+    const primary = this.hosts[0];
     const [tidb, client] = await Promise.all([
       primary.provider.ensureRegistryImage(images.tidb),
       primary.provider.ensureRegistryImage(images.client),
@@ -277,7 +276,7 @@ class TiDbReferenceRuntime {
     }));
     assert.equal(tikvContainers.length, this.hosts.length);
 
-    const primary = this.hosts[ZERO];
+    const primary = this.hosts[0];
     const tidb = await primary.provider.createContainer(containerOptions({
       name: `${this.runId}-tidb`,
       image: images.tidb,
@@ -315,7 +314,7 @@ class TiDbReferenceRuntime {
   }
 
   async waitReady() {
-    const primary = this.hosts[ZERO];
+    const primary = this.hosts[0];
     const deadline = Date.now() + this.config.readyTimeoutMs;
     let lastError = null;
     while (Date.now() < deadline) {
@@ -324,7 +323,7 @@ class TiDbReferenceRuntime {
           this.client.containerId,
           mysqlCommand(this.config.ports.tidb, 'SELECT 1'),
         );
-        if (result.exitCode === ZERO && String(result.stdout).trim() === '1') {
+        if (result.exitCode === 0 && String(result.stdout).trim() === '1') {
           return;
         }
         lastError = new Error(
@@ -342,12 +341,12 @@ class TiDbReferenceRuntime {
   }
 
   async executeSql(sql) {
-    const primary = this.hosts[ZERO];
+    const primary = this.hosts[0];
     const result = await primary.provider.execInContainer(
       this.client.containerId,
       mysqlCommand(this.config.ports.tidb, sql),
     );
-    if (result.exitCode !== ZERO) {
+    if (result.exitCode !== 0) {
       throw new Error(`TiDB SQL failed: ${String(result.stderr || '').trim()}`);
     }
     return String(result.stdout || '').trim();
@@ -369,11 +368,11 @@ class TiDbReferenceRuntime {
   }
 
   async stop() {
-    for (let index = this.components.length - 1; index >= ZERO; index -= 1) {
+    for (let index = this.components.length - 1; index >= 0; index -= 1) {
       const component = this.components[index];
       await removeContainerQuietly(component.provider, component.container);
     }
-    this.components.length = ZERO;
+    this.components.length = 0;
     this.client = null;
   }
 }
