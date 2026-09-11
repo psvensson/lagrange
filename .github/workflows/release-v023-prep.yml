@@ -1,0 +1,123 @@
+name: release-v023-prep
+
+on:
+  push:
+    branches: [release/v0.2.3]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: release/v0.2.3
+          fetch-depth: 0
+
+      - name: Prepare v0.2.3 release metadata
+        env:
+          VERSION: 0.2.3
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {readFileSync, writeFileSync} from 'node:fs';
+
+          const version = process.env.VERSION;
+          const writeJsonVersion = (path, mutate) => {
+            const value = JSON.parse(readFileSync(path, 'utf8'));
+            mutate(value);
+            writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+          };
+
+          writeJsonVersion('package.json', (value) => {
+            value.version = version;
+          });
+          writeJsonVersion('package-lock.json', (value) => {
+            value.version = version;
+            value.packages[''].version = version;
+          });
+
+          const replaceExact = (path, from, to) => {
+            const before = readFileSync(path, 'utf8');
+            if (!before.includes(from)) {
+              throw new Error(`${path}: expected release literal not found: ${from}`);
+            }
+            writeFileSync(path, before.replace(from, to));
+          };
+
+          replaceExact(
+            'src/constants/entrypoint.js',
+            "VERSION: '0.2.2'",
+            `VERSION: '${version}'`,
+          );
+          replaceExact(
+            'src/cli/cli-constants.js',
+            "CLI_VERSION: '0.2.2'",
+            `CLI_VERSION: '${version}'`,
+          );
+          replaceExact(
+            'charts/lagrange-node/Chart.yaml',
+            'version: 0.2.2',
+            `version: ${version}`,
+          );
+          replaceExact(
+            'charts/lagrange-node/Chart.yaml',
+            'appVersion: "0.2.2"',
+            `appVersion: "${version}"`,
+          );
+
+          const changelogPath = 'CHANGELOG.md';
+          let changelog = readFileSync(changelogPath, 'utf8');
+          const releaseSection = `## [${version}] — 2026-09-11\n\n` +
+            'This forward patch preserves the immutable `v0.2.2` tag after its release\n' +
+            'workflow completed the full release proof and build but stopped in the Docker\n' +
+            'image smoke test before publishing npm, Docker, Helm, SEA, or GitHub artifacts.\n\n' +
+            '### Fixed\n' +
+            '- The production Docker image now retains `node-sql-parser/build`, which\n' +
+            '  contains the SQLite and PostgreSQL dialect modules imported by the runtime\n' +
+            '  SQL parser. The v0.2.2 image build pruned that directory, so the release\n' +
+            '  smoke test failed with `ERR_MODULE_NOT_FOUND` before any artifact publication.\n\n';
+          const unreleasedHeader = '## [Unreleased]\n\n';
+          if (!changelog.includes(unreleasedHeader)) {
+            throw new Error('CHANGELOG.md: Unreleased header not found');
+          }
+          changelog = changelog.replace(
+            unreleasedHeader,
+            `${unreleasedHeader}${releaseSection}`,
+          );
+          replaceExact;
+          const oldUnreleased = '[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.2...HEAD';
+          if (!changelog.includes(oldUnreleased)) {
+            throw new Error('CHANGELOG.md: expected Unreleased comparison not found');
+          }
+          changelog = changelog.replace(
+            oldUnreleased,
+            '[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.3...HEAD',
+          );
+          const oldReleaseLink = '[0.2.2]: https://github.com/psvensson/lagrange/compare/v0.2.1...v0.2.2';
+          if (!changelog.includes(oldReleaseLink)) {
+            throw new Error('CHANGELOG.md: v0.2.2 link not found');
+          }
+          changelog = changelog.replace(
+            oldReleaseLink,
+            '[0.2.3]: https://github.com/psvensson/lagrange/compare/v0.2.2...v0.2.3\n' + oldReleaseLink,
+          );
+          writeFileSync(changelogPath, changelog);
+          NODE
+
+          # This helper exists only to perform the lockfile-safe release bump on
+          # the remote branch. Remove it in the same commit it produces so the
+          # release PR contains only the durable release repair.
+          rm .github/workflows/release-v023-prep.yml
+
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package.json package-lock.json src/constants/entrypoint.js \
+            src/cli/cli-constants.js charts/lagrange-node/Chart.yaml CHANGELOG.md \
+            .github/workflows/release-v023-prep.yml
+          git commit -m "release: prepare v0.2.3"
+          git push origin HEAD:release/v0.2.3
