@@ -22,10 +22,28 @@ jobs:
           node-version: "22"
           package-manager-cache: false
       - run: npm ci
-      - name: Prove release pipeline invariants
+
+      - name: Prove durable proof authority and release reuse invariants
         run: |
+          node test/scripts/proof-authority.test.js
+          node test/scripts/release-preflight.test.js
           node test/release/release-pipeline-proof-reuse.test.js
-          npx eslint scripts/run-release-proof.js test/release/release-pipeline-proof-reuse.test.js
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {ACTION, authorizeAction, isAuthorized, registeredActions} from './scripts/action-authority.js';
+          assert.ok(registeredActions().includes(ACTION.RECORD_PROOF));
+          const decision = authorizeAction({action: ACTION.RECORD_PROOF, signal: null});
+          assert.equal(isAuthorized(decision), true);
+          assert.equal(decision.standing, true);
+          NODE
+          npx eslint \
+            scripts/proof-authority.js \
+            scripts/run-release-proof.js \
+            scripts/release-preflight.js \
+            test/scripts/proof-authority.test.js \
+            test/scripts/release-preflight.test.js \
+            test/release/release-pipeline-proof-reuse.test.js
+
       - name: Prove npm registry package exists
         run: |
           node --input-type=module <<'NODE'
@@ -35,6 +53,7 @@ jobs:
           if (metadata.name !== 'lagrange-server') throw new Error('wrong npm package identity');
           console.log(`lagrange-server exists; latest=${metadata['dist-tags']?.latest || 'none'} versions=${Object.keys(metadata.versions || {}).length}`);
           NODE
+
       - name: Prove GitHub-hosted OIDC issuance
         run: |
           set -euo pipefail
@@ -46,6 +65,7 @@ jobs:
           if (p.runner_environment && p.runner_environment !== 'github-hosted') throw new Error(`runner ${p.runner_environment}`);
           console.log(`OIDC ok: ${p.repository} ${p.runner_environment || 'github-hosted'}`);
           NODE
+
       - name: Prove Docker Hub pull+push authorization
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
