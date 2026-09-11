@@ -7,8 +7,19 @@ const DEFAULT_POLL_MS = 500;
 const DEFAULT_PARTITION_POLL_MS = 1000;
 const PENDING_CONTRACT_STATE = 'pending';
 const TRANSITIONAL_PARTITION_STATES = new Set(['splitting', 'merging']);
-const TRANSIENT_ERROR_PATTERN =
-  /participant failures|pressure|degraded|reconnecting|not ready|service shutdown|shutting down|no active leader|leader.*unavailable|timed out|timeout/i;
+const TRANSIENT_ERROR_PATTERN = new RegExp([
+  'participant failures',
+  'pressure',
+  'degraded',
+  'reconnecting',
+  'not ready',
+  'service shutdown',
+  'shutting down',
+  'no active leader',
+  'leader.*unavailable',
+  'timed out',
+  'timeout',
+].join('|'), 'i');
 
 function rowsFromResult(result) {
   const rows = result?.rows || result?.results || [];
