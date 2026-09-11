@@ -13,6 +13,7 @@ import {test} from '../../src/test-helpers/tap.js';
 
 const PACKAGE_PATH = 'package.json';
 const RELEASE_WORKFLOW_PATH = '.github/workflows/release.yml';
+const FULL_GATE_WORKFLOW_PATH = '.github/workflows/full-gate.yml';
 const TEST_CI_SCRIPT_PATH = 'scripts/run-test-ci.sh';
 const COMMANDS = Object.freeze([
   'npm run test:static',
@@ -22,7 +23,7 @@ const COMMANDS = Object.freeze([
 ]);
 const MOVIELENS_DOWNLOAD_COMMAND =
   'node examples/service-data-affinity/download-movielens.js';
-const FULL_RELEASE_GATE_COMMAND = 'run: npm run check:release';
+const FULL_RELEASE_PROOF_COMMAND = 'node scripts/run-release-proof.js';
 const STUB_FAILURE_EXIT_CODE = 23;
 const NPM_STUB = [
   '#!/usr/bin/env bash',
@@ -98,11 +99,18 @@ test('all suite entry points use the classified execution owner', (t) => {
   t.end();
 });
 
-test('tagged releases fetch MovieLens before the canonical full proof', (t) => {
-  const workflow = readFileSync(RELEASE_WORKFLOW_PATH, 'utf8');
+test('canonical full proof fetches MovieLens once in the full gate', (t) => {
+  const fullGate = readFileSync(FULL_GATE_WORKFLOW_PATH, 'utf8');
+  const release = readFileSync(RELEASE_WORKFLOW_PATH, 'utf8');
 
-  t.ok(workflow.indexOf(MOVIELENS_DOWNLOAD_COMMAND) >= 0);
-  t.ok(workflow.indexOf(MOVIELENS_DOWNLOAD_COMMAND) <
-    workflow.indexOf(FULL_RELEASE_GATE_COMMAND));
+  t.ok(fullGate.indexOf(MOVIELENS_DOWNLOAD_COMMAND) >= 0,
+    'the full gate fetches the digest-pinned dataset');
+  t.ok(
+    fullGate.indexOf(MOVIELENS_DOWNLOAD_COMMAND) <
+    fullGate.indexOf(FULL_RELEASE_PROOF_COMMAND),
+    'data is present before the single-pass release proof runs',
+  );
+  t.notOk(release.includes(MOVIELENS_DOWNLOAD_COMMAND),
+    'tag publication consumes the durable receipt: it never reruns the proof or its data fetch');
   t.end();
 });
