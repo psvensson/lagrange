@@ -143,6 +143,12 @@ jobs:
     needs: publishability
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Publication must be globally serialized across SHAs: two different
+    # release tags must never mutate npm/Docker Hub/Releases at the same time.
+    # The workflow-level SHA-scoped group only orders work on one release.
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
     permissions:
       contents: write
       id-token: write

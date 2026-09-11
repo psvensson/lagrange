@@ -18,6 +18,7 @@
         "test/scripts/acceptance-proof-manifest-runner.test.js",
         "test/release/public-api-side-effect-boundary.test.js",
         "test/release/project-hardening-contracts.test.js",
+        "test/release/release-pipeline-proof-reuse.test.js",
         "test/admin/admin-websocket-external-bind-policy.test.js",
         "test/runtime/pgwire-protocol-ordering.test.js",
         "test/compatibility/pgwire-client-compat.test.js"
