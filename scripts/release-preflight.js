@@ -7,7 +7,8 @@
  * which this script changes:
  *   1. the release content is clean (porcelain status outside solve/);
  *   2. HEAD is exactly <remote>/main after a fetch;
- *   3. the `ci` workflow's gate job concluded success for that exact sha;
+ *   3. either the modular `ci` gate or stronger `full-gate` concluded
+ *      success for that exact sha;
  *   4. every version literal (package.json, package-lock.json, CLI,
  *      entrypoint, Helm chart version and appVersion) agrees and the
  *      changelog carries a non-empty section for that version;
@@ -40,6 +41,7 @@ const PACKAGE_LOCK = 'package-lock.json';
 const CHANGELOG = 'CHANGELOG.md';
 const CHART_YAML = 'charts/lagrange-node/Chart.yaml';
 const CI_WORKFLOW_PATH = '.github/workflows/ci.yml';
+const FULL_GATE_WORKFLOW_PATH = '.github/workflows/full-gate.yml';
 const RUN_STATUS_COMPLETED = 'completed';
 const RUN_CONCLUSION_SUCCESS = 'success';
 const RUNS_PER_PAGE = 50;
@@ -181,9 +183,9 @@ function gatherReleaseFacts({
   };
 }
 
-function ciGateRun(facts) {
+function preTagProofRun(facts) {
   return facts.workflowRuns.find((run) =>
-    run.path === CI_WORKFLOW_PATH &&
+    (run.path === CI_WORKFLOW_PATH || run.path === FULL_GATE_WORKFLOW_PATH) &&
     run.head_sha === facts.headSha &&
     run.status === RUN_STATUS_COMPLETED &&
     run.conclusion === RUN_CONCLUSION_SUCCESS) || null;
@@ -202,7 +204,7 @@ function versionDisagreements(facts) {
  *   commands: string[]}}
  */
 function evaluateReleasePreflight(facts) {
-  const gateRun = ciGateRun(facts);
+  const gateRun = preTagProofRun(facts);
   const disagreements = versionDisagreements(facts);
   const checks = [
     {
@@ -223,8 +225,10 @@ function evaluateReleasePreflight(facts) {
       id: CHECK.CI_GATE_GREEN,
       ok: gateRun !== null,
       detail: gateRun ?
-        `ci gate run ${gateRun.id} succeeded on ${facts.headSha}` :
-        `no completed successful ${CI_WORKFLOW_PATH} run for ${facts.headSha}`,
+        `pre-tag proof ${gateRun.path} run ${gateRun.id} succeeded on ` +
+          facts.headSha :
+        `no completed successful ${CI_WORKFLOW_PATH} or ` +
+          `${FULL_GATE_WORKFLOW_PATH} run for ${facts.headSha}`,
     },
     {
       id: CHECK.VERSIONS_AGREE,
