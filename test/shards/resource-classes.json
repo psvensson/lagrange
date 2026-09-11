@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2051,
+    "ordinary": 2053,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2068,
-  "digest": "fnv1a32-89dfc943",
+  "censusSize": 2070,
+  "digest": "fnv1a32-a467c392",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1631,6 +1631,7 @@
     "test/rebalancer/user-table-leader-placement-cure.test.js": "ordinary",
     "test/release/project-hardening-contracts.test.js": "ordinary",
     "test/release/public-api-side-effect-boundary.test.js": "ordinary",
+    "test/release/release-pipeline-proof-reuse.test.js": "ordinary",
     "test/release/version-single-source.test.js": "ordinary",
     "test/runtime/call-cell-reduce-coordinator.test.js": "ordinary",
     "test/runtime/call-cell-worker.test.js": "external-toolchain",
@@ -1816,6 +1817,7 @@
     "test/scripts/model-tlc-output-tail.test.js": "ordinary",
     "test/scripts/no-external-llm-guards.test.js": "ordinary",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "ordinary",
+    "test/scripts/proof-authority.test.js": "ordinary",
     "test/scripts/proof-cone-cli-output-completeness.test.js": "ordinary",
     "test/scripts/prune-test-output.test.js": "ordinary",
     "test/scripts/publish-head.test.js": "ordinary",
