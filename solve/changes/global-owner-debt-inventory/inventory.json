@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2485666,
-        "sha256": "a09cba547d01025f5a9d9927ddb9cb0d22c1899be42396fcaea05df52b13c221"
+        "bytes": 2485732,
+        "sha256": "8a6fee241ffeb9f20aceae7266199d0ce4f1ac277229d2e02e908dff63944f5d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "639847906956c98727bec8cd106785f067e7af312903ae8ed024882e45c9568f"
+        "sha256": "c32e2bf4da6d9fc20a72099d988ad8ddbc1e0bd86cdefe38e593026c6071af98"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "d170c6b72f0cde8a4102098156b60913fd3f0ef2ab3abc3d7171d0dfc4ac99ab"
+    "inputDigest": "35f295d7b61227fa1569e380e91ccf87016f273c8eb9001ca85ac22bdcca6e60"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "639847906956c98727bec8cd106785f067e7af312903ae8ed024882e45c9568f"
+          "sha256": "c32e2bf4da6d9fc20a72099d988ad8ddbc1e0bd86cdefe38e593026c6071af98"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2485666,
-        "sha256": "a09cba547d01025f5a9d9927ddb9cb0d22c1899be42396fcaea05df52b13c221"
+        "bytes": 2485732,
+        "sha256": "8a6fee241ffeb9f20aceae7266199d0ce4f1ac277229d2e02e908dff63944f5d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "6696c4c583f037fe97f4e5166965f1fa62558f28ade89689c29ee1ed1202cf8f",
+      "sourceDigest": "6b4dfaf7b0f8a6e5c68a26498df7f338cc92c054bc4305413728e998a63dbd02",
       "moduleCount": 4992,
-      "edgeCount": 22045,
+      "edgeCount": 22046,
       "unresolvedCount": 34
     }
   },
@@ -2040,7 +2040,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 47,
+      "importOut": 48,
       "score": 18.7,
       "topPaths": [
         "test/service/service-reconciler.test.js",

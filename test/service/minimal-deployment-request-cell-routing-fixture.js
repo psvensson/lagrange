@@ -28,6 +28,12 @@ import {
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {
+  HEALTH_STATUS,
+  PREPARE_STATUS,
+  RuntimeDriver,
+  START_STATUS,
+} from '../../src/runtime/runtime-driver.js';
 import {RuntimeDriverRegistry} from
   '../../src/runtime/runtime-driver-registry.js';
 import {ServiceRuntimeLifecycle} from
@@ -337,7 +343,10 @@ class MemoryInvocationJournal {
 }
 
 class SqliteInvocationJournal {
-  constructor() {
+  constructor(options = {}) {
+    this.afterEmptyInvocationRead =
+      options.afterEmptyInvocationRead || null;
+    this.emptyInvocationReadCount = 0;
     this.insertOperationIds = [];
     this.partition = new PartitionService({
       dbPath: SQLITE_MEMORY_DATABASE,
@@ -365,7 +374,15 @@ class SqliteInvocationJournal {
     try {
       const statement = this.partition.db.prepare(sqliteSql);
       if (sql.startsWith(JOURNAL_SQL_PREFIX.SELECT)) {
-        return {rows: statement.all(...params), success: true};
+        const rows = statement.all(...params);
+        if (rows.length === 0 && this.afterEmptyInvocationRead) {
+          this.emptyInvocationReadCount += 1;
+          await this.afterEmptyInvocationRead({
+            readCount: this.emptyInvocationReadCount,
+            sql,
+          });
+        }
+        return {rows, success: true};
       }
       if (sql.startsWith(JOURNAL_SQL_PREFIX.INSERT)) {
         this.insertOperationIds.push(
@@ -403,6 +420,10 @@ class SqliteInvocationJournal {
     return [...this.insertOperationIds];
   }
 
+  getEmptyInvocationReadCount() {
+    return this.emptyInvocationReadCount;
+  }
+
   getLegacyIdentityIndexSql() {
     return this.partition.db.prepare(
       SQLITE_INDEX_SQL,
@@ -414,6 +435,38 @@ class SqliteInvocationJournal {
 
   close() {
     this.partition.db.close();
+  }
+}
+
+class GatedRuntimeDriver extends RuntimeDriver {
+  constructor(options = {}) {
+    super(RUNTIME_KIND.WASM_COMPONENT);
+    this.invocationGate = options.invocationGate || null;
+    this.onInvoke = options.onInvoke || null;
+  }
+
+  validateDescriptor() {
+    return {valid: true};
+  }
+
+  async prepare() {
+    return {status: PREPARE_STATUS.READY};
+  }
+
+  async start() {
+    return {status: START_STATUS.RUNNING};
+  }
+
+  async stop() {}
+
+  async health() {
+    return {status: HEALTH_STATUS.HEALTHY};
+  }
+
+  async invoke() {
+    this.onInvoke?.();
+    if (this.invocationGate) await this.invocationGate;
+    return COMPONENT_RESPONSE;
   }
 }
 
@@ -440,12 +493,14 @@ function createActualRow(definition, replicaId, nodeId) {
   };
 }
 
-function createRuntime(rows, journal, replicaId, nodeId) {
-  const cellRuntime = new WasiComponentCellRuntime();
-  const driver = new WasmComponentDriver({
-    artifactLoader: async () => rows.artifact,
-    componentRuntime: cellRuntime,
-  });
+function createRuntimeWithDriver(
+  rows,
+  journal,
+  replicaId,
+  nodeId,
+  driver,
+  cellRuntime = null,
+) {
   let componentInvocationCount = 0;
   const driverInvoke = driver.invoke.bind(driver);
   driver.invoke = async (...args) => {
@@ -476,6 +531,38 @@ function createRuntime(rows, journal, replicaId, nodeId) {
   };
 }
 
+function createRuntime(rows, journal, replicaId, nodeId) {
+  const cellRuntime = new WasiComponentCellRuntime();
+  const driver = new WasmComponentDriver({
+    artifactLoader: async () => rows.artifact,
+    componentRuntime: cellRuntime,
+  });
+  return createRuntimeWithDriver(
+    rows,
+    journal,
+    replicaId,
+    nodeId,
+    driver,
+    cellRuntime,
+  );
+}
+
+function createGatedRuntime(
+  rows,
+  journal,
+  replicaId,
+  nodeId,
+  options = {},
+) {
+  return createRuntimeWithDriver(
+    rows,
+    journal,
+    replicaId,
+    nodeId,
+    new GatedRuntimeDriver(options),
+  );
+}
+
 export {
   COMPONENT_RESPONSE,
   MemoryInvocationJournal,
@@ -483,5 +570,6 @@ export {
   SqliteInvocationJournal,
   createActualRow,
   createDeploymentRows,
+  createGatedRuntime,
   createRuntime,
 };

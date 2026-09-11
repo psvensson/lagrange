@@ -1,0 +1,28 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "minimal-deployment-request-cell-routing-duration-boundary",
+  "status": "pass",
+  "generatedAt": "2026-09-11T10:35:17.373Z",
+  "receipts": [
+    {
+      "id": "durable-shared-sqlite-two-lifecycle-fence",
+      "passed": true,
+      "detail": "Two real ServiceRuntimeLifecycle owners cross a barrier after both real empty SQLite reads, make two same-operation insert attempts against the shared production unique index, invoke one typed driver exactly once, classify the loser as invoked and ambiguous, and replay the recorded result through both owners; stop-only and body-plus-stop rejection witnesses prove cleanup ownership without masking the primary failure."
+    },
+    {
+      "id": "genuine-http-router-wasi-late-response",
+      "passed": true,
+      "detail": "The separate genuine HTTP witness retains BootstrapAPI, RuntimeServiceHandler, two MessageRouters, and two real WASI runtimes; after startup, mocked Date covers the late request phase while only the real 1000ms pending-ledger timer uses the mock scheduler, and the real late response records late_after_timeout without reinvocation."
+    },
+    {
+      "id": "unchanged-routing-assertion-contract-and-selection",
+      "passed": true,
+      "detail": "All five original leaf names and assertions remain on the same test path; the canonical five-file scenario proof passes 83/83 and shard classification remains unit/ordinary/services-runtime. Generated owner inventory and import-graph seal were refreshed after the final source repair and canonical verification passes."
+    },
+    {
+      "id": "focused-static-and-authored-root-duration-proof",
+      "passed": true,
+      "detail": "Three isolated direct runs pass 5/5 with all semantic-owner roots below 334ms; classified and canonical scenario artifacts pass with every authored root below 985ms. Captured-native 750ms failure-only bounds cover every new progress and settlement wait, including non-masking cleanup; fast-static, strict metrics/file size, full owner-debt preparation, shard and impact audits, import-graph verification, and git diff check pass without ratchet increase."
+    }
+  ]
+}

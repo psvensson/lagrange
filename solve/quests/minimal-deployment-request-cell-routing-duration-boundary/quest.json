@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "minimal-deployment-request-cell-routing-duration-boundary",
+  "class": "fix",
+  "statement": "The blocking minimal-deployment request Cell routing proof retains its real cross-lifecycle durable SQLite single-effect fence and genuine HTTP, MessageRouter, and WASI late-response semantics while every authored node:test root completes within the existing two-second unit-test limit without wall-clock response sleeps.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/minimal-deployment-request-cell-routing-duration-boundary/evidence/receipt.json",
+      "requiredReceipts": [
+        "durable-shared-sqlite-two-lifecycle-fence",
+        "genuine-http-router-wasi-late-response",
+        "unchanged-routing-assertion-contract-and-selection",
+        "focused-static-and-authored-root-duration-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "durable-owner-proof",
+      "statement": "Keep two real ServiceRuntimeLifecycle owners and one real shared in-memory SQLite wasm_operations table with its production unique identity index. Use a typed RuntimeDriver with an explicit barrier after both initial empty SELECT observations; prove two same-operation insert attempts, one component invocation, the loser classification, and replay from both lifecycles. Do not replace durable storage with a Map or mutex."
+    },
+    {
+      "id": "genuine-http-owner-proof",
+      "statement": "Keep genuine WASI component execution, BootstrapAPI HTTP injection, RuntimeServiceHandler, and two actual MessageRouter instances. After startup, control only the existing 1000ms response deadline with the canonical test clock, gated on the actual timer arm and handler completion; release the real late response and prove MessageRouter records late_after_timeout without overwriting the timeout or repeating the component."
+    },
+    {
+      "id": "test-only-boundary",
+      "statement": "Do not edit runtime source, change request deadlines, retries, backoff, concurrency, product cadence, runner limits, test timeout declarations, or ratchets. Do not skip, reclassify, or weaken any existing routing assertion."
+    },
+    {
+      "id": "faithful-decomposition",
+      "statement": "Split authored roots only at lifecycle and semantic-owner fixture boundaries. Each root owns and closes its runtime, router, HTTP, worker, and database resources; canonical test selection must include every resulting path and each authored unit root must complete within two seconds."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

@@ -26,6 +26,7 @@ import {
   SqliteInvocationJournal,
   createActualRow,
   createDeploymentRows,
+  createGatedRuntime,
   createRuntime,
 } from './minimal-deployment-request-cell-routing-fixture.js';
 
@@ -41,6 +42,13 @@ const REQUEST_HEADERS = Object.freeze({
   'authorization': AUTHORIZATION,
   'content-type': 'application/json',
 });
+const REQUEST_CELL_DEADLINE_MS = 1_000;
+const REQUEST_CELL_CLOCK_START_MS = 1_000_000;
+const TEST_OWNER_SIGNAL_TIMEOUT_MS = 750;
+const nativeSetTimeout = globalThis.setTimeout;
+const nativeClearTimeout = globalThis.clearTimeout;
+const NO_TEST_FAILURE = Symbol('no test failure');
+const NO_CLEANUP_OUTCOMES = Symbol('no cleanup outcomes');
 
 function createHandler(nodeId, cache, runtime) {
   const handler = new RuntimeServiceHandler({
@@ -82,19 +90,114 @@ function parseFailure(response) {
   return JSON.parse(response.body);
 }
 
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForCondition(condition, message) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (condition()) return;
-    await delay(10);
+async function waitForOwnerSignal(signal, label) {
+  let timeout = null;
+  const failure = new Promise((_, reject) => {
+    timeout = nativeSetTimeout(() => reject(new assert.AssertionError({
+      actual: 'pending',
+      expected: 'settled',
+      message: 'Owner event did not settle within ' +
+        `${TEST_OWNER_SIGNAL_TIMEOUT_MS}ms: ${label}`,
+      operator: 'waitForOwnerSignal',
+      stackStartFn: waitForOwnerSignal,
+    })), TEST_OWNER_SIGNAL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([signal, failure]);
+  } finally {
+    nativeClearTimeout(timeout);
   }
-  assert.fail(message);
 }
 
-describe('minimal deployment request Cell routing', () => {
+function createTwoPartyBarrier() {
+  const reached = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let arrivals = 0;
+  return Object.freeze({
+    arrive: async () => {
+      arrivals += 1;
+      if (arrivals === 2) reached.resolve();
+      await release.promise;
+    },
+    get arrivals() {
+      return arrivals;
+    },
+    reached: reached.promise,
+    release: release.resolve,
+  });
+}
+
+function observeServiceResponseDisposition(router, classification) {
+  const observed = Promise.withResolvers();
+  const original = router.recordServiceResponseDisposition;
+  router.recordServiceResponseDisposition = function(disposition) {
+    const result = original.call(this, disposition);
+    if (disposition?.classification === classification) {
+      observed.resolve(disposition);
+    }
+    return result;
+  };
+  return Object.freeze({
+    observed: observed.promise,
+    restore() {
+      router.recordServiceResponseDisposition = original;
+    },
+  });
+}
+
+function installPendingResponseClock(t, router) {
+  const armed = Promise.withResolvers();
+  const originalArm = router.armPendingResponseTimeout;
+  const timeoutArms = [];
+  const timerRegistrations = [];
+  const nativeSetTimeout = globalThis.setTimeout;
+  t.mock.timers.enable({
+    apis: ['Date', 'setTimeout'],
+    now: REQUEST_CELL_CLOCK_START_MS,
+  });
+  const mockedSetTimeout = globalThis.setTimeout;
+  const observedSetTimeout = (callback, timeoutMs, ...args) => {
+    timerRegistrations.push(timeoutMs);
+    return mockedSetTimeout(callback, timeoutMs, ...args);
+  };
+  globalThis.setTimeout = nativeSetTimeout;
+  let installed = true;
+  router.armPendingResponseTimeout = function(messageId, timeoutMs) {
+    globalThis.setTimeout = observedSetTimeout;
+    let didArm;
+    try {
+      didArm = originalArm.call(this, messageId, timeoutMs);
+    } finally {
+      globalThis.setTimeout = nativeSetTimeout;
+    }
+    if (didArm) {
+      timeoutArms.push({messageId, timeoutMs});
+      armed.resolve({messageId, timeoutMs});
+    }
+    return didArm;
+  };
+  return Object.freeze({
+    armed: armed.promise,
+    get timeoutArms() {
+      return [...timeoutArms];
+    },
+    get timerRegistrations() {
+      return [...timerRegistrations];
+    },
+    tick(durationMs) {
+      t.mock.timers.tick(durationMs);
+    },
+    restore() {
+      router.armPendingResponseTimeout = originalArm;
+      if (!installed) return;
+      globalThis.setTimeout = nativeSetTimeout;
+      t.mock.timers.reset();
+      installed = false;
+    },
+  });
+}
+
+describe('minimal deployment request Cell adapter lifetime', () => {
   test('aborts and drains a held dispatch before shutdown returns',
     async () => {
       let dispatchAttempts = 0;
@@ -194,23 +297,38 @@ describe('minimal deployment request Cell routing', () => {
       });
     },
   );
+});
 
+describe('minimal deployment durable request Cell owners', () => {
   test('admits one component across concurrent durable-fence owners',
     async () => {
       initializeTestEnvironment();
       const rows = createDeploymentRows();
-      const journal = new SqliteInvocationJournal();
-      const runtimeA = createRuntime(
+      const initialReadBarrier = createTwoPartyBarrier();
+      const invocationGate = Promise.withResolvers();
+      const invocationEntered = Promise.withResolvers();
+      const journal = new SqliteInvocationJournal({
+        afterEmptyInvocationRead: initialReadBarrier.arrive,
+      });
+      const runtimeA = createGatedRuntime(
         rows,
         journal,
         `${rows.definition.service_id}-concurrent-owner-a`,
         NODE_A,
+        {
+          invocationGate: invocationGate.promise,
+          onInvoke: invocationEntered.resolve,
+        },
       );
-      const runtimeB = createRuntime(
+      const runtimeB = createGatedRuntime(
         rows,
         journal,
         `${rows.definition.service_id}-concurrent-owner-b`,
         NODE_B,
+        {
+          invocationGate: invocationGate.promise,
+          onInvoke: invocationEntered.resolve,
+        },
       );
       const invocation = {
         args: ['{}'],
@@ -220,6 +338,8 @@ describe('minimal deployment request Cell routing', () => {
         invocationServiceId: rows.definition.service_id,
         tenantId: 'tenant-a',
       };
+      let attempts = [];
+      let primaryFailure = NO_TEST_FAILURE;
       try {
         assert.match(
           journal.getIdentityIndexSql(),
@@ -229,12 +349,43 @@ describe('minimal deployment request Cell routing', () => {
           journal.getLegacyIdentityIndexSql(),
           /^CREATE INDEX /,
         );
-        await startRuntime(runtimeA);
-        await startRuntime(runtimeB);
-        const outcomes = await Promise.allSettled([
+        await waitForOwnerSignal(
+          Promise.all([startRuntime(runtimeA), startRuntime(runtimeB)]),
+          'both durable-fence lifecycle owners started',
+        );
+        attempts = [
           runtimeA.lifecycle.invoke(runtimeA.replicaHandle, invocation),
           runtimeB.lifecycle.invoke(runtimeB.replicaHandle, invocation),
-        ]);
+        ];
+        await waitForOwnerSignal(
+          initialReadBarrier.reached,
+          'both lifecycle owners completed the initial empty SQLite read',
+        );
+        assert.equal(initialReadBarrier.arrivals, 2);
+        assert.equal(journal.getEmptyInvocationReadCount(), 2);
+        initialReadBarrier.release();
+        await waitForOwnerSignal(
+          invocationEntered.promise,
+          'the durable single winner entered its runtime driver',
+        );
+        const observedAttempts = attempts.map((attempt) => attempt.then(
+          (value) => ({status: 'fulfilled', value}),
+          (reason) => ({reason, status: 'rejected'}),
+        ));
+        const loser = await waitForOwnerSignal(
+          Promise.race(observedAttempts),
+          'the duplicate durable claim produced a classified loser',
+        );
+        assert.equal(loser.status, 'rejected');
+        assert.equal(
+          loser.reason.code,
+          REQUEST_CELL_ROUTE_ERROR_CODE.INVOCATION_AMBIGUOUS,
+        );
+        assert.equal(
+          loser.reason.classification,
+          REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS,
+        );
+        assert.equal(loser.reason.invoked, true);
         assert.equal(
           runtimeA.componentInvocationCount +
             runtimeB.componentInvocationCount,
@@ -247,26 +398,64 @@ describe('minimal deployment request Cell routing', () => {
           insertOperationIds[0],
           /^request-cell-operation-[a-f0-9]{64}$/,
         );
-        assert.ok(
-          outcomes.some((outcome) => outcome.status === 'fulfilled'),
+        invocationGate.resolve();
+        const outcomes = await waitForOwnerSignal(
+          Promise.all(observedAttempts),
+          'both durable claim attempts settled',
         );
-        const replay = await runtimeB.lifecycle.invoke(
-          runtimeB.replicaHandle,
-          invocation,
+        assert.deepEqual(
+          outcomes.map((outcome) => outcome.status).sort(),
+          ['fulfilled', 'rejected'],
         );
-        assert.equal(replay.journaled, true);
+        const replays = await waitForOwnerSignal(
+          Promise.all([
+            runtimeA.lifecycle.invoke(runtimeA.replicaHandle, invocation),
+            runtimeB.lifecycle.invoke(runtimeB.replicaHandle, invocation),
+          ]),
+          'both lifecycle owners replayed the durable result',
+        );
+        assert.ok(replays.every((replay) => replay.journaled === true));
+        assert.ok(replays.every((replay) => replay.replayed === true));
+        for (const replay of replays) {
+          assert.deepEqual(replay.value, COMPONENT_RESPONSE);
+        }
         assert.equal(
           runtimeA.componentInvocationCount +
             runtimeB.componentInvocationCount,
           1,
         );
-      } finally {
-        await runtimeA.lifecycle.stop(runtimeA.replicaHandle)
-          .catch(() => {});
-        await runtimeB.lifecycle.stop(runtimeB.replicaHandle)
-          .catch(() => {});
-        journal.close();
+      } catch (error) {
+        primaryFailure = error;
       }
+      initialReadBarrier.release();
+      invocationGate.resolve();
+      let cleanupFailure = NO_TEST_FAILURE;
+      let cleanupOutcomes = NO_CLEANUP_OUTCOMES;
+      try {
+        cleanupOutcomes = await waitForOwnerSignal(Promise.allSettled([
+          ...attempts,
+          Promise.resolve().then(() =>
+            runtimeA.lifecycle.stop(runtimeA.replicaHandle)),
+          Promise.resolve().then(() =>
+            runtimeB.lifecycle.stop(runtimeB.replicaHandle)),
+        ]), 'durable attempts and both lifecycle owners retired');
+      } catch (error) {
+        cleanupFailure = error;
+      }
+      if (cleanupOutcomes !== NO_CLEANUP_OUTCOMES) {
+        const rejectedStop = cleanupOutcomes.slice(attempts.length)
+          .find((outcome) => outcome.status === 'rejected');
+        if (rejectedStop) cleanupFailure = rejectedStop.reason;
+      }
+      let journalFailure = NO_TEST_FAILURE;
+      try {
+        journal.close();
+      } catch (error) {
+        journalFailure = error;
+      }
+      if (primaryFailure !== NO_TEST_FAILURE) throw primaryFailure;
+      if (cleanupFailure !== NO_TEST_FAILURE) throw cleanupFailure;
+      if (journalFailure !== NO_TEST_FAILURE) throw journalFailure;
     },
   );
 
@@ -383,9 +572,11 @@ describe('minimal deployment request Cell routing', () => {
       }
     },
   );
+});
 
+describe('minimal deployment genuine HTTP request Cell routing', () => {
   test('routes genuine HTTP responses before and after handoff with fences',
-    async () => {
+    async (t) => {
       initializeTestEnvironment();
       const rows = createDeploymentRows();
       const cache = new MutableSystemTableCache(rows);
@@ -411,10 +602,16 @@ describe('minimal deployment request Cell routing', () => {
       let handlerA = null;
       let handlerB = null;
       let api = null;
+      let deadlineClock = null;
+      let lateDispositionObservation = null;
+      let shutdownDispositionObservation = null;
+      const releaseGates = [];
 
       try {
-        await startRuntime(runtimeA);
-        await startRuntime(runtimeB);
+        await waitForOwnerSignal(
+          Promise.all([startRuntime(runtimeA), startRuntime(runtimeB)]),
+          'both genuine WASI lifecycle owners started',
+        );
         cache.set(
           SYSTEM_TABLE_NAME.SERVICES,
           replicaA,
@@ -439,7 +636,7 @@ describe('minimal deployment request Cell routing', () => {
             roles: ['application'],
             tenantId: 'tenant-a',
           }),
-          requestCellDeadlineMs: 1_000,
+          requestCellDeadlineMs: REQUEST_CELL_DEADLINE_MS,
           requestCellMaxAttempts: 2,
           seedNodeAddress: 'http://routing-node-a',
           seedNodeId: NODE_A,
@@ -473,6 +670,7 @@ describe('minimal deployment request Cell routing', () => {
         const healthGate = new Promise(
           (resolve) => {
             releaseHealth = resolve;
+            releaseGates.push(resolve);
           },
         );
         const originalHealthA = runtimeA.lifecycle.health.bind(
@@ -582,18 +780,55 @@ describe('minimal deployment request Cell routing', () => {
 
         const originalHandlerB =
           routerB.handlers.get(HANDLER_ADDRESS_B);
+        const handlerCompleted = Promise.withResolvers();
+        const releaseLateResponse = Promise.withResolvers();
+        releaseGates.push(releaseLateResponse.resolve);
         routerB.register(
           HANDLER_ADDRESS_B,
           async (envelope) => {
             const response = await originalHandlerB(envelope);
-            await delay(1_100);
+            handlerCompleted.resolve(response);
+            await releaseLateResponse.promise;
             return response;
           },
         );
+        deadlineClock = installPendingResponseClock(t, routerA);
+        lateDispositionObservation = observeServiceResponseDisposition(
+          routerA,
+          'late_after_timeout',
+        );
+        assert.equal(Date.now(), REQUEST_CELL_CLOCK_START_MS);
         const lateBefore = runtimeB.componentInvocationCount;
-        const late = await api.getFastify().inject(
+        const lateRequest = api.getFastify().inject(
           requestOptions('late-response'),
         );
+        const [{timeoutMs}] = await waitForOwnerSignal(
+          Promise.all([
+            deadlineClock.armed,
+            handlerCompleted.promise,
+          ]),
+          'router deadline armed and genuine WASI handler completed',
+        );
+        assert.equal(timeoutMs, REQUEST_CELL_DEADLINE_MS);
+        assert.equal(deadlineClock.timeoutArms.length, 1);
+        assert.equal(
+          deadlineClock.timeoutArms[0].timeoutMs,
+          REQUEST_CELL_DEADLINE_MS,
+        );
+        assert.equal(
+          typeof deadlineClock.timeoutArms[0].messageId,
+          'string',
+        );
+        assert.deepEqual(
+          deadlineClock.timerRegistrations,
+          [REQUEST_CELL_DEADLINE_MS],
+        );
+        deadlineClock.tick(timeoutMs);
+        assert.equal(
+          Date.now(),
+          REQUEST_CELL_CLOCK_START_MS + REQUEST_CELL_DEADLINE_MS,
+        );
+        const late = await lateRequest;
         assert.equal(late.statusCode, 502);
         assert.equal(
           parseFailure(late).classification,
@@ -603,7 +838,19 @@ describe('minimal deployment request Cell routing', () => {
           runtimeB.componentInvocationCount,
           lateBefore + 1,
         );
-        await delay(150);
+        releaseLateResponse.resolve();
+        await waitForOwnerSignal(
+          lateDispositionObservation.observed,
+          'router classified the released response late_after_timeout',
+        );
+        assert.equal(
+          routerA.getServiceResponseDispositionCounts().late_after_timeout,
+          1,
+        );
+        lateDispositionObservation.restore();
+        lateDispositionObservation = null;
+        deadlineClock.restore();
+        deadlineClock = null;
         routerB.register(HANDLER_ADDRESS_B, originalHandlerB);
         const lateReplay = await api.getFastify().inject(
           requestOptions('late-response'),
@@ -660,6 +907,7 @@ describe('minimal deployment request Cell routing', () => {
         const overloadGate = new Promise(
           (resolve) => {
             releaseOverload = resolve;
+            releaseGates.push(resolve);
           },
         );
         routerB.register(HANDLER_ADDRESS_B, async (envelope) => {
@@ -723,6 +971,7 @@ describe('minimal deployment request Cell routing', () => {
         });
         const shutdownResponseGate = new Promise((resolve) => {
           releaseShutdownResponse = resolve;
+          releaseGates.push(resolve);
         });
         routerB.register(HANDLER_ADDRESS_B, async (envelope) => {
           const response = await shutdownHandler(envelope);
@@ -760,13 +1009,21 @@ describe('minimal deployment request Cell routing', () => {
           },
         );
         assert.equal(routerA.getStats().pendingResponses, 0);
-        releaseShutdownResponse();
-        await waitForCondition(
-          () =>
-            routerA.getServiceResponseDispositionCounts()
-              .late_after_cancelled === 1,
-          'late shutdown response was not absorbed',
+        shutdownDispositionObservation = observeServiceResponseDisposition(
+          routerA,
+          'late_after_cancelled',
         );
+        releaseShutdownResponse();
+        await waitForOwnerSignal(
+          shutdownDispositionObservation.observed,
+          'router classified the released response late_after_cancelled',
+        );
+        assert.equal(
+          routerA.getServiceResponseDispositionCounts().late_after_cancelled,
+          1,
+        );
+        shutdownDispositionObservation.restore();
+        shutdownDispositionObservation = null;
         routerB.register(HANDLER_ADDRESS_B, shutdownHandler);
 
         api = new BootstrapAPI({
@@ -776,7 +1033,7 @@ describe('minimal deployment request Cell routing', () => {
             roles: ['application'],
             tenantId: 'tenant-a',
           }),
-          requestCellDeadlineMs: 1_000,
+          requestCellDeadlineMs: REQUEST_CELL_DEADLINE_MS,
           requestCellMaxAttempts: 2,
           seedNodeAddress: 'http://routing-node-a',
           seedNodeId: NODE_A,
@@ -805,6 +1062,10 @@ describe('minimal deployment request Cell routing', () => {
           },
         );
       } finally {
+        deadlineClock?.restore();
+        lateDispositionObservation?.restore();
+        shutdownDispositionObservation?.restore();
+        for (const releaseGate of releaseGates) releaseGate();
         if (api) await api.shutdown().catch(() => {});
         handlerA?.unregisterFromRouter(routerA);
         handlerB?.unregisterFromRouter(routerB);
