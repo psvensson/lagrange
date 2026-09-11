@@ -6,6 +6,7 @@ const ONE = 1;
 const HUNDRED = 100;
 const MIN_NEW_ORDER_LINES = 5;
 const MAX_NEW_ORDER_LINES = 15;
+const MAX_ERROR_SAMPLES_PER_KIND = 3;
 const WORKLOAD_NAME = 'oltp-baseline-v1';
 const DEFAULT_SEED = 0x5eed5eed;
 const PHASE_SALT = Object.freeze({
@@ -325,6 +326,7 @@ function emptyKindMetrics() {
     succeeded: ZERO,
     failed: ZERO,
     latencies: [],
+    errorSamples: [],
   };
 }
 
@@ -332,6 +334,25 @@ function createMetricsAccumulator() {
   return Object.fromEntries(
     OPERATION_KINDS.map((kind) => [kind, emptyKindMetrics()]),
   );
+}
+
+function errorSample(error, operation) {
+  return {
+    kind: operation.kind,
+    phase: operation.phase,
+    workerId: operation.workerId,
+    sequence: operation.sequence,
+    warehouseId: operation.warehouseId,
+    code: typeof error?.code === 'string' ? error.code : null,
+    errno: Number.isFinite(error?.errno) ? Number(error.errno) : null,
+    sqlState: typeof error?.sqlState === 'string' ? error.sqlState : null,
+    message: String(error?.message || error),
+  };
+}
+
+function appendErrorSample(kindMetrics, error, operation) {
+  if (kindMetrics.errorSamples.length >= MAX_ERROR_SAMPLES_PER_KIND) return;
+  kindMetrics.errorSamples.push(errorSample(error, operation));
 }
 
 async function executeWorker(adapter, operations, metrics, now) {
@@ -343,8 +364,9 @@ async function executeWorker(adapter, operations, metrics, now) {
       await adapter.executeTransaction(operation);
       kindMetrics.succeeded += ONE;
       kindMetrics.latencies.push(Math.max(ZERO, now() - started));
-    } catch (_error) {
+    } catch (error) {
       kindMetrics.failed += ONE;
+      appendErrorSample(kindMetrics, error, operation);
     }
   }
 }
@@ -360,12 +382,17 @@ function flattenSuccessfulLatencies(metrics) {
   return OPERATION_KINDS.flatMap((kind) => metrics[kind].latencies);
 }
 
+function collectErrorSamples(metrics) {
+  return OPERATION_KINDS.flatMap((kind) => metrics[kind].errorSamples);
+}
+
 function publicOperationMetrics(metrics) {
   return Object.fromEntries(OPERATION_KINDS.map((kind) => [kind, {
     attempted: metrics[kind].attempted,
     succeeded: metrics[kind].succeeded,
     failed: metrics[kind].failed,
     latency: summarizeLatencies(metrics[kind].latencies),
+    errorSamples: [...metrics[kind].errorSamples],
   }]));
 }
 
@@ -395,8 +422,12 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
     now,
   );
   const warmupFailed = totalField(warmup.metrics, 'failed');
+  const warmupErrorSamples = collectErrorSamples(warmup.metrics);
   if (warmupFailed > ZERO) {
-    throw new Error(`OLTP baseline warmup failed ${warmupFailed} transaction(s)`);
+    throw new Error(
+      `OLTP baseline warmup failed ${warmupFailed} transaction(s); ` +
+      `samples=${JSON.stringify(warmupErrorSamples)}`,
+    );
   }
 
   const measured = await runPhase(
@@ -421,12 +452,14 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
       attempted: totalField(warmup.metrics, 'attempted'),
       succeeded: totalField(warmup.metrics, 'succeeded'),
       failed: warmupFailed,
+      errorSamples: warmupErrorSamples,
     },
     measurement: {
       attempted,
       succeeded,
       failed,
       elapsedMs: measured.elapsedMs,
+      errorSamples: collectErrorSamples(measured.metrics),
     },
     opsPerSec: seconds > ZERO ? succeeded / seconds : ZERO,
     latency: summarizeLatencies(latencies),

@@ -163,9 +163,11 @@ async function assertExecutionAndMetrics() {
 
   assert.equal(result.warmup.attempted, 100);
   assert.equal(result.warmup.failed, ZERO);
+  assert.deepEqual(result.warmup.errorSamples, []);
   assert.equal(result.measurement.attempted, 400);
   assert.equal(result.measurement.succeeded, 400);
   assert.equal(result.measurement.failed, ZERO);
+  assert.deepEqual(result.measurement.errorSamples, []);
   assert.equal(result.latency.count, 400);
   assert.ok(result.opsPerSec > ZERO);
   assert.ok(maxActive > ONE, 'Expected different workers to execute concurrently');
@@ -175,6 +177,7 @@ async function assertExecutionAndMetrics() {
     Object.entries(OLTP_OPERATION_MIX)) {
     assert.equal(result.operations[kind].attempted, expectedPerHundred * 4);
     assert.equal(result.operations[kind].failed, ZERO);
+    assert.deepEqual(result.operations[kind].errorSamples, []);
   }
 }
 
@@ -184,7 +187,10 @@ async function assertMeasuredErrorsAreCounted() {
     async executeTransaction(operation) {
       if (!failed && operation.phase === 'measurement') {
         failed = true;
-        throw new Error('synthetic measured failure');
+        const error = new Error('synthetic measured failure');
+        error.code = 'SYNTHETIC';
+        error.sqlState = 'ZZ999';
+        throw error;
       }
     },
   }, {
@@ -197,6 +203,12 @@ async function assertMeasuredErrorsAreCounted() {
   assert.equal(result.measurement.succeeded, 99);
   assert.equal(result.measurement.failed, ONE);
   assert.equal(result.latency.count, 99);
+  assert.equal(result.measurement.errorSamples.length, ONE);
+  assert.equal(result.measurement.errorSamples[0].message, 'synthetic measured failure');
+  assert.equal(result.measurement.errorSamples[0].code, 'SYNTHETIC');
+  assert.equal(result.measurement.errorSamples[0].sqlState, 'ZZ999');
+  assert.equal(result.measurement.errorSamples[0].phase, 'measurement');
+  assert.equal(result.measurement.errorSamples[0].workerId, ONE);
 }
 
 async function assertWarmupFailureFailsClosed() {
@@ -204,7 +216,9 @@ async function assertWarmupFailureFailsClosed() {
     runOltpBaselineWorkload({
       async executeTransaction(operation) {
         if (operation.phase === 'warmup') {
-          throw new Error('synthetic warmup failure');
+          const error = new Error('synthetic warmup failure');
+          error.code = 'WARMUP_SYNTHETIC';
+          throw error;
         }
       },
     }, {
@@ -213,7 +227,12 @@ async function assertWarmupFailureFailsClosed() {
       measurementOperationsPerWorker: 1,
       itemCount: 1000,
     }),
-    /warmup failed 1 transaction/u,
+    (error) => {
+      assert.match(error.message, /warmup failed 1 transaction/u);
+      assert.match(error.message, /synthetic warmup failure/u);
+      assert.match(error.message, /WARMUP_SYNTHETIC/u);
+      return true;
+    },
   );
 }
 
