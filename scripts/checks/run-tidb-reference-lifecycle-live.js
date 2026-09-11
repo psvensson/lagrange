@@ -60,6 +60,25 @@ function mysqlCommand(endpoint, sql) {
   ];
 }
 
+async function assertImagesAvailable(provider) {
+  const images = [
+    TIDB_REFERENCE_DEFAULTS.pdImage,
+    TIDB_REFERENCE_DEFAULTS.tikvImage,
+    TIDB_REFERENCE_DEFAULTS.tidbImage,
+    TIDB_REFERENCE_DEFAULTS.mysqlClientImage,
+  ];
+  const missing = [];
+  for (const image of images) {
+    if (!(await provider.imageExists(image))) missing.push(image);
+  }
+  if (missing.length > ZERO) {
+    throw new Error(
+      'TiDB reference live smoke requires pinned images to be present locally: ' +
+      missing.join(', ') + '. Pull the missing images before running the smoke.',
+    );
+  }
+}
+
 async function removeContainerIfPresent(provider, containerRef) {
   if (!containerRef) return;
   const inspect = await provider.inspectContainerIfExists(containerRef);
@@ -137,6 +156,8 @@ async function run() {
   let result = null;
 
   try {
+    await assertImagesAvailable(provider);
+
     const network = await provider.createNetwork(state.networkName, LABELS);
     state.networkId = network.id;
 
@@ -166,7 +187,6 @@ async function run() {
       command: [CLIENT_KEEPALIVE_SECONDS],
       labels: LABELS,
     });
-    await provider.startContainer(state.client.containerId);
 
     const query = await provider.execInContainer(
       state.client.containerId,
