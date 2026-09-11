@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
-import {setTimeout as sleep} from 'node:timers/promises';
+import {
+  runLagrangeDdl,
+  waitForLagrangeTablePartitions,
+} from './tidb-reference-lagrange-setup.js';
 import {
   metricRatio,
   summarizeLatencies,
@@ -18,8 +21,8 @@ const DEFAULT_INSERT_BATCH_SIZE = 64;
 const DEFAULT_PAYLOAD_BYTES = 256;
 const DEFAULT_QUERY_TIMEOUT_MS = 20000;
 const DEFAULT_DDL_READY_TIMEOUT_MS = 120000;
-const DDL_RETRY_POLL_MS = 500;
-const PENDING_CONTRACT_STATE = 'pending';
+const DEFAULT_SPLIT_READY_TIMEOUT_MS = 240000;
+const DEFAULT_MIN_LAGRANGE_PARTITIONS = 2;
 const EVENT_ID_ENTITY_SCALE = 100000;
 const VALUE_ORDINAL_MULTIPLIER = 11;
 const VALUE_MODULUS = 97;
@@ -98,33 +101,6 @@ function aggregateSql(table, entityId) {
   );
 }
 
-function isRetryableDdlOutcome(result) {
-  return result?.provisioningDeadlineExpired === true ||
-    result?.deferRetry === true ||
-    result?.contractState === PENDING_CONTRACT_STATE;
-}
-
-async function runLagrangeDdl(node, sql, queryTimeoutMs, ddlReadyTimeoutMs) {
-  const deadline = Date.now() + ddlReadyTimeoutMs;
-  let lastOutcome = null;
-  while (Date.now() < deadline) {
-    const result = await node.queryWithTimeout(
-      sql,
-      [],
-      {timeoutMs: queryTimeoutMs},
-    );
-    if (!isRetryableDdlOutcome(result)) {
-      return result;
-    }
-    lastOutcome = result;
-    await sleep(DDL_RETRY_POLL_MS);
-  }
-  throw new Error(
-    'Lagrange risk table DDL did not become admitted: ' +
-    JSON.stringify(lastOutcome),
-  );
-}
-
 async function prepareLagrange(cluster, config) {
   const node = cluster.getNodes()[ZERO];
   const queryTimeoutMs = config.queryTimeoutMs;
@@ -133,13 +109,19 @@ async function prepareLagrange(cluster, config) {
     await runLagrangeDdl(
       node,
       createTableSql(table),
-      queryTimeoutMs,
-      config.ddlReadyTimeoutMs,
+      {
+        queryTimeoutMs,
+        ddlReadyTimeoutMs: config.ddlReadyTimeoutMs,
+      },
     );
-    await node.queryWithTimeout(
-      `SELECT COUNT(*) AS row_count FROM ${table}`,
-      [],
-      {timeoutMs: queryTimeoutMs},
+    await waitForLagrangeTablePartitions(
+      cluster,
+      [table],
+      {
+        minPartitions: ONE,
+        queryTimeoutMs,
+        readyTimeoutMs: config.ddlReadyTimeoutMs,
+      },
     );
     await node.queryWithTimeout(
       `DELETE FROM ${table}`,
@@ -160,6 +142,15 @@ async function prepareLagrange(cluster, config) {
       );
     }
   }
+  return waitForLagrangeTablePartitions(
+    cluster,
+    Object.values(LAGRANGE_TABLES),
+    {
+      minPartitions: config.minLagrangePartitions,
+      queryTimeoutMs,
+      readyTimeoutMs: config.splitReadyTimeoutMs,
+    },
+  );
 }
 
 async function prepareTiDb(runtime, config) {
@@ -316,6 +307,10 @@ function resolvedConfig(cluster) {
       raw.queryTimeoutMs : DEFAULT_QUERY_TIMEOUT_MS,
     ddlReadyTimeoutMs: Number.isInteger(raw.ddlReadyTimeoutMs) ?
       raw.ddlReadyTimeoutMs : DEFAULT_DDL_READY_TIMEOUT_MS,
+    splitReadyTimeoutMs: Number.isInteger(raw.splitReadyTimeoutMs) ?
+      raw.splitReadyTimeoutMs : DEFAULT_SPLIT_READY_TIMEOUT_MS,
+    minLagrangePartitions: Number.isInteger(raw.minLagrangePartitions) ?
+      raw.minLagrangePartitions : DEFAULT_MIN_LAGRANGE_PARTITIONS,
     matureTarget: {
       minThroughputRatio: Number(
         raw.matureTarget?.minThroughputRatio ?? DEFAULT_MIN_THROUGHPUT_RATIO,
@@ -340,8 +335,12 @@ async function run(cluster) {
   assert.ok(config.entityCount > ZERO && config.eventsPerEntity > ZERO);
   assert.ok(config.requestCount > ZERO && config.insertBatchSize > ZERO);
   assert.ok(config.payloadBytes > ZERO, 'payloadBytes must be positive');
+  assert.ok(
+    config.minLagrangePartitions >= TWO,
+    'compute-near-data control must exercise multiple Lagrange partitions',
+  );
   const lagrangeNode = cluster.getNodes()[ZERO];
-  await prepareLagrange(cluster, config);
+  const lagrangePartitions = await prepareLagrange(cluster, config);
 
   return withTiDbReferenceRuntime(cluster, SCENARIO, async (runtime) => {
     await prepareTiDb(runtime, config);
@@ -383,19 +382,22 @@ async function run(cluster) {
       'risk-composition oracle diverged between Lagrange and TiDB',
     );
 
-    const coprocessorV2 = runtime.topologyIdentity().coprocessorV2;
+    const topology = runtime.topologyIdentity();
+    const coprocessorV2 = topology.coprocessorV2;
     const serviceGraphEngaged = false;
     const coproV2Engaged = Boolean(coprocessorV2.artifactIdentity) &&
       coprocessorV2.comparatorMode === 'coprocessor_v2';
 
     return {
       comparison: 'lagrange-vs-tidb-tikv-compute-near-data',
-      topology: runtime.topologyIdentity(),
+      topology,
+      lagrangePartitions,
       workload: {
         entityCount: config.entityCount,
         eventsPerEntity: config.eventsPerEntity,
         payloadBytes: config.payloadBytes,
         requestCount: config.requestCount,
+        minLagrangePartitions: config.minLagrangePartitions,
         primaryKeyLocality:
           'each entity owns one contiguous event_id range used by every leaf',
         dynamicGraph: 'account -> optional merchant -> optional device',
