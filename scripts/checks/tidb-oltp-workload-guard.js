@@ -56,6 +56,21 @@ function assertDeterministicPlanAndMix() {
   }
 }
 
+function assertFailClosedBounds() {
+  assert.throws(
+    () => buildOltpBaselinePlan({itemCount: 14}),
+    /itemCount must be an integer >= 15/u,
+  );
+  assert.throws(
+    () => buildOltpBaselinePlan({workers: 0}),
+    /workers must be an integer >= 1/u,
+  );
+  assert.throws(
+    () => buildOltpBaselinePlan({measurementOperationsPerWorker: 0}),
+    /measurementOperationsPerWorker must be an integer >= 1/u,
+  );
+}
+
 function assertPayloadContracts() {
   const plan = buildOltpBaselinePlan({
     seed: 777,
@@ -204,6 +219,7 @@ async function assertWarmupFailureFailsClosed() {
 
 async function main() {
   assertDeterministicPlanAndMix();
+  assertFailClosedBounds();
   assertPayloadContracts();
   assertLatencySummary();
   await assertExecutionAndMetrics();
