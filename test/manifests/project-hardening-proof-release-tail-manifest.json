@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "release-hardening-tail",
+  "environment": {
+    "inherit": true,
+    "set": {
+      "FORCE_COLOR": "0"
+    }
+  },
+  "commands": [
+    {
+      "id": "focused-contracts",
+      "executable": "node",
+      "argv": [
+        "scripts/run-test-files.js",
+        "--jobs=1",
+        "test/scripts/run-test-files.test.js",
+        "test/scripts/acceptance-proof-manifest-runner.test.js",
+        "test/release/public-api-side-effect-boundary.test.js",
+        "test/release/project-hardening-contracts.test.js",
+        "test/admin/admin-websocket-external-bind-policy.test.js",
+        "test/runtime/pgwire-protocol-ordering.test.js",
+        "test/compatibility/pgwire-client-compat.test.js"
+      ],
+      "timeoutMs": 600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/release-hardening/focused-contracts.json"
+      }
+    },
+    {
+      "id": "owner-debt-report-inputs",
+      "executable": "node",
+      "argv": [
+        "scripts/generate-global-owner-debt-inventory.js",
+        "--refresh-import-graph",
+        "--output",
+        "test-output/analysis/owner-debt-live-inventory.json"
+      ],
+      "timeoutMs": 1800000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/release-hardening/owner-debt-report-inputs.json"
+      }
+    },
+    {
+      "id": "golden-capability-guard-scenarios",
+      "executable": "node",
+      "argv": ["scripts/checks/run-golden-capability-guard-scenarios.js"],
+      "timeoutMs": 600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/release-hardening/golden-capability-guard-scenarios.json"
+      }
+    }
+  ]
+}
