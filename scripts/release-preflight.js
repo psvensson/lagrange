@@ -45,6 +45,7 @@ const GIT_BINARY = 'git';
 const SOLVE_EXCLUSION = ':!solve';
 const LINE_SEPARATOR = '\n';
 const ABSENT_LABEL = 'absent';
+const UNKNOWN_PROOF_STATE = 'unknown proof state';
 const GIT_FETCH_ARGS = Object.freeze(['fetch', '--quiet']);
 const GIT_REV_PARSE = 'rev-parse';
 const GIT_HEAD_REF = 'HEAD';
@@ -194,7 +195,7 @@ function proofDetail(proof, headSha) {
     return `no ${PROOF.RELEASE_FULL} receipt exists for ${headSha}`;
   }
   return `${PROOF.RELEASE_FULL} authority unavailable: ` +
-    `${proof?.because || 'unknown proof state'}`;
+    `${proof?.because || UNKNOWN_PROOF_STATE}`;
 }
 
 /**

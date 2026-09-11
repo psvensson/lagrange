@@ -4,6 +4,11 @@ import {spawnSync} from 'node:child_process';
 
 import {OUTCOME, PROOF, resolveProof} from './proof-authority.js';
 
+const GIT_FAILED_FALLBACK = 'git failed';
+const FALLBACK_TO_RUNNING = 'running proof rather than claiming reuse';
+const PERSIST_HINT_PREFIX =
+  '[release-proof] persist with: node scripts/proof-authority.js record ';
+
 const STEPS = Object.freeze([
   Object.freeze({
     label: 'complete-ci-proof',
@@ -29,7 +34,7 @@ function gitOutput(args) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || 'git failed').trim());
+    throw new Error((result.stderr || result.stdout || GIT_FAILED_FALLBACK).trim());
   }
   return result.stdout.trim();
 }
@@ -52,7 +57,7 @@ if (existing.outcome === OUTCOME.PROVEN) {
 if (existing.outcome === OUTCOME.UNAVAILABLE) {
   console.log(
     `[release-proof] durable receipt unavailable (${existing.because}); ` +
-    'running proof rather than claiming reuse',
+    FALLBACK_TO_RUNNING,
   );
 } else {
   console.log(`[release-proof] no durable receipt for ${headSha}; running once`);
@@ -70,7 +75,4 @@ for (const step of STEPS) {
 }
 
 console.log(`[release-proof] complete ${PROOF.RELEASE_FULL} for ${headSha}`);
-console.log(
-  '[release-proof] persist with: node scripts/proof-authority.js record ' +
-  `${PROOF.RELEASE_FULL} ${headSha}`,
-);
+console.log(`${PERSIST_HINT_PREFIX}${PROOF.RELEASE_FULL} ${headSha}`);
