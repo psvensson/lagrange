@@ -1,24 +1,10 @@
-# GitHub Actions on-demand full proof - the "prove everything now" button.
+# On-demand whole-tree proof for an exact main SHA.
 #
-# This is deliberately unscheduled. A whole-system proof is a standing veto:
-# rerunning an unchanged tree on a timer can only turn variance into unrelated
-# blocking work. It runs either when an operator dispatches it manually or when
-# an exact main SHA is exposed through a `release-proof/**` branch for release
-# preflight. The latter is a ref-only trigger: the branch must point at the
-# already-landed main commit, so the proof identity is the release identity.
-#
-# What replaced the old nightly whole-system proof:
-#
-#   every change      npm run check           (ci.yml, required modular proof)
-#   every main push   repository-health.yml   (expensive global analysis)
-#   on demand         this workflow           (the whole system)
-#   release surface   this workflow           (exact-head stronger proof)
-#   every release     release.yml             (the same command + publication)
-#
-# It invokes npm run check:release and nothing else. There is deliberately no
-# workflow-level opinion here about what "complete" means: that lives in the
-# package manifest, so this workflow and the release pipeline cannot drift into
-# two different definitions.
+# Release order is enforced here: release.yml must first have produced a green
+# publishability run for this exact SHA. Only an unproven SHA wakes the
+# controlled GCP runner. A successful proof is then persisted by the repository
+# proof authority so every later consumer can reuse it without depending on
+# workflow-run retention.
 name: full-gate
 
 on:
@@ -31,12 +17,70 @@ permissions:
   contents: read
 
 jobs:
-  # The whole release proof is intentionally kept off GitHub's default 2-vCPU
-  # runner. The release workflow uses the same controlled GCP runner for the
-  # same command; this pre-tag proof must measure the same admitted machine
-  # class rather than reintroduce the hosted-runner starvation failures that
-  # motivated the release runner in the first place.
-  wake-runner:
+  require_publishability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require exact-SHA publication preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/release.yml" and (.head_branch | startswith("release-publishability/")) and .status == "completed" and .conclusion == "success")][0].id // empty')"
+          test -n "$RUN_ID" || {
+            echo "::error::No successful release publishability run exists for exact SHA $GITHUB_SHA"
+            echo "Point release-publishability/<version> at this exact main SHA first."
+            exit 1
+          }
+          echo "publication preflight run $RUN_ID already green for $GITHUB_SHA"
+
+  resolve_proof:
+    needs: require_publishability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      proven: ${{ steps.proof.outputs.proven }}
+      receipt_object: ${{ steps.proof.outputs.receipt_object }}
+    steps:
+      - name: Checkout proof consumer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Resolve durable exact-SHA proof
+        id: proof
+        run: |
+          set +e
+          OUTPUT="$(node scripts/proof-authority.js check release-full-v1 "$GITHUB_SHA" --json 2>&1)"
+          STATUS=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "proven=true" >> "$GITHUB_OUTPUT"
+            OBJECT="$(printf '%s' "$OUTPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const x=JSON.parse(s);process.stdout.write(x.objectSha||"")})')"
+            echo "receipt_object=$OBJECT" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" -eq 1 ]; then
+            echo "proven=false" >> "$GITHUB_OUTPUT"
+            echo "receipt_object=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Durable proof authority was unavailable; refusing to guess whether $GITHUB_SHA is already proven"
+            exit "$STATUS"
+          fi
+
+  wake_runner:
+    needs: resolve_proof
+    if: needs.resolve_proof.outputs.proven != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -60,14 +104,14 @@ jobs:
           STATUS="$(gcloud compute instances describe lagrange-ci-runner \
             --zone europe-north1-a --format='value(status)')"
           echo "runner VM status: ${STATUS}"
-          if [ "${STATUS}" != "RUNNING" ]; then
+          if [ "$STATUS" != "RUNNING" ]; then
             gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
           fi
 
   gate:
-    needs: wake-runner
+    needs: wake_runner
     runs-on: [self-hosted, gcp]
-    timeout-minutes: 180
+    timeout-minutes: 150
     permissions:
       contents: read
     env:
@@ -79,8 +123,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          # Full history: solver historical-artifact tests read files from
-          # older commits via git show, which a shallow clone cannot serve.
           fetch-depth: 0
 
       - name: Set up Node 22
@@ -104,7 +146,6 @@ jobs:
           sha256sum --check "${HELM_ARCHIVE}.sha256sum"
           tar -xzf "$HELM_ARCHIVE"
           sudo install linux-amd64/helm /usr/local/bin/helm
-          helm version --short
           WASM_TOOLS_VERSION=1.236.0
           WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
           WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
@@ -124,27 +165,17 @@ jobs:
           node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
-      - name: Full release proof
-        run: npm run check:release
+      - name: Full release proof, single pass
+        run: node scripts/run-release-proof.js
 
-      - name: Name the failing gate commands
+      - name: Name a failing hardening-tail command
         if: failure()
         run: |
           set -uo pipefail
           receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1)
-          [ -n "$receipt" ] || { echo "no acceptance receipt was produced"; exit 0; }
+          [ -n "$receipt" ] || { echo "no hardening receipt was produced"; exit 0; }
           echo "=== $receipt ==="
           jq '{summary: .summary, commands: [.commands[] | {id, status, exitCode, reasons}]}' "$receipt"
-          jq -r '.commands[] | select(.status == "FAIL") | (.artifactIdentity.path // .requiredArtifact.path // empty)' "$receipt" |
-          while read -r artifact; do
-            [ -f "$artifact" ] || continue
-            echo "=== failures in $artifact ==="
-            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
-              grep -E '^(not ok|# test-files.*fail=[1-9]|FAIL|.*[Ee]rror)' |
-              head -100 || true
-            echo "=== tail of $artifact ==="
-            jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
-          done
 
       - name: Upload gate outputs
         if: always()
@@ -159,3 +190,32 @@ jobs:
             .tap/test-results/
           retention-days: 14
           if-no-files-found: ignore
+
+  record_proof:
+    needs: [resolve_proof, gate]
+    if: ${{ always() && needs.resolve_proof.outputs.proven != 'true' && needs.gate.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout proven SHA with write credential
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Persist durable proof receipt
+        run: |
+          set -euo pipefail
+          node scripts/proof-authority.js record release-full-v1 "$GITHUB_SHA" \
+            --producer-kind github-actions \
+            --producer-id "$GITHUB_RUN_ID" \
+            --producer-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --json

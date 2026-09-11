@@ -7,16 +7,16 @@
  * which this script changes:
  *   1. the release content is clean (porcelain status outside solve/);
  *   2. HEAD is exactly <remote>/main after a fetch;
- *   3. either the modular `ci` gate or stronger `full-gate` concluded
- *      success for that exact sha;
+ *   3. the durable release-full-v1 proof authority says this exact SHA is
+ *      proven;
  *   4. every version literal (package.json, package-lock.json, CLI,
  *      entrypoint, Helm chart version and appVersion) agrees and the
  *      changelog carries a non-empty section for that version;
  *   5. no local or remote tag exists for the version yet.
  * It prints the two commands that perform the release (an annotated tag and
  * its push, which starts the release.yml workflow: the only artifact
- * publisher) and never runs them. Everything after the tag is proven by the
- * workflow on the tagged sha, so nothing is re-run here.
+ * publisher) and never runs them. Everything after the tag consumes the same
+ * immutable proof receipt; the application proof is not re-run.
  */
 
 import fs from 'node:fs';
@@ -27,6 +27,7 @@ import {fileURLToPath} from 'node:url';
 import {CLI_VERSION} from '../src/cli/cli-constants.js';
 import {ENTRYPOINT_VERSION} from '../src/constants/entrypoint.js';
 import {extractChangelogSection} from './release-notes.js';
+import {OUTCOME as PROOF_OUTCOME, PROOF, resolveProof} from './proof-authority.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEXT_ENCODING = 'utf8';
@@ -40,13 +41,7 @@ const PACKAGE_JSON = 'package.json';
 const PACKAGE_LOCK = 'package-lock.json';
 const CHANGELOG = 'CHANGELOG.md';
 const CHART_YAML = 'charts/lagrange-node/Chart.yaml';
-const CI_WORKFLOW_PATH = '.github/workflows/ci.yml';
-const FULL_GATE_WORKFLOW_PATH = '.github/workflows/full-gate.yml';
-const RUN_STATUS_COMPLETED = 'completed';
-const RUN_CONCLUSION_SUCCESS = 'success';
-const RUNS_PER_PAGE = 50;
 const GIT_BINARY = 'git';
-const GH_BINARY = 'gh';
 const SOLVE_EXCLUSION = ':!solve';
 const LINE_SEPARATOR = '\n';
 const ABSENT_LABEL = 'absent';
@@ -58,9 +53,8 @@ const GIT_STATUS_ARGS = Object.freeze([
 ]);
 const GIT_TAG_LIST_ARGS = Object.freeze(['tag', '--list']);
 const GIT_LS_REMOTE_TAGS_ARGS = Object.freeze(['ls-remote', '--tags']);
-const GH_API_ARGS = Object.freeze(['api']);
 const READY_HINT =
-  'release with (the tag workflow proves and publishes the rest):';
+  'release with (the tag workflow consumes this proof and publishes the rest):';
 const BLOCKED_HINT = 'fix the failing checks; nothing was tagged';
 const CHART_VERSION_PATTERN = /^version:\s*"?([^"\s]+)"?\s*$/mu;
 const CHART_APP_VERSION_PATTERN = /^appVersion:\s*"?([^"\s]+)"?\s*$/mu;
@@ -75,7 +69,7 @@ const ARG = Object.freeze({JSON: '--json', REMOTE: '--remote'});
 const CHECK = Object.freeze({
   CLEAN_TREE: 'clean_release_content',
   HEAD_IS_REMOTE_MAIN: 'head_is_remote_main',
-  CI_GATE_GREEN: 'ci_gate_green_on_exact_sha',
+  RELEASE_PROOF: 'durable_release_proof_for_exact_sha',
   VERSIONS_AGREE: 'versions_and_changelog_agree',
   TAG_ABSENT: 'tag_absent',
 });
@@ -120,9 +114,8 @@ function gitViaChild(root) {
     .toString(TEXT_ENCODING).trim();
 }
 
-function ghViaChild(root) {
-  return (args) => execFileSync(GH_BINARY, args, {cwd: root})
-    .toString(TEXT_ENCODING);
+function defaultProofResolver({proofId, sha, remote, root}) {
+  return resolveProof({proofId, sha, remote, cwd: root});
 }
 
 function changelogSectionState(changelogText, version) {
@@ -135,7 +128,9 @@ function changelogSectionState(changelogText, version) {
 }
 
 /**
- * Gather the facts the checks read. Injectable git/gh for the witness.
+ * Gather the facts the checks read. Injectable git/proof resolver for the
+ * witness. The proof resolver is the only owner consulted for proof state;
+ * workflow history is deliberately not another authority.
  * @param {Object} options
  * @return {Object}
  */
@@ -143,7 +138,7 @@ function gatherReleaseFacts({
   root = REPO_ROOT,
   remote = DEFAULT_REMOTE,
   git = gitViaChild(root),
-  gh = ghViaChild(root),
+  proofResolver = defaultProofResolver,
   sourceVersions = {cli: CLI_VERSION, entrypoint: ENTRYPOINT_VERSION},
 } = {}) {
   const packageJson = readJson(root, PACKAGE_JSON);
@@ -154,9 +149,6 @@ function gatherReleaseFacts({
   const repository = resolveRepository(packageJson);
   git([...GIT_FETCH_ARGS, remote]);
   const headSha = git([GIT_REV_PARSE, GIT_HEAD_REF]);
-  const runsJson = gh([...GH_API_ARGS,
-    `repos/${repository}/actions/runs?head_sha=${headSha}` +
-    `&per_page=${RUNS_PER_PAGE}`]);
   return {
     version,
     tag,
@@ -166,7 +158,12 @@ function gatherReleaseFacts({
     remoteMainSha: git([GIT_REV_PARSE, `${remote}/${MAIN_BRANCH}`]),
     statusLines: git([...GIT_STATUS_ARGS])
       .split(LINE_SEPARATOR).map((line) => line.trim()).filter(Boolean),
-    workflowRuns: JSON.parse(runsJson).workflow_runs || [],
+    releaseProof: proofResolver({
+      proofId: PROOF.RELEASE_FULL,
+      sha: headSha,
+      remote,
+      root,
+    }),
     versionSources: {
       packageJson: version,
       packageLock: String(packageLock.version || VERSION_ABSENT),
@@ -183,18 +180,21 @@ function gatherReleaseFacts({
   };
 }
 
-function preTagProofRun(facts) {
-  return facts.workflowRuns.find((run) =>
-    (run.path === CI_WORKFLOW_PATH || run.path === FULL_GATE_WORKFLOW_PATH) &&
-    run.head_sha === facts.headSha &&
-    run.status === RUN_STATUS_COMPLETED &&
-    run.conclusion === RUN_CONCLUSION_SUCCESS) || null;
-}
-
 function versionDisagreements(facts) {
   return Object.entries(facts.versionSources)
     .filter(([, value]) => value !== facts.version)
     .map(([source, value]) => `${source}=${value || ABSENT_LABEL}`);
+}
+
+function proofDetail(proof, headSha) {
+  if (proof?.outcome === PROOF_OUTCOME.PROVEN) {
+    return `${PROOF.RELEASE_FULL} receipt ${proof.objectSha} proves ${headSha}`;
+  }
+  if (proof?.outcome === PROOF_OUTCOME.UNPROVEN) {
+    return `no ${PROOF.RELEASE_FULL} receipt exists for ${headSha}`;
+  }
+  return `${PROOF.RELEASE_FULL} authority unavailable: ` +
+    `${proof?.because || 'unknown proof state'}`;
 }
 
 /**
@@ -204,8 +204,8 @@ function versionDisagreements(facts) {
  *   commands: string[]}}
  */
 function evaluateReleasePreflight(facts) {
-  const gateRun = preTagProofRun(facts);
   const disagreements = versionDisagreements(facts);
+  const proofIsValid = facts.releaseProof?.outcome === PROOF_OUTCOME.PROVEN;
   const checks = [
     {
       id: CHECK.CLEAN_TREE,
@@ -222,13 +222,9 @@ function evaluateReleasePreflight(facts) {
         `${facts.remoteMainSha}`,
     },
     {
-      id: CHECK.CI_GATE_GREEN,
-      ok: gateRun !== null,
-      detail: gateRun ?
-        `pre-tag proof ${gateRun.path} run ${gateRun.id} succeeded on ` +
-          facts.headSha :
-        `no completed successful ${CI_WORKFLOW_PATH} or ` +
-          `${FULL_GATE_WORKFLOW_PATH} run for ${facts.headSha}`,
+      id: CHECK.RELEASE_PROOF,
+      ok: proofIsValid,
+      detail: proofDetail(facts.releaseProof, facts.headSha),
     },
     {
       id: CHECK.VERSIONS_AGREE,
@@ -256,8 +252,6 @@ function evaluateReleasePreflight(facts) {
     version: facts.version,
     headSha: facts.headSha,
     checks,
-    // The commands exist only for a READY result; a blocked preflight hands
-    // out nothing an operator could paste.
     commands: checks.every((check) => check.ok) ? [
       `git tag -a ${facts.tag} -m "lagrange-server ${facts.version}" ` +
         facts.headSha,
