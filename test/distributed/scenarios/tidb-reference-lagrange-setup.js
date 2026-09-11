@@ -1,7 +1,5 @@
 import {setTimeout as sleep} from 'node:timers/promises';
 
-const ZERO = 0;
-const ONE = 1;
 const DEFAULT_DDL_READY_TIMEOUT_MS = 120000;
 const DEFAULT_QUERY_TIMEOUT_MS = 20000;
 const DEFAULT_PARTITION_READY_TIMEOUT_MS = 240000;
@@ -75,7 +73,7 @@ function settledLedPartitionRows(rows) {
   return rows.filter((row) => {
     const state = String(row?.state || '').toLowerCase();
     const leader = String(row?.leader_node_id || '');
-    return !TRANSITIONAL_PARTITION_STATES.has(state) && leader.length > ZERO;
+    return !TRANSITIONAL_PARTITION_STATES.has(state) && leader.length > 0;
   });
 }
 
@@ -99,7 +97,7 @@ async function queryPartitionRows(nodes, tableName, queryTimeoutMs) {
       lastError = error;
     }
   }
-  if (bestRows.length === ZERO && lastError) {
+  if (bestRows.length === 0 && lastError) {
     return {rows: bestRows, lastError: String(lastError?.message || lastError)};
   }
   return {rows: bestRows, lastError: null};
@@ -112,7 +110,7 @@ async function waitForLagrangeTablePartitions(
 ) {
   const nodes = cluster.getNodes();
   const minPartitions = Number.isInteger(options.minPartitions) ?
-    options.minPartitions : ONE;
+    options.minPartitions : 1;
   const queryTimeoutMs = Number.isInteger(options.queryTimeoutMs) ?
     options.queryTimeoutMs : DEFAULT_QUERY_TIMEOUT_MS;
   const readyTimeoutMs = Number.isInteger(options.readyTimeoutMs) ?
