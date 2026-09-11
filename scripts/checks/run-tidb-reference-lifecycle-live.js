@@ -38,6 +38,14 @@ function uniqueRunId() {
   return `lagrange-tidb-live-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
+function normalizeStoreCount(value) {
+  const count = value ?? TIDB_REFERENCE_DEFAULTS.tikvStoreCount;
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('TiDB reference live smoke requires a positive integer store count');
+  }
+  return count;
+}
+
 function smokeSql() {
   return [
     `DROP DATABASE IF EXISTS ${SMOKE_DATABASE}`,
@@ -146,6 +154,7 @@ async function assertCleanup(provider, state) {
 async function runTiDbReferenceLifecycleSmoke(options = {}) {
   const provider = options.provider || new DockerProvider();
   const runId = options.runId || uniqueRunId();
+  const tikvStoreCount = normalizeStoreCount(options.tikvStoreCount);
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -168,13 +177,14 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       provider,
       network: state.networkName,
       namePrefix: runId,
+      tikvStoreCount,
       resourceLimits: DATABASE_RESOURCE_LIMITS,
       readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
     });
 
     state.containerNames.push(
       state.cluster.names.pd,
-      state.cluster.names.tikv,
+      ...state.cluster.names.tikvStores,
       state.cluster.names.tidb,
       state.cluster.names.readiness,
     );
@@ -191,6 +201,25 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       command: [CLIENT_KEEPALIVE_SECONDS],
       labels: LABELS,
     });
+
+    const storeQuery = await provider.execInContainer(
+      state.client.containerId,
+      mysqlCommand(
+        state.cluster.endpoints.mysql,
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS WHERE STORE_STATE_NAME = 'Up';",
+      ),
+    );
+    assert.equal(
+      storeQuery.exitCode,
+      ZERO,
+      `TiDB store-status SQL failed: ${storeQuery.stderr || storeQuery.stdout}`,
+    );
+    const upTiKvStores = Number.parseInt(String(storeQuery.stdout || '').trim(), 10);
+    assert.equal(
+      upTiKvStores,
+      tikvStoreCount,
+      `Expected exactly ${tikvStoreCount} Up TiKV stores before SQL round-trip`,
+    );
 
     const query = await provider.execInContainer(
       state.client.containerId,
@@ -210,6 +239,8 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
     result = {
       status: 'passed',
       queryValue: SMOKE_VALUE,
+      tikvStoreCount,
+      upTiKvStores,
       readinessAttempts: state.cluster.readiness.attempts,
       images: state.cluster.images,
     };
@@ -237,7 +268,12 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
 }
 
 async function main() {
-  const result = await runTiDbReferenceLifecycleSmoke();
+  const requestedStoreCount = process.env.TIDB_REFERENCE_TIKV_STORE_COUNT ?
+    Number(process.env.TIDB_REFERENCE_TIKV_STORE_COUNT) :
+    TIDB_REFERENCE_DEFAULTS.tikvStoreCount;
+  const result = await runTiDbReferenceLifecycleSmoke({
+    tikvStoreCount: requestedStoreCount,
+  });
   process.stdout.write(PASS_PREFIX + JSON.stringify(result) + '\n');
 }
 
