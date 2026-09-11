@@ -21,8 +21,6 @@ const DEFAULT_MIN_THROUGHPUT_RATIO = 0.70;
 const DEFAULT_MAX_P99_RATIO = 1.50;
 const EVENT_ID_SCALE = 1000;
 const OPERATIONS_PER_PAIR = 2;
-const ZERO = 0;
-const ONE = 1;
 
 function scenarioConfig(cluster) {
   return cluster?._config?.scenarios?.[SCENARIO] || {};
@@ -54,7 +52,7 @@ function selectSql(table, eventId) {
 }
 
 async function prepareLagrange(cluster, config) {
-  const node = cluster.getNodes()[ZERO];
+  const node = cluster.getNodes()[0];
   await runLagrangeDdl(
     node,
     createTableSql(TABLE_NAME),
@@ -67,7 +65,7 @@ async function prepareLagrange(cluster, config) {
     cluster,
     [TABLE_NAME],
     {
-      minPartitions: ONE,
+      minPartitions: 1,
       queryTimeoutMs: config.queryTimeoutMs,
       readyTimeoutMs: config.ddlReadyTimeoutMs,
     },
@@ -82,11 +80,11 @@ async function prepareLagrange(cluster, config) {
 
 async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, idBase) {
   const nodes = cluster.getNodes();
-  assert.ok(nodes.length > ZERO, 'Lagrange baseline requires active nodes');
+  assert.ok(nodes.length > 0, 'Lagrange baseline requires active nodes');
   const latencies = [];
-  let correctOperations = ZERO;
+  let correctOperations = 0;
   const startedAt = performance.now();
-  for (let index = ZERO; index < operationPairs; index += ONE) {
+  for (let index = 0; index < operationPairs; index += 1) {
     const node = nodes[index % nodes.length];
     const eventId = idBase + index;
     const timestamp = Date.now() + index;
@@ -96,7 +94,7 @@ async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, idBase) 
       {timeoutMs: queryTimeoutMs, lane: 'load'},
     ));
     latencies.push(inserted.elapsedMs);
-    correctOperations += ONE;
+    correctOperations += 1;
     const selected = await timedOperation(() => node.queryWithTimeout(
       selectSql(TABLE_NAME, eventId),
       [],
@@ -109,7 +107,7 @@ async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, idBase) 
         rows.some((row) => Number(row.event_id) === eventId),
       `Lagrange OLTP oracle did not observe ${eventId}`,
     );
-    correctOperations += ONE;
+    correctOperations += 1;
   }
   return summarizeLatencies(
     latencies,
@@ -129,16 +127,16 @@ async function runTiDbSide(runtime, operationPairs, idBase) {
   await prepareTiDb(runtime);
   const table = `${TIDB_DATABASE}.${TABLE_NAME}`;
   const latencies = [];
-  let correctOperations = ZERO;
+  let correctOperations = 0;
   const startedAt = performance.now();
-  for (let index = ZERO; index < operationPairs; index += ONE) {
+  for (let index = 0; index < operationPairs; index += 1) {
     const eventId = idBase + index;
     const timestamp = Date.now() + index;
     const inserted = await timedOperation(() => runtime.executeSql(
       insertSql(table, eventId, timestamp),
     ));
     latencies.push(inserted.elapsedMs);
-    correctOperations += ONE;
+    correctOperations += 1;
     const selected = await timedOperation(() => runtime.executeSql(
       selectSql(table, eventId),
     ));
@@ -148,7 +146,7 @@ async function runTiDbSide(runtime, operationPairs, idBase) {
       String(eventId),
       `TiDB OLTP oracle did not observe ${eventId}`,
     );
-    correctOperations += ONE;
+    correctOperations += 1;
   }
   return summarizeLatencies(
     latencies,
@@ -179,7 +177,7 @@ function resolvedConfig(cluster) {
 
 async function run(cluster) {
   const config = resolvedConfig(cluster);
-  assert.ok(config.operationPairs > ZERO, 'operationPairs must be positive');
+  assert.ok(config.operationPairs > 0, 'operationPairs must be positive');
   const idBase = Date.now() * EVENT_ID_SCALE;
   const lagrangePartitions = await prepareLagrange(cluster, config);
   const lagrange = await runLagrangeSide(
