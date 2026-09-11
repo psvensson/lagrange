@@ -24,7 +24,11 @@
       "eventsPerEntity": 16,
       "requestCount": 32,
       "insertBatchSize": 64,
+      "payloadBytes": 256,
       "queryTimeoutMs": 20000,
+      "ddlReadyTimeoutMs": 120000,
+      "splitReadyTimeoutMs": 240000,
+      "minLagrangePartitions": 2,
       "readyTimeoutMs": 180000,
       "images": {
         "pd": "pingcap/pd:v8.5.8",
