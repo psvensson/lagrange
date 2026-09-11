@@ -50,13 +50,13 @@ jobs:
 
           replaceExact(
             'src/constants/entrypoint.js',
-            "VERSION: '0.2.2'",
-            `VERSION: '${version}'`,
+            "const ENTRYPOINT_VERSION = '0.2.2';",
+            `const ENTRYPOINT_VERSION = '${version}';`,
           );
           replaceExact(
             'src/cli/cli-constants.js',
-            "CLI_VERSION: '0.2.2'",
-            `CLI_VERSION: '${version}'`,
+            "const CLI_VERSION = '0.2.2';",
+            `const CLI_VERSION = '${version}';`,
           );
           replaceExact(
             'charts/lagrange-node/Chart.yaml',
@@ -88,7 +88,6 @@ jobs:
             unreleasedHeader,
             `${unreleasedHeader}${releaseSection}`,
           );
-          replaceExact;
           const oldUnreleased = '[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.2...HEAD';
           if (!changelog.includes(oldUnreleased)) {
             throw new Error('CHANGELOG.md: expected Unreleased comparison not found');
