@@ -1,0 +1,116 @@
+name: tidb-reference-gcp
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - "benchmark/tidb-reference-scenarios"
+    paths:
+      - ".github/workflows/tidb-reference-gcp.yml"
+      - "scripts/checks/run-tidb-oltp-gcp-measurement.js"
+      - "scripts/checks/tidb-oltp-measurement.js"
+      - "scripts/checks/run-tidb-oltp-adapter-live.js"
+      - "test/distributed/reference-client/**"
+      - "test/distributed/harness/oltp-baseline-*.js"
+      - "test/distributed/harness/tidb-reference-lifecycle.js"
+      - "test/distributed/config/gcp-tidb-oltp-single-host.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tidb-reference-gcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          skip_install: false
+
+      - name: Start benchmark controller VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner \
+            --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  measure:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 90
+    env:
+      LAGRANGE_AUTHORIZE_CLOUD_PROJECT: something-2e584
+      TIDB_OLTP_GCP_EVIDENCE_PATH: test-output/tidb-reference/oltp-gcp-single-host.json
+    steps:
+      - name: Checkout exact benchmark head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.7.0
+          npm ci
+          npm ci --ignore-scripts --prefix test/distributed/reference-client
+          npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
+
+      - name: Verify controlled-cloud toolchain
+        run: |
+          set -euo pipefail
+          node --version
+          docker version
+          gcloud --version
+          pulumi version
+          openssl version
+
+      - name: Pull exact pinned reference images on controller
+        run: |
+          set -euo pipefail
+          docker pull pingcap/pd:v8.5.8
+          docker pull pingcap/tikv:v8.5.8
+          docker pull pingcap/tidb:v8.5.8
+          docker pull mysql:8.4.11
+
+      - name: Run TiDB reference contract guards
+        run: |
+          set -euo pipefail
+          node scripts/checks/tidb-reference-lifecycle-guard.js
+          node scripts/checks/tidb-oltp-dataset-guard.js
+          node scripts/checks/tidb-oltp-workload-guard.js
+
+      - name: Run controlled single-host GCP measurement
+        run: node scripts/checks/run-tidb-oltp-gcp-measurement.js
+
+      - name: Upload controlled GCP evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tidb-oltp-gcp-single-host-${{ github.run_id }}
+          path: test-output/tidb-reference/oltp-gcp-single-host.json
+          retention-days: 14
+          if-no-files-found: warn
