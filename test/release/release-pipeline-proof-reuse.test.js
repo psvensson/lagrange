@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import {test} from '../test-helpers/tap.js';
+import {test} from '../../src/test-helpers/tap.js';
 
 const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 const FULL_GATE_WORKFLOW = '.github/workflows/full-gate.yml';
