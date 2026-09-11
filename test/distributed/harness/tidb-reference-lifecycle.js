@@ -13,24 +13,42 @@ const DEFAULTS = Object.freeze({
   tidbPort: 4000,
   tidbStatusPort: 10080,
   tikvNofileLimit: 262144,
+  tikvStoreCount: 1,
   readinessTimeoutMs: 120000,
   readinessPollIntervalMs: 1000,
 });
 
 const ZERO = 0;
+const ONE = 1;
+const MAX_TIKV_STORE_COUNT = 9;
 const READY_VALUE = '1';
 const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
 const DIAGNOSTIC_LOG_TAIL_LINES = 80;
 const DIAGNOSTIC_LOG_MAX_CHARS = 6000;
-const READINESS_SQL =
-  'SELECT CASE WHEN ' +
-  'EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS ' +
-  "WHERE STORE_STATE_NAME = 'Up') " +
-  'AND (SELECT COUNT(*) FROM mysql.user) >= 1 ' +
-  'THEN 1 ELSE 0 END;';
+
+function buildReadinessSql(tikvStoreCount = DEFAULTS.tikvStoreCount) {
+  return 'SELECT CASE WHEN ' +
+    '(SELECT COUNT(*) FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS ' +
+    "WHERE STORE_STATE_NAME = 'Up') >= " + tikvStoreCount + ' ' +
+    'AND (SELECT COUNT(*) FROM mysql.user) >= 1 ' +
+    'THEN 1 ELSE 0 END;';
+}
+
+const READINESS_SQL = buildReadinessSql();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeStoreCount(value) {
+  const count = value ?? DEFAULTS.tikvStoreCount;
+  if (!Number.isInteger(count) || count < ONE || count > MAX_TIKV_STORE_COUNT) {
+    throw new Error(
+      `TiDB reference tikvStoreCount must be an integer from 1 to ` +
+      `${MAX_TIKV_STORE_COUNT}`,
+    );
+  }
+  return count;
 }
 
 function normalizeOptions(options = {}) {
@@ -50,6 +68,7 @@ function normalizeOptions(options = {}) {
   return {
     provider,
     network,
+    tikvStoreCount: normalizeStoreCount(options.tikvStoreCount),
     resourceLimits: options.resourceLimits || {},
     readinessResourceLimits: options.readinessResourceLimits || {},
     images: {
@@ -80,6 +99,14 @@ function tikvHostConfig(network) {
       Hard: DEFAULTS.tikvNofileLimit,
     }],
   };
+}
+
+function tikvStoreNames(namePrefix, storeCount) {
+  if (storeCount === ONE) return [`${namePrefix}-tikv`];
+  return Array.from(
+    {length: storeCount},
+    (_unused, index) => `${namePrefix}-tikv-${index + ONE}`,
+  );
 }
 
 function boundedLog(value) {
@@ -181,7 +208,7 @@ async function waitForContainerRunning(provider, containerId, options) {
   );
 }
 
-function buildSqlReadinessCommand(endpoint) {
+function buildSqlReadinessCommand(endpoint, sql = READINESS_SQL) {
   return [
     'mysql',
     '--protocol=TCP',
@@ -192,7 +219,7 @@ function buildSqlReadinessCommand(endpoint) {
     '--batch',
     '--skip-column-names',
     '--execute',
-    READINESS_SQL,
+    sql,
   ];
 }
 
@@ -201,7 +228,8 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   let lastError = null;
   let lastResult = null;
   let attempts = ZERO;
-  const command = buildSqlReadinessCommand(endpoint);
+  const readinessSql = options.readinessSql || READINESS_SQL;
+  const command = buildSqlReadinessCommand(endpoint, readinessSql);
   const watchedContainers = options.watchedContainers || [];
 
   while (Date.now() - started < options.timeoutMs) {
@@ -214,7 +242,7 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
           String(result.stdout || '').trim() === READY_VALUE) {
         return {
           attempts,
-          sql: READINESS_SQL,
+          sql: readinessSql,
           clientContainerId,
         };
       }
@@ -241,7 +269,7 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
 
 async function stopTiDbReferenceCluster(provider, created) {
   const failures = [];
-  for (let index = created.length - 1; index >= ZERO; index -= 1) {
+  for (let index = created.length - ONE; index >= ZERO; index -= ONE) {
     const container = created[index];
     try {
       const inspect = await provider.inspectContainer(container.containerId);
@@ -263,12 +291,51 @@ async function stopTiDbReferenceCluster(provider, created) {
   }
 }
 
+async function startTiKvStores(options, names, created, runningOptions) {
+  const stores = [];
+  for (const storeName of names.tikvStores) {
+    const tikv = await options.provider.createContainer({
+      name: storeName,
+      image: options.images.tikv,
+      network: options.network,
+      resourceLimits: options.resourceLimits,
+      hostConfigExtras: tikvHostConfig(options.network),
+      command: [
+        `--addr=0.0.0.0:${DEFAULTS.tikvPort}`,
+        `--advertise-addr=${storeName}:${DEFAULTS.tikvPort}`,
+        `--pd=${names.pd}:${DEFAULTS.pdClientPort}`,
+      ],
+    });
+    created.push(tikv);
+    stores.push(tikv);
+    await waitForContainerRunning(
+      options.provider,
+      tikv.containerId,
+      runningOptions,
+    );
+  }
+  return stores;
+}
+
+function watchedTopology(pd, tikvStores, tidb) {
+  return [
+    {role: 'pd', containerId: pd.containerId},
+    ...tikvStores.map((tikv, index) => ({
+      role: `tikv-${index + ONE}`,
+      containerId: tikv.containerId,
+    })),
+    {role: 'tidb', containerId: tidb.containerId},
+  ];
+}
+
 async function startTiDbReferenceCluster(rawOptions = {}) {
   const options = normalizeOptions(rawOptions);
   const created = [];
+  const storeNames = tikvStoreNames(options.namePrefix, options.tikvStoreCount);
   const names = {
     pd: `${options.namePrefix}-pd`,
-    tikv: `${options.namePrefix}-tikv`,
+    tikv: storeNames[ZERO],
+    tikvStores: storeNames,
     tidb: `${options.namePrefix}-tidb`,
     readiness: `${options.namePrefix}-sql-readiness`,
   };
@@ -298,22 +365,10 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
     created.push(pd);
     await waitForContainerRunning(options.provider, pd.containerId, runningOptions);
 
-    const tikv = await options.provider.createContainer({
-      name: names.tikv,
-      image: options.images.tikv,
-      network: options.network,
-      resourceLimits: options.resourceLimits,
-      hostConfigExtras: tikvHostConfig(options.network),
-      command: [
-        `--addr=0.0.0.0:${DEFAULTS.tikvPort}`,
-        `--advertise-addr=${names.tikv}:${DEFAULTS.tikvPort}`,
-        `--pd=${names.pd}:${DEFAULTS.pdClientPort}`,
-      ],
-    });
-    created.push(tikv);
-    await waitForContainerRunning(
-      options.provider,
-      tikv.containerId,
+    const tikvStores = await startTiKvStores(
+      options,
+      names,
+      created,
       runningOptions,
     );
 
@@ -354,18 +409,15 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       runningOptions,
     );
 
-    const watchedContainers = [
-      {role: 'pd', containerId: pd.containerId},
-      {role: 'tikv', containerId: tikv.containerId},
-      {role: 'tidb', containerId: tidb.containerId},
-    ];
+    const watchedContainers = watchedTopology(pd, tikvStores, tidb);
+    const readinessSql = buildReadinessSql(options.tikvStoreCount);
     let readiness;
     try {
       readiness = await waitForSqlReady(
         options.provider,
         readinessClient.containerId,
         {host: names.tidb, port: DEFAULTS.tidbPort},
-        {...runningOptions, watchedContainers},
+        {...runningOptions, watchedContainers, readinessSql},
       );
     } finally {
       await stopTiDbReferenceCluster(options.provider, [readinessClient]);
@@ -375,13 +427,21 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
     return {
       images: options.images,
       names,
-      containers: {pd, tikv, tidb},
+      containers: {
+        pd,
+        tikv: tikvStores[ZERO],
+        tikvStores,
+        tidb,
+      },
       endpoints: {
         mysql: {host: names.tidb, port: DEFAULTS.tidbPort},
         status: {host: names.tidb, port: DEFAULTS.tidbStatusPort},
         pd: {host: names.pd, port: DEFAULTS.pdClientPort},
       },
-      readiness,
+      readiness: {
+        ...readiness,
+        tikvStoreCount: options.tikvStoreCount,
+      },
       async stop() {
         await stopTiDbReferenceCluster(options.provider, created);
       },
@@ -402,6 +462,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
 export {
   DEFAULTS as TIDB_REFERENCE_DEFAULTS,
   READINESS_SQL as TIDB_REFERENCE_READINESS_SQL,
+  buildReadinessSql as buildTiDbReferenceReadinessSql,
   buildSqlReadinessCommand as buildTiDbReferenceSqlReadinessCommand,
   collectReadinessDiagnostics as collectTiDbReferenceReadinessDiagnostics,
   normalizeOptions as normalizeTiDbReferenceLifecycleOptions,
