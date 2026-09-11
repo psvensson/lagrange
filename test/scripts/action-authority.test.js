@@ -55,7 +55,7 @@ function candidateTarball(version) {
 }
 // Exactly the actions that may carry a standing authority, named here so
 // adding one to the registry cannot also widen this expectation.
-const STANDING_ACTIONS = Object.freeze(['publish-head']);
+const STANDING_ACTIONS = Object.freeze(['publish-head', 'record-proof']);
 const HEAD_SHA = 'b8ee3a0556e81b5917c72a2dbea3441fef3b8cc0';
 const OTHER_SHA = 'c0670a2af496aa246a8c5ccd2d23efbe9e54fb52';
 // Ways a module could perform an outward action itself.

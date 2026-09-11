@@ -36,7 +36,8 @@
  * whether the authority holds - never permits anything. Only `isAuthorized`
  * grants, and only for `authorized`.
  *
- * One action carries a standing authority instead of a signal, and says so:
+ * A small set of repository-maintenance actions carry standing authority instead
+ * of an operator signal, and say so explicitly:
  * landing work and then publishing the exact head is what this repository asks
  * of every unit of work, so demanding a fresh operator signal for each ordinary
  * publish would describe a policy nobody holds. A standing authority is
@@ -62,6 +63,7 @@ const ACTION = Object.freeze({
   PROVISION_CLOUD_HOSTS: 'provision-cloud-hosts',
   PUBLISH_CONTAINER_IMAGE: 'publish-container-image',
   CREATE_PUBLIC_RELEASE: 'create-public-release',
+  RECORD_PROOF: 'record-proof',
 });
 
 const EMPTY_TEXT = '';
@@ -94,6 +96,8 @@ const REQUIRES = Object.freeze({
     'the tag at hand',
   RELEASE: 'an explicit request naming the release to create, matching the ' +
     'tag at hand',
+  PROOF_RECEIPT: 'nothing beyond the standing authority to record a successful ' +
+    'registered proof for its exact immutable subject',
 });
 
 // Why a decision came out the way it did, in the authority's own words.
@@ -236,6 +240,11 @@ const REGISTRY = Object.freeze({
   [ACTION.CREATE_PUBLIC_RELEASE]: Object.freeze({
     requires: REQUIRES.RELEASE,
     decide: intendedRelease(REQUIRES.RELEASE, TAG_FIELD)}),
+  [ACTION.RECORD_PROOF]: Object.freeze({
+    requires: REQUIRES.PROOF_RECEIPT,
+    standing: 'successful registered immutable-SHA proofs are durably recorded ' +
+      'under their exact proof identity',
+  }),
 });
 
 /**
