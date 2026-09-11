@@ -14,6 +14,7 @@ import {
   selectCanonicalTopologyFailureGateScenariosForConfig,
 } from '../scenario-registry.js';
 
+const EXPECTED_CANONICAL_SCENARIO_COUNT = 26;
 const EXPECTED_TOPOLOGY_FAILURE_GATE_COUNT = 10;
 const EXPECTED_LOCAL_THREE_NODE_FAILURE_GATE_IDS = [
   'failure-detection-rolling-restart',
@@ -52,8 +53,8 @@ const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
   'stale-publication-durable-truth-ahead',
 ];
 
-test('scenario-registry tracks the canonical 24-scenario matrix', (t) => {
-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 24);
+test('scenario-registry tracks the canonical scenario matrix', (t) => {
+  assert.equal(CANONICAL_SCENARIO_MATRIX.length, EXPECTED_CANONICAL_SCENARIO_COUNT);
   t.end();
 });
 
@@ -134,14 +135,38 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
   t.end();
 });
 
+test('scenario-registry isolates TiDB GCP profiles to their scenario', (t) => {
+  const scenarios = [
+    {name: 'admin-query-smoke', path: '/tmp/admin-query-smoke.js'},
+    {name: 'tidb-oltp-baseline', path: '/tmp/tidb-oltp-baseline.js'},
+    {name: 'tidb-compute-near-data', path: '/tmp/tidb-compute-near-data.js'},
+  ];
+
+  assert.deepEqual(
+    selectCanonicalScenariosForConfig(
+      scenarios,
+      'test/distributed/config/gcp-tidb-oltp-baseline.json',
+    ).map((scenario) => scenario.name),
+    ['tidb-oltp-baseline'],
+  );
+  assert.deepEqual(
+    selectCanonicalScenariosForConfig(
+      scenarios,
+      'gcp-tidb-compute-near-data.json',
+    ).map((scenario) => scenario.name),
+    ['tidb-compute-near-data'],
+  );
+  t.end();
+});
+
 test('scenario-registry formats canonical scenario matrix lines', (t) => {
   const lines = formatCanonicalScenarioMatrixLines();
 
-  assert.equal(lines.length, 24);
+  assert.equal(lines.length, EXPECTED_CANONICAL_SCENARIO_COUNT);
   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
   assert.equal(
     lines[lines.length - 1],
-    'local-partition-merge.json|partition-merge-under-load',
+    'gcp-tidb-compute-near-data.json|tidb-compute-near-data',
   );
   t.end();
 });
