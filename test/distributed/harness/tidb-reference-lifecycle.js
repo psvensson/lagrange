@@ -64,6 +64,10 @@ function normalizeOptions(options = {}) {
   };
 }
 
+function networkHostConfig(network) {
+  return {NetworkMode: network};
+}
+
 async function waitForContainerRunning(provider, containerId, options) {
   const started = Date.now();
   let lastError = null;
@@ -175,11 +179,15 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
   try {
     // DockerProvider.createContainer is the lifecycle owner for create + start
     // + running-state wait. This adapter must not issue a second start.
+    // Explicit NetworkMode is required for Docker's embedded DNS aliases to be
+    // active on the user-defined benchmark network; NetworkingConfig alone is
+    // not a sufficient contract for this provider.
     const pd = await options.provider.createContainer({
       name: names.pd,
       image: options.images.pd,
       network: options.network,
       resourceLimits: options.resourceLimits,
+      hostConfigExtras: networkHostConfig(options.network),
       command: [
         '--name=pd',
         `--client-urls=http://0.0.0.0:${DEFAULTS.pdClientPort}`,
@@ -197,6 +205,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       image: options.images.tikv,
       network: options.network,
       resourceLimits: options.resourceLimits,
+      hostConfigExtras: networkHostConfig(options.network),
       command: [
         `--addr=0.0.0.0:${DEFAULTS.tikvPort}`,
         `--advertise-addr=${names.tikv}:${DEFAULTS.tikvPort}`,
@@ -215,6 +224,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       image: options.images.tidb,
       network: options.network,
       resourceLimits: options.resourceLimits,
+      hostConfigExtras: networkHostConfig(options.network),
       command: [
         '--store=tikv',
         `--path=${names.pd}:${DEFAULTS.pdClientPort}`,
@@ -235,6 +245,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       image: options.images.mysqlClient,
       network: options.network,
       resourceLimits: options.readinessResourceLimits,
+      hostConfigExtras: networkHostConfig(options.network),
       entrypoint: ['sleep'],
       command: [READINESS_CLIENT_KEEPALIVE_SECONDS],
     });
