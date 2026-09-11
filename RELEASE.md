@@ -19,7 +19,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
 | Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
 | Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
-| Manual | `.github/workflows/full-gate.yml` | `npm run check:release` — the whole system, on demand. No longer nightly: a scheduled whole-system proof is a standing veto, and an unchanged tree cannot grow new behavioural debt. |
+| Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | `npm run check:release` on the controlled GCP runner — the whole system, on demand or as the exact-head stronger proof when modular CI correctly refuses a release-surface change. It remains unscheduled. |
 | Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
 
 ## Release exit
@@ -30,8 +30,10 @@ the release; it never tags.
 
 1. The release content is clean (porcelain status outside `solve/`).
 2. HEAD is exactly `origin/main`.
-3. The full corpus is green on the exact SHA: the `ci` workflow's `gate` job
-   concluded success for that commit.
+3. The exact SHA has a successful pre-tag proof: either the modular `ci`
+   workflow's `gate` job, or the stronger `full-gate` workflow. A
+   `RELEASE_PROOF_REQUIRED` refusal is not a red behavioural result; route that
+   exact main SHA through `full-gate` instead of weakening the selector.
 4. Every version literal agrees (`package.json`, the root package in
    `package-lock.json`, `CLI_VERSION`, `ENTRYPOINT_VERSION`, Helm chart
    `version` and `appVersion`) and `CHANGELOG.md` carries a non-empty, dated
@@ -64,8 +66,11 @@ instead of frozen. A patch release for one fix follows the same steps.
    `test/release/version-single-source.test.js` enforces agreement); quote
    the current `npm run health:formation -- --summary` line in the notes.
    Keep the _Known limitations_ section honest about convergence (below).
-3. **Land it through the ordinary publish gate** (`npm run publish`) and wait
-   for `ci / gate` on that SHA.
+3. **Land it through the ordinary publish gate** (`npm run publish`). If
+   `ci / gate` is green, that is the pre-tag proof. If it refuses with
+   `RELEASE_PROOF_REQUIRED`, run `full-gate` on the exact same main SHA
+   (manual dispatch, or push a `release-proof/**` branch pointing at that SHA)
+   and wait for its `gate` job to succeed.
 4. **Preflight, then tag:**
    ```sh
    npm run release:preflight
@@ -96,12 +101,13 @@ instead of frozen. A patch release for one fix follows the same steps.
 
 ## Per-head proof, once
 
-Each landed head is proven in full exactly once: the pre-push hook runs the
-full test corpus before the push and `ci.yml` runs the impact cone after it.
-`npm run check:release` (the corpus plus the project-hardening acceptance)
-runs only inside `release.yml` on the tagged SHA, and on demand through
-`full-gate.yml`. Release-time re-runs of the corpus, local gate receipts and
-digest-bound release row Quests were removed on 2026-09-05.
+Each ordinary landed head is proven in full exactly once: the pre-push hook
+runs the full test corpus before the push and `ci.yml` runs the impact cone
+after it. A release-surface head that the selector marks
+`RELEASE_PROOF_REQUIRED` uses `full-gate.yml` as its stronger exact-SHA
+pre-tag proof. `release.yml` then re-runs that same `npm run check:release`
+on the immutable tag before publishing anything. No scheduled whole-system
+proof exists.
 
 ## Formation health
 

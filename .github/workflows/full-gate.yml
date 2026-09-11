@@ -1,36 +1,79 @@
 # GitHub Actions on-demand full proof - the "prove everything now" button.
 #
-# MANUAL ONLY, deliberately. This used to run nightly, and a nightly whole-system
-# proof is a standing veto: an unrelated marginal test failing at 02:30 made
-# every unrelated change unlandable the next morning, which is most of what the
-# modular-proof migration set out to stop. The repository also cannot develop
-# new behavioural debt while nobody is changing it, so rerunning an unchanged
-# tree on a timer buys nothing.
+# This is deliberately unscheduled. A whole-system proof is a standing veto:
+# rerunning an unchanged tree on a timer can only turn variance into unrelated
+# blocking work. It runs either when an operator dispatches it manually or when
+# an exact main SHA is exposed through a `release-proof/**` branch for release
+# preflight. The latter is a ref-only trigger: the branch must point at the
+# already-landed main commit, so the proof identity is the release identity.
 #
-# What replaced it:
+# What replaced the old nightly whole-system proof:
 #
-#   every change      npm run check           (ci.yml, required)
+#   every change      npm run check           (ci.yml, required modular proof)
 #   every main push   repository-health.yml   (expensive global analysis)
 #   on demand         this workflow           (the whole system)
-#   every release     release.yml             (the same command as this one)
+#   release surface   this workflow           (exact-head stronger proof)
+#   every release     release.yml             (the same command + publication)
 #
 # It invokes npm run check:release and nothing else. There is deliberately no
 # workflow-level opinion here about what "complete" means: that lives in the
 # package manifest, so this workflow and the release pipeline cannot drift into
-# two different definitions - which is exactly what had happened, with the
-# nightly running test:gate while releases ran test:ci.
+# two different definitions.
 name: full-gate
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - "release-proof/**"
 
 permissions:
   contents: read
 
 jobs:
-  gate:
+  # The whole release proof is intentionally kept off GitHub's default 2-vCPU
+  # runner. The release workflow uses the same controlled GCP runner for the
+  # same command; this pre-tag proof must measure the same admitted machine
+  # class rather than reintroduce the hosted-runner starvation failures that
+  # motivated the release runner in the first place.
+  wake-runner:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          skip_install: false
+
+      - name: Start the proof runner VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner \
+            --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  gate:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_RETRY_FAILED_ONCE: '1'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -44,20 +87,15 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "22"
-          cache: npm
+          package-manager-cache: false
 
       - name: Install gate CLI tools
-        # Bounds a HANG, not the normal duration. Measured on hosted runners:
-        # 115s, and 1252s on a run that succeeded, and once 62 minutes hung
-        # until cancelled by hand. The spread is wide, so this sits well above
-        # the slowest success and well below the 120-minute job backstop; the
-        # per-download --max-time values are the tighter bound.
         timeout-minutes: 30
         run: |
           set -euo pipefail
           sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
           sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
-            ripgrep jq default-jre-headless postgresql-client curl
+            ripgrep jq default-jre-headless postgresql-client curl gh
           HELM_VERSION=v3.16.3
           HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
           cd "$RUNNER_TEMP"
@@ -67,11 +105,6 @@ jobs:
           tar -xzf "$HELM_ARCHIVE"
           sudo install linux-amd64/helm /usr/local/bin/helm
           helm version --short
-          # Component tests spawn a bare `wasm-tools`; on the maintainer's box
-          # that is a cargo install, so a GitHub-hosted runner has no way to
-          # get it and the spawn fails ENOENT. Upstream publishes no checksum
-          # file for the release asset, so pin the digest inline and fail
-          # closed on drift, exactly as the MovieLens dataset step does.
           WASM_TOOLS_VERSION=1.236.0
           WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
           WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
@@ -82,11 +115,10 @@ jobs:
           wasm-tools --version
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
 
-      # The MovieLens evidence tests read the real 100k ratings file; data/ is
-      # gitignored, so fetch it and fail closed on any digest drift (the same
-      # sha256 the tests pin).
       - name: Fetch MovieLens dataset (digest-pinned)
         run: |
           node examples/service-data-affinity/download-movielens.js
@@ -95,11 +127,6 @@ jobs:
       - name: Full release proof
         run: npm run check:release
 
-      # The acceptance runner captures per-command outcomes into the receipt,
-      # not the job log, so without this step a red run says only that some
-      # commands failed. The summary now reports PASS/FAIL/NOT_RUN explicitly
-      # and names the first failing command; this dump adds the per-test detail
-      # behind it.
       - name: Name the failing gate commands
         if: failure()
         run: |

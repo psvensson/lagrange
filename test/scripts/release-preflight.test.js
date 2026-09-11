@@ -25,6 +25,10 @@ const CI_RUN = Object.freeze({
   id: 33985719321, path: '.github/workflows/ci.yml', head_sha: HEAD,
   status: 'completed', conclusion: 'success',
 });
+const FULL_GATE_RUN = Object.freeze({
+  id: 33985719322, path: '.github/workflows/full-gate.yml', head_sha: HEAD,
+  status: 'completed', conclusion: 'success',
+});
 
 function facts(overrides = {}) {
   return {
@@ -65,6 +69,15 @@ test('all five facts green is READY with the exact tag commands', (t) => {
   t.end();
 });
 
+test('a successful full gate is a stronger exact-sha pre-tag proof', (t) => {
+  const result = evaluateReleasePreflight(facts({
+    workflowRuns: [{...CI_RUN, conclusion: 'failure'}, FULL_GATE_RUN],
+  }));
+  t.equal(result.ok, true);
+  t.match(result.checks[2].detail, /full-gate\.yml/);
+  t.end();
+});
+
 test('each fact blocks on its own', (t) => {
   t.same(failing(evaluateReleasePreflight(facts({
     statusLines: [' M src/x.js'],
@@ -74,12 +87,12 @@ test('each fact blocks on its own', (t) => {
   t.same(failing(evaluateReleasePreflight(facts({
     workflowRuns: [
       {...CI_RUN, conclusion: 'failure'},
-      {...CI_RUN, path: '.github/workflows/full-gate.yml'},
+      {...FULL_GATE_RUN, conclusion: 'failure'},
       {...CI_RUN, head_sha: OTHER},
       {...CI_RUN, status: 'in_progress', conclusion: null},
     ],
   }))), [CHECK.CI_GATE_GREEN],
-  'only a completed successful ci.yml run on the exact sha counts');
+  'only a completed successful ci.yml or full-gate.yml run on the exact sha counts');
   const versions = evaluateReleasePreflight(facts({
     versionSources: {
       packageJson: VERSION, packageLock: '0.1.1', cli: VERSION,
