@@ -19,6 +19,8 @@ const DEFAULTS = Object.freeze({
 const ZERO = 0;
 const READY_VALUE = '1';
 const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
+const DIAGNOSTIC_LOG_TAIL_LINES = 80;
+const DIAGNOSTIC_LOG_MAX_CHARS = 6000;
 const READINESS_SQL =
   'SELECT CASE WHEN ' +
   'EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS ' +
@@ -68,6 +70,86 @@ function networkHostConfig(network) {
   return {NetworkMode: network};
 }
 
+function boundedLog(value) {
+  const text = String(value || '').trim();
+  if (text.length <= DIAGNOSTIC_LOG_MAX_CHARS) return text;
+  return text.slice(text.length - DIAGNOSTIC_LOG_MAX_CHARS);
+}
+
+async function collectContainerDiagnostic(provider, watched) {
+  let inspect = null;
+  let inspectError = null;
+  try {
+    inspect = await provider.inspectContainer(watched.containerId);
+  } catch (error) {
+    inspectError = String(error?.message || error);
+  }
+
+  let logs = '';
+  let logError = null;
+  if (typeof provider.getContainerLogs === 'function') {
+    try {
+      logs = boundedLog(await provider.getContainerLogs(
+        watched.containerId,
+        {tail: DIAGNOSTIC_LOG_TAIL_LINES},
+      ));
+    } catch (error) {
+      logError = String(error?.message || error);
+    }
+  }
+
+  const networks = inspect?.NetworkSettings?.Networks || {};
+  return {
+    role: watched.role,
+    containerId: watched.containerId,
+    running: inspect?.State?.Running ?? null,
+    status: inspect?.State?.Status ?? null,
+    exitCode: inspect?.State?.ExitCode ?? null,
+    oomKilled: inspect?.State?.OOMKilled ?? null,
+    stateError: inspect?.State?.Error || null,
+    networkNames: Object.keys(networks),
+    inspectError,
+    logError,
+    logs,
+  };
+}
+
+async function collectReadinessDiagnostics(provider, watchedContainers = []) {
+  const diagnostics = [];
+  for (const watched of watchedContainers) {
+    diagnostics.push(await collectContainerDiagnostic(provider, watched));
+  }
+  return diagnostics;
+}
+
+async function assertWatchedContainersRunning(provider, watchedContainers = []) {
+  for (const watched of watchedContainers) {
+    let inspect;
+    try {
+      inspect = await provider.inspectContainer(watched.containerId);
+    } catch (error) {
+      const diagnostics = await collectReadinessDiagnostics(
+        provider,
+        watchedContainers,
+      );
+      throw new Error(
+        `TiDB reference ${watched.role} inspection failed before SQL readiness: ` +
+        `${error.message}; diagnostics=${JSON.stringify(diagnostics)}`,
+      );
+    }
+    if (inspect?.State?.Running !== true) {
+      const diagnostics = await collectReadinessDiagnostics(
+        provider,
+        watchedContainers,
+      );
+      throw new Error(
+        `TiDB reference ${watched.role} stopped before SQL readiness; ` +
+        `diagnostics=${JSON.stringify(diagnostics)}`,
+      );
+    }
+  }
+}
+
 async function waitForContainerRunning(provider, containerId, options) {
   const started = Date.now();
   let lastError = null;
@@ -108,9 +190,11 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
   let lastResult = null;
   let attempts = ZERO;
   const command = buildSqlReadinessCommand(endpoint);
+  const watchedContainers = options.watchedContainers || [];
 
   while (Date.now() - started < options.timeoutMs) {
     attempts += 1;
+    await assertWatchedContainersRunning(provider, watchedContainers);
     try {
       const result = await provider.execInContainer(clientContainerId, command);
       lastResult = result;
@@ -133,8 +217,13 @@ async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
     `exit=${lastResult?.exitCode ?? 'unknown'} ` +
       `stdout=${JSON.stringify(lastResult?.stdout || '')} ` +
       `stderr=${JSON.stringify(lastResult?.stderr || '')}`;
+  const diagnostics = await collectReadinessDiagnostics(
+    provider,
+    watchedContainers,
+  );
   throw new Error(
-    `TiDB reference SQL readiness failed within ${options.timeoutMs}ms: ${detail}`,
+    `TiDB reference SQL readiness failed within ${options.timeoutMs}ms: ` +
+    `${detail}; diagnostics=${JSON.stringify(diagnostics)}`,
   );
 }
 
@@ -179,9 +268,6 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
   try {
     // DockerProvider.createContainer is the lifecycle owner for create + start
     // + running-state wait. This adapter must not issue a second start.
-    // Explicit NetworkMode is required for Docker's embedded DNS aliases to be
-    // active on the user-defined benchmark network; NetworkingConfig alone is
-    // not a sufficient contract for this provider.
     const pd = await options.provider.createContainer({
       name: names.pd,
       image: options.images.pd,
@@ -256,13 +342,18 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       runningOptions,
     );
 
+    const watchedContainers = [
+      {role: 'pd', containerId: pd.containerId},
+      {role: 'tikv', containerId: tikv.containerId},
+      {role: 'tidb', containerId: tidb.containerId},
+    ];
     let readiness;
     try {
       readiness = await waitForSqlReady(
         options.provider,
         readinessClient.containerId,
         {host: names.tidb, port: DEFAULTS.tidbPort},
-        runningOptions,
+        {...runningOptions, watchedContainers},
       );
     } finally {
       await stopTiDbReferenceCluster(options.provider, [readinessClient]);
@@ -300,6 +391,7 @@ export {
   DEFAULTS as TIDB_REFERENCE_DEFAULTS,
   READINESS_SQL as TIDB_REFERENCE_READINESS_SQL,
   buildSqlReadinessCommand as buildTiDbReferenceSqlReadinessCommand,
+  collectReadinessDiagnostics as collectTiDbReferenceReadinessDiagnostics,
   normalizeOptions as normalizeTiDbReferenceLifecycleOptions,
   startTiDbReferenceCluster,
   stopTiDbReferenceCluster,
