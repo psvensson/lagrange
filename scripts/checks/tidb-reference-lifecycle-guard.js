@@ -51,6 +51,7 @@ function assertPinnedImages() {
   assert.equal(TIDB_REFERENCE_DEFAULTS.tikvImage, 'pingcap/tikv:v8.5.8');
   assert.equal(TIDB_REFERENCE_DEFAULTS.tidbImage, 'pingcap/tidb:v8.5.8');
   assert.equal(TIDB_REFERENCE_DEFAULTS.mysqlClientImage, 'mysql:8.4.11');
+  assert.equal(TIDB_REFERENCE_DEFAULTS.tikvNofileLimit, 262144);
 }
 
 function assertRequiredOwners() {
@@ -113,6 +114,11 @@ async function assertDependencyOrderAndCleanup() {
     '--advertise-client-urls=http://pair-a-pd:2379',
   ));
   assert.ok(tikv.command.includes('--pd=pair-a-pd:2379'));
+  assert.deepEqual(tikv.hostConfigExtras.Ulimits, [{
+    Name: 'nofile',
+    Soft: 262144,
+    Hard: 262144,
+  }]);
   assert.ok(tidb.command.includes('--path=pair-a-pd:2379'));
   assert.ok(tidb.command.includes('--store=tikv'));
   assert.ok(tidb.command.includes('-P=4000'));
