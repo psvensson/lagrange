@@ -61,8 +61,19 @@ jobs:
           TIDB_REFERENCE_TIKV_STORE_COUNT: '3'
         run: node scripts/checks/run-tidb-reference-lifecycle-live.js
 
-      - name: Run live persistent OLTP adapter proof
-        run: node scripts/checks/run-tidb-oltp-adapter-live.js
+      - name: Run hosted TiDB OLTP measurement smoke
+        env:
+          TIDB_OLTP_EVIDENCE_PATH: test-output/tidb-reference/oltp-hosted-smoke.json
+        run: node scripts/checks/run-tidb-oltp-hosted-measurement.js
+
+      - name: Upload TiDB OLTP hosted-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tidb-oltp-hosted-smoke-${{ github.run_id }}
+          path: test-output/tidb-reference/oltp-hosted-smoke.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Capture Docker state on failure
         if: failure()

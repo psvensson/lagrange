@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
 
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
@@ -29,7 +30,7 @@ const CLIENT_RESOURCE_LIMITS = Object.freeze({
 const LABELS = Object.freeze({
   'lagrange.benchmark': 'tidb-oltp-adapter-live',
 });
-const WORKLOAD_OPTIONS = Object.freeze({
+const DEFAULT_WORKLOAD_OPTIONS = Object.freeze({
   seed: 20260911,
   workers: 2,
   warmupOperationsPerWorker: 100,
@@ -44,11 +45,22 @@ function uniqueRunId() {
   return `lagrange-tidb-oltp-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
-function expectedMixedOperationCount(perHundred) {
-  const blocksPerWorker =
-    (WORKLOAD_OPTIONS.warmupOperationsPerWorker +
-      WORKLOAD_OPTIONS.measurementOperationsPerWorker) / 100;
-  return perHundred * WORKLOAD_OPTIONS.workers * blocksPerWorker;
+function resolveWorkloadOptions(overrides = {}) {
+  return Object.freeze({...DEFAULT_WORKLOAD_OPTIONS, ...overrides});
+}
+
+function expectedMixedOperationCount(perHundred, workloadOptions) {
+  const totalOperationsPerWorker =
+    workloadOptions.warmupOperationsPerWorker +
+    workloadOptions.measurementOperationsPerWorker;
+  if (totalOperationsPerWorker % 100 !== ZERO) {
+    throw new Error(
+      'TiDB OLTP live proof requires warmup + measurement operations per ' +
+      'worker to be divisible by 100 for exact mix assertions',
+    );
+  }
+  const blocksPerWorker = totalOperationsPerWorker / 100;
+  return perHundred * workloadOptions.workers * blocksPerWorker;
 }
 
 async function cleanup(provider, state) {
@@ -82,6 +94,7 @@ async function cleanup(provider, state) {
 async function runTiDbOltpAdapterSmoke(options = {}) {
   const provider = options.provider || new DockerProvider();
   const runId = options.runId || uniqueRunId();
+  const workloadOptions = resolveWorkloadOptions(options.workloadOptions);
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -111,7 +124,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
         port: TIDB_REFERENCE_DEFAULTS.tidbPort,
       },
       databaseName: `${runId.replace(/-/gu, '_')}_db`,
-      workload: WORKLOAD_OPTIONS,
+      workload: workloadOptions,
     });
 
     const before = await state.adapter.getEvidence();
@@ -121,7 +134,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
     assert.equal(before.stateCounts.history, ZERO);
     assert.equal(
       new Set(before.initialConnectionIds).size,
-      WORKLOAD_OPTIONS.workers,
+      workloadOptions.workers,
       'Expected one distinct persistent MySQL connection per workload worker',
     );
     assert.deepEqual(
@@ -132,13 +145,13 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
 
     const workload = await runOltpBaselineWorkload(
       state.adapter,
-      WORKLOAD_OPTIONS,
+      workloadOptions,
     );
     assert.equal(workload.warmup.failed, ZERO);
     assert.equal(workload.measurement.failed, ZERO);
     assert.equal(
       workload.measurement.succeeded,
-      WORKLOAD_OPTIONS.workers * WORKLOAD_OPTIONS.measurementOperationsPerWorker,
+      workloadOptions.workers * workloadOptions.measurementOperationsPerWorker,
     );
 
     const after = await state.adapter.getEvidence();
@@ -148,15 +161,21 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       'Persistent worker connections changed during the workload',
     );
     assert.equal(after.datasetSha256, before.datasetSha256);
-    assert.equal(after.stateCounts.orders, expectedMixedOperationCount(45));
-    assert.equal(after.stateCounts.history, expectedMixedOperationCount(43));
+    assert.equal(
+      after.stateCounts.orders,
+      expectedMixedOperationCount(45, workloadOptions),
+    );
+    assert.equal(
+      after.stateCounts.history,
+      expectedMixedOperationCount(43, workloadOptions),
+    );
     assert.ok(after.stateCounts.orderLines >= after.stateCounts.orders * 5);
     assert.ok(after.stateCounts.newOrders <= after.stateCounts.orders);
 
     result = {
       status: 'passed',
       tikvStoreCount: TIKV_STORE_COUNT,
-      workers: WORKLOAD_OPTIONS.workers,
+      workers: workloadOptions.workers,
       warmupTransactions: workload.warmup.succeeded,
       measuredTransactions: workload.measurement.succeeded,
       datasetSha256: after.datasetSha256,
@@ -164,6 +183,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       workerConnectionIds: after.currentConnectionIds,
       stateCounts: after.stateCounts,
       images: state.cluster.images,
+      workload,
     };
   } catch (error) {
     primaryError = error;
@@ -192,9 +212,15 @@ async function main() {
   process.stdout.write(PASS_PREFIX + JSON.stringify(result) + '\n');
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = ONE;
-});
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
+if (invokedPath === import.meta.url) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack || error.message || error}\n`);
+    process.exitCode = ONE;
+  });
+}
 
-export {runTiDbOltpAdapterSmoke};
+export {
+  DEFAULT_WORKLOAD_OPTIONS as TIDB_OLTP_LIVE_DEFAULT_WORKLOAD_OPTIONS,
+  runTiDbOltpAdapterSmoke,
+};
