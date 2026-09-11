@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from '../../../src/test-helpers/tap.js';
+import {test} from '../../../../src/test-helpers/tap.js';
 import {
   TIDB_REFERENCE_DEFAULTS,
   normalizeTiDbReferenceLifecycleOptions,
