@@ -10,6 +10,22 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-09-11
+
+This forward patch preserves the immutable `v0.2.1` tag after its release
+workflow stopped in the full pre-release proof, before publishing npm, Docker,
+Helm, SEA, or GitHub artifacts. It includes the `0.2.1` changes described below.
+
+Formation health at cut time: `formation health: 0/0 passed (0%), 0 with a
+starved seed`.
+
+### Fixed
+- The Admin CDC release proof now gives synthetic notification operations one
+  isolated cache owner while retaining a separate real shared-cache wiring
+  witness. A deterministic authoritative-absence sweep and exact ordered event
+  assertions prevent a repair DELETE from preempting or impersonating the
+  intended INSERT, UPDATE, and DELETE operations.
+
 ## [0.2.1] — 2026-09-10
 
 This forward patch preserves the immutable `v0.2.0` tag after its release
@@ -318,7 +334,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/psvensson/lagrange/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/psvensson/lagrange/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/psvensson/lagrange/compare/v0.1.0...v0.1.1
