@@ -229,7 +229,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
         '--store=tikv',
         `--path=${names.pd}:${DEFAULTS.pdClientPort}`,
         '--host=0.0.0.0',
-        `--port=${DEFAULTS.tidbPort}`,
+        `-P=${DEFAULTS.tidbPort}`,
         `--status=${DEFAULTS.tidbStatusPort}`,
       ],
     });
