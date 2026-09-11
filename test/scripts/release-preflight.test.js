@@ -1,14 +1,15 @@
 /**
  * Release preflight: five facts, pure decisions, exact commands, and no
- * side effects beyond a fetch. A missing ci gate run, a dirty tree, a HEAD
- * that is not origin/main, a disagreeing version literal, a missing
- * changelog section or an existing tag each block on their own.
+ * side effects beyond fetch/read operations. A missing durable proof receipt,
+ * a dirty tree, a HEAD that is not origin/main, a disagreeing version literal,
+ * a missing changelog section or an existing tag each block on their own.
  */
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
+import {OUTCOME as PROOF_OUTCOME, PROOF} from '../../scripts/proof-authority.js';
 import {
   CHECK,
   evaluateReleasePreflight,
@@ -21,14 +22,17 @@ import {
 const VERSION = '0.2.0';
 const HEAD = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
-const CI_RUN = Object.freeze({
-  id: 33985719321, path: '.github/workflows/ci.yml', head_sha: HEAD,
-  status: 'completed', conclusion: 'success',
-});
-const FULL_GATE_RUN = Object.freeze({
-  id: 33985719322, path: '.github/workflows/full-gate.yml', head_sha: HEAD,
-  status: 'completed', conclusion: 'success',
-});
+const RECEIPT_OBJECT = 'c'.repeat(40);
+
+function provenProof() {
+  return {
+    outcome: PROOF_OUTCOME.PROVEN,
+    proofId: PROOF.RELEASE_FULL,
+    subjectSha: HEAD,
+    objectSha: RECEIPT_OBJECT,
+    receipt: {proofId: PROOF.RELEASE_FULL, subjectSha: HEAD, outcome: 'passed'},
+  };
+}
 
 function facts(overrides = {}) {
   return {
@@ -39,7 +43,7 @@ function facts(overrides = {}) {
     headSha: HEAD,
     remoteMainSha: HEAD,
     statusLines: [],
-    workflowRuns: [CI_RUN],
+    releaseProof: provenProof(),
     versionSources: {
       packageJson: VERSION, packageLock: VERSION, cli: VERSION,
       entrypoint: VERSION, chart: VERSION, chartApp: VERSION,
@@ -65,16 +69,29 @@ test('all five facts green is READY with the exact tag commands', (t) => {
   ]);
   const rendered = renderPreflight(result);
   t.match(rendered, /READY/);
+  t.match(rendered, /release-full-v1 receipt/);
   t.match(rendered, /git push origin v0\.2\.0/);
   t.end();
 });
 
-test('a successful full gate is a stronger exact-sha pre-tag proof', (t) => {
+test('durable receipt is the sole proof authority, not workflow history', (t) => {
   const result = evaluateReleasePreflight(facts({
-    workflowRuns: [{...CI_RUN, conclusion: 'failure'}, FULL_GATE_RUN],
+    releaseProof: {
+      outcome: PROOF_OUTCOME.UNPROVEN,
+      proofId: PROOF.RELEASE_FULL,
+      subjectSha: HEAD,
+    },
+    workflowRuns: [{
+      id: 33985719322,
+      path: '.github/workflows/full-gate.yml',
+      head_sha: HEAD,
+      status: 'completed',
+      conclusion: 'success',
+    }],
   }));
-  t.equal(result.ok, true);
-  t.match(result.checks[2].detail, /full-gate\.yml/);
+  t.equal(result.ok, false);
+  t.same(failing(result), [CHECK.RELEASE_PROOF]);
+  t.match(result.checks[2].detail, /no release-full-v1 receipt exists/);
   t.end();
 });
 
@@ -85,14 +102,13 @@ test('each fact blocks on its own', (t) => {
   t.same(failing(evaluateReleasePreflight(facts({remoteMainSha: OTHER}))),
     [CHECK.HEAD_IS_REMOTE_MAIN]);
   t.same(failing(evaluateReleasePreflight(facts({
-    workflowRuns: [
-      {...CI_RUN, conclusion: 'failure'},
-      {...FULL_GATE_RUN, conclusion: 'failure'},
-      {...CI_RUN, head_sha: OTHER},
-      {...CI_RUN, status: 'in_progress', conclusion: null},
-    ],
-  }))), [CHECK.CI_GATE_GREEN],
-  'only a completed successful ci.yml or full-gate.yml run on the exact sha counts');
+    releaseProof: {outcome: PROOF_OUTCOME.UNPROVEN},
+  }))), [CHECK.RELEASE_PROOF]);
+  const unavailable = evaluateReleasePreflight(facts({
+    releaseProof: {outcome: PROOF_OUTCOME.UNAVAILABLE, because: 'remote down'},
+  }));
+  t.same(failing(unavailable), [CHECK.RELEASE_PROOF]);
+  t.match(unavailable.checks[2].detail, /authority unavailable: remote down/);
   const versions = evaluateReleasePreflight(facts({
     versionSources: {
       packageJson: VERSION, packageLock: '0.1.1', cli: VERSION,
@@ -124,7 +140,7 @@ test('each fact blocks on its own', (t) => {
   t.end();
 });
 
-test('gatherReleaseFacts reads the checkout and queries git and gh only', (t) => {
+test('gatherReleaseFacts reads git and asks the proof authority once', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'release-preflight-'));
   fs.mkdirSync(path.join(root, 'charts/lagrange-node'), {recursive: true});
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
@@ -148,16 +164,18 @@ test('gatherReleaseFacts reads the checkout and queries git and gh only', (t) =>
     if (verb === 'ls-remote') return '';
     return '';
   };
-  const ghCalls = [];
-  const gh = (args) => {
-    ghCalls.push(args.join(' '));
-    return JSON.stringify({workflow_runs: [CI_RUN]});
+  const proofCalls = [];
+  const proofResolver = (request) => {
+    proofCalls.push(request);
+    return provenProof();
   };
   const gathered = gatherReleaseFacts({
-    root, git, gh, sourceVersions: {cli: VERSION, entrypoint: VERSION},
+    root, git, proofResolver,
+    sourceVersions: {cli: VERSION, entrypoint: VERSION},
   });
   t.equal(gathered.repository, 'psvensson/lagrange');
   t.equal(gathered.headSha, HEAD);
+  t.equal(gathered.releaseProof.outcome, PROOF_OUTCOME.PROVEN);
   t.same(gathered.statusLines, ['M solve/x.json'],
     'status output is reported verbatim; git itself applies the solve/ exclusion');
   t.equal(gathered.changelog.present, true);
@@ -173,20 +191,27 @@ test('gatherReleaseFacts reads the checkout and queries git and gh only', (t) =>
     'tag --list v0.2.0',
     'ls-remote --tags origin refs/tags/v0.2.0',
   ], 'reads only; no tag, no push');
-  t.same(ghCalls, [
-    `api repos/psvensson/lagrange/actions/runs?head_sha=${HEAD}&per_page=50`,
-  ]);
+  t.same(proofCalls, [{
+    proofId: PROOF.RELEASE_FULL,
+    sha: HEAD,
+    remote: 'origin',
+    root,
+  }]);
   const lines = [];
   const run = runReleasePreflight({
-    root, git, gh, sourceVersions: {cli: VERSION, entrypoint: VERSION},
+    root, git, proofResolver,
+    sourceVersions: {cli: VERSION, entrypoint: VERSION},
     log: (line) => lines.push(line),
   });
   t.equal(run.exitCode, 1, 'the dirty status line blocks');
   t.match(lines.join('\n'), /FAIL clean_release_content/);
   const asJson = [];
   runReleasePreflight({
-    root, git: (args) => (args[0] === 'status' ? '' : git(args)), gh,
-    sourceVersions: {cli: VERSION, entrypoint: VERSION}, json: true,
+    root,
+    git: (args) => (args[0] === 'status' ? '' : git(args)),
+    proofResolver,
+    sourceVersions: {cli: VERSION, entrypoint: VERSION},
+    json: true,
     log: (line) => asJson.push(line),
   });
   t.equal(JSON.parse(asJson[0]).ok, true);
