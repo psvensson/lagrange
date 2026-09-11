@@ -1,8 +1,10 @@
 # On-demand whole-tree proof for an exact main SHA.
 #
 # Release order is enforced here: release.yml must first have produced a green
-# publishability run for this exact SHA. Only then do we wake the controlled GCP
-# runner and spend the whole-system proof budget.
+# publishability run for this exact SHA. Only an unproven SHA wakes the
+# controlled GCP runner. A successful proof is then persisted by the repository
+# proof authority so every later consumer can reuse it without depending on
+# workflow-run retention.
 name: full-gate
 
 on:
@@ -15,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  require-publishability:
+  require_publishability:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -36,8 +38,49 @@ jobs:
           }
           echo "publication preflight run $RUN_ID already green for $GITHUB_SHA"
 
-  wake-runner:
-    needs: require-publishability
+  resolve_proof:
+    needs: require_publishability
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      proven: ${{ steps.proof.outputs.proven }}
+      receipt_object: ${{ steps.proof.outputs.receipt_object }}
+    steps:
+      - name: Checkout proof consumer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Resolve durable exact-SHA proof
+        id: proof
+        run: |
+          set +e
+          OUTPUT="$(node scripts/proof-authority.js check release-full-v1 "$GITHUB_SHA" --json 2>&1)"
+          STATUS=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "proven=true" >> "$GITHUB_OUTPUT"
+            OBJECT="$(printf '%s' "$OUTPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const x=JSON.parse(s);process.stdout.write(x.objectSha||"")})')"
+            echo "receipt_object=$OBJECT" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" -eq 1 ]; then
+            echo "proven=false" >> "$GITHUB_OUTPUT"
+            echo "receipt_object=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Durable proof authority was unavailable; refusing to guess whether $GITHUB_SHA is already proven"
+            exit "$STATUS"
+          fi
+
+  wake_runner:
+    needs: resolve_proof
+    if: needs.resolve_proof.outputs.proven != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -66,7 +109,7 @@ jobs:
           fi
 
   gate:
-    needs: wake-runner
+    needs: wake_runner
     runs-on: [self-hosted, gcp]
     timeout-minutes: 150
     permissions:
@@ -147,3 +190,32 @@ jobs:
             .tap/test-results/
           retention-days: 14
           if-no-files-found: ignore
+
+  record_proof:
+    needs: [resolve_proof, gate]
+    if: ${{ always() && needs.resolve_proof.outputs.proven != 'true' && needs.gate.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout proven SHA with write credential
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Persist durable proof receipt
+        run: |
+          set -euo pipefail
+          node scripts/proof-authority.js record release-full-v1 "$GITHUB_SHA" \
+            --producer-kind github-actions \
+            --producer-id "$GITHUB_RUN_ID" \
+            --producer-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --json
