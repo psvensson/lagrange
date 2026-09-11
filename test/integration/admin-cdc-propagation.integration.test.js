@@ -12,6 +12,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   cleanupTestEnvironment,
   getUniquePort,
@@ -46,33 +47,13 @@ test('Admin CDC propagation', async (t) => {
     // mechanism that enables real-time updates to admin clients.
     // =========================================================================
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
-    const seedWsPort = getUniquePort();
-
-    const bootstrapService = new BootstrapService({
-      nodeId: seedNodeId,
-      nodeAddress: `ws://127.0.0.1:${seedWsPort}`,
-      wsPort: seedWsPort,
-      config: {
-        leadershipWaitTimeoutMs: 500,
-        leadershipWaitInitialDelayMs: 5,
-        leadershipWaitMaxDelayMs: 25,
-        replicaStaggerDelayMs: 10,
-      },
-    });
-
-    let bootstrapResult;
+    const systemTableCache = new SystemTableCache();
     let adminApi;
 
     // Track CDC events received by AdminWebSocketAPI
     const cdcEventsReceived = [];
 
     try {
-      // Bootstrap seed node
-      bootstrapResult = await bootstrapService.bootstrap();
-      t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
-
-      // Get system table cache from NodeService singleton
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const cacheId = systemTableCache._cacheId;
       t.ok(cacheId, 'cache should have an ID for tracking');
 
@@ -92,9 +73,13 @@ test('Admin CDC propagation', async (t) => {
       await adminApi.initialize(0, {listen: false});
       t.ok(adminApi.isInitialized(), 'AdminWebSocketAPI should be initialized');
 
-      // Verify AdminWebSocketAPI is using the same cache
+      // Verify AdminWebSocketAPI is using the supplied notification cache.
       const adminCacheId = adminApi.systemTableCache._cacheId;
-      t.equal(adminCacheId, cacheId, 'AdminWebSocketAPI should use same cache as bootstrap');
+      t.equal(
+        adminCacheId,
+        cacheId,
+        'AdminWebSocketAPI should use the supplied notification cache',
+      );
 
       // Verify cache has listeners registered
       const listenerCount = systemTableCache.listeners.size;
@@ -135,9 +120,6 @@ test('Admin CDC propagation', async (t) => {
     } finally {
       if (adminApi) {
         await adminApi.shutdown().catch(() => {});
-      }
-      if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
       }
     }
   });
@@ -250,7 +232,14 @@ test('Admin CDC propagation', async (t) => {
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
+      const runtimeSystemTableCache =
+        NodeService.getInstance().getSystemTableCache();
+      const systemTableCache = new SystemTableCache();
+      t.not(
+        systemTableCache,
+        runtimeSystemTableCache,
+        'synthetic notification operations should have one isolated cache owner',
+      );
 
       // Create AdminWebSocketAPI
       adminApi = new AdminWebSocketAPI({
@@ -293,6 +282,11 @@ test('Admin CDC propagation', async (t) => {
       );
       t.ok(insertEvent, 'should receive INSERT event');
       t.equal(insertEvent?.operation, 'INSERT', 'first set should be INSERT');
+      t.same(
+        cdcEventsReceived.map((event) => event.operation),
+        ['INSERT'],
+        'only the intended INSERT should be delivered',
+      );
 
       // Test UPDATE (set same key again)
       const versionBeforeUpdate =
@@ -324,6 +318,36 @@ test('Admin CDC propagation', async (t) => {
         'inactive',
         'updated status should be inactive',
       );
+      t.same(
+        cdcEventsReceived.map((event) => event.operation),
+        ['INSERT', 'UPDATE'],
+        'only the intended INSERT and UPDATE should be delivered',
+      );
+
+      // Deterministically exercise the authoritative-repair owner that remains
+      // live after bootstrap. The synthetic notification row is deliberately
+      // absent from authoritative truth.
+      const authoritativeNodes = runtimeSystemTableCache.getAll('nodes').filter(
+        (row) => row.node_id !== testNodeId,
+      );
+      const repairResult =
+        runtimeSystemTableCache.reconcileAgainstAuthoritativeTruth({
+          nodes: authoritativeNodes,
+        });
+      t.notMatch(
+        repairResult.removed,
+        [{tableName: 'nodes', key: testNodeId}],
+        'authoritative repair must not own the notification-operation fixture',
+      );
+      t.ok(
+        systemTableCache.get('nodes', testNodeId),
+        'the notification-operation fixture should retain its row after runtime repair',
+      );
+      t.same(
+        cdcEventsReceived.map((event) => event.operation),
+        ['INSERT', 'UPDATE'],
+        'runtime repair cannot impersonate a notification-fixture operation',
+      );
 
       // Test DELETE
       const versionBeforeDelete =
@@ -347,6 +371,11 @@ test('Admin CDC propagation', async (t) => {
                e.operation === 'DELETE',
       );
       t.ok(deleteEvent, 'should receive DELETE event');
+      t.same(
+        cdcEventsReceived.map((event) => event.operation),
+        ['INSERT', 'UPDATE', 'DELETE'],
+        'each intended operation should deliver exactly once and in order',
+      );
     } finally {
       if (adminApi) {
         await adminApi.shutdown().catch(() => {});

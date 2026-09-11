@@ -9,6 +9,7 @@ quests:
   - managed-split-cutover-handoff-closure
   - red-main-multi-join-formation-convergence
   - admin-cdc-notification-lifecycle-contract
+  - admin-cdc-authoritative-repair-race-contract
 authorizes: []
 ---
 

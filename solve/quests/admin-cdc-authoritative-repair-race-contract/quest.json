@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-cdc-authoritative-repair-race-contract",
+  "class": "fix",
+  "epic": "release-0-2-five-node-convergence",
+  "statement": "The admin CDC notification proof separates cache-listener delivery from live authoritative-repair ownership: its INSERT, UPDATE, and DELETE witness cannot be preempted or impersonated by an authoritative absence sweep, the production AdminWebSocketAPI-to-SystemTableCache listener path and cache causal fencing remain unchanged, and the exact release proof passes before a forward 0.2 patch release is tagged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/admin-cdc-authoritative-repair-race-contract/evidence/receipt.json",
+      "requiredReceipts": [
+        "release-failure-causal-race-classified",
+        "notification-fixture-owner-separated",
+        "authoritative-sweep-cannot-impersonate-operations",
+        "production-cdc-and-admin-lifecycle-preserved",
+        "full-release-proof-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "interaction-first",
+      "statement": "Treat the failure as an interaction between the cache mutation owner, authoritative absence repair, asynchronous notification delivery, and the test harness; do not tune waits or weaken assertions."
+    },
+    {
+      "id": "one-owner-per-witness",
+      "statement": "A cache-notification witness must have exactly one mutation owner. A live authoritative repair loop may be exercised only when its competing mutation is itself the subject of the test."
+    },
+    {
+      "id": "preserve-production-semantics",
+      "statement": "Do not weaken tombstone fencing, causal ordering, authoritative absence reconciliation, AdminWebSocketAPI subscription lifecycle, or asynchronous listener isolation."
+    },
+    {
+      "id": "deterministic-adversarial-proof",
+      "statement": "Retain a deterministic witness showing that an authoritative sweep cannot satisfy or preempt the intended INSERT, UPDATE, and DELETE notification assertions; repeated timing stress alone is insufficient."
+    },
+    {
+      "id": "forward-only-release",
+      "statement": "The immutable v0.2.1 tag is never moved or deleted. If committed bytes change, publish the repaired head and release forward as the next 0.2 patch only after exact-SHA CI and release preflight pass."
+    }
+  ],
+  "sealedAt": "a5c2eae8a5f5c6ceadab4886f5d636b58526b022"
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "questId": "admin-cdc-authoritative-repair-race-contract",
+  "generatedAt": "2026-09-11T02:22:17.658Z",
+  "receipts": [
+    {
+      "id": "release-failure-causal-race-classified",
+      "passed": true,
+      "detail": "Release run 34546814180 and a deterministic focused reproduction show the same mechanism: an authoritative absence sweep removes the cache-only synthetic node and emits DELETE; the later intended DELETE does not advance the mutation revision even though the historical DELETE lookup passes."
+    },
+    {
+      "id": "notification-fixture-owner-separated",
+      "passed": true,
+      "detail": "Synthetic notification-operation tests use their own real SystemTableCache. The separate bootstrap integration still proves NodeService, MessageGroupService, and AdminWebSocketAPI share the exact production cache object."
+    },
+    {
+      "id": "authoritative-sweep-cannot-impersonate-operations",
+      "passed": true,
+      "detail": "The operation witness performs an explicit authoritative absence sweep on the live runtime cache between UPDATE and DELETE, proves the isolated synthetic row remains, and requires exactly one ordered INSERT, UPDATE, and DELETE notification. Reusing the runtime cache reproduces the release failure deterministically."
+    },
+    {
+      "id": "production-cdc-and-admin-lifecycle-preserved",
+      "passed": true,
+      "detail": "No production source changed. The registered Admin/cache owner cone passed 530/530 assertions; authoritative absence, tombstone resurrection, CDC provenance, and delete convergence tests passed 127/127; impact-contract audit passed at digest 97cc5d7924cfc89c679661341d890867311af6471f354fa93f24e558ed49b888."
+    },
+    {
+      "id": "full-release-proof-and-static-gates",
+      "passed": true,
+      "detail": "npm run check:release passed on the final candidate: the full 2,068-file classified corpus, chart validation, and project-hardening acceptance all completed green; acceptance reported 6 PASS, 0 FAIL, 0 NOT_RUN in test-output/acceptance/project-hardening-proof-integrity-cutover-2026-09-11T02-22-17-658Z.report.json."
+    }
+  ]
+}
