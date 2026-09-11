@@ -4,6 +4,8 @@ import {performance} from 'node:perf_hooks';
 const ZERO = 0;
 const ONE = 1;
 const HUNDRED = 100;
+const MIN_NEW_ORDER_LINES = 5;
+const MAX_NEW_ORDER_LINES = 15;
 const WORKLOAD_NAME = 'oltp-baseline-v1';
 const DEFAULT_SEED = 0x5eed5eed;
 const PHASE_SALT = Object.freeze({
@@ -36,13 +38,21 @@ const DEFAULTS = Object.freeze({
   itemCount: 10000,
 });
 
-function positiveInteger(value, fallback, name, allowZero = false) {
+function integerAtLeast(value, fallback, name, minimum) {
   const resolved = value ?? fallback;
-  const minimum = allowZero ? ZERO : ONE;
   if (!Number.isInteger(resolved) || resolved < minimum) {
     throw new Error(`${name} must be an integer >= ${minimum}`);
   }
   return resolved;
+}
+
+function positiveInteger(value, fallback, name, allowZero = false) {
+  return integerAtLeast(
+    value,
+    fallback,
+    name,
+    allowZero ? ZERO : ONE,
+  );
 }
 
 function resolveOltpBaselineConfig(options = {}) {
@@ -78,10 +88,11 @@ function resolveOltpBaselineConfig(options = {}) {
         DEFAULTS.customersPerDistrict,
         'customersPerDistrict',
       ),
-      itemCount: positiveInteger(
+      itemCount: integerAtLeast(
         options.itemCount,
         DEFAULTS.itemCount,
         'itemCount',
+        MAX_NEW_ORDER_LINES,
       ),
     }),
   });
@@ -174,7 +185,11 @@ function generateOperation(kind, context) {
   const districtId = randomInteger(rng, ONE, scale.districtsPerWarehouse);
 
   if (kind === OPERATION_KIND.NEW_ORDER) {
-    const lineCount = randomInteger(rng, 5, 15);
+    const lineCount = randomInteger(
+      rng,
+      MIN_NEW_ORDER_LINES,
+      MAX_NEW_ORDER_LINES,
+    );
     const itemIds = uniqueItemIds(rng, lineCount, scale.itemCount);
     return {
       ...operation,
@@ -281,8 +296,15 @@ function nearestRank(sortedValues, percentile) {
 
 function summarizeLatencies(values) {
   if (values.length === ZERO) {
-    return {count: ZERO, avg: ZERO, p50: ZERO, p95: ZERO, p99: ZERO,
-      min: ZERO, max: ZERO};
+    return {
+      count: ZERO,
+      avg: ZERO,
+      p50: ZERO,
+      p95: ZERO,
+      p99: ZERO,
+      min: ZERO,
+      max: ZERO,
+    };
   }
   const sorted = [...values].sort((left, right) => left - right);
   const total = sorted.reduce((sum, value) => sum + value, ZERO);
