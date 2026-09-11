@@ -33,6 +33,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate pinned reference-client lock
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --package-lock-only \
+            --prefix test/distributed/reference-client
+          echo '=== TIDB_REFERENCE_CLIENT_LOCK_BEGIN ==='
+          cat test/distributed/reference-client/package-lock.json
+          echo '=== TIDB_REFERENCE_CLIENT_LOCK_END ==='
+
       - name: Verify Docker engine
         run: docker version
 
