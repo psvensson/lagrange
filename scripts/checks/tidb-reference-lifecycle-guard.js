@@ -115,6 +115,8 @@ async function assertDependencyOrderAndCleanup() {
   assert.ok(tikv.command.includes('--pd=pair-a-pd:2379'));
   assert.ok(tidb.command.includes('--path=pair-a-pd:2379'));
   assert.ok(tidb.command.includes('--store=tikv'));
+  assert.ok(tidb.command.includes('-P=4000'));
+  assert.equal(tidb.command.some((arg) => arg.startsWith('--port=')), false);
   assert.deepEqual(readinessClient.entrypoint, ['sleep']);
   assert.equal(cluster.endpoints.mysql.host, 'pair-a-tidb');
   assert.equal(cluster.endpoints.mysql.port, 4000);
