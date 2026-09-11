@@ -1,19 +1,17 @@
 import {performance} from 'node:perf_hooks';
 
-const ZERO = 0;
-const ONE = 1;
 const MILLISECONDS_PER_SECOND = 1000;
 const PERCENTILE_50 = 0.50;
 const PERCENTILE_95 = 0.95;
 const PERCENTILE_99 = 0.99;
 
 function percentile(sorted, fraction) {
-  if (!Array.isArray(sorted) || sorted.length === ZERO) {
+  if (!Array.isArray(sorted) || sorted.length === 0) {
     return null;
   }
   const index = Math.min(
-    sorted.length - ONE,
-    Math.max(ZERO, Math.ceil(sorted.length * fraction) - ONE),
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * fraction) - 1),
   );
   return sorted[index];
 }
@@ -24,14 +22,14 @@ function summarizeLatencies(latencies, elapsedMs, correctOperations) {
     correctOperations,
     elapsedMs,
     throughputOpsPerSec:
-      elapsedMs > ZERO ?
+      elapsedMs > 0 ?
         correctOperations / (elapsedMs / MILLISECONDS_PER_SECOND) :
         null,
     latencyMs: {
       p50: percentile(sorted, PERCENTILE_50),
       p95: percentile(sorted, PERCENTILE_95),
       p99: percentile(sorted, PERCENTILE_99),
-      max: sorted.length > ZERO ? sorted[sorted.length - ONE] : null,
+      max: sorted.length > 0 ? sorted[sorted.length - 1] : null,
     },
   };
 }
@@ -44,7 +42,7 @@ async function timedOperation(callback) {
 
 function metricRatio(numerator, denominator) {
   return Number.isFinite(numerator) && Number.isFinite(denominator) &&
-    denominator > ZERO ? numerator / denominator : null;
+    denominator > 0 ? numerator / denominator : null;
 }
 
 export {
