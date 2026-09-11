@@ -15,9 +15,9 @@ const HOST_NETWORK = 'host';
 const ZERO = 0;
 
 const DEFAULT_IMAGES = Object.freeze({
-  pd: 'pingcap/pd:v8.5.7',
-  tikv: 'pingcap/tikv:v8.5.7',
-  tidb: 'pingcap/tidb:v8.5.7',
+  pd: 'pingcap/pd:v8.5.8',
+  tikv: 'pingcap/tikv:v8.5.8',
+  tidb: 'pingcap/tidb:v8.5.8',
   client: 'mysql:8.4',
 });
 
@@ -31,7 +31,9 @@ const DEFAULT_RESOURCES = Object.freeze({
 class TiDbReferenceDockerProvider extends DockerProvider {
   async ensureRegistryImage(image) {
     const present = await this.inspectImage(image);
-    if (present) return present;
+    if (present) {
+      return present;
+    }
     const stream = await this._docker.pull(image);
     await new Promise((resolvePromise, rejectPromise) => {
       this._docker.modem.followProgress(stream, (error) => {
@@ -165,8 +167,21 @@ function mysqlCommand(port, sql) {
   ];
 }
 
+function requireCommonImageId(component, inspections) {
+  const imageIds = [...new Set(inspections.map((inspection) => inspection?.Id))];
+  assert.equal(
+    imageIds.length,
+    1,
+    `${component} image identity differs across comparator hosts`,
+  );
+  assert.ok(imageIds[ZERO], `${component} image identity is missing`);
+  return imageIds[ZERO];
+}
+
 async function removeContainerQuietly(provider, container) {
-  if (!container?.containerId) return;
+  if (!container?.containerId) {
+    return;
+  }
   try {
     await provider.removeContainer(container.containerId);
   } catch (_error) {
@@ -176,8 +191,6 @@ async function removeContainerQuietly(provider, container) {
 
 class TiDbReferenceRuntime {
   constructor(cluster, scenarioName) {
-    this.cluster = cluster;
-    this.scenarioName = scenarioName;
     this.config = resolveRuntimeConfig(cluster, scenarioName);
     this.hosts = resolveComparatorHosts(cluster, this.config);
     this.runId = `tidb-ref-${scenarioName}-${process.pid}-${Date.now()}`;
@@ -188,20 +201,35 @@ class TiDbReferenceRuntime {
     });
     this.components = [];
     this.client = null;
+    this.imageIds = null;
   }
 
   async ensureImages() {
     const {images} = this.config;
-    await Promise.all(this.hosts.map(async (host) => {
-      await Promise.all([
+    const storageInspections = await Promise.all(this.hosts.map(async (host) => {
+      const [pd, tikv] = await Promise.all([
         host.provider.ensureRegistryImage(images.pd),
         host.provider.ensureRegistryImage(images.tikv),
       ]);
+      return {pd, tikv};
     }));
-    await Promise.all([
-      this.hosts[ZERO].provider.ensureRegistryImage(images.tidb),
-      this.hosts[ZERO].provider.ensureRegistryImage(images.client),
+    const primary = this.hosts[ZERO];
+    const [tidb, client] = await Promise.all([
+      primary.provider.ensureRegistryImage(images.tidb),
+      primary.provider.ensureRegistryImage(images.client),
     ]);
+    this.imageIds = {
+      pd: requireCommonImageId(
+        'PD',
+        storageInspections.map((inspection) => inspection.pd),
+      ),
+      tikv: requireCommonImageId(
+        'TiKV',
+        storageInspections.map((inspection) => inspection.tikv),
+      ),
+      tidb: tidb.Id,
+      client: client.Id,
+    };
   }
 
   async start() {
@@ -264,7 +292,11 @@ class TiDbReferenceRuntime {
         `--status=${ports.tidbStatus}`,
       ],
     }));
-    this.components.push({provider: primary.provider, container: tidb, role: 'tidb'});
+    this.components.push({
+      provider: primary.provider,
+      container: tidb,
+      role: 'tidb',
+    });
 
     this.client = await primary.provider.createContainer(containerOptions({
       name: `${this.runId}-client`,
@@ -295,7 +327,9 @@ class TiDbReferenceRuntime {
         if (result.exitCode === ZERO && String(result.stdout).trim() === '1') {
           return;
         }
-        lastError = new Error(String(result.stderr || result.stdout || 'not ready'));
+        lastError = new Error(
+          String(result.stderr || result.stdout || 'not ready'),
+        );
       } catch (error) {
         lastError = error;
       }
@@ -323,7 +357,8 @@ class TiDbReferenceRuntime {
     return {
       database: 'TiDB',
       storage: 'TiKV',
-      images: {...this.config.images},
+      requestedImages: {...this.config.images},
+      imageIds: {...this.imageIds},
       hosts: this.hosts.map((host) => ({
         comparatorIndex: host.index,
         internalIp: host.internalIp,
