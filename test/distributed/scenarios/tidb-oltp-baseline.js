@@ -1,51 +1,23 @@
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
+import {
+  metricRatio,
+  summarizeLatencies,
+  timedOperation,
+} from './tidb-reference-metrics.js';
 import {withTiDbReferenceRuntime} from './tidb-reference-runtime.js';
 
 const SCENARIO = 'tidb-oltp-baseline';
 const DEFAULT_OPERATION_PAIRS = 64;
 const DEFAULT_QUERY_TIMEOUT_MS = 15000;
-const MILLISECONDS_PER_SECOND = 1000;
-const P50 = 0.50;
-const P95 = 0.95;
-const P99 = 0.99;
+const DEFAULT_MIN_THROUGHPUT_RATIO = 0.70;
+const DEFAULT_MAX_P99_RATIO = 1.50;
+const OPERATIONS_PER_PAIR = 2;
 const ZERO = 0;
+const ONE = 1;
 
 function scenarioConfig(cluster) {
   return cluster?._config?.scenarios?.[SCENARIO] || {};
-}
-
-function percentile(sorted, fraction) {
-  if (!Array.isArray(sorted) || sorted.length === ZERO) return null;
-  const index = Math.min(
-    sorted.length - 1,
-    Math.max(ZERO, Math.ceil(sorted.length * fraction) - 1),
-  );
-  return sorted[index];
-}
-
-function summarize(latencies, elapsedMs, correctOperations) {
-  const sorted = [...latencies].sort((left, right) => left - right);
-  return {
-    correctOperations,
-    elapsedMs,
-    throughputOpsPerSec:
-      elapsedMs > ZERO ?
-        correctOperations / (elapsedMs / MILLISECONDS_PER_SECOND) :
-        null,
-    latencyMs: {
-      p50: percentile(sorted, P50),
-      p95: percentile(sorted, P95),
-      p99: percentile(sorted, P99),
-      max: sorted.length > ZERO ? sorted[sorted.length - 1] : null,
-    },
-  };
-}
-
-async function timedOperation(callback) {
-  const startedAt = performance.now();
-  const value = await callback();
-  return {value, elapsedMs: performance.now() - startedAt};
 }
 
 function lagrangeInsertSql(id, timestamp) {
@@ -83,7 +55,7 @@ async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, prefix) 
   const latencies = [];
   let correctOperations = ZERO;
   const startedAt = performance.now();
-  for (let index = ZERO; index < operationPairs; index += 1) {
+  for (let index = ZERO; index < operationPairs; index += ONE) {
     const node = nodes[index % nodes.length];
     const id = `${prefix}-lagrange-${index}`;
     const timestamp = Date.now() + index;
@@ -93,7 +65,7 @@ async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, prefix) 
       {timeoutMs: queryTimeoutMs, lane: 'load'},
     ));
     latencies.push(inserted.elapsedMs);
-    correctOperations += 1;
+    correctOperations += ONE;
     const selected = await timedOperation(() => node.queryWithTimeout(
       lagrangeSelectSql(id),
       [],
@@ -105,9 +77,9 @@ async function runLagrangeSide(cluster, operationPairs, queryTimeoutMs, prefix) 
       Array.isArray(rows) && rows.some((row) => String(row.log_id) === id),
       `Lagrange OLTP oracle did not observe ${id}`,
     );
-    correctOperations += 1;
+    correctOperations += ONE;
   }
-  return summarize(
+  return summarizeLatencies(
     latencies,
     performance.now() - startedAt,
     correctOperations,
@@ -133,14 +105,14 @@ async function runTiDbSide(runtime, operationPairs, prefix) {
   const latencies = [];
   let correctOperations = ZERO;
   const startedAt = performance.now();
-  for (let index = ZERO; index < operationPairs; index += 1) {
+  for (let index = ZERO; index < operationPairs; index += ONE) {
     const id = `${prefix}-tidb-${index}`;
     const timestamp = Date.now() + index;
     const inserted = await timedOperation(() => runtime.executeSql(
       tidbInsertSql(id, timestamp),
     ));
     latencies.push(inserted.elapsedMs);
-    correctOperations += 1;
+    correctOperations += ONE;
     const selected = await timedOperation(() => runtime.executeSql(
       tidbSelectSql(id),
     ));
@@ -150,18 +122,13 @@ async function runTiDbSide(runtime, operationPairs, prefix) {
       id,
       `TiDB OLTP oracle did not observe ${id}`,
     );
-    correctOperations += 1;
+    correctOperations += ONE;
   }
-  return summarize(
+  return summarizeLatencies(
     latencies,
     performance.now() - startedAt,
     correctOperations,
   );
-}
-
-function ratio(numerator, denominator) {
-  return Number.isFinite(numerator) && Number.isFinite(denominator) &&
-    denominator > ZERO ? numerator / denominator : null;
 }
 
 async function run(cluster) {
@@ -188,17 +155,21 @@ async function run(cluster) {
     }),
   );
 
-  const throughputRatio = ratio(
+  const throughputRatio = metricRatio(
     lagrange.throughputOpsPerSec,
     tidbResult.metrics.throughputOpsPerSec,
   );
-  const p99Ratio = ratio(
+  const p99Ratio = metricRatio(
     lagrange.latencyMs.p99,
     tidbResult.metrics.latencyMs.p99,
   );
   const matureTarget = {
-    minThroughputRatio: Number(config.matureTarget?.minThroughputRatio ?? 0.70),
-    maxP99Ratio: Number(config.matureTarget?.maxP99Ratio ?? 1.50),
+    minThroughputRatio: Number(
+      config.matureTarget?.minThroughputRatio ?? DEFAULT_MIN_THROUGHPUT_RATIO,
+    ),
+    maxP99Ratio: Number(
+      config.matureTarget?.maxP99Ratio ?? DEFAULT_MAX_P99_RATIO,
+    ),
     enforced: false,
     blockedBy: 'common_protocol_open_loop_adapter_not_yet_shared',
   };
@@ -208,7 +179,7 @@ async function run(cluster) {
     workload: {
       kind: 'paired-insert-primary-key-read',
       operationPairs,
-      correctOperationsPerSide: operationPairs * 2,
+      correctOperationsPerSide: operationPairs * OPERATIONS_PER_PAIR,
     },
     lagrange,
     tidb: tidbResult.metrics,
