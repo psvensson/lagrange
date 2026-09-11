@@ -47,7 +47,9 @@ jobs:
       - name: Run lifecycle contract guard
         run: node scripts/checks/tidb-reference-lifecycle-guard.js
 
-      - name: Run live Docker SQL smoke
+      - name: Run live three-store Docker SQL smoke
+        env:
+          TIDB_REFERENCE_TIKV_STORE_COUNT: '3'
         run: node scripts/checks/run-tidb-reference-lifecycle-live.js
 
       - name: Capture Docker state on failure
