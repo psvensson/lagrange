@@ -22,6 +22,7 @@ import {runTiDbOltpAdapterSmoke} from
 
 const ZERO = 0;
 const ONE = 1;
+const NANOSECONDS_PER_SECOND = 1_000_000_000;
 const MEMORY_SAMPLE_INTERVAL_MS = 1000;
 const RESOURCE_SIDE_ID = 'tidb';
 const OUTPUT_PATH =
@@ -103,54 +104,77 @@ function componentRole(componentId) {
   return 'unknown';
 }
 
-async function captureMemorySample(provider, components) {
-  const rows = await Promise.all(components.map(async (component) => {
-    const stats = await provider.getContainerStats(component.containerId);
-    return [component.componentId, stats.memoryUsageBytes];
-  }));
-  const componentBytes = Object.fromEntries(rows);
-  const totalBytes = Object.values(componentBytes).reduce(
-    (sum, value) => sum + value,
-    ZERO,
-  );
+async function captureWindowSample(provider, components) {
+  const entries = await Promise.all(components.map(async (component) => [
+    component.componentId,
+    await provider.getContainerStats(component.containerId),
+  ]));
   return {
     capturedAtMs: Date.now(),
-    componentBytes,
-    totalBytes,
+    components: Object.fromEntries(entries),
   };
 }
 
-function average(values) {
-  if (values.length === ZERO) return ZERO;
-  return values.reduce((sum, value) => sum + value, ZERO) / values.length;
+function memorySampleProjection(sample) {
+  const componentBytes = Object.fromEntries(
+    Object.entries(sample.components).map(([componentId, stats]) => [
+      componentId,
+      stats.memoryUsageBytes,
+    ]),
+  );
+  return {
+    capturedAtMs: sample.capturedAtMs,
+    componentBytes,
+    totalBytes: Object.values(componentBytes).reduce(
+      (sum, value) => sum + value,
+      ZERO,
+    ),
+  };
 }
 
-function summarizeMemorySamples(samples, components) {
-  assert.ok(samples.length > ZERO, 'Expected at least one memory sample');
+function timeWeightedAverage(samples, valueFor) {
+  if (samples.length === ZERO) return ZERO;
+  if (samples.length === ONE) return valueFor(samples[ZERO]);
+  let weighted = ZERO;
+  let duration = ZERO;
+  for (let index = ONE; index < samples.length; index += ONE) {
+    const previous = samples[index - ONE];
+    const current = samples[index];
+    const interval = Math.max(ZERO, current.capturedAtMs - previous.capturedAtMs);
+    weighted += (valueFor(previous) + valueFor(current)) / 2 * interval;
+    duration += interval;
+  }
+  return duration > ZERO ? weighted / duration : valueFor(samples.at(-ONE));
+}
+
+function summarizeMemory(samples, components) {
+  const projected = samples.map(memorySampleProjection);
   const componentSummary = {};
   for (const component of components) {
-    const values = samples.map(
-      (sample) => sample.componentBytes[component.componentId],
-    );
-    componentSummary[component.componentId] = {
-      averageBytes: average(values),
-      peakBytes: Math.max(...values),
+    const componentId = component.componentId;
+    componentSummary[componentId] = {
+      averageBytes: timeWeightedAverage(
+        projected,
+        (sample) => sample.componentBytes[componentId],
+      ),
+      peakBytes: Math.max(
+        ...projected.map((sample) => sample.componentBytes[componentId]),
+      ),
     };
   }
-  const totals = samples.map((sample) => sample.totalBytes);
   return {
     intervalMs: MEMORY_SAMPLE_INTERVAL_MS,
-    sampleCount: samples.length,
+    sampleCount: projected.length,
     components: componentSummary,
     topology: {
-      averageBytes: average(totals),
-      peakBytes: Math.max(...totals),
+      averageBytes: timeWeightedAverage(projected, (sample) => sample.totalBytes),
+      peakBytes: Math.max(...projected.map((sample) => sample.totalBytes)),
     },
-    samples,
+    samples: projected,
   };
 }
 
-async function startMemorySampler(provider, components) {
+async function startWindowSampler(provider, components) {
   const samples = [];
   let stopped = false;
   let timer = null;
@@ -158,7 +182,7 @@ async function startMemorySampler(provider, components) {
   let failure = null;
 
   async function sample() {
-    samples.push(await captureMemorySample(provider, components));
+    samples.push(await captureWindowSample(provider, components));
   }
 
   async function loop() {
@@ -188,37 +212,102 @@ async function startMemorySampler(provider, components) {
       if (timer !== null) clearTimeout(timer);
       if (pending !== null) await pending;
       if (failure) throw failure;
-      return summarizeMemorySamples(samples, components);
+      await sample();
+      assert.ok(samples.length >= 2, 'Expected start and end resource samples');
+      return {
+        samples,
+        memory: summarizeMemory(samples, components),
+      };
     },
   };
 }
 
-function componentProjection(observation, memory) {
-  const accounting = deriveBenchmarkResourceLiveComponentAccounting(observation);
-  const durationSeconds = observation.delta.durationMilliseconds / 1000;
+function nonNegativeDelta(end, start, label) {
+  const value = end - start;
+  if (value < ZERO) {
+    throw new Error(`TiDB OLTP resource counter regressed: ${label}`);
+  }
+  return value;
+}
+
+function networkBytes(stats) {
+  return stats.rxBytes + stats.txBytes;
+}
+
+function blockOperations(stats) {
+  return stats.blockReadOperations + stats.blockWriteOperations;
+}
+
+function authorityObservationFor(calibration, componentId) {
+  const observation = calibration.artifact.payload.components.find(
+    (candidate) => candidate.componentId === componentId,
+  );
+  assert.ok(observation, `Missing resource authority observation for ${componentId}`);
+  return observation;
+}
+
+function componentWindowProjection(
+  component,
+  first,
+  last,
+  memory,
+  calibration,
+) {
+  const start = first.components[component.componentId];
+  const end = last.components[component.componentId];
+  assert.ok(start && end, `Missing sampled stats for ${component.componentId}`);
+  const authorityObservation = authorityObservationFor(
+    calibration,
+    component.componentId,
+  );
+  const authorityAccounting =
+    deriveBenchmarkResourceLiveComponentAccounting(authorityObservation);
+  const cpuUsageNanoseconds = nonNegativeDelta(
+    end.cpuUsageNanoseconds,
+    start.cpuUsageNanoseconds,
+    `${component.componentId}.cpuUsageNanoseconds`,
+  );
   return {
-    componentId: observation.componentId,
-    role: componentRole(observation.componentId),
-    durationMilliseconds: observation.delta.durationMilliseconds,
-    cpuCoreSeconds: accounting.utilized.cpuCoreSeconds,
-    averageCpuCores: durationSeconds > ZERO ?
-      accounting.utilized.cpuCoreSeconds / durationSeconds :
-      ZERO,
+    componentId: component.componentId,
+    role: componentRole(component.componentId),
+    sampledCounterWindow: {
+      startTimestamp: start.timestamp,
+      endTimestamp: end.timestamp,
+      durationMilliseconds: Math.max(ZERO, end.timestamp - start.timestamp),
+    },
+    cpuCoreSeconds: cpuUsageNanoseconds / NANOSECONDS_PER_SECOND,
     memoryAverageBytes: memory.averageBytes,
     memoryPeakBytes: memory.peakBytes,
-    networkContainerInterfaceBytes: observation.delta.networkBytes,
-    blockReadBytes: observation.delta.blockReadBytes,
-    blockWriteBytes: observation.delta.blockWriteBytes,
-    blockOperations: observation.delta.blockOperations,
+    networkContainerInterfaceBytes: nonNegativeDelta(
+      networkBytes(end),
+      networkBytes(start),
+      `${component.componentId}.networkBytes`,
+    ),
+    blockReadBytes: nonNegativeDelta(
+      end.blockReadBytes,
+      start.blockReadBytes,
+      `${component.componentId}.blockReadBytes`,
+    ),
+    blockWriteBytes: nonNegativeDelta(
+      end.blockWriteBytes,
+      start.blockWriteBytes,
+      `${component.componentId}.blockWriteBytes`,
+    ),
+    blockOperations: nonNegativeDelta(
+      blockOperations(end),
+      blockOperations(start),
+      `${component.componentId}.blockOperations`,
+    ),
     storageUsageBytes: {
-      start: observation.start.storageUsageBytes,
-      end: observation.end.storageUsageBytes,
+      start: authorityObservation.start.storageUsageBytes,
+      end: authorityObservation.end.storageUsageBytes,
       endpointPeak: Math.max(
-        observation.start.storageUsageBytes,
-        observation.end.storageUsageBytes,
+        authorityObservation.start.storageUsageBytes,
+        authorityObservation.end.storageUsageBytes,
       ),
     },
-    provisioned: accounting.provisioned,
+    provisioned: authorityAccounting.provisioned,
+    authorityEnvelopeMilliseconds: authorityObservation.delta.durationMilliseconds,
   };
 }
 
@@ -228,51 +317,63 @@ function sumField(rows, field) {
 
 function projectResourceAccounting(
   calibration,
-  memorySummary,
+  sampled,
+  components,
   measurementElapsedMs,
   transactionWindow,
 ) {
   assert.equal(calibration.artifact.payload.cleanupVerified, true);
-  const observations = calibration.artifact.payload.components;
-  const components = observations.map((observation) => componentProjection(
-    observation,
-    memorySummary.components[observation.componentId],
+  const first = sampled.samples[ZERO];
+  const last = sampled.samples.at(-ONE);
+  const componentRows = components.map((component) => componentWindowProjection(
+    component,
+    first,
+    last,
+    sampled.memory.components[component.componentId],
+    calibration,
   ));
   const elapsedSeconds = measurementElapsedMs / 1000;
-  const cpuCoreSeconds = sumField(components, 'cpuCoreSeconds');
+  const cpuCoreSeconds = sumField(componentRows, 'cpuCoreSeconds');
   return {
-    method: 'benchmark-resource-live-observation-plus-memory-sampling-v1',
+    method: 'docker-provider-window-samples-plus-resource-live-authority-v1',
     measurementBoundary: {
       setupExcluded: true,
       warmupExcluded: true,
-      startTrigger: 'before-first-measured-transaction',
-      endTrigger: 'after-final-measured-transaction',
+      startHookOutsideWorkloadTimer: true,
+      endHookOutsideWorkloadTimer: true,
+      startTrigger: 'after-warmup-before-measurement-timer',
+      endTrigger: 'after-measurement-timer-before-cleanup',
       measuredTransactionWindow: transactionWindow,
       workloadElapsedMs: measurementElapsedMs,
       note:
-        'Docker counter snapshots conservatively enclose the measured transaction ' +
-        'window by their capture overhead; setup and warmup are outside the window.',
+        'Sampled Docker counters conservatively bracket the timed transaction ' +
+        'window by endpoint-snapshot overhead. Authority snapshots provide ' +
+        'identity, limits, storage endpoints, digest, and cleanup proof.',
     },
     authorityArtifact: calibration.artifact,
-    memorySampling: memorySummary,
-    components,
+    memorySampling: sampled.memory,
+    sampledCounterWindow: {
+      firstCapturedAtMs: first.capturedAtMs,
+      lastCapturedAtMs: last.capturedAtMs,
+    },
+    components: componentRows,
     totals: {
       cpuCoreSeconds,
       averageCpuCores: elapsedSeconds > ZERO ?
         cpuCoreSeconds / elapsedSeconds :
         ZERO,
-      memoryAverageBytes: memorySummary.topology.averageBytes,
-      memoryPeakBytes: memorySummary.topology.peakBytes,
+      memoryAverageBytes: sampled.memory.topology.averageBytes,
+      memoryPeakBytes: sampled.memory.topology.peakBytes,
       networkContainerInterfaceBytes:
-        sumField(components, 'networkContainerInterfaceBytes'),
-      blockReadBytes: sumField(components, 'blockReadBytes'),
-      blockWriteBytes: sumField(components, 'blockWriteBytes'),
-      blockOperations: sumField(components, 'blockOperations'),
-      provisionedCpuCores: components.reduce(
+        sumField(componentRows, 'networkContainerInterfaceBytes'),
+      blockReadBytes: sumField(componentRows, 'blockReadBytes'),
+      blockWriteBytes: sumField(componentRows, 'blockWriteBytes'),
+      blockOperations: sumField(componentRows, 'blockOperations'),
+      provisionedCpuCores: componentRows.reduce(
         (sum, component) => sum + component.provisioned.cpuCores,
         ZERO,
       ),
-      provisionedMemoryBytes: components.reduce(
+      provisionedMemoryBytes: componentRows.reduce(
         (sum, component) => sum + component.provisioned.memoryBytes,
         ZERO,
       ),
@@ -284,8 +385,8 @@ async function main() {
   const provider = new DockerProvider();
   let observationSession = null;
   let observedComponents = null;
-  let memorySampler = null;
-  let memorySummary = null;
+  let windowSampler = null;
+  let sampledWindow = null;
   const transactionWindow = {
     startedAtMs: null,
     endedAtMs: null,
@@ -304,12 +405,12 @@ async function main() {
           components: observedComponents,
         },
       );
-      memorySampler = await startMemorySampler(provider, observedComponents);
+      windowSampler = await startWindowSampler(provider, observedComponents);
       transactionWindow.startedAtMs = Date.now();
     },
     async end() {
       transactionWindow.endedAtMs = Date.now();
-      memorySummary = await memorySampler.stop();
+      sampledWindow = await windowSampler.stop();
       await captureBenchmarkResourceLiveObservation(observationSession);
     },
   };
@@ -331,8 +432,8 @@ async function main() {
   assert.ok(run.workload.latency.count > ZERO);
   assert.match(run.workload.measurementPlanSha256, /^[a-f0-9]{64}$/u);
   assert.ok(observationSession, 'Expected resource observation to start');
-  assert.ok(memorySummary, 'Expected memory sampling to complete');
-  assert.ok(memorySummary.sampleCount >= 2, 'Expected repeated memory samples');
+  assert.ok(sampledWindow, 'Expected sampled resource window to complete');
+  assert.ok(sampledWindow.memory.sampleCount >= 2, 'Expected repeated memory samples');
 
   const finalization =
     await finalizeBenchmarkResourceLiveObservation(observationSession);
@@ -344,7 +445,8 @@ async function main() {
 
   const resourceAccounting = projectResourceAccounting(
     calibration,
-    memorySummary,
+    sampledWindow,
+    observedComponents,
     run.workload.measurement.elapsedMs,
     transactionWindow,
   );

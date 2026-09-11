@@ -18,7 +18,6 @@ import {createTiDbOltpAdapter} from
 const ZERO = 0;
 const ONE = 1;
 const TIKV_STORE_COUNT = 3;
-const MEASUREMENT_PHASE = 'measurement';
 const PASS_PREFIX = 'tidb-oltp-adapter-live: PASS ';
 const DATABASE_RESOURCE_LIMITS = Object.freeze({
   memory: '2g',
@@ -76,75 +75,6 @@ function normalizeMeasurementHooks(hooks) {
     );
   }
   return hooks;
-}
-
-function createMeasurementBoundaryAdapter(
-  adapter,
-  workloadOptions,
-  hooks,
-  context,
-) {
-  if (!hooks) {
-    return {
-      adapter,
-      async assertComplete() {},
-    };
-  }
-
-  const expectedTransactions =
-    workloadOptions.workers * workloadOptions.measurementOperationsPerWorker;
-  let startPromise = null;
-  let endPromise = null;
-  let completedTransactions = ZERO;
-
-  async function ensureStarted() {
-    if (startPromise === null) {
-      startPromise = Promise.resolve().then(() => hooks.start({
-        ...context,
-        expectedTransactions,
-      }));
-    }
-    await startPromise;
-  }
-
-  async function completeOne() {
-    completedTransactions += ONE;
-    if (completedTransactions === expectedTransactions) {
-      endPromise = Promise.resolve().then(() => hooks.end({
-        ...context,
-        expectedTransactions,
-        completedTransactions,
-      }));
-      await endPromise;
-    }
-  }
-
-  return {
-    adapter: {
-      async executeTransaction(operation) {
-        if (operation?.phase !== MEASUREMENT_PHASE) {
-          return adapter.executeTransaction(operation);
-        }
-        await ensureStarted();
-        try {
-          return await adapter.executeTransaction(operation);
-        } finally {
-          await completeOne();
-        }
-      },
-    },
-    async assertComplete() {
-      assert.equal(
-        completedTransactions,
-        expectedTransactions,
-        'TiDB OLTP measurement boundary did not observe every measured transaction',
-      );
-      assert.ok(startPromise, 'TiDB OLTP measurement boundary never started');
-      assert.ok(endPromise, 'TiDB OLTP measurement boundary never ended');
-      await startPromise;
-      await endPromise;
-    },
-  };
 }
 
 async function cleanup(provider, state) {
@@ -228,6 +158,8 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       'Worker connection IDs changed before workload execution',
     );
 
+    const expectedTransactions =
+      workloadOptions.workers * workloadOptions.measurementOperationsPerWorker;
     const measurementContext = Object.freeze({
       provider,
       runId,
@@ -235,24 +167,26 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       networkName: state.networkName,
       cluster: state.cluster,
       workloadOptions,
+      expectedTransactions,
     });
-    const boundary = createMeasurementBoundaryAdapter(
-      state.adapter,
-      workloadOptions,
-      measurementHooks,
-      measurementContext,
-    );
+    const workloadRunOptions = {
+      ...workloadOptions,
+      ...(measurementHooks ? {
+        onMeasurementStart: () => measurementHooks.start(measurementContext),
+        onMeasurementEnd: () => measurementHooks.end({
+          ...measurementContext,
+          completedTransactions: expectedTransactions,
+        }),
+      } : {}),
+    };
+
     const workload = await runOltpBaselineWorkload(
-      boundary.adapter,
-      workloadOptions,
+      state.adapter,
+      workloadRunOptions,
     );
-    await boundary.assertComplete();
     assert.equal(workload.warmup.failed, ZERO);
     assert.equal(workload.measurement.failed, ZERO);
-    assert.equal(
-      workload.measurement.succeeded,
-      workloadOptions.workers * workloadOptions.measurementOperationsPerWorker,
-    );
+    assert.equal(workload.measurement.succeeded, expectedTransactions);
 
     const after = await state.adapter.getEvidence();
     assert.deepEqual(

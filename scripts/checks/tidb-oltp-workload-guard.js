@@ -181,6 +181,45 @@ async function assertExecutionAndMetrics() {
   }
 }
 
+async function assertMeasurementHooksOutsideTimer() {
+  const events = [];
+  let clock = ZERO;
+  const result = await runOltpBaselineWorkload({
+    async executeTransaction(operation) {
+      events.push(operation.phase);
+      clock += 10;
+    },
+  }, {
+    workers: 1,
+    warmupOperationsPerWorker: 1,
+    measurementOperationsPerWorker: 1,
+    itemCount: 1000,
+    now() {
+      return clock;
+    },
+    async onMeasurementStart() {
+      events.push('start-hook');
+      clock += 1000;
+    },
+    async onMeasurementEnd() {
+      events.push('end-hook');
+      clock += 1000;
+    },
+  });
+
+  assert.deepEqual(events, [
+    'warmup',
+    'start-hook',
+    'measurement',
+    'end-hook',
+  ]);
+  assert.equal(result.measurement.elapsedMs, 10);
+  assert.equal(result.latency.count, ONE);
+  assert.equal(result.latency.avg, 10);
+  assert.equal(result.latency.p50, 10);
+  assert.equal(result.opsPerSec, 100);
+}
+
 async function assertMeasuredErrorsAreCounted() {
   let failed = false;
   const result = await runOltpBaselineWorkload({
@@ -242,6 +281,7 @@ async function main() {
   assertPayloadContracts();
   assertLatencySummary();
   await assertExecutionAndMetrics();
+  await assertMeasurementHooksOutsideTimer();
   await assertMeasuredErrorsAreCounted();
   await assertWarmupFailureFailsClosed();
   process.stdout.write(PASS_LINE);

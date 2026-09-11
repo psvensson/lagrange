@@ -405,6 +405,45 @@ async function runPhase(adapter, workerPlans, now) {
   return {metrics, elapsedMs};
 }
 
+function optionalMeasurementHook(rawOptions, name) {
+  const hook = rawOptions[name];
+  if (hook === undefined || hook === null) return null;
+  if (typeof hook !== 'function') {
+    throw new Error(`OLTP baseline ${name} must be a function`);
+  }
+  return hook;
+}
+
+async function runMeasuredPhase(adapter, workerPlans, now, startHook, endHook) {
+  if (startHook) await startHook();
+  let measured = null;
+  let phaseError = null;
+  try {
+    measured = await runPhase(adapter, workerPlans, now);
+  } catch (error) {
+    phaseError = error;
+  }
+
+  let endError = null;
+  if (endHook) {
+    try {
+      await endHook();
+    } catch (error) {
+      endError = error;
+    }
+  }
+
+  if (phaseError && endError) {
+    throw new AggregateError(
+      [phaseError, endError],
+      'OLTP baseline measurement and end hook both failed',
+    );
+  }
+  if (phaseError) throw phaseError;
+  if (endError) throw endError;
+  return measured;
+}
+
 async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
   if (!adapter || typeof adapter.executeTransaction !== 'function') {
     throw new Error(
@@ -415,6 +454,14 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
   const now = typeof rawOptions.now === 'function' ?
     rawOptions.now :
     () => performance.now();
+  const onMeasurementStart = optionalMeasurementHook(
+    rawOptions,
+    'onMeasurementStart',
+  );
+  const onMeasurementEnd = optionalMeasurementHook(
+    rawOptions,
+    'onMeasurementEnd',
+  );
 
   const warmup = await runPhase(
     adapter,
@@ -430,10 +477,12 @@ async function runOltpBaselineWorkload(adapter, rawOptions = {}) {
     );
   }
 
-  const measured = await runPhase(
+  const measured = await runMeasuredPhase(
     adapter,
     plan.workers.map((worker) => worker.measurement),
     now,
+    onMeasurementStart,
+    onMeasurementEnd,
   );
   const attempted = totalField(measured.metrics, 'attempted');
   const succeeded = totalField(measured.metrics, 'succeeded');
