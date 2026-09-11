@@ -100,6 +100,10 @@ async function assertDependencyOrderAndCleanup() {
       'mysql:8.4.11',
     ],
   );
+  assert.deepEqual(
+    creates.map(([, options]) => options.hostConfigExtras?.NetworkMode),
+    ['benchmark-net', 'benchmark-net', 'benchmark-net', 'benchmark-net'],
+  );
 
   const pd = creates[0][1];
   const tikv = creates[1][1];
