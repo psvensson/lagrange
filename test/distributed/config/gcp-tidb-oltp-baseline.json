@@ -20,9 +20,9 @@
       "queryTimeoutMs": 15000,
       "readyTimeoutMs": 180000,
       "images": {
-        "pd": "pingcap/pd:v8.5.7",
-        "tikv": "pingcap/tikv:v8.5.7",
-        "tidb": "pingcap/tidb:v8.5.7",
+        "pd": "pingcap/pd:v8.5.8",
+        "tikv": "pingcap/tikv:v8.5.8",
+        "tidb": "pingcap/tidb:v8.5.8",
         "client": "mysql:8.4"
       },
       "resources": {
