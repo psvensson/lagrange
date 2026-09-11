@@ -20,8 +20,8 @@ const ZERO = 0;
 const READY_VALUE = '1';
 const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
 const READINESS_SQL =
-  "SELECT CASE WHEN " +
-  "EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS " +
+  'SELECT CASE WHEN ' +
+  'EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS ' +
   "WHERE STORE_STATE_NAME = 'Up') " +
   'AND (SELECT COUNT(*) FROM mysql.user) >= 1 ' +
   'THEN 1 ELSE 0 END;';
@@ -173,6 +173,8 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
   };
 
   try {
+    // DockerProvider.createContainer is the lifecycle owner for create + start
+    // + running-state wait. This adapter must not issue a second start.
     const pd = await options.provider.createContainer({
       name: names.pd,
       image: options.images.pd,
@@ -188,7 +190,6 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       ],
     });
     created.push(pd);
-    await options.provider.startContainer(pd.containerId);
     await waitForContainerRunning(options.provider, pd.containerId, runningOptions);
 
     const tikv = await options.provider.createContainer({
@@ -203,7 +204,6 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       ],
     });
     created.push(tikv);
-    await options.provider.startContainer(tikv.containerId);
     await waitForContainerRunning(
       options.provider,
       tikv.containerId,
@@ -224,7 +224,6 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       ],
     });
     created.push(tidb);
-    await options.provider.startContainer(tidb.containerId);
     await waitForContainerRunning(
       options.provider,
       tidb.containerId,
@@ -240,7 +239,6 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       command: [READINESS_CLIENT_KEEPALIVE_SECONDS],
     });
     created.push(readinessClient);
-    await options.provider.startContainer(readinessClient.containerId);
     await waitForContainerRunning(
       options.provider,
       readinessClient.containerId,
