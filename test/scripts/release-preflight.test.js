@@ -39,7 +39,7 @@ function facts(overrides = {}) {
     headSha: HEAD,
     remoteMainSha: HEAD,
     statusLines: [],
-    workflowRuns: [CI_RUN],
+    workflowRuns: [FULL_GATE_RUN],
     versionSources: {
       packageJson: VERSION, packageLock: VERSION, cli: VERSION,
       entrypoint: VERSION, chart: VERSION, chartApp: VERSION,
@@ -69,12 +69,14 @@ test('all five facts green is READY with the exact tag commands', (t) => {
   t.end();
 });
 
-test('a successful full gate is a stronger exact-sha pre-tag proof', (t) => {
+test('only a successful exact-sha full gate satisfies pre-tag proof', (t) => {
   const result = evaluateReleasePreflight(facts({
-    workflowRuns: [{...CI_RUN, conclusion: 'failure'}, FULL_GATE_RUN],
+    workflowRuns: [CI_RUN, FULL_GATE_RUN],
   }));
   t.equal(result.ok, true);
   t.match(result.checks[2].detail, /full-gate\.yml/);
+  const modularOnly = evaluateReleasePreflight(facts({workflowRuns: [CI_RUN]}));
+  t.same(failing(modularOnly), [CHECK.CI_GATE_GREEN]);
   t.end();
 });
 
@@ -86,13 +88,13 @@ test('each fact blocks on its own', (t) => {
     [CHECK.HEAD_IS_REMOTE_MAIN]);
   t.same(failing(evaluateReleasePreflight(facts({
     workflowRuns: [
-      {...CI_RUN, conclusion: 'failure'},
       {...FULL_GATE_RUN, conclusion: 'failure'},
-      {...CI_RUN, head_sha: OTHER},
-      {...CI_RUN, status: 'in_progress', conclusion: null},
+      {...FULL_GATE_RUN, head_sha: OTHER},
+      {...FULL_GATE_RUN, status: 'in_progress', conclusion: null},
+      CI_RUN,
     ],
   }))), [CHECK.CI_GATE_GREEN],
-  'only a completed successful ci.yml or full-gate.yml run on the exact sha counts');
+  'only a completed successful full-gate.yml run on the exact sha counts');
   const versions = evaluateReleasePreflight(facts({
     versionSources: {
       packageJson: VERSION, packageLock: '0.1.1', cli: VERSION,
@@ -151,7 +153,7 @@ test('gatherReleaseFacts reads the checkout and queries git and gh only', (t) =>
   const ghCalls = [];
   const gh = (args) => {
     ghCalls.push(args.join(' '));
-    return JSON.stringify({workflow_runs: [CI_RUN]});
+    return JSON.stringify({workflow_runs: [FULL_GATE_RUN]});
   };
   const gathered = gatherReleaseFacts({
     root, git, gh, sourceVersions: {cli: VERSION, entrypoint: VERSION},
