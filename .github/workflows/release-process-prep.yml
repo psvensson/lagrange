@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - run: npm ci
       - name: Make release proof and preflight single-owner
         run: |
           node --input-type=module <<'NODE'
