@@ -15,6 +15,10 @@ import {
 import {TIDB_REFERENCE_DEFAULTS} from
   '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
+  createTiDbReferenceLifecycleResourceProvider,
+} from
+  '../../test/distributed/harness/tidb-reference-lifecycle-resource-policy.js';
+import {
   TIDB_REFERENCE_REQUIRED_IMAGES,
   assertTiDbReferenceImagesAvailable,
 } from './run-tidb-reference-lifecycle-live.js';
@@ -32,6 +36,10 @@ const EXPECTED_MACHINE_TYPE = 'n2-standard-4';
 const TIDB_CONTAINER_SQL_PORT = 8080;
 const GCP_HOST_SQL_PORT = 8089;
 const CONTROLLER_LOCAL_SQL_PORT = TIDB_REFERENCE_DEFAULTS.tidbPort;
+const GCP_TIKV_RESOURCE_LIMITS = Object.freeze({
+  memory: '3g',
+  cpus: '2.0',
+});
 
 function controllerEvidence() {
   return {
@@ -213,7 +221,11 @@ async function run() {
       host: hosts[0],
       tls: provisioned.runConfig.docker.tls,
     });
-    const benchmarkProvider = createPublishedSqlProvider(remoteProvider);
+    const publishedSqlProvider = createPublishedSqlProvider(remoteProvider);
+    const benchmarkProvider = createTiDbReferenceLifecycleResourceProvider(
+      publishedSqlProvider,
+      {tikvResourceLimits: GCP_TIKV_RESOURCE_LIMITS},
+    );
     forwarder = await startTcpForwarder(hostInfo[0].externalIp);
 
     result = await runTiDbOltpMeasurement({
@@ -234,6 +246,9 @@ async function run() {
         machineType: inputConfig.gcp.machineType,
         vmCount: inputConfig.gcp.vmCount,
         preemptible: inputConfig.gcp.preemptible,
+        roleResourceOverrides: {
+          tikv: GCP_TIKV_RESOURCE_LIMITS,
+        },
         publishedSqlBridge: {
           containerPort: TIDB_CONTAINER_SQL_PORT,
           hostPort: GCP_HOST_SQL_PORT,

@@ -10,9 +10,11 @@ on:
       - "scripts/checks/run-tidb-oltp-gcp-measurement.js"
       - "scripts/checks/tidb-oltp-measurement.js"
       - "scripts/checks/run-tidb-oltp-adapter-live.js"
+      - "scripts/checks/tidb-reference-resource-policy-guard.js"
       - "test/distributed/reference-client/**"
       - "test/distributed/harness/oltp-baseline-*.js"
       - "test/distributed/harness/tidb-reference-lifecycle.js"
+      - "test/distributed/harness/tidb-reference-lifecycle-resource-policy.js"
       - "test/distributed/config/gcp-tidb-oltp-single-host.json"
 
 permissions:
@@ -111,6 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/checks/tidb-reference-lifecycle-guard.js
+          node scripts/checks/tidb-reference-resource-policy-guard.js
           node scripts/checks/tidb-oltp-dataset-guard.js
           node scripts/checks/tidb-oltp-workload-guard.js
 
