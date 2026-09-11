@@ -4,6 +4,9 @@ const DEFAULTS = Object.freeze({
   pdImage: 'pingcap/pd:v8.5.8',
   tikvImage: 'pingcap/tikv:v8.5.8',
   tidbImage: 'pingcap/tidb:v8.5.8',
+  // Readiness uses an ephemeral client container. It is never part of the
+  // measured topology, but is pinned so the readiness contract is reproducible.
+  mysqlClientImage: 'mysql:8.4.11',
   pdClientPort: 2379,
   pdPeerPort: 2380,
   tikvPort: 20160,
@@ -14,6 +17,14 @@ const DEFAULTS = Object.freeze({
 });
 
 const ZERO = 0;
+const READY_VALUE = '1';
+const READINESS_CLIENT_KEEPALIVE_SECONDS = '300';
+const READINESS_SQL =
+  "SELECT CASE WHEN " +
+  "EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS " +
+  "WHERE STORE_STATE_NAME = 'Up') " +
+  'AND (SELECT COUNT(*) FROM mysql.user) >= 1 ' +
+  'THEN 1 ELSE 0 END;';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,14 +39,22 @@ function normalizeOptions(options = {}) {
   if (!network) {
     throw new Error('TiDB reference lifecycle requires network');
   }
+  if (typeof provider.execInContainer !== 'function') {
+    throw new Error(
+      'TiDB reference lifecycle requires provider.execInContainer for SQL readiness',
+    );
+  }
   return {
     provider,
     network,
     resourceLimits: options.resourceLimits || {},
+    readinessResourceLimits: options.readinessResourceLimits || {},
     images: {
       pd: options.images?.pd || DEFAULTS.pdImage,
       tikv: options.images?.tikv || DEFAULTS.tikvImage,
       tidb: options.images?.tidb || DEFAULTS.tidbImage,
+      mysqlClient:
+        options.images?.mysqlClient || DEFAULTS.mysqlClientImage,
     },
     readinessTimeoutMs:
       options.readinessTimeoutMs || DEFAULTS.readinessTimeoutMs,
@@ -61,6 +80,57 @@ async function waitForContainerRunning(provider, containerId, options) {
     `TiDB reference container ${containerId} was not running within ` +
     `${options.timeoutMs}ms` +
     (lastError ? `: ${lastError.message}` : ''),
+  );
+}
+
+function buildSqlReadinessCommand(endpoint) {
+  return [
+    'mysql',
+    '--protocol=TCP',
+    `--host=${endpoint.host}`,
+    `--port=${endpoint.port}`,
+    '--user=root',
+    '--connect-timeout=2',
+    '--batch',
+    '--skip-column-names',
+    '--execute',
+    READINESS_SQL,
+  ];
+}
+
+async function waitForSqlReady(provider, clientContainerId, endpoint, options) {
+  const started = Date.now();
+  let lastError = null;
+  let lastResult = null;
+  let attempts = ZERO;
+  const command = buildSqlReadinessCommand(endpoint);
+
+  while (Date.now() - started < options.timeoutMs) {
+    attempts += 1;
+    try {
+      const result = await provider.execInContainer(clientContainerId, command);
+      lastResult = result;
+      if (result?.exitCode === ZERO &&
+          String(result.stdout || '').trim() === READY_VALUE) {
+        return {
+          attempts,
+          sql: READINESS_SQL,
+          clientContainerId,
+        };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(options.pollIntervalMs);
+  }
+
+  const detail = lastError ?
+    lastError.message :
+    `exit=${lastResult?.exitCode ?? 'unknown'} ` +
+      `stdout=${JSON.stringify(lastResult?.stdout || '')} ` +
+      `stderr=${JSON.stringify(lastResult?.stderr || '')}`;
+  throw new Error(
+    `TiDB reference SQL readiness failed within ${options.timeoutMs}ms: ${detail}`,
   );
 }
 
@@ -95,6 +165,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
     pd: `${options.namePrefix}-pd`,
     tikv: `${options.namePrefix}-tikv`,
     tidb: `${options.namePrefix}-tidb`,
+    readiness: `${options.namePrefix}-sql-readiness`,
   };
   const runningOptions = {
     timeoutMs: options.readinessTimeoutMs,
@@ -160,6 +231,33 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       runningOptions,
     );
 
+    const readinessClient = await options.provider.createContainer({
+      name: names.readiness,
+      image: options.images.mysqlClient,
+      network: options.network,
+      resourceLimits: options.readinessResourceLimits,
+      entrypoint: ['sleep'],
+      command: [READINESS_CLIENT_KEEPALIVE_SECONDS],
+    });
+    await options.provider.startContainer(readinessClient.containerId);
+    await waitForContainerRunning(
+      options.provider,
+      readinessClient.containerId,
+      runningOptions,
+    );
+
+    let readiness;
+    try {
+      readiness = await waitForSqlReady(
+        options.provider,
+        readinessClient.containerId,
+        {host: names.tidb, port: DEFAULTS.tidbPort},
+        runningOptions,
+      );
+    } finally {
+      await stopTiDbReferenceCluster(options.provider, [readinessClient]);
+    }
+
     return {
       images: options.images,
       names,
@@ -169,6 +267,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
         status: {host: names.tidb, port: DEFAULTS.tidbStatusPort},
         pd: {host: names.pd, port: DEFAULTS.pdClientPort},
       },
+      readiness,
       async stop() {
         await stopTiDbReferenceCluster(options.provider, created);
       },
@@ -188,8 +287,11 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
 
 export {
   DEFAULTS as TIDB_REFERENCE_DEFAULTS,
+  READINESS_SQL as TIDB_REFERENCE_READINESS_SQL,
+  buildSqlReadinessCommand as buildTiDbReferenceSqlReadinessCommand,
   normalizeOptions as normalizeTiDbReferenceLifecycleOptions,
   startTiDbReferenceCluster,
   stopTiDbReferenceCluster,
   waitForContainerRunning as waitForTiDbReferenceContainerRunning,
+  waitForSqlReady as waitForTiDbReferenceSqlReady,
 };
