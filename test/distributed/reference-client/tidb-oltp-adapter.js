@@ -422,9 +422,14 @@ async function executeDelivery(connection, operation, scale) {
         'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
         [operation.warehouseId, districtId, orderId],
       );
+
+      // The new_order FOR UPDATE is a current/locking read in TiDB. Keep the
+      // dependent order and order-line reads on that same visibility mode.
+      // Mixing them with snapshot reads can expose new_order before the
+      // transaction snapshot can see the order committed with it.
       const [orderRows] = await connection.execute(
         'SELECT customer_id FROM orders ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
+        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? FOR UPDATE',
         [operation.warehouseId, districtId, orderId],
       );
       const order = requireRow(orderRows, 'delivery order');
@@ -433,12 +438,19 @@ async function executeDelivery(connection, operation, scale) {
         'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
         [operation.carrierId, operation.warehouseId, districtId, orderId],
       );
-      const [sumRows] = await connection.execute(
-        'SELECT COALESCE(SUM(amount_cents), 0) AS amount_cents FROM order_line ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
+      const [lineRows] = await connection.execute(
+        'SELECT amount_cents FROM order_line ' +
+        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? ' +
+        'ORDER BY line_number FOR UPDATE',
         [operation.warehouseId, districtId, orderId],
       );
-      const amountCents = Number(requireRow(sumRows, 'delivery total').amount_cents);
+      if (!Array.isArray(lineRows) || lineRows.length === ZERO) {
+        throw new Error('TiDB OLTP expected delivery order lines');
+      }
+      const amountCents = lineRows.reduce(
+        (sum, row) => sum + Number(row.amount_cents),
+        ZERO,
+      );
       await connection.execute(
         'UPDATE order_line SET delivered = 1 ' +
         'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
