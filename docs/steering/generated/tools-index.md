@@ -107,7 +107,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `check:formation` — Local seed-starvation gate: run the formation-only demo with five local node processes and fail unless the formation verdict is PASS and the seed stayed inside its hardware-relative event-loop budget.
 - `check:memory-index` — `node scripts/check-memory-index.js`
-- `check:release` — `npm run test:ci && npm run test:gate`
+- `check:release` — `node scripts/run-release-proof.js`
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
 - `check:subsystem` — `node scripts/check-subsystem.js`
 
