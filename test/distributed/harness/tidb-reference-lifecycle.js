@@ -12,6 +12,7 @@ const DEFAULTS = Object.freeze({
   tikvPort: 20160,
   tidbPort: 4000,
   tidbStatusPort: 10080,
+  tikvNofileLimit: 262144,
   readinessTimeoutMs: 120000,
   readinessPollIntervalMs: 1000,
 });
@@ -68,6 +69,17 @@ function normalizeOptions(options = {}) {
 
 function networkHostConfig(network) {
   return {NetworkMode: network};
+}
+
+function tikvHostConfig(network) {
+  return {
+    NetworkMode: network,
+    Ulimits: [{
+      Name: 'nofile',
+      Soft: DEFAULTS.tikvNofileLimit,
+      Hard: DEFAULTS.tikvNofileLimit,
+    }],
+  };
 }
 
 function boundedLog(value) {
@@ -291,7 +303,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       image: options.images.tikv,
       network: options.network,
       resourceLimits: options.resourceLimits,
-      hostConfigExtras: networkHostConfig(options.network),
+      hostConfigExtras: tikvHostConfig(options.network),
       command: [
         `--addr=0.0.0.0:${DEFAULTS.tikvPort}`,
         `--advertise-addr=${names.tikv}:${DEFAULTS.tikvPort}`,
