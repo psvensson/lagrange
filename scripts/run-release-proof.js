@@ -71,6 +71,6 @@ for (const step of STEPS) {
 
 console.log(`[release-proof] complete ${PROOF.RELEASE_FULL} for ${headSha}`);
 console.log(
-  `[release-proof] persist with: node scripts/proof-authority.js record ` +
+  '[release-proof] persist with: node scripts/proof-authority.js record ' +
   `${PROOF.RELEASE_FULL} ${headSha}`,
 );
