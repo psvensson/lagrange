@@ -29,16 +29,18 @@ The two systems therefore do not compete for CPU or memory. They use the same
 GCP machine class and VPC. Comparator ports 8700-8721 stay inside the existing
 8080-9090 internal benchmark firewall range.
 
-The image set is pinned in the profiles:
+The profiles request these version-pinned tags:
 
-- `pingcap/pd:v8.5.7`
-- `pingcap/tikv:v8.5.7`
-- `pingcap/tidb:v8.5.7`
+- `pingcap/pd:v8.5.8`
+- `pingcap/tikv:v8.5.8`
+- `pingcap/tidb:v8.5.8`
 - `mysql:8.4`
 
 `tidb-reference-runtime.js` pulls missing public images directly through each
-remote Docker daemon. TiDB/TiKV containers are removed at scenario exit; the
-ordinary distributed runner still owns GCP teardown.
+remote Docker daemon. The report records the Docker content ID actually used
+for every component and requires PD/TiKV identity to agree across comparator
+hosts. TiDB/TiKV containers are removed at scenario exit; the ordinary
+distributed runner still owns GCP teardown.
 
 ## Running
 
@@ -64,11 +66,16 @@ and teardown rules apply unchanged.
 
 ## Scenario 1: `tidb-oltp-baseline`
 
-This is the control case. Both sides execute the same logical sequence:
+This is the control case. Both systems create the same logical user-table
+schema and execute the same sequence:
 
-1. insert one uniquely identified log/event row;
+1. insert one uniquely identified event row;
 2. primary-key read that row and prove it is visible;
 3. repeat for the configured number of operation pairs.
+
+The Lagrange arm deliberately uses a normal user table rather than a system
+table. It waits for the table to have a settled, led partition before the
+measured phase begins.
 
 The result records throughput and p50/p95/p99 latency for each side and the
 ratios. The initial mature engineering target is intentionally modest:
@@ -76,11 +83,11 @@ ratios. The initial mature engineering target is intentionally modest:
 - Lagrange throughput at least 70% of TiDB/TiKV;
 - Lagrange p99 no more than 1.5x TiDB/TiKV.
 
-Those thresholds are **not enforced yet**. The SQL semantics are paired, but the
-client paths are not: Lagrange is driven through the distributed harness admin
-client while TiDB is driven through the MySQL CLI over Docker exec. This phase
-is useful for regressions and gross architectural cost, but it is not
-publication evidence.
+Those thresholds are **not enforced yet**. The schema and operations are paired,
+but the client paths are not: Lagrange is driven through the distributed
+harness admin client while TiDB is driven through the MySQL CLI over Docker
+exec. This phase is useful for regressions and gross architectural cost, but it
+is not publication evidence.
 
 The next maturity step is to route both sides through the comparative benchmark
 program's common open-loop observation owner and capacity protocol. At that
@@ -89,14 +96,19 @@ than a small sequential sample.
 
 ## Scenario 2: `tidb-compute-near-data`
 
-This has two phases on identical synthetic event data.
+This has two phases on identical synthetic event data. Each account, merchant,
+and device owns a contiguous primary-key range. Rows also contain a deterministic
+payload so the checked-in profile crosses Lagrange's low benchmark split
+threshold. Before measurement, all three Lagrange tables must reach at least two
+settled, led partitions. A run that remains single-partition fails rather than
+silently weakening the test.
 
 ### A. Leaf pushdown control
 
-Each request reduces all events for one account to `COUNT` and `SUM` beside the
-storage path. This is deliberately a case in which TiDB/TiKV should be strong.
-It prevents the benchmark from turning "compute near data" into a Lagrange-only
-claim: TiDB's normal coprocessor pushdown already attacks this class well.
+Each request reduces one entity's primary-key range to `COUNT` and `SUM`. This
+is deliberately a case in which TiDB/TiKV should be strong. It prevents the
+benchmark from turning "compute near data" into a Lagrange-only claim: TiDB's
+normal coprocessor pushdown already attacks this class well.
 
 A mature Lagrange is **not expected to win merely because the reduction is
 local**.
@@ -203,9 +215,9 @@ outcome-neutral claim projection remain the authoritative owners.
 ## Scaling the target workload
 
 The checked-in compute profile is deliberately small enough to iterate on. A
-larger campaign should increase `entityCount`, `eventsPerEntity` and
-`requestCount` only after the common measurement path is present. The important
-axis is not row count by itself; it is the combination of:
+larger campaign should increase `entityCount`, `eventsPerEntity`, `payloadBytes`
+and `requestCount` only after the common measurement path is present. The
+important axis is not row count by itself; it is the combination of:
 
 - substantial reusable local state per partition;
 - small per-service output;
