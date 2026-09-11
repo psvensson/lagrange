@@ -4,9 +4,10 @@
 # checks external publication prerequisites on a GitHub-hosted runner without
 # mutating npm, Docker Hub, or GitHub Releases.
 #
-# Tag: the same workflow rechecks those prerequisites, requires a successful
-# exact-SHA full-gate, then publishes artifacts. It never reruns the application
-# corpus: full-gate owns that proof.
+# Tag: the same workflow rechecks those prerequisites, requires the durable
+# exact-SHA release proof receipt, then publishes artifacts. It never reruns the
+# application corpus: the proof authority owns reuse and full-gate produces a
+# missing receipt.
 name: release
 
 on:
@@ -158,10 +159,8 @@ jobs:
           node-version: "22"
           package-manager-cache: false
 
-      - name: Resolve release identity and consume exact-head proof
+      - name: Resolve release identity and consume durable exact-SHA proof
         id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -171,9 +170,16 @@ jobs:
           git show-ref --verify --quiet refs/remotes/origin/main
           git merge-base --is-ancestor "$TAGGED_COMMIT" origin/main
           test "$(node -p "require('./package.json').version")" = "$VERSION"
-          PROOF_RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TAGGED_COMMIT&per_page=100" \
-            --jq '[.workflow_runs[] | select(.path == ".github/workflows/full-gate.yml" and .status == "completed" and .conclusion == "success")][0].id // empty')"
-          test -n "$PROOF_RUN" || { echo "::error::No successful exact-SHA full-gate for $TAGGED_COMMIT"; exit 1; }
+          PROOF_JSON="$RUNNER_TEMP/release-proof.json"
+          node scripts/proof-authority.js check release-full-v1 "$TAGGED_COMMIT" --json > "$PROOF_JSON" || {
+            STATUS=$?
+            cat "$PROOF_JSON" || true
+            echo "::error::No reusable release-full-v1 proof receipt for $TAGGED_COMMIT (status $STATUS)"
+            exit "$STATUS"
+          }
+          cat "$PROOF_JSON"
+          PROOF_OBJECT="$(node -e 'const fs=require("fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(x.objectSha||"")' "$PROOF_JSON")"
+          test -n "$PROOF_OBJECT"
           LATEST_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
           test "$GITHUB_REF_NAME" = "$LATEST_TAG" || { echo "::error::Refusing to move latest backward from $LATEST_TAG"; exit 1; }
           NOTES_DIR="$RUNNER_TEMP/lagrange-release-notes"
@@ -183,10 +189,10 @@ jobs:
           node scripts/release-notes.js --mode overview --version "$VERSION" > "$NOTES_DIR/dockerhub-overview.md"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tagged_commit=$TAGGED_COMMIT" >> "$GITHUB_OUTPUT"
-          echo "proof_run=$PROOF_RUN" >> "$GITHUB_OUTPUT"
+          echo "proof_object=$PROOF_OBJECT" >> "$GITHUB_OUTPUT"
           echo "notes_dir=$NOTES_DIR" >> "$GITHUB_OUTPUT"
           echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-          echo "Consuming full-gate run $PROOF_RUN for $TAGGED_COMMIT"
+          echo "Consuming durable proof receipt $PROOF_OBJECT for $TAGGED_COMMIT"
 
       - name: Install dependencies
         run: |
