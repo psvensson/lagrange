@@ -12,9 +12,14 @@ import {
 } from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 
 const ZERO = 0;
+const ONE = 1;
+const DEFAULT_REPLICA_TARGET = 3;
 const SMOKE_VALUE = '424242';
 const SMOKE_DATABASE = 'lagrange_tidb_smoke';
+const SMOKE_TABLE = 'probe';
 const CLIENT_KEEPALIVE_SECONDS = '300';
+const REPLICATION_TIMEOUT_MS = 90000;
+const REPLICATION_POLL_INTERVAL_MS = 1000;
 const CLIENT_RESOURCE_LIMITS = Object.freeze({
   memory: '256m',
   cpus: '0.5',
@@ -38,26 +43,58 @@ function uniqueRunId() {
   return `lagrange-tidb-live-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizeStoreCount(value) {
   const count = value ?? TIDB_REFERENCE_DEFAULTS.tikvStoreCount;
-  if (!Number.isInteger(count) || count < 1) {
-    throw new Error('TiDB reference live smoke requires a positive integer store count');
+  if (!Number.isInteger(count) || count < ONE) {
+    throw new Error(
+      'TiDB reference live smoke requires a positive integer store count',
+    );
   }
   return count;
 }
 
-function smokeSql() {
+function smokeSetupSql() {
   return [
     `DROP DATABASE IF EXISTS ${SMOKE_DATABASE}`,
     `CREATE DATABASE ${SMOKE_DATABASE}`,
     `USE ${SMOKE_DATABASE}`,
-    'CREATE TABLE probe (' +
+    `CREATE TABLE ${SMOKE_TABLE} (` +
       'id BIGINT PRIMARY KEY, value BIGINT NOT NULL' +
       ')',
-    `INSERT INTO probe (id, value) VALUES (1, ${SMOKE_VALUE})`,
-    'SELECT value FROM probe WHERE id = 1',
-    `DROP DATABASE ${SMOKE_DATABASE}`,
+    `INSERT INTO ${SMOKE_TABLE} (id, value) VALUES (1, ${SMOKE_VALUE})`,
+    `SELECT value FROM ${SMOKE_TABLE} WHERE id = 1`,
   ].join('; ') + ';';
+}
+
+function smokeCleanupSql() {
+  return `DROP DATABASE IF EXISTS ${SMOKE_DATABASE};`;
+}
+
+function replicationSql() {
+  return [
+    'SELECT r.REGION_ID,',
+    'COUNT(p.PEER_ID) AS peer_count,',
+    'COUNT(DISTINCT p.STORE_ID) AS store_count,',
+    'COALESCE(SUM(CASE WHEN p.IS_LEARNER = 1 THEN 1 ELSE 0 END), 0)',
+    'AS learner_count,',
+    'COALESCE(SUM(CASE WHEN p.IS_LEADER = 1 THEN 1 ELSE 0 END), 0)',
+    'AS leader_count',
+    'FROM (',
+    'SELECT DISTINCT REGION_ID',
+    'FROM INFORMATION_SCHEMA.TIKV_REGION_STATUS',
+    `WHERE DB_NAME = '${SMOKE_DATABASE}'`,
+    `AND TABLE_NAME = '${SMOKE_TABLE}'`,
+    'AND IS_INDEX = 0',
+    ') AS r',
+    'LEFT JOIN INFORMATION_SCHEMA.TIKV_REGION_PEERS AS p',
+    'ON p.REGION_ID = r.REGION_ID',
+    'GROUP BY r.REGION_ID',
+    'ORDER BY r.REGION_ID;',
+  ].join(' ');
 }
 
 function mysqlCommand(endpoint, sql) {
@@ -73,6 +110,70 @@ function mysqlCommand(endpoint, sql) {
     '--execute',
     sql,
   ];
+}
+
+function parseReplicationRows(stdout) {
+  const text = String(stdout || '').trim();
+  if (!text) return [];
+  return text.split('\n').filter(Boolean).map((line) => {
+    const [regionId, peerCount, storeCount, learnerCount, leaderCount] =
+      line.trim().split(/\s+/u);
+    return {
+      regionId,
+      peerCount: Number.parseInt(peerCount, 10),
+      storeCount: Number.parseInt(storeCount, 10),
+      learnerCount: Number.parseInt(learnerCount, 10),
+      leaderCount: Number.parseInt(leaderCount, 10),
+    };
+  });
+}
+
+function regionHasReplicaContract(region, replicaTarget) {
+  return region.peerCount === replicaTarget &&
+    region.storeCount === replicaTarget &&
+    region.learnerCount === ZERO &&
+    region.leaderCount === ONE;
+}
+
+async function waitForTableReplication(
+  provider,
+  clientContainerId,
+  endpoint,
+  replicaTarget,
+) {
+  const started = Date.now();
+  let attempts = ZERO;
+  let lastRows = [];
+  let lastResult = null;
+
+  while (Date.now() - started < REPLICATION_TIMEOUT_MS) {
+    attempts += ONE;
+    lastResult = await provider.execInContainer(
+      clientContainerId,
+      mysqlCommand(endpoint, replicationSql()),
+    );
+    if (lastResult?.exitCode === ZERO) {
+      lastRows = parseReplicationRows(lastResult.stdout);
+      if (lastRows.length > ZERO &&
+          lastRows.every((region) =>
+            regionHasReplicaContract(region, replicaTarget))) {
+        return {
+          attempts,
+          replicaTarget,
+          regionCount: lastRows.length,
+          regions: lastRows,
+        };
+      }
+    }
+    await sleep(REPLICATION_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `TiDB table replication did not converge to RF=${replicaTarget} within ` +
+    `${REPLICATION_TIMEOUT_MS}ms; exit=${lastResult?.exitCode ?? 'unknown'} ` +
+    `stderr=${JSON.stringify(lastResult?.stderr || '')} ` +
+    `regions=${JSON.stringify(lastRows)}`,
+  );
 }
 
 async function assertImagesAvailable(provider) {
@@ -155,6 +256,7 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
   const provider = options.provider || new DockerProvider();
   const runId = options.runId || uniqueRunId();
   const tikvStoreCount = normalizeStoreCount(options.tikvStoreCount);
+  const replicaTarget = Math.min(DEFAULT_REPLICA_TARGET, tikvStoreCount);
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -206,7 +308,8 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       state.client.containerId,
       mysqlCommand(
         state.cluster.endpoints.mysql,
-        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS WHERE STORE_STATE_NAME = 'Up';",
+        "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS " +
+          "WHERE STORE_STATE_NAME = 'Up';",
       ),
     );
     assert.equal(
@@ -214,7 +317,10 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       ZERO,
       `TiDB store-status SQL failed: ${storeQuery.stderr || storeQuery.stdout}`,
     );
-    const upTiKvStores = Number.parseInt(String(storeQuery.stdout || '').trim(), 10);
+    const upTiKvStores = Number.parseInt(
+      String(storeQuery.stdout || '').trim(),
+      10,
+    );
     assert.equal(
       upTiKvStores,
       tikvStoreCount,
@@ -223,7 +329,7 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
 
     const query = await provider.execInContainer(
       state.client.containerId,
-      mysqlCommand(state.cluster.endpoints.mysql, smokeSql()),
+      mysqlCommand(state.cluster.endpoints.mysql, smokeSetupSql()),
     );
     assert.equal(
       query.exitCode,
@@ -236,12 +342,33 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       'TiDB smoke SQL did not round-trip the expected TiKV-backed value',
     );
 
+    const replication = await waitForTableReplication(
+      provider,
+      state.client.containerId,
+      state.cluster.endpoints.mysql,
+      replicaTarget,
+    );
+
+    const dropResult = await provider.execInContainer(
+      state.client.containerId,
+      mysqlCommand(state.cluster.endpoints.mysql, smokeCleanupSql()),
+    );
+    assert.equal(
+      dropResult.exitCode,
+      ZERO,
+      `TiDB smoke cleanup SQL failed: ${dropResult.stderr || dropResult.stdout}`,
+    );
+
     result = {
       status: 'passed',
       queryValue: SMOKE_VALUE,
       tikvStoreCount,
       upTiKvStores,
       readinessAttempts: state.cluster.readiness.attempts,
+      replicaTarget: replication.replicaTarget,
+      replicatedRegionCount: replication.regionCount,
+      replicationAttempts: replication.attempts,
+      regions: replication.regions,
       images: state.cluster.images,
     };
   } catch (error) {
