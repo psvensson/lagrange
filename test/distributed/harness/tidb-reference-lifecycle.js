@@ -239,6 +239,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       entrypoint: ['sleep'],
       command: [READINESS_CLIENT_KEEPALIVE_SECONDS],
     });
+    created.push(readinessClient);
     await options.provider.startContainer(readinessClient.containerId);
     await waitForContainerRunning(
       options.provider,
@@ -256,6 +257,7 @@ async function startTiDbReferenceCluster(rawOptions = {}) {
       );
     } finally {
       await stopTiDbReferenceCluster(options.provider, [readinessClient]);
+      created.pop();
     }
 
     return {
