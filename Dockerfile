@@ -10,7 +10,6 @@ RUN apt-get update && \
   rm -rf /var/lib/apt/lists/* && \
   npm ci --omit=dev --no-audit --no-fund && \
   rm -rf node_modules/node-sql-parser/umd \
-         node_modules/node-sql-parser/build \
          node_modules/node-sql-parser/*.map && \
   find node_modules/leveldown/prebuilds -mindepth 1 -maxdepth 1 \
          ! -name 'linux-x64' -exec rm -rf {} + && \
