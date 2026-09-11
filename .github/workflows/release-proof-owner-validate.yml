@@ -31,4 +31,7 @@ jobs:
       - name: Prove proof-owner repair
         env:
           LAGRANGE_CHECK_BASE: 3d36fe433f53c63be983f46489bab294c1206625
-        run: npm run check
+        run: |
+          npm run check
+          node --test test/scripts/release-preflight.test.js \
+            test/release/project-hardening-contracts.test.js
