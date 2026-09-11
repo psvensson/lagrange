@@ -10,6 +10,18 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-09-11
+
+This forward patch preserves the immutable `v0.2.2` tag after its release
+workflow completed the full release proof and build but stopped in the Docker
+image smoke test before publishing npm, Docker, Helm, SEA, or GitHub artifacts.
+
+### Fixed
+- The production Docker image now retains `node-sql-parser/build`, which
+  contains the SQLite and PostgreSQL dialect modules imported by the runtime
+  SQL parser. The v0.2.2 image build pruned that directory, so the release
+  smoke test failed with `ERR_MODULE_NOT_FOUND` before any artifact publication.
+
 ## [0.2.2] — 2026-09-11
 
 This forward patch preserves the immutable `v0.2.1` tag after its release
@@ -334,7 +346,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/psvensson/lagrange/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/psvensson/lagrange/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/psvensson/lagrange/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/psvensson/lagrange/compare/v0.1.1...v0.2.0
