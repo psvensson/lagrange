@@ -287,8 +287,8 @@ class TiDbReferenceRuntime {
         '--store=tikv',
         `--path=${pdAddressList}`,
         '--host=0.0.0.0',
+        `-P=${ports.tidb}`,
         `--advertise-address=${primary.internalIp}`,
-        `--port=${ports.tidb}`,
         `--status=${ports.tidbStatus}`,
       ],
     }));
