@@ -3,6 +3,8 @@ name: release-operator-gcp-prep
 on:
   push:
     branches: [release/v0.2.3-proof-owner]
+    paths:
+      - .github/workflows/release-operator-gcp-prep.yml
 
 permissions:
   contents: write
@@ -17,11 +19,11 @@ jobs:
           ref: release/v0.2.3-proof-owner
           fetch-depth: 0
 
-      - name: Make runner startup operator-owned and tighten preflight
+      - name: Tighten release preflight to exact-head full-gate proof
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import {readFileSync, writeFileSync, rmSync} from 'node:fs';
+          import {readFileSync, writeFileSync} from 'node:fs';
 
           function replaceExact(path, from, to) {
             const before = readFileSync(path, 'utf8');
@@ -31,17 +33,6 @@ jobs:
             writeFileSync(path, before.replace(from, to));
           }
 
-          function replaceRegex(path, pattern, replacement, label) {
-            const before = readFileSync(path, 'utf8');
-            if (!pattern.test(before)) {
-              throw new Error(`${path}: expected ${label} block not found`);
-            }
-            writeFileSync(path, before.replace(pattern, replacement));
-          }
-
-          // A release is stronger than an ordinary change proof. Preflight must
-          // therefore require the exact-SHA full gate, not accept a modular CI
-          // success that may only cover the final process/documentation delta.
           replaceExact(
             'scripts/release-preflight.js',
             ' *   3. either the modular `ci` gate or stronger `full-gate` concluded\n *      success for that exact sha;\n',
@@ -70,6 +61,11 @@ jobs:
 
           replaceExact(
             'test/scripts/release-preflight.test.js',
+            '    workflowRuns: [CI_RUN],\n',
+            '    workflowRuns: [FULL_GATE_RUN],\n',
+          );
+          replaceExact(
+            'test/scripts/release-preflight.test.js',
             `test('a successful full gate is a stronger exact-sha pre-tag proof', (t) => {\n  const result = evaluateReleasePreflight(facts({\n    workflowRuns: [{...CI_RUN, conclusion: 'failure'}, FULL_GATE_RUN],\n  }));\n  t.equal(result.ok, true);\n  t.match(result.checks[2].detail, /full-gate\\.yml/);\n  t.end();\n});\n\n`,
             `test('only a successful exact-sha full gate satisfies pre-tag proof', (t) => {\n  const result = evaluateReleasePreflight(facts({\n    workflowRuns: [CI_RUN, FULL_GATE_RUN],\n  }));\n  t.equal(result.ok, true);\n  t.match(result.checks[2].detail, /full-gate\\.yml/);\n  const modularOnly = evaluateReleasePreflight(facts({workflowRuns: [CI_RUN]}));\n  t.same(failing(modularOnly), [CHECK.CI_GATE_GREEN]);\n  t.end();\n});\n\n`,
           );
@@ -78,32 +74,10 @@ jobs:
             `      {...CI_RUN, conclusion: 'failure'},\n      {...FULL_GATE_RUN, conclusion: 'failure'},\n      {...CI_RUN, head_sha: OTHER},\n      {...CI_RUN, status: 'in_progress', conclusion: null},\n    ],\n  }))), [CHECK.CI_GATE_GREEN],\n  'only a completed successful ci.yml or full-gate.yml run on the exact sha counts');\n`,
             `      {...FULL_GATE_RUN, conclusion: 'failure'},\n      {...FULL_GATE_RUN, head_sha: OTHER},\n      {...FULL_GATE_RUN, status: 'in_progress', conclusion: null},\n      CI_RUN,\n    ],\n  }))), [CHECK.CI_GATE_GREEN],\n  'only a completed successful full-gate.yml run on the exact sha counts');\n`,
           );
-          // Default facts must now model the full-gate release exit.
-          replaceExact(
-            'test/scripts/release-preflight.test.js',
-            '    workflowRuns: [CI_RUN],\n',
-            '    workflowRuns: [FULL_GATE_RUN],\n',
-          );
           replaceExact(
             'test/scripts/release-preflight.test.js',
             '    return JSON.stringify({workflow_runs: [CI_RUN]});\n',
             '    return JSON.stringify({workflow_runs: [FULL_GATE_RUN]});\n',
-          );
-
-          // GitHub does not own the credentials to start the GCP machine.
-          // Both proof and release simply queue on the runner; the operator
-          // starts it from an authenticated local machine before triggering.
-          replaceRegex(
-            '.github/workflows/full-gate.yml',
-            /\n  # The whole release proof[\s\S]*?\n  gate:\n    needs: wake-runner\n/,
-            `\n  # The full proof queues on the controlled GCP runner. Starting that VM is\n  # deliberately operator-owned because the GCP credentials live only on the\n  # maintainer machine; GitHub receives no cloud-start authority.\n  gate:\n`,
-            'full-gate wake-runner',
-          );
-          replaceRegex(
-            '.github/workflows/release.yml',
-            /\n  # Wake the GCP runner VM[\s\S]*?\n  release:\n    needs: wake-runner\n/,
-            `\n  # The release queues on the controlled GCP runner. The maintainer starts the\n  # VM from an authenticated local machine before pushing the release tag;\n  # GitHub itself has no authority or credentials to start GCP resources.\n  release:\n`,
-            'release wake-runner',
           );
 
           replaceExact(
@@ -119,22 +93,18 @@ jobs:
           replaceExact(
             'RELEASE.md',
             '3. **Land it through the ordinary publish gate** (`npm run publish`). If\n   `ci / gate` is green, that is the pre-tag proof. If it refuses with\n   `RELEASE_PROOF_REQUIRED`, run `full-gate` on the exact same main SHA\n   (manual dispatch, or push a `release-proof/**` branch pointing at that SHA)\n   and wait for its `gate` job to succeed.\n',
-            '3. **Land it through the ordinary publish gate** (`npm run publish`). Then\n   start the GCP runner from the authenticated maintainer machine, point a\n   `release-proof/**` branch at the exact `main` SHA (or manually dispatch\n   `full-gate` for that SHA), and wait for its `gate` job to succeed. Modular\n   `ci` remains useful change feedback but is not the release-exit proof.\n',
+            '3. **Land it through the ordinary publish gate** (`npm run publish`). Then\n   start the GCP runner from the authenticated maintainer machine, point a\n   `release-proof/**` branch at the exact `main` SHA, and wait for its `gate`\n   job to succeed. Modular `ci` remains useful change feedback but is not the\n   release-exit proof.\n',
           );
           replaceExact(
             'RELEASE.md',
             'Each ordinary landed head is proven in full exactly once: the pre-push hook\nruns the full test corpus before the push and `ci.yml` runs the impact cone\nafter it. A release-surface head that the selector marks\n`RELEASE_PROOF_REQUIRED` uses `full-gate.yml` as its stronger exact-SHA\npre-tag proof. `release.yml` then re-runs that same `npm run check:release`\non the immutable tag before publishing anything. No scheduled whole-system\nproof exists.\n',
             'Each ordinary landed head gets the local pre-push full corpus plus the remote\nmodular impact-cone proof. Release exit is separate and stronger: every tag\nrequires a successful exact-SHA `full-gate.yml` run first, regardless of whether\nordinary `ci.yml` was green or correctly refused modular proof. `release.yml`\nthen re-runs the same `npm run check:release` on the immutable tag before\npublishing anything. No scheduled whole-system proof exists.\n',
           );
-
-          // Remove temporary branch-only validators from the durable tree.
-          rmSync('.github/workflows/release-proof-owner-validate.yml', {force: true});
-          rmSync('.github/workflows/release-operator-gcp-prep.yml', {force: true});
           NODE
 
           git diff --check
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "release: make full-gate the operator-started pre-tag proof"
+          git add scripts/release-preflight.js test/scripts/release-preflight.test.js RELEASE.md
+          git commit -m "release: require exact-head full-gate before tagging"
           git push origin HEAD:release/v0.2.3-proof-owner
