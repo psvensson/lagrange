@@ -186,6 +186,7 @@ async function runTiDbReferenceLifecycleSmoke(options = {}) {
       image: TIDB_REFERENCE_DEFAULTS.mysqlClientImage,
       network: state.networkName,
       resourceLimits: CLIENT_RESOURCE_LIMITS,
+      hostConfigExtras: {NetworkMode: state.networkName},
       entrypoint: ['sleep'],
       command: [CLIENT_KEEPALIVE_SECONDS],
       labels: LABELS,
