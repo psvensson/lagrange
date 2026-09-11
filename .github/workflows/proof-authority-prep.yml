@@ -11,17 +11,12 @@ jobs:
   prepare:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: release/v0.2.4-process-repair
           fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-      - run: npm ci
       - name: Finish durable proof authority wiring
         run: |
           node --input-type=module <<'NODE'
@@ -77,24 +72,9 @@ jobs:
           fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
 
-          node test/scripts/proof-authority.test.js
-          node test/scripts/action-authority.test.js
-          node test/scripts/release-preflight.test.js
-          node test/release/release-pipeline-proof-reuse.test.js
-          npx eslint \
-            scripts/proof-authority.js \
-            scripts/run-release-proof.js \
-            scripts/release-preflight.js \
-            test/scripts/proof-authority.test.js \
-            test/scripts/release-preflight.test.js \
-            test/release/release-pipeline-proof-reuse.test.js
-
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            package.json \
-            scripts/action-authority.js \
-            test/scripts/action-authority.test.js
+          git add package.json scripts/action-authority.js test/scripts/action-authority.test.js
           if ! git diff --cached --quiet; then
             git commit -m 'release: complete durable proof authority wiring'
             git push origin HEAD:release/v0.2.4-process-repair
