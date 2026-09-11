@@ -1,19 +1,36 @@
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
+import {setTimeout as sleep} from 'node:timers/promises';
+import {
+  metricRatio,
+  summarizeLatencies,
+} from './tidb-reference-metrics.js';
 import {withTiDbReferenceRuntime} from './tidb-reference-runtime.js';
 
 const SCENARIO = 'tidb-compute-near-data';
 const ZERO = 0;
 const ONE = 1;
+const TWO = 2;
 const DEFAULT_ENTITY_COUNT = 128;
 const DEFAULT_EVENTS_PER_ENTITY = 16;
 const DEFAULT_REQUEST_COUNT = 32;
 const DEFAULT_INSERT_BATCH_SIZE = 64;
+const DEFAULT_PAYLOAD_BYTES = 256;
 const DEFAULT_QUERY_TIMEOUT_MS = 20000;
-const P50 = 0.50;
-const P95 = 0.95;
-const P99 = 0.99;
-const MS_PER_SECOND = 1000;
+const DEFAULT_DDL_READY_TIMEOUT_MS = 120000;
+const DDL_RETRY_POLL_MS = 500;
+const PENDING_CONTRACT_STATE = 'pending';
+const EVENT_ID_ENTITY_SCALE = 100000;
+const VALUE_ORDINAL_MULTIPLIER = 11;
+const VALUE_MODULUS = 97;
+const MERCHANT_ID_MULTIPLIER = 17;
+const DEVICE_ID_MULTIPLIER = 31;
+const MERCHANT_SIGNAL_THRESHOLD = 40;
+const DEVICE_SIGNAL_THRESHOLD = 45;
+const DEFAULT_MIN_THROUGHPUT_RATIO = 2.0;
+const DEFAULT_MAX_P99_RATIO = 0.70;
+const DEFAULT_MAX_COORDINATOR_ROUND_TRIP_RATIO = 0.50;
+const DEFAULT_MAX_EXPENSIVE_EDGE_BYTES_RATIO = 0.50;
 const LAGRANGE_TABLES = Object.freeze({
   account: 'tidb_risk_account_events',
   merchant: 'tidb_risk_merchant_events',
@@ -30,44 +47,22 @@ function scenarioConfig(cluster) {
   return cluster?._config?.scenarios?.[SCENARIO] || {};
 }
 
-function percentile(sorted, fraction) {
-  if (sorted.length === ZERO) return null;
-  const index = Math.min(
-    sorted.length - ONE,
-    Math.max(ZERO, Math.ceil(sorted.length * fraction) - ONE),
-  );
-  return sorted[index];
-}
-
-function summarize(latencies, startedAt, operations) {
-  const sorted = [...latencies].sort((left, right) => left - right);
-  const elapsedMs = performance.now() - startedAt;
-  return {
-    operations,
-    elapsedMs,
-    throughputOpsPerSec:
-      elapsedMs > ZERO ? operations / (elapsedMs / MS_PER_SECOND) : null,
-    latencyMs: {
-      p50: percentile(sorted, P50),
-      p95: percentile(sorted, P95),
-      p99: percentile(sorted, P99),
-    },
-  };
-}
-
 function valueFor(kind, entityId, ordinal) {
   const multiplier = VALUE_MULTIPLIERS[kind];
-  return ((entityId * multiplier) + (ordinal * 11)) % 97 + ONE;
+  return ((entityId * multiplier) +
+    (ordinal * VALUE_ORDINAL_MULTIPLIER)) % VALUE_MODULUS + ONE;
 }
 
-function eventRows(kind, entityCount, eventsPerEntity) {
+function eventRows(kind, entityCount, eventsPerEntity, payloadBytes) {
   const rows = [];
+  const payload = 'x'.repeat(payloadBytes);
   for (let entityId = ONE; entityId <= entityCount; entityId += ONE) {
     for (let ordinal = ONE; ordinal <= eventsPerEntity; ordinal += ONE) {
       rows.push({
-        eventId: (entityId * 100000) + ordinal,
+        eventId: (entityId * EVENT_ID_ENTITY_SCALE) + ordinal,
         entityId,
         value: valueFor(kind, entityId, ordinal),
+        payload,
       });
     }
   }
@@ -79,21 +74,54 @@ function createTableSql(table) {
     `CREATE TABLE IF NOT EXISTS ${table} (` +
     'event_id INTEGER PRIMARY KEY, ' +
     'entity_id INTEGER NOT NULL, ' +
-    'value INTEGER NOT NULL)'
+    'value INTEGER NOT NULL, ' +
+    'payload TEXT NOT NULL)'
   );
 }
 
 function insertSql(table, rows) {
   const values = rows.map((row) =>
-    `(${row.eventId}, ${row.entityId}, ${row.value})`,
+    `(${row.eventId}, ${row.entityId}, ${row.value}, '${row.payload}')`,
   ).join(', ');
-  return `INSERT INTO ${table} (event_id, entity_id, value) VALUES ${values}`;
+  return (
+    `INSERT INTO ${table} (event_id, entity_id, value, payload) VALUES ${values}`
+  );
 }
 
 function aggregateSql(table, entityId) {
+  const lowerExclusive = entityId * EVENT_ID_ENTITY_SCALE;
+  const upperExclusive = (entityId + ONE) * EVENT_ID_ENTITY_SCALE;
   return (
     'SELECT COUNT(*) AS row_count, COALESCE(SUM(value), 0) AS value_sum ' +
-    `FROM ${table} WHERE entity_id = ${entityId}`
+    `FROM ${table} WHERE event_id > ${lowerExclusive} ` +
+    `AND event_id < ${upperExclusive}`
+  );
+}
+
+function isRetryableDdlOutcome(result) {
+  return result?.provisioningDeadlineExpired === true ||
+    result?.deferRetry === true ||
+    result?.contractState === PENDING_CONTRACT_STATE;
+}
+
+async function runLagrangeDdl(node, sql, queryTimeoutMs, ddlReadyTimeoutMs) {
+  const deadline = Date.now() + ddlReadyTimeoutMs;
+  let lastOutcome = null;
+  while (Date.now() < deadline) {
+    const result = await node.queryWithTimeout(
+      sql,
+      [],
+      {timeoutMs: queryTimeoutMs},
+    );
+    if (!isRetryableDdlOutcome(result)) {
+      return result;
+    }
+    lastOutcome = result;
+    await sleep(DDL_RETRY_POLL_MS);
+  }
+  throw new Error(
+    'Lagrange risk table DDL did not become admitted: ' +
+    JSON.stringify(lastOutcome),
   );
 }
 
@@ -102,8 +130,14 @@ async function prepareLagrange(cluster, config) {
   const queryTimeoutMs = config.queryTimeoutMs;
   for (const kind of Object.keys(LAGRANGE_TABLES)) {
     const table = LAGRANGE_TABLES[kind];
-    await node.queryWithTimeout(
+    await runLagrangeDdl(
+      node,
       createTableSql(table),
+      queryTimeoutMs,
+      config.ddlReadyTimeoutMs,
+    );
+    await node.queryWithTimeout(
+      `SELECT COUNT(*) AS row_count FROM ${table}`,
       [],
       {timeoutMs: queryTimeoutMs},
     );
@@ -112,7 +146,12 @@ async function prepareLagrange(cluster, config) {
       [],
       {timeoutMs: queryTimeoutMs},
     );
-    const rows = eventRows(kind, config.entityCount, config.eventsPerEntity);
+    const rows = eventRows(
+      kind,
+      config.entityCount,
+      config.eventsPerEntity,
+      config.payloadBytes,
+    );
     for (let offset = ZERO; offset < rows.length; offset += config.insertBatchSize) {
       await node.queryWithTimeout(
         insertSql(table, rows.slice(offset, offset + config.insertBatchSize)),
@@ -129,7 +168,12 @@ async function prepareTiDb(runtime, config) {
     const table = `${TIDB_DATABASE}.${LAGRANGE_TABLES[kind]}`;
     await runtime.executeSql(createTableSql(table));
     await runtime.executeSql(`DELETE FROM ${table}`);
-    const rows = eventRows(kind, config.entityCount, config.eventsPerEntity);
+    const rows = eventRows(
+      kind,
+      config.entityCount,
+      config.eventsPerEntity,
+      config.payloadBytes,
+    );
     for (let offset = ZERO; offset < rows.length; offset += config.insertBatchSize) {
       await runtime.executeSql(
         insertSql(table, rows.slice(offset, offset + config.insertBatchSize)),
@@ -149,7 +193,7 @@ function parseLagrangeAggregate(result) {
 
 function parseTiDbAggregate(output) {
   const fields = String(output).trim().split('\t');
-  assert.equal(fields.length, 2, 'TiDB aggregate returned unexpected shape');
+  assert.equal(fields.length, TWO, 'TiDB aggregate returned unexpected shape');
   return {rowCount: Number(fields[ZERO]), valueSum: Number(fields[ONE])};
 }
 
@@ -157,17 +201,17 @@ function requestShape(requestIndex, entityCount) {
   const accountId = (requestIndex % entityCount) + ONE;
   return {
     accountId,
-    merchantId: ((accountId * 17) % entityCount) + ONE,
-    deviceId: ((accountId * 31) % entityCount) + ONE,
+    merchantId: ((accountId * MERCHANT_ID_MULTIPLIER) % entityCount) + ONE,
+    deviceId: ((accountId * DEVICE_ID_MULTIPLIER) % entityCount) + ONE,
   };
 }
 
 function shouldCallMerchant(account, eventsPerEntity) {
-  return account.valueSum >= eventsPerEntity * 40;
+  return account.valueSum >= eventsPerEntity * MERCHANT_SIGNAL_THRESHOLD;
 }
 
 function shouldCallDevice(merchant, eventsPerEntity) {
-  return merchant.valueSum >= eventsPerEntity * 45;
+  return merchant.valueSum >= eventsPerEntity * DEVICE_SIGNAL_THRESHOLD;
 }
 
 async function lagrangeAggregate(node, kind, entityId, queryTimeoutMs) {
@@ -205,7 +249,11 @@ async function runLeafControl(executor, config) {
     results.push(outcome.aggregate);
   }
   return {
-    metrics: summarize(latencies, startedAt, config.requestCount),
+    metrics: summarizeLatencies(
+      latencies,
+      performance.now() - startedAt,
+      config.requestCount,
+    ),
     results,
   };
 }
@@ -241,7 +289,11 @@ async function runRiskComposition(executor, config) {
     latencies.push(performance.now() - requestStartedAt);
   }
   return {
-    metrics: summarize(latencies, startedAt, config.requestCount),
+    metrics: summarizeLatencies(
+      latencies,
+      performance.now() - startedAt,
+      config.requestCount,
+    ),
     aggregateCalls,
     decisions,
   };
@@ -258,28 +310,36 @@ function resolvedConfig(cluster) {
       raw.requestCount : DEFAULT_REQUEST_COUNT,
     insertBatchSize: Number.isInteger(raw.insertBatchSize) ?
       raw.insertBatchSize : DEFAULT_INSERT_BATCH_SIZE,
+    payloadBytes: Number.isInteger(raw.payloadBytes) ?
+      raw.payloadBytes : DEFAULT_PAYLOAD_BYTES,
     queryTimeoutMs: Number.isInteger(raw.queryTimeoutMs) ?
       raw.queryTimeoutMs : DEFAULT_QUERY_TIMEOUT_MS,
+    ddlReadyTimeoutMs: Number.isInteger(raw.ddlReadyTimeoutMs) ?
+      raw.ddlReadyTimeoutMs : DEFAULT_DDL_READY_TIMEOUT_MS,
     matureTarget: {
-      minThroughputRatio: Number(raw.matureTarget?.minThroughputRatio ?? 2.0),
-      maxP99Ratio: Number(raw.matureTarget?.maxP99Ratio ?? 0.70),
-      maxCoordinatorRoundTripRatio:
-        Number(raw.matureTarget?.maxCoordinatorRoundTripRatio ?? 0.50),
-      maxExpensiveEdgeBytesRatio:
-        Number(raw.matureTarget?.maxExpensiveEdgeBytesRatio ?? 0.50),
+      minThroughputRatio: Number(
+        raw.matureTarget?.minThroughputRatio ?? DEFAULT_MIN_THROUGHPUT_RATIO,
+      ),
+      maxP99Ratio: Number(
+        raw.matureTarget?.maxP99Ratio ?? DEFAULT_MAX_P99_RATIO,
+      ),
+      maxCoordinatorRoundTripRatio: Number(
+        raw.matureTarget?.maxCoordinatorRoundTripRatio ??
+          DEFAULT_MAX_COORDINATOR_ROUND_TRIP_RATIO,
+      ),
+      maxExpensiveEdgeBytesRatio: Number(
+        raw.matureTarget?.maxExpensiveEdgeBytesRatio ??
+          DEFAULT_MAX_EXPENSIVE_EDGE_BYTES_RATIO,
+      ),
     },
   };
-}
-
-function metricRatio(left, right) {
-  return Number.isFinite(left) && Number.isFinite(right) && right > ZERO ?
-    left / right : null;
 }
 
 async function run(cluster) {
   const config = resolvedConfig(cluster);
   assert.ok(config.entityCount > ZERO && config.eventsPerEntity > ZERO);
   assert.ok(config.requestCount > ZERO && config.insertBatchSize > ZERO);
+  assert.ok(config.payloadBytes > ZERO, 'payloadBytes must be positive');
   const lagrangeNode = cluster.getNodes()[ZERO];
   await prepareLagrange(cluster, config);
 
@@ -334,7 +394,10 @@ async function run(cluster) {
       workload: {
         entityCount: config.entityCount,
         eventsPerEntity: config.eventsPerEntity,
+        payloadBytes: config.payloadBytes,
         requestCount: config.requestCount,
+        primaryKeyLocality:
+          'each entity owns one contiguous event_id range used by every leaf',
         dynamicGraph: 'account -> optional merchant -> optional device',
       },
       phases: {
@@ -386,8 +449,12 @@ async function run(cluster) {
       evidenceDisposition: {
         claimEligible: serviceGraphEngaged && coproV2Engaged,
         reasonCodes: [
-          ...(serviceGraphEngaged ? [] : ['lagrange_service_graph_target_not_engaged']),
-          ...(coproV2Engaged ? [] : ['tidb_coprocessor_v2_comparator_not_engaged']),
+          ...(serviceGraphEngaged ? [] : [
+            'lagrange_service_graph_target_not_engaged',
+          ]),
+          ...(coproV2Engaged ? [] : [
+            'tidb_coprocessor_v2_comparator_not_engaged',
+          ]),
           'shared_open_loop_client_not_yet_engaged',
           'expensive_edge_byte_accounting_not_yet_engaged',
           'rebalance_subphase_not_yet_engaged',
