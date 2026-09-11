@@ -47,6 +47,9 @@ jobs:
       - name: Run lifecycle contract guard
         run: node scripts/checks/tidb-reference-lifecycle-guard.js
 
+      - name: Run OLTP workload contract guard
+        run: node scripts/checks/tidb-oltp-workload-guard.js
+
       - name: Run live three-store Docker SQL smoke
         env:
           TIDB_REFERENCE_TIKV_STORE_COUNT: '3'
