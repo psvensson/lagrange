@@ -1,0 +1,49 @@
+name: release-v023-validate
+
+on:
+  push:
+    branches: [release/v0.2.3]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: release/v0.2.3
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install exact dependencies
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
+
+      - name: Validate release identity and notes
+        run: |
+          node scripts/release-notes.js --mode check --version 0.2.3
+          node --test \
+            test/release/version-single-source.test.js \
+            test/scripts/release-notes.test.js \
+            test/scripts/release-preflight.test.js
+
+      - name: Build and smoke production image
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg VERSION=0.2.3 \
+            --build-arg VCS_REF="$GITHUB_SHA" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --tag lagrange-release-smoke:0.2.3 .
+          VERSION_OUTPUT="$(docker run --rm lagrange-release-smoke:0.2.3 src/index.js --version)"
+          test "$VERSION_OUTPUT" = "lagrange v0.2.3"
