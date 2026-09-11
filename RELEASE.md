@@ -19,35 +19,40 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
 | Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
 | Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
-| Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | `npm run check:release` on the controlled GCP runner — the whole system, on demand or as the exact-head stronger proof when modular CI correctly refuses a release-surface change. It remains unscheduled. |
-| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
+| Push of `release-publishability/**` | `.github/workflows/release.yml` | Fast GitHub-hosted, non-publishing preflight. It checks current npm package/version state, GitHub OIDC claims for npm trusted publishing, and the current Docker Hub pull+push credential scope. These are freshness-bound external facts and are deliberately **not** permanent proof receipts. |
+| Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | First asks the durable proof authority whether `release-full-v1` already proves this exact SHA. If yes, GCP is not woken and the proof is reused. If not, the controlled GCP runner executes the complete release proof once; after success a separate GitHub-hosted recorder persists the proof receipt. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | Rechecks freshness-bound publication prerequisites → requires the durable `release-full-v1` receipt for the tagged SHA → builds and publishes the npm package **first** → builds SEA/Helm/Docker artifacts and smoke-tests the image → pushes Docker tags → updates the Docker Hub overview (best-effort) → publishes release assets and notes. The application proof is never rerun by the tag workflow. |
+
+The durable proof design is specified in
+[`docs/development/durable-proof-receipts.md`](docs/development/durable-proof-receipts.md).
 
 ## Release exit
 
 A head may be tagged when, and only when, five checks hold. `npm run
-release:preflight` evaluates them and prints the two commands that perform
-the release; it never tags.
+release:preflight` evaluates them and prints the two commands that perform the
+release; it never tags.
 
 1. The release content is clean (porcelain status outside `solve/`).
 2. HEAD is exactly `origin/main`.
-3. The exact SHA has a successful pre-tag proof: either the modular `ci`
-   workflow's `gate` job, or the stronger `full-gate` workflow. A
-   `RELEASE_PROOF_REQUIRED` refusal is not a red behavioural result; route that
-   exact main SHA through `full-gate` instead of weakening the selector.
+3. The proof authority reports a valid durable `release-full-v1` receipt for
+   this exact 40-character commit SHA.
 4. Every version literal agrees (`package.json`, the root package in
    `package-lock.json`, `CLI_VERSION`, `ENTRYPOINT_VERSION`, Helm chart
    `version` and `appVersion`) and `CHANGELOG.md` carries a non-empty, dated
    section for the version.
 5. No tag exists for the version yet.
 
-Everything after the tag is proven by `release.yml` on the tagged SHA (the
-full pre-release proof, the SEA binaries, the Docker image and its smoke
-test, the Helm chart, the npm package, the GitHub Release). The tag workflow
-is the only artifact publisher; nothing it proves is re-run locally. Five-node
-formation timing is a measured number quoted in the notes from the formation
-health trend (below), never a gate. Decided 2026-09-05 after the 0.2 program
-(`solve/epics/release-0-2.md`) had coupled the tag to a live convergence
-result the shipped bytes had not met since 2026-08-30.
+Workflow history is **not** proof authority. A remembered green run, a branch
+name, an Actions status, or a local report cannot substitute for the durable
+receipt. The workflow that establishes a missing proof records the receipt once;
+all later consumers ask the same authority.
+
+Everything after the tag consumes the already-established content proof. The
+tag workflow proves only facts that can have changed since that proof — for
+example registry availability and credentials — plus the release artifacts it
+constructs from the immutable tagged tree. Five-node formation timing is a
+measured number quoted in the notes from the formation health trend (below),
+never a release gate.
 
 ## Cutting a release
 
@@ -66,48 +71,89 @@ instead of frozen. A patch release for one fix follows the same steps.
    `test/release/version-single-source.test.js` enforces agreement); quote
    the current `npm run health:formation -- --summary` line in the notes.
    Keep the _Known limitations_ section honest about convergence (below).
-3. **Land it through the ordinary publish gate** (`npm run publish`). If
-   `ci / gate` is green, that is the pre-tag proof. If it refuses with
-   `RELEASE_PROOF_REQUIRED`, run `full-gate` on the exact same main SHA
-   (manual dispatch, or push a `release-proof/**` branch pointing at that SHA)
-   and wait for its `gate` job to succeed.
-4. **Preflight, then tag:**
+3. **Land it through the ordinary publish gate** (`npm run publish`). Then
+   point `release-publishability/<version>` at that exact main SHA. This fast
+   hosted check must be green before the expensive release proof is attempted.
+4. **Establish or reuse the release proof.** Run `full-gate` for that exact SHA
+   (manual dispatch or a `release-proof/**` ref). `full-gate` asks
+   `ProofAuthority` first. If `release-full-v1` is already recorded, it exits
+   without waking GCP. Otherwise GCP runs the proof once and the hosted recorder
+   stores the receipt after success.
+5. **Preflight, then tag:**
    ```sh
    npm run release:preflight
    git tag -a vx.y.z -m "lagrange-server x.y.z" <sha>
    git push origin vx.y.z
    ```
-   `release.yml` builds and publishes every artifact from the tagged tree.
-   The workflow serializes all releases and refuses to publish an older tag
-   after a newer `v*` tag exists, preventing a rerun from moving `latest`
-   backward. It also verifies that the tag is annotated and its commit is
-   reachable from `origin/main`. The npm owner records the tarball SHA-512 and
-   `gitHead`; a rerun skips npm only when both match, and fails closed on a
-   foreign package, immutable-version content conflict, or commit conflict. A
-   rerun of the current tag replaces existing GitHub release assets and notes,
-   then publishes any draft left by an interrupted first attempt. A
-   partial-channel failure is repaired forward with a new patch version; a
-   tag is never moved.
-5. **Docker Hub overview updates itself.**
+   `release.yml` consumes that same durable proof receipt; it does not repeat
+   the corpus. npm publication is deliberately the first mutating release
+   channel so a trusted-publisher problem is discovered before SEA/Helm/Docker
+   build work. The workflow serializes releases and refuses to publish an older
+   tag after a newer `v*` tag exists, preventing a rerun from moving `latest`
+   backward. A partial-channel failure is repaired forward with a new patch
+   version; a tag is never moved.
+6. **Docker Hub overview updates itself.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
-   section (from `CHANGELOG.md`) and PATCHes it to the repository description
-   at <https://hub.docker.com/r/psvensson/lagrange> via the Hub API
-   (best-effort — a failed description update never sinks a release). Manual
+   section (from `CHANGELOG.md`) and updates the repository description
+   best-effort. A failed description update never sinks a release. Manual
    fallback if the step warns:
    `npm run release:notes -- --mode overview --version x.y.z` and paste the
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
 
-## Per-head proof, once
+## Proof once per exact SHA
 
-Each ordinary landed head is proven in full exactly once: the pre-push hook
-runs the full test corpus before the push and `ci.yml` runs the impact cone
-after it. A release-surface head that the selector marks
-`RELEASE_PROOF_REQUIRED` uses `full-gate.yml` as its stronger exact-SHA
-pre-tag proof. `release.yml` then re-runs that same `npm run check:release`
-on the immutable tag before publishing anything. No scheduled whole-system
-proof exists.
+The release-wide content proof has one semantic owner:
+`scripts/proof-authority.js`.
+
+The first registered permanent contract is `release-full-v1`. Its durable key
+is the pair:
+
+```text
+(release-full-v1, <exact 40-character commit SHA>)
+```
+
+A successful receipt is stored outside normal source history under:
+
+```text
+refs/lagrange-proofs/release-full-v1/<sha>
+```
+
+The ref points to an annotated Git object that targets the proven commit and
+contains the versioned receipt. This makes the fact independent of the workflow
+or host that happened to establish it and independent of GitHub Actions log or
+artifact retention.
+
+Any consumer can ask:
+
+```sh
+node scripts/proof-authority.js check release-full-v1 <sha>
+```
+
+Exit status `0` means proven and reusable, `1` means authoritatively unproven,
+and `2` means the authority is unavailable or stored evidence is malformed.
+Only `proven` permits reuse. `npm run check:release` routes through the same
+proof-aware runner, so a previously proven SHA skips the expensive work even
+when invoked from a different process or machine.
+
+The proof contract is part of identity. If a future release policy deliberately
+strengthens the meaning of the full proof in a way that must invalidate old
+receipts, introduce `release-full-v2`; never reinterpret `release-full-v1`.
+
+### What is not cached forever
+
+A proof receipt is permanent only when truth is a property of immutable content.
+External facts can change while the SHA stays identical. Therefore the following
+remain freshness-bound checks and may legitimately run more than once:
+
+- npm registry reachability and candidate-version availability;
+- npm trusted-publisher/OIDC configuration;
+- Docker Hub credential validity and push scope;
+- current availability or policy of another external service.
+
+This distinction is deliberate. "Proof once" must not become "a credential
+worked once, therefore it works forever."
 
 ## Formation health
 
@@ -154,42 +200,29 @@ trend and promote only through the sealed Wilson-bar rule.
 
 ## GitHub repository configuration
 
-The workflows use GitHub-hosted `ubuntu-24.04` runners. Configure these values
-under **Settings → Secrets and variables → Actions** before pushing a release
-tag:
+Publication and publication preflight use GitHub-hosted `ubuntu-24.04` runners.
+Configure these values under **Settings → Secrets and variables → Actions**:
 
 - repository variable `DOCKERHUB_USERNAME`: the Docker Hub account that owns
   `psvensson/lagrange`;
 - repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with
   Read/Write permission.
 
-The npm package is public and named `lagrange-server`. npm cannot configure a
-trusted publisher until the package exists, so bootstrap it once with a
-short-lived granular npm access token stored as repository secret `NPM_TOKEN`.
-The release workflow passes this token only to the npm publish step. After the
-first successful publication:
+The npm package is public and named `lagrange-server`. npm trusted publishing is
+bound to owner `psvensson`, repository `lagrange`, and workflow `release.yml`.
+The workflow keeps `id-token: write`; npm receives the GitHub-hosted OIDC
+identity at publication time. The fast publishability job verifies the
+available OIDC claims before GCP proof work begins. The actual npm-side trusted
+publisher decision occurs at publish time, so npm publication remains the first
+mutating release operation after the tag.
 
-1. In the npm package settings, add a GitHub Actions trusted publisher for
-   owner `psvensson`, repository `lagrange`, and workflow `release.yml`.
-2. Delete the `NPM_TOKEN` GitHub secret and revoke the token on npm.
-3. Leave the workflow's `id-token: write` permission in place; later releases
-   use npm's short-lived OIDC credentials and generate provenance automatically.
+The full proof runner itself retains `contents: read`. Only the separate hosted
+proof-recorder job needs `contents: write`, and it writes through
+`ProofAuthority` after the gate has succeeded. Receipt recording is a registered
+standing action in `ActionAuthority`; it does not grant permission to rewrite an
+existing receipt or invent a different proof identity.
 
-The workflow pins npm `11.7.0`, above the trusted-publishing minimum, and runs
-on a GitHub-hosted Node 22 runner. The publish owner checks the live registry
-without accepting cached absence and refuses to overwrite or reinterpret an
-existing version. A package name can be claimed between releases, so the
-repository identity check is a release gate rather than an assumption.
-
-The pre-release gate is clean-checkout safe: it downloads the digest-pinned
-MovieLens input, regenerates ignored owner-debt analysis inputs before the
-overlapped test readers start, verifies generated test shards, and caps the
-fast TAP lane at the measured stable worker budget. The one aggregate-sensitive
-evidence projection runs serially before the overlapped lanes. No untracked
-developer artifact is required to release.
-
-The release job requests `contents: write` for GitHub's short-lived
-`GITHUB_TOKEN` and `id-token: write` for npm trusted publishing. Repository or
-organization policy must allow those permissions. Ordinary CI, repository
-health, and the manual full gate retain `contents: read` and receive no Docker
-Hub or npm publishing credentials.
+The tag publication job requests `contents: write` for GitHub release assets and
+`id-token: write` for npm trusted publishing. Ordinary CI, repository health,
+and the self-hosted full-proof execution receive no Docker Hub or npm publishing
+credentials.
