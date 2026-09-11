@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-artifact-hosted-publisher",
+  "class": "fix",
+  "epic": "release-process-simplification",
+  "statement": "The release workflow performs its heavy proof and artifact construction on the controlled runner, then publishes the same verified bytes on a GitHub-hosted runner supported by npm trusted publishing; one commit-and-run-bound handoff owner rejects substituted identities, files and digests before any publication, restores canonical executable modes, and keeps public checksums usable beside the published assets.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/release-artifact-hosted-publisher/evidence/receipt.json",
+      "requiredReceipts": [
+        "unsupported-publisher-red-witness",
+        "handoff-identity-integrity-modes-adversarial-witnesses",
+        "hosted-publisher-consumes-verified-bytes-without-rebuild",
+        "independent-category-complete-review",
+        "static-and-required-change-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-handoff-owner",
+      "statement": "Define the artifact set, identity, hashes and canonical modes once in a handoff owner. Consumers validate, not reconstruct, this contract."
+    },
+    {
+      "id": "same-verified-bytes",
+      "statement": "Use the producer artifact ID in the same workflow run and a separately bound manifest digest. Never repack npm, rebuild images or replace artifacts after verification. Publisher-only reruns may differ in run attempt but not run, tag or commit."
+    },
+    {
+      "id": "fail-before-publish",
+      "statement": "Reject unexpected/missing/non-regular files, digest/size/identity mismatch and image provenance mismatch before npm or Docker credentials are used. Use a fresh temporary download directory and no cross-run download override."
+    },
+    {
+      "id": "preserve-publication-safety",
+      "statement": "Retain OIDC and provenance, existing npm authorization/registry integrity owner, release serialization, current-tag/main checks, Docker latest fencing and forward-only partial-channel repair. No new credentials or gate weakening."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Own release workflow producer/publisher handoff, its source and tests, release documentation and generated metadata. The separate Docker/proof-dispatch Quest remains independently scoped and will be integrated before the final publish."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

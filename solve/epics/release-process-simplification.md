@@ -6,6 +6,7 @@ legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
+  - release-artifact-hosted-publisher
   - release-process-simplification-v2
   - release-process-simplification
 authorizes: []

@@ -1,6 +1,9 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {access, readFile} from 'node:fs/promises';
+import {access, mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {parse} from 'yaml';
 import {ADMIN_DEFAULT} from '../../src/admin/admin-constants.js';
 import {
@@ -54,6 +57,76 @@ const ACTIVE_RELEASE_SURFACES = [
 ];
 
 describe('project hardening contracts', () => {
+  it('runs npm trusted publishing on its supported hosted runner', async () => {
+    const workflow = parse(await readFile('.github/workflows/release.yml', UTF8));
+    const publisher = Object.values(workflow.jobs).find((job) =>
+      job.steps.some((step) => step.name === 'Publish npm package'));
+    assert.ok(publisher, 'the real npm publisher must remain reachable');
+    assert.equal(publisher['runs-on'], 'ubuntu-24.04',
+      'npm trusted publishing and provenance do not support self-hosted runners');
+    assert.equal(publisher.permissions['id-token'], 'write');
+  });
+
+  it('hands off current-run immutable artifacts before any outward publisher action', async () => {
+    const workflow = parse(await readFile('.github/workflows/release.yml', UTF8));
+    const build = workflow.jobs.release;
+    const publish = workflow.jobs.publish;
+    assert.deepEqual(build.permissions, {contents: 'read'});
+    assert.deepEqual(build['runs-on'], ['self-hosted', 'gcp']);
+    assert.equal(publish.needs, 'release');
+    assert.equal(publish['runs-on'], 'ubuntu-24.04');
+    assert.equal(build.outputs.artifact_id, '${{ steps.upload.outputs.artifact-id }}');
+    const upload = build.steps.find((step) => step.id === 'upload');
+    assert.equal(upload.with['if-no-files-found'], 'error');
+    assert.match(upload.with.name, /github.run_attempt/u);
+    const download = publish.steps.find((step) => step.name === 'Download exact producer artifact');
+    assert.deepEqual(Object.keys(download.with).sort(), ['artifact-ids', 'merge-multiple', 'path']);
+    assert.equal(download.with['artifact-ids'], '${{ needs.release.outputs.artifact_id }}');
+    assert.equal(download.with.path, '${{ steps.handoff.outputs.directory }}');
+    const identity = (job) => job.steps.find((step) => step.id === 'release');
+    assert.deepEqual(identity(build), identity(publish), 'one shared tag/main/latest identity owner');
+    const verified = publish.steps.findIndex((step) => step.name === 'Authorize verified artifact publication');
+    assert.ok(verified > publish.steps.findIndex((step) => step.name === 'Smoke-test Docker image'));
+    assert.match(publish.steps[verified].run, /release-artifact-handoff.js authorize/u);
+    for (const name of ['Publish npm package', 'Log in to Docker Hub', 'Push Docker images',
+      'Update Docker Hub repository description', 'Publish GitHub Release']) {
+      assert.ok(publish.steps.findIndex((step) => step.name === name) > verified, name);
+      assert.ok(!build.steps.some((step) => step.name === name));
+    }
+    const publisherCommands = publish.steps.map((step) => step.run || '').join('\n');
+    assert.doesNotMatch(publisherCommands, /npm ci|npm run (build:|package:npm)/u);
+    assert.match(publisherCommands, /npm install --global npm@11.7.0/u);
+    assert.match(publisherCommands, /release-artifact-handoff.js public-assets/u);
+    assert.match(publisherCommands, /--tarball "\$\{\{ steps.handoff.outputs.directory \}\}/u);
+  });
+
+  it('rejects absent or invalid producer outputs before the download action can select artifacts',
+    async (t) => {
+      const workflow = parse(await readFile('.github/workflows/release.yml', UTF8));
+      const binding = workflow.jobs.publish.steps.find((step) => step.id === 'handoff');
+      const temporaryRoot = await mkdtemp(join(tmpdir(), 'release-output-binding-'));
+      t.after(() => rm(temporaryRoot, {recursive: true, force: true}));
+      const version = '0.2.3';
+      const script = binding.run.replace('${{ steps.release.outputs.version }}', version);
+      const output = join(temporaryRoot, 'output');
+      const env = {...process.env, RUNNER_TEMP: temporaryRoot, GITHUB_OUTPUT: output,
+        GITHUB_SHA: 'a'.repeat(40), PRODUCER_COMMIT: 'a'.repeat(40), RELEASE_VERSION: version,
+        RELEASE_HANDOFF_SHA256: 'b'.repeat(64), ARTIFACT_ID: '123'};
+      for (const overrides of [
+        {ARTIFACT_ID: ''}, {ARTIFACT_ID: '0'}, {ARTIFACT_ID: '1,2'}, {ARTIFACT_ID: 'foreign'},
+        {RELEASE_HANDOFF_SHA256: ''}, {RELEASE_HANDOFF_SHA256: 'bad'}, {PRODUCER_COMMIT: 'wrong'},
+      ]) {
+        const result = spawnSync('bash', ['-c', script], {env: {...env, ...overrides}, encoding: UTF8});
+        assert.notEqual(result.status, 0);
+        await assert.rejects(access(output), {code: 'ENOENT'});
+      }
+      const result = spawnSync('bash', ['-c', script], {env, encoding: UTF8});
+      assert.equal(result.status, 0, result.stderr);
+      const directory = (await readFile(output, UTF8)).trim().slice('directory='.length);
+      assert.ok(directory.startsWith(`${temporaryRoot}/lagrange-download.`));
+      assert.deepEqual(await readdir(directory), []);
+    });
+
   it('keeps network defaults local and mutation enforcement active', () => {
     assert.equal(ADMIN_DEFAULT.HOST, '127.0.0.1');
     assert.equal(ADMIN_DEFAULT.ENFORCEMENT_MODE, 'enforce');
@@ -241,7 +314,8 @@ describe('project hardening contracts', () => {
     'repository health must not become a behavioural gate under another name');
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
-    assert.equal(release.jobs.release.permissions.contents, 'write');
+    assert.equal(release.jobs.release.permissions.contents, 'read');
+    assert.equal(release.jobs.publish.permissions.contents, 'write');
     assert.equal(release.concurrency.group, 'release-publish');
     assert.equal(release.concurrency['cancel-in-progress'], false);
 
@@ -289,11 +363,7 @@ describe('project hardening contracts', () => {
     assert.match(releaseText, /npm run build:all/u);
     assert.match(releaseText, /helm package charts\/lagrange-node/u);
     assert.match(releaseText, /SHA256SUMS/u);
-    assert.match(
-      releaseText,
-      /ASSETS=\(lagrange lagrange-cli "lagrange-node-\$\{VERSION\}\.tgz"\)/u,
-    );
-    assert.match(releaseText, /dist\/lagrange-node-\$\{VERSION\}\.tgz/u);
+    assert.match(releaseText, /release-artifact-handoff.js public-assets/u);
     assert.match(releaseText, /docker\/build-push-action@[a-f0-9]{40}/u);
     assert.match(
       releaseText,

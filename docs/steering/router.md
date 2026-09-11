@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-06
+last_reviewed: 2026-09-11
 ---
 
 # Owner router
@@ -47,12 +47,15 @@ is owned by `npm run audit:doc-audience`, not by this table.
 
 Every outward action performed by this repository's own code now asks that
 owner before acting, and an action nobody has registered is refused. What sits
-outside it is the release workflow and the push hook: pushing a container image
-and creating a public release happen in workflow YAML, which cannot ask a
-module, so they are registered but unasked; the pre-push hook decides for
-itself whether the shared branch is red; and nothing refuses a force push or a
+outside it is the push hook: the pre-push hook decides for itself whether the
+shared branch is red; and nothing refuses a force push or a
 release-tag push, which is true because no code here performs either rather
 than because anything would stop it.
+
+The release workflow asks the registered container-image and public-release
+owners through `scripts/release-artifact-handoff.js` after verifying producer
+bytes and loaded image provenance, before publication credentials are used.
+The npm publisher retains its own package and registry authorization owner.
 
 ## When authorities disagree
 

@@ -1,0 +1,16 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {"id": "unsupported-publisher-red-witness", "passed": true,
+      "detail": "Actual sealed workflow hosted-runner assertion is red; npm official trusted-publisher contract excludes self-hosted. Producer stays controlled; publisher now hosted with Node22.22.0/npm11.7.0."},
+    {"id": "handoff-identity-integrity-modes-adversarial-witnesses", "passed": true,
+      "detail": "Identity/run/digest/file-set/size/type/mode/checksum/image and hostile-intrinsic regressions pass. Existing canonical JSON and strict-own-data primitives protect one byte boundary; producer identity and consumer intent snapshot before await."},
+    {"id": "hosted-publisher-consumes-verified-bytes-without-rebuild", "passed": true,
+      "detail": "Actual YAML topology/permissions/exact artifact-ID inputs; actual bind shell fail-closed checks; isolated real CLI verify/assets/authorize with faithful fake Docker and real action-owner delegation. Controlled removal of loaded-image check makes intended refusal assertion red. No live Docker/large transfer/OIDC claim."},
+    {"id": "independent-category-complete-review", "passed": true,
+      "detail": "subagent:verify_final_cdc_formation_system APPROVE exact attempt2026-09-11T07:46:14.716Z; owner interaction, temporal/concurrency, integrity/adversarial, harness fidelity, generated graph and final docs audited. Fresh36/36 native and2/2 canonical files39 assertions; post-import intrinsic and numeric probes green. Live large-transfer/OIDC evidence honestly deferred to actual tag workflow."},
+    {"id": "static-and-required-change-proof", "passed": true,
+      "detail": "Canonical npm test143/143 files,3232 assertions; final whole test:static exit0. New module strict cyclomatic12/cognitive20, touched ESLint/literals green. No ratchet/timeout increase."}
+  ]
+}

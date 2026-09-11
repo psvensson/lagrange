@@ -20,7 +20,38 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
 | Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
 | Manual | `.github/workflows/full-gate.yml` | `npm run check:release` — the whole system, on demand. No longer nightly: a scheduled whole-system proof is a standing veto, and an unchanged tree cannot grow new behavioural debt. |
-| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | The controlled GCP producer checks the annotated tag, version and notes, runs `npm ci` → `npm run check:release` → `npm run build:all`, packages Helm, builds and smokes the distroless image, and builds and clean-installs one commit-bound npm tarball. A GitHub-hosted publisher verifies the exact-run artifact handoff, repeats image smoke and asks the publication owners, then publishes those same bytes to npm, Docker Hub and GitHub Releases. Docker Hub overview update remains best-effort. |
+
+## Artifact producer/publisher boundary
+
+`scripts/release-artifact-handoff.js` owns the artifact names, canonical modes,
+identity and byte manifest. The producer uploads a fresh directory containing
+the two SEA executables, Helm chart, verified npm tarball, saved Docker image,
+release notes, Docker Hub overview, public checksums and manifest. The hosted
+job downloads only the immutable artifact ID emitted by its producer in the
+same workflow run, into another fresh directory. There is no cross-run lookup,
+repack, project dependency install or image rebuild in the publisher.
+
+The separately passed manifest SHA-256 binds the manifest before parsing. The
+consumer checks repository, workflow, run, tag, commit and version; every file's
+size and SHA-256; the exact file allowlist; and standalone regular-file status.
+Artifact transfer strips modes, so only after all validation succeeds does the
+owner restore `0755` for the SEA executables and `0644` for data. After loading
+the verified image, both declared image references must resolve to the producer's
+immutable image ID and matching OCI version, revision and creation labels.
+These checks and publication authorization precede npm publishing and Docker
+credentials. The hosted job independently rechecks annotated-tag/main/latest
+identity and rendered notes from the tagged checkout.
+
+The public `SHA256SUMS` covers only the four public payloads, using flat basenames.
+After downloading them beside that file, run `sha256sum --strict --check SHA256SUMS`.
+The saved image and internal handoff metadata are not GitHub Release assets.
+
+A publisher-only retry uses the same producer artifact ID and run identity;
+the producer attempt is recorded, but need not equal the retry attempt. A full
+rerun produces a new attempt-qualified immutable artifact. Handoffs expire after
+seven days; missing or expired artifacts fail closed. Partial-channel conflicts
+still require a forward patch release, never a moved tag.
 
 ## Release exit
 
@@ -148,7 +179,8 @@ trend and promote only through the sealed Wilson-bar rule.
 
 ## GitHub repository configuration
 
-The workflows use GitHub-hosted `ubuntu-24.04` runners. Configure these values
+The full release proof and builds use the controlled self-hosted GCP runner;
+artifact publication uses GitHub-hosted `ubuntu-24.04`. Configure these values
 under **Settings → Secrets and variables → Actions** before pushing a release
 tag:
 
@@ -157,20 +189,20 @@ tag:
 - repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with
   Read/Write permission.
 
-The npm package is public and named `lagrange-server`. npm cannot configure a
-trusted publisher until the package exists, so bootstrap it once with a
-short-lived granular npm access token stored as repository secret `NPM_TOKEN`.
-The release workflow passes this token only to the npm publish step. After the
-first successful publication:
+The public npm package `lagrange-server` already exists. In its npm package
+settings, configure a GitHub Actions trusted publisher for owner `psvensson`,
+repository `lagrange`, and workflow `release.yml`. Leave the hosted publish
+job's `id-token: write` permission in place: releases use npm's short-lived OIDC
+credentials and generate provenance automatically.
 
-1. In the npm package settings, add a GitHub Actions trusted publisher for
-   owner `psvensson`, repository `lagrange`, and workflow `release.yml`.
-2. Delete the `NPM_TOKEN` GitHub secret and revoke the token on npm.
-3. Leave the workflow's `id-token: write` permission in place; later releases
-   use npm's short-lived OIDC credentials and generate provenance automatically.
+This workflow does not read `NPM_TOKEN` or provide a token-based bootstrap or
+fallback path. An existing secret with that name is unused by this workflow;
+its removal and the corresponding token's revocation are separate credential
+administration, not steps performed by a release.
 
-The workflow pins npm `11.7.0`, above the trusted-publishing minimum, and runs
-on a GitHub-hosted Node 22 runner. The publish owner checks the live registry
+The workflow pins npm `11.7.0` and Node `22.22.0`, above the trusted-publishing
+minimums. npm trusted publishing and provenance require the GitHub-hosted
+publisher, not the self-hosted producer. The publish owner checks the live registry
 without accepting cached absence and refuses to overwrite or reinterpret an
 existing version. A package name can be claimed between releases, so the
 repository identity check is a release gate rather than an assumption.
@@ -182,8 +214,8 @@ fast TAP lane at the measured stable worker budget. The one aggregate-sensitive
 evidence projection runs serially before the overlapped lanes. No untracked
 developer artifact is required to release.
 
-The release job requests `contents: write` for GitHub's short-lived
+The hosted publish job requests `contents: write` for GitHub's short-lived
 `GITHUB_TOKEN` and `id-token: write` for npm trusted publishing. Repository or
 organization policy must allow those permissions. Ordinary CI, repository
-health, and the manual full gate retain `contents: read` and receive no Docker
+health, the release producer, and the manual full gate retain `contents: read` and receive no Docker
 Hub or npm publishing credentials.

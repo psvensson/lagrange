@@ -10,6 +10,14 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release builds now hand their verified artifacts to a GitHub-hosted publisher
+  supported by npm trusted publishing. An exact-run artifact ID and a separately
+  bound manifest digest protect the commit, bytes, executable modes and Docker
+  provenance before any release channel is changed; publishing never rebuilds
+  those artifacts. Public checksums now use names relative to the release assets.
+
 ## [0.2.2] — 2026-09-11
 
 This forward patch preserves the immutable `v0.2.1` tag after its release
