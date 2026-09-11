@@ -18,6 +18,7 @@
       "hostCount": 3,
       "operationPairs": 64,
       "queryTimeoutMs": 15000,
+      "ddlReadyTimeoutMs": 120000,
       "readyTimeoutMs": 180000,
       "images": {
         "pd": "pingcap/pd:v8.5.8",
