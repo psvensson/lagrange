@@ -108,6 +108,14 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
     config: 'local-partition-merge.json',
     name: 'partition-merge-under-load',
   }),
+  Object.freeze({
+    config: 'gcp-tidb-oltp-baseline.json',
+    name: 'tidb-oltp-baseline',
+  }),
+  Object.freeze({
+    config: 'gcp-tidb-compute-near-data.json',
+    name: 'tidb-compute-near-data',
+  }),
 ]);
 
 function normalizeScenarioConfigName(configPathOrName) {
