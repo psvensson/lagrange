@@ -24,10 +24,10 @@ function createProviderDouble(options = {}) {
       nextId += 1;
       const containerId = `c${nextId}`;
       calls.push(['create', containerOptions]);
+      if (containerOptions.name === options.failCreateName) {
+        throw new Error(options.failCreateMessage || 'container create failed');
+      }
       return {containerId, name: containerOptions.name};
-    },
-    async startContainer(containerId) {
-      calls.push(['start', containerId]);
     },
     async inspectContainer(containerId) {
       calls.push(['inspect', containerId]);
@@ -164,11 +164,10 @@ async function assertSqlReadinessIsAGate() {
 }
 
 async function assertPartialStartupCleanup() {
-  const provider = createProviderDouble();
-  provider.startContainer = async (containerId) => {
-    provider.calls.push(['start', containerId]);
-    if (containerId === 'c2') throw new Error('tikv failed');
-  };
+  const provider = createProviderDouble({
+    failCreateName: 'tidb-reference-tikv',
+    failCreateMessage: 'tikv failed',
+  });
 
   await assert.rejects(
     startTiDbReferenceCluster({provider, network: 'benchmark-net'}),
@@ -176,7 +175,7 @@ async function assertPartialStartupCleanup() {
   );
 
   const removes = provider.calls.filter(([kind]) => kind === 'remove');
-  assert.deepEqual(removes.map(([, id]) => id), ['c2', 'c1']);
+  assert.deepEqual(removes.map(([, id]) => id), ['c1']);
 }
 
 async function main() {
