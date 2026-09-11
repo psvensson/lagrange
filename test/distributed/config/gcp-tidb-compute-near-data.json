@@ -1,0 +1,61 @@
+{
+  "size": 3,
+  "nodesPerHost": 1,
+  "image": "distributed-db:test",
+  "docker": {},
+  "timeouts": {
+    "nodeStartup": 120000,
+    "convergence": 180000,
+    "scenarioDefault": 1200000
+  },
+  "resourceLimits": {
+    "memory": "4g",
+    "cpus": "2.0"
+  },
+  "partition": {
+    "splitThresholdBytes": 262144,
+    "evaluationIntervalMs": 60000
+  },
+  "scenarios": {
+    "tidb-compute-near-data": {
+      "hostOffset": 3,
+      "hostCount": 3,
+      "entityCount": 128,
+      "eventsPerEntity": 16,
+      "requestCount": 32,
+      "insertBatchSize": 64,
+      "queryTimeoutMs": 20000,
+      "readyTimeoutMs": 180000,
+      "images": {
+        "pd": "pingcap/pd:v8.5.7",
+        "tikv": "pingcap/tikv:v8.5.7",
+        "tidb": "pingcap/tidb:v8.5.7",
+        "client": "mysql:8.4"
+      },
+      "resources": {
+        "pd": {"memory": "768m", "cpus": "0.5"},
+        "tikv": {"memory": "4g", "cpus": "2.0"},
+        "tidb": {"memory": "2g", "cpus": "1.0"},
+        "client": {"memory": "512m", "cpus": "0.5"}
+      },
+      "coprocessorV2": {
+        "requiredForClaim": true,
+        "comparatorMode": "sql_pushdown",
+        "artifactIdentity": null
+      },
+      "matureTarget": {
+        "minThroughputRatio": 2.0,
+        "maxP99Ratio": 0.7,
+        "maxCoordinatorRoundTripRatio": 0.5,
+        "maxExpensiveEdgeBytesRatio": 0.5
+      }
+    }
+  },
+  "gcp": {
+    "project": "something-2e584",
+    "zone": "us-central1-a",
+    "machineType": "e2-standard-8",
+    "vmCount": 6,
+    "preemptible": false
+  }
+}
