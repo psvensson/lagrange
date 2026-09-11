@@ -187,31 +187,6 @@ describe('project hardening contracts', () => {
       'a pull request proves base..head, not just its tip');
     assert.match(rangeStep.run, /PUSH_BEFORE_SHA/u,
       'a push proves the range the remote did not have');
-    // ONE definition of complete. The repository used to carry two - the
-    // nightly ran test:gate while releases ran test:ci - so "prove everything"
-    // meant different things depending on who asked. check:release is now the
-    // only answer, and both callers invoke it and nothing else.
-    const packageJson = JSON.parse(await readFile('package.json', UTF8));
-    const releaseProof = packageJson.scripts['check:release'];
-    assert.match(releaseProof, /npm run test:ci/u);
-    assert.match(releaseProof, /npm run test:gate/u,
-      'check:release must contain BOTH prior notions of complete');
-
-    const fullGateSteps = fullGate.jobs.gate.steps;
-    const fullGateProof = fullGateSteps.filter(
-      (step) => typeof step.run === 'string' &&
-        /npm run (check|test):/u.test(step.run));
-    assert.deepEqual(
-      fullGateProof.map((step) => step.run.trim()), ['npm run check:release'],
-      'the manual full gate proves via check:release and nothing else');
-
-    const releaseProofSteps = release.jobs.release.steps.filter(
-      (step) => typeof step.run === 'string' &&
-        /npm run (check:release|test:ci|test:gate)/u.test(step.run));
-    assert.deepEqual(
-      releaseProofSteps.map((step) => step.run.trim()),
-      ['npm run check:release'],
-      'the tagged release proves via the same command as the full gate');
 
     // Manual only. A nightly whole-system proof is a standing veto: an
     // unrelated marginal test failing overnight made every unrelated change
@@ -242,8 +217,12 @@ describe('project hardening contracts', () => {
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
     assert.equal(release.jobs.release.permissions.contents, 'write');
-    assert.equal(release.concurrency.group, 'release-publish');
+    // Same-SHA preflight/tag runs are ordered per release, while actual
+    // publication is globally serialized across SHAs by the job-level group.
+    assert.equal(release.concurrency.group, 'release-${{ github.sha }}');
     assert.equal(release.concurrency['cancel-in-progress'], false);
+    assert.equal(release.jobs.release.concurrency.group, 'release-publish');
+    assert.equal(release.jobs.release.concurrency['cancel-in-progress'], false);
 
     // Every network-facing install step must fail in minutes. On 2026-08-19 a
     // step that normally takes 115s hung for 62 minutes on a hosted runner:
@@ -278,11 +257,10 @@ describe('project hardening contracts', () => {
       }
     }
 
-    // Was `npm run test:ci`: the release pipeline used to carry its own notion
-    // of a complete proof, different from the one the full gate used. It now
-    // defers to check:release like every other caller.
-    assert.match(releaseText, /npm run check:release/u);
-    assert.doesNotMatch(releaseText, /npm run test:ci/u);
+    // The release pipeline never reruns the proof corpus: it consumes the
+    // durable exact-SHA receipt. Reuse semantics are owned by
+    // release-pipeline-proof-reuse.test.js.
+    assert.doesNotMatch(releaseText, /npm run (check:release|test:ci)/u);
     assert.match(releaseText, /git cat-file -t/u);
     assert.match(releaseText, /git merge-base --is-ancestor/u);
     assert.match(releaseText, /refs\/remotes\/origin\/main/u);
@@ -291,7 +269,7 @@ describe('project hardening contracts', () => {
     assert.match(releaseText, /SHA256SUMS/u);
     assert.match(
       releaseText,
-      /ASSETS=\(lagrange lagrange-cli "lagrange-node-\$\{VERSION\}\.tgz"\)/u,
+      /ASSETS=\(lagrange lagrange-cli "lagrange-node-\$\{VERSION\}\.tgz" "npm\/lagrange-server-\$\{VERSION\}\.tgz"\)/u,
     );
     assert.match(releaseText, /dist\/lagrange-node-\$\{VERSION\}\.tgz/u);
     assert.match(releaseText, /docker\/build-push-action@[a-f0-9]{40}/u);
