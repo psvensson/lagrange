@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
 
 import {DockerProvider} from
   '../../test/distributed/harness/docker-provider.js';
@@ -26,6 +27,12 @@ const LABELS = Object.freeze({
   'lagrange.benchmark': 'tidb-reference-lifecycle-live',
 });
 const PASS_PREFIX = 'tidb-reference-lifecycle-live: PASS ';
+const REQUIRED_IMAGES = Object.freeze([
+  TIDB_REFERENCE_DEFAULTS.pdImage,
+  TIDB_REFERENCE_DEFAULTS.tikvImage,
+  TIDB_REFERENCE_DEFAULTS.tidbImage,
+  TIDB_REFERENCE_DEFAULTS.mysqlClientImage,
+]);
 
 function uniqueRunId() {
   return `lagrange-tidb-live-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -61,20 +68,14 @@ function mysqlCommand(endpoint, sql) {
 }
 
 async function assertImagesAvailable(provider) {
-  const images = [
-    TIDB_REFERENCE_DEFAULTS.pdImage,
-    TIDB_REFERENCE_DEFAULTS.tikvImage,
-    TIDB_REFERENCE_DEFAULTS.tidbImage,
-    TIDB_REFERENCE_DEFAULTS.mysqlClientImage,
-  ];
   const missing = [];
-  for (const image of images) {
+  for (const image of REQUIRED_IMAGES) {
     if (!(await provider.imageExists(image))) missing.push(image);
   }
   if (missing.length > ZERO) {
     throw new Error(
-      'TiDB reference live smoke requires pinned images to be present locally: ' +
-      missing.join(', ') + '. Pull the missing images before running the smoke.',
+      'TiDB reference live smoke requires pinned images to be present: ' +
+      missing.join(', ') + '. Install the missing images before running the smoke.',
     );
   }
 }
@@ -142,9 +143,9 @@ async function assertCleanup(provider, state) {
   }
 }
 
-async function run() {
-  const provider = new DockerProvider();
-  const runId = uniqueRunId();
+async function runTiDbReferenceLifecycleSmoke(options = {}) {
+  const provider = options.provider || new DockerProvider();
+  const runId = options.runId || uniqueRunId();
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -156,7 +157,9 @@ async function run() {
   let result = null;
 
   try {
-    await assertImagesAvailable(provider);
+    if (options.requireImages !== false) {
+      await assertImagesAvailable(provider);
+    }
 
     const network = await provider.createNetwork(state.networkName, LABELS);
     state.networkId = network.id;
@@ -229,11 +232,24 @@ async function run() {
   }
   if (primaryError) throw primaryError;
   if (cleanupError) throw cleanupError;
+  return result;
+}
 
+async function main() {
+  const result = await runTiDbReferenceLifecycleSmoke();
   process.stdout.write(PASS_PREFIX + JSON.stringify(result) + '\n');
 }
 
-run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message || error}\n`);
-  process.exitCode = 1;
-});
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
+if (invokedPath === import.meta.url) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack || error.message || error}\n`);
+    process.exitCode = 1;
+  });
+}
+
+export {
+  REQUIRED_IMAGES as TIDB_REFERENCE_REQUIRED_IMAGES,
+  assertImagesAvailable as assertTiDbReferenceImagesAvailable,
+  runTiDbReferenceLifecycleSmoke,
+};
