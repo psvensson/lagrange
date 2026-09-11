@@ -11,9 +11,6 @@ import {
 import {withTiDbReferenceRuntime} from './tidb-reference-runtime.js';
 
 const SCENARIO = 'tidb-compute-near-data';
-const ZERO = 0;
-const ONE = 1;
-const TWO = 2;
 const DEFAULT_ENTITY_COUNT = 128;
 const DEFAULT_EVENTS_PER_ENTITY = 16;
 const DEFAULT_REQUEST_COUNT = 32;
@@ -53,14 +50,14 @@ function scenarioConfig(cluster) {
 function valueFor(kind, entityId, ordinal) {
   const multiplier = VALUE_MULTIPLIERS[kind];
   return ((entityId * multiplier) +
-    (ordinal * VALUE_ORDINAL_MULTIPLIER)) % VALUE_MODULUS + ONE;
+    (ordinal * VALUE_ORDINAL_MULTIPLIER)) % VALUE_MODULUS + 1;
 }
 
 function eventRows(kind, entityCount, eventsPerEntity, payloadBytes) {
   const rows = [];
   const payload = 'x'.repeat(payloadBytes);
-  for (let entityId = ONE; entityId <= entityCount; entityId += ONE) {
-    for (let ordinal = ONE; ordinal <= eventsPerEntity; ordinal += ONE) {
+  for (let entityId = 1; entityId <= entityCount; entityId += 1) {
+    for (let ordinal = 1; ordinal <= eventsPerEntity; ordinal += 1) {
       rows.push({
         eventId: (entityId * EVENT_ID_ENTITY_SCALE) + ordinal,
         entityId,
@@ -93,7 +90,7 @@ function insertSql(table, rows) {
 
 function aggregateSql(table, entityId) {
   const lowerExclusive = entityId * EVENT_ID_ENTITY_SCALE;
-  const upperExclusive = (entityId + ONE) * EVENT_ID_ENTITY_SCALE;
+  const upperExclusive = (entityId + 1) * EVENT_ID_ENTITY_SCALE;
   return (
     'SELECT COUNT(*) AS row_count, COALESCE(SUM(value), 0) AS value_sum ' +
     `FROM ${table} WHERE event_id > ${lowerExclusive} ` +
@@ -102,7 +99,7 @@ function aggregateSql(table, entityId) {
 }
 
 async function prepareLagrange(cluster, config) {
-  const node = cluster.getNodes()[ZERO];
+  const node = cluster.getNodes()[0];
   const queryTimeoutMs = config.queryTimeoutMs;
   for (const kind of Object.keys(LAGRANGE_TABLES)) {
     const table = LAGRANGE_TABLES[kind];
@@ -118,7 +115,7 @@ async function prepareLagrange(cluster, config) {
       cluster,
       [table],
       {
-        minPartitions: ONE,
+        minPartitions: 1,
         queryTimeoutMs,
         readyTimeoutMs: config.ddlReadyTimeoutMs,
       },
@@ -134,7 +131,11 @@ async function prepareLagrange(cluster, config) {
       config.eventsPerEntity,
       config.payloadBytes,
     );
-    for (let offset = ZERO; offset < rows.length; offset += config.insertBatchSize) {
+    for (
+      let offset = 0;
+      offset < rows.length;
+      offset += config.insertBatchSize
+    ) {
       await node.queryWithTimeout(
         insertSql(table, rows.slice(offset, offset + config.insertBatchSize)),
         [],
@@ -165,7 +166,11 @@ async function prepareTiDb(runtime, config) {
       config.eventsPerEntity,
       config.payloadBytes,
     );
-    for (let offset = ZERO; offset < rows.length; offset += config.insertBatchSize) {
+    for (
+      let offset = 0;
+      offset < rows.length;
+      offset += config.insertBatchSize
+    ) {
       await runtime.executeSql(
         insertSql(table, rows.slice(offset, offset + config.insertBatchSize)),
       );
@@ -175,25 +180,28 @@ async function prepareTiDb(runtime, config) {
 
 function parseLagrangeAggregate(result) {
   const rows = result?.rows || result?.results || [];
-  assert.ok(Array.isArray(rows) && rows.length === ONE, 'aggregate returned no row');
+  assert.ok(
+    Array.isArray(rows) && rows.length === 1,
+    'aggregate returned no row',
+  );
   return {
-    rowCount: Number(rows[ZERO].row_count),
-    valueSum: Number(rows[ZERO].value_sum),
+    rowCount: Number(rows[0].row_count),
+    valueSum: Number(rows[0].value_sum),
   };
 }
 
 function parseTiDbAggregate(output) {
   const fields = String(output).trim().split('\t');
-  assert.equal(fields.length, TWO, 'TiDB aggregate returned unexpected shape');
-  return {rowCount: Number(fields[ZERO]), valueSum: Number(fields[ONE])};
+  assert.equal(fields.length, 2, 'TiDB aggregate returned unexpected shape');
+  return {rowCount: Number(fields[0]), valueSum: Number(fields[1])};
 }
 
 function requestShape(requestIndex, entityCount) {
-  const accountId = (requestIndex % entityCount) + ONE;
+  const accountId = (requestIndex % entityCount) + 1;
   return {
     accountId,
-    merchantId: ((accountId * MERCHANT_ID_MULTIPLIER) % entityCount) + ONE,
-    deviceId: ((accountId * DEVICE_ID_MULTIPLIER) % entityCount) + ONE,
+    merchantId: ((accountId * MERCHANT_ID_MULTIPLIER) % entityCount) + 1,
+    deviceId: ((accountId * DEVICE_ID_MULTIPLIER) % entityCount) + 1,
   };
 }
 
@@ -233,7 +241,7 @@ async function runLeafControl(executor, config) {
   const latencies = [];
   const results = [];
   const startedAt = performance.now();
-  for (let index = ZERO; index < config.requestCount; index += ONE) {
+  for (let index = 0; index < config.requestCount; index += 1) {
     const shape = requestShape(index, config.entityCount);
     const outcome = await executor('account', shape.accountId);
     latencies.push(outcome.elapsedMs);
@@ -252,29 +260,29 @@ async function runLeafControl(executor, config) {
 async function runRiskComposition(executor, config) {
   const latencies = [];
   const decisions = [];
-  let aggregateCalls = ZERO;
+  let aggregateCalls = 0;
   const startedAt = performance.now();
-  for (let index = ZERO; index < config.requestCount; index += ONE) {
+  for (let index = 0; index < config.requestCount; index += 1) {
     const requestStartedAt = performance.now();
     const shape = requestShape(index, config.entityCount);
     const account = (await executor('account', shape.accountId)).aggregate;
-    aggregateCalls += ONE;
-    let merchant = {rowCount: ZERO, valueSum: ZERO};
-    let device = {rowCount: ZERO, valueSum: ZERO};
+    aggregateCalls += 1;
+    let merchant = {rowCount: 0, valueSum: 0};
+    let device = {rowCount: 0, valueSum: 0};
     if (shouldCallMerchant(account, config.eventsPerEntity)) {
       merchant = (await executor('merchant', shape.merchantId)).aggregate;
-      aggregateCalls += ONE;
+      aggregateCalls += 1;
       if (shouldCallDevice(merchant, config.eventsPerEntity)) {
         device = (await executor('device', shape.deviceId)).aggregate;
-        aggregateCalls += ONE;
+        aggregateCalls += 1;
       }
     }
     decisions.push({
       accountId: shape.accountId,
       merchantId: shape.merchantId,
       deviceId: shape.deviceId,
-      hops: ONE + (merchant.rowCount > ZERO ? ONE : ZERO) +
-        (device.rowCount > ZERO ? ONE : ZERO),
+      hops: 1 + (merchant.rowCount > 0 ? 1 : 0) +
+        (device.rowCount > 0 ? 1 : 0),
       score: account.valueSum + merchant.valueSum + device.valueSum,
     });
     latencies.push(performance.now() - requestStartedAt);
@@ -332,14 +340,14 @@ function resolvedConfig(cluster) {
 
 async function run(cluster) {
   const config = resolvedConfig(cluster);
-  assert.ok(config.entityCount > ZERO && config.eventsPerEntity > ZERO);
-  assert.ok(config.requestCount > ZERO && config.insertBatchSize > ZERO);
-  assert.ok(config.payloadBytes > ZERO, 'payloadBytes must be positive');
+  assert.ok(config.entityCount > 0 && config.eventsPerEntity > 0);
+  assert.ok(config.requestCount > 0 && config.insertBatchSize > 0);
+  assert.ok(config.payloadBytes > 0, 'payloadBytes must be positive');
   assert.ok(
-    config.minLagrangePartitions >= TWO,
+    config.minLagrangePartitions >= 2,
     'compute-near-data control must exercise multiple Lagrange partitions',
   );
-  const lagrangeNode = cluster.getNodes()[ZERO];
+  const lagrangeNode = cluster.getNodes()[0];
   const lagrangePartitions = await prepareLagrange(cluster, config);
 
   return withTiDbReferenceRuntime(cluster, SCENARIO, async (runtime) => {
