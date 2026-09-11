@@ -79,6 +79,17 @@ jobs:
           npm ci --ignore-scripts --prefix test/distributed/reference-client
           npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
 
+          PULUMI_VERSION=3.261.0
+          PULUMI_ARCHIVE="pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz"
+          PULUMI_SHA256=39bc0d2427e22ead6039fad7a7337c2fdc53a68b737ccc52dc897d244aaa8853
+          curl -fsSL --connect-timeout 20 --max-time 300 --retry 2 \
+            -o "$RUNNER_TEMP/$PULUMI_ARCHIVE" \
+            "https://github.com/pulumi/pulumi/releases/download/v${PULUMI_VERSION}/${PULUMI_ARCHIVE}"
+          echo "$PULUMI_SHA256  $RUNNER_TEMP/$PULUMI_ARCHIVE" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$PULUMI_ARCHIVE" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/pulumi" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pulumi/pulumi" version
+
       - name: Verify controlled-cloud toolchain
         run: |
           set -euo pipefail
