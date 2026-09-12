@@ -20,6 +20,9 @@ data
 !/data/releases/
 /data/releases/*
 !/data/releases/*.json
+!/data/formation-health/
+/data/formation-health/*
+!/data/formation-health/trend.ndjson
 data2/
 .tap/
 .tmp/
