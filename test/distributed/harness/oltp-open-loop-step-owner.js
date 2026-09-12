@@ -11,6 +11,16 @@ const ZERO = 0;
 const ONE = 1;
 const THOUSAND = 1000;
 
+const OPEN_LOOP_PROFILE = Object.freeze({
+  id: 'scenario-a-open-loop-v1',
+  issueSchedule: 'fixed-rate-intended-time',
+  workerSerialization: 'per-worker',
+  latencyOrigin: 'intended-issue-time',
+  headlineLatency: 'successful-requests',
+  attemptLatency: 'all-attempted-requests',
+  completionRateWindow: 'max-scheduled-and-drain',
+});
+
 function positiveNumber(value, label) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= ZERO) {
@@ -139,6 +149,7 @@ function summarizeStep(issuePlan, records, offeredRatePerSec) {
     ZERO,
   );
   return Object.freeze({
+    profileId: OPEN_LOOP_PROFILE.id,
     offeredRatePerSec,
     attempted: records.length,
     succeeded: succeeded.length,
@@ -229,6 +240,7 @@ async function runOpenLoopOltpStep(adapter, operations, options = {}) {
 }
 
 export {
+  OPEN_LOOP_PROFILE as OLTP_OPEN_LOOP_PROFILE,
   buildOpenLoopIssuePlan,
   interleaveOltpWorkerPhase,
   runOpenLoopOltpStep,
