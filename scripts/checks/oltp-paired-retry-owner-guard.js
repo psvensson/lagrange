@@ -161,9 +161,18 @@ async function main() {
     () => resolvePairedOltpRetryDelayMs(0),
     /retryNumber >= 1/u,
   );
-  assert.equal(classifyOltpAttemptError(serializationError('code')).retryable, true);
-  assert.equal(classifyOltpAttemptError(serializationError('sqlState')).retryable, true);
-  assert.equal(classifyOltpAttemptError(new Error('other')).retryable, false);
+  assert.equal(
+    classifyOltpAttemptError(serializationError('code')).retryable,
+    true,
+  );
+  assert.equal(
+    classifyOltpAttemptError(serializationError('sqlState')).retryable,
+    true,
+  );
+  assert.equal(
+    classifyOltpAttemptError(new Error('other')).retryable,
+    false,
+  );
   await assertSuccessfulRetryAndRequestClock();
   await assertTerminalNonRetryableFailure();
   await assertRetryBudgetExhaustion();
