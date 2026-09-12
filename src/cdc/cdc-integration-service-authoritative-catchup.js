@@ -26,6 +26,7 @@
  */
 
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
 import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
@@ -151,10 +152,16 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     options.maxAttemptsPerTable > 0 ?
       Math.floor(options.maxAttemptsPerTable) :
       CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE;
+  // The sleep between attempts is a timer and arms on the service's clock (a
+  // bare service record gets the platform clock, as every seamed owner
+  // defaults). `now` is NOT a timer: it stamps readStartedAtMs, which the
+  // sweep compares against row updated_at and tombstone times the cache
+  // stamps on the wall clock, so it stays on that clock - a virtual stamp
+  // here would leave the sweep inert and fence every tombstoned key.
+  const clock = resolveTimeSource(service);
   const sleep = typeof options.sleep === 'function' ?
     options.sleep :
-    (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
-
+    (delayMs) => new Promise((resolve) => clock.setTimeout(resolve, delayMs));
   const now = typeof options.now === 'function' ? options.now : Date.now;
   // The catch-up interaction accepts exactly one authority token. Callers that
   // need leader-pinned owner reads construct that token at their own boundary;

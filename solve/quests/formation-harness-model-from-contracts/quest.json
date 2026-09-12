@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-harness-model-from-contracts",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The seven-node in-process cold-formation probe's cross-owner harness model is derived from the registered owner contracts rather than hand-maintained: a model module enumerates every registered coupled pair and contract as a driver-host that hosts the real production owner with its drive methods sealed, every registered invariant owner is a hosted owner, the hand-wired stand-in family in the membership-consistency helpers is replaced by those hosts, and a test derived from the registry fails whenever a registered interaction is absent from the model, so the model can no longer go stale without the gate saying so.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/formation-harness-model-from-contracts/evidence/receipt.json",
+      "requiredReceipts": [
+        "registered-interactions-all-hosted",
+        "hosts-are-real-owners-with-sealed-drive",
+        "invariant-owners-hosted",
+        "stand-in-family-removed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "contracts-are-the-oracle",
+      "statement": "The checklist is derived at test time from test/shards/impact-contracts.json and architecture/contracts/invariants.json; no interaction id is typed into the model or the test by hand."
+    },
+    {
+      "id": "driver-host-shape",
+      "statement": "A host inherits the production prototype and seals its drive methods against override, in the shape of test/convergence/membership-publication-owner-driver-host.js; a hand-built object implementing an owner's methods is a stand-in, not a host."
+    },
+    {
+      "id": "no-readiness-cache",
+      "statement": "Nothing here memoises or caches readiness; the sealed bounded-read-amplification-scope constraint of the epic holds."
+    },
+    {
+      "id": "probe-unchanged-in-verdict",
+      "statement": "The seven-node probe's assertions and budgets are unchanged; it consumes the hosts, it does not weaken."
+    },
+    {
+      "id": "src-changes-verified",
+      "statement": "Any change under src/ lands only behind an independent verification (epic guardrail)."
+    }
+  ],
+  "sealedAt": "0538db5c7d4a52bc4f7712061763a6efc9e3ff72"
+}

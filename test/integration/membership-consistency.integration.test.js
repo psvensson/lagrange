@@ -10,7 +10,7 @@
  *
  * Uses low timeouts suitable for single-machine testing.
  *
- * Note: Tests 1, 2, 5, 6 use createRealisticCDCService for CDC latency simulation.
+ * Note: Tests 1, 2, 5, 6 use createCdcPropagationHost for CDC latency simulation.
  * This is a legitimate pattern for testing eventual consistency behavior.
  */
 
@@ -49,17 +49,20 @@ import {
 import {
   MockMessageGroupService,
   TEST_TIMEOUTS,
-  createCacheBackedReadinessService,
-  createCacheControlPlaneGateway,
-  createCacheSqlQueryEngine,
-  createMockMessageRouter,
-  createMockRebalanceCoordinator,
-  createMockTablePolicyService,
+  createSqlEngineSeamFor,
+  createMessageRouterHost,
+  createRebalanceCoordinatorHost,
   createNodeEntry,
-  createRealisticCDCService,
+  createCdcPropagationHost,
+  createNodeHosts,
+  createReplicaPropagation,
   initializeTestEnvironment,
+  readPublishedActiveNodeIds,
+  seedOwners,
   shutdownOrFail,
   waitForCondition,
+  waitForPlacementEligible,
+  waitForPublishedMembership,
 } from './membership-consistency-integration-test-helpers.js';
 
 // ============================================================================
@@ -85,7 +88,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const followerCache = new SystemTableCache();
 
     // Create CDC service with propagation delay
-    const cdcService = createRealisticCDCService(
+    const cdcService = createCdcPropagationHost(
       leaderCache,
       [followerCache],
       {propagationDelayMs: TEST_TIMEOUTS.CDC_PROPAGATION_DELAY},
@@ -124,64 +127,84 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   // Test 2: Rebalancer Decisions During CDC Latency
   // --------------------------------------------------------------------------
   await t.test('rebalancer sees stale membership during CDC propagation', async (t) => {
-    const leaderCache = new SystemTableCache();
-    const rebalancerCache = new SystemTableCache();
-    let rebalancer = null;
+    // Membership is the PUBLISHED active set, not the nodes table. The seed
+    // publishes itself on the real path (its publication owner, tier-0
+    // leadership on its real control_plane_publications partition); the
+    // follower is a lagging replica on the virtual network, so it holds the
+    // seed's node row before it holds the seed's publication - the state the
+    // hand-wired stand-ins could not express (row present, not yet published).
+    initTestEnv({nodeId: 'test-node-stale'});
 
-    const cdcService = createRealisticCDCService(
-      leaderCache,
-      [rebalancerCache],
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440002';
+    const seedWsPort = getUniquePort();
+    const followerNodeId = 'follower-node';
+
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
+    });
+    const seedCache = NodeService.getInstance().getSystemTableCache();
+    const followerCache = new SystemTableCache();
+    // Subscribed before bootstrap: every change the seed commits, its own
+    // registration and its publication included, is in flight to the follower.
+    const replica = createReplicaPropagation(
+      seedCache,
+      [followerCache],
       {propagationDelayMs: TEST_TIMEOUTS.CDC_PROPAGATION_DELAY},
     );
+    let rebalancer = null;
 
     try {
-      // Add initial node to both caches
-      const initialNode = createNodeEntry('node-1');
-      leaderCache.applySystemTableChange(
-        SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, initialNode,
-      );
-      rebalancerCache.applySystemTableChange(
-        SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, initialNode,
-      );
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
+      const published = await waitForPublishedMembership(seedCache, [seedNodeId]);
+      t.equal(published, true, 'seed should publish itself on the real path');
 
-      // Create rebalancer using the follower cache
+      // Deliver the replication stream up to the seed's node row and hold
+      // the rest, the publication among it, in flight.
+      const rowDelivered = await replica.deliverUntil(() =>
+        Boolean(followerCache.get(SYSTEM_TABLE_NAME.NODES, seedNodeId)));
+      t.equal(rowDelivered, true,
+        'follower should hold the seed node row before the publication arrives');
+      t.equal(readPublishedActiveNodeIds(followerCache), null,
+        'follower should hold no publication yet');
+
+      const hosts = createNodeHosts(followerCache, {nodeId: followerNodeId});
       rebalancer = new UnifiedRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
-        systemTableCache: rebalancerCache,
-        cdcIntegrationService: cdcService,
-        tablePolicyService: createMockTablePolicyService(),
-        sqlQueryEngine: cdcService.sqlQueryEngine,
-        messageRouter: createMockMessageRouter(),
-        rebalanceCoordinator: createMockRebalanceCoordinator(),
-        controlPlaneReadinessService: createCacheBackedReadinessService(
-          rebalancerCache,
-        ),
-        nodeId: 'node-1',
+        systemTableCache: followerCache,
+        cdcIntegrationService: hosts.cdcIntegrationService,
+        tablePolicyService: hosts.tablePolicyService,
+        sqlQueryEngine: hosts.sqlQueryEngine,
+        messageRouter: hosts.messageRouter,
+        rebalanceCoordinator: createRebalanceCoordinatorHost(followerCache, hosts),
+        controlPlaneReadinessService: hosts.controlPlaneReadinessService,
+        nodeId: followerNodeId,
       });
       rebalancer.initialize();
 
-      // Add a new node via CDC (only leader has it initially)
-      await cdcService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        createNodeEntry('node-2'),
-      );
+      // was: 'rebalancer should see stale membership (1 node)'
+      t.equal(rebalancer.getPublishedActiveNodeIdSet(), null,
+        'rebalancer should see no published membership while the publication ' +
+        'is in flight (seed row present, not yet published)');
+      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id), [],
+        'rebalancer should have no member to place on before the publication');
 
-      // Rebalancer should only see 1 node (stale view)
-      const availableNodesBefore = rebalancer.getAvailableNodes();
-      t.equal(availableNodesBefore.length, 1,
-        'rebalancer should see stale membership (1 node)');
+      await replica.waitForPropagation();
 
-      // Wait for CDC propagation
-      await cdcService.waitForPropagation();
-
-      // Now rebalancer should see 2 nodes
-      const availableNodesAfter = rebalancer.getAvailableNodes();
-      t.equal(availableNodesAfter.length, 2,
-        'rebalancer should see updated membership (2 nodes)');
+      t.same(readPublishedActiveNodeIds(followerCache), [seedNodeId],
+        'follower should hold the seed publication after propagation');
+      // was: 'rebalancer should see updated membership (2 nodes)'
+      t.same([...rebalancer.getPublishedActiveNodeIdSet()], [seedNodeId],
+        'rebalancer should see the published membership after propagation');
     } finally {
       rebalancer?.shutdown();
-      cdcService.cleanup();
+      replica.cleanup();
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
+      await cleanupTestEnvironment();
     }
   });
 
@@ -208,32 +231,37 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
 
-      // Get real components from bootstrap
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const cdcService = bootstrapService.cdcIntegrationService;
+      // The seed's real owners; the seed publishes itself on the real path.
+      const owners = seedOwners(bootstrapService);
+      const published = await waitForPublishedMembership(owners.cache, [seedNodeId]);
+      t.equal(published, true, 'seed should publish itself on the real path');
+      const eligible = await waitForPlacementEligible(
+        owners.controlPlaneReadinessService, seedNodeId);
+      t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
 
-      // Add a node with short lease that will expire during stabilization
+      // A node row with a short lease, present but never published: the
+      // publication owner admits only nodes it can witness.
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
         ready_lease_expires_at: now + 50, // Expires in 50ms
       });
-      await cdcService.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
+      await owners.cdcIntegrationService.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
 
-      // Create rebalancer using real cache and CDC service
+      // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
         entityId: 'partition-test',
         entityType: EntityType.PARTITION,
-        systemTableCache,
-        cdcIntegrationService: cdcService,
-        sqlQueryEngine: cdcService.sqlQueryEngine,
-        tablePolicyService: bootstrapService.tablePolicyService,
-        messageRouter: bootstrapService.messageRouter,
-        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        systemTableCache: owners.cache,
+        cdcIntegrationService: owners.cdcIntegrationService,
+        sqlQueryEngine: owners.cdcIntegrationService.sqlQueryEngine,
+        tablePolicyService: owners.tablePolicyService,
+        messageRouter: owners.messageRouter,
+        rebalanceCoordinator: owners.rebalanceCoordinator,
+        controlPlaneReadinessService: owners.controlPlaneReadinessService,
         nodeId: seedNodeId,
       });
       rebalancer.initialize();
-      rebalancer.controlPlaneReadinessService =
-        createCacheBackedReadinessService(systemTableCache);
       rebalancer.setLeader(true);
 
       // Override stabilization period for faster testing
@@ -242,22 +270,26 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
 
-      // Node should be available initially
-      const nodesBefore = rebalancer.getAvailableNodes();
-      const hasShortLeaseNode = nodesBefore.some((n) =>
-        n.node_id === 'short-lease-node' || n === 'short-lease-node');
-      t.ok(hasShortLeaseNode || nodesBefore.length >= 1,
-        'should have nodes available initially');
+      // Every nodes-table write returns the readiness owner's verdict to
+      // planning_snapshot_refresh_pending until the next evaluation; drive it
+      // before each read, as the owners' own consumers do.
+      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
+      // was: 'should have nodes available initially'
+      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
+        [seedNodeId],
+        'available nodes should be the published set (the seed) while the ' +
+        'short-lease row is present but unpublished');
 
       // Wait for lease to expire (but less than stabilization period)
       await new Promise((r) => setTimeout(r, 60));
 
-      // Node should no longer be available (lease expired)
-      const nodesAfter = rebalancer.getAvailableNodes();
-      const stillHasShortLeaseNode = nodesAfter.some((n) =>
-        n.node_id === 'short-lease-node' || n === 'short-lease-node');
-      t.notOk(stillHasShortLeaseNode,
-        'short-lease node should not be available after lease expiry');
+      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
+      // was: 'short-lease node should not be available after lease expiry'
+      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
+        [seedNodeId],
+        'an unpublished row stays unavailable after its lease expires: a ' +
+        'member leaving on lease expiry is a republication by the ' +
+        'publication owner, not a row read');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.
@@ -386,23 +418,16 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, nodeData,
     );
 
-    const cdcService = createRealisticCDCService(
+    const cdcService = createCdcPropagationHost(
       leaderCache,
       [detectorCache],
       {propagationDelayMs: TEST_TIMEOUTS.CDC_PROPAGATION_DELAY},
     );
 
     try {
-      const cdcUpdates = [];
       const detector = new FailureDetector({
         systemTableCache: detectorCache,
-        cdcIntegrationService: {
-          ...cdcService,
-          async updateSystemTableRow(tableName, where, data) {
-            cdcUpdates.push({tableName, where, data});
-            return cdcService.updateSystemTableRow(tableName, where, data);
-          },
-        },
+        cdcIntegrationService: cdcService,
         nodeId: 'detector-node',
       });
       detector.initialize();
@@ -439,85 +464,70 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   // Test 6: Control Plane Lease Sweep with CDC Latency
   // --------------------------------------------------------------------------
   await t.test('lease sweep may miss nodes due to CDC propagation delay', async (t) => {
-    const leaderCache = new SystemTableCache();
-    const followerCache = new SystemTableCache();
-    const now = Date.now();
-    const sweepNow = now + 100;
+    // The lease sweep reads the authoritative nodes table, which only an
+    // owner with a partition can serve: it runs on the seed, through the
+    // seed's real LeaseService (its heartbeat owner performs the guarded
+    // disconnect). A lagging replica on the virtual network keeps showing
+    // the node ready until the disconnect propagates.
+    initTestEnv({nodeId: 'test-node-sweep'});
 
-    // Add node with an already-expired lease so the sweep is deterministic.
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440006';
+    const seedWsPort = getUniquePort();
     const nodeId = 'expiring-node';
-    const nodeData = createNodeEntry(nodeId, {
-      ready_lease_expires_at: now - 1,
-    });
-    leaderCache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, nodeData,
-    );
-    followerCache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, nodeData,
-    );
 
-    const cdcService = createRealisticCDCService(
-      leaderCache,
-      [followerCache],
-      {propagationDelayMs: TEST_TIMEOUTS.CDC_PROPAGATION_DELAY},
-    );
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
+    });
+    const followerCache = new SystemTableCache();
+    let replica = null;
 
     try {
-      const messageGroup = new MockMessageGroupService({isLeader: true});
-      const controlPlaneSystemTableGateway =
-        createCacheControlPlaneGateway(leaderCache);
-      const nodeLeaseOwner = {
-        async disconnectNodeDueToLeaseExpiry(node, writeNow) {
-          return cdcService.updateSystemTableRow(
-            SYSTEM_TABLE_NAME.NODES,
-            {
-              node_id: node.node_id,
-              ready_lease_expires_at: node.ready_lease_expires_at,
-              last_heartbeat: node.last_heartbeat || writeNow,
-            },
-            {
-              connection_state: STATE.DISCONNECTED,
-              ready_lease_expires_at: null,
-              updated_at: writeNow,
-            },
-          );
-        },
-      };
+      const bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
+      const owners = seedOwners(bootstrapService);
+      replica = createReplicaPropagation(
+        owners.cache,
+        [followerCache],
+        {propagationDelayMs: TEST_TIMEOUTS.CDC_PROPAGATION_DELAY},
+      );
 
-      const leaseSvc = new LeaseService({
-        nodeId: 'control-plane-node',
-        nodeLeaseOwner,
-        controlPlaneSystemTableGateway,
-        systemTableCache: leaderCache,
-        sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
-        messageGroupServices: new Set([messageGroup]),
-        now: () => sweepNow,
+      // Add node with an already-expired lease so the sweep is deterministic.
+      const nodeData = createNodeEntry(nodeId, {
+        ready_lease_expires_at: Date.now() - 1,
       });
-      leaseSvc.initialize();
+      await owners.cdcIntegrationService.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, nodeData);
+      await replica.waitForPropagation();
+      t.equal(followerCache.get(SYSTEM_TABLE_NAME.NODES, nodeId)?.connection_state,
+        STATE.READY, 'follower should replicate the expired-lease row as ready');
 
       // Manually trigger lease sweep
-      const expiredIds = await leaseSvc.sweepExpiredLeases();
+      const expiredIds = await owners.leaseService.sweepExpiredLeases();
       t.same(expiredIds, [nodeId], 'lease sweep should process the expired node');
 
       // Leader cache should have node marked as disconnected
-      const leaderNode = leaderCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
+      const leaderNode = owners.cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
       t.equal(leaderNode.connection_state, STATE.DISCONNECTED,
         'leader should mark node as disconnected');
 
-      // Follower cache may still show ready (CDC latency)
-      // Note: This depends on timing - the update may or may not have propagated
+      // Follower cache still shows ready while the disconnect is in flight
+      t.equal(followerCache.get(SYSTEM_TABLE_NAME.NODES, nodeId).connection_state,
+        STATE.READY, 'follower should still see ready before CDC propagation');
 
       // Wait for CDC propagation
-      await cdcService.waitForPropagation();
+      await replica.waitForPropagation();
 
       // Now follower should also show disconnected
       const followerNodeAfter = followerCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
       t.equal(followerNodeAfter.connection_state, STATE.DISCONNECTED,
         'follower should see disconnected after CDC propagation');
-
-      leaseSvc.stop();
     } finally {
-      cdcService.cleanup();
+      replica?.cleanup();
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
+      await cleanupTestEnvironment();
     }
   });
 
@@ -547,12 +557,18 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
 
-      // Get real components from bootstrap
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const cdcService = bootstrapService.cdcIntegrationService;
+      // The seed's real owners; the seed publishes itself on the real path.
+      const owners = seedOwners(bootstrapService);
+      const published = await waitForPublishedMembership(owners.cache, [seedNodeId]);
+      t.equal(published, true, 'seed should publish itself on the real path');
+      const eligible = await waitForPlacementEligible(
+        owners.controlPlaneReadinessService, seedNodeId);
+      t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
+      const systemTableCache = owners.cache;
+      const cdcService = owners.cdcIntegrationService;
       const now = Date.now();
 
-      // Add additional nodes for rebalancing
+      // Additional node rows, present but unpublished: not members.
       await cdcService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         createNodeEntry('node-2', {
@@ -576,6 +592,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        controlPlaneReadinessService: owners.controlPlaneReadinessService,
         nodeId: seedNodeId,
       });
 
@@ -588,25 +605,27 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+        controlPlaneReadinessService: owners.controlPlaneReadinessService,
         nodeId: 'node-2',
       });
 
       rebalancer1.initialize();
       rebalancer2.initialize();
-      rebalancer1.controlPlaneReadinessService =
-        createCacheBackedReadinessService(systemTableCache);
-      rebalancer2.controlPlaneReadinessService =
-        createCacheBackedReadinessService(systemTableCache);
       rebalancer1.setLeader(true);
       rebalancer2.setLeader(true);
 
-      // Both rebalancers see the same available nodes
+      // Both rebalancers see the same available nodes (the node-row writes
+      // above returned the readiness verdict to refresh-pending; drive it).
+      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
       const nodes1 = rebalancer1.getAvailableNodes();
       const nodes2 = rebalancer2.getAvailableNodes();
 
       t.equal(nodes1.length, nodes2.length,
         'both rebalancers should see same node count');
-      t.ok(nodes1.length >= 1, 'should see at least seed node');
+      // was: 'should see at least seed node'
+      t.same(nodes1.map((node) => node.node_id), [seedNodeId],
+        'both rebalancers should see the published set: the seed, not the ' +
+        'unpublished node rows');
 
       // Trigger rebalance on both (simulating concurrent decisions)
       rebalancer1.lastStateChangeTime = now - TEST_TIMEOUTS.STABILIZATION_PERIOD - 1;
@@ -655,14 +674,15 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     );
 
     // Create message router that shows node as disconnected
-    const messageRouter = createMockMessageRouter();
-    messageRouter.setConnectionState(nodeId, 'disconnected');
+    const messageRouter = createMessageRouterHost();
+    // An unregistered peer is what a disconnected peer looks like to the real
+    // router: getConnectionState(nodeId) is null.
 
-    const cdcService = createRealisticCDCService(cache, []);
+    const cdcService = createCdcPropagationHost(cache, []);
 
     try {
       const messageGroup = new MockMessageGroupService({isLeader: true});
-      const mockCoordinator = createMockRebalanceCoordinator();
+      const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
         nodeId: 'control-plane-node',
@@ -676,13 +696,13 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         nodeId: 'control-plane-node',
         nodeLeaseOwner: heartbeatSvc,
         systemTableCache: cache,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
       });
       leaseSvc.initialize();
 
       const endpointGateway = new ControlPlaneSystemTableGateway({
         nodeId: 'control-plane-node',
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
         cdcIntegrationService: cdcService,
         messageRouter,
       });
@@ -702,7 +722,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         cdcIntegrationService: cdcService,
         systemTableCache: cache,
         rebalanceCoordinator: mockCoordinator,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
       });
       dispatchSvc.initialize();
 
@@ -928,9 +948,12 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'bootstrap should succeed');
 
-      // Get real components from bootstrap
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const cdcService = bootstrapService.cdcIntegrationService;
+      // The seed's real owners: the detector reads the authoritative nodes
+      // table through the seed's real gateway and writes through its real
+      // CDC owner; both outcomes are observed on that path.
+      const owners = seedOwners(bootstrapService);
+      const systemTableCache = owners.cache;
+      const cdcService = owners.cdcIntegrationService;
       const now = Date.now();
 
       // Add a node that will fail (old heartbeat, suspected status)
@@ -952,40 +975,10 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         'failing node should be visible in cache before detector runs',
       );
 
-      const cdcUpdates = [];
-      const trackingCdcService = {
-        ...cdcService,
-        async updateSystemTableRow(tableName, where, data) {
-          cdcUpdates.push({type: 'update', tableName, where, data, time: Date.now()});
-          return cdcService.updateSystemTableRow(tableName, where, data);
-        },
-        async insertSystemTableRow(tableName, data) {
-          cdcUpdates.push({type: 'insert', tableName, data, time: Date.now()});
-          if (tableName === SYSTEM_TABLE_NAME.NODES) {
-            systemTableCache.applySystemTableChange(
-              tableName,
-              CDC_OPERATIONS.INSERT,
-              data,
-            );
-            return {
-              success: true,
-              operation: 'INSERT',
-              tableName,
-              data,
-              affectedRows: 1,
-              partitionResult: {affectedRows: 1},
-            };
-          }
-          return cdcService.insertSystemTableRow(tableName, data);
-        },
-      };
-      const controlPlaneSystemTableGateway =
-        createCacheControlPlaneGateway(systemTableCache, trackingCdcService);
-
       const detector = new FailureDetector({
         systemTableCache,
-        cdcIntegrationService: trackingCdcService,
-        controlPlaneSystemTableGateway,
+        cdcIntegrationService: cdcService,
+        controlPlaneSystemTableGateway: owners.controlPlaneSystemTableGateway,
         nodeId: seedNodeId,
       });
       detector.initialize();
@@ -1004,19 +997,23 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // Simultaneously: detect failure AND add new node
       const failurePromise = detector.checkNodeHealth();
-      const joinPromise = trackingCdcService.insertSystemTableRow(
+      const joinPromise = cdcService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         createNodeEntry('joining-node'),
       );
 
-      await Promise.all([failurePromise, joinPromise]);
+      const [, joinResult] = await Promise.all([failurePromise, joinPromise]);
 
-      // Verify both operations completed
-      const insertOps = cdcUpdates.filter((u) => u.type === 'insert');
-      const updateOps = cdcUpdates.filter((u) => u.type === 'update');
-
-      t.ok(insertOps.length > 0, 'should have insert operation for joining node');
-      t.ok(updateOps.length > 0, 'should have update operation for failing node');
+      // Verify both operations completed on the authoritative path
+      // was: 'should have insert operation for joining node'
+      t.equal(joinResult.success, true, 'join write should succeed on the real path');
+      const authoritativeNodes = await detector.getNodes();
+      t.ok(authoritativeNodes.some((node) => node.node_id === 'joining-node'),
+        'joining node should be in the authoritative nodes table');
+      // was: 'should have update operation for failing node'
+      t.ok(authoritativeNodes.some((node) =>
+        node.node_id === 'failing-node' && node.status !== NODE_STATUS.SUSPECTED),
+      'health check should have advanced the failing node past suspected');
 
       // Verify final state
       const joiningNode = systemTableCache.get(SYSTEM_TABLE_NAME.NODES, 'joining-node');
@@ -1312,7 +1309,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   // --------------------------------------------------------------------------
   await t.test('non-leader forwards control messages to leader', async (t) => {
     const cache = new SystemTableCache();
-    const cdcService = createRealisticCDCService(cache, []);
+    const cdcService = createCdcPropagationHost(cache, []);
 
     try {
       // Create follower message group
@@ -1321,8 +1318,8 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         replicaId: 'follower-replica',
       });
 
-      const mockRouter = createMockMessageRouter();
-      const mockCoordinator = createMockRebalanceCoordinator();
+      const mockRouter = createMessageRouterHost();
+      const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
         nodeId: 'follower-node',
@@ -1336,13 +1333,13 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         nodeId: 'follower-node',
         nodeLeaseOwner: heartbeatSvc,
         systemTableCache: cache,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
       });
       leaseSvc.initialize();
 
       const endpointGateway = new ControlPlaneSystemTableGateway({
         nodeId: 'follower-node',
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
         cdcIntegrationService: cdcService,
         messageRouter: mockRouter,
       });
@@ -1362,7 +1359,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         cdcIntegrationService: cdcService,
         systemTableCache: cache,
         rebalanceCoordinator: mockCoordinator,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        sqlQueryEngine: createSqlEngineSeamFor(cache),
       });
       dispatchSvc.initialize();
 
