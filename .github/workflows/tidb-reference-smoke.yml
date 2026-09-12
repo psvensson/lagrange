@@ -11,6 +11,7 @@ on:
       - benchmark/hosted-retry-integration-staging
       - benchmark/paired-sweep-plan-reconcile
       - benchmark/scenario-a-semantic-profile-staging
+      - benchmark/scenario-a-semantic-gate-staging
   workflow_dispatch: {}
 
 permissions:
@@ -74,7 +75,9 @@ jobs:
             test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/harness/oltp-paired-retry-owner.js \
             test/distributed/harness/oltp-open-loop-step-owner.js \
+            test/distributed/harness/oltp-scenario-a-comparison-systems.js \
             test/distributed/harness/oltp-scenario-a-semantic-profile.js \
+            test/distributed/harness/oltp-scenario-a-semantic-gate.js \
             test/distributed/harness/oltp-paired-sweep-plan.js \
             test/distributed/reference-client/tidb-oltp-adapter.js \
             test/distributed/reference-client/lagrange-oltp-adapter.js \
@@ -82,6 +85,7 @@ jobs:
             scripts/checks/oltp-paired-retry-owner-guard.js \
             scripts/checks/oltp-open-loop-step-owner-guard.js \
             scripts/checks/oltp-scenario-a-semantic-profile-guard.js \
+            scripts/checks/oltp-scenario-a-semantic-gate-guard.js \
             scripts/checks/oltp-paired-sweep-plan-guard.js \
             scripts/checks/lagrange-oltp-adapter-guard.js \
             scripts/checks/run-tidb-oltp-adapter-live.js
@@ -91,6 +95,7 @@ jobs:
           node scripts/checks/oltp-paired-retry-owner-guard.js
           node scripts/checks/oltp-open-loop-step-owner-guard.js
           node scripts/checks/oltp-scenario-a-semantic-profile-guard.js
+          node scripts/checks/oltp-scenario-a-semantic-gate-guard.js
           node scripts/checks/oltp-paired-sweep-plan-guard.js
           node scripts/checks/lagrange-oltp-adapter-guard.js
 
