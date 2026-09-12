@@ -48,6 +48,7 @@ const ABSENT_LABEL = 'absent';
 const UNKNOWN_PROOF_STATE = 'unknown proof state';
 const GIT_FETCH_ARGS = Object.freeze(['fetch', '--quiet']);
 const GIT_REV_PARSE = 'rev-parse';
+const GIT_MERGE_BASE = 'merge-base';
 const GIT_HEAD_REF = 'HEAD';
 const GIT_STATUS_ARGS = Object.freeze([
   'status', '--porcelain', '--', '.', SOLVE_EXCLUSION,
@@ -69,7 +70,7 @@ const ARG = Object.freeze({JSON: '--json', REMOTE: '--remote'});
 
 const CHECK = Object.freeze({
   CLEAN_TREE: 'clean_release_content',
-  HEAD_IS_REMOTE_MAIN: 'head_is_remote_main',
+  HEAD_ON_REMOTE_MAIN: 'head_on_remote_main',
   RELEASE_PROOF: 'durable_release_proof_for_exact_sha',
   VERSIONS_AGREE: 'versions_and_changelog_agree',
   TAG_ABSENT: 'tag_absent',
@@ -150,13 +151,19 @@ function gatherReleaseFacts({
   const repository = resolveRepository(packageJson);
   git([...GIT_FETCH_ARGS, remote]);
   const headSha = git([GIT_REV_PARSE, GIT_HEAD_REF]);
+  const remoteMainSha = git([GIT_REV_PARSE, `${remote}/${MAIN_BRANCH}`]);
   return {
     version,
     tag,
     remote,
     repository,
     headSha,
-    remoteMainSha: git([GIT_REV_PARSE, `${remote}/${MAIN_BRANCH}`]),
+    remoteMainSha,
+    // The proof is over a tree, not a branch position: the SHA that gets
+    // tagged must be proven (below) and published - on the remote main
+    // history - but the remote may already have moved past it, so landings
+    // can publish behind a running proof without invalidating it.
+    headMergeBaseWithRemoteMain: git([GIT_MERGE_BASE, headSha, remoteMainSha]),
     statusLines: git([...GIT_STATUS_ARGS])
       .split(LINE_SEPARATOR).map((line) => line.trim()).filter(Boolean),
     releaseProof: proofResolver({
@@ -217,10 +224,15 @@ function evaluateReleasePreflight(facts) {
         facts.statusLines.join(', '),
     },
     {
-      id: CHECK.HEAD_IS_REMOTE_MAIN,
-      ok: facts.headSha === facts.remoteMainSha,
-      detail: `HEAD ${facts.headSha} vs ${facts.remote}/${MAIN_BRANCH} ` +
-        `${facts.remoteMainSha}`,
+      id: CHECK.HEAD_ON_REMOTE_MAIN,
+      ok: facts.headMergeBaseWithRemoteMain === facts.headSha,
+      detail: facts.headSha === facts.remoteMainSha ?
+        `HEAD ${facts.headSha} is ${facts.remote}/${MAIN_BRANCH}` :
+        facts.headMergeBaseWithRemoteMain === facts.headSha ?
+          `HEAD ${facts.headSha} is on ${facts.remote}/${MAIN_BRANCH} ` +
+            `history (remote head ${facts.remoteMainSha} has moved past it)` :
+          `HEAD ${facts.headSha} is not on ${facts.remote}/${MAIN_BRANCH} ` +
+            `history (remote head ${facts.remoteMainSha})`,
     },
     {
       id: CHECK.RELEASE_PROOF,
