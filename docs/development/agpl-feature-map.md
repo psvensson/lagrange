@@ -245,6 +245,7 @@ constrained by `solve/specs/global-secondary-indexes/requirements.md`.
 |----|------|---------------|-------------|
 | RM-0.3-qs-typed-key-ordering | Typed partition-key and tuple ordering | 🔲 | One shared type-aware total order (or order-preserving key encoding) replaces the duplicated `localeCompare` helpers and raw JS compare, with a migration/revalidation story for persisted boundaries. This is correctness work as well as planner substrate. |
 | RM-0.3-qs-pk-partition-narrowing | Primary-key and compound-primary-key partition narrowing beyond `id` | 🔲 | Read the already-persisted primary key (`tables.partition_key`) in partition resolution and the remaining `id`-fallback modules, activating the existing composite-key path. Depends on typed key ordering. |
+| RM-0.3-qs-locking-reads | PostgreSQL `SELECT ... FOR UPDATE` locking reads | 🔲 | Preserve the locking clause in the canonical PostgreSQL AST and route it through `SqlCore` and the existing transaction/participant owners as a real distributed write-intent/reservation semantic. Conflict/wait behavior, timeout/cancellation, commit/rollback release, multi-partition behavior, and recovery must be deterministic and proven through the public PG path; no PG-adapter-local or benchmark-only lock authority. Architecture: `architecture/postgres-locking-reads.md`. |
 | RM-0.3-qs-local-index-ddl | Local ordered index DDL | 🔲 | Wire parsed `CREATE INDEX` / `DROP INDEX` through statement dispatch into the existing `IndexService`, instantiate it in runtime composition, and support ordinary and compound local B-tree indexes. Unsupported index families fail closed rather than existing as metadata-only claims. |
 | RM-0.3-qs-compound-index-semantics | Ordered and compound index planner semantics | 🔲 | Seal tuple/NULL/type/collation behavior plus left-prefix and equality-prefix-plus-next-range rules for local and global indexes. Remove the current heuristic that treats any matching non-leading column as sufficient index use. |
 | RM-0.3-qs-global-secondary-indexes | Non-unique global secondary and compound indexes | 🔲 | Index-as-partitioned-dataset storage, index-side routing, write-path maintenance, resumable backfill, lifecycle/failure state, planner integration, and `EXPLAIN DISTRIBUTED`. An unavailable/unreadable index degrades to scatter-gather rather than affecting correctness. Spec: `solve/specs/global-secondary-indexes/`. |
@@ -259,6 +260,9 @@ historical references remain valid; new Quests link the 0.3 IDs above.
 - Persisted partition and indexed tuples have one type-aware ordering contract.
 - Tables with non-`id` and compound primary keys narrow to the correct
   partitions where their predicates permit it.
+- PostgreSQL `SELECT ... FOR UPDATE` survives parsing as an explicit semantic
+  and changes conflicting concurrent transaction behavior through the canonical
+  distributed transaction/participant owners, with bounded release and recovery.
 - Ordinary and compound local B-tree indexes can be created, dropped, and used
   under explicit ordered-index semantics.
 - A non-unique global secondary/compound index survives resumable backfill and
