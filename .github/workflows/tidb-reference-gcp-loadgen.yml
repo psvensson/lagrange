@@ -96,6 +96,22 @@ jobs:
           pulumi version
           openssl version
 
+      - name: Run TiDB reference contract guards
+        run: |
+          set -euo pipefail
+          npx eslint \
+            scripts/checks/build-tidb-oltp-loadgen-image.js \
+            scripts/checks/tidb-oltp-loadgen-runner.js \
+            scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js \
+            scripts/checks/oltp-baseline-transaction-executor-guard.js \
+            test/distributed/harness/oltp-baseline-transaction-executor.js \
+            test/distributed/reference-client/tidb-oltp-adapter.js
+          node scripts/checks/tidb-reference-lifecycle-guard.js
+          node scripts/checks/tidb-reference-resource-policy-guard.js
+          node scripts/checks/tidb-oltp-dataset-guard.js
+          node scripts/checks/tidb-oltp-workload-guard.js
+          node scripts/checks/oltp-baseline-transaction-executor-guard.js
+
       - name: Pull pinned TiDB images and build load-generator image
         run: |
           set -euo pipefail
@@ -106,18 +122,6 @@ jobs:
           LOADGEN_IMAGE="lagrange-tidb-oltp-loadgen:${GITHUB_SHA}"
           node scripts/checks/build-tidb-oltp-loadgen-image.js --tag "$LOADGEN_IMAGE"
           echo "TIDB_OLTP_LOADGEN_IMAGE=$LOADGEN_IMAGE" >> "$GITHUB_ENV"
-
-      - name: Run TiDB reference contract guards
-        run: |
-          set -euo pipefail
-          npx eslint \
-            scripts/checks/build-tidb-oltp-loadgen-image.js \
-            scripts/checks/tidb-oltp-loadgen-runner.js \
-            scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js
-          node scripts/checks/tidb-reference-lifecycle-guard.js
-          node scripts/checks/tidb-reference-resource-policy-guard.js
-          node scripts/checks/tidb-oltp-dataset-guard.js
-          node scripts/checks/tidb-oltp-workload-guard.js
 
       - name: Prove separate same-zone load generator
         run: node scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js
