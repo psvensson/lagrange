@@ -338,7 +338,7 @@ async function run() {
     },
     workload: loadgenResult,
     cleanup: {
-      loadGeneratorContainerRemoved,
+      loadgenContainerRemoved,
       databaseClusterStopped,
       databaseNetworkRemoved,
       infrastructureDestroyed: Boolean(provisioner) && teardownError === null,
