@@ -337,25 +337,33 @@ describe('prerelease publication contract', () => {
       'npm receives the channel as a dist-tag, never the latest default');
   });
 
-  it('writes a publication receipt and attaches it to the release', async () => {
+  it('writes a publication receipt from what the registries report', async () => {
     const {release} = await load();
-    const receipt = step(release, 'Write publication receipt');
+    const steps = release.jobs.release.steps.map((candidate) => candidate.name);
+    const receipt = step(release, 'Write publication receipt from what the registries report');
     assert.ok(receipt, 'the workflow records what it published, per tag');
+    assert.ok(steps.indexOf(receipt.name) > steps.indexOf('Publish GitHub Release'),
+      'the receipt is written after the last publication, so it can observe all of them');
+    // Observed, never intended: every published fact is re-read from the
+    // registry that holds it, the same rule as re-hashing evidence.
+    assert.match(receipt.run, /npm view lagrange-server dist-tags/u);
+    assert.match(receipt.run, /docker manifest inspect/u);
+    assert.match(receipt.run, /gh release view .*isPrerelease/u);
     assert.match(receipt.run, /data\/releases\/\$\{?GITHUB_REF_NAME\}?\.json/u);
     for (const artifact of ['npm', 'docker', 'helm', 'github']) {
       assert.match(receipt.run, new RegExp(`"${artifact}"`, 'u'),
         `the receipt names ${artifact}`);
     }
-    const gh = step(release, 'Publish GitHub Release');
-    assert.match(gh.run, /release-receipt\.json|data\/releases/u,
+    assert.match(receipt.run, /gh release upload .*release-receipt\.json/u,
       'the receipt travels with the release so the quest can commit it verbatim');
     // The receipt is committed evidence, so its path must be the one thing
     // under the ignored data/ tree that git will take.
     const ignore = await readFile('.gitignore', UTF8);
     assert.match(ignore, /^!\/data\/releases\/\*\.json$/mu,
       'data/releases/*.json must be un-ignored, or the receipt can never land');
+    assert.match(ignore, /^!\/data\/formation-health\/trend\.ndjson$/mu,
+      'the formation-health trend is committed evidence in the same shape');
     assert.match(ignore, /^data$/mu,
       'every nested data/ directory stays ignored by the bare pattern');
   });
 });
-

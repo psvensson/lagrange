@@ -308,41 +308,6 @@ jobs:
           repository: psvensson/lagrange
           readme-filepath: ${{ steps.release.outputs.notes_dir }}/dockerhub-overview.md
 
-      - name: Write publication receipt
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.release.outputs.version }}"
-          mkdir -p data/releases
-          node --input-type=module <<'NODE' > "data/releases/${GITHUB_REF_NAME}.json"
-          const version = process.env.VERSION;
-          const image = process.env.DOCKERHUB_IMAGE;
-          const repo = process.env.GITHUB_REPOSITORY;
-          const tag = process.env.GITHUB_REF_NAME;
-          const receipt = {
-            schema: 'release-publication-receipt/1',
-            tag,
-            sha: process.env.TAGGED_COMMIT,
-            version,
-            prerelease: process.env.PRERELEASE === 'true',
-            distTag: process.env.DIST_TAG,
-            publishedAt: new Date().toISOString(),
-            published: {
-              "npm": {published: true, url: `https://www.npmjs.com/package/lagrange-server/v/${version}`},
-              "docker": {published: true, url: `https://hub.docker.com/r/${image.replace(/^docker\.io\//u, '')}/tags?name=${version}`},
-              "helm": {published: true, url: `https://github.com/${repo}/releases/download/${tag}/lagrange-node-${version}.tgz`},
-              "github": {published: true, url: `https://github.com/${repo}/releases/tag/${tag}`},
-            },
-          };
-          process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
-          NODE
-          cp "data/releases/${GITHUB_REF_NAME}.json" dist/release-receipt.json
-          cat dist/release-receipt.json
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-          TAGGED_COMMIT: ${{ steps.release.outputs.tagged_commit }}
-          PRERELEASE: ${{ steps.release.outputs.prerelease }}
-          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -350,7 +315,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
-          ASSETS=(dist/lagrange dist/lagrange-cli "dist/lagrange-node-${VERSION}.tgz" "dist/npm/lagrange-server-${VERSION}.tgz" dist/SHA256SUMS dist/release-receipt.json)
+          ASSETS=(dist/lagrange dist/lagrange-cli "dist/lagrange-node-${VERSION}.tgz" "dist/npm/lagrange-server-${VERSION}.tgz" dist/SHA256SUMS)
           NOTES="${{ steps.release.outputs.notes_dir }}/release-notes.md"
           CHANNEL_FLAGS=(--latest)
           if [ "$PRERELEASE" = "true" ]; then CHANNEL_FLAGS=(--prerelease --latest=false); fi
@@ -360,3 +325,57 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" --verify-tag --title "Lagrange $GITHUB_REF_NAME" --notes-file "$NOTES" "${CHANNEL_FLAGS[@]}"
           fi
+
+      - name: Write publication receipt from what the registries report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          TAGGED_COMMIT: ${{ steps.release.outputs.tagged_commit }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+        run: |
+          set -euo pipefail
+          # Observed, never intended: each fact below is re-read from the
+          # registry that now holds it, the same rule as re-hashing evidence.
+          NPM_DIST_TAGS="$(npm view lagrange-server dist-tags --json)"
+          DOCKER_VERSION_DIGEST="$(docker manifest inspect --verbose "$DOCKERHUB_IMAGE:$VERSION" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const m=Array.isArray(j)?j[0]:j;process.stdout.write(m.Descriptor?.digest||"")})')"
+          DOCKER_LATEST_DIGEST="$(docker manifest inspect --verbose "$DOCKERHUB_IMAGE:latest" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const m=Array.isArray(j)?j[0]:j;process.stdout.write(m.Descriptor?.digest||"")}catch{process.stdout.write("")}})')"
+          GH_RELEASE="$(gh release view "$GITHUB_REF_NAME" --json isPrerelease,isLatest,url,assets)"
+          mkdir -p data/releases
+          node --input-type=module <<'NODE' > "data/releases/${GITHUB_REF_NAME}.json"
+          const env = process.env;
+          const distTags = JSON.parse(env.NPM_DIST_TAGS);
+          const npmTagsAtVersion = Object.entries(distTags)
+            .filter(([, version]) => version === env.VERSION).map(([tag]) => tag).sort();
+          const release = JSON.parse(env.GH_RELEASE);
+          const assetNames = (release.assets || []).map((asset) => asset.name);
+          const helmAsset = `lagrange-node-${env.VERSION}.tgz`;
+          const repo = env.GITHUB_REPOSITORY;
+          const image = env.DOCKERHUB_IMAGE.replace(/^docker\.io\//u, '');
+          const receipt = {
+            schema: 'release-publication-receipt/1',
+            tag: env.GITHUB_REF_NAME,
+            sha: env.TAGGED_COMMIT,
+            version: env.VERSION,
+            prerelease: env.PRERELEASE === 'true',
+            intended: {distTag: env.DIST_TAG},
+            observedAt: new Date().toISOString(),
+            published: {
+              "npm": {published: npmTagsAtVersion.length > 0, distTags: npmTagsAtVersion,
+                latest: distTags.latest || null,
+                url: `https://www.npmjs.com/package/lagrange-server/v/${env.VERSION}`},
+              "docker": {published: env.DOCKER_VERSION_DIGEST !== '', digest: env.DOCKER_VERSION_DIGEST,
+                latestDigest: env.DOCKER_LATEST_DIGEST || null,
+                latestIsThisRelease: env.DOCKER_LATEST_DIGEST !== '' && env.DOCKER_LATEST_DIGEST === env.DOCKER_VERSION_DIGEST,
+                url: `https://hub.docker.com/r/${image}/tags?name=${env.VERSION}`},
+              "helm": {published: assetNames.includes(helmAsset),
+                url: `https://github.com/${repo}/releases/download/${env.GITHUB_REF_NAME}/${helmAsset}`},
+              "github": {published: Boolean(release.url), prerelease: release.isPrerelease === true,
+                latest: release.isLatest === true, assets: assetNames, url: release.url || null},
+            },
+          };
+          process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+          NODE
+          cat "data/releases/${GITHUB_REF_NAME}.json"
+          cp "data/releases/${GITHUB_REF_NAME}.json" release-receipt.json
+          gh release upload "$GITHUB_REF_NAME" release-receipt.json --clobber
