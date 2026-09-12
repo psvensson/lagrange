@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-pipeline-dry-run",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The release workflow publishes end to end on the production path for a prerelease semver tag before any further v0.2.x is cut: a prerelease tag makes npm publish under the next dist-tag and never latest, Docker tagged with the version only with no latest move, the GitHub release marked pre-release, and the identity step accepts package.json equal to the tag including its suffix; the workflow writes a compact publication receipt to data/releases/<tag>.json naming the tag, the exact commit, and each artifact's published state and URL, that path is un-ignored for exactly those receipts, and the newest receipt shows every artifact published.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/release-publication-receipt.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-prerelease-contract",
+      "statement": "The four prerelease behaviours are one contract keyed on the tag's semver prerelease suffix, asserted by one workflow-contract test; they are never four flags."
+    },
+    {
+      "id": "production-path-only",
+      "statement": "The dry run is the production workflow on a real tag; no bypass, no dry-run mode, no skipped step. A step that cannot run for a prerelease is a defect in the step."
+    },
+    {
+      "id": "immutable-tags",
+      "statement": "No existing tag is moved, deleted or recreated. The prerelease tag is v0.2.4-rc.0 and the release that follows a green dry run is v0.2.4, never a re-cut of 0.2.3."
+    },
+    {
+      "id": "outward-actions-authorized",
+      "statement": "Pushing the prerelease tag publishes to npm, Docker Hub and GitHub Releases; that push happens only on the operator's explicit authorization for that tag (R26)."
+    },
+    {
+      "id": "receipt-is-the-authority",
+      "statement": "Done is read from the committed receipt through scripts/checks/release-publication-receipt.js, never from an Actions status."
+    }
+  ],
+  "sealedAt": "0538db5c7d4a52bc4f7712061763a6efc9e3ff72"
+}

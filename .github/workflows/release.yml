@@ -340,7 +340,15 @@ jobs:
           NPM_DIST_TAGS="$(npm view lagrange-server dist-tags --json)"
           DOCKER_VERSION_DIGEST="$(docker manifest inspect --verbose "$DOCKERHUB_IMAGE:$VERSION" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const m=Array.isArray(j)?j[0]:j;process.stdout.write(m.Descriptor?.digest||"")})')"
           DOCKER_LATEST_DIGEST="$(docker manifest inspect --verbose "$DOCKERHUB_IMAGE:latest" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);const m=Array.isArray(j)?j[0]:j;process.stdout.write(m.Descriptor?.digest||"")}catch{process.stdout.write("")}})')"
-          GH_RELEASE="$(gh release view "$GITHUB_REF_NAME" --json isPrerelease,isLatest,url,assets)"
+          GH_RELEASE="$(gh release view "$GITHUB_REF_NAME" --json isPrerelease,url,assets)"
+          # "latest" is a repository fact, not a release field the runner's gh
+          # exposes (2.89.0 rejects --json isLatest): ask the API which release
+          # it serves as latest and compare with this tag.
+          GH_LATEST_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          # The receipt is written by a child node process: every observed value
+          # must be exported to reach it (a separate statement, so set -e still
+          # judged each substitution above).
+          export NPM_DIST_TAGS DOCKER_VERSION_DIGEST DOCKER_LATEST_DIGEST GH_RELEASE GH_LATEST_TAG
           mkdir -p data/releases
           node --input-type=module <<'NODE' > "data/releases/${GITHUB_REF_NAME}.json"
           const env = process.env;
@@ -371,7 +379,8 @@ jobs:
               "helm": {published: assetNames.includes(helmAsset),
                 url: `https://github.com/${repo}/releases/download/${env.GITHUB_REF_NAME}/${helmAsset}`},
               "github": {published: Boolean(release.url), prerelease: release.isPrerelease === true,
-                latest: release.isLatest === true, assets: assetNames, url: release.url || null},
+                latest: env.GH_LATEST_TAG === env.GITHUB_REF_NAME, assets: assetNames,
+                url: release.url || null},
             },
           };
           process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
