@@ -8,6 +8,7 @@ on:
       - benchmark/lagrange-oltp-adapter-reconcile
       - benchmark/paired-retry-owner-staging
       - benchmark/paired-open-loop-owner-staging
+      - benchmark/hosted-retry-integration-staging
   workflow_dispatch: {}
 
 permissions:
@@ -76,7 +77,8 @@ jobs:
             scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-paired-retry-owner-guard.js \
             scripts/checks/oltp-open-loop-step-owner-guard.js \
-            scripts/checks/lagrange-oltp-adapter-guard.js
+            scripts/checks/lagrange-oltp-adapter-guard.js \
+            scripts/checks/run-tidb-oltp-adapter-live.js
           node scripts/checks/tidb-oltp-dataset-guard.js
           node scripts/checks/tidb-oltp-workload-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
