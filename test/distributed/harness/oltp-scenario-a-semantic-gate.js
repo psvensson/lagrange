@@ -1,8 +1,8 @@
 import {createHash} from 'node:crypto';
 
 import {
-  OLTP_PAIRED_SWEEP_SYSTEM,
-} from './oltp-paired-sweep-plan.js';
+  OLTP_SCENARIO_A_SYSTEM,
+} from './oltp-scenario-a-comparison-systems.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
   hashScenarioASemanticProfile,
@@ -14,7 +14,7 @@ const STATUS = Object.freeze({
   PASSED: 'passed',
   FAILED: 'failed',
 });
-const SYSTEMS = Object.freeze(Object.values(OLTP_PAIRED_SWEEP_SYSTEM));
+const SYSTEMS = Object.freeze(Object.values(OLTP_SCENARIO_A_SYSTEM));
 
 function requiredSystemProofIds() {
   const profile = OLTP_SCENARIO_A_SEMANTIC_PROFILE;
