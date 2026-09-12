@@ -47,8 +47,15 @@ jobs:
           docker pull pingcap/tidb:v8.5.8
           docker pull mysql:8.4.11
 
-      - name: Run lifecycle contract guard
-        run: node scripts/checks/tidb-reference-lifecycle-guard.js
+      - name: Run lifecycle and physical-topology contract guards
+        run: |
+          set -euo pipefail
+          npx eslint \
+            test/distributed/harness/tidb-reference-physical-topology.js \
+            scripts/checks/tidb-reference-physical-topology-guard.js
+          node scripts/checks/tidb-reference-lifecycle-guard.js
+          node scripts/checks/tidb-reference-resource-policy-guard.js
+          node scripts/checks/tidb-reference-physical-topology-guard.js
 
       - name: Run OLTP dataset contract guard
         run: node scripts/checks/tidb-oltp-dataset-guard.js
