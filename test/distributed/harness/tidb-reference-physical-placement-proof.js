@@ -36,7 +36,7 @@ function storeStatusSql() {
   return [
     'SELECT STORE_ID, ADDRESS, STORE_STATE_NAME',
     'FROM INFORMATION_SCHEMA.TIKV_STORE_STATUS',
-    "WHERE STORE_STATE_NAME = 'Up'",
+    'WHERE STORE_STATE_NAME = \'Up\'',
     'ORDER BY STORE_ID;',
   ].join(' ');
 }
