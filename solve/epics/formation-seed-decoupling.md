@@ -1,0 +1,137 @@
+---
+id: formation-seed-decoupling
+status: open
+proof: certification
+roadmapRow: RM-0.2-five-node-convergence
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: release-0-2-five-node-cold-formation
+    consecutive: 3
+    metric: priority
+quests:
+  - formation-harness-model-from-contracts
+  - formation-calibration-run
+  - formation-sim
+  - seed-formation-decoupling
+  - five-node-cold-formation-certification
+authorizes:
+  - src/control-plane
+  - src/bootstrap
+  - src/rebalancer
+  - src/worker
+  - src/diagnostics
+  - src/message-group
+  - src/raft
+  - test/convergence
+  - test/simulation
+  - test/distributed/harness
+  - scripts/checks/formation-budget.js
+  - scripts/checks/formation-sim-reproduces.js
+  - scripts/checks/formation-calibration.js
+  - docs
+---
+
+# Formation without seed starvation
+
+Five-node cold formation completes without starving the seed, proven first in
+a deterministic in-process simulator and only then certified live. This is the
+altitude the 2026-09-05 finding asked for: every system-table replica lives on
+the seed during formation, so one event loop is Raft leader of everything,
+readiness planner and admin snapshot server; the seed showed 30 gaps totalling
+66.5 s (49.8 s unattributed) in a 135 s window, the readiness lease never
+completed, and critical spread never planned. A week of readiness-owner
+increments did not cure it, and 0.2.0 shipped with formation demoted from gate
+to signal. This epic restores a proof before the claim.
+
+`doneWhen` is the existing certification streak: three consecutive
+fresh-container five-node runs, priority metric. Confirm the scenario id
+against the harness before sealing. Live runs are terminal evidence only
+here; every child quest is deterministic or simulation.
+
+## Binding constraints
+
+- **No caching or memoising of readiness as the mechanism.** The sealed
+  `bounded-read-amplification-scope` constraint stays. A design note whose
+  mechanism is a cache is rejected.
+- **GCP is never the iteration loop.** One authorized calibration run, then
+  nothing live until certification.
+- **Budgets** in `scripts/checks/formation-budget.js`, read from the same
+  report schema the live harness writes and the simulator must emit: seed
+  event-loop gap total < 10 % of the formation window and max gap < 500 ms;
+  all five nodes lease-complete within 45 s of the fifth join;
+  `prioritySpreadGap` reaches 0 with ≥ 1 operation in flight within 30 s of
+  quorum; admission leaves `critical_spread_open` within 60 s and never enters
+  `control_plane_pressure`. Numeric, owner-adjustable, never removed.
+
+## Quests, in order
+
+**formation-harness-model-from-contracts** — the seven-node in-process
+cold-formation path (the mandatory convergence probe) is the simulator's
+base, and its cross-owner harness model is derived from the production owner
+contracts instead of hand-maintained: landing the attribution seam turned it
+red for a day (35 attempts, 2026-09-09) because the model was stale. Probe:
+test-receipt for a test that fails when a registered owner interaction is
+absent from the harness model. Red at seal.
+
+**formation-calibration-run** — the authorized single run. Precondition: the
+attribution seam already on `main` (`formation-turn-attribution`,
+`raft-formation-attribution`) plus a sampling CPU profile of the seed's main
+thread over the formation window, frames mapped to owners by directory, so the
+buckets partition the window. Fresh container, matching `SRC_FINGERPRINT`,
+`gate:preflight` question "per-owner attribution of seed event-loop time
+during formation". The run counts only if the unattributed bucket is under
+10 %; otherwise record, extend the seam under deterministic tests, and return
+for a new authorization — no second run. Output: the per-owner cost table
+committed as text under `test/simulation/calibration/`, each figure citing
+its immutable artifact, and the ranked mechanism list for the fix. Probe:
+script `formation-calibration.js` — 0 when the table exists, is complete for
+every formation-path owner, and cites artifacts.
+
+**formation-sim** — deterministic five-node cold-formation simulator on the
+in-process path: virtual clock, seeded in-memory transport, a discrete-event
+scheduler charging virtual time from the calibration table so starvation is
+computed rather than observed, real owners throughout, and a guard that throws
+on any ambient clock or timer read in deterministic mode. Same seed produces a
+byte-identical report; the signature predicate (seed gap fraction ≥ 50 % of
+the window, joiners < 5 %, lease-incomplete loop with escalating backoff,
+`prioritySpreadGap` stuck with 0 in flight, admission ending in
+`control_plane_pressure`) holds across a 0.5×–2× sweep of every coefficient.
+A live report plus logs can be ingested as a scenario. Runs under 60 s in a
+normal lane. Probe: script `formation-sim-reproduces.js` — 0 when the
+signature reproduces on `main` and two runs hash identical. Red at seal.
+
+**seed-formation-decoupling** — the fix, chosen from the calibration
+ranking: early spread of system-table replicas once three nodes are joined and
+before user-table admission opens; or system-partition Raft apply moved onto
+the replica-worker pool; or formation-time admission control with an explicit
+deadline. Owner-level red test first, red on revert. After two attempts with
+no budget improvement in the simulator, the next entry is an altitude-check.
+Probe: script `formation-budget.js` against the simulator scenario — 0 when
+every budget holds and `formation-sim-reproduces.js` has been converted into a
+regression guard that injects the removed condition and still reproduces.
+
+**five-node-cold-formation-certification** — three fresh-container runs,
+`gate:preflight` with the exact question. A failed run is ingested into the
+simulator as a scenario and the work returns to `seed-formation-decoupling`;
+no further live run until the simulator passes the new scenario. Probe: the
+epic's scenario-harness streak.
+
+## Relation to other epics
+
+`release-0-2-five-node-convergence` keeps its remaining split/merge quest and
+is otherwise superseded by this epic for the cold-formation surface.
+`formation-complexity-consolidation`, `publication-readiness-churn-liveness-closure`
+and `hysteresis-consolidation` are superseded here. `raft-ownership` in
+`apparatus-release-consolidation` must not run concurrently with a quest here
+that touches `src/raft`.
+
+## Guardrails
+
+- Design note with the calibration attribution before the fix; stop for
+  review before `seed-formation-decoupling` starts.
+- Fold, never split: a touched `-methods` bag on the formation path may be
+  folded into a cohesive module; a ratchet that blocks that stops and records.
+- Every cited artifact is immutable. No mechanism claim rests on a
+  statistical run.
+- Independent verification before landing any `src/` change.
