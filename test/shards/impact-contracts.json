@@ -306,6 +306,105 @@
         "test/integration/message-group-multi-join-formation.integration.test.js"
       ]
     },
+    "CL-041": {
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "owners": [
+        "src/raft/liferaft.js",
+        "src/raft/in-memory-log-adapter.js"
+      ],
+      "tests": [
+        "test/closure/CL-041.repro.test.js"
+      ]
+    },
+    "CL-040": {
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "owners": [
+        "src/raft/liferaft.js",
+        "src/raft/in-memory-log-adapter.js"
+      ],
+      "tests": [
+        "test/closure/CL-040.repro.test.js"
+      ]
+    },
+    "CL-042": {
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "owners": [
+        "src/raft/liferaft.js",
+        "src/raft/in-memory-log-adapter.js"
+      ],
+      "tests": [
+        "test/closure/CL-042.repro.test.js"
+      ]
+    },
+    "CL-038": {
+      "description": "A surplus-drain REPLACE whose declared source replica is already removed terminalizes (reaches SAFE) instead of re-dispatching a source-leader handoff to a replica that no longer exists (CL-038).",
+      "owners": [
+        "src/rebalancer/priority-publication-leader-safety.js",
+        "src/rebalancer/priority-publication-safety-shared.js"
+      ],
+      "tests": [
+        "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
+      ]
+    },
+    "CL-035": {
+      "description": "A replica's committed learner-to-voter raft promotion is seeded into its own node's local SERVICES row at voter-ready activation, so the REPLACE remove-safety gate observes the promotion instead of deferring on a stale learner/null raft_role forever (CL-035).",
+      "owners": [
+        "src/node/replica-handler.js",
+        "src/rebalancer/priority-publication-safety-topology.js"
+      ],
+      "tests": [
+        "test/control-plane/cl-035-voter-ready-row-seed.test.js"
+      ]
+    },
+    "CL-033": {
+      "description": "The priority-recovery planning projection is memoized per publisher node (build once, reuse while the source revision and stale-grace window hold), so the post-restart recovery hot path cannot rebuild the heavy projection per call and freeze the control-plane seed's event loop past the raft election timeout (CL-033).",
+      "owners": [
+        "src/control-plane/control-plane-readiness-publication-planning-snapshot.js"
+      ],
+      "tests": [
+        "test/control-plane/cl-033-planning-projection-memo.test.js"
+      ]
+    },
+    "CL-034": {
+      "description": "The stage-3 membership-publication planning-snapshot merge (the residual readiness-build cost CL-033's projection memo does not cover) is memoized per publisher node under the same planning-source revision discipline, so per-routing-call rebuild storms cannot freeze the control-plane seed's event loop past the raft election timeout during recovery (CL-034).",
+      "owners": [
+        "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
+        "src/control-plane/control-plane-readiness-service.js"
+      ],
+      "tests": [
+        "test/control-plane/cl-034-planning-snapshot-merge-memo.test.js"
+      ]
+    },
+    "CL-001": {
+      "description": "The strict-mode active-node projection retains an already-published node that is transport-alive and within the heartbeat grace through a transient heartbeat-stall trough, while never promoting a non-baseline node on that grace and still trimming a published node that is genuinely stale (CL-001 variant C).",
+      "owners": [
+        "src/control-plane/active-node-projection.js",
+        "src/control-plane/projection-readiness-state.js"
+      ],
+      "tests": [
+        "test/control-plane/active-node-projection.test.js"
+      ]
+    },
+    "golden-capability-gold-plating": {
+      "description": "A failed or unavailable authoritative read never concludes the positive premise of a safety gate: admission gates fail closed into a typed defer/deny (the conflict-lane deferred-visibility throw; the topology guard's replica_inventory_unusable denial; the surplus REMOVE commit fence; the ledger quorum-spread confirmation). A hold may fail OPEN on a read gap only where blocking on the gap would itself deadlock convergence, and each fail-open hold names its deadlock witness: the over-target count-keyed create-lane hold (G1; fail-closing it would strand the surplus drain it exists to release) and the routine-direction ledger self-move serialization (a disruptive IDLE_ONLY self-move still fails closed). Advisory probes fail open only where a fail-closed enforcer remains downstream (the provisioning ledger-interlock probe defers to operation creation as the enforcing seam).",
+      "owners": [
+        "src/rebalancer/replica-status.js"
+      ],
+      "tests": [
+        "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
+      ]
+    },
+    "publication-readiness-churn-liveness-closure": {
+      "description": "After semantic-input quiescence the final complete token is published; during continuous churn completed tokens advance monotonically, dirty owners receive bounded round-robin service, and stale evidence never promotes readiness. Continuous readiness source churn starts at most one heavy planning build globally per macrotask turn and permits a timer or heartbeat sentinel between every pair of heavy items.",
+      "owners": [
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+        "src/workflow/owner-key-reconcile-queue.js"
+      ],
+      "tests": [
+        "test/control-plane/publication-readiness-churn-liveness.test.js"
+      ]
+    },
     "architecture-model-chain": {
       "description": "Executable architecture models are checks: an Alloy assertion, a decision-table rule or an owner-trace violation named by an invariant is validated and run by the model:contracts chain (repository-health on every push) and by these tests locally, so a model or registry edit selects the chain.",
       "owners": [
@@ -316,6 +415,48 @@
         "test/scripts/model-contract-tools.test.js",
         "test/scripts/check-owner-traces.test.js",
         "test/scripts/model-invariants.test.js"
+      ]
+    },
+    "readiness-handoff-liveness": {
+      "description": "Startup readiness is a controller handoff: the seed registers ready only after its canonical system leaders are in its cache AND its query/data-plane transport is serviceable, and a deferred handoff terminates (ready or blocked with a typed wake) within the bound the owner reports.",
+      "owners": [
+        "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
+        "src/bootstrap/owners/startup-runtime-handoff-owner.js",
+        "src/bootstrap/shared/startup-sql-runtime-handoff.js",
+        "src/bootstrap/shared/local-query-transport-readiness.js"
+      ],
+      "tests": [
+        "test/bootstrap/readiness-handoff-liveness-witness.test.js"
+      ]
+    },
+    "core-system-logic": {
+      "description": "The runtime invariants the core-system-logic contract cites (its architecture invariants bind through the Alloy, decision-table and owner-trace checks instead): a stale projection promotes no readiness lane, degraded runtime authority explains but never projects a node, and the seed phase owner transfers the control-plane writers to the steady-state owners on completion.",
+      "owners": [
+        "src/control-plane/projection-readiness-decision.js",
+        "src/control-plane/active-node-projection.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/control-plane-readiness-snapshot-store.js",
+        "src/control-plane/read-model-contract.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/bootstrap/owners/startup-runtime-handoff-owner.js",
+        "src/bootstrap/shared/startup-sql-runtime-handoff.js"
+      ],
+      "tests": [
+        "test/control-plane/core-system-logic-runtime-witness.test.js"
+      ]
+    },
+    "rolling-restart-rebalancer-handoff": {
+      "description": "The operation-workflow owner bounds deferred re-entry of a coordinator-created remote handoff per operation: retries re-arm with at least the minimum backoff and stop, clearing the retry, once the step has timed out and the operation budget (createdAt + REBALANCE_OPERATION_BUDGET_MS) has passed. Per operation only; the cross-operation cycle is formation-sim's question.",
+      "owners": [
+        "src/rebalancer/operation-workflow-owner-ports.js",
+        "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
+        "src/rebalancer/operation-workflow-coordinator-handoff-retry.js",
+        "src/rebalancer/operation-workflow-owner-retry-registry.js",
+        "src/rebalancer/operation-workflow-owner-handoff-state.js",
+        "src/rebalancer/operation-workflow-transition-retry-grace.js"
+      ],
+      "tests": [
+        "test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js"
       ]
     }
   },
