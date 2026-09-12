@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "consolidation-budget-check",
+  "status": "pass",
+  "generatedAt": "2026-09-12T06:42:37.507Z",
+  "receipts": [
+    {
+      "id": "budget-script-passes-changed-path-guideline-checkers",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the budget script passes the guideline checkers that scan it$\" test/scripts/apparatus-release-consolidation-budget.test.js",
+      "detail": "the literal-owner audit, the ambient-intrinsic audit and eslint are run against this one path and report nothing, so the script is compliant on its own account rather than by inheriting a baseline"
+    },
+    {
+      "id": "fixture-tree-measures-every-budget-row",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every budget row is measured from the tree it is given$\" test/scripts/apparatus-release-consolidation-budget.test.js",
+      "detail": "the rows are measured against a tree that meets every budget and a tree that meets none; a row met in both would be reading a default instead of the tree, and is caught here rather than by the repository happening to be over budget"
+    },
+    {
+      "id": "budget-numbers-are-unchanged-by-the-adaptation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no budget number changed$\" test/scripts/apparatus-release-consolidation-budget.test.js",
+      "detail": "each sealed threshold is restated independently of the script and compared by row name, so a number that drifts to meet the tree fails instead of passing quietly"
+    }
+  ]
+}
