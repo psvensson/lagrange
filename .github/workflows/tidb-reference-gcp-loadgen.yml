@@ -1,0 +1,127 @@
+name: tidb-reference-gcp-loadgen
+
+on:
+  push:
+    branches:
+      - "benchmark/tidb-reference-scenarios"
+    paths:
+      - ".github/workflows/tidb-reference-gcp-loadgen.yml"
+      - "scripts/checks/build-tidb-oltp-loadgen-image.js"
+      - "scripts/checks/tidb-oltp-loadgen-runner.js"
+      - "scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js"
+      - "test/distributed/reference-loadgen/**"
+      - "test/distributed/config/gcp-tidb-oltp-loadgen.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tidb-reference-gcp-loadgen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          skip_install: false
+
+      - name: Start benchmark controller VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner \
+            --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  prove-loadgen:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 120
+    env:
+      LAGRANGE_AUTHORIZE_CLOUD_PROJECT: something-2e584
+      TIDB_OLTP_LOADGEN_EVIDENCE_PATH: test-output/tidb-reference/oltp-gcp-loadgen-proof.json
+    steps:
+      - name: Checkout exact benchmark head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.7.0
+          npm ci
+          npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
+
+          PULUMI_VERSION=3.261.0
+          PULUMI_ARCHIVE="pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz"
+          PULUMI_SHA256=39bc0d2427e22ead6039fad7a7337c2fdc53a68b737ccc52dc897d244aaa8853
+          curl -fsSL --connect-timeout 20 --max-time 300 --retry 2 \
+            -o "$RUNNER_TEMP/$PULUMI_ARCHIVE" \
+            "https://github.com/pulumi/pulumi/releases/download/v${PULUMI_VERSION}/${PULUMI_ARCHIVE}"
+          echo "$PULUMI_SHA256  $RUNNER_TEMP/$PULUMI_ARCHIVE" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$PULUMI_ARCHIVE" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/pulumi" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pulumi/pulumi" version
+
+      - name: Verify controlled-cloud toolchain
+        run: |
+          set -euo pipefail
+          node --version
+          docker version
+          gcloud --version
+          pulumi version
+          openssl version
+
+      - name: Pull pinned TiDB images and build load-generator image
+        run: |
+          set -euo pipefail
+          docker pull pingcap/pd:v8.5.8
+          docker pull pingcap/tikv:v8.5.8
+          docker pull pingcap/tidb:v8.5.8
+          docker pull mysql:8.4.11
+          LOADGEN_IMAGE="lagrange-tidb-oltp-loadgen:${GITHUB_SHA}"
+          node scripts/checks/build-tidb-oltp-loadgen-image.js --tag "$LOADGEN_IMAGE"
+          echo "TIDB_OLTP_LOADGEN_IMAGE=$LOADGEN_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Run TiDB reference contract guards
+        run: |
+          set -euo pipefail
+          node scripts/checks/tidb-reference-lifecycle-guard.js
+          node scripts/checks/tidb-reference-resource-policy-guard.js
+          node scripts/checks/tidb-oltp-dataset-guard.js
+          node scripts/checks/tidb-oltp-workload-guard.js
+
+      - name: Prove separate same-zone load generator
+        run: node scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js
+
+      - name: Upload load-generator proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tidb-oltp-gcp-loadgen-proof-${{ github.run_id }}
+          path: test-output/tidb-reference/oltp-gcp-loadgen-proof.json
+          retention-days: 14
+          if-no-files-found: warn
