@@ -1,6 +1,5 @@
 import {TIDB_REFERENCE_DEFAULTS} from './tidb-reference-lifecycle.js';
 
-const ZERO = 0;
 const TIKV_DATA_DIR = '/var/lib/tikv';
 const DATA_DIR_PREFIX = '--data-dir=';
 const SAFE_PATH_PATTERN = /^\/[A-Za-z0-9._/-]+$/u;
