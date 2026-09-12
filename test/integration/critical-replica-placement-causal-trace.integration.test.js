@@ -12,8 +12,12 @@
  * ledger stage is the missing one, an active probe drives ONE evaluation of
  * the partition's own production rebalancer (real coordinator, real policy
  * service - the instances the cluster itself wired) to split planner
- * emission from admission. The full trace lands in
- * solve/report/critical-placement-causal-trace-live.json.
+ * emission from admission. The full trace lands under test-output/reports/;
+ * only the quest evidence harness, which names the path through
+ * LAGRANGE_TRACE_ARTIFACT_PATH, regenerates the tracked quest artifact
+ * solve/report/critical-placement-causal-trace-live.json - a corpus run must
+ * never rewrite tracked content (the exact-HEAD publish gate refuses a tree
+ * its own tests mutated, 2026-09-12).
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -69,8 +73,11 @@ const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440100';
 const NODE2_ID = '550e8400-e29b-41d4-a716-446655440101';
 const NODE3_ID = '550e8400-e29b-41d4-a716-446655440102';
 const LEDGER_PARTITION_ID = 'replica_operations-p1';
+const TRACE_ARTIFACT_PATH_ENV = 'LAGRANGE_TRACE_ARTIFACT_PATH';
+const DEFAULT_TRACE_ARTIFACT_PATH =
+  'test-output/reports/critical-placement-causal-trace-live.json';
 const TRACE_ARTIFACT_PATH =
-  'solve/report/critical-placement-causal-trace-live.json';
+  process.env[TRACE_ARTIFACT_PATH_ENV] || DEFAULT_TRACE_ARTIFACT_PATH;
 
 function readRows(systemTableCache, tableName, predicate) {
   return systemTableCache.filter(tableName, predicate || (() => true)) || [];
