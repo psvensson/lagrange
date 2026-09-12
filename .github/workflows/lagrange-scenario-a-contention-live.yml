@@ -68,6 +68,7 @@ jobs:
             --config test/distributed/config/local-benchmark-3node.json \
             --scenario scenario-a-new-order-contention-lagrange \
             --output "$LAGRANGE_SCENARIO_A_CONTENTION_REPORT_PATH" \
+            --no-fast-local \
             --verbose
 
       - name: Upload semantic proof evidence
