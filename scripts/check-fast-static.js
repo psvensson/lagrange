@@ -34,10 +34,11 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+import {RANGE_SOURCE} from './checks/change-selection-constants.js';
 import {
   changedCandidatePaths,
   javaScriptPaths,
-  resolvedCheckBase,
+  resolvedCheckRange,
 } from './checks/changed-paths.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,6 +55,22 @@ const ESLINT_NO_CHANGES_LABEL = 'eslint(changed)';
 const SCOPED_RATCHET_CHECK = 'test:metrics:scoped';
 const MS_COLUMN_WIDTH = 6;
 const FAILURE_EXCERPT_CHARS = 2000;
+const HEAD_LABEL = 'HEAD';
+const RANGE_PREFIX = 'proof range: ';
+const WORKTREE_RANGE_NOTE = 'no publication remote';
+// Printed when the range holds no JavaScript. That is legitimate for a
+// docs-only change and a hole for anything else: eslint and the scoped
+// ratchets ran over nothing, and "ok" alone would not say so.
+const NO_JAVASCRIPT_WARNING = 'fast-static: no JavaScript in the proof range; ' +
+  'eslint and the scoped ratchets examined nothing';
+const NO_JAVASCRIPT_SUMMARY = ' (0 JavaScript changed)';
+const WORKTREE_ONLY_SUMMARY = ' (worktree only)';
+// Printed when no base could be resolved at all. Proving the working tree
+// alone is the inner-loop case in a repository with no publication remote,
+// and a silent fallback to it anywhere else is the same hole as an empty
+// range: nothing committed was examined, and "ok" alone would not say so.
+const WORKTREE_ONLY_WARNING = 'fast-static: no publication remote reachable; ' +
+  'only the working tree was proved, nothing already committed';
 
 // Genuinely sub-second on a COLD cache, and each encodes a structural fact
 // worth keeping. Cold is the number that matters: CI never has a warm page
@@ -105,9 +122,38 @@ function runEslint(paths) {
   };
 }
 
-export function runFastStatic({base = null, explain = false} = {}) {
-  const changed = changedCandidatePaths({root, base});
+// One line naming the base and where it came from, so a green run can be read
+// against the range it actually proved.
+export function describeRange(range) {
+  if (!range.base) {
+    return `${RANGE_PREFIX}${range.source} (${WORKTREE_RANGE_NOTE})`;
+  }
+  return `${RANGE_PREFIX}${range.base}..${HEAD_LABEL} (${range.source})`;
+}
+
+export function rangeWarnings({range, changedJs}) {
+  const warnings = [];
+  if (range.source === RANGE_SOURCE.WORKTREE) warnings.push(WORKTREE_ONLY_WARNING);
+  if (changedJs.length === 0) warnings.push(NO_JAVASCRIPT_WARNING);
+  return warnings;
+}
+
+// The verdict line carries the warned cases, so "ok" never stands alone over
+// a range in which the changed-path checks examined nothing committed.
+export function summaryLine(outcome) {
+  const noJavaScript = outcome.warnings.includes(NO_JAVASCRIPT_WARNING);
+  const worktreeOnly = outcome.warnings.includes(WORKTREE_ONLY_WARNING);
+  return `fast-static: ${outcome.failures.length === 0 ? OK_MARK : FAIL_MARK}` +
+    `${noJavaScript ? NO_JAVASCRIPT_SUMMARY : ''}` +
+    `${worktreeOnly ? WORKTREE_ONLY_SUMMARY : ''} ` +
+    `in ${outcome.totalMs}ms`;
+}
+
+export function runFastStatic({base = null, explain = false,
+  range = {base, source: base ? RANGE_SOURCE.FLAG : RANGE_SOURCE.WORKTREE}} = {}) {
+  const changed = changedCandidatePaths({root, base: range.base});
   const changedJs = javaScriptPaths(changed || []);
+  const warnings = rangeWarnings({range, changedJs});
   const results = [];
 
   for (const script of GLOBAL_CHEAP_CHECKS) results.push(runNpm(script));
@@ -128,22 +174,25 @@ export function runFastStatic({base = null, explain = false} = {}) {
         `${String(result.ms).padStart(MS_COLUMN_WIDTH)}ms  ${result.script}${NEWLINE}`);
     }
   }
-  return {results, failures, totalMs, changed: changed || [], changedJs};
+  return {results, failures, totalMs, changed: changed || [], changedJs,
+    range, warnings};
 }
 
 function main() {
   const argv = process.argv.slice(2);
-  const base = resolvedCheckBase(argv.includes(BASE_FLAG) ?
-    argv[argv.indexOf(BASE_FLAG) + 1] : null);
-  const outcome = runFastStatic({base, explain: argv.includes(EXPLAIN_FLAG)});
+  const range = resolvedCheckRange(argv.includes(BASE_FLAG) ?
+    argv[argv.indexOf(BASE_FLAG) + 1] : null, process.env, root);
+  process.stdout.write(`${describeRange(range)}${NEWLINE}`);
+  const outcome = runFastStatic({range, explain: argv.includes(EXPLAIN_FLAG)});
+  for (const warning of outcome.warnings) {
+    process.stderr.write(`${warning}${NEWLINE}`);
+  }
   for (const failure of outcome.failures) {
     process.stderr.write(`${FAIL_MARK} ${failure.script}${NEWLINE}`);
     process.stderr.write(
       (failure.output || '').trim().slice(-FAILURE_EXCERPT_CHARS) + NEWLINE);
   }
-  process.stdout.write(
-    `fast-static: ${outcome.failures.length === 0 ? OK_MARK : FAIL_MARK} ` +
-    `in ${outcome.totalMs}ms${NEWLINE}`);
+  process.stdout.write(`${summaryLine(outcome)}${NEWLINE}`);
   process.exitCode = outcome.failures.length === 0 ? 0 : 1;
 }
 

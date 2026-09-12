@@ -62,6 +62,16 @@ export const WORKSPACE_INJECTION_ENV = 'LAGRANGE_WORKSPACE_INJECTIONS';
 // halves.
 export const CHECK_BASE_ENV = 'LAGRANGE_CHECK_BASE';
 
+// Where a resolved proof range came from: a named state, so a caller can SAY
+// which base it proved against rather than leaving "no base" indistinguishable
+// from "the merge base happened to be HEAD".
+export const RANGE_SOURCE = Object.freeze({
+  FLAG: 'flag',
+  ENVIRONMENT: 'environment',
+  PUBLICATION: 'publication merge-base',
+  WORKTREE: 'worktree only',
+});
+
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 export const SAFETY_SPINE_TESTS_FIELD = 'tests';
 export const INVALID_SAFETY_SPINE_PROBLEM =
