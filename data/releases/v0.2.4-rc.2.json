@@ -1,0 +1,55 @@
+{
+  "schema": "release-publication-receipt/1",
+  "tag": "v0.2.4-rc.2",
+  "sha": "9ea9ecc91f4697da5e865a5b78cd8002ac1f9002",
+  "version": "0.2.4-rc.2",
+  "prerelease": true,
+  "intended": {
+    "distTag": "next"
+  },
+  "observedAt": "2026-09-12T16:03:13.442Z",
+  "observedBy": "solver, after tagged release.yml run 34703612500 published every artifact (steps 7, 14, 16 success) and failed only at step 17 (Write publication receipt from what the registries report); every value below re-read from the registries",
+  "published": {
+    "npm": {
+      "published": true,
+      "distTags": {
+        "latest": "0.1.1",
+        "next": "0.2.4-rc.2"
+      },
+      "gitHead": "9ea9ecc91f4697da5e865a5b78cd8002ac1f9002",
+      "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.4-rc.2"
+    },
+    "docker": {
+      "published": true,
+      "digest": "sha256:9f141348b833c071e827d54b1883b0876133a34342e26e09f05bb66de48a7351",
+      "latestDigest": "sha256:80afc47193c35623e3abd4ecf6b8d1d803c454a9ca583a3ac831956e8c6e7c35",
+      "latestIsThisRelease": false,
+      "note": "version tag pushed 2026-09-12T16:01:14Z; latest untouched (2026-08-24)",
+      "url": "https://hub.docker.com/r/psvensson/lagrange/tags?name=0.2.4-rc.2"
+    },
+    "helm": {
+      "published": true,
+      "note": "chart attached to the GitHub pre-release as lagrange-node-0.2.4-rc.2.tgz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/v0.2.4-rc.2/lagrange-node-0.2.4-rc.2.tgz"
+    },
+    "github": {
+      "published": true,
+      "prerelease": true,
+      "latest": false,
+      "assets": [
+        "lagrange",
+        "lagrange-cli",
+        "lagrange-node-0.2.4-rc.2.tgz",
+        "lagrange-server-0.2.4-rc.2.tgz",
+        "SHA256SUMS"
+      ],
+      "note": "latest release per the API remains v0.1.1",
+      "url": "https://github.com/psvensson/lagrange/releases/tag/v0.2.4-rc.2"
+    }
+  },
+  "failure": {
+    "step": "Write publication receipt from what the registries report",
+    "ownerVerdict": "gh release view --json isLatest: Unknown JSON field (gh 2.89.0 on the runner)",
+    "class": "receipt step queried a release field the runner's gh does not expose; every artifact was already published, the receipt and its upload were the only losses"
+  }
+}

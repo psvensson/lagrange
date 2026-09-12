@@ -356,6 +356,26 @@ describe('prerelease publication contract', () => {
     }
     assert.match(receipt.run, /gh release upload .*release-receipt\.json/u,
       'the receipt travels with the release so the quest can commit it verbatim');
+    // The receipt is written by a child node process (rc.2, 2026-09-12): a
+    // value the shell observed but did not export never reaches env.NAME
+    // there, and the step fails one command after every publication has
+    // already happened. Every name the heredoc reads must be provided by the
+    // runner, the job/step env: block, an export, or an inline assignment.
+    const readNames = new Set([...receipt.run.matchAll(/\benv\.([A-Z][A-Z0-9_]*)/gu)]
+      .map(([, name]) => name));
+    const exported = new Set([...receipt.run.matchAll(/^\s*export\s+([^\n]+)$/gmu)]
+      .flatMap(([, names]) => names.trim().split(/\s+/u)));
+    const provided = new Set([
+      ...Object.keys(receipt.env || {}),
+      ...Object.keys(release.env || {}),
+      ...Object.keys(release.jobs.release.env || {}),
+      ...exported,
+    ]);
+    for (const name of readNames) {
+      const inline = new RegExp(`^\\s*${name}="[^\n]*"\\s+\\S*node\\b`, 'mu');
+      assert.ok(provided.has(name) || name.startsWith('GITHUB_') || inline.test(receipt.run),
+        `the receipt's node process reads env.${name}, which nothing provides`);
+    }
     // The receipt is committed evidence, so its path must be the one thing
     // under the ignored data/ tree that git will take.
     const ignore = await readFile('.gitignore', UTF8);
