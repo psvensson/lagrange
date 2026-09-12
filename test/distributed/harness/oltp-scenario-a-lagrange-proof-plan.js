@@ -8,6 +8,7 @@ import {
 const ZERO = 0;
 const MIN_CERTIFICATION_STREAK = 3;
 const GIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
+const SRC_FINGERPRINT_PATTERN = /^[0-9a-f]{16}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 const FORMATION_REQUIREMENT = Object.freeze({
@@ -48,6 +49,10 @@ function normalizeFormationCertification(value) {
     consecutive: Number(value.consecutive),
     coreHeadSha: requireText(value.coreHeadSha, 'formation certification coreHeadSha')
       .toLowerCase(),
+    srcFingerprint: requireText(
+      value.srcFingerprint,
+      'formation certification srcFingerprint',
+    ).toLowerCase(),
     artifactSha256: requireText(
       value.artifactSha256,
       'formation certification artifactSha256',
@@ -69,6 +74,9 @@ function normalizeFormationCertification(value) {
   }
   if (!GIT_SHA_PATTERN.test(certification.coreHeadSha)) {
     throw new Error('formation certification coreHeadSha must be a Git SHA');
+  }
+  if (!SRC_FINGERPRINT_PATTERN.test(certification.srcFingerprint)) {
+    throw new Error('formation certification srcFingerprint must be 16 hex characters');
   }
   if (!SHA256_PATTERN.test(certification.artifactSha256)) {
     throw new Error('formation certification artifactSha256 must be a SHA-256 digest');

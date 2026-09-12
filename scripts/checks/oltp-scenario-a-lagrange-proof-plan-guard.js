@@ -16,6 +16,7 @@ import {
 
 const ARTIFACT_SHA256 = 'd'.repeat(64);
 const CORE_HEAD_SHA = 'c'.repeat(40);
+const SRC_FINGERPRINT = 'b'.repeat(16);
 
 function allProofIds(plan) {
   return plan.cases.flatMap(({proofIds}) => proofIds).sort();
@@ -26,6 +27,7 @@ function formationCertification(overrides = {}) {
     ...LAGRANGE_SCENARIO_A_FORMATION_REQUIREMENT,
     status: 'passed',
     coreHeadSha: CORE_HEAD_SHA,
+    srcFingerprint: SRC_FINGERPRINT,
     artifactSha256: ARTIFACT_SHA256,
     ...overrides,
   };
@@ -49,6 +51,7 @@ assert.equal(Object.hasOwn(blocked, 'comparable'), false);
 
 for (const proofCase of blocked.cases) {
   assert.equal(proofCase.system, OLTP_SCENARIO_A_SYSTEM.LAGRANGE);
+  assert.equal(proofCase.serviceId, 'sys-postgres-wire');
   assert.equal(proofCase.protocol, 'postgresql');
   assert.equal(proofCase.executionPath, 'public-sql');
   assert.equal(proofCase.adapter, 'lagrange-oltp-adapter');
@@ -87,6 +90,12 @@ assert.throws(
 );
 assert.throws(
   () => buildLagrangeScenarioAProofPlan({
+    formationCertification: formationCertification({srcFingerprint: 'not-fingerprint'}),
+  }),
+  /srcFingerprint must be 16 hex characters/u,
+);
+assert.throws(
+  () => buildLagrangeScenarioAProofPlan({
     formationCertification: formationCertification({artifactSha256: 'not-a-digest'}),
   }),
   /artifactSha256 must be a SHA-256 digest/u,
@@ -100,6 +109,7 @@ assert.equal(ready.state, 'ready');
 assert.equal(ready.blocker, null);
 assert.equal(ready.formationCertification.status, 'passed');
 assert.equal(ready.formationCertification.consecutive, 3);
+assert.equal(ready.formationCertification.srcFingerprint, SRC_FINGERPRINT);
 
 const proofs = ready.cases.map((proofCase) => Object.freeze({
   evidenceId: `lagrange-plan-${proofCase.id}`,

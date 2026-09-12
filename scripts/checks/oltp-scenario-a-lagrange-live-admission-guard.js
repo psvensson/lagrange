@@ -14,6 +14,7 @@ import {
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
 
 const CORE_HEAD_SHA = 'a'.repeat(40);
+const SRC_FINGERPRINT = 'c'.repeat(16);
 const ARTIFACT_SHA256 = 'b'.repeat(64);
 
 function certification(overrides = {}) {
@@ -21,6 +22,7 @@ function certification(overrides = {}) {
     ...LAGRANGE_SCENARIO_A_FORMATION_REQUIREMENT,
     status: 'passed',
     coreHeadSha: CORE_HEAD_SHA,
+    srcFingerprint: SRC_FINGERPRINT,
     artifactSha256: ARTIFACT_SHA256,
     ...overrides,
   };
@@ -53,6 +55,13 @@ assert.throws(
   }),
   /unsupported Lagrange Scenario A live admission option retryCount/u,
 );
+assert.throws(
+  () => buildLagrangeScenarioALiveAdmission({
+    proofCaseId: 'payment',
+    formationCertification: certification({srcFingerprint: 'bad'}),
+  }),
+  /srcFingerprint must be 16 hex characters/u,
+);
 
 const firstPayment = buildLagrangeScenarioALiveAdmission({
   proofCaseId: 'payment',
@@ -65,6 +74,7 @@ const secondPayment = buildLagrangeScenarioALiveAdmission({
 assert.deepEqual(firstPayment, secondPayment);
 assert.match(firstPayment.admissionSha256, /^[0-9a-f]{64}$/u);
 assert.equal(firstPayment.requiredCoreHeadSha, CORE_HEAD_SHA);
+assert.equal(firstPayment.requiredSrcFingerprint, SRC_FINGERPRINT);
 assert.equal(firstPayment.publicExecutionContract.serviceId, 'sys-postgres-wire');
 assert.equal(firstPayment.publicExecutionContract.protocol, 'postgresql');
 assert.equal(firstPayment.publicExecutionContract.executionPath, 'public-sql');
@@ -98,6 +108,7 @@ assert.equal(new Set(allProofIds).size, allProofIds.length);
 assert.deepEqual(allProofIds, OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS);
 for (const admission of admissions) {
   assert.equal(admission.requiredCoreHeadSha, CORE_HEAD_SHA);
+  assert.equal(admission.requiredSrcFingerprint, SRC_FINGERPRINT);
   assert.equal(admission.formationCertification.artifactSha256, ARTIFACT_SHA256);
   assert.equal(admission.publicExecutionContract.serviceId, 'sys-postgres-wire');
   assert.equal(admission.publicExecutionContract.executionPath, 'public-sql');

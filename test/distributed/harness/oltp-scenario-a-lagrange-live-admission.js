@@ -63,6 +63,7 @@ function buildLagrangeScenarioALiveAdmission(value) {
     proofCaseId: proofCase.id,
     proofIds: proofCase.proofIds,
     requiredCoreHeadSha: plan.formationCertification.coreHeadSha,
+    requiredSrcFingerprint: plan.formationCertification.srcFingerprint,
     formationCertification: plan.formationCertification,
     publicExecutionContract: plan.publicExecutionContract,
   });
