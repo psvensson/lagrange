@@ -114,6 +114,34 @@ test('scheduled GCP health installs only its pinned optional boundary', (t) => {
     'the optional boundary is restored after npm ci removes ambient packages');
   t.ok(healthRunIndex > optionalInstallIndex,
     'the provisioner cannot run before its optional boundary is installed');
+
+  // The Pulumi JS SDK drives the `pulumi` CLI binary, which npm ci cannot
+  // provide: the scheduled runner must install it itself, pinned to the same
+  // SDK version, with a bounded network install, before anything needs it.
+  const cliInstallIndex = workflow.indexOf(
+    'sh "$RUNNER_TEMP/install-pulumi.sh" --version 3.261.0',
+  );
+  t.ok(cliInstallIndex >= 0, 'the workflow installs the Pulumi CLI at 3.261.0');
+  t.match(workflow, /--connect-timeout \d+/,
+    'the CLI download is bounded by a connect timeout');
+  t.match(workflow, /--max-time \d+/,
+    'the CLI download is bounded by a total timeout');
+  t.match(workflow, /timeout-minutes: 10/,
+    'the CLI install step has a step timeout');
+  t.match(workflow, /echo "\$HOME\/\.pulumi\/bin" >> "\$GITHUB_PATH"/,
+    'the CLI lands on the step PATH');
+  t.match(workflow, /test "\$\(pulumi version\)" = "v3\.261\.0"/,
+    'the installed CLI is verified to be the pinned version');
+  t.ok(cliInstallIndex > workflow.indexOf('node-version: "22"'),
+    'the CLI installs after Node setup');
+  t.ok(cliInstallIndex < healthRunIndex,
+    'the CLI exists before the formation run needs it');
+  for (const packageName of PULUMI_PACKAGE_NAMES) {
+    t.match(workflow, `${packageName}@`);
+    t.ok(workflow.includes(`${packageName}@3.261.0`) ||
+        workflow.includes(`${packageName}@9.36.1`),
+    `${packageName} stays pinned at its expected version`);
+  }
   t.end();
 });
 
