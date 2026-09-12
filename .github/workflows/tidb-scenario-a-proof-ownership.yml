@@ -6,6 +6,7 @@ on:
       - benchmark/tidb-reference-scenarios
       - benchmark/payment-proof-ownership-repair
       - benchmark/stock-proof-ownership-staging
+      - benchmark/delivery-proof-ownership-repair
     paths:
       - '.github/workflows/tidb-scenario-a-proof-ownership.yml'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
@@ -14,9 +15,11 @@ on:
       - 'test/distributed/harness/oltp-scenario-a-payment-case.js'
       - 'test/distributed/harness/oltp-scenario-a-order-status-case.js'
       - 'test/distributed/harness/oltp-scenario-a-stock-level-case.js'
+      - 'test/distributed/harness/oltp-scenario-a-delivery-case.js'
       - 'scripts/checks/oltp-scenario-a-proof-ownership-guard.js'
       - 'scripts/checks/oltp-scenario-a-payment-case-guard.js'
       - 'scripts/checks/oltp-scenario-a-stock-level-case-guard.js'
+      - 'scripts/checks/oltp-scenario-a-delivery-case-guard.js'
   workflow_dispatch: {}
 
 permissions:
@@ -52,9 +55,12 @@ jobs:
           npx eslint \
             test/distributed/harness/oltp-scenario-a-payment-case.js \
             test/distributed/harness/oltp-scenario-a-stock-level-case.js \
+            test/distributed/harness/oltp-scenario-a-delivery-case.js \
             scripts/checks/oltp-scenario-a-payment-case-guard.js \
             scripts/checks/oltp-scenario-a-stock-level-case-guard.js \
+            scripts/checks/oltp-scenario-a-delivery-case-guard.js \
             scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-scenario-a-payment-case-guard.js
           node scripts/checks/oltp-scenario-a-stock-level-case-guard.js
+          node scripts/checks/oltp-scenario-a-delivery-case-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js
