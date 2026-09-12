@@ -26,6 +26,7 @@ import {isControlPlanePublicationsWriteLeader} from
 import {
   initializeTestEnvironment as initTestEnv,
 } from './helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -36,7 +37,12 @@ async function shutdownOrFail(t, promise, label) {
   }
 }
 
-const TEST_TIMEOUTS = {
+// Work-bound budgets, calibrated on the reference machine and scaled by the
+// machine factor as ONE table so every ratio the subtests rely on (a lease
+// against a heartbeat, a sweep against a lease) is preserved: on the 2.4x
+// slower GCP proof host a 100 ms heartbeat missed a 200 ms ready lease and
+// the seed dropped out of its own published set (2026-09-13).
+const REFERENCE_TEST_TIMEOUTS = {
   CDC_FLUSH_INTERVAL: 50,
   CDC_PROPAGATION_DELAY: 25,
   HEARTBEAT_INTERVAL: 100,
@@ -50,6 +56,10 @@ const TEST_TIMEOUTS = {
   CONFIG_PERIODIC_CHECK_INTERVAL: 1000,
   CONFIG_PERIODIC_CHECK_JITTER: 100,
 };
+const TEST_TIMEOUTS = Object.fromEntries(
+  Object.entries(REFERENCE_TEST_TIMEOUTS).map(([name, referenceMs]) =>
+    [name, scaleByMachineFactor(referenceMs)]));
+
 
 function initializeTestEnvironment() {
   initTestEnv({nodeId: 'test-node'});
