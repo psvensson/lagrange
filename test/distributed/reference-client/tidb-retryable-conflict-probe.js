@@ -99,8 +99,8 @@ async function induceTiDbRetryableConflict(options = {}) {
   try {
     left = await connect(connectionOptions(endpoint, databaseName));
     right = await connect(connectionOptions(endpoint, databaseName));
-    await left.query("SET SESSION tidb_txn_mode = 'pessimistic'");
-    await right.query("SET SESSION tidb_txn_mode = 'pessimistic'");
+    await left.query('SET SESSION tidb_txn_mode = \'pessimistic\'');
+    await right.query('SET SESSION tidb_txn_mode = \'pessimistic\'');
     await left.beginTransaction();
     await right.beginTransaction();
 
