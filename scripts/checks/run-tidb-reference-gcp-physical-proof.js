@@ -11,6 +11,8 @@ import {
   installGcpImage,
   provisionGcpDockerHosts,
 } from '../../test/distributed/gcp-run-orchestration.js';
+import {GcpDataDiskOwner} from
+  '../../test/distributed/harness/gcp-data-disk-owner.js';
 import {
   TIDB_REFERENCE_DEFAULTS,
 } from '../../test/distributed/harness/tidb-reference-lifecycle.js';
@@ -22,6 +24,10 @@ import {
   buildTiDbPhysicalMysqlCommand,
   waitForPhysicalTablePlacement,
 } from '../../test/distributed/harness/tidb-reference-physical-placement-proof.js';
+import {
+  createTiKvPersistentStorageProvider,
+  tikvPersistentStorageEvidence,
+} from '../../test/distributed/harness/tidb-reference-tikv-storage-provider.js';
 import {
   TIDB_REFERENCE_REQUIRED_IMAGES,
   assertTiDbReferenceImagesAvailable,
@@ -61,6 +67,16 @@ function parseArgs(argv) {
   return {configPath: resolve(process.cwd(), configPath)};
 }
 
+function assertStorageDataDisk(config) {
+  const policy = config.storageDataDisk;
+  assert.ok(policy, 'TiDB physical proof requires storageDataDisk');
+  assert.equal(policy.type, 'pd-balanced');
+  assert.equal(policy.sizeGb, 100);
+  assert.equal(policy.mountPath, '/mnt/lagrange-benchmark-data');
+  assert.equal(policy.deviceName, 'lagrange-benchmark-data');
+  return policy;
+}
+
 async function loadConfig(configPath) {
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   assert.ok(config.gcp, 'TiDB physical proof requires gcp block');
@@ -71,6 +87,7 @@ async function loadConfig(configPath) {
     !Array.isArray(config.docker?.hosts) || config.docker.hosts.length === ZERO,
     'TiDB physical proof must provision fresh controlled hosts',
   );
+  assertStorageDataDisk(config);
   return config;
 }
 
@@ -111,25 +128,62 @@ function providerFor(host, tls) {
   return new DockerProvider({host, tls});
 }
 
+function diskByHostIndex(records) {
+  return new Map(records.map((record) => [record.hostIndex, record]));
+}
+
+async function collectTiKvStorageEvidence(cluster, disks) {
+  const evidence = [];
+  for (let index = ZERO; index < cluster.containers.tikvStores.length; index += ONE) {
+    const container = cluster.containers.tikvStores[index];
+    const inspect = await cluster.provider.inspectContainer(container.containerId);
+    const disk = disks[index];
+    const storage = tikvPersistentStorageEvidence(
+      inspect,
+      {hostPath: disk.mountPath},
+    );
+    assert.equal(
+      storage.valid,
+      true,
+      `TiKV store ${index + ONE} must use its persistent data disk`,
+    );
+    evidence.push({
+      storeIndex: index,
+      hostIndex: disk.hostIndex,
+      diskName: disk.diskName,
+      type: disk.type,
+      sizeGb: disk.sizeGb,
+      ...storage,
+    });
+  }
+  return evidence;
+}
+
 async function run() {
   const {configPath} = parseArgs(process.argv.slice(2));
   const inputConfig = await loadConfig(configPath);
+  const dataDiskPolicy = assertStorageDataDisk(inputConfig);
   const localProvider = new DockerProvider();
   await assertTiDbReferenceImagesAvailable(localProvider);
 
-  const runId = `lagrange-tidb-physical-${randomUUID().slice(0, 8)}`;
+  const runSuffix = randomUUID().slice(0, 8);
+  const runId = `lagrange-tidb-physical-${runSuffix}`;
   let provisioner = null;
+  let dataDiskOwner = null;
+  let dataDisks = [];
   let cluster = null;
   let loadgenProvider = null;
   let loadgenClient = null;
   let hostInfo = [];
   let placementProof = null;
   let physicalPlacements = null;
+  let tikvStorageEvidence = null;
   let queryValue = null;
   let primaryError = null;
   const cleanupErrors = [];
   let loadgenClientRemoved = false;
   let clusterStopped = false;
+  let dataDisksDestroyed = false;
 
   try {
     const provisioned = await provisionGcpDockerHosts(inputConfig, true);
@@ -145,16 +199,34 @@ async function run() {
       await installGcpImage(provisioner, image, true);
     }
 
+    dataDiskOwner = new GcpDataDiskOwner({
+      project: inputConfig.gcp.project,
+      zone: inputConfig.gcp.zone,
+    });
+    dataDisks = await dataDiskOwner.attachDataDisks({
+      hostInfo,
+      hostIndexes: STORAGE_INDEXES,
+      namePrefix: `tidb-data-${runSuffix}`,
+      ...dataDiskPolicy,
+    });
+    const disks = diskByHostIndex(dataDisks);
+
     const providers = hosts.map((host) =>
       providerFor(host, provisioned.runConfig.docker.tls));
     const control = {
       provider: providers[CONTROL_INDEX],
       host: hostInfo[CONTROL_INDEX].internalIp,
     };
-    const storage = STORAGE_INDEXES.map((index) => ({
-      provider: providers[index],
-      host: hostInfo[index].internalIp,
-    }));
+    const storage = STORAGE_INDEXES.map((index) => {
+      const disk = disks.get(index);
+      assert.ok(disk, `Missing data disk for storage host ${index}`);
+      return {
+        provider: createTiKvPersistentStorageProvider(providers[index], {
+          hostPath: disk.mountPath,
+        }),
+        host: hostInfo[index].internalIp,
+      };
+    });
     loadgenProvider = providers[LOADGEN_INDEX];
 
     cluster = await startTiDbReferencePhysicalCluster({
@@ -173,6 +245,7 @@ async function run() {
       storage.map(({host}) => host),
       'TiKV container placements must match the three storage VMs',
     );
+    tikvStorageEvidence = await collectTiKvStorageEvidence(cluster, dataDisks);
 
     loadgenClient = await loadgenProvider.createContainer({
       name: `${runId}-loadgen-client`,
@@ -238,6 +311,14 @@ async function run() {
       cleanupErrors.push(error);
     }
   }
+  if (dataDiskOwner) {
+    try {
+      await dataDiskOwner.destroy();
+      dataDisksDestroyed = true;
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
 
   let teardownError = null;
   if (provisioner) {
@@ -251,14 +332,14 @@ async function run() {
   const allErrors = [primaryError, ...cleanupErrors, teardownError].filter(Boolean);
 
   const evidence = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scenario: 'tidb-physical-rf3-gcp-proof',
-    evidenceClass: 'gcp-physical-rf3-correctness-non-comparative',
+    evidenceClass: 'gcp-physical-rf3-persistent-disk-correctness-non-comparative',
     comparable: false,
     nonComparableReason:
-      'This run proves physical RF3 placement and separate same-zone client ' +
-      'reachability. Publishable performance comparison still requires ' +
-      'persistent-disk parity and measurement-window resource accounting.',
+      'This run proves physical RF3 and explicit TiKV data disks. Publishable ' +
+      'comparison still requires the matching Lagrange disk policy and ' +
+      'measurement-window resource accounting.',
     generatedAt: new Date().toISOString(),
     source: {
       gitSha: process.env.GITHUB_SHA || null,
@@ -280,6 +361,9 @@ async function run() {
       trafficPath: 'vpc-internal',
       teardownVerified: Boolean(provisioner) && teardownError === null,
       computeCostEstimate: costEstimate,
+      computeCostEstimateScope: 'compute-only; data-disk cost not estimated',
+      storageDataDiskPolicy: dataDiskPolicy,
+      storageDataDisks: dataDisks,
     },
     topology: {
       physicalPorts: TIDB_REFERENCE_PHYSICAL_DEFAULTS,
@@ -290,6 +374,7 @@ async function run() {
       distinctSystemHosts: 4,
       separateLoadGeneratorHost: true,
       physicalPlacements,
+      tikvStorageEvidence,
     },
     resourcePolicy: {
       sharedDatabase: SHARED_DB_RESOURCE_LIMITS,
@@ -310,6 +395,7 @@ async function run() {
     cleanup: {
       loadgenClientRemoved,
       clusterStopped,
+      dataDisksDestroyed,
       infrastructureDestroyed: Boolean(provisioner) && teardownError === null,
     },
     failure: allErrors.length === ZERO ? null : {
@@ -330,6 +416,8 @@ async function run() {
     placementAttempts: placementProof.attempts,
     regionCount: placementProof.regions.length,
     expectedAddresses: placementProof.expectedAddresses,
+    dataDiskType: dataDiskPolicy.type,
+    dataDiskSizeGb: dataDiskPolicy.sizeGb,
     zone: inputConfig.gcp.zone,
     vmCount: inputConfig.gcp.vmCount,
     costEstimate,
