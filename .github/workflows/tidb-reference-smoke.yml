@@ -71,6 +71,16 @@ jobs:
           node scripts/checks/tidb-oltp-workload-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
 
+      - name: Run PG wire transaction-conflict contract guard
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/query/distributed/transaction-participant-error-projection.js \
+            src/query/pg/pg-wire-constants.js \
+            src/query/pg/postgres-wire-adapter.js \
+            scripts/checks/pgwire-transaction-conflict-guard.js
+          node scripts/checks/pgwire-transaction-conflict-guard.js
+
       - name: Run live three-store Docker SQL smoke
         env:
           TIDB_REFERENCE_TIKV_STORE_COUNT: '3'
