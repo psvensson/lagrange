@@ -70,6 +70,14 @@ function buildConnectionConfig() {
   });
 }
 
+function waitForBenchmarkDataConvergence(cluster, targetVoterCount) {
+  return cluster.waitForConvergence({
+    targetVoterCount,
+    settleTimeoutMs: TIMEOUTS.SCENARIO_DEFAULT,
+    quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+  });
+}
+
 async function configurePublicPgWire(seedNode, executionContract) {
   if (!seedNode || typeof seedNode.query !== 'function') {
     throw new Error('Lagrange Scenario A public PG context requires queryable seed node');
@@ -141,13 +149,10 @@ async function prepareLagrangeScenarioAPublicPgContext(value) {
   if (!Array.isArray(nodes) || nodes.length < ONE) {
     throw new Error('Lagrange Scenario A public PG context requires cluster nodes');
   }
+  const targetVoterCount = nodes.length;
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
 
-  await cluster.waitForConvergence({
-    targetVoterCount: nodes.length,
-    settleTimeoutMs: TIMEOUTS.SCENARIO_DEFAULT,
-    quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-  });
+  await waitForBenchmarkDataConvergence(cluster, targetVoterCount);
   await configurePublicPgWire(seedNode, executionContract);
   const discovered = await discoverPublicPgWireEndpoint(
     cluster,
@@ -161,6 +166,8 @@ async function prepareLagrangeScenarioAPublicPgContext(value) {
     connection: buildConnectionConfig(),
     endpoint: discovered.endpoint,
     serviceEndpoint: discovered.serviceEndpoint,
+    waitForDataConvergence: () =>
+      waitForBenchmarkDataConvergence(cluster, targetVoterCount),
   });
 }
 

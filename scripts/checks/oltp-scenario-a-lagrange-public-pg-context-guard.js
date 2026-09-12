@@ -95,11 +95,14 @@ assert.deepEqual(context.connection, {
   database: REQUEST_CELL_AUTH.DATABASE,
   ssl: false,
 });
-assert.deepEqual(convergence, [{
+const convergenceContract = {
   targetVoterCount: 2,
   settleTimeoutMs: TIMEOUTS.SCENARIO_DEFAULT,
   quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-}]);
+};
+assert.deepEqual(convergence, [convergenceContract]);
+await context.waitForDataConvergence();
+assert.deepEqual(convergence, [convergenceContract, convergenceContract]);
 assert.equal(queries.length, 3);
 assert.match(queries[0], /UPDATE service_definitions SET runtime_config/u);
 assert.match(queries[0], /sys-postgres-wire/u);
