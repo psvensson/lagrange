@@ -12,6 +12,8 @@ import {
 } from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {runOltpBaselineWorkload} from
   '../../test/distributed/harness/oltp-baseline-workload.js';
+import {createPairedRetryingOltpAdapter} from
+  '../../test/distributed/harness/oltp-paired-retry-owner.js';
 import {createTiDbOltpAdapter} from
   '../../test/distributed/reference-client/tidb-oltp-adapter.js';
 
@@ -160,6 +162,10 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
 
     const expectedTransactions =
       workloadOptions.workers * workloadOptions.measurementOperationsPerWorker;
+    const expectedLogicalTransactions = workloadOptions.workers * (
+      workloadOptions.warmupOperationsPerWorker +
+      workloadOptions.measurementOperationsPerWorker
+    );
     const measurementContext = Object.freeze({
       provider,
       runId,
@@ -179,14 +185,21 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
         }),
       } : {}),
     };
+    const retryingAdapter = createPairedRetryingOltpAdapter(state.adapter);
 
     const workload = await runOltpBaselineWorkload(
-      state.adapter,
+      retryingAdapter,
       workloadRunOptions,
     );
     assert.equal(workload.warmup.failed, ZERO);
     assert.equal(workload.measurement.failed, ZERO);
     assert.equal(workload.measurement.succeeded, expectedTransactions);
+    const retryEvidence = retryingAdapter.getRetryEvidence();
+    assert.equal(
+      retryEvidence.logicalTransactions,
+      expectedLogicalTransactions,
+    );
+    assert.equal(retryEvidence.terminalTransactions, ZERO);
 
     const after = await state.adapter.getEvidence();
     assert.deepEqual(
@@ -206,6 +219,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
     assert.ok(after.stateCounts.orderLines >= after.stateCounts.orders * 5);
     assert.ok(after.stateCounts.newOrders <= after.stateCounts.orders);
 
+    const measuredWorkload = Object.freeze({...workload, retryEvidence});
     result = {
       status: 'passed',
       tikvStoreCount: TIKV_STORE_COUNT,
@@ -217,7 +231,8 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       workerConnectionIds: after.currentConnectionIds,
       stateCounts: after.stateCounts,
       images: state.cluster.images,
-      workload,
+      retryEvidence,
+      workload: measuredWorkload,
     };
   } catch (error) {
     primaryError = error;
