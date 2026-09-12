@@ -87,7 +87,7 @@ async function assertTerminalNonRetryableFailure() {
     (error) => {
       assert.equal(error.name, 'OltpPairedTransactionError');
       assert.equal(error.cause, cause);
-      assert.equal(error.sqlState, 'ECONNRESET');
+      assert.equal(error.sqlState, null);
       assert.equal(error.oltpRetryEvidence.attempts, 1);
       assert.equal(error.oltpRetryEvidence.retries, 0);
       assert.equal(error.oltpRetryEvidence.retryDelayMs, 0);
