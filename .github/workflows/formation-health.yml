@@ -73,6 +73,21 @@ jobs:
           node-version: "22"
           package-manager-cache: false
 
+      - name: Install Pulumi CLI
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            --connect-timeout 20 \
+            --max-time 300 \
+            --retry 2 \
+            https://get.pulumi.com \
+            -o "$RUNNER_TEMP/install-pulumi.sh"
+          sh "$RUNNER_TEMP/install-pulumi.sh" --version 3.261.0
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          test "$(pulumi version)" = "v3.261.0"
+
       - name: Install dependencies
         run: |
           npm install --global npm@11.7.0
