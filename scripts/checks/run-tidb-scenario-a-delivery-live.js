@@ -132,7 +132,7 @@ async function runTiDbDeliveryProof(options = {}) {
       if (!expectedDistrict ||
           Number(setupOutcome.result?.orderId) !== expectedDistrict.orderId) {
         throw new Error(
-          `TiDB delivery setup allocated unexpected order id for district ` +
+          'TiDB delivery setup allocated unexpected order id for district ' +
           `${setupOperation.districtId}`,
         );
       }
