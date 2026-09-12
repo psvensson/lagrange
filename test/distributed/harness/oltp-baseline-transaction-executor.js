@@ -4,12 +4,12 @@ const ZERO = 0;
 const ONE = 1;
 
 const STATEMENT = Object.freeze({
-  DISTRICT_NEXT_ORDER_FOR_UPDATE: 'district-next-order-for-update',
+  DISTRICT_NEXT_ORDER_READ_FOR_MUTATION: 'district-next-order-read-for-mutation',
   DISTRICT_SET_NEXT_ORDER: 'district-set-next-order',
   ORDER_INSERT: 'order-insert',
   NEW_ORDER_INSERT: 'new-order-insert',
   ITEM_PRICE: 'item-price',
-  STOCK_QUANTITY_FOR_UPDATE: 'stock-quantity-for-update',
+  STOCK_QUANTITY_READ_FOR_MUTATION: 'stock-quantity-read-for-mutation',
   STOCK_UPDATE: 'stock-update',
   ORDER_LINE_INSERT: 'order-line-insert',
   WAREHOUSE_PAYMENT: 'warehouse-payment',
@@ -18,11 +18,12 @@ const STATEMENT = Object.freeze({
   HISTORY_INSERT: 'history-insert',
   ORDER_STATUS_LATEST: 'order-status-latest',
   ORDER_STATUS_LINES: 'order-status-lines',
-  DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE: 'delivery-oldest-new-order-for-update',
+  DELIVERY_OLDEST_NEW_ORDER_READ_FOR_MUTATION:
+    'delivery-oldest-new-order-read-for-mutation',
   DELIVERY_DELETE_NEW_ORDER: 'delivery-delete-new-order',
-  DELIVERY_ORDER_FOR_UPDATE: 'delivery-order-for-update',
+  DELIVERY_ORDER_READ_FOR_MUTATION: 'delivery-order-read-for-mutation',
   DELIVERY_SET_CARRIER: 'delivery-set-carrier',
-  DELIVERY_LINES_FOR_UPDATE: 'delivery-lines-for-update',
+  DELIVERY_LINES_READ_FOR_MUTATION: 'delivery-lines-read-for-mutation',
   DELIVERY_MARK_LINES: 'delivery-mark-lines',
   DELIVERY_CUSTOMER_UPDATE: 'delivery-customer-update',
   STOCK_LEVEL_DISTRICT: 'stock-level-district',
@@ -61,7 +62,7 @@ function rowCountOf(result) {
 async function executeNewOrder(session, operation) {
   return session.transaction(async (tx) => {
     const district = singleRow(
-      await tx.execute(STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE, [
+      await tx.execute(STATEMENT.DISTRICT_NEXT_ORDER_READ_FOR_MUTATION, [
         operation.warehouseId,
         operation.districtId,
       ]),
@@ -97,7 +98,7 @@ async function executeNewOrder(session, operation) {
         'item',
       );
       const stock = singleRow(
-        await tx.execute(STATEMENT.STOCK_QUANTITY_FOR_UPDATE, [
+        await tx.execute(STATEMENT.STOCK_QUANTITY_READ_FOR_MUTATION, [
           line.supplyWarehouseId,
           line.itemId,
         ]),
@@ -196,7 +197,7 @@ async function executeDelivery(session, operation, scale) {
       districtId <= scale.districtsPerWarehouse;
       districtId += ONE) {
       const newOrderRows = rowsOf(await tx.execute(
-        STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE,
+        STATEMENT.DELIVERY_OLDEST_NEW_ORDER_READ_FOR_MUTATION,
         [operation.warehouseId, districtId],
       ));
       if (newOrderRows.length === ZERO) continue;
@@ -207,7 +208,7 @@ async function executeDelivery(session, operation, scale) {
         orderId,
       ]);
       const order = singleRow(
-        await tx.execute(STATEMENT.DELIVERY_ORDER_FOR_UPDATE, [
+        await tx.execute(STATEMENT.DELIVERY_ORDER_READ_FOR_MUTATION, [
           operation.warehouseId,
           districtId,
           orderId,
@@ -221,7 +222,7 @@ async function executeDelivery(session, operation, scale) {
         orderId,
       ]);
       const lineRows = rowsOf(await tx.execute(
-        STATEMENT.DELIVERY_LINES_FOR_UPDATE,
+        STATEMENT.DELIVERY_LINES_READ_FOR_MUTATION,
         [operation.warehouseId, districtId, orderId],
       ));
       if (lineRows.length === ZERO) {
