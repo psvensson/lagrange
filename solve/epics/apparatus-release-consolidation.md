@@ -86,7 +86,17 @@ throwaway pre-release tag before any further `v0.2.x` is cut, and the workflow
 writes a compact publication receipt to `data/releases/<tag>.json` (tag, sha,
 each artifact's published state and URL). No forward-patch release until this
 is green. Probe: script reading the newest receipt, unmet while any artifact
-is unpublished.
+is unpublished. Finding (2026-09-12): `data/` is gitignored (`.gitignore:14`),
+so `data/releases/<tag>.json` and `data/formation-health/trend.ndjson` cannot
+be committed as written; the quest that first writes a receipt owns the
+`.gitignore` negation for exactly those two paths. The pipeline has no
+prerelease awareness today - npm publish takes `latest`, Docker `latest`
+moves, the GitHub release is created `--latest`, and the identity step needs
+`package.json` equal to the tag - so a prerelease semver tag is one contract:
+npm under a `next` dist-tag, Docker tagged with the version only, the GitHub
+release marked pre-release, the identity step accepting the suffix. That
+contract is this quest's first red test; `v0.2.4-rc.0` is then the dry run
+on the production path.
 
 **formation-health-verdicts** — the nightly workflow produces measuring
 verdicts: `UNKNOWN` fails the job loudly instead of appending a non-verdict,
