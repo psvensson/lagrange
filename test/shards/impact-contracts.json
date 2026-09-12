@@ -305,6 +305,18 @@
         "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
         "test/integration/message-group-multi-join-formation.integration.test.js"
       ]
+    },
+    "architecture-model-chain": {
+      "description": "Executable architecture models are checks: an Alloy assertion, a decision-table rule or an owner-trace violation named by an invariant is validated and run by the model:contracts chain (repository-health on every push) and by these tests locally, so a model or registry edit selects the chain.",
+      "owners": [
+        "architecture/models/",
+        "architecture/contracts/invariants.json"
+      ],
+      "tests": [
+        "test/scripts/model-contract-tools.test.js",
+        "test/scripts/check-owner-traces.test.js",
+        "test/scripts/model-invariants.test.js"
+      ]
     }
   },
   "coupledPairs": {
