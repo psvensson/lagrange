@@ -219,6 +219,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
     assert.ok(after.stateCounts.orderLines >= after.stateCounts.orders * 5);
     assert.ok(after.stateCounts.newOrders <= after.stateCounts.orders);
 
+    const measuredWorkload = Object.freeze({...workload, retryEvidence});
     result = {
       status: 'passed',
       tikvStoreCount: TIKV_STORE_COUNT,
@@ -231,7 +232,7 @@ async function runTiDbOltpAdapterSmoke(options = {}) {
       stateCounts: after.stateCounts,
       images: state.cluster.images,
       retryEvidence,
-      workload,
+      workload: measuredWorkload,
     };
   } catch (error) {
     primaryError = error;
