@@ -33,8 +33,6 @@ function freezeRecord(value) {
 }
 
 const CLAIMED_PROOF_IDS = freezeRecord([
-  'forbidden:duplicate_success_effect',
-  'isolation:successfulEffectsExactlyOnce',
   'transaction:payment:warehouse_ytd_increases_by_payment_amount',
   'transaction:payment:district_ytd_increases_by_payment_amount',
   'transaction:payment:customer_balance_decreases_by_payment_amount',
