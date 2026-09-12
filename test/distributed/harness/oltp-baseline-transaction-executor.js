@@ -284,18 +284,18 @@ async function executeOltpBaselineTransaction(session, operation, scale) {
   }
 
   switch (operation.kind) {
-    case OLTP_OPERATION_KIND.NEW_ORDER:
-      return executeNewOrder(session, operation);
-    case OLTP_OPERATION_KIND.PAYMENT:
-      return executePayment(session, operation);
-    case OLTP_OPERATION_KIND.ORDER_STATUS:
-      return executeOrderStatus(session, operation);
-    case OLTP_OPERATION_KIND.DELIVERY:
-      return executeDelivery(session, operation, scale);
-    case OLTP_OPERATION_KIND.STOCK_LEVEL:
-      return executeStockLevel(session, operation);
-    default:
-      throw new Error(`Unsupported OLTP operation kind: ${operation.kind}`);
+  case OLTP_OPERATION_KIND.NEW_ORDER:
+    return executeNewOrder(session, operation);
+  case OLTP_OPERATION_KIND.PAYMENT:
+    return executePayment(session, operation);
+  case OLTP_OPERATION_KIND.ORDER_STATUS:
+    return executeOrderStatus(session, operation);
+  case OLTP_OPERATION_KIND.DELIVERY:
+    return executeDelivery(session, operation, scale);
+  case OLTP_OPERATION_KIND.STOCK_LEVEL:
+    return executeStockLevel(session, operation);
+  default:
+    throw new Error(`Unsupported OLTP operation kind: ${operation.kind}`);
   }
 }
 
