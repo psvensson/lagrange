@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-harness-model-from-contracts",
+  "status": "pass",
+  "generatedAt": "2026-09-12T10:27:13.477Z",
+  "receipts": [
+    {
+      "id": "registered-interactions-all-hosted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every registered owner interaction is hosted by the harness model$\" test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "detail": "the checklist is derived from the coupled pairs and contracts in the registry, and every entry is accounted for by a host in the model"
+    },
+    {
+      "id": "hosts-are-real-owners-with-sealed-drive",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every hosted interaction hosts the real owner with sealed drive methods$\" test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "detail": "each host names existing production modules and seals the methods a stand-in would override, in the driver-host shape"
+    },
+    {
+      "id": "invariant-owners-hosted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every registry-bound invariant is hosted and every unbound citation is named$\" test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "detail": "every invariant whose contract the registry knows binds to that contract's host, and every citation the registry does not know is listed in the derived model with its invariant id, so the gap is a reported number that formation-contracts-registration drives to zero"
+    },
+    {
+      "id": "seams-are-contract-bound",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every seam in the model is contract-bound and points at where the owner is real$\" test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "detail": "a seam is declared on its registry pair with the stand-in module, the contract cases both legs run, the conformance run and the real-owner test, all existing and the latter two witnesses of the pair"
+    },
+    {
+      "id": "stand-in-family-removed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no registered owner is replaced by a hand-wired stand-in$\" test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "detail": "the hand-wired constructors that replaced registered owners in the membership-consistency helpers are gone"
+    }
+  ]
+}
