@@ -14,7 +14,7 @@ fourth semantic proof stage or permit a later parent frontier to start early.
 This design can be migrated mechanically to a v2 epic after that contract cuts
 over; the separate solve-v2 worktree is not an input to this draft.
 The checked-in authoring constant is still 1
-([`scripts/solve/quest-lint.js:45`](../../../scripts/solve/quest-lint.js)); the
+(`scripts/solve/quest-lint.js:45`, v1 tooling since retired); the
 v2 epic template does not by itself constitute a Solver cutover.
 
 ## Terminal contract
@@ -63,7 +63,7 @@ read is rejected.
 ## Phase 0 failure evidence
 
 The immutable identities and extracted measurements are recorded in
-[`solve/evidence/formation-seed-decoupling-phase0.md`](../../evidence/formation-seed-decoupling-phase0.md).
+[`solve/evidence/formation-seed-decoupling-phase0.md`](phase0-inventory.md).
 The existing run establishes the target signature:
 
 - 30 seed gaps totalling 66,486 ms, 49,840 ms unexplained, maximum 5,365 ms;
