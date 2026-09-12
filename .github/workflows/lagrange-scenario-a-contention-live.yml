@@ -5,8 +5,12 @@ on:
     branches:
       - benchmark/tidb-reference-scenarios
       - benchmark/scenario-a-new-order-contention-lagrange-live-staging
+      - benchmark/scenario-a-contention-endpoint-owner-reconcile
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
+      - 'src/bootstrap/shared/meta-service-definition-registration.js'
+      - 'src/bootstrap/shared/runtime-service-handler-setup.js'
+      - 'src/runtime/runtime-endpoint-publication-wiring.js'
       - 'test/distributed/config/local-benchmark-3node-timeout180.json'
       - 'test/distributed/run.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
@@ -56,6 +60,9 @@ jobs:
         run: |
           set -euo pipefail
           npx eslint \
+            src/bootstrap/shared/meta-service-definition-registration.js \
+            src/bootstrap/shared/runtime-service-handler-setup.js \
+            src/runtime/runtime-endpoint-publication-wiring.js \
             test/distributed/reference-client/lagrange-new-order-contention-observer.js \
             test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
