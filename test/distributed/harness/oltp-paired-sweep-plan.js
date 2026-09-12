@@ -17,11 +17,14 @@ import {
 import {
   OLTP_PAIRED_RETRY_POLICY,
 } from './oltp-paired-retry-owner.js';
+import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  hashScenarioASemanticProfile,
+} from './oltp-scenario-a-semantic-profile.js';
 
 const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
-const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 const SYSTEM = Object.freeze({
   TIDB_TIKV: 'tidb-tikv',
@@ -34,6 +37,7 @@ const SWEEP_PROFILE = Object.freeze({
   counterbalance: 'alternate-rate-direction-and-system-first',
   freshDatasetPerSystemRateRun: true,
   warmupBeforeMeasurement: true,
+  semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
   openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
   retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
 });
@@ -83,14 +87,6 @@ function normalizeSlo(value = {}) {
   return Object.freeze({p99Ms, maxErrorRate});
 }
 
-function requireSha256(value, label) {
-  const digest = String(value || '').trim().toLowerCase();
-  if (!SHA256_PATTERN.test(digest)) {
-    throw new Error(`${label} must be a SHA-256 digest`);
-  }
-  return digest;
-}
-
 function normalizeComparisonView(value) {
   if (value !== COMPARISON_VIEW.ARCHITECTURE_NATIVE &&
       value !== COMPARISON_VIEW.MATCHED_TOTAL_BUDGET) {
@@ -115,7 +111,17 @@ function workloadIdentity(rawWorkload = {}) {
   });
 }
 
+function rejectSemanticOverride(options) {
+  if (Object.hasOwn(options, 'semanticProfileSha256') ||
+      Object.hasOwn(options, 'semanticProfileId')) {
+    throw new Error(
+      'Scenario A sweep semantic profile is owned by the semantic-profile owner',
+    );
+  }
+}
+
 function canonicalIdentity(options) {
+  rejectSemanticOverride(options);
   const workload = workloadIdentity(options.workload || {});
   return Object.freeze({
     profileId: SWEEP_PROFILE.id,
@@ -126,10 +132,8 @@ function canonicalIdentity(options) {
     datasetSha256: workload.datasetSha256,
     workloadPlanSha256: workload.workloadPlanSha256,
     measurementPlanSha256: workload.measurementPlanSha256,
-    semanticProfileSha256: requireSha256(
-      options.semanticProfileSha256,
-      'semanticProfileSha256',
-    ),
+    semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
+    semanticProfileSha256: hashScenarioASemanticProfile(),
     openLoopProfileId: OLTP_OPEN_LOOP_PROFILE.id,
     retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
   });
