@@ -1,0 +1,82 @@
+name: lagrange-scenario-a-contention-live
+
+on:
+  push:
+    branches:
+      - benchmark/tidb-reference-scenarios
+      - benchmark/scenario-a-new-order-contention-lagrange-live-staging
+    paths:
+      - '.github/workflows/lagrange-scenario-a-contention-live.yml'
+      - 'test/distributed/config/local-benchmark-3node.json'
+      - 'test/distributed/run.js'
+      - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
+      - 'test/distributed/harness/oltp-paired-retry-owner.js'
+      - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'
+      - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
+      - 'test/distributed/harness/oltp-scenario-a-new-order-contention-case.js'
+      - 'test/distributed/reference-client/lagrange-oltp-adapter.js'
+      - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lagrange-scenario-a-contention-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH: test-output/tidb-reference/scenario-a-new-order-contention-lagrange.json
+      LAGRANGE_SCENARIO_A_CONTENTION_REPORT_PATH: test-output/tidb-reference/scenario-a-new-order-contention-lagrange.report.json
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+          npm ci --ignore-scripts --prefix test/distributed/reference-client
+
+      - name: Verify proof sources and Docker
+        run: |
+          set -euo pipefail
+          npx eslint \
+            test/distributed/reference-client/lagrange-new-order-contention-observer.js \
+            test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js
+          node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
+          docker version
+
+      - name: Run live three-node Lagrange contention proof
+        run: |
+          set -euo pipefail
+          node test/distributed/run.js \
+            --config test/distributed/config/local-benchmark-3node.json \
+            --scenario scenario-a-new-order-contention-lagrange \
+            --output "$LAGRANGE_SCENARIO_A_CONTENTION_REPORT_PATH" \
+            --verbose
+
+      - name: Upload semantic proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lagrange-scenario-a-contention-${{ github.run_id }}
+          path: |
+            test-output/tidb-reference/scenario-a-new-order-contention-lagrange.json
+            test-output/tidb-reference/scenario-a-new-order-contention-lagrange.report.json
+          retention-days: 14
+          if-no-files-found: warn
