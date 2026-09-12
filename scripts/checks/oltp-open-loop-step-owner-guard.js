@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  OLTP_OPEN_LOOP_PROFILE,
   buildOpenLoopIssuePlan,
   interleaveOltpWorkerPhase,
   runOpenLoopOltpStep,
@@ -81,6 +82,7 @@ async function assertFixedRateAndWorkerSerialization() {
     waitUntil,
   });
 
+  assert.equal(result.profileId, OLTP_OPEN_LOOP_PROFILE.id);
   assert.equal(result.offeredRatePerSec, 100);
   assert.equal(result.attempted, 3);
   assert.equal(result.succeeded, 3);
@@ -214,6 +216,15 @@ async function assertEarlySchedulerReturnFailsClosed() {
 }
 
 async function main() {
+  assert.deepEqual(OLTP_OPEN_LOOP_PROFILE, {
+    id: 'scenario-a-open-loop-v1',
+    issueSchedule: 'fixed-rate-intended-time',
+    workerSerialization: 'per-worker',
+    latencyOrigin: 'intended-issue-time',
+    headlineLatency: 'successful-requests',
+    attemptLatency: 'all-attempted-requests',
+    completionRateWindow: 'max-scheduled-and-drain',
+  });
   assertIssuePlan();
   assertInterleave();
   await assertFixedRateAndWorkerSerialization();
