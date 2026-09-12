@@ -13,7 +13,7 @@ function freezeRecord(value) {
 
 const SEMANTIC_PROFILE = freezeRecord({
   id: PROFILE_ID,
-  scenario: 'tidb-oltp-baseline',
+  scenario: 'scenario-a-oltp-baseline',
   scope: 'externally-observable-transaction-contract',
   retryPolicyId: OLTP_PAIRED_RETRY_POLICY.id,
   isolation: {
