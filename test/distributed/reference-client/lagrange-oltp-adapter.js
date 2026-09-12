@@ -20,11 +20,12 @@ const INSERT_BATCH_SIZE = 100;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 const PUBLIC_PROTOCOL = 'postgresql';
 const PUBLIC_EXECUTION_PATH = 'public-sql';
+const LOCKING_READ_MODE = 'snapshot-write-conflict';
 
 const SQL = Object.freeze({
   [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE]:
     'SELECT next_order_id FROM district ' +
-    'WHERE warehouse_id = $1 AND district_id = $2 FOR UPDATE',
+    'WHERE warehouse_id = $1 AND district_id = $2',
   [OLTP_SQL_STATEMENT.DISTRICT_SET_NEXT_ORDER]:
     'UPDATE district SET next_order_id = $1 ' +
     'WHERE warehouse_id = $2 AND district_id = $3',
@@ -39,7 +40,7 @@ const SQL = Object.freeze({
     'SELECT price_cents FROM item WHERE item_id = $1',
   [OLTP_SQL_STATEMENT.STOCK_QUANTITY_FOR_UPDATE]:
     'SELECT quantity FROM stock ' +
-    'WHERE warehouse_id = $1 AND item_id = $2 FOR UPDATE',
+    'WHERE warehouse_id = $1 AND item_id = $2',
   [OLTP_SQL_STATEMENT.STOCK_UPDATE]:
     'UPDATE stock SET quantity = $1, ytd_quantity = ytd_quantity + $2, ' +
     'order_count = order_count + 1, remote_count = remote_count + $3 ' +
@@ -77,20 +78,20 @@ const SQL = Object.freeze({
   [OLTP_SQL_STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE]:
     'SELECT order_id FROM new_order ' +
     'WHERE warehouse_id = $1 AND district_id = $2 ' +
-    'ORDER BY order_id ASC LIMIT 1 FOR UPDATE',
+    'ORDER BY order_id ASC LIMIT 1',
   [OLTP_SQL_STATEMENT.DELIVERY_DELETE_NEW_ORDER]:
     'DELETE FROM new_order ' +
     'WHERE warehouse_id = $1 AND district_id = $2 AND order_id = $3',
   [OLTP_SQL_STATEMENT.DELIVERY_ORDER_FOR_UPDATE]:
     'SELECT customer_id FROM orders ' +
-    'WHERE warehouse_id = $1 AND district_id = $2 AND order_id = $3 FOR UPDATE',
+    'WHERE warehouse_id = $1 AND district_id = $2 AND order_id = $3',
   [OLTP_SQL_STATEMENT.DELIVERY_SET_CARRIER]:
     'UPDATE orders SET carrier_id = $1 ' +
     'WHERE warehouse_id = $2 AND district_id = $3 AND order_id = $4',
   [OLTP_SQL_STATEMENT.DELIVERY_LINES_FOR_UPDATE]:
     'SELECT amount_cents FROM order_line ' +
     'WHERE warehouse_id = $1 AND district_id = $2 AND order_id = $3 ' +
-    'ORDER BY line_number FOR UPDATE',
+    'ORDER BY line_number',
   [OLTP_SQL_STATEMENT.DELIVERY_MARK_LINES]:
     'UPDATE order_line SET delivered = 1 ' +
     'WHERE warehouse_id = $1 AND district_id = $2 AND order_id = $3',
@@ -446,6 +447,7 @@ async function createLagrangeOltpAdapter(options = {}) {
   return Object.freeze({
     protocol: PUBLIC_PROTOCOL,
     executionPath: PUBLIC_EXECUTION_PATH,
+    lockingReadMode: LOCKING_READ_MODE,
     datasetSha256,
     datasetSummary,
     workerSessionIds,
@@ -477,6 +479,7 @@ async function createLagrangeOltpAdapter(options = {}) {
       return Object.freeze({
         protocol: PUBLIC_PROTOCOL,
         executionPath: PUBLIC_EXECUTION_PATH,
+        lockingReadMode: LOCKING_READ_MODE,
         datasetSha256,
         datasetSummary,
         workerSessionIds,
