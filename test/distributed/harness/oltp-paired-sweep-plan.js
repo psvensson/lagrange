@@ -4,6 +4,14 @@ import {
   COMPARISON_VIEW,
 } from './comparative-system-budget.js';
 import {
+  buildOltpBaselineDataset,
+  hashOltpBaselineDataset,
+} from './oltp-baseline-dataset.js';
+import {
+  buildOltpBaselinePlan,
+  hashOltpBaselineMeasurementPlan,
+} from './oltp-baseline-workload.js';
+import {
   OLTP_OPEN_LOOP_PROFILE,
 } from './oltp-open-loop-step-owner.js';
 import {
@@ -78,7 +86,7 @@ function normalizeSlo(value = {}) {
 function requireSha256(value, label) {
   const digest = String(value || '').trim().toLowerCase();
   if (!SHA256_PATTERN.test(digest)) {
-    throw new Error(`${label} must be a lowercase SHA-256 digest`);
+    throw new Error(`${label} must be a SHA-256 digest`);
   }
   return digest;
 }
@@ -91,18 +99,33 @@ function normalizeComparisonView(value) {
   return value;
 }
 
+function hashCanonicalValue(value) {
+  return createHash('sha256')
+    .update(JSON.stringify(value))
+    .digest('hex');
+}
+
+function workloadIdentity(rawWorkload = {}) {
+  const plan = buildOltpBaselinePlan(rawWorkload);
+  const dataset = buildOltpBaselineDataset(rawWorkload);
+  return Object.freeze({
+    datasetSha256: hashOltpBaselineDataset(dataset),
+    workloadPlanSha256: hashCanonicalValue(plan),
+    measurementPlanSha256: hashOltpBaselineMeasurementPlan(plan),
+  });
+}
+
 function canonicalIdentity(options) {
+  const workload = workloadIdentity(options.workload || {});
   return Object.freeze({
     profileId: SWEEP_PROFILE.id,
     comparisonView: normalizeComparisonView(options.comparisonView),
     offeredRatesPerSec: normalizeRates(options.offeredRatesPerSec),
     repetitions: normalizeRepetitions(options.repetitions),
     slo: normalizeSlo(options.slo),
-    datasetSha256: requireSha256(options.datasetSha256, 'datasetSha256'),
-    measurementPlanSha256: requireSha256(
-      options.measurementPlanSha256,
-      'measurementPlanSha256',
-    ),
+    datasetSha256: workload.datasetSha256,
+    workloadPlanSha256: workload.workloadPlanSha256,
+    measurementPlanSha256: workload.measurementPlanSha256,
     semanticProfileSha256: requireSha256(
       options.semanticProfileSha256,
       'semanticProfileSha256',
@@ -112,12 +135,6 @@ function canonicalIdentity(options) {
   });
 }
 
-function hashIdentity(identity) {
-  return createHash('sha256')
-    .update(JSON.stringify(identity))
-    .digest('hex');
-}
-
 function systemOrder(repetitionIndex) {
   return repetitionIndex % TWO === ZERO ?
     Object.freeze([SYSTEM.TIDB_TIKV, SYSTEM.LAGRANGE]) :
@@ -125,7 +142,9 @@ function systemOrder(repetitionIndex) {
 }
 
 function rateOrder(rates, repetitionIndex) {
-  return repetitionIndex % TWO === ZERO ? rates : Object.freeze([...rates].reverse());
+  return repetitionIndex % TWO === ZERO ?
+    rates :
+    Object.freeze([...rates].reverse());
 }
 
 function buildPairs(identity) {
@@ -153,7 +172,7 @@ function buildScenarioAPairedSweepPlan(options = {}) {
   return Object.freeze({
     profile: SWEEP_PROFILE,
     identity,
-    sweepPlanSha256: hashIdentity(identity),
+    sweepPlanSha256: hashCanonicalValue(identity),
     pairs: buildPairs(identity),
   });
 }
