@@ -8,9 +8,12 @@ on:
       - benchmark/stock-proof-ownership-staging
       - benchmark/delivery-proof-ownership-repair
       - benchmark/scenario-a-tidb-semantic-closure
+      - benchmark/scenario-a-lagrange-proof-plan-staging
     paths:
       - '.github/workflows/tidb-scenario-a-proof-ownership.yml'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
+      - 'test/distributed/harness/oltp-scenario-a-proof-cases.js'
+      - 'test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js'
       - 'test/distributed/harness/oltp-scenario-a-new-order-contention-case.js'
       - 'test/distributed/harness/oltp-scenario-a-visibility-case.js'
       - 'test/distributed/harness/oltp-scenario-a-payment-case.js'
@@ -50,8 +53,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prove semantic proof ownership and TiDB coverage
+      - name: Prove semantic proof ownership and planned Lagrange coverage
         run: |
           set -euo pipefail
-          npx eslint scripts/checks/oltp-scenario-a-proof-ownership-guard.js
+          npx eslint \
+            test/distributed/harness/oltp-scenario-a-proof-cases.js \
+            test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js \
+            scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js

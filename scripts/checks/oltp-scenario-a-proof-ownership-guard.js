@@ -4,89 +4,32 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
-  OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-delivery-case.js';
+  buildLagrangeScenarioAProofPlan,
+} from '../../test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js';
 import {
-  OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-durability-case.js';
-import {
-  OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js';
-import {
-  OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-new-order-contention-case.js';
-import {
-  OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-order-status-case.js';
-import {
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-payment-case.js';
-import {
-  OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js';
+  OLTP_SCENARIO_A_PROOF_CASES,
+} from '../../test/distributed/harness/oltp-scenario-a-proof-cases.js';
 import {
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
   OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
   buildScenarioASemanticGateEvidence,
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
-import {
-  OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-stock-level-case.js';
-import {
-  OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-} from '../../test/distributed/harness/oltp-scenario-a-visibility-case.js';
 
 const ARTIFACT_SHA256 = 'e'.repeat(64);
-const CASES = Object.freeze([
-  Object.freeze({
-    evidenceId: 'ownership-new-order',
-    proofIds: OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-visibility',
-    proofIds: OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-payment',
-    proofIds: OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-order-status',
-    proofIds: OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-delivery',
-    proofIds: OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-stock-level',
-    proofIds: OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-failure-atomicity',
-    proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-retryable-conflict',
-    proofIds: OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
-  }),
-  Object.freeze({
-    evidenceId: 'ownership-durability',
-    proofIds: OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
-  }),
-]);
 
-function proofFor(caseDefinition) {
+function proofFor(caseDefinition, system) {
   return Object.freeze({
-    evidenceId: caseDefinition.evidenceId,
-    system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
+    evidenceId: `ownership-${caseDefinition.id}`,
+    system,
     status: OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED,
     artifactSha256: ARTIFACT_SHA256,
     proofIds: caseDefinition.proofIds,
   });
 }
 
-const allProofIds = CASES.flatMap(({proofIds}) => proofIds).sort();
+const allProofIds = OLTP_SCENARIO_A_PROOF_CASES
+  .flatMap(({proofIds}) => proofIds)
+  .sort();
 assert.equal(
   new Set(allProofIds).size,
   allProofIds.length,
@@ -95,11 +38,23 @@ assert.equal(
 assert.deepEqual(
   allProofIds,
   OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
-  'TiDB Scenario A case owners must cover every required semantic proof ID',
+  'Scenario A case owners must cover every required semantic proof ID',
+);
+
+const lagrangePlan = buildLagrangeScenarioAProofPlan();
+assert.equal(lagrangePlan.liveEnabled, false);
+assert.deepEqual(
+  lagrangePlan.cases.map(({id}) => id),
+  OLTP_SCENARIO_A_PROOF_CASES.map(({id}) => id),
+);
+assert.deepEqual(
+  lagrangePlan.cases.flatMap(({proofIds}) => proofIds).sort(),
+  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
 );
 
 const gate = buildScenarioASemanticGateEvidence({
-  proofs: CASES.map(proofFor),
+  proofs: OLTP_SCENARIO_A_PROOF_CASES.map((proofCase) =>
+    proofFor(proofCase, OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV)),
 });
 const tidb = gate.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV];
 const lagrange = gate.systems[OLTP_SCENARIO_A_SYSTEM.LAGRANGE];
@@ -114,5 +69,9 @@ assert.deepEqual(lagrange.missingProofIds, OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF
 
 console.log(
   'oltp-scenario-a-proof-ownership-guard: PASS ' +
-  JSON.stringify({tidbProofCount: tidb.passedProofIds.length}),
+  JSON.stringify({
+    tidbProofCount: tidb.passedProofIds.length,
+    lagrangePlannedProofCount: lagrangePlan.proofCount,
+    lagrangeLiveEnabled: lagrangePlan.liveEnabled,
+  }),
 );
