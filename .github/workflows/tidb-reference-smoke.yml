@@ -60,11 +60,16 @@ jobs:
           node scripts/checks/tidb-reference-physical-topology-guard.js
           node scripts/checks/comparative-system-budget-guard.js
 
-      - name: Run OLTP dataset contract guard
-        run: node scripts/checks/tidb-oltp-dataset-guard.js
-
-      - name: Run OLTP workload contract guard
-        run: node scripts/checks/tidb-oltp-workload-guard.js
+      - name: Run OLTP contract guards
+        run: |
+          set -euo pipefail
+          npx eslint \
+            test/distributed/harness/oltp-baseline-transaction-executor.js \
+            test/distributed/reference-client/tidb-oltp-adapter.js \
+            scripts/checks/oltp-baseline-transaction-executor-guard.js
+          node scripts/checks/tidb-oltp-dataset-guard.js
+          node scripts/checks/tidb-oltp-workload-guard.js
+          node scripts/checks/oltp-baseline-transaction-executor-guard.js
 
       - name: Run live three-store Docker SQL smoke
         env:

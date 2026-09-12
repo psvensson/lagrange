@@ -13,6 +13,8 @@ COPY test/distributed/harness/oltp-baseline-dataset.js \
   ./test/distributed/harness/oltp-baseline-dataset.js
 COPY test/distributed/harness/oltp-baseline-workload.js \
   ./test/distributed/harness/oltp-baseline-workload.js
+COPY test/distributed/harness/oltp-baseline-transaction-executor.js \
+  ./test/distributed/harness/oltp-baseline-transaction-executor.js
 COPY scripts/checks/tidb-oltp-loadgen-runner.js \
   ./scripts/checks/tidb-oltp-loadgen-runner.js
 
