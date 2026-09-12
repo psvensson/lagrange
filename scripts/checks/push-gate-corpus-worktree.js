@@ -19,6 +19,10 @@
 //     (snapshot the CURRENT working tree state and gate it)
 //   node scripts/checks/push-gate-corpus-worktree.js --ref <sha>
 //     (gate an exact committed tree, e.g. the pushed local-sha)
+//   node scripts/checks/push-gate-corpus-worktree.js --in-place
+//     (gate THIS tree where it stands: for a caller that already runs
+//     inside an exact-HEAD worktree, such as `npm run publish`, a second
+//     materialization would only copy the same bytes again)
 //
 // Exit 0 when every corpus gate passes on the snapshot; exit 1 on the first
 // failing gate; exit 2 on usage error. The throwaway worktree is always
@@ -34,6 +38,7 @@ import {
 
 const TEXT_ENCODING = 'utf8';
 const REF_FLAG = '--ref';
+const IN_PLACE_FLAG = '--in-place';
 const EXIT_USAGE = 2;
 const EXIT_GATE_FAILURE = 1;
 const GIT_BINARY = 'git';
@@ -47,7 +52,7 @@ const LOCAL_TEXT = Object.freeze({
   ARGUMENT_SEPARATOR: ' ',
   CORPUS_PASSED:
     '[push-gate-corpus] corpus gates passed on the pushed tree\n',
-  USAGE: 'usage: push-gate-corpus-worktree.js [--ref <sha>]\n',
+  USAGE: 'usage: push-gate-corpus-worktree.js [--ref <sha> | --in-place]\n',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -137,26 +142,35 @@ function runCorpusGates(worktreePath) {
   return 0;
 }
 
+function gateMaterializedTree(root, ref) {
+  const worktreePath = materializeTreeUnderTest(root, ref);
+  try {
+    return runCorpusGates(worktreePath);
+  } finally {
+    removeWorktree(root, worktreePath);
+  }
+}
+
 function main(argv) {
   const args = argv.slice(2);
   let ref = null;
+  let inPlace = false;
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === REF_FLAG && index + 1 < args.length) {
       ref = args[index + 1];
       index += 1;
+    } else if (args[index] === IN_PLACE_FLAG) {
+      inPlace = true;
     } else {
       usage();
     }
   }
+  if (inPlace && ref !== null) usage();
 
   const root = repoRoot();
-  const worktreePath = materializeTreeUnderTest(root, ref);
-  let gateStatus;
-  try {
-    gateStatus = runCorpusGates(worktreePath);
-  } finally {
-    removeWorktree(root, worktreePath);
-  }
+  const gateStatus = inPlace ?
+    runCorpusGates(root) :
+    gateMaterializedTree(root, ref);
   if (gateStatus !== 0) {
     return gateStatus;
   }

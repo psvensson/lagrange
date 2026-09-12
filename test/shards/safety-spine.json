@@ -3,7 +3,7 @@
   "id": "safety-spine",
   "description": "The always-run spine: tests whose breakage can invalidate the meaning of every other test. Hand-curated on purpose. Unlike the subsystem taxonomy, completeness is NOT this list's contract - stability and breadth of fundamental mechanisms are. It must stay small enough that every ordinary change can afford it, so a test belongs here only if its failure would make other green results untrustworthy.",
   "rationale": {
-    "test-machinery": "if the runner, the classifier or the change selector is wrong, every other result is meaningless - once ordinary development runs a SELECTED proof, the selector decides what every other green result covers, so its own contracts are unconditional",
+    "test-machinery": "if the runner, the classifier or the change selector is wrong, every other result is meaningless - once ordinary development AND the push gate run a SELECTED proof, the selector, the base it is fed and the gate's own decision decide what every other green result covers, so their contracts are unconditional",
     "public-surface": "package and API boundaries break consumers without breaking any subsystem test",
     "core-mechanisms": "storage, consensus, routing, bootstrap, query and service invocation underpin nearly every higher-level proof",
     "identity-primitives": "correlation and canonical encoding silently corrupt evidence everywhere when broken"
@@ -17,6 +17,11 @@
     "test/scripts/select-change-tests.test.js",
     "test/scripts/selection-golden-corpus.test.js",
     "test/scripts/change-proof-boundary.test.js",
+    "test/scripts/changed-paths.test.js",
+    "test/scripts/change-selection-taxonomy.test.js",
+    "test/scripts/helper-import-closure.test.js",
+    "test/scripts/push-gate-change-proof.test.js",
+    "test/scripts/publish-head.test.js",
 
     "test/release/public-api-side-effect-boundary.test.js",
     "test/release/project-hardening-contracts.test.js",

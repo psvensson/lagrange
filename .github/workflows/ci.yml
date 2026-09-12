@@ -167,6 +167,22 @@ jobs:
           node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
+      # The change proof selects the import closure of changed test support
+      # code from the sealed import graph, a generated artefact a fresh
+      # checkout does not have; without it such a change refuses rather than
+      # guesses. Regenerate it (seconds) with the command the push gate runs.
+      # The command also rewrites the committed seal; a stale seal is a push
+      # that skipped the gate's inventory refresh, and it must fail HERE with
+      # its name rather than silently widen the proof (the seal would appear
+      # as a changed path).
+      - name: Prepare the sealed import graph
+        run: |
+          node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+          git diff --exit-code -- test/shards/impact-graph-seal.json || {
+            echo "::error::test/shards/impact-graph-seal.json is stale for this tree; run the command above and commit the seal"
+            exit 1
+          }
+
       # The ordinary proof: fast static over the changed paths, then the
       # safety spine plus whatever this change's subsystems oblige. It fails
       # closed - an unclassifiable change refuses with MODULAR PROOF NOT SAFE

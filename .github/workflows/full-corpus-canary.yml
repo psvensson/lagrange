@@ -1,0 +1,102 @@
+# The whole behavioural corpus on main, AFTER the push, gating nothing.
+#
+# The pre-push gate stopped running the full corpus before every push
+# (lean-push-gate, 2026-09-12): a push proves its change cone plus the safety
+# spine, locally and again in ci.yml. Both are the same selection, so a red
+# the cone cannot see - a cross-subsystem regression no contract names, a
+# fixture consumer the import graph does not reach - would otherwise surface
+# only at the next release proof. This lane finds it within the hour instead.
+#
+# What it is NOT: a gate. It is not a required check, the pre-push red-main
+# guard reads only ci.yml, and a red here never blocks a push. It runs on
+# push to main because that is when the tree changed; an unchanged tree
+# cannot grow new behavioural debt, so there is no schedule (the reasoning
+# that keeps full-gate.yml off a timer). Concurrent pushes coalesce: only the
+# newest head is worth proving.
+name: full-corpus-canary
+run-name: "full-corpus: ${{ github.event.head_commit.message || github.ref_name }}"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-corpus-canary
+  cancel-in-progress: true
+
+jobs:
+  corpus:
+    name: corpus
+    runs-on: ubuntu-24.04
+    # A hosted runner is roughly three times slower than the box where the
+    # ordinary lane alone took 17 minutes, and the exclusive lane is serial:
+    # budget for a long run rather than cancel a nearly finished one.
+    timeout-minutes: 300
+    env:
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_RETRY_FAILED_ONCE: '1'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      # The same toolchain ci.yml installs, with the same bounds: every
+      # download fails in minutes rather than consuming the job budget.
+      - name: Install gate CLI tools
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
+            ripgrep jq default-jre-headless postgresql-client curl
+          HELM_VERSION=v3.16.3
+          HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}.sha256sum"
+          sha256sum --check "${HELM_ARCHIVE}.sha256sum"
+          tar -xzf "$HELM_ARCHIVE"
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          WASM_TOOLS_VERSION=1.236.0
+          WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
+          WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASM_TOOLS_VERSION}/${WASM_TOOLS_ARCHIVE}"
+          echo "a4fe8101d98f4efeb4854fde05d7c6a36a9a61e8249d4c72afcda4a4944723fb  ${WASM_TOOLS_ARCHIVE}" | sha256sum --check
+          tar -xzf "$WASM_TOOLS_ARCHIVE"
+          sudo install "${WASM_TOOLS_DIR}/wasm-tools" /usr/local/bin/wasm-tools
+          wasm-tools --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      - name: Whole behavioural corpus
+        run: npm run test:all
+
+      - name: Upload corpus evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: full-corpus-canary-evidence
+          path: |
+            test-output/reports/
+            .tap/test-results/
+          retention-days: 14
+          if-no-files-found: ignore

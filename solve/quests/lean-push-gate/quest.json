@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lean-push-gate",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The pre-push gate proves a push by its change: its test stage runs the change proof CI runs (the safety spine plus the changed subsystems, their witnesses and, for changed test support code, every test whose import closure reaches it) against the remote base the hook already receives, and runs the whole corpus only when the change proof cannot stand for it (a refused selection, a change to the selection machinery, runner, hook or package manifests, a cone above half the corpus, no committed range, or the operator asking); the whole corpus still runs on main after every push in a non-gating canary workflow; and the corpus ratchets run in place inside the exact-HEAD worktree instead of materialising a second one.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/lean-push-gate.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-authority-on-a-change",
+      "statement": "The gate's change proof is the selector CI runs, fed the same base through LAGRANGE_CHECK_BASE; the hook never carries a second authority on what a change means."
+    },
+    {
+      "id": "graph-only-adds",
+      "statement": "The import graph only ever adds proof to the taxonomy's selection; a missing or unsealed graph refuses rather than guesses, and in the gate a refusal runs the whole corpus."
+    },
+    {
+      "id": "canary-is-not-a-gate",
+      "statement": "The full-corpus canary is not a required check, is not read by the red-main guard, and has no schedule: an unchanged tree cannot grow new behavioural debt."
+    },
+    {
+      "id": "independently-verified",
+      "statement": "The hook, workflow and selector changes land only with an approving independent verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "57e6940c7202583510b7480bb95c79aff0c08714"
+}

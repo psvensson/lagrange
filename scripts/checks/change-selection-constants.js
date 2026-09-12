@@ -35,6 +35,9 @@ export const REASON_CHANGED_TEST = 'changed-test';
 export const REASON_SUBSYSTEM = 'subsystem-widening';
 export const REASON_IMPACT_WITNESS = 'impact-witness';
 export const REASON_COUPLED_WITNESS = 'coupled-pair-witness';
+// A test whose import closure reaches changed test support code (a fixture
+// or helper the taxonomy can only route to test-infrastructure).
+export const REASON_HELPER_IMPORTER = 'helper-importer';
 export const REASON_SAFETY_SPINE = 'safety-spine';
 
 // How the layer that ASSEMBLES a worktree declares what it injected into it.
@@ -187,6 +190,42 @@ export const REFUSED_UNKNOWN_OWNER_PROBLEM =
   'SAFE TEST SCOPE UNKNOWN: no owning subsystem for';
 export const REFUSED_UNCLASSIFIED_TEST_PROBLEM =
   'SAFE TEST SCOPE UNKNOWN: changed test file has no subsystem classification';
+export const REFUSED_IMPORT_GRAPH_PROBLEM =
+  'SAFE TEST SCOPE UNKNOWN: import graph unavailable for changed test support code';
+export const HELPER_IMPORT_GRAPH_HINT =
+  'run: node scripts/generate-global-owner-debt-inventory.js ' +
+  '--refresh-import-graph-only';
+
+// The push gate's test stage (scripts/checks/push-gate-change-proof.js): the
+// change proof, or the whole corpus when the proof cannot stand for it.
+export const PUSH_FULL_CORPUS_ENV = 'LAGRANGE_PUSH_FULL_CORPUS';
+export const PROOF_MODE = Object.freeze({
+  CHANGE_PROOF: 'change-proof',
+  FULL_CORPUS: 'full-corpus',
+});
+// Above this share of the classified corpus the cone is no longer a saving
+// worth the selection risk; the whole corpus is a few minutes more.
+export const FULL_CORPUS_SHARE = 0.5;
+// A change to any of these makes the change proof self-referential: it would
+// be selected, scheduled or executed by the thing the change altered. Only
+// CURATED selection state counts: the generated census manifests change with
+// the tests they classify (which are changed tests, selected as such) and the
+// import-graph seal changes with every JavaScript edit, so they carry no
+// selection semantics of their own - a trigger on them ran the corpus on 45
+// of 60 pushes when measured (verifier, 2026-09-12). package.json and the
+// lockfile are NOT here: the selector is the one authority on what they mean
+// (a dependency change refuses, which is the corpus; dev tooling widens; a
+// version bump is packaging metadata) and the hook must not carry a second.
+export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
+  {id: 'selection-state', pattern: /^test\/(shards\/(safety-spine|impact-contracts)\.json|manifests\/)/u},
+  {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|plan-test-lane|select-change-tests|check-subsystem)\.js$/u},
+  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
+  {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
+  // The scheduler that launches the proof and hands it its environment.
+  {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
+  {id: 'push-gate', pattern: /^\.githooks\//u},
+  {id: 'test-config', pattern: /^\.taprc$/u},
+]);
 
 // Source path -> subsystem. Ordered for reading; ALL rules are evaluated and
 // more than one match is a hard error, exactly as in the test taxonomy, so
