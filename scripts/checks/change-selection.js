@@ -18,7 +18,16 @@
 // AUTHORITIES:
 //   source taxonomy          -> owning subsystem      [authority]
 //   impact-contract registry -> foreign witnesses     [authority]
-//   import graph             -> diagnostics only, never reduces mandatory proof
+//   import graph             -> importers of changed test support code
+//                               [adds proof; never narrows it]
+//
+// TEST SUPPORT CODE HAS NO SUBSYSTEM. A fixture under test/bootstrap/ or a
+// helper under src/test-helpers/ is imported across subsystems, and the path
+// taxonomy can only route it to test-infrastructure - which is how a fixture
+// change broke placement-rebalance tests the cone never ran (a6d99aa3d,
+// 2026-09-05). So a changed support file ALSO selects every test whose import
+// closure reaches it, from the sealed import graph (helper-import-closure.js);
+// without that graph the change refuses rather than guesses.
 //
 // Silent under-selection is the one failure mode indistinguishable from
 // success, so uncertainty widens to a semantic subsystem and unclassifiable
@@ -35,6 +44,11 @@ import path from 'node:path';
 
 import {testsForSubsystem} from '../check-subsystem.js';
 import {withoutWorkspaceInjections} from './changed-paths.js';
+import {
+  helperImportClosure,
+  isTestSupportPath,
+  loadSealedImporters,
+} from './helper-import-closure.js';
 import {
   appendArrayValue,
   createOrderedStringMap,
@@ -53,6 +67,7 @@ import {
   INERT_PATH_RULES,
   REASON_CHANGED_TEST,
   REASON_COUPLED_WITNESS,
+  REASON_HELPER_IMPORTER,
   REASON_IMPACT_WITNESS,
   REASON_SUBSYSTEM,
   LOCKFILE_RELEASE_PROBLEM,
@@ -61,6 +76,7 @@ import {
   CATEGORY_OWNED,
   CATEGORY_RELEASE_PROOF,
   CATEGORY_TEST,
+  HELPER_IMPORT_GRAPH_HINT,
   PACKAGE_LOCKFILE_PATH,
   PACKAGE_MANIFEST_PATH,
   PACKAGE_DEV_TOOLING_FIELDS,
@@ -71,6 +87,7 @@ import {
   RELEASE_SURFACE_PROBLEM,
   REFUSAL_RELEASE_PROOF_REQUIRED,
   REFUSAL_UNKNOWN_SCOPE,
+  REFUSED_IMPORT_GRAPH_PROBLEM,
   REFUSED_UNCLASSIFIED_TEST_PROBLEM,
   REFUSED_UNKNOWN_OWNER_PROBLEM,
   SELECTION_PRECISE,
@@ -421,6 +438,31 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
   }
 }
 
+// The sealed import graph, read once per selection and only when a support
+// file changed: an ordinary source change never pays for it.
+function sealedImporters(evidence, root) {
+  if (evidence.importers === null) evidence.importers = loadSealedImporters(root);
+  return evidence.importers;
+}
+
+// Changed test support code selects every test whose import closure reaches
+// it, on top of the subsystem the taxonomy gave it. No graph, no guess: the
+// refusal names the file and the command that regenerates the graph.
+function admitHelperImporters(evidence, changedPath, classes, root) {
+  const graph = sealedImporters(evidence, root);
+  if (!graph.ok) {
+    appendArrayValue(evidence.refusals,
+      `${REFUSED_IMPORT_GRAPH_PROBLEM} ${changedPath} (${graph.problem}); ` +
+        HELPER_IMPORT_GRAPH_HINT);
+    return;
+  }
+  const tests = helperImportClosure(graph.importers, changedPath, classes);
+  for (let index = 0; index < tests.length; index += 1) {
+    addReason(evidence.plan, tests[index],
+      `${REASON_HELPER_IMPORTER}${REASON_SEPARATOR}${changedPath}`);
+  }
+}
+
 // package.json is not one semantic subsystem, so its OWNER depends on which
 // fields moved. The runtime surface and the dependency set are broader than any
 // subsystem and have already refused above; a dev-tooling-only edit is the
@@ -443,6 +485,7 @@ export function packageDevToolingSubsystem(changedPackageFields) {
 // One pass over the changed paths, gathering what they oblige. It decides
 // nothing: the outcome is chosen once, by the caller, from this evidence.
 function collectChangeEvidence({
+  root,
   changedPaths,
   classes,
   contracts,
@@ -455,6 +498,7 @@ function collectChangeEvidence({
     coupledBy: createOrderedStringMap(),
     refusals: [],
     sourceChanged: false,
+    importers: null,
   };
   for (let index = 0; index < changedPaths.length; index += 1) {
     const changedPath = changedPaths[index];
@@ -469,6 +513,9 @@ function collectChangeEvidence({
       continue;
     }
     admitChangedSource(evidence, changedPath, classes, contracts);
+    if (isTestSupportPath(changedPath)) {
+      admitHelperImporters(evidence, changedPath, classes, root);
+    }
   }
   return evidence;
 }
@@ -496,6 +543,7 @@ export function selectChangedTests({
   const manifest = readJson(root, SUBSYSTEM_MANIFEST_PATH);
   const classes = manifest?.classes || {};
   const evidence = collectChangeEvidence({
+    root,
     changedPaths,
     classes,
     contracts: readJson(root, IMPACT_CONTRACTS_PATH),

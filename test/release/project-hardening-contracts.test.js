@@ -214,6 +214,27 @@ describe('project hardening contracts', () => {
     assert.ok(!healthRuns.some((run) => /test:sharded|test:fast|test:ci/u
       .test(run)),
     'repository health must not become a behavioural gate under another name');
+
+    // The full-corpus canary: the whole behavioural corpus on main AFTER the
+    // push, since the pre-push gate proves the change rather than the corpus
+    // (lean-push-gate, 2026-09-12). Not a gate - not required, not read by
+    // the red-main guard - and not on a timer.
+    const canaryText = await readFile(
+      '.github/workflows/full-corpus-canary.yml', UTF8);
+    const canary = parse(canaryText);
+    assert.deepEqual(canary.on.push.branches, ['main']);
+    assert.equal(canary.on.pull_request, undefined,
+      'the canary must not gate pull requests');
+    assert.equal(canary.on.schedule, undefined,
+      'an unchanged tree cannot grow new behavioural debt');
+    assert.equal(canary.concurrency['cancel-in-progress'], true,
+      'only the newest head is worth proving');
+    const canaryRuns = canary.jobs.corpus.steps
+      .filter((step) => typeof step.run === 'string' &&
+        /npm run /u.test(step.run))
+      .map((step) => step.run.trim());
+    assert.ok(canaryRuns.includes('npm run test:all'),
+      'the canary runs the whole corpus, not a selection');
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
     assert.equal(release.jobs.release.permissions.contents, 'write');
@@ -232,7 +253,7 @@ describe('project hardening contracts', () => {
     const healthText = await readFile(
       '.github/workflows/repository-health.yml', UTF8);
     for (const workflowText of
-      [ciText, fullGateText, releaseText, healthText]) {
+      [ciText, fullGateText, releaseText, healthText, canaryText]) {
       const workflow = parse(workflowText);
       for (const job of Object.values(workflow.jobs)) {
         for (const step of job.steps) {
@@ -251,7 +272,8 @@ describe('project hardening contracts', () => {
       }
     }
 
-    for (const workflowText of [ciText, fullGateText, releaseText]) {
+    for (const workflowText of
+      [ciText, fullGateText, releaseText, canaryText]) {
       for (const match of workflowText.matchAll(ACTION_REFERENCE_PATTERN)) {
         assert.match(match[1], PINNED_ACTION_PATTERN);
       }

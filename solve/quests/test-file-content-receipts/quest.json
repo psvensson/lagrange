@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "test-file-content-receipts",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A test file that passed on exactly the bytes it can observe is not run again until one of those bytes changes: each eligible test file carries a receipt keyed by the sha256 of the test file, its transitive import closure from the sealed import graph and an environment vector (package.json and package-lock.json bytes, node version, platform and arch, the runner scripts, the classification manifests, .taprc, the TAP timeout and machine-factor variables, the receipt schema version), any changed tracked non-JavaScript file invalidates every receipt, eligibility is a generated manifest with --check covering only the ordinary lane at primary class unit or packaging whose closure is free of child_process, worker_threads, readdirSync and glob and which lives outside test/scripts, test/solve, test/release, test/guidelines, test/invariants and test/closure, receipts live under the git common dir like publish receipts and never in a committed index, CI consumes only CI-produced receipts, and a pass reached through retry-once is recorded as such.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/test-file-content-receipts.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "unit-is-the-test-file",
+      "statement": "The receipt unit is one test file and its content identity, never a subsystem or a cone: subsystems overlap and one change would invalidate all of them."
+    },
+    {
+      "id": "fail-closed-eligibility",
+      "statement": "A test whose closure the import graph cannot see (process spawns, tree reads, the external-toolchain and exclusive lanes) is ineligible in v1 and always runs."
+    },
+    {
+      "id": "producers-stay-disjoint",
+      "statement": "The environment vector is part of the digest, so a local receipt can never satisfy CI and a CI receipt never satisfies a local run."
+    },
+    {
+      "id": "ratchets-untouched",
+      "statement": "Whole-repository static ratchets are not receipted: they are cheap, global by nature, and every commit changes the whole-tree identity they would key on."
+    }
+  ]
+}

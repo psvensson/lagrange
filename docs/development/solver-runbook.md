@@ -148,8 +148,15 @@ progress branch only, never for a commit that lands source on the shared
 branch: skipping a gate to obtain a green state is exactly what R23 forbids.
 
 The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
-duplication/file-size ratchets, cycles, unused exports, then the long post-push
-test corpus. Fix one-way ratchets rather than raising their baselines.
+duplication/file-size ratchets, cycles, unused exports, then the test stage:
+the focused contracts and audits, and last the change proof - the same
+`npm test` selection CI runs, fed the remote sha of main as its base - or the
+whole corpus when that proof cannot stand for it (a refused selection, a change
+to the selection machinery, runner, hook or package manifests, a cone above
+half the corpus, no committed range, or `LAGRANGE_PUSH_FULL_CORPUS=1`). The
+stage prints which it chose and why. The whole corpus then runs on main after
+the push in the non-gating `full-corpus-canary` workflow. Fix one-way ratchets
+rather than raising their baselines.
 
 ## Partial clones (solve-v2 phase 1)
 

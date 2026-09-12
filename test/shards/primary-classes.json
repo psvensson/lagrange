@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1818,
+    "unit": 1820,
     "integration": 75,
     "bootstrap": 180,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2080,
-  "digest": "fnv1a32-f98fd431",
+  "censusSize": 2082,
+  "digest": "fnv1a32-d3d743cd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1810,6 +1810,7 @@
     "test/scripts/formation-health.test.js": "unit",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
+    "test/scripts/helper-import-closure.test.js": "unit",
     "test/scripts/historical-record-exemptions.test.js": "unit",
     "test/scripts/impact-contract-registry.test.js": "unit",
     "test/scripts/impact-proof-cone-consumers.test.js": "unit",
@@ -1831,6 +1832,7 @@
     "test/scripts/prune-test-output.test.js": "unit",
     "test/scripts/publish-head-workspace-links.test.js": "unit",
     "test/scripts/publish-head.test.js": "unit",
+    "test/scripts/push-gate-change-proof.test.js": "unit",
     "test/scripts/release-content-digest.test.js": "unit",
     "test/scripts/release-notes.test.js": "unit",
     "test/scripts/release-npm-package.test.js": "unit",

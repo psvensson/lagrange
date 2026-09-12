@@ -149,6 +149,7 @@ reason code rather than proving a convenient subset.
 | `npm run check` | fast static over the changed paths, then `npm test` |
 | `npm run check:subsystem -- <id>` | one whole subsystem, explicitly |
 | `npm run check:release` | everything |
+| `npm run publish` | the pre-push gate: static stages, then `npm test` against the remote base, or `test:all` when the change proof cannot stand for it |
 
 Only run the complete suite (`npm run check:release`) at:
 - Checkpoint tasks explicitly marked in the active Quest's `doneWhen` or frontier list
