@@ -27,7 +27,6 @@ import {
 } from '../reference-client/lagrange-new-order-contention-observer.js';
 
 const ZERO = 0;
-const ONE = 1;
 const POSTGRES_SERVICE_ID = 'sys-postgres-wire';
 const POSTGRES_PROTOCOL = 'postgresql';
 const HEALTHY = 'healthy';
@@ -47,7 +46,8 @@ function sleep(ms) {
 }
 
 function sqlLiteral(value) {
-  return `'${String(value).replace(/'/gu, "''")}'`;
+  const escaped = String(value).replace(/'/gu, String.fromCharCode(39, 39));
+  return `'${escaped}'`;
 }
 
 function rowsOf(result) {
