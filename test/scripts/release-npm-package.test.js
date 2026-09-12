@@ -124,6 +124,18 @@ describe('publish mismatch verdicts carry npm output', () => {
       'npm\'s own words are the only explanation of a zero exit with no version');
   });
 
+  it('types a publish npm says it is still processing as pending, not as absent', () => {
+    // npm's own closing line for a provenance-signed publish; the registry
+    // is working, and the release must not be called a non-publication.
+    const pending = describePublishMismatch(RELEASE_OUTCOME.VERSION_ABSENT, {
+      status: 0,
+      stdout: '+ lagrange-server@0.2.4-rc.1\n',
+      stderr: 'npm notice Your package is being processed and may take a few minutes to become available.',
+    });
+    assert.equal(pending.outcome, RELEASE_OUTCOME.PUBLISH_ACCEPTED_PENDING_AVAILABILITY);
+    assert.match(pending.message, /being processed/u);
+  });
+
   it('keeps the conflict outcome for any other mismatch and says when npm was silent', () => {
     const conflict = describePublishMismatch(
       RELEASE_OUTCOME.VERSION_CONTENT_CONFLICT, {status: 0, stdout: '', stderr: ''});
