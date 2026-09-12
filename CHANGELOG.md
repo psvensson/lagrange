@@ -10,6 +10,14 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.4-rc.0] — 2026-09-12
+
+Pipeline dry run. No functional change since the `v0.2.3` tag: this
+prerelease exists to publish the release pipeline end to end on the
+production path under a prerelease semver - npm under the `next` dist-tag,
+Docker tagged with the version only, the GitHub release marked pre-release -
+and to record the first publication receipt at `data/releases/`.
+
 ## [0.2.3] — 2026-09-11
 
 This forward patch preserves the immutable `v0.2.2` tag after its release
@@ -346,7 +354,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...HEAD
+[0.2.4-rc.0]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4-rc.0
 [0.2.3]: https://github.com/psvensson/lagrange/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/psvensson/lagrange/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/psvensson/lagrange/compare/v0.2.0...v0.2.1
