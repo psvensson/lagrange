@@ -10,6 +10,14 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.4-rc.1] — 2026-09-12
+
+Pipeline dry run, second attempt. No functional change since the `v0.2.3`
+tag. `v0.2.4-rc.0` reached the npm publication step and stopped there - the
+same boundary where 0.2.3 stopped - with `npm publish` exiting 0 and the
+registry unchanged; the npm publication owner now carries npm's own output
+in that verdict, so this run can explain itself.
+
 ## [0.2.4-rc.0] — 2026-09-12
 
 Pipeline dry run. No functional change since the `v0.2.3` tag: this
@@ -354,7 +362,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...HEAD
+[0.2.4-rc.1]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...v0.2.4-rc.1
 [0.2.4-rc.0]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4-rc.0
 [0.2.3]: https://github.com/psvensson/lagrange/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/psvensson/lagrange/compare/v0.2.1...v0.2.2
