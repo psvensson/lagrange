@@ -6,5 +6,11 @@
     "machineType": "n2-standard-4",
     "vmCount": 5,
     "preemptible": false
+  },
+  "storageDataDisk": {
+    "type": "pd-balanced",
+    "sizeGb": 100,
+    "mountPath": "/mnt/lagrange-benchmark-data",
+    "deviceName": "lagrange-benchmark-data"
   }
 }
