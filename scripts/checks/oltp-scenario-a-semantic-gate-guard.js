@@ -60,7 +60,8 @@ function assertEmptyEvidenceFailsClosed() {
   assert.equal(gate.semanticProfileId, 'scenario-a-semantic-v1');
   assert.equal(gate.semanticProfileSha256, hashScenarioASemanticProfile());
   assert.equal(gate.status, 'incomplete');
-  assert.equal(gate.comparable, false);
+  assert.equal(gate.semanticEquivalent, false);
+  assert.equal(Object.hasOwn(gate, 'comparable'), false);
   assert.match(gate.semanticGateEvidenceSha256, /^[0-9a-f]{64}$/u);
   for (const system of Object.values(OLTP_SCENARIO_A_SYSTEM)) {
     assert.deepEqual(gate.systems[system].passedProofIds, []);
@@ -72,13 +73,13 @@ function assertEmptyEvidenceFailsClosed() {
   }
 }
 
-function assertPartialAndFailedEvidenceStayNonComparable() {
+function assertPartialAndFailedEvidenceStayNonEquivalent() {
   const proofId = OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS[0];
   const partial = buildScenarioASemanticGateEvidence({
     proofs: [proof({proofIds: [proofId]})],
   });
   assert.equal(partial.status, 'incomplete');
-  assert.equal(partial.comparable, false);
+  assert.equal(partial.semanticEquivalent, false);
   assert.deepEqual(
     partial.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV].passedProofIds,
     [proofId],
@@ -91,7 +92,7 @@ function assertPartialAndFailedEvidenceStayNonComparable() {
     })],
   });
   assert.equal(failed.status, 'failed');
-  assert.equal(failed.comparable, false);
+  assert.equal(failed.semanticEquivalent, false);
   assert.deepEqual(
     failed.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV].failedProofIds,
     [proofId],
@@ -115,12 +116,15 @@ function completeProofs() {
   ];
 }
 
-function assertCompleteEvidenceCanPass() {
+function assertCompleteEvidenceCanPassSemanticGate() {
   const proofs = completeProofs();
   const first = buildScenarioASemanticGateEvidence({proofs});
-  const second = buildScenarioASemanticGateEvidence({proofs: [...proofs].reverse()});
+  const second = buildScenarioASemanticGateEvidence({
+    proofs: [...proofs].reverse(),
+  });
   assert.equal(first.status, 'passed');
-  assert.equal(first.comparable, true);
+  assert.equal(first.semanticEquivalent, true);
+  assert.equal(Object.hasOwn(first, 'comparable'), false);
   assert.equal(first.semanticGateEvidenceSha256, second.semanticGateEvidenceSha256);
   for (const system of Object.values(OLTP_SCENARIO_A_SYSTEM)) {
     assert.deepEqual(first.systems[system].failedProofIds, []);
@@ -172,8 +176,8 @@ function assertInvalidEvidenceFailsClosed() {
 function main() {
   assertRequiredProofsComeFromProfile();
   assertEmptyEvidenceFailsClosed();
-  assertPartialAndFailedEvidenceStayNonComparable();
-  assertCompleteEvidenceCanPass();
+  assertPartialAndFailedEvidenceStayNonEquivalent();
+  assertCompleteEvidenceCanPassSemanticGate();
   assertInvalidEvidenceFailsClosed();
   process.stdout.write(PASS_LINE);
 }
