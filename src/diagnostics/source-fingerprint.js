@@ -24,6 +24,9 @@ const SOURCE_FINGERPRINT_ALGORITHM = 'sha256-content-v1';
 // channel set verbatim, never shadowed by the LAGRANGE_* host auto-forward.
 const SOURCE_FINGERPRINT_ENV_VAR = 'SRC_FINGERPRINT';
 const HASH_NAME = 'sha256';
+const HASH_TEXT_ENCODING = 'utf8';
+const HASH_FIELD_SEPARATOR = ':';
+const HASH_DIGEST_ENCODING = 'hex';
 const FINGERPRINT_HEX_LENGTH = 16;
 const POSIX_PATH_SEPARATOR = '/';
 
@@ -87,6 +90,26 @@ async function digestRecords(records, hexLength) {
 }
 
 /**
+ * The same framing over content already in memory: records of
+ * {relativePath, content: Buffer}. Synchronous and IO-free, so a caller that
+ * must transform bytes before hashing (the release proof identity masks the
+ * version authorities) still hashes in the one form this module owns.
+ * @param {Array<{relativePath: string, content: Buffer}>} records
+ * @return {string} Full lowercase hex digest.
+ */
+function computeContentRecordsFingerprint(records) {
+  const sorted = [...records]
+    .sort((a, b) => (a.relativePath < b.relativePath ? -1 : 1));
+  const hash = crypto.createHash(HASH_NAME);
+  hash.update(String(sorted.length), HASH_TEXT_ENCODING);
+  hash.update(HASH_FIELD_SEPARATOR, HASH_TEXT_ENCODING);
+  for (const {relativePath, content} of sorted) {
+    updateHashWithRecord(hash, relativePath, content);
+  }
+  return hash.digest(HASH_DIGEST_ENCODING);
+}
+
+/**
  * Compute a deterministic content fingerprint of every regular file under
  * rootDir. Order-independent (paths are sorted) and location-independent (only
  * the POSIX relative path participates), so the same tree yields the same hex on
@@ -125,6 +148,7 @@ async function computeFileSetFingerprint(rootDir, relativePaths) {
 export {
   computeSourceFingerprint,
   computeFileSetFingerprint,
+  computeContentRecordsFingerprint,
   SOURCE_FINGERPRINT_ALGORITHM,
   SOURCE_FINGERPRINT_ENV_VAR,
   FINGERPRINT_HEX_LENGTH,
