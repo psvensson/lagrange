@@ -12,17 +12,24 @@ import {
 } from '../../test/distributed/harness/oltp-paired-sweep-plan.js';
 
 const PASS_LINE = 'oltp-paired-sweep-plan-guard: PASS\n';
-const DATASET_SHA256 = 'a'.repeat(64);
-const MEASUREMENT_PLAN_SHA256 = 'b'.repeat(64);
 const SEMANTIC_PROFILE_SHA256 = 'c'.repeat(64);
+const BASE_WORKLOAD = Object.freeze({
+  seed: 12345,
+  workers: 2,
+  warmupOperationsPerWorker: 4,
+  measurementOperationsPerWorker: 10,
+  warehouseCount: 1,
+  districtsPerWarehouse: 1,
+  customersPerDistrict: 10,
+  itemCount: 30,
+});
 
 const BASE_OPTIONS = Object.freeze({
   comparisonView: COMPARISON_VIEW.MATCHED_TOTAL_BUDGET,
   offeredRatesPerSec: Object.freeze([100, 150, 200]),
   repetitions: 4,
   slo: Object.freeze({p99Ms: 100, maxErrorRate: 0.01}),
-  datasetSha256: DATASET_SHA256,
-  measurementPlanSha256: MEASUREMENT_PLAN_SHA256,
+  workload: BASE_WORKLOAD,
   semanticProfileSha256: SEMANTIC_PROFILE_SHA256,
 });
 
@@ -45,6 +52,9 @@ function assertCounterbalancedPlan() {
   assert.deepEqual(plan.identity.offeredRatesPerSec, [100, 150, 200]);
   assert.equal(plan.identity.repetitions, 4);
   assert.deepEqual(plan.identity.slo, {p99Ms: 100, maxErrorRate: 0.01});
+  assert.match(plan.identity.datasetSha256, /^[0-9a-f]{64}$/u);
+  assert.match(plan.identity.workloadPlanSha256, /^[0-9a-f]{64}$/u);
+  assert.match(plan.identity.measurementPlanSha256, /^[0-9a-f]{64}$/u);
   assert.equal(plan.pairs.length, 12);
 
   assert.deepEqual(
@@ -102,6 +112,24 @@ function assertIdentityIsImmutable() {
     offeredRatesPerSec: [100, 160, 200],
   });
   assert.notEqual(first.sweepPlanSha256, changedRates.sweepPlanSha256);
+
+  const changedWarmup = buildScenarioAPairedSweepPlan({
+    ...BASE_OPTIONS,
+    workload: {
+      ...BASE_WORKLOAD,
+      warmupOperationsPerWorker: 5,
+    },
+  });
+  assert.equal(first.identity.datasetSha256, changedWarmup.identity.datasetSha256);
+  assert.equal(
+    first.identity.measurementPlanSha256,
+    changedWarmup.identity.measurementPlanSha256,
+  );
+  assert.notEqual(
+    first.identity.workloadPlanSha256,
+    changedWarmup.identity.workloadPlanSha256,
+  );
+  assert.notEqual(first.sweepPlanSha256, changedWarmup.sweepPlanSha256);
 }
 
 function assertInvalidPlansFailClosed() {
@@ -124,7 +152,7 @@ function assertInvalidPlansFailClosed() {
       ...BASE_OPTIONS,
       semanticProfileSha256: 'not-a-digest',
     }),
-    /semanticProfileSha256 must be a lowercase SHA-256 digest/u,
+    /semanticProfileSha256 must be a SHA-256 digest/u,
   );
   assert.throws(
     () => buildScenarioAPairedSweepPlan({
