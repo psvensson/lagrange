@@ -26,6 +26,13 @@ authorizes:
   - test/convergence
   - test/simulation
   - test/distributed/harness
+  - test/integration/helpers
+  - test/integration/message-group-multi-join-formation.integration.test.js
+  - test/integration/preflight-critical-path-hops.integration.test.js
+  - test/integration/membership-consistency.integration.test.js
+  - test/integration/membership-consistency-integration-test-helpers.js
+  - test/shards
+  - scripts/quest-evidence-formation-harness-model-from-contracts.js
   - scripts/checks/formation-budget.js
   - scripts/checks/formation-sim-reproduces.js
   - scripts/checks/formation-calibration.js
@@ -125,6 +132,27 @@ is otherwise superseded by this epic for the cold-formation surface.
 and `hysteresis-consolidation` are superseded here. `raft-ownership` in
 `apparatus-release-consolidation` must not run concurrently with a quest here
 that touches `src/raft`.
+
+Decision (2026-09-12): the readiness-owner memoisation line -
+`readiness-planning-generation-granularity`, its `-v2`,
+`projection-readiness-evidence-amplification` and its `-v2`, and the
+`node-liveness-semantic-projection-owner` publish-gate repair - is superseded
+by this epic and its drafts were discarded unlanded. Their mechanism is a
+cache of readiness, which the `bounded-read-amplification-scope` constraint
+above forbids; the starvation they measured is owned here by
+`seed-formation-decoupling`. The v1 `formation-seed-decoupling` quest record
+is superseded by this epic of the same id; its phase-0 inventory (owner map,
+ambient-time seams, signature predicate) is kept as
+[`phase0-inventory.md`](formation-seed-decoupling/phase0-inventory.md) beside
+[`design.md`](formation-seed-decoupling/design.md) for
+`formation-calibration-run` and `formation-sim`.
+
+Scope widening (2026-09-12, R16): `formation-harness-model-from-contracts`
+replaces the hand-wired stand-in family in
+`test/integration/membership-consistency-integration-test-helpers.js` and the
+two integration probes with driver-hosts, so those paths, `test/shards` (the
+classification manifests every test change regenerates) and the quest's
+receipt harness are authorized above.
 
 ## Guardrails
 
