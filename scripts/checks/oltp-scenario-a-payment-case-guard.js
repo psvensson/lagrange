@@ -16,7 +16,25 @@ assert.equal(definition.identity.operation.kind, 'payment');
 assert.equal(definition.caseSha256, repeated.caseSha256);
 assert.match(definition.caseSha256, /^[0-9a-f]{64}$/u);
 assert.match(definition.identity.datasetSha256, /^[0-9a-f]{64}$/u);
-assert.equal(OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.length, 7);
+assert.equal(OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.length, 5);
+assert.equal(
+  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.includes(
+    'isolation:successfulEffectsExactlyOnce',
+  ),
+  false,
+);
+assert.equal(
+  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.includes(
+    'forbidden:duplicate_success_effect',
+  ),
+  false,
+);
+assert.equal(
+  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS.every(
+    (proofId) => proofId.startsWith('transaction:payment:'),
+  ),
+  true,
+);
 
 const passing = evaluateScenarioAPaymentObservation(passingObservation);
 assert.equal(passing.passed, true);
