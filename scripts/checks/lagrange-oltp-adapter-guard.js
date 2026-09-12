@@ -74,6 +74,11 @@ function assertSqlContract() {
   for (const [statementId, sql] of Object.entries(LAGRANGE_OLTP_SQL)) {
     assert.equal(sql.includes('?'), false, `${statementId} used MySQL placeholders`);
     assert.equal(sql.includes('`'), false, `${statementId} used MySQL quoting`);
+    assert.equal(
+      /\bFOR\s+UPDATE\b/iu.test(sql),
+      false,
+      `${statementId} pretended Lagrange currently owns locking reads`,
+    );
     assert.match(sql, /\$1/u, `${statementId} did not use PostgreSQL parameters`);
   }
 }
@@ -99,6 +104,7 @@ async function assertAdapterLifecycle() {
 
   assert.equal(adapter.protocol, 'postgresql');
   assert.equal(adapter.executionPath, 'public-sql');
+  assert.equal(adapter.lockingReadMode, 'snapshot-write-conflict');
   assert.equal(fake.clients.length, 3, 'setup plus exactly two worker clients expected');
   assert.deepEqual(adapter.workerSessionIds, ['pgwire-worker-1', 'pgwire-worker-2']);
   assert.equal(
@@ -154,6 +160,7 @@ async function assertAdapterLifecycle() {
   const evidence = await adapter.getEvidence();
   assert.equal(evidence.protocol, 'postgresql');
   assert.equal(evidence.executionPath, 'public-sql');
+  assert.equal(evidence.lockingReadMode, 'snapshot-write-conflict');
   assert.equal(evidence.datasetSha256, adapter.datasetSha256);
   assert.deepEqual(evidence.stateCounts, {
     orders: 0,
