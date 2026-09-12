@@ -245,6 +245,10 @@ export const SOURCE_SUBSYSTEM_RULES = Object.freeze([
   {id: 'source-charts', pattern: /^charts\//, subsystem: 'release-packaging'},
   {id: 'source-examples', pattern: /^examples\//, subsystem: 'examples-e2e'},
   {id: 'source-models', pattern: /^models\//, subsystem: 'architecture-governance'},
+  // Executable architecture models (Alloy, statecharts, decision tables, owner
+  // traces) and the invariant registry they answer for: a model edit must run the
+  // checkers, so they are a governed source, not inert prose.
+  {id: 'source-architecture-models', pattern: /^architecture\/(models\/|contracts\/invariants\.json$)/, subsystem: 'architecture-governance'},
 ]);
 
 // Paths that cannot affect behaviour, so they neither widen nor refuse. Kept
@@ -258,6 +262,6 @@ export const INERT_PATH_RULES = Object.freeze([
   // (data/releases/<tag>.json, data/formation-health/trend.ndjson): read by
   // quest probes and budget scripts, never by the behaviour under test.
   /^data\//,
-  /^architecture\//,
+  /^architecture\/(?!models\/|contracts\/invariants\.json$)/,
   /\.md$/,
 ]);
