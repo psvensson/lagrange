@@ -7,7 +7,7 @@ on:
       - benchmark/scenario-a-new-order-contention-lagrange-live-staging
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
-      - 'test/distributed/config/local-benchmark-3node.json'
+      - 'test/distributed/config/local-benchmark-3node-timeout180.json'
       - 'test/distributed/run.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
       - 'test/distributed/harness/oltp-paired-retry-owner.js'
@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           node test/distributed/run.js \
-            --config test/distributed/config/local-benchmark-3node.json \
+            --config test/distributed/config/local-benchmark-3node-timeout180.json \
             --scenario scenario-a-new-order-contention-lagrange \
             --output "$LAGRANGE_SCENARIO_A_CONTENTION_REPORT_PATH" \
             --no-fast-local \
