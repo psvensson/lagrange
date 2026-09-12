@@ -77,8 +77,8 @@ assert.deepEqual(
   TIDB_OLTP_SNAPSHOT_TABLES.map(({name}) => name),
 );
 
-assert.throws(
-  () => observeTiDbOltpStateSnapshot({
+await assert.rejects(
+  observeTiDbOltpStateSnapshot({
     endpoint: {host: '', port: 4000},
     databaseName: DATABASE_NAME,
     createConnection: createConnectionFactory(1, {options: [], queries: []}),
