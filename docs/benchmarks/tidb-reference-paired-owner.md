@@ -123,13 +123,60 @@ Changing these scheduling or accounting semantics requires a new open-loop
 profile identity. The offered rate itself is a sweep parameter and does not
 change the profile identity.
 
+## Paired sweep planning owner
+
+The counter-balanced sweep plan belongs to
+`test/distributed/harness/oltp-paired-sweep-plan.js`. It consumes the canonical
+workload, dataset, retry, open-loop, and topology-view owners; it must not invent
+parallel definitions of those concerns.
+
+### Preregistered Scenario A paired sweep profile v1
+
+The first sweep-planning profile has identity `scenario-a-paired-sweep-v1`.
+Every plan must explicitly preregister:
+
+- architecture-native or matched-total-budget comparison view;
+- a strictly increasing offered-rate curve with at least two points;
+- an even number of paired repetitions, at least two;
+- p99 latency SLO and maximum allowed error rate;
+- the canonical OLTP workload options; and
+- the semantic-profile digest produced by the separate semantic-equivalence
+  owner.
+
+The planner derives and records, rather than accepting from callers, the
+canonical generated dataset digest, the full workload-plan digest including
+warm-up and measurement operations, and the measurement-plan digest. This keeps
+pre-measurement state inside the immutable sweep identity.
+
+Counter-balancing is deterministic:
+
+- odd-numbered repetitions traverse offered rates upward and run TiDB/TiKV first
+  within each rate pair;
+- even-numbered repetitions traverse rates downward and run Lagrange first;
+- with an even repetition count, every offered rate therefore has each system
+  first equally often.
+
+Every system/rate run starts from a freshly prepared copy of the same
+deterministic dataset and executes the same canonical warm-up before timed
+measurement. Reusing the mutated state left by an earlier rate is invalid.
+
+The sweep-plan digest changes when any bound input changes, including SLO,
+offered rates, repetitions, workload/warm-up state, comparison view, semantic
+profile, retry policy, or open-loop profile. Changing one of those concerns for
+a later experiment requires a new preregistered plan identity rather than an
+in-place adjustment after results are seen.
+
+The sweep planner is not itself comparative proof. Until the semantic gate,
+resource/topology evidence, actual paired execution, and repeated-run statistics
+are present, sweep-plan or smoke evidence remains `comparable: false`.
+
 ## Evidence required before performance comparison
 
 The semantic gate is deterministic and runs before expensive paired GCP sweeps.
 Its evidence must identify:
 
 - exact Lagrange commit and TiDB/TiKV versions;
-- dataset and operation-plan digest;
+- dataset, full workload-plan, and measurement-plan digests;
 - semantic-profile digest;
 - adapter identities;
 - transaction family and conflicting operation pair tested;
@@ -138,6 +185,7 @@ Its evidence must identify:
 - retry-policy identity, retry count, and total request-clock duration where a
   retry occurs;
 - open-loop profile identity and offered rate;
+- sweep-profile identity and sweep-plan digest;
 - scheduled window, completion/drain window, completed throughput, issue lag,
   queue delay, successful-request latency, and all-attempt latency.
 
