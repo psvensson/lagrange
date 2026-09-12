@@ -9,6 +9,10 @@ on:
       - "scripts/checks/build-tidb-oltp-loadgen-image.js"
       - "scripts/checks/tidb-oltp-loadgen-runner.js"
       - "scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js"
+      - "test/distributed/harness/oltp-baseline-dataset.js"
+      - "test/distributed/harness/oltp-baseline-workload.js"
+      - "test/distributed/harness/oltp-baseline-transaction-executor.js"
+      - "test/distributed/reference-client/tidb-oltp-adapter.js"
       - "test/distributed/reference-loadgen/**"
       - "test/distributed/config/gcp-tidb-oltp-loadgen.json"
 
