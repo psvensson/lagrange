@@ -43,14 +43,17 @@ function normalizeSafeToken(value, label) {
 }
 
 function normalizeMountPath(value) {
-  const path = normalizeSafeToken(
+  const mountPath = normalizeSafeToken(
     value ?? DEFAULT_MOUNT_PATH,
     'GCP data disk mountPath',
   );
-  if (!path.startsWith('/')) {
+  if (!mountPath.startsWith('/')) {
     throw new Error('GCP data disk mountPath must be absolute');
   }
-  return path;
+  if (mountPath.split('/').includes('..')) {
+    throw new Error('GCP data disk mountPath must not traverse parents');
+  }
+  return mountPath;
 }
 
 function normalizeDiskType(value) {
@@ -136,7 +139,7 @@ function mountCommand(deviceName, mountPath) {
     `mkdir -p ${mountPath}; ` +
     `mountpoint -q ${mountPath} || mount "$device" ${mountPath}; ` +
     `chmod 0777 ${mountPath}; ` +
-    `test -w ${mountPath}\''`;
+    `test -w ${mountPath}'`;
 }
 
 function unmountCommand(mountPath) {
