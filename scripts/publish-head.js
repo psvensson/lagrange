@@ -133,6 +133,7 @@ const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const DEPENDENCY_LINK_ERROR =
   'publish: pre-push gate mutated the temporary dependency link';
 const DIRECTORY_LINK_TYPE = 'dir';
+const FILE_LINK_TYPE = 'file';
 
 function checked(run, command, args, options = {}) {
   const result = run(command, args, {
@@ -262,14 +263,30 @@ function assertWorkspaceDependencySources(root, args, log) {
   }
 }
 
+// A workspace directory may already exist in the fresh worktree when some of
+// its content is tracked (data/releases holds committed publication
+// receipts). Then the directory itself is real and only its gitignored
+// entries - the dataset trees - are linked, one by one; a whole-directory
+// link would collide with the checkout (EEXIST) and hide the tracked files.
 function linkWorkspaceDependencies(root, worktree) {
   const links = [];
   for (const directory of GATE_WORKSPACE_DIRECTORIES) {
     const source = path.join(root, directory);
     if (!fs.existsSync(source)) continue;
     const link = path.join(worktree, directory);
-    fs.symlinkSync(source, link, DIRECTORY_LINK_TYPE);
-    links.push({link, source: fs.realpathSync(source)});
+    if (!fs.existsSync(link)) {
+      fs.symlinkSync(source, link, DIRECTORY_LINK_TYPE);
+      links.push({link, source: fs.realpathSync(source)});
+      continue;
+    }
+    for (const entry of fs.readdirSync(source)) {
+      const entrySource = path.join(source, entry);
+      const entryLink = path.join(link, entry);
+      if (fs.existsSync(entryLink)) continue;
+      fs.symlinkSync(entrySource, entryLink,
+        fs.statSync(entrySource).isDirectory() ? DIRECTORY_LINK_TYPE : FILE_LINK_TYPE);
+      links.push({link: entryLink, source: fs.realpathSync(entrySource)});
+    }
   }
   return links;
 }
@@ -493,3 +510,5 @@ if (process.argv[1] &&
     process.exitCode = 1;
   }
 }
+
+export {linkWorkspaceDependencies};
