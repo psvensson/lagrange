@@ -30,10 +30,7 @@ test('join readiness requires local bootstrap transport but not pgwire', () => {
     status: ENDPOINT_STATUS.ACTIVE,
   }]);
 
-  const result = evaluateBootstrapEndpointVisibility.call(
-    {nodeId: NODE_ID},
-    cache,
-  );
+  const result = evaluateBootstrapEndpointVisibility(NODE_ID, cache);
 
   assert.equal(result.ready, true);
   assert.deepEqual(result.missingNodeEndpointNodeIds, []);
@@ -41,8 +38,8 @@ test('join readiness requires local bootstrap transport but not pgwire', () => {
 });
 
 test('join readiness still fails closed when local bootstrap transport is absent', () => {
-  const result = evaluateBootstrapEndpointVisibility.call(
-    {nodeId: NODE_ID},
+  const result = evaluateBootstrapEndpointVisibility(
+    NODE_ID,
     cacheWithNodeEndpoint([]),
   );
 
