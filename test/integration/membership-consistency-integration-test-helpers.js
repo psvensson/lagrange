@@ -316,17 +316,6 @@ function createNodeHosts(cache, options = {}) {
   };
 }
 
-function createTablePolicyServiceHost(cache, hosts = null) {
-  return (hosts || createNodeHosts(cache)).tablePolicyService;
-}
-
-function createControlPlaneGatewayHost(cache, hosts = null) {
-  return (hosts || createNodeHosts(cache)).controlPlaneSystemTableGateway;
-}
-
-function createReadinessServiceHost(cache, hosts = null) {
-  return (hosts || createNodeHosts(cache)).controlPlaneReadinessService;
-}
 
 /**
  * The real RebalanceCoordinator over the node's real owners.
@@ -515,15 +504,12 @@ export {
   MockMessageGroupService,
   TEST_TIMEOUTS,
   createCdcPropagationHost,
-  createControlPlaneGatewayHost,
   createMessageRouterHost,
   createNodeEntry,
   createNodeHosts,
-  createReadinessServiceHost,
   createReplicaPropagation,
   createRebalanceCoordinatorHost,
   createSqlEngineSeamFor,
-  createTablePolicyServiceHost,
   initializeTestEnvironment,
   readPublishedActiveNodeIds,
   seedOwners,

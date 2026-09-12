@@ -128,4 +128,3 @@ export function createSqlEngineSeam(cache) {
   });
 }
 
-export const SQL_ENGINE_SEAM_ID = SEAM_ID;
