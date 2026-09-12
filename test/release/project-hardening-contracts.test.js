@@ -297,3 +297,65 @@ describe('project hardening contracts', () => {
     );
   });
 });
+
+// One contract, not four flags: a prerelease semver tag (0.2.4-rc.0) must
+// leave every "latest" pointer where it is. The dry run of the release
+// pipeline is a real prerelease tag on the production path, so a pipeline
+// that cannot tell a prerelease from a release has no throwaway run.
+describe('prerelease publication contract', () => {
+  const load = async () => {
+    const releaseText = await readFile('.github/workflows/release.yml', UTF8);
+    return {releaseText, release: parse(releaseText)};
+  };
+  const step = (release, name) =>
+    release.jobs.release.steps.find((candidate) => candidate.name === name);
+
+  it('decides the channel once, from the version, through the npm owner', async () => {
+    const {release} = await load();
+    const identity = step(release, 'Resolve release identity and consume durable exact-SHA proof');
+    assert.ok(identity, 'the identity step is where the channel is decided');
+    assert.match(identity.run, /release-npm-package\.js channel/u,
+      'the channel is asked of the owner that publishes, not re-derived in YAML');
+    assert.match(identity.run, /prerelease=/u, 'the decision is a named output');
+    assert.match(identity.run, /dist_tag=/u);
+  });
+
+  it('publishes a prerelease under next and never moves latest', async () => {
+    const {release, releaseText} = await load();
+    const build = step(release, 'Build and smoke-test Docker image');
+    assert.doesNotMatch(build.with.tags, /:latest/u,
+      'the image is built under the version tag only; latest is a push-time decision');
+    const push = step(release, 'Push Docker images');
+    assert.match(push.run, /prerelease/u,
+      'latest moves only for a release, and the step says so');
+    assert.match(push.run, /docker push "\$DOCKERHUB_IMAGE:\$VERSION"/u);
+    const gh = step(release, 'Publish GitHub Release');
+    assert.match(gh.run, /--prerelease/u,
+      'a prerelease is marked as one on GitHub');
+    assert.match(gh.run, /prerelease/u);
+    assert.match(releaseText, /dist-tag|dist_tag/u,
+      'npm receives the channel as a dist-tag, never the latest default');
+  });
+
+  it('writes a publication receipt and attaches it to the release', async () => {
+    const {release} = await load();
+    const receipt = step(release, 'Write publication receipt');
+    assert.ok(receipt, 'the workflow records what it published, per tag');
+    assert.match(receipt.run, /data\/releases\/\$\{?GITHUB_REF_NAME\}?\.json/u);
+    for (const artifact of ['npm', 'docker', 'helm', 'github']) {
+      assert.match(receipt.run, new RegExp(`"${artifact}"`, 'u'),
+        `the receipt names ${artifact}`);
+    }
+    const gh = step(release, 'Publish GitHub Release');
+    assert.match(gh.run, /release-receipt\.json|data\/releases/u,
+      'the receipt travels with the release so the quest can commit it verbatim');
+    // The receipt is committed evidence, so its path must be the one thing
+    // under the ignored data/ tree that git will take.
+    const ignore = await readFile('.gitignore', UTF8);
+    assert.match(ignore, /^!\/data\/releases\/\*\.json$/mu,
+      'data/releases/*.json must be un-ignored, or the receipt can never land');
+    assert.match(ignore, /^data$/mu,
+      'every nested data/ directory stays ignored by the bare pattern');
+  });
+});
+
