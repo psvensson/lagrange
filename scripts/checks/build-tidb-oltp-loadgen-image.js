@@ -14,6 +14,7 @@ const FILES = Object.freeze([
   'test/distributed/reference-client/tidb-oltp-adapter.js',
   'test/distributed/harness/oltp-baseline-dataset.js',
   'test/distributed/harness/oltp-baseline-workload.js',
+  'test/distributed/harness/oltp-baseline-transaction-executor.js',
   'scripts/checks/tidb-oltp-loadgen-runner.js',
 ]);
 const DOCKERFILE = 'test/distributed/reference-loadgen/Dockerfile';
