@@ -64,6 +64,24 @@ The paired owner must:
 - fail closed on an unclassified conflict or ambiguous commit;
 - prevent a retry policy change after results are observed.
 
+### Preregistered Scenario A retry profile v1
+
+The first paired Scenario A profile is fixed by
+`test/distributed/harness/oltp-paired-retry-owner.js`:
+
+- policy identity: `scenario-a-retry-v1`;
+- only SQLSTATE `40001` is retryable;
+- at most three retries after the first attempt;
+- deterministic backoff: 5 ms, 10 ms, then 20 ms;
+- the request clock starts at the intended open-loop issue time and is never
+  reset by an attempt or retry;
+- all retry delay remains inside that request-clock latency sample;
+- transport errors, unknown errors, and ambiguous commits are terminal failures;
+- database adapters may expose conflict details but may not own retry loops.
+
+Changing this policy requires a new policy identity. An observed result must
+never cause an in-place mutation of `scenario-a-retry-v1`.
+
 ## Evidence required before performance comparison
 
 The semantic gate is deterministic and runs before expensive paired GCP sweeps.
