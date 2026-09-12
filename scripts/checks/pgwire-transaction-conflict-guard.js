@@ -31,6 +31,7 @@ function authHandler() {
         context: {
           tenantId: database,
           principal: user,
+          roles: [],
         },
       };
     },
