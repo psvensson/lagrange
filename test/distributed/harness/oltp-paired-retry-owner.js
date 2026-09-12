@@ -181,11 +181,77 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
   }
 }
 
+function createRetryAccumulator(policy) {
+  return {
+    policyId: policy.id,
+    logicalTransactions: ZERO,
+    attempts: ZERO,
+    retries: ZERO,
+    retryDelayMs: ZERO,
+    serializationConflicts: ZERO,
+    terminalTransactions: ZERO,
+  };
+}
+
+function accumulateEvidence(accumulator, evidence, terminal) {
+  accumulator.logicalTransactions += ONE;
+  accumulator.attempts += evidence.attempts;
+  accumulator.retries += evidence.retries;
+  accumulator.retryDelayMs += evidence.retryDelayMs;
+  accumulator.serializationConflicts += evidence.failures.filter(
+    ({outcome}) => outcome === RETRY_OUTCOME.SERIALIZATION_CONFLICT,
+  ).length;
+  if (terminal) accumulator.terminalTransactions += ONE;
+}
+
+function freezeAccumulator(accumulator) {
+  return Object.freeze({...accumulator});
+}
+
+function createPairedRetryingOltpAdapter(adapter, options = {}) {
+  if (!adapter || typeof adapter.executeTransaction !== 'function') {
+    throw new Error(
+      'OLTP paired retry adapter requires adapter.executeTransaction',
+    );
+  }
+  const policy = options.policy || OLTP_PAIRED_RETRY_POLICY;
+  validatePolicy(policy);
+  const now = options.now || Date.now;
+  const accumulator = createRetryAccumulator(policy);
+
+  return Object.freeze({
+    async executeTransaction(operation) {
+      const intendedIssueTimeMs = now();
+      try {
+        const outcome = await executePairedOltpTransactionWithRetry({
+          policy,
+          now,
+          intendedIssueTimeMs,
+          ...(options.sleep ? {sleep: options.sleep} : {}),
+          ...(options.onRetry ? {onRetry: options.onRetry} : {}),
+          executeAttempt: () => adapter.executeTransaction(operation),
+        });
+        accumulateEvidence(accumulator, outcome.evidence, false);
+        return outcome.result;
+      } catch (error) {
+        if (error?.oltpRetryEvidence) {
+          accumulateEvidence(accumulator, error.oltpRetryEvidence, true);
+        }
+        throw error;
+      }
+    },
+    getRetryEvidence() {
+      return freezeAccumulator(accumulator);
+    },
+  });
+}
+
 export {
   OLTP_PAIRED_RETRY_POLICY,
   RETRY_OUTCOME as OLTP_PAIRED_RETRY_OUTCOME,
   SERIALIZATION_FAILURE_SQLSTATE as OLTP_SERIALIZATION_FAILURE_SQLSTATE,
   classifyOltpAttemptError,
+  createPairedRetryingOltpAdapter,
   executePairedOltpTransactionWithRetry,
   retryDelayMs as resolvePairedOltpRetryDelayMs,
   resolveSqlState as resolveOltpSqlState,
