@@ -13,6 +13,8 @@ quests:
   - formation-health-verdicts
   - public-claims-match-shipped-bytes
   - publish-gate-hygiene
+  - lean-push-gate
+  - test-file-content-receipts
   - script-reachability-cull
   - workflow-budget
   - ratchet-realignment
@@ -108,6 +110,26 @@ Probe: script, unmet until three consecutive scheduled records measure.
 version npm actually serves, the cluster-scale claim quotes the latest measured
 formation verdict with its date, and the changelog's newest entry has a
 receipt. Probe: script comparing README, CHANGELOG and `data/releases`.
+
+**Decision (2026-09-12, lean-push-gate).** The pre-push gate proves a push by
+its change, not by the corpus. The postpush manifest's last command is
+`scripts/checks/push-gate-change-proof.js`: the `npm test` plan against the
+remote sha of main (the hook exports it as `LAGRANGE_CHECK_BASE`), or
+`test:all` when the proof cannot stand for it - a refused selection, a change
+to the selection machinery, runner, generated selection state, hook or package
+manifests, a cone above half the corpus, no committed range, or
+`LAGRANGE_PUSH_FULL_CORPUS=1`. The fixture hole the 2026-09-05 latent red went
+through (a6d99aa3d) is closed by selection: changed non-test JavaScript under
+`test/` or `src/test-helpers/` also selects every test whose import closure
+reaches it, from the sealed import graph, and refuses without it. The whole
+corpus runs on main after every push in `full-corpus-canary.yml`, which gates
+nothing and has no schedule. The corpus ratchets run in place inside the
+exact-HEAD worktree. Review findings not adopted here, carried as follow-ups:
+`npm run check` in CI refusing on a real dependency-graph bump (CI should run
+`test:all` on `RELEASE_PROOF_REQUIRED` rather than go red); `audit:file-size`
+and `model:contracts` re-running in repository-health after the gate; and the
+release proof re-running a corpus CI already proved for the exact sha
+(release-tooling recommendation 4, now `test-file-content-receipts` v2).
 
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the

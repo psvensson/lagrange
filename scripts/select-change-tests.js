@@ -336,6 +336,22 @@ export function lockfileDependencyGraphChanged(base, head, gitRoot = root) {
   return unavailable ? null : false;
 }
 
+// The plan for a committed range plus the working tree: what `npm test` and
+// the push gate both execute. null when the range cannot be diffed.
+export function planChangeProof({base = null, head = null,
+  planRoot = root} = {}) {
+  const headRevision = head || DEFAULT_HEAD;
+  const changedPaths = changedPathsBetween(base, headRevision, planRoot);
+  if (changedPaths === null) return null;
+  return buildExecutionPlan({
+    changedPaths,
+    packageFields: changedPackageFields(base, head, planRoot),
+    lockfileGraphChanged: lockfileDependencyGraphChanged(base, head, planRoot),
+    vanished: vanishedPathsBetween(base, headRevision, planRoot),
+    planRoot,
+  });
+}
+
 // The union. The spine is added HERE, unconditionally, never by the selector.
 export function buildExecutionPlan(options) {
   const input = copyOwnDataRecord(options);
@@ -549,21 +565,13 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  const changedPaths = changedPathsBetween(
-    invocation.base, invocation.headRevision);
-  if (changedPaths === null) {
+  const plan = planChangeProof({base: invocation.base, head: invocation.head});
+  if (plan === null) {
     process.stderr.write(
       `cannot diff ${invocation.base}..${invocation.headRevision}${NEWLINE}`);
     process.exitCode = 1;
     return;
   }
-  const plan = buildExecutionPlan({
-    changedPaths,
-    packageFields: changedPackageFields(invocation.base, invocation.head),
-    lockfileGraphChanged: lockfileDependencyGraphChanged(
-      invocation.base, invocation.head),
-    vanished: vanishedPathsBetween(invocation.base, invocation.headRevision),
-  });
 
   if (invocation.explain) {
     process.stdout.write(renderExplain(plan));
@@ -587,7 +595,7 @@ function main() {
     planTestPaths(plan), {root});
 }
 
-function planTestPaths(plan) {
+export function planTestPaths(plan) {
   const paths = [];
   for (let index = 0; index < plan.tests.length; index += 1) {
     appendArrayValue(paths, plan.tests[index].path);

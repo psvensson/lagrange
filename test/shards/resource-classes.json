@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2063,
+    "ordinary": 2065,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2080,
-  "digest": "fnv1a32-820b5f9d",
+  "censusSize": 2082,
+  "digest": "fnv1a32-54b910af",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1809,6 +1809,7 @@
     "test/scripts/formation-health.test.js": "ordinary",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "ordinary",
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",
+    "test/scripts/helper-import-closure.test.js": "ordinary",
     "test/scripts/historical-record-exemptions.test.js": "ordinary",
     "test/scripts/impact-contract-registry.test.js": "ordinary",
     "test/scripts/impact-proof-cone-consumers.test.js": "ordinary",
@@ -1830,6 +1831,7 @@
     "test/scripts/prune-test-output.test.js": "ordinary",
     "test/scripts/publish-head-workspace-links.test.js": "ordinary",
     "test/scripts/publish-head.test.js": "ordinary",
+    "test/scripts/push-gate-change-proof.test.js": "ordinary",
     "test/scripts/release-content-digest.test.js": "ordinary",
     "test/scripts/release-notes.test.js": "ordinary",
     "test/scripts/release-npm-package.test.js": "ordinary",
