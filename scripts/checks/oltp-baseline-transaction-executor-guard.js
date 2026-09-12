@@ -38,13 +38,13 @@ function fakeSession(responses = {}) {
 
 async function assertNewOrder() {
   const session = fakeSession({
-    [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE]: {
+    [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_READ_FOR_MUTATION]: {
       rows: [{next_order_id: 301}], rowCount: 1,
     },
     [OLTP_SQL_STATEMENT.ITEM_PRICE]: {
       rows: [{price_cents: 125}], rowCount: 1,
     },
-    [OLTP_SQL_STATEMENT.STOCK_QUANTITY_FOR_UPDATE]: {
+    [OLTP_SQL_STATEMENT.STOCK_QUANTITY_READ_FOR_MUTATION]: {
       rows: [{quantity: 50}], rowCount: 1,
     },
   });
@@ -64,12 +64,12 @@ async function assertNewOrder() {
   assert.deepEqual(
     session.calls.map(({statementId}) => statementId),
     [
-      OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE,
+      OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_READ_FOR_MUTATION,
       OLTP_SQL_STATEMENT.DISTRICT_SET_NEXT_ORDER,
       OLTP_SQL_STATEMENT.ORDER_INSERT,
       OLTP_SQL_STATEMENT.NEW_ORDER_INSERT,
       OLTP_SQL_STATEMENT.ITEM_PRICE,
-      OLTP_SQL_STATEMENT.STOCK_QUANTITY_FOR_UPDATE,
+      OLTP_SQL_STATEMENT.STOCK_QUANTITY_READ_FOR_MUTATION,
       OLTP_SQL_STATEMENT.STOCK_UPDATE,
       OLTP_SQL_STATEMENT.ORDER_LINE_INSERT,
     ],
@@ -146,13 +146,13 @@ async function assertOrderStatus() {
 
 async function assertDelivery() {
   const session = fakeSession({
-    [OLTP_SQL_STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE]: {
+    [OLTP_SQL_STATEMENT.DELIVERY_OLDEST_NEW_ORDER_READ_FOR_MUTATION]: {
       rows: [{order_id: 88}], rowCount: 1,
     },
-    [OLTP_SQL_STATEMENT.DELIVERY_ORDER_FOR_UPDATE]: {
+    [OLTP_SQL_STATEMENT.DELIVERY_ORDER_READ_FOR_MUTATION]: {
       rows: [{customer_id: 77}], rowCount: 1,
     },
-    [OLTP_SQL_STATEMENT.DELIVERY_LINES_FOR_UPDATE]: {
+    [OLTP_SQL_STATEMENT.DELIVERY_LINES_READ_FOR_MUTATION]: {
       rows: [{amount_cents: 100}, {amount_cents: 250}], rowCount: 2,
     },
   });
