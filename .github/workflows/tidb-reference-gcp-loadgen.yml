@@ -110,6 +110,10 @@ jobs:
       - name: Run TiDB reference contract guards
         run: |
           set -euo pipefail
+          npx eslint \
+            scripts/checks/build-tidb-oltp-loadgen-image.js \
+            scripts/checks/tidb-oltp-loadgen-runner.js \
+            scripts/checks/run-tidb-oltp-gcp-loadgen-proof.js
           node scripts/checks/tidb-reference-lifecycle-guard.js
           node scripts/checks/tidb-reference-resource-policy-guard.js
           node scripts/checks/tidb-oltp-dataset-guard.js
