@@ -4,6 +4,9 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
+  OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-delivery-case.js';
+import {
   OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
 } from '../../test/distributed/harness/oltp-scenario-a-new-order-contention-case.js';
 import {
@@ -44,6 +47,10 @@ const CASES = Object.freeze([
   Object.freeze({
     evidenceId: 'ownership-stock-level',
     proofIds: OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
+  }),
+  Object.freeze({
+    evidenceId: 'ownership-delivery',
+    proofIds: OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
   }),
 ]);
 
