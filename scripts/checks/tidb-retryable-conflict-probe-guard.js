@@ -93,7 +93,7 @@ assert.equal(
 );
 assert.equal(
   fake.trace.filter(({op, sql}) =>
-    op === 'query' && sql.includes("tidb_txn_mode = 'pessimistic'"),
+    op === 'query' && sql.includes('tidb_txn_mode = \'pessimistic\''),
   ).length,
   2,
 );
