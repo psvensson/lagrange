@@ -2,6 +2,7 @@ const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
 
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/u;
 const SERIALIZATION_FAILURE_SQLSTATE = '40001';
 const RETRY_OUTCOME = Object.freeze({
   SERIALIZATION_CONFLICT: 'serialization_conflict',
@@ -18,16 +19,26 @@ const OLTP_PAIRED_RETRY_POLICY = Object.freeze({
   adapterRetriesAllowed: false,
 });
 
+function normalizeSqlState(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.toUpperCase();
+  return SQLSTATE_PATTERN.test(normalized) ? normalized : null;
+}
+
 function resolveSqlState(error) {
   for (const value of [error?.sqlState, error?.sqlstate, error?.code]) {
-    if (typeof value === 'string' && value.length > ZERO) return value;
+    const sqlState = normalizeSqlState(value);
+    if (sqlState) return sqlState;
   }
   return null;
 }
 
-function classifyOltpAttemptError(error) {
+function classifyOltpAttemptError(
+  error,
+  policy = OLTP_PAIRED_RETRY_POLICY,
+) {
   const sqlState = resolveSqlState(error);
-  if (OLTP_PAIRED_RETRY_POLICY.retryableSqlStates.includes(sqlState)) {
+  if (policy.retryableSqlStates.includes(sqlState)) {
     return Object.freeze({
       retryable: true,
       outcome: RETRY_OUTCOME.SERIALIZATION_CONFLICT,
@@ -59,6 +70,10 @@ function validatePolicy(policy) {
   if (!Number.isFinite(policy?.maxDelayMs) ||
       policy.maxDelayMs < policy.baseDelayMs) {
     throw new Error('OLTP paired retry owner requires maxDelayMs >= baseDelayMs');
+  }
+  if (!Array.isArray(policy?.retryableSqlStates) ||
+      policy.retryableSqlStates.some((value) => !normalizeSqlState(value))) {
+    throw new Error('OLTP paired retry owner requires valid retryable SQLSTATEs');
   }
 }
 
@@ -129,7 +144,7 @@ async function executePairedOltpTransactionWithRetry(options = {}) {
       });
       return Object.freeze({result, evidence});
     } catch (cause) {
-      const classification = classifyOltpAttemptError(cause);
+      const classification = classifyOltpAttemptError(cause, policy);
       failures.push({
         attempt: attempts,
         retryable: classification.retryable,
