@@ -24,8 +24,15 @@ const PRODUCT_NAME = 'lagrange';
 const REGISTRY_URL = 'https://registry.npmjs.org/';
 const COMMAND_TIMEOUT_MS = 120000;
 const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
-const REGISTRY_OBSERVATION_ATTEMPTS = 5;
-const REGISTRY_OBSERVATION_DELAY_MS = 2000;
+// npm processes a provenance-signed publish asynchronously and says so:
+// "Your package is being processed and may take a few minutes to become
+// available." The 0.2.4-rc.0 dry run surfaced four minutes after its publish
+// step; a 10-second window read that as absence and failed the release
+// (release-pipeline-dry-run, 2026-09-12). The window now matches npm's stated
+// semantics: minutes, at a bounded cadence.
+const REGISTRY_OBSERVATION_ATTEMPTS = 40;
+const REGISTRY_OBSERVATION_DELAY_MS = 15000;
+const NPM_PROCESSING_NOTICE = /being processed and may take a few minutes/iu;
 const REGISTRY_MISMATCH_MESSAGE_PREFIX =
   'published registry state did not match the candidate: ';
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -144,6 +151,10 @@ const RELEASE_OUTCOME = Object.freeze({
   // npm publish exited 0 and the registry still does not hold the version:
   // the one outcome whose only explanation is in npm's own output.
   PUBLISH_EXITED_WITHOUT_VERSION: 'PUBLISH_EXITED_WITHOUT_VERSION',
+  // npm accepted the publish and said it is still processing; the
+  // observation window expired before the version became visible. Not a
+  // refusal and not a silent non-publication: the registry was still working.
+  PUBLISH_ACCEPTED_PENDING_AVAILABILITY: 'PUBLISH_ACCEPTED_PENDING_AVAILABILITY',
 });
 
 class NpmReleaseError extends Error {
@@ -580,9 +591,14 @@ function describePublishMismatch(classification, publishResult = {}) {
   const excerpt = printed.length === 0 ?
     NPM_OUTPUT_EMPTY : printed.slice(-NPM_OUTPUT_EXCERPT_CHARS);
   const exitedClean = publishResult.status === 0;
-  const outcome = exitedClean && classification === RELEASE_OUTCOME.VERSION_ABSENT ?
-    RELEASE_OUTCOME.PUBLISH_EXITED_WITHOUT_VERSION :
-    RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT;
+  const absent = classification === RELEASE_OUTCOME.VERSION_ABSENT;
+  const stillProcessing = NPM_PROCESSING_NOTICE.test(printed);
+  let outcome = RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT;
+  if (exitedClean && absent) {
+    outcome = stillProcessing ?
+      RELEASE_OUTCOME.PUBLISH_ACCEPTED_PENDING_AVAILABILITY :
+      RELEASE_OUTCOME.PUBLISH_EXITED_WITHOUT_VERSION;
+  }
   return {
     outcome,
     message: `${REGISTRY_MISMATCH_MESSAGE_PREFIX}${classification}` +
