@@ -8,6 +8,7 @@ on:
       - benchmark/lagrange-oltp-adapter-reconcile
       - benchmark/paired-retry-owner-staging
       - benchmark/paired-open-loop-owner-staging
+      - benchmark/paired-sweep-plan-staging
   workflow_dispatch: {}
 
 permissions:
@@ -71,17 +72,20 @@ jobs:
             test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/harness/oltp-paired-retry-owner.js \
             test/distributed/harness/oltp-open-loop-step-owner.js \
+            test/distributed/harness/oltp-paired-sweep-plan.js \
             test/distributed/reference-client/tidb-oltp-adapter.js \
             test/distributed/reference-client/lagrange-oltp-adapter.js \
             scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-paired-retry-owner-guard.js \
             scripts/checks/oltp-open-loop-step-owner-guard.js \
+            scripts/checks/oltp-paired-sweep-plan-guard.js \
             scripts/checks/lagrange-oltp-adapter-guard.js
           node scripts/checks/tidb-oltp-dataset-guard.js
           node scripts/checks/tidb-oltp-workload-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-paired-retry-owner-guard.js
           node scripts/checks/oltp-open-loop-step-owner-guard.js
+          node scripts/checks/oltp-paired-sweep-plan-guard.js
           node scripts/checks/lagrange-oltp-adapter-guard.js
 
       - name: Run PG wire transaction-conflict contract guard
@@ -106,7 +110,7 @@ jobs:
 
       - name: Upload TiDB OLTP hosted-smoke evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b5e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tidb-oltp-hosted-smoke-${{ github.run_id }}
           path: test-output/tidb-reference/oltp-hosted-smoke.json
