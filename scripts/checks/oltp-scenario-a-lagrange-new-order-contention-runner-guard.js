@@ -37,8 +37,8 @@ for (const forbidden of [
   'computeSourceFingerprint',
   'ctx.call',
   'DB.call',
-  "from '../../src/",
-  "from '../../../src/",
+  'from \'../../src/',
+  'from \'../../../src/',
   '.query(',
 ]) {
   assert.equal(
