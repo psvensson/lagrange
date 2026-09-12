@@ -8,18 +8,19 @@ import {
 } from '../control-plane/system-row-normalizers.js';
 
 /**
- * Canonical bootstrap endpoint-visibility owner.
+ * Canonical bootstrap endpoint-visibility decision.
  *
  * Join admission is concerned with the node's bootstrap transport, not with
  * optional runtime services. Runtime services such as sys-postgres-wire have
  * their own desired-vs-actual placement and endpoint-publication owners and may
  * legitimately have replica_count=0 while the cluster forms.
  *
+ * @param {string} nodeId
  * @param {Object|null} systemTableCache
  * @return {{ready:boolean, missingNodeEndpointNodeIds:string[],
  *   missingPostgresWireNodeIds:string[]}}
  */
-function evaluateBootstrapEndpointVisibility(systemTableCache) {
+function evaluateBootstrapEndpointVisibility(nodeId, systemTableCache) {
   if (!systemTableCache ||
       typeof systemTableCache.getAll !== 'function') {
     return {
@@ -29,23 +30,24 @@ function evaluateBootstrapEndpointVisibility(systemTableCache) {
     };
   }
 
-  const requiredNodeIds = [this.nodeId];
+  const requiredNodeIds = [nodeId];
   const nodeEndpointRows =
     systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
   const visibleNodeEndpointNodeIds = new Set();
 
   for (const row of nodeEndpointRows) {
     const normalizedRow = normalizeNodeEndpointRow(row);
-    const {nodeId, transportType, status} = normalizedRow;
-    if (nodeId.length === 0) continue;
+    const normalizedNodeId = normalizedRow.nodeId;
+    const {transportType, status} = normalizedRow;
+    if (normalizedNodeId.length === 0) continue;
     if (status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase()) continue;
     if (transportType !==
         String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()) continue;
-    visibleNodeEndpointNodeIds.add(nodeId);
+    visibleNodeEndpointNodeIds.add(normalizedNodeId);
   }
 
   const missingNodeEndpointNodeIds = requiredNodeIds.filter(
-    (nodeId) => !visibleNodeEndpointNodeIds.has(nodeId),
+    (requiredNodeId) => !visibleNodeEndpointNodeIds.has(requiredNodeId),
   );
 
   return {
@@ -57,15 +59,18 @@ function evaluateBootstrapEndpointVisibility(systemTableCache) {
   };
 }
 
+class JoinReadinessEndpointVisibilityOwnerMethods {
+  evaluateCanonicalJoinEndpointVisibility(systemTableCache) {
+    return evaluateBootstrapEndpointVisibility(this.nodeId, systemTableCache);
+  }
+}
+
 function createJoinReadinessEndpointVisibilityOwnerMethods() {
-  return {
-    evaluateCanonicalJoinEndpointVisibility: {
-      configurable: true,
-      enumerable: false,
-      writable: true,
-      value: evaluateBootstrapEndpointVisibility,
-    },
-  };
+  const descriptors = Object.getOwnPropertyDescriptors(
+    JoinReadinessEndpointVisibilityOwnerMethods.prototype,
+  );
+  delete descriptors.constructor;
+  return descriptors;
 }
 
 export {
