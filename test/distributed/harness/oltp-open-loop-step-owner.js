@@ -151,6 +151,9 @@ function summarizeStep(issuePlan, records, offeredRatePerSec) {
     completedPerSec: accountingWindowMs > ZERO ?
       succeeded.length / (accountingWindowMs / THOUSAND) : ZERO,
     latency: summarizeOltpBaselineLatencies(
+      succeeded.map(({latencyMs}) => latencyMs),
+    ),
+    attemptLatency: summarizeOltpBaselineLatencies(
       records.map(({latencyMs}) => latencyMs),
     ),
     queueDelay: summarizeOltpBaselineLatencies(
@@ -187,6 +190,11 @@ async function runOpenLoopOltpStep(adapter, operations, options = {}) {
   for (const entry of issuePlan) {
     await waitUntil(entry.intendedIssueTimeMs);
     const issuedAtMs = now();
+    if (issuedAtMs < entry.intendedIssueTimeMs) {
+      throw new Error(
+        'Open-loop OLTP scheduler returned before intended issue time',
+      );
+    }
     const previous = workerQueues.get(entry.workerId) || Promise.resolve();
     const task = previous.then(async () => {
       const executionStartedAtMs = now();
