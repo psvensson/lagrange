@@ -17,6 +17,9 @@ import {
   buildScenarioASemanticGateEvidence,
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
 import {
+  OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-stock-level-case.js';
+import {
   OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
 } from '../../test/distributed/harness/oltp-scenario-a-visibility-case.js';
 
@@ -37,6 +40,10 @@ const CASES = Object.freeze([
   Object.freeze({
     evidenceId: 'ownership-order-status',
     proofIds: OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
+  }),
+  Object.freeze({
+    evidenceId: 'ownership-stock-level',
+    proofIds: OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
   }),
 ]);
 
