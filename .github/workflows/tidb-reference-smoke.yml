@@ -7,6 +7,7 @@ on:
       - benchmark/lagrange-oltp-adapter-staging
       - benchmark/lagrange-oltp-adapter-reconcile
       - benchmark/paired-retry-owner-staging
+      - benchmark/paired-open-loop-owner-staging
   workflow_dispatch: {}
 
 permissions:
@@ -69,15 +70,18 @@ jobs:
           npx eslint \
             test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/harness/oltp-paired-retry-owner.js \
+            test/distributed/harness/oltp-open-loop-step-owner.js \
             test/distributed/reference-client/tidb-oltp-adapter.js \
             test/distributed/reference-client/lagrange-oltp-adapter.js \
             scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-paired-retry-owner-guard.js \
+            scripts/checks/oltp-open-loop-step-owner-guard.js \
             scripts/checks/lagrange-oltp-adapter-guard.js
           node scripts/checks/tidb-oltp-dataset-guard.js
           node scripts/checks/tidb-oltp-workload-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-paired-retry-owner-guard.js
+          node scripts/checks/oltp-open-loop-step-owner-guard.js
           node scripts/checks/lagrange-oltp-adapter-guard.js
 
       - name: Run PG wire transaction-conflict contract guard
