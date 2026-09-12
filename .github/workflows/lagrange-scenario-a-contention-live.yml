@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
       - 'test/bootstrap/meta-service-endpoint-registration.test.js'
+      - 'test/bootstrap/join-readiness-endpoint-visibility-owner.test.js'
       - 'test/distributed/config/local-benchmark-3node-timeout180.json'
       - 'test/distributed/run.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
@@ -18,6 +19,8 @@ on:
       - 'test/distributed/harness/oltp-scenario-a-new-order-contention-case.js'
       - 'test/distributed/reference-client/lagrange-oltp-adapter.js'
       - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
+      - 'src/bootstrap/join-readiness-endpoint-visibility-owner.js'
+      - 'src/bootstrap/join-readiness-evaluator.js'
       - 'src/bootstrap/shared/meta-service-definition-registration.js'
       - 'src/bootstrap/shared/runtime-service-handler-setup.js'
       - 'src/runtime/runtime-endpoint-publication-wiring.js'
@@ -28,8 +31,11 @@ on:
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
       - 'test/bootstrap/meta-service-endpoint-registration.test.js'
+      - 'test/bootstrap/join-readiness-endpoint-visibility-owner.test.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
       - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
+      - 'src/bootstrap/join-readiness-endpoint-visibility-owner.js'
+      - 'src/bootstrap/join-readiness-evaluator.js'
       - 'src/bootstrap/shared/meta-service-definition-registration.js'
       - 'src/bootstrap/shared/runtime-service-handler-setup.js'
       - 'src/runtime/runtime-endpoint-publication-wiring.js'
@@ -75,12 +81,15 @@ jobs:
           npx eslint \
             test/distributed/reference-client/lagrange-new-order-contention-observer.js \
             test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js \
+            src/bootstrap/join-readiness-endpoint-visibility-owner.js \
+            src/bootstrap/join-readiness-evaluator.js \
             src/bootstrap/shared/meta-service-definition-registration.js \
             src/bootstrap/shared/runtime-service-handler-setup.js \
             src/runtime/runtime-endpoint-publication-wiring.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
           node --test \
             test/bootstrap/meta-service-endpoint-registration.test.js \
+            test/bootstrap/join-readiness-endpoint-visibility-owner.test.js \
             test/runtime/runtime-endpoint-publication-wiring.test.js
           docker version
 
