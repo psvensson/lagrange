@@ -10,9 +10,12 @@ import {
   OLTP_PAIRED_SWEEP_SYSTEM,
   buildScenarioAPairedSweepPlan,
 } from '../../test/distributed/harness/oltp-paired-sweep-plan.js';
+import {
+  OLTP_SCENARIO_A_SEMANTIC_PROFILE,
+  hashScenarioASemanticProfile,
+} from '../../test/distributed/harness/oltp-scenario-a-semantic-profile.js';
 
 const PASS_LINE = 'oltp-paired-sweep-plan-guard: PASS\n';
-const SEMANTIC_PROFILE_SHA256 = 'c'.repeat(64);
 const BASE_WORKLOAD = Object.freeze({
   seed: 12345,
   workers: 2,
@@ -30,7 +33,6 @@ const BASE_OPTIONS = Object.freeze({
   repetitions: 4,
   slo: Object.freeze({p99Ms: 100, maxErrorRate: 0.01}),
   workload: BASE_WORKLOAD,
-  semanticProfileSha256: SEMANTIC_PROFILE_SHA256,
 });
 
 function assertProfile() {
@@ -40,6 +42,7 @@ function assertProfile() {
     counterbalance: 'alternate-rate-direction-and-system-first',
     freshDatasetPerSystemRateRun: true,
     warmupBeforeMeasurement: true,
+    semanticProfileId: 'scenario-a-semantic-v1',
     openLoopProfileId: 'scenario-a-open-loop-v1',
     retryPolicyId: 'scenario-a-retry-v1',
   });
@@ -55,6 +58,14 @@ function assertCounterbalancedPlan() {
   assert.match(plan.identity.datasetSha256, /^[0-9a-f]{64}$/u);
   assert.match(plan.identity.workloadPlanSha256, /^[0-9a-f]{64}$/u);
   assert.match(plan.identity.measurementPlanSha256, /^[0-9a-f]{64}$/u);
+  assert.equal(
+    plan.identity.semanticProfileId,
+    OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
+  );
+  assert.equal(
+    plan.identity.semanticProfileSha256,
+    hashScenarioASemanticProfile(),
+  );
   assert.equal(plan.pairs.length, 12);
 
   assert.deepEqual(
@@ -147,9 +158,16 @@ function assertInvalidPlansFailClosed() {
   assert.throws(
     () => buildScenarioAPairedSweepPlan({
       ...BASE_OPTIONS,
-      semanticProfileSha256: 'not-a-digest',
+      semanticProfileSha256: 'c'.repeat(64),
     }),
-    /semanticProfileSha256 must be a SHA-256 digest/u,
+    /semantic profile is owned by the semantic-profile owner/u,
+  );
+  assert.throws(
+    () => buildScenarioAPairedSweepPlan({
+      ...BASE_OPTIONS,
+      semanticProfileId: 'caller-owned-profile',
+    }),
+    /semantic profile is owned by the semantic-profile owner/u,
   );
   assert.throws(
     () => buildScenarioAPairedSweepPlan({

@@ -49,6 +49,43 @@ A product-specific mechanism such as `FOR UPDATE`, snapshot isolation, or a
 particular database isolation-level name is evidence about how a system meets
 the contract; it is not itself the benchmark contract.
 
+### Preregistered Scenario A semantic profile v1
+
+The canonical semantic profile is owned by
+`test/distributed/harness/oltp-scenario-a-semantic-profile.js` and has identity
+`scenario-a-semantic-v1`.
+
+It deliberately specifies only externally observable guarantees needed by this
+workload. It does not require serializable isolation or any particular locking
+mechanism. The common guarantees are:
+
+- dirty reads are forbidden;
+- a transaction reads its own writes;
+- commit is atomic;
+- an acknowledged successful commit is durable;
+- a successful logical transaction applies its effects exactly once;
+- a successful committed write may not be lost by a conflicting transaction;
+- read-only transaction families do not mutate database state;
+- terminal logical failure leaves no partial transaction effects.
+
+The shared outcome vocabulary is `committed`, `serialization_conflict`, and
+`terminal_failure`. SQLSTATE `40001` is the retryable serialization/conflict
+class. Ambiguous commit, disconnect before an unambiguous commit acknowledgement,
+and transport timeout are terminal failures.
+
+Profile v1 has no benchmark-injected per-request deadline. Requests are allowed to
+drain and the SLO is applied to the resulting latency distribution rather than
+turning an individual slow request into a timeout. Adding a request deadline is a
+semantic change and requires a new semantic-profile identity.
+
+The profile also owns success invariants for every canonical transaction family:
+new-order, payment, order-status, delivery, and stock-level. These invariants are
+system-independent and are the contract future contention/final-state proofs must
+check.
+
+The semantic-profile digest is derived from the canonical frozen profile. Callers
+may not supply or override a semantic-profile id or digest in the sweep planner.
+
 ## Retry owner
 
 Retry behavior belongs to the paired benchmark owner, not to either database
@@ -127,8 +164,8 @@ change the profile identity.
 
 The counter-balanced sweep plan belongs to
 `test/distributed/harness/oltp-paired-sweep-plan.js`. It consumes the canonical
-workload, dataset, retry, open-loop, and topology-view owners; it must not invent
-parallel definitions of those concerns.
+workload, dataset, semantic, retry, open-loop, and topology-view owners; it must
+not invent parallel definitions of those concerns.
 
 ### Preregistered Scenario A paired sweep profile v1
 
@@ -138,15 +175,14 @@ Every plan must explicitly preregister:
 - architecture-native or matched-total-budget comparison view;
 - a strictly increasing offered-rate curve with at least two points;
 - an even number of paired repetitions, at least two;
-- p99 latency SLO and maximum allowed error rate;
-- the canonical OLTP workload options; and
-- the semantic-profile digest produced by the separate semantic-equivalence
-  owner.
+- p99 latency SLO and maximum allowed error rate; and
+- the canonical OLTP workload options.
 
 The planner derives and records, rather than accepting from callers, the
 canonical generated dataset digest, the full workload-plan digest including
-warm-up and measurement operations, and the measurement-plan digest. This keeps
-pre-measurement state inside the immutable sweep identity.
+warm-up and measurement operations, the measurement-plan digest, and the
+canonical semantic-profile id/digest. This keeps pre-measurement state and
+correctness semantics inside the immutable sweep identity.
 
 Counter-balancing is deterministic:
 
@@ -177,7 +213,7 @@ Its evidence must identify:
 
 - exact Lagrange commit and TiDB/TiKV versions;
 - dataset, full workload-plan, and measurement-plan digests;
-- semantic-profile digest;
+- semantic-profile identity and digest;
 - adapter identities;
 - transaction family and conflicting operation pair tested;
 - expected shared outcome set;
