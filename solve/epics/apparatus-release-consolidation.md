@@ -153,6 +153,23 @@ remove the dependency. Sequenced last and never concurrent with a
 `formation-seed-decoupling` quest that touches `src/raft`. Probe: script (the
 dependency is absent) plus test-receipt for the conformance suite.
 
+Decision (2026-09-12, after `release-pipeline-dry-run`): a release proof is
+a proof of shipped logic, so it binds to a *release proof identity* - the
+tracked tree minus what cannot change behaviour (`solve/`, `data/releases/`,
+`CHANGELOG.md`) with the release version string masked in the five version
+authorities (`scripts/release-proof-identity.js`) - and not only to the exact
+commit. Receipts carry the identity and are indexed under
+`refs/lagrange-proofs/<proof>/identity/<digest>`; `proof-authority check`
+resolves an exact receipt first and otherwise the identity receipt of the
+checked-out subject, reporting which (`resolution`, `provenBy`), and never
+guesses from a tree it does not have checked out. `proof-authority index`
+backfills the identity ref of an older receipt. Consequence: a version bump
+alone - the rc-to-release step, a forward patch with no logic change - needs
+no new GCP proof; any shipped byte still does. `release:preflight` requires
+the tagged SHA to be proven and on `origin/main` history, no longer the
+remote tip, so landings publish behind a running proof. Both are the lean
+answer to a day spent re-proving identical bytes.
+
 ## Fixes, no quest
 
 - `CLAUDE.md` becomes one line: `See AGENTS.md.`

@@ -26,6 +26,8 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {computeReleaseProofIdentity} from './release-proof-identity.js';
+
 import {
   ACTION, authorizeAction, isAuthorized,
 } from './action-authority.js';
@@ -43,6 +45,7 @@ const GIT_BINARY = 'git';
 const GIT_STATUS_UNKNOWN = 'unknown';
 const GIT_FLAG_DELETE = '-d';
 const GIT_COMMAND_UPDATE_REF = 'update-ref';
+const GIT_COMMAND_PUSH = 'push';
 const SPAWN_ENCODING_UTF8 = 'utf8';
 const STDIO_MODE_IGNORE = 'ignore';
 const STDIO_MODE_PIPE = 'pipe';
@@ -81,12 +84,24 @@ const COMMAND_CHECK = 'check';
 const COMMAND_RECORD = 'record';
 const COMMAND_REF = 'ref';
 const USAGE_TEXT =
-  'usage: proof-authority.js <check|record|ref> <proof-id> <full-sha> ' +
+  'usage: proof-authority.js <check|record|index|ref> <proof-id> <full-sha> ' +
   '[--remote name] [--json]\n';
 
 const REUSE = Object.freeze({
   IMMUTABLE_SHA: 'immutable-sha',
 });
+// How a PROVEN outcome was reached: the exact commit's own receipt, or a
+// receipt for a commit with the same release proof identity (the shipped
+// logic, version authorities masked - scripts/release-proof-identity.js).
+const RESOLUTION = Object.freeze({
+  EXACT_SHA: 'exact-sha',
+  RELEASE_CONTENT_IDENTITY: 'release-content-identity',
+});
+const IDENTITY_REF_SEGMENT = 'identity';
+const COMMAND_INDEX = 'index';
+const RECEIPT_IDENTITY_MISMATCH = 'receipt identity does not match this tree';
+const IDENTITY_NEEDS_CHECKOUT =
+  'release proof identity needs the subject commit checked out in a clean tree';
 
 const PROOF = Object.freeze({
   RELEASE_FULL: 'release-full-v1',
@@ -123,6 +138,32 @@ function proofRef(proofId, sha) {
   }
   if (!validSha(sha)) throw new Error(`invalid full commit SHA: ${sha}`);
   return `${RECEIPT_REF_ROOT}/${proofId}/${sha}`;
+}
+
+function identityRef(proofId, digest) {
+  if (!PROOF_ID.test(text(proofId))) {
+    throw new Error(`invalid proof id: ${proofId}`);
+  }
+  if (!/^[0-9a-f]{64}$/u.test(text(digest))) {
+    throw new Error(`invalid release proof identity digest: ${digest}`);
+  }
+  return `${RECEIPT_REF_ROOT}/${proofId}/${IDENTITY_REF_SEGMENT}/${digest}`;
+}
+
+// The identity of the tree at cwd, only when cwd has the subject commit
+// checked out: an identity computed from some other tree proves nothing
+// about the subject.
+function checkedOutIdentity({sha, cwd, git}) {
+  const head = git(['rev-parse', 'HEAD'], {cwd});
+  if (head.status !== 0 || text(head.stdout) !== sha) return null;
+  const top = git(['rev-parse', '--show-toplevel'], {cwd});
+  if (top.status !== 0) return null;
+  // The identity is of the COMMIT's bytes: a working tree with edits outside
+  // Solver records is not that commit, and answers nothing.
+  const status = git(['status', '--porcelain', '--untracked-files=no', '--', '.', ':!solve/'],
+    {cwd: text(top.stdout)});
+  if (status.status !== 0 || text(status.stdout) !== EMPTY_TEXT) return null;
+  return computeReleaseProofIdentity(text(top.stdout));
 }
 
 function receiptTagName(proofId, sha) {
@@ -194,35 +235,52 @@ function parseAnnotatedTag(body) {
   return {ok: true, headers, receipt};
 }
 
-function receiptProblems({proofId, sha, objectType, parsed}) {
+function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (objectType !== OBJECT_TYPE_TAG) return [PROOF_REF_NOT_TAG];
   if (!parsed.ok) return [parsed.because];
   const {headers, receipt} = parsed;
-  const expectedTag = receiptTagName(proofId, sha);
+  // An exact lookup binds the receipt to the requested commit; an identity
+  // lookup binds it to the commit the receipt names and to this tree's
+  // identity, which must be the one the receipt recorded.
+  const subject = identity ? text(receipt?.subjectSha) : sha;
+  const expectedTag = receiptTagName(proofId, subject);
   const problems = [];
-  if (headers.object !== sha) problems.push(TAG_TARGET_MISMATCH);
+  if (headers.object !== subject) problems.push(TAG_TARGET_MISMATCH);
   if (headers.type !== OBJECT_TYPE_COMMIT) problems.push(TAG_TARGET_NOT_COMMIT);
   if (headers.tag !== expectedTag) problems.push(TAG_IDENTITY_MISMATCH);
   if (receipt?.schema !== RECEIPT_SCHEMA) problems.push(RECEIPT_SCHEMA_MISMATCH);
   if (receipt?.proofId !== proofId) problems.push(RECEIPT_PROOF_ID_MISMATCH);
-  if (receipt?.subjectSha !== sha) problems.push(RECEIPT_SUBJECT_SHA_MISMATCH);
+  if (receipt?.subjectSha !== subject) problems.push(RECEIPT_SUBJECT_SHA_MISMATCH);
   if (receipt?.outcome !== RECEIPT_OUTCOME_PASSED) problems.push(RECEIPT_NOT_A_PASS);
   if (receipt?.reuse !== REUSE.IMMUTABLE_SHA) problems.push(RECEIPT_NOT_IMMUTABLE);
   if (!receipt?.completedAt || Number.isNaN(Date.parse(receipt.completedAt))) {
     problems.push(RECEIPT_TIME_INVALID);
   }
+  // A receipt reached through an identity ref proves this tree when it
+  // carries the same identity, or when it carries none: receipts recorded
+  // before identities were carried are bound by the ref alone, which
+  // `index` publishes only from a checkout of the receipt's own subject -
+  // the same trust the exact ref already has.
+  if (identity && receipt?.identity &&
+      (receipt.identity.algorithm !== identity.algorithm ||
+        receipt.identity.digest !== identity.digest)) {
+    problems.push(RECEIPT_IDENTITY_MISMATCH);
+  }
   return problems;
 }
 
-function evaluateReceipt({proofId, sha, objectSha, objectType, objectBody}) {
+function evaluateReceipt({proofId, sha, objectSha, objectType, objectBody, identity = null}) {
   const parsed = parseAnnotatedTag(objectBody);
-  const problems = receiptProblems({proofId, sha, objectType, parsed});
+  const problems = receiptProblems({proofId, sha, objectType, parsed, identity});
   if (problems.length === 0) {
     return {
       outcome: OUTCOME.PROVEN,
       proofId,
       subjectSha: sha,
       objectSha,
+      resolution: identity ?
+        RESOLUTION.RELEASE_CONTENT_IDENTITY : RESOLUTION.EXACT_SHA,
+      provenBy: parsed.receipt.subjectSha,
       receipt: parsed.receipt,
     };
   }
@@ -254,7 +312,62 @@ function resolveProof({proofId, sha, remote = DEFAULT_REMOTE, cwd = process.cwd(
   if (registered) {
     return unavailableProof(registered);
   }
-  return cataloguedProof({proofId, sha, remote, cwd, git});
+  const exact = cataloguedProof({proofId, sha, remote, cwd, git});
+  if (exact.outcome !== OUTCOME.UNPROVEN) return exact;
+  return identityCataloguedProof({proofId, sha, remote, cwd, git});
+}
+
+// A commit without its own receipt is still proven when a receipt exists for
+// the same release proof identity: the same shipped logic, proven under
+// another version string. Only a checkout of the subject can say what its
+// identity is; anywhere else the answer stays unproven, never guessed. One
+// decision per step, the same ladder as the exact lookup.
+function identityCataloguedProof({proofId, sha, remote, cwd, git}) {
+  const identity = checkedOutIdentity({sha, cwd, git});
+  if (!identity) return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha};
+  return remoteIdentityProof({proofId, sha, remote, cwd, git, identity});
+}
+
+function remoteIdentityProof({proofId, sha, remote, cwd, git, identity}) {
+  const ref = identityRef(proofId, identity.digest);
+  const listed = git(['ls-remote', '--refs', remote, ref], {cwd});
+  if (listed.status !== 0) {
+    return unavailableProof(`proof store lookup failed: ${gitFailure(listed)}`);
+  }
+  return matchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, listed});
+}
+
+function matchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, listed}) {
+  const match = parseLsRemote(listed.stdout, ref);
+  if (match.kind === PARSE_KIND_ABSENT) {
+    return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha, identity};
+  }
+  if (match.kind !== PARSE_KIND_PRESENT) return unavailableProof(match.because);
+  return fetchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref,
+    objectSha: match.objectSha});
+}
+
+function fetchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, objectSha}) {
+  const fetched = git(['fetch', '--quiet', '--no-tags', remote, ref], {cwd});
+  if (fetched.status !== 0) {
+    return unavailableProof(`proof object fetch failed: ${gitFailure(fetched)}`);
+  }
+  return materializedIdentityProof({proofId, sha, cwd, git, identity, objectSha});
+}
+
+function materializedIdentityProof({proofId, sha, cwd, git, identity, objectSha}) {
+  const typed = git(['cat-file', '-t', objectSha], {cwd});
+  if (typed.status !== 0) {
+    return unavailableProof(`proof object type unavailable: ${gitFailure(typed)}`);
+  }
+  const body = git(['cat-file', '-p', objectSha], {cwd});
+  if (body.status !== 0) {
+    return unavailableProof(`proof object unavailable: ${gitFailure(body)}`);
+  }
+  return evaluateReceipt({
+    proofId, sha, objectSha, objectType: text(typed.stdout),
+    objectBody: body.stdout, identity,
+  });
 }
 
 function cataloguedProof({proofId, sha, remote, cwd, git}) {
@@ -313,7 +426,9 @@ function materializedProofObject({proofId, sha, cwd, git, objectSha}) {
   });
 }
 
-function buildReceipt({proofId, sha, completedAt = new Date().toISOString(), producer = {}}) {
+function buildReceipt({
+  proofId, sha, completedAt = new Date().toISOString(), producer = {}, identity = null,
+}) {
   return Object.freeze({
     schema: RECEIPT_SCHEMA,
     proofId,
@@ -322,7 +437,24 @@ function buildReceipt({proofId, sha, completedAt = new Date().toISOString(), pro
     reuse: REUSE.IMMUTABLE_SHA,
     completedAt,
     producer: Object.freeze({...producer}),
+    ...(identity ? {identity: Object.freeze({
+      algorithm: identity.algorithm, digest: identity.digest,
+    })} : {}),
   });
+}
+
+// Publish the identity ref for a receipt object. First receipt for an
+// identity wins; a later one is simply not indexed (its exact ref stands).
+function publishIdentityRef({proofId, identity, objectSha, remote, cwd, git, now}) {
+  const finalRef = identityRef(proofId, identity.digest);
+  const tempRef = `${RECEIPT_REF_ROOT}-stage/${IDENTITY_REF_SEGMENT}-${process.pid}-${now}`;
+  const staged = git([GIT_COMMAND_UPDATE_REF, tempRef, objectSha, ZERO_SHA], {cwd});
+  if (staged.status !== 0) return false;
+  try {
+    return git([GIT_COMMAND_PUSH, remote, `${tempRef}:${finalRef}`], {cwd}).status === 0;
+  } finally {
+    git([GIT_COMMAND_UPDATE_REF, GIT_FLAG_DELETE, tempRef], {cwd});
+  }
 }
 
 function buildTagBody({proofId, sha, receipt, now = Date.now()}) {
@@ -376,7 +508,8 @@ function recordProof({
     throw new Error(SUBJECT_NOT_COMMIT);
   }
 
-  const receipt = buildReceipt({proofId, sha, completedAt, producer});
+  const identity = checkedOutIdentity({sha, cwd, git});
+  const receipt = buildReceipt({proofId, sha, completedAt, producer, identity});
   const tagBody = buildTagBody({proofId, sha, receipt, now});
   const made = git(['mktag'], {cwd, input: tagBody});
   if (made.status !== 0 || !validSha(text(made.stdout))) {
@@ -390,7 +523,7 @@ function recordProof({
     throw new Error(`could not stage proof receipt: ${gitFailure(staged)}`);
   }
   try {
-    const pushed = git(['push', remote, `${tempRef}:${finalRef}`], {cwd});
+    const pushed = git([GIT_COMMAND_PUSH, remote, `${tempRef}:${finalRef}`], {cwd});
     if (pushed.status !== 0) {
       const raced = resolveProof({proofId, sha, remote, cwd, git});
       if (raced.outcome === OUTCOME.PROVEN) return {...raced, reused: true};
@@ -404,7 +537,52 @@ function recordProof({
   if (recorded.outcome !== OUTCOME.PROVEN) {
     throw new Error(`persisted proof did not verify: ${recorded.because || recorded.outcome}`);
   }
+  if (identity) {
+    publishIdentityRef({proofId, identity, objectSha, remote, cwd, git, now});
+  }
   return {...recorded, reused: false};
+}
+
+/**
+ * Index an existing exact receipt under its release proof identity, for
+ * receipts recorded before identities were carried (the subject commit must
+ * be checked out at cwd). Idempotent; an existing identity ref is kept.
+ */
+// The exact receipt an identity may be published for: proven, and either
+// carrying this identity or none at all.
+function indexableReceipt({proofId, sha, remote, cwd, git, identity}) {
+  const exact = cataloguedProof({proofId, sha, remote, cwd, git});
+  if (exact.outcome !== OUTCOME.PROVEN) {
+    throw new Error(`no exact receipt to index: ${exact.because || exact.outcome}`);
+  }
+  const carried = exact.receipt?.identity;
+  if (carried && (carried.algorithm !== identity.algorithm ||
+      carried.digest !== identity.digest)) {
+    throw new Error(`${RECEIPT_IDENTITY_MISMATCH}: ${carried.digest}`);
+  }
+  return exact;
+}
+
+function existingIdentityObject({proofId, identity, remote, cwd, git}) {
+  const ref = identityRef(proofId, identity.digest);
+  const listed = git(['ls-remote', '--refs', remote, ref], {cwd});
+  if (listed.status !== 0) return null;
+  const match = parseLsRemote(listed.stdout, ref);
+  return match.kind === PARSE_KIND_PRESENT ? match.objectSha : null;
+}
+
+function indexProof({
+  proofId, sha, remote = DEFAULT_REMOTE, cwd = process.cwd(), now = Date.now(), git = runGit,
+}) {
+  const identity = checkedOutIdentity({sha, cwd, git});
+  if (!identity) throw new Error(IDENTITY_NEEDS_CHECKOUT);
+  const exact = indexableReceipt({proofId, sha, remote, cwd, git, identity});
+  const existing = existingIdentityObject({proofId, identity, remote, cwd, git});
+  if (existing) return {...exact, identity, indexed: false, indexedObject: existing};
+  if (!publishIdentityRef({proofId, identity, objectSha: exact.objectSha, remote, cwd, git, now})) {
+    throw new Error(`could not persist identity ref ${identityRef(proofId, identity.digest)}`);
+  }
+  return {...exact, identity, indexed: true, indexedObject: exact.objectSha};
 }
 
 function registeredProofs() {
@@ -428,7 +606,9 @@ function parseCli(argv) {
 function render(result, json) {
   if (json) return `${JSON.stringify(result, null, 2)}\n`;
   if (result.outcome === OUTCOME.PROVEN) {
-    return `PROVEN ${result.proofId} ${result.subjectSha} ${result.objectSha}\n`;
+    const via = result.resolution === RESOLUTION.RELEASE_CONTENT_IDENTITY ?
+      ` (release content identity of ${result.provenBy})` : '';
+    return `PROVEN ${result.proofId} ${result.subjectSha} ${result.objectSha}${via}\n`;
   }
   return `${result.outcome.toUpperCase()} ${result.because || ''}\n`;
 }
@@ -444,6 +624,11 @@ function runCli(argv = process.argv.slice(2), write = (value) => process.stdout.
   }
   if (options.command === COMMAND_RECORD) {
     const result = recordProof(options);
+    write(render(result, options.json));
+    return 0;
+  }
+  if (options.command === COMMAND_INDEX) {
+    const result = indexProof(options);
     write(render(result, options.json));
     return 0;
   }
@@ -465,7 +650,10 @@ export {
   PROOF,
   RECEIPT_REF_ROOT,
   RECEIPT_SCHEMA,
+  RESOLUTION,
   REUSE,
+  identityRef,
+  indexProof,
   buildReceipt,
   buildTagBody,
   evaluateReceipt,
