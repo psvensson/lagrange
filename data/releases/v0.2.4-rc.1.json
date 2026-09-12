@@ -1,0 +1,50 @@
+{
+  "schema": "release-publication-receipt/1",
+  "tag": "v0.2.4-rc.1",
+  "sha": "cd07a9cbe05cd97eef9bd3498b9fe1145daa723f",
+  "version": "0.2.4-rc.1",
+  "prerelease": true,
+  "intended": {
+    "distTag": "next"
+  },
+  "observedAt": "2026-09-12T13:08:56.797590+00:00",
+  "observedBy": "solver, after tagged release.yml run 34695375163 failed at step 7 (Publish npm package); the workflow did not reach its own receipt step",
+  "published": {
+    "npm": {
+      "published": false,
+      "distTags": {
+        "latest": "0.1.1",
+        "next": "0.2.4-rc.0"
+      },
+      "gitHead": null,
+      "note": "npm publish exited 0 with 'Your package is being processed and may take a few minutes to become available'; the owner's 10 s observation window read the version as absent (false negative; 0.2.4-rc.0 surfaced 4 minutes after its publish)",
+      "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.4-rc.1"
+    },
+    "docker": {
+      "published": false,
+      "digest": null,
+      "latestDigest": "sha256:80afc47193c35623e3abd4ecf6b8d1d803c454a9ca583a3ac831956e8c6e7c35",
+      "latestIsThisRelease": false,
+      "note": "not attempted: the job failed before the Docker steps",
+      "url": "https://hub.docker.com/r/psvensson/lagrange/tags?name=0.2.4-rc.1"
+    },
+    "helm": {
+      "published": false,
+      "note": "not attempted: the job failed before the release step",
+      "url": "https://github.com/psvensson/lagrange/releases/download/v0.2.4-rc.1/lagrange-node-0.2.4-rc.1.tgz"
+    },
+    "github": {
+      "published": false,
+      "prerelease": null,
+      "latest": null,
+      "assets": [],
+      "note": "not attempted: the job failed before the release step",
+      "url": null
+    }
+  },
+  "failure": {
+    "step": "Publish npm package",
+    "ownerVerdict": "PUBLISH_EXITED_WITHOUT_VERSION",
+    "class": "npm post-publish processing latency exceeds the owner's observation window"
+  }
+}
