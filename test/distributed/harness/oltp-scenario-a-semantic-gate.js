@@ -161,8 +161,10 @@ function buildScenarioASemanticGateEvidence(options = {}) {
   const hasMissing = Object.values(systems).some(
     ({missingProofIds}) => missingProofIds.length > ZERO,
   );
-  const comparable = !hasFailure && !hasMissing;
-  const status = hasFailure ? 'failed' : comparable ? 'passed' : 'incomplete';
+  const semanticEquivalent = !hasFailure && !hasMissing;
+  const status = hasFailure ?
+    'failed' :
+    semanticEquivalent ? 'passed' : 'incomplete';
   const payload = Object.freeze({
     semanticProfileId: OLTP_SCENARIO_A_SEMANTIC_PROFILE.id,
     semanticProfileSha256: hashScenarioASemanticProfile(),
@@ -170,7 +172,7 @@ function buildScenarioASemanticGateEvidence(options = {}) {
     systems: Object.freeze(systems),
     proofs,
     status,
-    comparable,
+    semanticEquivalent,
   });
   return Object.freeze({
     ...payload,
