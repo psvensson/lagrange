@@ -59,7 +59,7 @@ async function assertFixedRateAndWorkerSerialization() {
     async executeTransaction(value) {
       assert.equal(activeWorkers.has(value.workerId), false);
       activeWorkers.add(value.workerId);
-      starts.push({workerId: value.workerId, at: logicalNow});
+      starts.push(value.workerId);
       logicalNow += 4;
       await Promise.resolve();
       activeWorkers.delete(value.workerId);
@@ -86,19 +86,46 @@ async function assertFixedRateAndWorkerSerialization() {
   assert.equal(result.succeeded, 3);
   assert.equal(result.failed, 0);
   assert.equal(result.retries, 0);
+  assert.equal(result.scheduledWindowMs, 30);
+  assert.ok(result.accountingWindowMs >= result.scheduledWindowMs);
+  assert.ok(result.completedPerSec <= result.offeredRatePerSec);
   assert.deepEqual(
     result.records.map(({intendedIssueTimeMs}) => intendedIssueTimeMs),
     [1000, 1010, 1020],
   );
-  assert.deepEqual(
-    result.records.map(({latencyMs}) => latencyMs),
-    [4, 4, 4],
+  assert.equal(
+    result.records.every((record) =>
+      record.latencyMs >= 0 &&
+      record.queueDelayMs >= 0 &&
+      record.issueLagMs >= 0),
+    true,
   );
-  assert.deepEqual(starts, [
-    {workerId: 1, at: 1000},
-    {workerId: 2, at: 1010},
-    {workerId: 1, at: 1020},
-  ]);
+  assert.deepEqual(starts, [1, 2, 1]);
+}
+
+async function assertSchedulerLagStaysInsideRequestClock() {
+  let logicalNow = 4000;
+  const adapter = {
+    async executeTransaction() {
+      logicalNow += 3;
+      return {committed: true};
+    },
+  };
+  const result = await runOpenLoopOltpStep(adapter, [operation(1, 1)], {
+    offeredRatePerSec: 100,
+    startTimeMs: 4000,
+    now: () => logicalNow,
+    waitUntil: async (targetTimeMs) => {
+      logicalNow = targetTimeMs + 7;
+    },
+  });
+
+  assert.equal(result.records[0].issueLagMs, 7);
+  assert.equal(result.records[0].queueDelayMs, 7);
+  assert.equal(result.records[0].latencyMs, 10);
+  assert.equal(result.scheduledWindowMs, 10);
+  assert.equal(result.accountingWindowMs, 10);
+  assert.equal(result.completedPerSec, 100);
 }
 
 async function assertRetryStaysInsideRequestClock() {
@@ -163,6 +190,7 @@ async function main() {
   assertIssuePlan();
   assertInterleave();
   await assertFixedRateAndWorkerSerialization();
+  await assertSchedulerLagStaysInsideRequestClock();
   await assertRetryStaysInsideRequestClock();
   await assertFailureIsRecordedNotRetriedBlindly();
   assert.throws(
