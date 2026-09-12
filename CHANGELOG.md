@@ -10,6 +10,32 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-09-12
+
+The first 0.2 release that ships. `v0.2.0`, `v0.2.1`, `v0.2.2` and `v0.2.3`
+were tagged but never published: each tagged run stopped before any
+artifact left the runner (0.2.2 in the Docker smoke test, 0.2.3 and the
+first two release candidates at the npm publication owner's ten-second
+observation window), so no npm version, Docker image, Helm chart or GitHub
+release exists for them; npm served `0.1.1` under `latest` throughout. The
+release pipeline was then published end to end on the production path
+under `v0.2.4-rc.0`, `-rc.1` and `-rc.2` (npm under the `next` dist-tag,
+Docker tagged with the version only, GitHub pre-releases), with each run's
+publication receipt committed under `data/releases/` and re-read from the
+registries. No functional change since the `v0.2.3` tag beyond the release
+apparatus itself.
+
+### Fixed
+- The npm publication owner observes the registry for minutes and types an
+  accepted, still-processing publish as such instead of reading npm's
+  post-publish processing latency as absence.
+- The release workflow writes its publication receipt from what the
+  registries report, asking only for fields the runner's tools expose, and
+  the values it observes reach the receipt writer.
+- `release:preflight` requires the tagged SHA to be proven and on the
+  remote main history, no longer the remote tip, so landings can publish
+  behind a running release proof without invalidating it.
+
 ## [0.2.4-rc.2] — 2026-09-12
 
 Pipeline dry run, third attempt. No functional change since the `v0.2.3`
@@ -372,7 +398,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.2...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4
 [0.2.4-rc.2]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...v0.2.4-rc.2
 [0.2.4-rc.1]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...v0.2.4-rc.1
 [0.2.4-rc.0]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4-rc.0
