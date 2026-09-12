@@ -8,6 +8,7 @@ on:
       - benchmark/tidb-lagrange-scenario-a-integration
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
+      - 'test/bootstrap/meta-service-endpoint-registration.test.js'
       - 'test/distributed/config/local-benchmark-3node-timeout180.json'
       - 'test/distributed/run.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
@@ -26,6 +27,7 @@ on:
       - benchmark/tidb-reference-scenarios
     paths:
       - '.github/workflows/lagrange-scenario-a-contention-live.yml'
+      - 'test/bootstrap/meta-service-endpoint-registration.test.js'
       - 'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js'
       - 'test/distributed/reference-client/lagrange-new-order-contention-observer.js'
       - 'src/bootstrap/shared/meta-service-definition-registration.js'
@@ -77,7 +79,9 @@ jobs:
             src/bootstrap/shared/runtime-service-handler-setup.js \
             src/runtime/runtime-endpoint-publication-wiring.js
           node scripts/checks/oltp-scenario-a-new-order-contention-case-guard.js
-          node --test test/runtime/runtime-endpoint-publication-wiring.test.js
+          node --test \
+            test/bootstrap/meta-service-endpoint-registration.test.js \
+            test/runtime/runtime-endpoint-publication-wiring.test.js
           docker version
 
       - name: Run live three-node Lagrange contention proof
