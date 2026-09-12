@@ -51,6 +51,9 @@ const AUTHORIZE_OPTION = 'authorize-version';
 const PUBLISH_REFUSED_PREFIX = 'publishing this package is ';
 const NOTHING_AUTHORIZED_ERROR =
   'publish requires --authorize-version naming the version to publish';
+const NPM_OUTPUT_EXCERPT_CHARS = 2000;
+const NPM_OUTPUT_LABEL = '; npm said: ';
+const NPM_OUTPUT_EMPTY = '(npm printed nothing)';
 const RELEASE_COMMAND = Object.freeze({
   VERIFY: 'verify',
   PUBLISH: 'publish',
@@ -138,6 +141,9 @@ const RELEASE_OUTCOME = Object.freeze({
   REGISTRY_UNAVAILABLE: 'REGISTRY_UNAVAILABLE',
   PUBLISH_FAILED: 'PUBLISH_FAILED',
   PARTIAL_RELEASE_CONFLICT: 'PARTIAL_RELEASE_CONFLICT',
+  // npm publish exited 0 and the registry still does not hold the version:
+  // the one outcome whose only explanation is in npm's own output.
+  PUBLISH_EXITED_WITHOUT_VERSION: 'PUBLISH_EXITED_WITHOUT_VERSION',
 });
 
 class NpmReleaseError extends Error {
@@ -559,7 +565,32 @@ function delay(milliseconds) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
-async function observePublishedCandidate(candidate) {
+/**
+ * What to say when the registry does not show the candidate after a publish
+ * that exited 0: the classification the registry gave, and npm's own output,
+ * because a zero exit that published nothing is explained nowhere else. The
+ * 0.2.3 release and the 0.2.4-rc.0 dry run both stopped here with the output
+ * discarded (release-pipeline-dry-run, 2026-09-12).
+ * @param {string} classification registry classification after publish
+ * @param {{stdout?: string, stderr?: string, status?: number}} publishResult
+ * @return {{outcome: string, message: string}}
+ */
+function describePublishMismatch(classification, publishResult = {}) {
+  const printed = `${publishResult.stdout || ''}\n${publishResult.stderr || ''}`.trim();
+  const excerpt = printed.length === 0 ?
+    NPM_OUTPUT_EMPTY : printed.slice(-NPM_OUTPUT_EXCERPT_CHARS);
+  const exitedClean = publishResult.status === 0;
+  const outcome = exitedClean && classification === RELEASE_OUTCOME.VERSION_ABSENT ?
+    RELEASE_OUTCOME.PUBLISH_EXITED_WITHOUT_VERSION :
+    RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT;
+  return {
+    outcome,
+    message: `${REGISTRY_MISMATCH_MESSAGE_PREFIX}${classification}` +
+      `${NPM_OUTPUT_LABEL}${excerpt}`,
+  };
+}
+
+async function observePublishedCandidate(candidate, publishResult = {}) {
   let lastRegistryClassification = null;
   for (let attempt = 0; attempt < REGISTRY_OBSERVATION_ATTEMPTS; attempt += 1) {
     const metadata = await readRegistryMetadata(candidate.manifest.name);
@@ -571,9 +602,10 @@ async function observePublishedCandidate(candidate) {
       await delay(REGISTRY_OBSERVATION_DELAY_MS);
     }
   }
+  const mismatch = describePublishMismatch(lastRegistryClassification, publishResult);
   throw new NpmReleaseError(
-    RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
-    `${REGISTRY_MISMATCH_MESSAGE_PREFIX}${lastRegistryClassification}`,
+    mismatch.outcome,
+    mismatch.message,
   );
 }
 
@@ -642,7 +674,7 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
       ),
     );
   }
-  const outcome = await observePublishedCandidate(candidate);
+  const outcome = await observePublishedCandidate(candidate, publishResult);
   return {outcome, candidate};
 }
 
@@ -750,6 +782,7 @@ export {
   classifyRegistryState,
   inspectTarball,
   normalizeRepositoryUrl,
+  describePublishMismatch,
   publishNpmPackage,
   releaseChannel,
   validateWorkspaceManifest,

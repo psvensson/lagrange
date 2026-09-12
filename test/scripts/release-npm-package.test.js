@@ -4,6 +4,7 @@ import {describe, it} from 'node:test';
 import {
   RELEASE_OUTCOME,
   classifyRegistryState,
+  describePublishMismatch,
   normalizeRepositoryUrl,
   releaseChannel,
 } from '../../scripts/release-npm-package.js';
@@ -108,3 +109,30 @@ describe('release channel', () => {
     }
   });
 });
+
+describe('publish mismatch verdicts carry npm output', () => {
+  it('types a clean exit that published nothing, and quotes npm', () => {
+    const verdict = describePublishMismatch(RELEASE_OUTCOME.VERSION_ABSENT, {
+      status: 0,
+      stdout: '+ lagrange-server@0.2.4-rc.0\n',
+      stderr: 'npm notice Publishing to https://registry.npmjs.org/ with tag next',
+    });
+    assert.equal(verdict.outcome, RELEASE_OUTCOME.PUBLISH_EXITED_WITHOUT_VERSION);
+    assert.match(verdict.message, /VERSION_ABSENT/u);
+    assert.match(verdict.message, /npm said: /u);
+    assert.match(verdict.message, /with tag next/u,
+      'npm\'s own words are the only explanation of a zero exit with no version');
+  });
+
+  it('keeps the conflict outcome for any other mismatch and says when npm was silent', () => {
+    const conflict = describePublishMismatch(
+      RELEASE_OUTCOME.VERSION_CONTENT_CONFLICT, {status: 0, stdout: '', stderr: ''});
+    assert.equal(conflict.outcome, RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT);
+    assert.match(conflict.message, /npm printed nothing/u);
+    const absentAfterFailure = describePublishMismatch(
+      RELEASE_OUTCOME.VERSION_ABSENT, {status: 1, stderr: 'npm ERR! 403'});
+    assert.equal(absentAfterFailure.outcome, RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
+      'a non-zero exit is not the silent case');
+  });
+});
+
