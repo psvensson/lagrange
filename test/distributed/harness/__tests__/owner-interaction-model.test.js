@@ -29,6 +29,7 @@ import * as model from '../owner-interaction-model.js';
 // ambient-intrinsics guideline (a replaced prototype method must not be able
 // to invert a checklist).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -127,15 +128,34 @@ test('every registry-bound invariant is hosted and every unbound citation is nam
   // it does not know appears in the derived model as unbound with its id -
   // a number the harness reports, retired or registered one at a time by
   // formation-contracts-registration, never a silent footnote.
+  // Widened 2026-09-12 (owner decision, formation-contracts-registration):
+  // an invariant whose subject is the architecture itself may be
+  // MODEL-WITNESSED by a named check the model:contracts chain runs; the
+  // class is narrow (declared subject + resolvable named check, validated
+  // with the chain's own validators) and the receipt reports three counts.
   const model = await loadModel();
-  const {bound, unbound, hostedOwners} = await model.invariantBindings(ROOT);
+  const {bound, modelWitnessed, unbound, problems, hostedOwners} =
+    await model.invariantBindings(ROOT);
   const invariants = arrayFilter(registeredInteractions(),
     (entry) => entry.kind === 'invariant');
-  assert.equal(bound.length + unbound.length, invariants.length,
-    'every registered invariant is accounted for as bound or unbound');
+  assert.deepEqual(problems, [],
+    'a declared model witness whose pointer dangles turns the receipt red');
+  assert.equal(bound.length + modelWitnessed.length + unbound.length,
+    invariants.length,
+    'every registered invariant is accounted for as hosted, model-witnessed or unbound');
   for (const entry of bound) {
     assert.ok(hostedOwners.has(entry.owner),
       `${entry.id} binds to ${entry.contract}, so its owner is hosted`);
+  }
+  const registry = JSON.parse(fs.readFileSync(
+    path.join(ROOT, 'architecture/contracts/invariants.json'), UTF8)).invariants;
+  for (const entry of modelWitnessed) {
+    const declared = arrayFind(registry, (invariant) => invariant.id === entry.id);
+    assert.equal(declared?.subject, 'architecture',
+      `${entry.id} is model-witnessed only because its subject is the architecture`);
+    assert.ok(entry.witness.kind && entry.witness.name &&
+      fs.existsSync(path.join(ROOT, entry.witness.model)),
+    `${entry.id} names the check that witnesses it: ${JSON.stringify(entry.witness)}`);
   }
   for (const entry of unbound) {
     assert.ok(entry.id && entry.owner && entry.contractRef,

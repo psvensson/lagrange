@@ -9,7 +9,9 @@
       "kind": "safety",
       "statement": "A node can never be published before its snapshot coverage is accepted; published is always a subset of covered.",
       "formalPredicate": "published \\subseteq covered",
-      "coupledWith": ["covered-disjoint-pending"],
+      "coupledWith": [
+        "covered-disjoint-pending"
+      ],
       "modelRef": "models/active-gate/ActiveGate.tla",
       "contractRef": "architecture/contracts/active-gate-convergence.md"
     },
@@ -20,7 +22,9 @@
       "kind": "safety",
       "statement": "A node with accepted snapshot coverage has already been reconciled by the owner; covered and pending never intersect.",
       "formalPredicate": "covered \\cap pending = {}",
-      "coupledWith": ["published-subset-covered"],
+      "coupledWith": [
+        "published-subset-covered"
+      ],
       "modelRef": "models/active-gate/ActiveGate.tla",
       "contractRef": "architecture/contracts/active-gate-convergence.md"
     },
@@ -31,7 +35,9 @@
       "kind": "liveness",
       "statement": "Under weak fairness of the progress actions and bounded owner re-entry, every node eventually reaches published with a fresh quorum snapshot, so the active gate eventually goes green.",
       "formalPredicate": "<>Converged",
-      "coupledWith": ["bounded-owner-reentry"],
+      "coupledWith": [
+        "bounded-owner-reentry"
+      ],
       "modelRef": "models/active-gate/ActiveGate.tla",
       "contractRef": "architecture/contracts/active-gate-convergence.md"
     },
@@ -60,7 +66,9 @@
       "kind": "liveness",
       "statement": "A reconciled-but-not-yet-published node may be deferred back to pending only a bounded number of times; unbounded deferred owner re-entry is the higher-level oscillation that prevents convergence.",
       "formalPredicate": "\\A n: bounded(count(DeferReentry(n)))",
-      "coupledWith": ["active-gate-eventually-converged"],
+      "coupledWith": [
+        "active-gate-eventually-converged"
+      ],
       "modelRef": "models/active-gate/ActiveGate.tla",
       "contractRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md"
     },
@@ -69,6 +77,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Every state transition, lifecycle decision, data transformation, cache view, diagnostic grammar, and runtime resource has exactly one semantic owner.",
       "formalPredicate": "Cardinality(SemanticOwner(concern)) = 1",
       "modelRef": "architecture/models/alloy/core-system-logic.als",
@@ -79,6 +88,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Runtime logic consumes normalized state and does not reopen raw storage, transport, bootstrap, cache, or wire shapes.",
       "formalPredicate": "RuntimeInput = NormalizedState",
       "modelRef": "architecture/models/alloy/core-system-logic.als",
@@ -89,6 +99,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "An owner emits one canonical outcome before observers, caches, diagnostics, admin views, or harness reports project the result.",
       "formalPredicate": "ObserverProjection => OwnerOutcomeEmitted",
       "modelRef": "architecture/models/alloy/core-system-logic.als",
@@ -99,6 +110,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Reader-local caches, diagnostics, and reports do not repair or replace authoritative owner state on the hot path.",
       "formalPredicate": "ReaderAction # RepairAuthoritativeState",
       "modelRef": "architecture/models/alloy/core-system-logic.als",
@@ -111,7 +123,9 @@
       "kind": "safety",
       "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission.",
       "formalPredicate": "DegradedEvidence => nextAction # proceed",
-      "coupledWith": ["failed-authoritative-read-admission-verdict"],
+      "coupledWith": [
+        "failed-authoritative-read-admission-verdict"
+      ],
       "modelRef": "architecture/models/alloy/core-system-logic.als",
       "contractRef": "architecture/contracts/core-system-logic.md"
     },
@@ -140,9 +154,10 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it.",
       "formalPredicate": "DurableFollowUp => RecoverableWake",
-      "modelRef": "architecture/models/statecharts/core-system-logic.json",
+      "modelRef": "architecture/models/alloy/core-system-logic.als",
       "contractRef": "architecture/contracts/core-system-logic.md"
     },
     {
@@ -150,6 +165,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Every retry, rerun, handoff, or observer evidence combination emits exactly one owner-owned canonical action.",
       "formalPredicate": "Cardinality(RouteOutcome(evidence)) = 1",
       "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
@@ -160,6 +176,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Repeated local retry with non-shrinking evidence cannot authorize another local retry.",
       "formalPredicate": "RepeatedLocalRetry /\\ NonShrinkingEvidence => next = blocked_model_route",
       "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
@@ -170,6 +187,7 @@
       "owner": "architecture_owner",
       "boundary": "core_system_logic",
       "kind": "safety",
+      "subject": "architecture",
       "statement": "Deferred follow-up work exits through a recoverable wake while retry budget remains available.",
       "formalPredicate": "DeferredFollowup /\\ RetryBudgetAvailable => RecoverableWake",
       "modelRef": "architecture/models/decision-tables/bounded-retry-exit-routing.json",
@@ -221,8 +239,14 @@
           "ref": "npm run repro -- CL-041",
           "test": "test/closure/CL-041.repro.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:message_group_raft_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -241,8 +265,14 @@
           "ref": "npm run repro -- CL-040",
           "test": "test/closure/CL-040.repro.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:message_group_raft_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -261,8 +291,14 @@
           "ref": "npm run repro -- CL-038",
           "test": "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:operation_workflow_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:operation_workflow_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -281,8 +317,14 @@
           "ref": "npm run repro -- CL-001",
           "test": "test/control-plane/active-node-projection.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_projection_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_projection_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -301,8 +343,14 @@
           "ref": "npm run repro -- CL-034",
           "test": "test/control-plane/cl-034-planning-snapshot-merge-memo.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_readiness_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -321,8 +369,14 @@
           "ref": "npm run repro -- CL-033",
           "test": "test/control-plane/cl-033-planning-projection-memo.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_readiness_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -341,8 +395,14 @@
           "ref": "npm run repro -- CL-035",
           "test": "test/control-plane/cl-035-voter-ready-row-seed.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:replica_lifecycle_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -361,8 +421,14 @@
           "ref": "npm run repro -- CL-042",
           "test": "test/closure/CL-042.repro.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:message_group_raft_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -372,7 +438,9 @@
       "kind": "safety",
       "statement": "A failed or unavailable authoritative read never concludes the positive premise of a safety gate: admission gates fail closed into a typed defer/deny (the conflict-lane deferred-visibility throw; the topology guard's replica_inventory_unusable denial; the surplus REMOVE commit fence; the ledger quorum-spread confirmation). A hold may fail OPEN on a read gap only where blocking on the gap would itself deadlock convergence, and each fail-open hold names its deadlock witness: the over-target count-keyed create-lane hold (G1; fail-closing it would strand the surplus drain it exists to release) and the routine-direction ledger self-move serialization (a disruptive IDLE_ONLY self-move still fails closed). Advisory probes fail open only where a fail-closed enforcer remains downstream (the provisioning ledger-interlock probe defers to operation creation as the enforcing seam).",
       "formalPredicate": "AuthoritativeReadFailed(gate) => Verdict(gate) \\in {defer, deny}; FailOpen(hold) => NamedDeadlockWitness(hold)",
-      "coupledWith": ["degraded-evidence-never-upgrades-readiness"],
+      "coupledWith": [
+        "degraded-evidence-never-upgrades-readiness"
+      ],
       "contractRef": "solve/epics/golden-capability-gold-plating.md",
       "liveEvidence": {
         "tier": 2,
@@ -382,8 +450,14 @@
           "ref": "node --test test/rebalancer/failed-authoritative-read-admission-verdict.test.js",
           "test": "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:replica_lifecycle_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -393,7 +467,9 @@
       "kind": "liveness",
       "statement": "After semantic-input quiescence the final complete token is published; during continuous churn completed tokens advance monotonically, dirty owners receive bounded round-robin service, and stale evidence never promotes readiness.",
       "formalPredicate": "Quiescent => <>CompletedToken = InputToken; StaleToken => ~PositiveDecision",
-      "coupledWith": ["readiness-heavy-work-turn-bounded"],
+      "coupledWith": [
+        "readiness-heavy-work-turn-bounded"
+      ],
       "modelRef": "models/readiness-starvation/VersionedReadinessPlanning.tla",
       "contractRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
       "liveEvidence": {
@@ -404,8 +480,14 @@
           "ref": "node scripts/run-test-files.js test/control-plane/publication-readiness-churn-liveness.test.js",
           "test": "test/control-plane/publication-readiness-churn-liveness.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_readiness_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -415,7 +497,9 @@
       "kind": "liveness",
       "statement": "Continuous readiness source churn starts at most one heavy planning build globally per macrotask turn and permits a timer or heartbeat sentinel between every pair of heavy items.",
       "formalPredicate": "HeavyBuildsPerMacrotask \\leq 1 /\\ AlwaysEventually(TimerTick)",
-      "coupledWith": ["readiness-source-freshness-eventually-reflected"],
+      "coupledWith": [
+        "readiness-source-freshness-eventually-reflected"
+      ],
       "modelRef": "models/readiness-starvation/VersionedReadinessPlanning.tla",
       "contractRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
       "liveEvidence": {
@@ -426,8 +510,14 @@
           "ref": "node scripts/run-test-files.js test/control-plane/publication-readiness-churn-liveness.test.js test/workflow/owner-key-reconcile-queue.test.js",
           "test": "test/control-plane/publication-readiness-churn-liveness.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_planning_scheduler_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_planning_scheduler_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     },
     {
@@ -447,8 +537,14 @@
           "ref": "node scripts/run-test-files.js test/control-plane/control-plane-read-authority-token.test.js",
           "test": "test/control-plane/control-plane-read-authority-token.test.js"
         },
-        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_read_authority_owner", "cost": "cheap"},
-        "restoration": {"autoSpawn": true}
+        "trigger": {
+          "policy": "on-quest-closure",
+          "scope": "owner:control_plane_read_authority_owner",
+          "cost": "cheap"
+        },
+        "restoration": {
+          "autoSpawn": true
+        }
       }
     }
   ]

@@ -38,6 +38,11 @@ authorizes:
   - scripts/checks/formation-budget.js
   - scripts/checks/formation-sim-reproduces.js
   - scripts/checks/formation-calibration.js
+  - scripts/checks/formation-contracts-registration.js
+  - architecture/contracts
+  - test/bootstrap/readiness-handoff-liveness-witness.test.js
+  - test/control-plane/core-system-logic-runtime-witness.test.js
+  - test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js
   - docs
 ---
 
@@ -145,6 +150,22 @@ nodes-table write until an asynchronous evaluation lands (~170 ms on the
 seed); authoritative reads exist only where a partition does; published
 membership reaches the rebalancer only through the publication coordinator.
 
+Scenario for `formation-sim` (2026-09-12, from
+`formation-contracts-registration`): the cross-operation re-entry cycle.
+The operation-workflow owner bounds deferred handoff re-entry per operation
+(step timeout, then the operation budget) and, at the stop, leaves the
+operation "for planner rearm / ready-node replay" — nothing marks the node
+or operation terminal, so a reconciled-but-unpublished node can be re-planned
+into a fresh operation with a fresh budget without any state change. The
+abstract active-gate model admits this cycle (`allowUnboundedReentry`). The
+simulator must show whether the reconcile → unpublished → pending → reconcile
+loop recurs across operations under formation load and how often, before
+anyone decides what happens at the bound (escalate, fail the node, force
+publication); that decision belongs in `seed-formation-decoupling`'s design
+note. Related ambient-time seam for the deterministic guard: the handoff
+retry callback and the transition retry grace read `Date.now()` directly
+rather than the owner's `timeSource`.
+
 **seed-formation-decoupling** — the fix, chosen from the calibration
 ranking: early spread of system-table replicas once three nodes are joined and
 before user-table admission opens; or system-partition Raft apply moved onto
@@ -202,6 +223,13 @@ be driven without an ambient timer, so it receives the time seam as the first
 `message-group-service-raft-timing.js`, one commit, red on revert, verifier
 before landing - and `src/cdc` is authorized above for that owner only;
 `formation-sim` injects through the same seam.
+
+Scope widening (2026-09-12, R16): `formation-contracts-registration` binds
+every invariant citation, which means editing the invariant registry and the
+contract documents it cites (`architecture/contracts`), its own probe script,
+and one witness test per registered contract outside the harness tree
+(`test/bootstrap`, `test/control-plane`, `test/rebalancer`, listed by file), so
+those paths are authorized above.
 
 ## Guardrails
 
