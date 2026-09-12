@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  TIDB_REFERENCE_PHYSICAL_DEFAULTS,
   createTiDbReferencePhysicalRoutingProvider,
   startTiDbReferencePhysicalCluster,
 } from '../../test/distributed/harness/tidb-reference-physical-topology.js';
@@ -84,6 +85,16 @@ function assertHostNetwork(container) {
   assert.equal(container.hostConfigExtras?.NetworkMode, undefined);
 }
 
+function assertDefaultPorts() {
+  assert.deepEqual(TIDB_REFERENCE_PHYSICAL_DEFAULTS, {
+    pdClientPort: 8083,
+    pdPeerPort: 8084,
+    tidbPort: 8085,
+    tidbStatusPort: 8086,
+    tikvPort: 8090,
+  });
+}
+
 async function assertPhysicalPlacementAndLifecycle() {
   const {providers, options} = createTopology();
   const cluster = await startTiDbReferencePhysicalCluster({
@@ -106,15 +117,21 @@ async function assertPhysicalPlacementAndLifecycle() {
   assert.deepEqual(tidb.resourceLimits, SHARED_LIMITS);
   assert.deepEqual(readiness.resourceLimits, READINESS_LIMITS);
   assert.ok(pd.command.includes(
-    '--advertise-client-urls=http://10.0.0.10:2379',
+    '--client-urls=http://0.0.0.0:8083',
   ));
   assert.ok(pd.command.includes(
-    '--advertise-peer-urls=http://10.0.0.10:2380',
+    '--advertise-client-urls=http://10.0.0.10:8083',
+  ));
+  assert.ok(pd.command.includes('--peer-urls=http://0.0.0.0:8084'));
+  assert.ok(pd.command.includes(
+    '--advertise-peer-urls=http://10.0.0.10:8084',
   ));
   assert.ok(pd.command.includes(
-    '--initial-cluster=pd=http://10.0.0.10:2380',
+    '--initial-cluster=pd=http://10.0.0.10:8084',
   ));
-  assert.ok(tidb.command.includes('--path=10.0.0.10:2379'));
+  assert.ok(tidb.command.includes('--path=10.0.0.10:8083'));
+  assert.ok(tidb.command.includes('-P=8085'));
+  assert.ok(tidb.command.includes('--status=8086'));
 
   const storageProviders = [
     providers.storage1,
@@ -129,9 +146,10 @@ async function assertPhysicalPlacementAndLifecycle() {
     assert.equal(store.name, `physical-a-tikv-${index + 1}`);
     assertHostNetwork(store);
     assert.deepEqual(store.resourceLimits, TIKV_LIMITS);
-    assert.ok(store.command.includes('--pd=10.0.0.10:2379'));
+    assert.ok(store.command.includes('--pd=10.0.0.10:8083'));
+    assert.ok(store.command.includes('--addr=0.0.0.0:8090'));
     assert.ok(store.command.includes(
-      `--advertise-addr=${storageHosts[index]}:20160`,
+      `--advertise-addr=${storageHosts[index]}:8090`,
     ));
   }
 
@@ -139,6 +157,7 @@ async function assertPhysicalPlacementAndLifecycle() {
   assert.equal(readinessExec.length, 1);
   assert.equal(readinessExec[0][1], 'control-c3');
   assert.ok(readinessExec[0][2].includes('--host=127.0.0.1'));
+  assert.ok(readinessExec[0][2].includes('--port=8085'));
   assert.equal(
     readinessExec[0][2].some((argument) =>
       String(argument).includes('physical-a-tidb')),
@@ -149,9 +168,11 @@ async function assertPhysicalPlacementAndLifecycle() {
     controlHost: '10.0.0.10',
     storageHosts,
     distinctSystemHosts: 4,
+    ports: TIDB_REFERENCE_PHYSICAL_DEFAULTS,
   });
-  assert.deepEqual(cluster.endpoints.mysql, {host: '10.0.0.10', port: 4000});
-  assert.deepEqual(cluster.endpoints.pd, {host: '10.0.0.10', port: 2379});
+  assert.deepEqual(cluster.endpoints.mysql, {host: '10.0.0.10', port: 8085});
+  assert.deepEqual(cluster.endpoints.pd, {host: '10.0.0.10', port: 8083});
+  assert.deepEqual(cluster.endpoints.status, {host: '10.0.0.10', port: 8086});
   assert.equal(cluster.readiness.tikvStoreCount, 3);
 
   assert.deepEqual(
@@ -164,7 +185,6 @@ async function assertPhysicalPlacementAndLifecycle() {
     ],
   );
 
-  // The readiness client is removed before the measured topology is returned.
   assert.deepEqual(
     calls(providers.control, 'remove').map(([, id]) => id),
     ['control-c3'],
@@ -233,9 +253,24 @@ function assertFailClosedTopology() {
     }),
     /distinct Docker providers/u,
   );
+
+  assert.throws(
+    () => createTiDbReferencePhysicalRoutingProvider({
+      control: {provider: control, host: '10.0.0.10'},
+      storage: [
+        {provider: storage1, host: '10.0.0.11'},
+        {provider: storage2, host: '10.0.0.12'},
+        {provider: storage3, host: '10.0.0.13'},
+      ],
+      namePrefix: 'bad-ports',
+      ports: {pdClientPort: 8083, pdPeerPort: 8083},
+    }),
+    /control ports must be distinct/u,
+  );
 }
 
 async function main() {
+  assertDefaultPorts();
   assertFailClosedTopology();
   await assertPhysicalPlacementAndLifecycle();
   process.stdout.write(PASS_LINE);
