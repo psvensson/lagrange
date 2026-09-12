@@ -12,6 +12,7 @@ doneWhen:
 quests:
   - formation-harness-model-from-contracts
   - formation-calibration-run
+  - formation-contracts-registration
   - formation-sim
   - seed-formation-decoupling
   - five-node-cold-formation-certification
@@ -23,6 +24,7 @@ authorizes:
   - src/diagnostics
   - src/message-group
   - src/raft
+  - src/cdc
   - test/convergence
   - test/simulation
   - test/distributed/harness
@@ -95,6 +97,19 @@ its immutable artifact, and the ranked mechanism list for the fix. Probe:
 script `formation-calibration.js` — 0 when the table exists, is complete for
 every formation-path owner, and cites artifacts.
 
+**formation-contracts-registration** — of the 32 registered invariants, 26
+cite a contract the impact-contract registry does not know (CL-001,
+CL-033..CL-042, core-system-logic, publication-readiness-churn-liveness-closure,
+readiness-handoff-liveness, rolling-restart-rebalancer-handoff,
+golden-capability-gold-plating), across 9 of the 11 invariant owners, so no
+derived harness can witness them. Each of the 26 either gets a registration
+in `test/shards/impact-contracts.json` with exactly one witness test, or a
+ruled-out finding retiring the citation; both are progress, and a citation
+nobody can witness is not an invariant. Probe: script
+`formation-contracts-registration.js` - the count of unbound citations in the
+derived harness model, target 0; the harness receipt goes green on its own
+as the registry grows, because it derives from the registry.
+
 **formation-sim** — deterministic five-node cold-formation simulator on the
 in-process path: virtual clock, seeded in-memory transport, a discrete-event
 scheduler charging virtual time from the calibration table so starvation is
@@ -153,6 +168,18 @@ replaces the hand-wired stand-in family in
 two integration probes with driver-hosts, so those paths, `test/shards` (the
 classification manifests every test change regenerates) and the quest's
 receipt harness are authorized above.
+
+Decisions (2026-09-12): the harness-model receipt `invariant-owners-hosted`
+is superseded from "every invariant owner is hosted" to "every registry-bound
+invariant is hosted and every unbound citation is named" - widening the
+registry by 26 owner-boundary claims to turn a receipt green would be the
+accretion this epic removes elsewhere; the 26 are routed to
+`formation-contracts-registration` above. The CDC owner (`src/cdc`) cannot
+be driven without an ambient timer, so it receives the time seam as the first
+`src/` change of `formation-harness-model-from-contracts` - the seam shape of
+`message-group-service-raft-timing.js`, one commit, red on revert, verifier
+before landing - and `src/cdc` is authorized above for that owner only;
+`formation-sim` injects through the same seam.
 
 ## Guardrails
 
