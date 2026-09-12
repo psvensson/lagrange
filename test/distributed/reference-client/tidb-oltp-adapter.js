@@ -6,9 +6,12 @@ import {
   summarizeOltpBaselineDataset,
 } from '../harness/oltp-baseline-dataset.js';
 import {
-  OLTP_OPERATION_KIND,
   resolveOltpBaselineConfig,
 } from '../harness/oltp-baseline-workload.js';
+import {
+  OLTP_SQL_STATEMENT,
+  executeOltpBaselineTransaction,
+} from '../harness/oltp-baseline-transaction-executor.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -16,6 +19,93 @@ const DEFAULT_DATABASE_NAME = 'lagrange_tidb_oltp';
 const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 const INSERT_BATCH_SIZE = 250;
 const DATABASE_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/u;
+
+const SQL = Object.freeze({
+  [OLTP_SQL_STATEMENT.DISTRICT_NEXT_ORDER_FOR_UPDATE]:
+    'SELECT next_order_id FROM district ' +
+    'WHERE warehouse_id = ? AND district_id = ? FOR UPDATE',
+  [OLTP_SQL_STATEMENT.DISTRICT_SET_NEXT_ORDER]:
+    'UPDATE district SET next_order_id = ? ' +
+    'WHERE warehouse_id = ? AND district_id = ?',
+  [OLTP_SQL_STATEMENT.ORDER_INSERT]:
+    'INSERT INTO orders ' +
+    '(warehouse_id, district_id, order_id, customer_id, carrier_id, ' +
+    'line_count, all_local) VALUES (?, ?, ?, ?, NULL, ?, ?)',
+  [OLTP_SQL_STATEMENT.NEW_ORDER_INSERT]:
+    'INSERT INTO new_order (warehouse_id, district_id, order_id) ' +
+    'VALUES (?, ?, ?)',
+  [OLTP_SQL_STATEMENT.ITEM_PRICE]:
+    'SELECT price_cents FROM item WHERE item_id = ?',
+  [OLTP_SQL_STATEMENT.STOCK_QUANTITY_FOR_UPDATE]:
+    'SELECT quantity FROM stock ' +
+    'WHERE warehouse_id = ? AND item_id = ? FOR UPDATE',
+  [OLTP_SQL_STATEMENT.STOCK_UPDATE]:
+    'UPDATE stock SET quantity = ?, ytd_quantity = ytd_quantity + ?, ' +
+    'order_count = order_count + 1, remote_count = remote_count + ? ' +
+    'WHERE warehouse_id = ? AND item_id = ?',
+  [OLTP_SQL_STATEMENT.ORDER_LINE_INSERT]:
+    'INSERT INTO order_line ' +
+    '(warehouse_id, district_id, order_id, line_number, item_id, ' +
+    'supply_warehouse_id, quantity, amount_cents, delivered) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
+  [OLTP_SQL_STATEMENT.WAREHOUSE_PAYMENT]:
+    'UPDATE warehouse SET ytd_cents = ytd_cents + ? WHERE id = ?',
+  [OLTP_SQL_STATEMENT.DISTRICT_PAYMENT]:
+    'UPDATE district SET ytd_cents = ytd_cents + ? ' +
+    'WHERE warehouse_id = ? AND district_id = ?',
+  [OLTP_SQL_STATEMENT.CUSTOMER_PAYMENT]:
+    'UPDATE customer SET balance_cents = balance_cents - ?, ' +
+    'ytd_payment_cents = ytd_payment_cents + ?, ' +
+    'payment_count = payment_count + 1 ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ?',
+  [OLTP_SQL_STATEMENT.HISTORY_INSERT]:
+    'INSERT INTO history ' +
+    '(phase, worker_id, sequence_id, customer_warehouse_id, ' +
+    'customer_district_id, customer_id, home_warehouse_id, ' +
+    'home_district_id, amount_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  [OLTP_SQL_STATEMENT.ORDER_STATUS_LATEST]:
+    'SELECT order_id, carrier_id FROM orders ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ? ' +
+    'ORDER BY order_id DESC LIMIT 1',
+  [OLTP_SQL_STATEMENT.ORDER_STATUS_LINES]:
+    'SELECT line_number, item_id, supply_warehouse_id, quantity, ' +
+    'amount_cents, delivered FROM order_line ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? ' +
+    'ORDER BY line_number',
+  [OLTP_SQL_STATEMENT.DELIVERY_OLDEST_NEW_ORDER_FOR_UPDATE]:
+    'SELECT order_id FROM new_order ' +
+    'WHERE warehouse_id = ? AND district_id = ? ' +
+    'ORDER BY order_id ASC LIMIT 1 FOR UPDATE',
+  [OLTP_SQL_STATEMENT.DELIVERY_DELETE_NEW_ORDER]:
+    'DELETE FROM new_order ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
+  [OLTP_SQL_STATEMENT.DELIVERY_ORDER_FOR_UPDATE]:
+    'SELECT customer_id FROM orders ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? FOR UPDATE',
+  [OLTP_SQL_STATEMENT.DELIVERY_SET_CARRIER]:
+    'UPDATE orders SET carrier_id = ? ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
+  [OLTP_SQL_STATEMENT.DELIVERY_LINES_FOR_UPDATE]:
+    'SELECT amount_cents FROM order_line ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? ' +
+    'ORDER BY line_number FOR UPDATE',
+  [OLTP_SQL_STATEMENT.DELIVERY_MARK_LINES]:
+    'UPDATE order_line SET delivered = 1 ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
+  [OLTP_SQL_STATEMENT.DELIVERY_CUSTOMER_UPDATE]:
+    'UPDATE customer SET balance_cents = balance_cents + ?, ' +
+    'delivery_count = delivery_count + 1 ' +
+    'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ?',
+  [OLTP_SQL_STATEMENT.STOCK_LEVEL_DISTRICT]:
+    'SELECT next_order_id FROM district ' +
+    'WHERE warehouse_id = ? AND district_id = ?',
+  [OLTP_SQL_STATEMENT.STOCK_LEVEL_COUNT]:
+    'SELECT COUNT(DISTINCT ol.item_id) AS low_stock ' +
+    'FROM order_line AS ol JOIN stock AS s ' +
+    'ON s.warehouse_id = ? AND s.item_id = ol.item_id ' +
+    'WHERE ol.warehouse_id = ? AND ol.district_id = ? ' +
+    'AND ol.order_id >= ? AND ol.order_id < ? AND s.quantity < ?',
+});
 
 function validateDatabaseName(value) {
   const databaseName = value || DEFAULT_DATABASE_NAME;
@@ -69,23 +159,45 @@ async function closeConnections(connections) {
   }
 }
 
-async function withTransaction(connection, callback) {
-  await connection.beginTransaction();
-  try {
-    const result = await callback();
-    await connection.commit();
-    return result;
-  } catch (error) {
-    try {
-      await connection.rollback();
-    } catch (rollbackError) {
-      throw new AggregateError(
-        [error, rollbackError],
-        'TiDB OLTP transaction and rollback both failed',
-      );
-    }
-    throw error;
+function normalizeResult(result) {
+  if (Array.isArray(result)) {
+    return {rows: result, rowCount: result.length};
   }
+  return {
+    rows: [],
+    rowCount: Number.isFinite(result?.affectedRows) ?
+      Number(result.affectedRows) : ZERO,
+  };
+}
+
+function createTiDbSession(connection) {
+  const session = {
+    async transaction(callback) {
+      await connection.beginTransaction();
+      try {
+        const result = await callback(session);
+        await connection.commit();
+        return result;
+      } catch (error) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          throw new AggregateError(
+            [error, rollbackError],
+            'TiDB OLTP transaction and rollback both failed',
+          );
+        }
+        throw error;
+      }
+    },
+    async execute(statementId, parameters = []) {
+      const sql = SQL[statementId];
+      if (!sql) throw new Error(`TiDB OLTP unknown statement ${statementId}`);
+      const [result] = await connection.execute(sql, parameters);
+      return normalizeResult(result);
+    },
+  };
+  return session;
 }
 
 function requireRow(rows, description) {
@@ -223,12 +335,7 @@ async function loadDataset(connection, dataset) {
   );
 }
 
-async function recreateAndLoadDatabase(
-  connect,
-  endpoint,
-  databaseName,
-  dataset,
-) {
+async function recreateAndLoadDatabase(connect, endpoint, databaseName, dataset) {
   const admin = await connect(connectionOptions(endpoint));
   try {
     const quoted = quoteIdentifier(databaseName);
@@ -239,279 +346,6 @@ async function recreateAndLoadDatabase(
     await loadDataset(admin, dataset);
   } finally {
     await admin.end();
-  }
-}
-
-async function executeNewOrder(connection, operation) {
-  return withTransaction(connection, async () => {
-    const [districtRows] = await connection.execute(
-      'SELECT next_order_id FROM district ' +
-      'WHERE warehouse_id = ? AND district_id = ? FOR UPDATE',
-      [operation.warehouseId, operation.districtId],
-    );
-    const district = requireRow(districtRows, 'district');
-    const orderId = Number(district.next_order_id);
-    await connection.execute(
-      'UPDATE district SET next_order_id = ? ' +
-      'WHERE warehouse_id = ? AND district_id = ?',
-      [orderId + ONE, operation.warehouseId, operation.districtId],
-    );
-    const allLocal = operation.lines.every((line) =>
-      line.supplyWarehouseId === operation.warehouseId) ? ONE : ZERO;
-    await connection.execute(
-      'INSERT INTO orders ' +
-      '(warehouse_id, district_id, order_id, customer_id, carrier_id, ' +
-      'line_count, all_local) VALUES (?, ?, ?, ?, NULL, ?, ?)',
-      [
-        operation.warehouseId,
-        operation.districtId,
-        orderId,
-        operation.customerId,
-        operation.lines.length,
-        allLocal,
-      ],
-    );
-    await connection.execute(
-      'INSERT INTO new_order (warehouse_id, district_id, order_id) ' +
-      'VALUES (?, ?, ?)',
-      [operation.warehouseId, operation.districtId, orderId],
-    );
-
-    let totalCents = ZERO;
-    for (let index = ZERO; index < operation.lines.length; index += ONE) {
-      const line = operation.lines[index];
-      const [itemRows] = await connection.execute(
-        'SELECT price_cents FROM item WHERE item_id = ?',
-        [line.itemId],
-      );
-      const item = requireRow(itemRows, 'item');
-      const [stockRows] = await connection.execute(
-        'SELECT quantity FROM stock ' +
-        'WHERE warehouse_id = ? AND item_id = ? FOR UPDATE',
-        [line.supplyWarehouseId, line.itemId],
-      );
-      const stock = requireRow(stockRows, 'stock');
-      const currentQuantity = Number(stock.quantity);
-      const nextQuantity = currentQuantity >= line.quantity + 10 ?
-        currentQuantity - line.quantity :
-        currentQuantity + 91 - line.quantity;
-      const remote = line.supplyWarehouseId === operation.warehouseId ?
-        ZERO : ONE;
-      await connection.execute(
-        'UPDATE stock SET quantity = ?, ytd_quantity = ytd_quantity + ?, ' +
-        'order_count = order_count + 1, remote_count = remote_count + ? ' +
-        'WHERE warehouse_id = ? AND item_id = ?',
-        [
-          nextQuantity,
-          line.quantity,
-          remote,
-          line.supplyWarehouseId,
-          line.itemId,
-        ],
-      );
-      const amountCents = Number(item.price_cents) * line.quantity;
-      totalCents += amountCents;
-      await connection.execute(
-        'INSERT INTO order_line ' +
-        '(warehouse_id, district_id, order_id, line_number, item_id, ' +
-        'supply_warehouse_id, quantity, amount_cents, delivered) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
-        [
-          operation.warehouseId,
-          operation.districtId,
-          orderId,
-          index + ONE,
-          line.itemId,
-          line.supplyWarehouseId,
-          line.quantity,
-          amountCents,
-        ],
-      );
-    }
-    return {orderId, totalCents};
-  });
-}
-
-async function executePayment(connection, operation) {
-  return withTransaction(connection, async () => {
-    await connection.execute(
-      'UPDATE warehouse SET ytd_cents = ytd_cents + ? WHERE id = ?',
-      [operation.amountCents, operation.warehouseId],
-    );
-    await connection.execute(
-      'UPDATE district SET ytd_cents = ytd_cents + ? ' +
-      'WHERE warehouse_id = ? AND district_id = ?',
-      [operation.amountCents, operation.warehouseId, operation.districtId],
-    );
-    const [customerUpdate] = await connection.execute(
-      'UPDATE customer SET balance_cents = balance_cents - ?, ' +
-      'ytd_payment_cents = ytd_payment_cents + ?, ' +
-      'payment_count = payment_count + 1 ' +
-      'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ?',
-      [
-        operation.amountCents,
-        operation.amountCents,
-        operation.customerWarehouseId,
-        operation.customerDistrictId,
-        operation.customerId,
-      ],
-    );
-    if (customerUpdate.affectedRows !== ONE) {
-      throw new Error('TiDB OLTP payment did not update exactly one customer');
-    }
-    await connection.execute(
-      'INSERT INTO history ' +
-      '(phase, worker_id, sequence_id, customer_warehouse_id, ' +
-      'customer_district_id, customer_id, home_warehouse_id, ' +
-      'home_district_id, amount_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        operation.phase,
-        operation.workerId,
-        operation.sequence,
-        operation.customerWarehouseId,
-        operation.customerDistrictId,
-        operation.customerId,
-        operation.warehouseId,
-        operation.districtId,
-        operation.amountCents,
-      ],
-    );
-    return {paidCents: operation.amountCents};
-  });
-}
-
-async function executeOrderStatus(connection, operation) {
-  return withTransaction(connection, async () => {
-    const [orderRows] = await connection.execute(
-      'SELECT order_id, carrier_id FROM orders ' +
-      'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ? ' +
-      'ORDER BY order_id DESC LIMIT 1',
-      [operation.warehouseId, operation.districtId, operation.customerId],
-    );
-    if (!Array.isArray(orderRows) || orderRows.length === ZERO) {
-      return {orderId: null, lineCount: ZERO};
-    }
-    const order = orderRows[ZERO];
-    const [lineRows] = await connection.execute(
-      'SELECT line_number, item_id, supply_warehouse_id, quantity, ' +
-      'amount_cents, delivered FROM order_line ' +
-      'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? ' +
-      'ORDER BY line_number',
-      [operation.warehouseId, operation.districtId, order.order_id],
-    );
-    return {orderId: Number(order.order_id), lineCount: lineRows.length};
-  });
-}
-
-async function executeDelivery(connection, operation, scale) {
-  return withTransaction(connection, async () => {
-    let deliveredOrders = ZERO;
-    for (let districtId = ONE;
-      districtId <= scale.districtsPerWarehouse;
-      districtId += ONE) {
-      const [newOrderRows] = await connection.execute(
-        'SELECT order_id FROM new_order ' +
-        'WHERE warehouse_id = ? AND district_id = ? ' +
-        'ORDER BY order_id ASC LIMIT 1 FOR UPDATE',
-        [operation.warehouseId, districtId],
-      );
-      if (!Array.isArray(newOrderRows) || newOrderRows.length === ZERO) continue;
-      const orderId = Number(newOrderRows[ZERO].order_id);
-      await connection.execute(
-        'DELETE FROM new_order ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
-        [operation.warehouseId, districtId, orderId],
-      );
-
-      // The new_order FOR UPDATE is a current/locking read in TiDB. Keep the
-      // dependent order and order-line reads on that same visibility mode.
-      // Mixing them with snapshot reads can expose new_order before the
-      // transaction snapshot can see the order committed with it.
-      const [orderRows] = await connection.execute(
-        'SELECT customer_id FROM orders ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? FOR UPDATE',
-        [operation.warehouseId, districtId, orderId],
-      );
-      const order = requireRow(orderRows, 'delivery order');
-      await connection.execute(
-        'UPDATE orders SET carrier_id = ? ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
-        [operation.carrierId, operation.warehouseId, districtId, orderId],
-      );
-      const [lineRows] = await connection.execute(
-        'SELECT amount_cents FROM order_line ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ? ' +
-        'ORDER BY line_number FOR UPDATE',
-        [operation.warehouseId, districtId, orderId],
-      );
-      if (!Array.isArray(lineRows) || lineRows.length === ZERO) {
-        throw new Error('TiDB OLTP expected delivery order lines');
-      }
-      const amountCents = lineRows.reduce(
-        (sum, row) => sum + Number(row.amount_cents),
-        ZERO,
-      );
-      await connection.execute(
-        'UPDATE order_line SET delivered = 1 ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND order_id = ?',
-        [operation.warehouseId, districtId, orderId],
-      );
-      await connection.execute(
-        'UPDATE customer SET balance_cents = balance_cents + ?, ' +
-        'delivery_count = delivery_count + 1 ' +
-        'WHERE warehouse_id = ? AND district_id = ? AND customer_id = ?',
-        [amountCents, operation.warehouseId, districtId, order.customer_id],
-      );
-      deliveredOrders += ONE;
-    }
-    return {deliveredOrders};
-  });
-}
-
-async function executeStockLevel(connection, operation) {
-  return withTransaction(connection, async () => {
-    const [districtRows] = await connection.execute(
-      'SELECT next_order_id FROM district ' +
-      'WHERE warehouse_id = ? AND district_id = ?',
-      [operation.warehouseId, operation.districtId],
-    );
-    const nextOrderId = Number(
-      requireRow(districtRows, 'stock-level district').next_order_id,
-    );
-    const firstOrderId = Math.max(ONE, nextOrderId - 20);
-    const [rows] = await connection.execute(
-      'SELECT COUNT(DISTINCT ol.item_id) AS low_stock ' +
-      'FROM order_line AS ol JOIN stock AS s ' +
-      'ON s.warehouse_id = ? AND s.item_id = ol.item_id ' +
-      'WHERE ol.warehouse_id = ? AND ol.district_id = ? ' +
-      'AND ol.order_id >= ? AND ol.order_id < ? AND s.quantity < ?',
-      [
-        operation.warehouseId,
-        operation.warehouseId,
-        operation.districtId,
-        firstOrderId,
-        nextOrderId,
-        operation.threshold,
-      ],
-    );
-    return {lowStock: Number(requireRow(rows, 'stock-level count').low_stock)};
-  });
-}
-
-async function executeOperation(connection, operation, scale) {
-  switch (operation.kind) {
-    case OLTP_OPERATION_KIND.NEW_ORDER:
-      return executeNewOrder(connection, operation);
-    case OLTP_OPERATION_KIND.PAYMENT:
-      return executePayment(connection, operation);
-    case OLTP_OPERATION_KIND.ORDER_STATUS:
-      return executeOrderStatus(connection, operation);
-    case OLTP_OPERATION_KIND.DELIVERY:
-      return executeDelivery(connection, operation, scale);
-    case OLTP_OPERATION_KIND.STOCK_LEVEL:
-      return executeStockLevel(connection, operation);
-    default:
-      throw new Error(`Unsupported TiDB OLTP operation kind: ${operation.kind}`);
   }
 }
 
@@ -555,24 +389,19 @@ async function createTiDbOltpAdapter(options = {}) {
   const datasetSha256 = hashOltpBaselineDataset(dataset);
   const datasetSummary = summarizeOltpBaselineDataset(dataset);
   const workerConnections = [];
+  const workerSessions = [];
   const initialConnectionIds = [];
   const busyWorkers = new Set();
   let closed = false;
   let databaseCreated = false;
 
   try {
-    await recreateAndLoadDatabase(
-      connect,
-      endpoint,
-      databaseName,
-      dataset,
-    );
+    await recreateAndLoadDatabase(connect, endpoint, databaseName, dataset);
     databaseCreated = true;
     for (let index = ZERO; index < config.workers; index += ONE) {
-      const connection = await connect(
-        connectionOptions(endpoint, databaseName),
-      );
+      const connection = await connect(connectionOptions(endpoint, databaseName));
       workerConnections.push(connection);
+      workerSessions.push(createTiDbSession(connection));
       initialConnectionIds.push(await queryConnectionId(connection));
     }
   } catch (error) {
@@ -605,7 +434,7 @@ async function createTiDbOltpAdapter(options = {}) {
       const workerIndex = Number(operation?.workerId) - ONE;
       if (!Number.isInteger(workerIndex) ||
           workerIndex < ZERO ||
-          workerIndex >= workerConnections.length) {
+          workerIndex >= workerSessions.length) {
         throw new Error('TiDB OLTP operation has invalid workerId');
       }
       if (busyWorkers.has(workerIndex)) {
@@ -615,8 +444,8 @@ async function createTiDbOltpAdapter(options = {}) {
       }
       busyWorkers.add(workerIndex);
       try {
-        return await executeOperation(
-          workerConnections[workerIndex],
+        return await executeOltpBaselineTransaction(
+          workerSessions[workerIndex],
           operation,
           config.scale,
         );
