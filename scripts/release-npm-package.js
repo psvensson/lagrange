@@ -54,7 +54,25 @@ const NOTHING_AUTHORIZED_ERROR =
 const RELEASE_COMMAND = Object.freeze({
   VERIFY: 'verify',
   PUBLISH: 'publish',
+  CHANNEL: 'channel',
 });
+// A prerelease semver (a hyphenated suffix after the patch) publishes under
+// `next`; everything else is the release channel and takes `latest`. One
+// decision, read from the version the registry will see, consumed by npm,
+// Docker and the GitHub release alike so no "latest" pointer moves for a
+// prerelease.
+const RELEASE_CHANNEL = Object.freeze({
+  RELEASE: 'release',
+  PRERELEASE: 'prerelease',
+});
+const DIST_TAG = Object.freeze({
+  LATEST: 'latest',
+  NEXT: 'next',
+});
+const PRERELEASE_VERSION = /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/u;
+const RELEASE_VERSION = /^\d+\.\d+\.\d+$/u;
+const VERSION_OPTION = 'version';
+const NPM_TAG_OPTION = '--tag';
 const COMMAND_ARGUMENT = Object.freeze({
   TAR_EXTRACT_GZIP: '-xzf',
   TAR_DIRECTORY: '-C',
@@ -97,7 +115,8 @@ const MANIFEST_ERROR = Object.freeze({
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
 const CLI_USAGE =
   'usage: release-npm-package.js verify [--output DIR] [--git-head SHA] ' +
-  'or publish --tarball FILE --authorize-version VERSION [--git-head SHA]';
+  'or publish --tarball FILE --authorize-version VERSION [--git-head SHA] ' +
+  'or channel --version VERSION';
 
 const RELEASE_OUTCOME = Object.freeze({
   PACKAGE_VERIFIED: 'PACKAGE_VERIFIED',
@@ -600,6 +619,7 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
   // version they intend to publish; the authority compares it with the version
   // actually about to go out. Reading the version out of the tarball and
   // presenting it as the authorization would authorize whatever was built.
+  const channel = releaseChannel(candidate.manifest.version);
   const publishResult = run(NPM_COMMAND, [
     'publish',
     candidate.tarballPath,
@@ -608,6 +628,8 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
     '--provenance',
     '--registry',
     REGISTRY_URL,
+    NPM_TAG_OPTION,
+    channel.distTag,
   ]);
   if (publishResult.status !== 0) {
     const code = classifyPublishFailure(publishResult);
@@ -622,6 +644,24 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
   }
   const outcome = await observePublishedCandidate(candidate);
   return {outcome, candidate};
+}
+
+/**
+ * Which channel a version publishes to, and the npm dist-tag that carries it.
+ * A version that is neither a release nor a prerelease semver is refused
+ * rather than defaulted, because the default would be `latest`.
+ * @param {string} version bare semver, no leading v
+ * @return {{channel: string, distTag: string, prerelease: boolean}}
+ */
+function releaseChannel(version) {
+  if (RELEASE_VERSION.test(version)) {
+    return {channel: RELEASE_CHANNEL.RELEASE, distTag: DIST_TAG.LATEST, prerelease: false};
+  }
+  if (PRERELEASE_VERSION.test(version)) {
+    return {channel: RELEASE_CHANNEL.PRERELEASE, distTag: DIST_TAG.NEXT, prerelease: true};
+  }
+  throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
+    `not a release or prerelease semver: ${version}`);
 }
 
 function parseArguments(argv) {
@@ -662,6 +702,10 @@ async function main() {
       integrity: packed.integrity,
       gitHead: packed.gitHead,
     }, null, 2));
+    return;
+  }
+  if (command === RELEASE_COMMAND.CHANNEL && options[VERSION_OPTION]) {
+    console.log(JSON.stringify(releaseChannel(options[VERSION_OPTION]), null, 2));
     return;
   }
   if (command === RELEASE_COMMAND.PUBLISH && options.tarball) {
@@ -707,6 +751,7 @@ export {
   inspectTarball,
   normalizeRepositoryUrl,
   publishNpmPackage,
+  releaseChannel,
   validateWorkspaceManifest,
   verifyInstalledPackage,
 };

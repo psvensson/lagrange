@@ -12,6 +12,14 @@ dist/
 .gc/
 build/
 data
+# Release publication receipts are committed evidence (one per tag, written by
+# the release workflow); everything else under the root data/ stays ignored,
+# and every nested data/ directory stays ignored by the bare pattern above.
+!/data/
+/data/*
+!/data/releases/
+/data/releases/*
+!/data/releases/*.json
 data2/
 .tap/
 .tmp/
