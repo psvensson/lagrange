@@ -13,8 +13,16 @@ import {createSqlRequest} from '../sql-request.js';
 import {createTimeoutBudget} from '../../control-plane/timeout-budget.js';
 import {QUERY_WALL_TIME_LIMIT_MS} from
   '../../wasm-service/query-budget-constants.js';
+import {QUERY_ERROR_CODE} from '../query-constants.js';
+import {
+  projectTransactionParticipantFailure,
+} from '../distributed/transaction-participant-error-projection.js';
 import {PARSER_DIALECT} from './pg-compat-constants.js';
-import {PG_SESSION_STATE, PG_WIRE_ERROR_MSG} from './pg-wire-constants.js';
+import {
+  PG_SESSION_STATE,
+  PG_WIRE_ERROR_MSG,
+  PG_WIRE_SQLSTATE,
+} from './pg-wire-constants.js';
 import {
   SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
   SERVICE_LIFECYCLE_SQL_COMMAND,
@@ -63,6 +71,19 @@ function resolveStatementAuthorizationAction(statement) {
   }
 }
 
+function projectPgWireExecutionResult(result) {
+  const projected = projectTransactionParticipantFailure(result);
+  if (
+    projected?.success === false &&
+    projected.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT
+  ) {
+    return {
+      ...projected,
+      sqlState: PG_WIRE_SQLSTATE.SERIALIZATION_FAILURE,
+    };
+  }
+  return projected;
+}
 
 /**
  * PostgresWireAdapter maps authenticated protocol sessions to
@@ -223,7 +244,8 @@ class PostgresWireAdapter {
       executionMode: request.executionMode,
     });
 
-    return await this.sqlCore.executeRequest(request);
+    const result = await this.sqlCore.executeRequest(request);
+    return projectPgWireExecutionResult(result);
   }
 
   /**
@@ -282,4 +304,9 @@ class PostgresWireAdapter {
   }
 }
 
-export {PostgresWireAdapter, PG_SESSION_STATE, PG_WIRE_ERROR_MSG};
+export {
+  PostgresWireAdapter,
+  PG_SESSION_STATE,
+  PG_WIRE_ERROR_MSG,
+  projectPgWireExecutionResult,
+};
