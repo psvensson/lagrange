@@ -7,10 +7,14 @@ on:
     paths:
       - ".github/workflows/tidb-reference-gcp-physical.yml"
       - "scripts/checks/run-tidb-reference-gcp-physical-proof.js"
+      - "scripts/checks/gcp-data-disk-owner-guard.js"
       - "scripts/checks/tidb-reference-physical-placement-guard.js"
       - "scripts/checks/tidb-reference-physical-topology-guard.js"
+      - "scripts/checks/tidb-reference-tikv-storage-guard.js"
+      - "test/distributed/harness/gcp-data-disk-owner.js"
       - "test/distributed/harness/tidb-reference-physical-placement-proof.js"
       - "test/distributed/harness/tidb-reference-physical-topology.js"
+      - "test/distributed/harness/tidb-reference-tikv-storage-provider.js"
       - "test/distributed/config/gcp-tidb-reference-physical.json"
 
 permissions:
@@ -96,19 +100,25 @@ jobs:
           pulumi version
           openssl version
 
-      - name: Run physical-topology and placement guards
+      - name: Run physical-topology, placement and storage guards
         run: |
           set -euo pipefail
           npx eslint \
+            test/distributed/harness/gcp-data-disk-owner.js \
             test/distributed/harness/tidb-reference-physical-topology.js \
             test/distributed/harness/tidb-reference-physical-placement-proof.js \
+            test/distributed/harness/tidb-reference-tikv-storage-provider.js \
+            scripts/checks/gcp-data-disk-owner-guard.js \
             scripts/checks/tidb-reference-physical-topology-guard.js \
             scripts/checks/tidb-reference-physical-placement-guard.js \
+            scripts/checks/tidb-reference-tikv-storage-guard.js \
             scripts/checks/run-tidb-reference-gcp-physical-proof.js
           node scripts/checks/tidb-reference-lifecycle-guard.js
           node scripts/checks/tidb-reference-resource-policy-guard.js
           node scripts/checks/tidb-reference-physical-topology-guard.js
           node scripts/checks/tidb-reference-physical-placement-guard.js
+          node scripts/checks/gcp-data-disk-owner-guard.js
+          node scripts/checks/tidb-reference-tikv-storage-guard.js
 
       - name: Pull exact pinned reference images on controller
         run: |
@@ -118,7 +128,7 @@ jobs:
           docker pull pingcap/tidb:v8.5.8
           docker pull mysql:8.4.11
 
-      - name: Prove five-host physical RF3 placement
+      - name: Prove five-host physical RF3 placement with data disks
         run: node scripts/checks/run-tidb-reference-gcp-physical-proof.js
 
       - name: Upload physical RF3 proof evidence
