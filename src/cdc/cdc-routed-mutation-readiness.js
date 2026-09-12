@@ -38,7 +38,7 @@ const {
   annotateSystemTableMutationError,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
-  delay,
+  delayOn,
   getControlPlaneRetryAfterMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
@@ -429,11 +429,14 @@ class CDCRoutedMutationReadiness {
       if (queryExecutionBudgetMs === null) {
         return null;
       }
+      // The budget that bounds this loop reads the same clock the loop's
+      // delays arm on; a budget on the wall clock under a virtual delay
+      // would let the attempt count depend on which clock moved.
       if (queryExecutionDeadlineMs === null) {
-        queryExecutionDeadlineMs = Date.now() + queryExecutionBudgetMs;
+        queryExecutionDeadlineMs = this.timeSource.now() + queryExecutionBudgetMs;
         return queryExecutionBudgetMs;
       }
-      return Math.max(0, queryExecutionDeadlineMs - Date.now());
+      return Math.max(0, queryExecutionDeadlineMs - this.timeSource.now());
     };
     const waitForRetryBudget = async (delayMs) => {
       // Teardown stop: once the service is shutting down, abandon the retry
@@ -450,7 +453,7 @@ class CDCRoutedMutationReadiness {
       const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       if (remainingBudgetMs === null) {
         if (normalizedDelayMs > 0) {
-          await delay(normalizedDelayMs);
+          await delayOn(this.timeSource, normalizedDelayMs);
         }
         return true;
       }
@@ -461,7 +464,7 @@ class CDCRoutedMutationReadiness {
         return false;
       }
       if (normalizedDelayMs > 0) {
-        await delay(normalizedDelayMs);
+        await delayOn(this.timeSource, normalizedDelayMs);
       }
       const nextRemainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;

@@ -37,7 +37,7 @@ const {
   canonicalizeSystemTableRow,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  delay,
+  delayOn,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   isRetryableControlPlaneError,
@@ -139,10 +139,12 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (isSatisfied()) {
       return buildSystemTableVisibilityResult();
     }
+    const timeSource = this.timeSource;
     return new Promise((resolve, reject) => {
       let settled = false;
       const timeoutBudget = createTimeoutBudget({
         configuredBudgetMs: timeoutMs,
+        now: () => timeSource.now(),
       });
       const listener = (changedTable) => {
         if (changedTable !== tableName) {
@@ -152,7 +154,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           cleanup(null, buildSystemTableVisibilityResult());
         }
       };
-      const timer = setTimeout(() => {
+      const timer = timeSource.setTimeout(() => {
         void (async () => {
           if (isSatisfied()) {
             cleanup();
@@ -247,6 +249,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
             classification:
               TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
             nestedOperation: `cache_wait:${tableName}`,
+            now: () => timeSource.now(),
           });
           if (typeof visibilityResult?.visibilityState === 'string') {
             timeoutError.visibilityState = visibilityResult.visibilityState;
@@ -287,7 +290,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           cache.offCacheChange(listener);
         }
         if (timer) {
-          clearTimeout(timer);
+          timeSource.clearTimeout(timer);
         }
         if (error) {
           reject(error);
@@ -330,14 +333,13 @@ class CDCIntegrationServiceCacheVisibilityWait {
         return lastResult;
       }
       const remainingBudgetMs = getRemainingBudgetMs(options?.timeoutBudget, {
-        now: this.now,
+        now: () => this.timeSource.now(),
       });
       if (attempt >= maxAttempts || remainingBudgetMs <= 0) {
         break;
       }
-      await delay(
-        Math.min(this.authoritativeFallbackRetryDelayMs, remainingBudgetMs),
-      );
+      await delayOn(this.timeSource,
+        Math.min(this.authoritativeFallbackRetryDelayMs, remainingBudgetMs));
     }
     return lastResult;
   }
