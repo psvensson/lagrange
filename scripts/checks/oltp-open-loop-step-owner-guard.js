@@ -89,6 +89,8 @@ async function assertFixedRateAndWorkerSerialization() {
   assert.equal(result.scheduledWindowMs, 30);
   assert.ok(result.accountingWindowMs >= result.scheduledWindowMs);
   assert.ok(result.completedPerSec <= result.offeredRatePerSec);
+  assert.equal(result.latency.count, 3);
+  assert.equal(result.attemptLatency.count, 3);
   assert.deepEqual(
     result.records.map(({intendedIssueTimeMs}) => intendedIssueTimeMs),
     [1000, 1010, 1020],
@@ -184,6 +186,31 @@ async function assertFailureIsRecordedNotRetriedBlindly() {
   assert.equal(result.records[0].status, 'failed');
   assert.equal(result.records[0].sqlState, null);
   assert.equal(result.records[0].latencyMs, 3);
+  assert.equal(result.latency.count, 0);
+  assert.equal(result.attemptLatency.count, 1);
+  assert.equal(result.attemptLatency.p99, 3);
+}
+
+async function assertEarlySchedulerReturnFailsClosed() {
+  let logicalNow = 5000;
+  let calls = 0;
+  const adapter = {
+    async executeTransaction() {
+      calls += 1;
+    },
+  };
+  await assert.rejects(
+    runOpenLoopOltpStep(adapter, [operation(1, 1)], {
+      offeredRatePerSec: 100,
+      startTimeMs: 5000,
+      now: () => logicalNow,
+      waitUntil: async (targetTimeMs) => {
+        logicalNow = targetTimeMs - 1;
+      },
+    }),
+    /scheduler returned before intended issue time/u,
+  );
+  assert.equal(calls, 0);
 }
 
 async function main() {
@@ -193,6 +220,7 @@ async function main() {
   await assertSchedulerLagStaysInsideRequestClock();
   await assertRetryStaysInsideRequestClock();
   await assertFailureIsRecordedNotRetriedBlindly();
+  await assertEarlySchedulerReturnFailsClosed();
   assert.throws(
     () => buildOpenLoopIssuePlan([operation(1, 1)], 0, 0),
     /offeredRatePerSec must be a positive number/u,
