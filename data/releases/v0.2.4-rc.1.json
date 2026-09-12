@@ -7,17 +7,17 @@
   "intended": {
     "distTag": "next"
   },
-  "observedAt": "2026-09-12T13:08:56.797590+00:00",
+  "observedAt": "2026-09-12T13:10:41.089793+00:00",
   "observedBy": "solver, after tagged release.yml run 34695375163 failed at step 7 (Publish npm package); the workflow did not reach its own receipt step",
   "published": {
     "npm": {
-      "published": false,
+      "published": true,
       "distTags": {
         "latest": "0.1.1",
-        "next": "0.2.4-rc.0"
+        "next": "0.2.4-rc.1"
       },
-      "gitHead": null,
-      "note": "npm publish exited 0 with 'Your package is being processed and may take a few minutes to become available'; the owner's 10 s observation window read the version as absent (false negative; 0.2.4-rc.0 surfaced 4 minutes after its publish)",
+      "gitHead": "cd07a9cbe05cd97eef9bd3498b9fe1145daa723f",
+      "note": "npm publish exited 0 saying the package was being processed; the owner's 10 s window read it as absent (false negative); observed available under dist-tag next 2026-09-12T13:10:41.089779+00:00",
       "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.4-rc.1"
     },
     "docker": {
@@ -45,6 +45,6 @@
   "failure": {
     "step": "Publish npm package",
     "ownerVerdict": "PUBLISH_EXITED_WITHOUT_VERSION",
-    "class": "npm post-publish processing latency exceeds the owner's observation window"
+    "class": "npm post-publish processing latency (minutes) exceeded the owner's 10 s observation window; npm publication itself succeeded"
   }
 }
