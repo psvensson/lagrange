@@ -146,6 +146,7 @@ async function runTiDbOrderStatusProof(options = {}) {
     const observation = Object.freeze({
       orderId: Number(readOutcome.result?.orderId),
       lineCount: Number(readOutcome.result?.lineCount),
+      lines: readOutcome.result?.lines || [],
       stateBeforeSha256: before.stateSha256,
       stateAfterSha256: after.stateSha256,
     });
