@@ -35,11 +35,11 @@ function freezeRecord(value) {
 const CLAIMED_PROOF_IDS = freezeRecord([
   'forbidden:duplicate_success_effect',
   'isolation:successfulEffectsExactlyOnce',
-  'family:payment:warehouse_ytd_increases_by_payment_amount',
-  'family:payment:district_ytd_increases_by_payment_amount',
-  'family:payment:customer_balance_decreases_by_payment_amount',
-  'family:payment:customer_payment_counters_advance_once',
-  'family:payment:one_history_row_created_for_logical_payment',
+  'transaction:payment:warehouse_ytd_increases_by_payment_amount',
+  'transaction:payment:district_ytd_increases_by_payment_amount',
+  'transaction:payment:customer_balance_decreases_by_payment_amount',
+  'transaction:payment:customer_payment_counters_advance_once',
+  'transaction:payment:one_history_row_created_for_logical_payment',
 ].sort());
 
 function requireRow(rows, predicate, label) {
