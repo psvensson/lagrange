@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-contracts-registration",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Every registered invariant cites a contract the impact-contract registry knows: each of the 26 citations the derived harness model reports as unbound either receives a registration in test/shards/impact-contracts.json with exactly one witness test, or a ruled-out finding retiring the citation from architecture/contracts/invariants.json, so that no invariant remains that nobody can witness and the harness model's unbound count reaches zero by derivation.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-contracts-registration.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-witness-per-registration",
+      "statement": "A registration names exactly one witness test that fails when the invariant is violated; a registration without a red-on-violation witness is not a registration."
+    },
+    {
+      "id": "retire-or-register-never-relabel",
+      "statement": "An unbound citation is either registered or retired with a ruled-out finding; it is never re-pointed at an unrelated registered contract to make the number move."
+    },
+    {
+      "id": "derived-not-typed",
+      "statement": "The count is read from the derived harness model through scripts/checks/formation-contracts-registration.js; no list of the 26 is maintained by hand."
+    }
+  ],
+  "sealedAt": "0538db5c7d4a52bc4f7712061763a6efc9e3ff72"
+}
