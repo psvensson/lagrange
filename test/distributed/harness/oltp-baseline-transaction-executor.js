@@ -58,6 +58,17 @@ function rowCountOf(result) {
   return Number.isFinite(rowCount) ? rowCount : rowsOf(result).length;
 }
 
+function normalizeOrderStatusLine(row) {
+  return {
+    lineNumber: Number(row.line_number),
+    itemId: Number(row.item_id),
+    supplyWarehouseId: Number(row.supply_warehouse_id),
+    quantity: Number(row.quantity),
+    amountCents: Number(row.amount_cents),
+    delivered: Number(row.delivered),
+  };
+}
+
 async function executeNewOrder(session, operation) {
   return session.transaction(async (tx) => {
     const district = singleRow(
@@ -177,7 +188,7 @@ async function executeOrderStatus(session, operation) {
       operation.customerId,
     ]));
     if (orderRows.length === ZERO) {
-      return {orderId: null, lineCount: ZERO};
+      return {orderId: null, lineCount: ZERO, lines: []};
     }
     const order = orderRows[ZERO];
     const lineRows = rowsOf(await tx.execute(STATEMENT.ORDER_STATUS_LINES, [
@@ -185,7 +196,8 @@ async function executeOrderStatus(session, operation) {
       operation.districtId,
       order.order_id,
     ]));
-    return {orderId: Number(order.order_id), lineCount: lineRows.length};
+    const lines = lineRows.map(normalizeOrderStatusLine);
+    return {orderId: Number(order.order_id), lineCount: lines.length, lines};
   });
 }
 

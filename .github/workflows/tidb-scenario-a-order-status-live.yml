@@ -5,11 +5,15 @@ on:
     branches:
       - benchmark/tidb-reference-scenarios
       - benchmark/scenario-a-order-status-tidb-live-staging
+      - benchmark/order-status-lines-tidb-live-staging
+      - benchmark/order-status-lines-reconcile
     paths:
       - '.github/workflows/tidb-scenario-a-order-status-live.yml'
       - 'scripts/checks/run-tidb-scenario-a-order-status-live.js'
+      - 'scripts/checks/oltp-baseline-transaction-executor-guard.js'
       - 'scripts/checks/oltp-scenario-a-order-status-case-guard.js'
       - 'scripts/checks/tidb-oltp-state-snapshot-guard.js'
+      - 'test/distributed/harness/oltp-baseline-transaction-executor.js'
       - 'test/distributed/harness/oltp-paired-retry-owner.js'
       - 'test/distributed/harness/oltp-scenario-a-comparison-systems.js'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
@@ -53,11 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           npx eslint \
+            test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/harness/oltp-scenario-a-order-status-case.js \
             test/distributed/reference-client/tidb-oltp-state-snapshot.js \
+            scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-scenario-a-order-status-case-guard.js \
             scripts/checks/tidb-oltp-state-snapshot-guard.js \
             scripts/checks/run-tidb-scenario-a-order-status-live.js
+          node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-scenario-a-order-status-case-guard.js
           node scripts/checks/tidb-oltp-state-snapshot-guard.js
 

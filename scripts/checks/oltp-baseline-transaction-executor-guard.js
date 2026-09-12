@@ -125,14 +125,32 @@ async function assertOrderStatus() {
     districtId: 1,
     customerId: 1,
   }, {districtsPerWarehouse: 10});
-  assert.deepEqual(emptyResult, {orderId: null, lineCount: 0});
+  assert.deepEqual(emptyResult, {orderId: null, lineCount: 0, lines: []});
 
   const populated = fakeSession({
     [OLTP_SQL_STATEMENT.ORDER_STATUS_LATEST]: {
       rows: [{order_id: 44, carrier_id: null}], rowCount: 1,
     },
     [OLTP_SQL_STATEMENT.ORDER_STATUS_LINES]: {
-      rows: [{line_number: 1}, {line_number: 2}], rowCount: 2,
+      rows: [
+        {
+          line_number: 1,
+          item_id: 7,
+          supply_warehouse_id: 1,
+          quantity: 3,
+          amount_cents: 450,
+          delivered: 0,
+        },
+        {
+          line_number: 2,
+          item_id: 8,
+          supply_warehouse_id: 2,
+          quantity: 4,
+          amount_cents: 800,
+          delivered: 1,
+        },
+      ],
+      rowCount: 2,
     },
   });
   const result = await executeOltpBaselineTransaction(populated, {
@@ -141,7 +159,28 @@ async function assertOrderStatus() {
     districtId: 1,
     customerId: 1,
   }, {districtsPerWarehouse: 10});
-  assert.deepEqual(result, {orderId: 44, lineCount: 2});
+  assert.deepEqual(result, {
+    orderId: 44,
+    lineCount: 2,
+    lines: [
+      {
+        lineNumber: 1,
+        itemId: 7,
+        supplyWarehouseId: 1,
+        quantity: 3,
+        amountCents: 450,
+        delivered: 0,
+      },
+      {
+        lineNumber: 2,
+        itemId: 8,
+        supplyWarehouseId: 2,
+        quantity: 4,
+        amountCents: 800,
+        delivered: 1,
+      },
+    ],
+  });
 }
 
 async function assertDelivery() {

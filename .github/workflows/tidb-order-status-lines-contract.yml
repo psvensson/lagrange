@@ -1,28 +1,22 @@
-name: tidb-scenario-a-order-status-contract
+name: tidb-order-status-lines-contract
 
 on:
   push:
     branches:
       - benchmark/tidb-reference-scenarios
-      - benchmark/scenario-a-order-status-case-staging
-      - benchmark/order-status-lines-proof-staging
+      - benchmark/order-status-lines-staging
       - benchmark/order-status-lines-reconcile
     paths:
-      - '.github/workflows/tidb-scenario-a-order-status-contract.yml'
-      - 'test/distributed/harness/oltp-baseline-dataset.js'
-      - 'test/distributed/harness/oltp-baseline-workload.js'
+      - '.github/workflows/tidb-order-status-lines-contract.yml'
       - 'test/distributed/harness/oltp-baseline-transaction-executor.js'
-      - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
-      - 'test/distributed/harness/oltp-scenario-a-order-status-case.js'
       - 'scripts/checks/oltp-baseline-transaction-executor-guard.js'
-      - 'scripts/checks/oltp-scenario-a-order-status-case-guard.js'
   workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: tidb-scenario-a-order-status-contract-${{ github.ref }}
+  group: tidb-order-status-lines-contract-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -45,13 +39,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prove order-status case contract
+      - name: Prove shared order-status line result
         run: |
           set -euo pipefail
           npx eslint \
             test/distributed/harness/oltp-baseline-transaction-executor.js \
-            test/distributed/harness/oltp-scenario-a-order-status-case.js \
-            scripts/checks/oltp-baseline-transaction-executor-guard.js \
-            scripts/checks/oltp-scenario-a-order-status-case-guard.js
+            scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
-          node scripts/checks/oltp-scenario-a-order-status-case-guard.js
