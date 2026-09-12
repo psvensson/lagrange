@@ -5,6 +5,7 @@ import {
   RELEASE_OUTCOME,
   classifyRegistryState,
   normalizeRepositoryUrl,
+  releaseChannel,
 } from '../../scripts/release-npm-package.js';
 
 const VERSION = '0.1.0';
@@ -92,3 +93,19 @@ describe('npm release registry decisions', () => {
     );
   });
 });
+
+describe('release channel', () => {
+  it('sends a prerelease to next and a release to latest, and refuses the rest', () => {
+    assert.deepEqual(releaseChannel('0.2.4'),
+      {channel: 'release', distTag: 'latest', prerelease: false});
+    assert.deepEqual(releaseChannel('0.2.4-rc.0'),
+      {channel: 'prerelease', distTag: 'next', prerelease: true});
+    assert.deepEqual(releaseChannel('1.0.0-beta.12'),
+      {channel: 'prerelease', distTag: 'next', prerelease: true});
+    for (const bad of ['v0.2.4', '0.2', '0.2.4+build', '']) {
+      assert.throws(() => releaseChannel(bad), /not a release or prerelease semver/u,
+        `${JSON.stringify(bad)} must be refused, never defaulted to latest`);
+    }
+  });
+});
+

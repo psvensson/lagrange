@@ -29,6 +29,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {receiptVerdicts} from './release-publication-receipt.js';
+
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
@@ -46,7 +48,6 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const UNKNOWN_VERDICT = 'unknown';
 const TREND_WINDOW = 3;
-const ARTIFACTS = Object.freeze(['npm', 'docker', 'helm', 'github']);
 
 const BUDGET = Object.freeze({
   LOOSE_SCRIPTS: 80,
@@ -87,7 +88,6 @@ const SCRIPTS_DIR = 'scripts';
 const CHECKS_DIR = 'scripts/checks';
 const WORKFLOWS_DIR = '.github/workflows';
 const SRC_DIR = 'src';
-const RELEASES_DIR = 'data/releases';
 const TREND_FILE = 'data/formation-health/trend.ndjson';
 const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 const FAST_STATIC_SCRIPT = 'scripts/check-fast-static.js';
@@ -97,7 +97,6 @@ const AGENTS_MD = 'AGENTS.md';
 const README_MD = 'README.md';
 
 const MARKDOWN_SUFFIX = '.md';
-const JSON_SUFFIX = '.json';
 const METHODS_SUFFIX = '-methods.js';
 
 const LITERALS_CHECKER_FRAGMENT = 'guideline:literals';
@@ -233,24 +232,14 @@ function dependsOn(root, name) {
   return arraySome(Object.keys(all), (key) => stringIncludes(key, name));
 }
 
-function newestReleaseReceipt(root) {
-  const files = arrayFilter(filesUnder(root, RELEASES_DIR),
-    (f) => stringEndsWith(f, JSON_SUFFIX)).sort();
-  if (files.length === 0) return null;
-  try {
-    return JSON.parse(read(root, files[files.length - 1]));
-  } catch {
-    return null;
-  }
-}
-
-function receiptPublishedCount(receipt) {
-  if (!receipt || typeof receipt !== 'object') return 0;
-  const published = receipt.published || receipt.artifacts || {};
-  return arrayFilter(ARTIFACTS, (name) => {
-    const entry = published[name];
-    return entry === true || (entry && entry.published === true);
-  }).length;
+// The receipt owner decides what "published" means; this row only counts.
+function releaseReceipt(root) {
+  const verdicts = receiptVerdicts(root);
+  return {
+    receipt: verdicts.receipt,
+    published: arrayFilter(verdicts.rows, (row) => row.published).length,
+    artifacts: verdicts.rows.length,
+  };
 }
 
 function measuringTrendRecords(root) {
@@ -305,11 +294,12 @@ const atLeast = (value, budget) => value >= budget;
  *   one row per budget, in the sealed table's order
  */
 function measureConsolidationBudget(root = REPO_ROOT) {
-  const receipt = newestReleaseReceipt(root);
+  const release = releaseReceipt(root);
+  const receipt = release.receipt;
   const epics = epicStats(root);
   const rows = [
     ['release receipt: artifacts published',
-      receiptPublishedCount(receipt), ARTIFACTS.length, atLeast],
+      release.published, release.artifacts, atLeast],
     ['formation trend: measuring verdicts in last 3',
       measuringTrendRecords(root), TREND_WINDOW, atLeast],
     ['README offences', readmeOffences(root, receipt), 0, atMost],

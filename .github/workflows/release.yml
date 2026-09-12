@@ -193,7 +193,13 @@ jobs:
           node scripts/release-notes.js --mode check --version "$VERSION"
           node scripts/release-notes.js --mode notes --version "$VERSION" > "$NOTES_DIR/release-notes.md"
           node scripts/release-notes.js --mode overview --version "$VERSION" > "$NOTES_DIR/dockerhub-overview.md"
+          CHANNEL_JSON="$(node scripts/release-npm-package.js channel --version "$VERSION")"
+          PRERELEASE="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).prerelease))' "$CHANNEL_JSON")"
+          DIST_TAG="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).distTag)' "$CHANNEL_JSON")"
+          echo "Release channel: $CHANNEL_JSON"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
           echo "tagged_commit=$TAGGED_COMMIT" >> "$GITHUB_OUTPUT"
           echo "proof_object=$PROOF_OBJECT" >> "$GITHUB_OUTPUT"
           echo "notes_dir=$NOTES_DIR" >> "$GITHUB_OUTPUT"
@@ -258,7 +264,6 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ env.DOCKERHUB_IMAGE }}:${{ steps.release.outputs.version }}
-            ${{ env.DOCKERHUB_IMAGE }}:latest
           build-args: |
             VERSION=${{ steps.release.outputs.version }}
             VCS_REF=${{ steps.release.outputs.tagged_commit }}
@@ -285,8 +290,13 @@ jobs:
           VERSION="${{ steps.release.outputs.version }}"
           retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 3 ] && return 1; sleep "$((n*5))"; done; }
           retry docker push "$DOCKERHUB_IMAGE:$VERSION"
-          LATEST_REMOTE_TAG="$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' | sed 's#^refs/tags/##' | sort -V | tail -n 1)"
+          if [ "${{ steps.release.outputs.prerelease }}" = "true" ]; then
+            echo "prerelease $VERSION: latest stays where it is"
+            exit 0
+          fi
+          LATEST_REMOTE_TAG="$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' | sed 's#^refs/tags/##' | grep -v -- '-' | sort -V | tail -n 1)"
           test "$GITHUB_REF_NAME" = "$LATEST_REMOTE_TAG" || { echo "::error::Refusing to move latest backward from $LATEST_REMOTE_TAG"; exit 1; }
+          docker tag "$DOCKERHUB_IMAGE:$VERSION" "$DOCKERHUB_IMAGE:latest"
           retry docker push "$DOCKERHUB_IMAGE:latest"
 
       - name: Update Docker Hub repository description
@@ -298,17 +308,55 @@ jobs:
           repository: psvensson/lagrange
           readme-filepath: ${{ steps.release.outputs.notes_dir }}/dockerhub-overview.md
 
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Write publication receipt
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
-          ASSETS=(dist/lagrange dist/lagrange-cli "dist/lagrange-node-${VERSION}.tgz" "dist/npm/lagrange-server-${VERSION}.tgz" dist/SHA256SUMS)
+          mkdir -p data/releases
+          node --input-type=module <<'NODE' > "data/releases/${GITHUB_REF_NAME}.json"
+          const version = process.env.VERSION;
+          const image = process.env.DOCKERHUB_IMAGE;
+          const repo = process.env.GITHUB_REPOSITORY;
+          const tag = process.env.GITHUB_REF_NAME;
+          const receipt = {
+            schema: 'release-publication-receipt/1',
+            tag,
+            sha: process.env.TAGGED_COMMIT,
+            version,
+            prerelease: process.env.PRERELEASE === 'true',
+            distTag: process.env.DIST_TAG,
+            publishedAt: new Date().toISOString(),
+            published: {
+              "npm": {published: true, url: `https://www.npmjs.com/package/lagrange-server/v/${version}`},
+              "docker": {published: true, url: `https://hub.docker.com/r/${image.replace(/^docker\.io\//u, '')}/tags?name=${version}`},
+              "helm": {published: true, url: `https://github.com/${repo}/releases/download/${tag}/lagrange-node-${version}.tgz`},
+              "github": {published: true, url: `https://github.com/${repo}/releases/tag/${tag}`},
+            },
+          };
+          process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+          NODE
+          cp "data/releases/${GITHUB_REF_NAME}.json" dist/release-receipt.json
+          cat dist/release-receipt.json
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          TAGGED_COMMIT: ${{ steps.release.outputs.tagged_commit }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          ASSETS=(dist/lagrange dist/lagrange-cli "dist/lagrange-node-${VERSION}.tgz" "dist/npm/lagrange-server-${VERSION}.tgz" dist/SHA256SUMS dist/release-receipt.json)
           NOTES="${{ steps.release.outputs.notes_dir }}/release-notes.md"
+          CHANNEL_FLAGS=(--latest)
+          if [ "$PRERELEASE" = "true" ]; then CHANNEL_FLAGS=(--prerelease --latest=false); fi
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
-            gh release edit "$GITHUB_REF_NAME" --title "Lagrange $GITHUB_REF_NAME" --notes-file "$NOTES" --draft=false --latest
+            gh release edit "$GITHUB_REF_NAME" --title "Lagrange $GITHUB_REF_NAME" --notes-file "$NOTES" --draft=false "${CHANNEL_FLAGS[@]}"
           else
-            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" --verify-tag --title "Lagrange $GITHUB_REF_NAME" --notes-file "$NOTES"
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" --verify-tag --title "Lagrange $GITHUB_REF_NAME" --notes-file "$NOTES" "${CHANNEL_FLAGS[@]}"
           fi
