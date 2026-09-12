@@ -19,6 +19,7 @@ const FORMATION_REQUIREMENT = Object.freeze({
 });
 
 const PUBLIC_EXECUTION_CONTRACT = Object.freeze({
+  serviceId: 'sys-postgres-wire',
   protocol: 'postgresql',
   executionPath: 'public-sql',
   adapter: 'lagrange-oltp-adapter',
