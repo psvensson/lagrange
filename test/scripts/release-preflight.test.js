@@ -42,6 +42,7 @@ function facts(overrides = {}) {
     repository: 'psvensson/lagrange',
     headSha: HEAD,
     remoteMainSha: HEAD,
+    headMergeBaseWithRemoteMain: HEAD,
     statusLines: [],
     releaseProof: provenProof(),
     versionSources: {
@@ -99,8 +100,15 @@ test('each fact blocks on its own', (t) => {
   t.same(failing(evaluateReleasePreflight(facts({
     statusLines: [' M src/x.js'],
   }))), [CHECK.CLEAN_TREE]);
-  t.same(failing(evaluateReleasePreflight(facts({remoteMainSha: OTHER}))),
-    [CHECK.HEAD_IS_REMOTE_MAIN]);
+  t.same(failing(evaluateReleasePreflight(facts({
+    remoteMainSha: OTHER, headMergeBaseWithRemoteMain: OTHER,
+  }))), [CHECK.HEAD_ON_REMOTE_MAIN],
+  'a HEAD that is not on remote main history blocks');
+  // The proof is over a tree: a remote head that moved PAST the proven SHA
+  // (a landing published behind a running proof) does not block the tag.
+  t.same(failing(evaluateReleasePreflight(facts({
+    remoteMainSha: OTHER, headMergeBaseWithRemoteMain: HEAD,
+  }))), [], 'a proven SHA the remote has moved past is still taggable');
   t.same(failing(evaluateReleasePreflight(facts({
     releaseProof: {outcome: PROOF_OUTCOME.UNPROVEN},
   }))), [CHECK.RELEASE_PROOF]);
@@ -159,6 +167,7 @@ test('gatherReleaseFacts reads git and asks the proof authority once', (t) => {
     gitCalls.push(args.join(' '));
     const [verb] = args;
     if (verb === 'rev-parse') return args[1] === 'HEAD' ? HEAD : HEAD;
+    if (verb === 'merge-base') return HEAD;
     if (verb === 'status') return ' M solve/x.json\n';
     if (verb === 'tag') return '';
     if (verb === 'ls-remote') return '';
@@ -187,6 +196,7 @@ test('gatherReleaseFacts reads git and asks the proof authority once', (t) => {
     'fetch --quiet origin',
     'rev-parse HEAD',
     'rev-parse origin/main',
+    `merge-base ${HEAD} ${HEAD}`,
     'status --porcelain -- . :!solve',
     'tag --list v0.2.0',
     'ls-remote --tags origin refs/tags/v0.2.0',
