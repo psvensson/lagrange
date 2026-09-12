@@ -5,12 +5,15 @@ on:
     branches:
       - benchmark/tidb-reference-scenarios
       - benchmark/scenario-a-order-status-case-staging
+      - benchmark/order-status-lines-proof-staging
     paths:
       - '.github/workflows/tidb-scenario-a-order-status-contract.yml'
       - 'test/distributed/harness/oltp-baseline-dataset.js'
       - 'test/distributed/harness/oltp-baseline-workload.js'
+      - 'test/distributed/harness/oltp-baseline-transaction-executor.js'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
       - 'test/distributed/harness/oltp-scenario-a-order-status-case.js'
+      - 'scripts/checks/oltp-baseline-transaction-executor-guard.js'
       - 'scripts/checks/oltp-scenario-a-order-status-case-guard.js'
   workflow_dispatch: {}
 
@@ -45,6 +48,9 @@ jobs:
         run: |
           set -euo pipefail
           npx eslint \
+            test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/harness/oltp-scenario-a-order-status-case.js \
+            scripts/checks/oltp-baseline-transaction-executor-guard.js \
             scripts/checks/oltp-scenario-a-order-status-case-guard.js
+          node scripts/checks/oltp-baseline-transaction-executor-guard.js
           node scripts/checks/oltp-scenario-a-order-status-case-guard.js
