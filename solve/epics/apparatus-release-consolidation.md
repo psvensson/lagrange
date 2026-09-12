@@ -102,12 +102,19 @@ receipt. Probe: script comparing README, CHANGELOG and `data/releases`.
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the
 same gate the solver uses. Probe: test-receipt for the refusal tests.
+Routed here from consolidation-budget-check (2026-09-12): `solve land` takes
+every path differing from HEAD, untracked included, as the change set; it must
+scope to the quest's authorized paths and refuse with a list when untracked
+files sit outside them, rather than sweep or block on them.
 
 **script-reachability-cull** — every file under `scripts/` is reachable from
 `package.json`, a workflow, `.githooks`, or `scripts/solve*`; everything else
 is deleted (git keeps it). `npm run commands` is the only catalogue. Probe:
 script printing the unreachable count, target 0; the loose-file and line
-budgets above follow.
+budgets above follow. First step, before the budget bites anyone: move the
+`scripts/quest-evidence-*.js` receipt harnesses into `scripts/quest-evidence/`,
+since the current convention grows the loose-file count by one per quest
+(consolidation-budget-check moved it 380 to 381).
 
 **workflow-budget** — workflows under 500 lines total, the release job under
 12 named steps, each step one npm script; the three "proof authority"
@@ -118,7 +125,11 @@ chain; replace `check-file-size-thresholds` with a function-length and
 complexity checker at zero baseline; add the sealed per-quest allowance that
 `audit-file-size` consumed so that a cohesive edit to a grandfathered file is a
 recorded decision rather than a split. Probe: test-receipt for the new
-checker plus the chain check above.
+checker plus the chain check above. Routed here from
+consolidation-budget-check: one unclassified test file fails
+`audit:impact-contracts` for every coupled pair (twenty unrelated witnesses
+reported "not primary-classified"); the failure should name the unclassified
+file, not the pairs.
 
 **epic-board-curation** — every open epic has a sealed `doneWhen` and at
 least one quest or is `done`/`superseded`; `solve-v2` goes `done` (its budget

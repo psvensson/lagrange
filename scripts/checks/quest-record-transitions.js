@@ -17,14 +17,10 @@ const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
 const MAX_BUFFER_BYTES = 512 * 1024 * 1024;
 const HEAD_REV = 'HEAD';
-const REMOTE_MAIN = 'origin/main';
-const GIT_MERGE_BASE = 'merge-base';
 const SHA_SEPARATOR = ' ';
 const BATCH_MISSING = 'missing';
 const NUL = '\0';
 const NO_EDGES = Object.freeze([]);
-const NO_PUBLICATION_BASE = null;
-const QUIET_STDIO = Object.freeze(['pipe', 'pipe', 'pipe']);
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
@@ -109,20 +105,6 @@ function admittedEdges(root, base) {
 }
 
 /**
- * The merge base with the publication remote, or null when there is none.
- * @param {string} root
- * @return {string|null}
- */
-function publicationBase(root) {
-  try {
-    return stringTrim(String(git(root, [GIT_MERGE_BASE, REMOTE_MAIN, HEAD_REV],
-      {encoding: TEXT_ENCODING, stdio: QUIET_STDIO})));
-  } catch (_error) {
-    return NO_PUBLICATION_BASE;
-  }
-}
-
-/**
  * Files tracked at a commit, filtered by a classifier.
  * @param {string} root
  * @param {string} rev
@@ -180,5 +162,5 @@ function reportRecordOffences(report) {
 
 export {
   HEAD_REV, NO_EDGES, admittedEdges, baseFromArgv, changedPathsBetween, git,
-  publicationBase, readBlobs, reportRecordOffences, trackedAt,
+  readBlobs, reportRecordOffences, trackedAt,
 };

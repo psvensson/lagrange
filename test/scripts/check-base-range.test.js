@@ -25,11 +25,14 @@ import {test} from 'node:test';
 
 import {
   changedRecords,
+  publicationBase,
   resolvedCheckBase,
+  resolvedCheckRange,
   semanticPaths,
 } from '../../scripts/checks/changed-paths.js';
 import {
   CHECK_BASE_ENV,
+  RANGE_SOURCE,
 } from '../../scripts/checks/change-selection-constants.js';
 
 const UTF8 = 'utf8';
@@ -92,7 +95,59 @@ test('a push range covers every commit after the remote before-SHA', () => {
 test('the range is resolved from ONE environment authority', () => {
   assert.equal(resolvedCheckBase(null, {[CHECK_BASE_ENV]: shas.a}), shas.a);
   assert.equal(resolvedCheckBase(null, {}), null,
-    'no declaration means the working tree, which is the inner-loop case');
+    'a library caller that names no root receives only the declared base');
+});
+
+// A clone of a four-commit `main` with one more local commit: what a
+// developer's checkout looks like the moment before a push.
+function buildPublishedClone() {
+  const upstream = fs.mkdtempSync(path.join(os.tmpdir(), 'check-base-up-'));
+  git(upstream, ['init', '--quiet', '--initial-branch=main']);
+  git(upstream, ['config', 'user.email', 'fixture@example.invalid']);
+  git(upstream, ['config', 'user.name', 'fixture']);
+  fs.writeFileSync(path.join(upstream, 'a.js'), 'export const a = 1;\n', UTF8);
+  git(upstream, ['add', '.']);
+  git(upstream, ['commit', '--quiet', '-m', 'a']);
+  const published = git(upstream, ['rev-parse', 'HEAD']).trim();
+  const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'check-base-clone-'));
+  git(clone, ['clone', '--quiet', upstream, '.']);
+  git(clone, ['config', 'user.email', 'fixture@example.invalid']);
+  git(clone, ['config', 'user.name', 'fixture']);
+  fs.writeFileSync(path.join(clone, 'local.js'), 'export const local = 1;\n', UTF8);
+  git(clone, ['add', '.']);
+  git(clone, ['commit', '--quiet', '-m', 'local']);
+  return {clone, published};
+}
+
+test('with no declaration the base is the publication merge-base', () => {
+  // The hole this closes: a commit already made locally differs from HEAD by
+  // nothing, so a HEAD base let every changed-path checker examine nothing
+  // and report ok. The base an unqualified proof means is what a push would
+  // carry - the merge base with origin/main.
+  const {clone, published} = buildPublishedClone();
+  assert.equal(publicationBase(clone), published);
+  const range = resolvedCheckRange(null, {}, clone);
+  assert.deepEqual(range, {base: published, source: RANGE_SOURCE.PUBLICATION});
+  assert.equal(resolvedCheckBase(null, {}, clone), published,
+    'the base and the range agree, since one is read from the other');
+  assert.ok(semanticPaths(changedRecords({root: clone, base: range.base}))
+    .includes('local.js'),
+  'the locally committed file is in the proof range');
+});
+
+test('the source is a named state, never inferred from an empty base', () => {
+  const {clone, published} = buildPublishedClone();
+  assert.deepEqual(resolvedCheckRange(shas.c, {[CHECK_BASE_ENV]: shas.a}, clone),
+    {base: shas.c, source: RANGE_SOURCE.FLAG});
+  assert.deepEqual(resolvedCheckRange(null, {[CHECK_BASE_ENV]: shas.a}, clone),
+    {base: shas.a, source: RANGE_SOURCE.ENVIRONMENT});
+  assert.deepEqual(resolvedCheckRange(null, {}, clone),
+    {base: published, source: RANGE_SOURCE.PUBLICATION});
+  // The branch-only fixture has no remote: the working tree alone is proved,
+  // and the range SAYS so rather than presenting the same null as "no base".
+  assert.equal(publicationBase(repo), null);
+  assert.deepEqual(resolvedCheckRange(null, {}, repo),
+    {base: null, source: RANGE_SOURCE.WORKTREE});
 });
 
 test('an explicit flag overrides the environment', () => {

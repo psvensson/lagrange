@@ -44,10 +44,9 @@ import {
 } from '../solve/store.js';
 import {requiredProofArtifacts} from '../solve/probes.js';
 import {
-  admittedEdges, baseFromArgv, changedPathsBetween, publicationBase,
-  readBlobs, reportRecordOffences, trackedAt,
+  admittedEdges, baseFromArgv, changedPathsBetween, readBlobs, reportRecordOffences, trackedAt,
 } from './quest-record-transitions.js';
-import {resolvedCheckBase} from './changed-paths.js';
+import {publicationBase, resolvedCheckBase} from './changed-paths.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PATH_SEPARATOR = '/';
