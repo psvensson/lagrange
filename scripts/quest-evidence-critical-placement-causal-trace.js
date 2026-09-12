@@ -1,7 +1,10 @@
 // Deterministic evidence harness for the critical-placement-causal-trace
 // quest (S6a): receipt declarations only. The live three-node trace runs
 // ONCE through the classified runner (first receipt) and regenerates
-// solve/report/critical-placement-causal-trace-live.json; the trace-shape
+// solve/report/critical-placement-causal-trace-live.json - the test writes
+// there only when this harness names the path through
+// LAGRANGE_TRACE_ARTIFACT_PATH, so an ordinary corpus run never rewrites the
+// tracked artifact; the trace-shape
 // receipts then validate the artifact THAT RUN just produced, so a stale
 // artifact can never satisfy them. The classifier and divergence-probe
 // receipts anchor top-level node:test scenarios by name, one each.
@@ -24,6 +27,7 @@ const NODE_TEST_COMMAND_PREFIX = 'node --test ';
 const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
 const DOUBLE_QUOTE = '"';
 const SPACE = ' ';
+const TRACE_ARTIFACT_PATH_ENV = 'LAGRANGE_TRACE_ARTIFACT_PATH';
 const CLASSIFIED_RUNNER_PREFIX = 'npm run test:file -- ';
 // The integration file dumps its whole cluster log on a red run, which
 // overruns the receipt runner's capture buffer; discarding stdout keeps the
@@ -44,8 +48,8 @@ function artifactValidator(expression) {
 const RECEIPTS = Object.freeze([
   Object.freeze({
     id: 'fresh-formation-critical-baseline-measured',
-    command: CLASSIFIED_RUNNER_PREFIX + LIVE_TRACE_TEST +
-      DISCARD_STDOUT_SUFFIX,
+    command: `${TRACE_ARTIFACT_PATH_ENV}=${TRACE_ARTIFACT}${SPACE}` +
+      CLASSIFIED_RUNNER_PREFIX + LIVE_TRACE_TEST + DISCARD_STDOUT_SUFFIX,
     timeoutMs: INTEGRATION_TIMEOUT_MS,
     detail: 'the LIVE RUN: a real three-node in-process formation through ' +
       'the production join path, whose fresh-formation subtest asserts the ' +
