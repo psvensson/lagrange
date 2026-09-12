@@ -1,4 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {applyCDCIntegrationServiceLifecycleMethods} from
   './cdc-integration-service-lifecycle.js';
 import {applyCDCIntegrationServiceAuthoritativeReadDelegates} from
@@ -46,6 +47,10 @@ class CDCIntegrationService extends EventEmitter {
     // Primary: SQL query engine for transparent routing
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
+    // Every timer this owner arms - the cache-visibility wait, the retry
+    // delays, the catch-up sleep - is armed on this source, so the owner can
+    // be driven on a virtual clock instead of reaching the ambient one.
+    this.timeSource = resolveTimeSource(options);
     this.systemTableCache = options.systemTableCache || null;
     this.cacheMutationTarget =
       options.cacheMutationTarget ||

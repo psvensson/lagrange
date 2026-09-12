@@ -145,7 +145,9 @@ const CDCOperationType = CDC_OPERATION;
  * Config key for the current epoch in the config table.
  */
 const EPOCH_CONFIG_KEY = CDC_EPOCH_CONFIG_KEY;
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A delay is armed on the clock it is handed, never on the ambient one.
+const delayOn = (timeSource, ms) =>
+  new Promise((resolve) => timeSource.setTimeout(resolve, ms));
 
 function materializeNormalizedDefaultValue(result) {
   if (
@@ -728,7 +730,7 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   createSqlWriteRouter,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  delay,
+  delayOn,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,

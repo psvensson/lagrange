@@ -122,6 +122,28 @@ the window, joiners < 5 %, lease-incomplete loop with escalating backoff,
 A live report plus logs can be ingested as a scenario. Runs under 60 s in a
 normal lane. Probe: script `formation-sim-reproduces.js` — 0 when the
 signature reproduces on `main` and two runs hash identical. Red at seal.
+Open items for its design note (2026-09-12): the CDC seam keeps data stamps
+(row `created_at`/`updated_at`, tombstone times, event timestamps, the HLC)
+on the wall clock — the right production call, since a virtual stamp left
+the anti-entropy sweep inert — so byte-identical reports under virtual time
+need either the HLC's physical component injected in deterministic mode or
+data stamps normalized out of the report hash; and the SQL engine is real
+here (over in-memory partitions, as the seven-node probe runs it) while it is
+a contract-bound seam in the membership-consistency harness — the derived
+model records which is which.
+Evidence for the design note (2026-09-12): when the membership-consistency
+harness was moved from hand-wired stand-ins to hosted real owners, seven of
+its fourteen subtests failed on contact — the stand-ins had defined
+membership as row presence where the owners define it as published
+membership. The harness model was not merely drifting; it encoded a
+different system. The simulator inherits this harness, so every remaining
+stand-in it meets is presumed to encode a different system until a contract
+run twice says otherwise. The re-expression (same day) added the fact the
+simulator must carry: the readiness owner's synchronous verdict, the one
+every rebalancer reads, is refresh-pending after bootstrap and after every
+nodes-table write until an asynchronous evaluation lands (~170 ms on the
+seed); authoritative reads exist only where a partition does; published
+membership reaches the rebalancer only through the publication coordinator.
 
 **seed-formation-decoupling** — the fix, chosen from the calibration
 ranking: early spread of system-table replicas once three nodes are joined and

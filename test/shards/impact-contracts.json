@@ -291,6 +291,20 @@
       "tests": [
         "test/raft/liferaft-formation-attribution-interaction.test.js"
       ]
+    },
+    "sql-engine-system-table-read": {
+      "description": "System-table reads answered by the SQL engine reflect rows written through the CDC owner; the engine is real on a production-booted node and a contract-bound seam in the membership-consistency harness.",
+      "owners": [
+        "src/query/sql-query-engine.js",
+        "src/query/sql-query-engine-statement-execution.js",
+        "src/cache/system-table-cache.js",
+        "src/cdc/cdc-integration-service.js"
+      ],
+      "tests": [
+        "test/integration/sql-engine-system-writes-contract.integration.test.js",
+        "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
+        "test/integration/message-group-multi-join-formation.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -575,6 +589,37 @@
       "witnessTests": [
         "test/raft/liferaft-formation-attribution-interaction.test.js"
       ]
+    },
+    "sql-engine-cache-membership": {
+      "description": "The SQL engine and the system-table cache agree on membership rows: what the CDC owner writes, the engine reads back. Seamed in the membership-consistency harness, real in the seven-node probe.",
+      "endpoints": [
+        {
+          "id": "sql-engine",
+          "owners": [
+            "src/query/sql-query-engine.js",
+            "src/query/sql-query-engine-statement-execution.js"
+          ]
+        },
+        {
+          "id": "cache-membership",
+          "owners": [
+            "src/cache/system-table-cache.js",
+            "src/cdc/cdc-integration-service.js"
+          ]
+        }
+      ],
+      "contract": "sql-engine-system-table-read",
+      "witnessTests": [
+        "test/integration/sql-engine-system-writes-contract.integration.test.js",
+        "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
+        "test/integration/message-group-multi-join-formation.integration.test.js"
+      ],
+      "harnessSeam": {
+        "stub": "test/distributed/harness/sql-engine-seam.js",
+        "contractCases": "test/query/sql-engine-system-table-contract-cases.js",
+        "conformanceTest": "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
+        "realTest": "test/integration/message-group-multi-join-formation.integration.test.js"
+      }
     }
   }
 }
