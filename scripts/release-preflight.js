@@ -6,9 +6,11 @@
  * The whole release exit, as five facts about the current checkout, none of
  * which this script changes:
  *   1. the release content is clean (porcelain status outside solve/);
- *   2. HEAD is exactly <remote>/main after a fetch;
- *   3. the durable release-full-v1 proof authority says this exact SHA is
- *      proven;
+ *   2. HEAD is on <remote>/main history after a fetch (the remote may have
+ *      moved past it: the proof is over a tree, not a branch position);
+ *   3. the durable release-full-v1 proof authority says this SHA is proven -
+ *      by its own receipt, or by the receipt of a commit with the same
+ *      release content identity (scripts/release-proof-identity.js);
  *   4. every version literal (package.json, package-lock.json, CLI,
  *      entrypoint, Helm chart version and appVersion) agrees and the
  *      changelog carries a non-empty section for that version;
