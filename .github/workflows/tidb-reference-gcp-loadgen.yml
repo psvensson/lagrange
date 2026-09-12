@@ -73,6 +73,7 @@ jobs:
           set -euo pipefail
           npm install --global npm@11.7.0
           npm ci
+          npm ci --ignore-scripts --prefix test/distributed/reference-client
           npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
 
           PULUMI_VERSION=3.261.0
