@@ -534,7 +534,7 @@ function parseInvocation(argv) {
   const head = flagValue(argv, HEAD_FLAG);
   return {
     valid: !(base.present && !base.value) && !(head.present && !head.value),
-    base: resolvedCheckBase(base.value),
+    base: resolvedCheckBase(base.value, process.env, root),
     head: head.value,
     headRevision: head.value || DEFAULT_HEAD,
     explain: arrayIncludes(argv, EXPLAIN_FLAG),

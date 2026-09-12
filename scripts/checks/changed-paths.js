@@ -33,6 +33,7 @@ import {
   CHANGE_MODIFIED,
   CHANGE_RENAMED,
   CHECK_BASE_ENV,
+  RANGE_SOURCE,
   WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
 import {
@@ -79,6 +80,8 @@ const STATUS_DELETED_PREFIX = 'D';
 const STATUS_ADDED_PREFIX = 'A';
 const INJECTION_SEPARATOR = ',';
 const PATH_SEPARATOR = '/';
+const MERGE_BASE = 'merge-base';
+const PUBLICATION_REMOTE = 'origin/main';
 
 function git(root, args) {
   try {
@@ -134,12 +137,45 @@ function dedupe(records) {
     (record) => record.path || record.oldPath);
 }
 
-// An explicit flag wins; otherwise the environment supplies the range. Resolved
-// HERE so the static layer and the change proof cannot disagree: `npm run check`
-// runs them as two processes, and a base that reached only one of them would
-// silently prove a narrower range on one side.
-export function resolvedCheckBase(explicitBase = null, env = process.env) {
-  return explicitBase || env[CHECK_BASE_ENV] || null;
+/**
+ * The merge base with the publication remote, or null when the repository at
+ * `root` has none. This is what a push would be measured against, so it is
+ * the base an unqualified local proof means.
+ * @param {string} root
+ * @return {string|null}
+ */
+export function publicationBase(root) {
+  const lines = git(root, [MERGE_BASE, PUBLICATION_REMOTE, DEFAULT_HEAD]);
+  return lines && lines.length > 0 ? lines[0] : null;
+}
+
+// An explicit flag wins; otherwise the environment supplies the range; otherwise
+// the range is what a push would carry: the merge base with the publication
+// remote. Resolved HERE so the static layer and the change proof cannot
+// disagree: `npm run check` runs them as two processes, and a base that reached
+// only one of them would silently prove a narrower range on one side.
+//
+// The publication default exists because `HEAD` is the wrong base for a proof
+// that gates a push: a change already committed locally - a `git am`, a direct
+// commit, a rebase - differs from HEAD by nothing, so every changed-path
+// checker examined nothing and reported ok. Only the working tree is proved
+// when the repository has no publication remote, and the source says so.
+export function resolvedCheckRange(explicitBase = null, env = process.env,
+  root = null) {
+  if (explicitBase) return {base: explicitBase, source: RANGE_SOURCE.FLAG};
+  if (env[CHECK_BASE_ENV]) {
+    return {base: env[CHECK_BASE_ENV], source: RANGE_SOURCE.ENVIRONMENT};
+  }
+  const published = root ? publicationBase(root) : null;
+  if (published) return {base: published, source: RANGE_SOURCE.PUBLICATION};
+  return {base: null, source: RANGE_SOURCE.WORKTREE};
+}
+
+// `root` is passed by every CLI boundary; a library caller that owns its own
+// fallback omits it and receives only the declared base.
+export function resolvedCheckBase(explicitBase = null, env = process.env,
+  root = null) {
+  return resolvedCheckRange(explicitBase, env, root).base;
 }
 
 // What the assembling layer declared it injected into this worktree. Empty in

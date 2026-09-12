@@ -14,7 +14,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {runFastStatic} from '../../scripts/check-fast-static.js';
+import {
+  describeRange,
+  rangeWarnings,
+  runFastStatic,
+  summaryLine,
+} from '../../scripts/check-fast-static.js';
+import {
+  RANGE_SOURCE,
+} from '../../scripts/checks/change-selection-constants.js';
 import {
   changedCandidatePaths,
   javaScriptPaths,
@@ -93,4 +101,41 @@ test('untracked files are candidates, not invisible until staged', () => {
     assert.ok(changed.includes(candidate),
       `${candidate} is untracked and non-ignored, so it must be a candidate`);
   }
+});
+
+test('the range is printed with its source and an empty one is warned about', () => {
+  // A green run must be readable against the range it proved. "ok" over a
+  // range with no JavaScript is a docs-only change or a hole, and the line
+  // that distinguishes them is the warning.
+  assert.equal(describeRange({base: 'abc123', source: RANGE_SOURCE.PUBLICATION}),
+    'proof range: abc123..HEAD (publication merge-base)');
+  assert.equal(describeRange({base: null, source: RANGE_SOURCE.WORKTREE}),
+    'proof range: worktree only (no publication remote)');
+  const published = {base: 'abc123', source: RANGE_SOURCE.PUBLICATION};
+  const worktree = {base: null, source: RANGE_SOURCE.WORKTREE};
+  assert.deepEqual(rangeWarnings({range: published, changedJs: ['src/a.js']}), []);
+  const empty = rangeWarnings({range: published, changedJs: []});
+  assert.equal(empty.length, 1);
+  assert.match(empty[0], /examined nothing/u);
+  // A silent fallback to the working tree is the same hole in a different
+  // coat: nothing committed was examined, so it is warned about the same way.
+  const fallback = rangeWarnings({range: worktree, changedJs: ['src/a.js']});
+  assert.equal(fallback.length, 1);
+  assert.match(fallback[0], /only the working tree was proved/u);
+  assert.equal(rangeWarnings({range: worktree, changedJs: []}).length, 2);
+  assert.equal(summaryLine({failures: [], warnings: [], totalMs: 7}),
+    'fast-static: ok in 7ms');
+  assert.equal(summaryLine({failures: [], warnings: empty, totalMs: 7}),
+    'fast-static: ok (0 JavaScript changed) in 7ms',
+    'a green verdict over an empty range says so on the verdict line itself');
+  assert.equal(summaryLine({failures: [], warnings: fallback, totalMs: 7}),
+    'fast-static: ok (worktree only) in 7ms');
+  assert.equal(summaryLine({failures: [{}], warnings: [], totalMs: 7}),
+    'fast-static: FAIL in 7ms');
+
+  const outcome = runFastStatic({});
+  assert.deepEqual(outcome.range, {base: null, source: RANGE_SOURCE.WORKTREE},
+    'a library call with no base proves the working tree and says so');
+  assert.deepEqual(outcome.warnings,
+    rangeWarnings({range: outcome.range, changedJs: outcome.changedJs}));
 });

@@ -41,10 +41,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {isQuestLogPath} from '../solve/store.js';
-import {resolvedCheckBase} from './changed-paths.js';
+import {publicationBase, resolvedCheckBase} from './changed-paths.js';
 import {
   HEAD_REV, NO_EDGES, admittedEdges, baseFromArgv, changedPathsBetween,
-  publicationBase, readBlobs, reportRecordOffences, trackedAt,
+  readBlobs, reportRecordOffences, trackedAt,
 } from './quest-record-transitions.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
