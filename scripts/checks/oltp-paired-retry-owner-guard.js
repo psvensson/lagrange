@@ -8,6 +8,7 @@ import {
   OLTP_PAIRED_RETRY_POLICY,
   OLTP_SERIALIZATION_FAILURE_SQLSTATE,
   classifyOltpAttemptError,
+  createPairedRetryingOltpAdapter,
   executePairedOltpTransactionWithRetry,
   resolvePairedOltpRetryDelayMs,
 } from '../../test/distributed/harness/oltp-paired-retry-owner.js';
@@ -127,6 +128,68 @@ async function assertRetryBudgetExhaustion() {
   assert.equal(attempts, 4);
 }
 
+async function assertRetryingAdapterEvidence() {
+  let logicalNow = 1000;
+  let firstOperationAttempts = 0;
+  const adapter = {
+    async executeTransaction(operation) {
+      logicalNow += 2;
+      if (operation.id === 'retry-once') {
+        firstOperationAttempts += 1;
+        if (firstOperationAttempts === 1) {
+          throw serializationError('sqlState');
+        }
+      }
+      if (operation.id === 'terminal') {
+        const error = new Error('transport failure');
+        error.code = 'ECONNRESET';
+        throw error;
+      }
+      return {id: operation.id, committed: true};
+    },
+  };
+  const retrying = createPairedRetryingOltpAdapter(adapter, {
+    now: () => logicalNow,
+    async sleep(delayMs) {
+      logicalNow += delayMs;
+    },
+  });
+
+  assert.deepEqual(
+    await retrying.executeTransaction({id: 'retry-once'}),
+    {id: 'retry-once', committed: true},
+  );
+  assert.deepEqual(
+    retrying.getRetryEvidence(),
+    {
+      policyId: 'scenario-a-retry-v1',
+      logicalTransactions: 1,
+      attempts: 2,
+      retries: 1,
+      retryDelayMs: 5,
+      serializationConflicts: 1,
+      terminalTransactions: 0,
+    },
+  );
+
+  await assert.rejects(
+    retrying.executeTransaction({id: 'terminal'}),
+    /transport failure/u,
+  );
+  assert.deepEqual(
+    retrying.getRetryEvidence(),
+    {
+      policyId: 'scenario-a-retry-v1',
+      logicalTransactions: 2,
+      attempts: 3,
+      retries: 1,
+      retryDelayMs: 5,
+      serializationConflicts: 1,
+      terminalTransactions: 1,
+    },
+  );
+}
+
 async function assertAdaptersDoNotOwnRetries() {
   for (const path of ADAPTER_PATHS) {
     const source = await readFile(path, 'utf8');
@@ -176,6 +239,7 @@ async function main() {
   await assertSuccessfulRetryAndRequestClock();
   await assertTerminalNonRetryableFailure();
   await assertRetryBudgetExhaustion();
+  await assertRetryingAdapterEvidence();
   await assertAdaptersDoNotOwnRetries();
   await assert.rejects(
     executePairedOltpTransactionWithRetry({
@@ -184,6 +248,10 @@ async function main() {
       async executeAttempt() {},
     }),
     /intendedIssueTimeMs <= current time/u,
+  );
+  assert.throws(
+    () => createPairedRetryingOltpAdapter({}),
+    /requires adapter.executeTransaction/u,
   );
   process.stdout.write(PASS_LINE);
 }
