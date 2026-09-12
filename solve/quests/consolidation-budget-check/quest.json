@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "consolidation-budget-check",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The apparatus-release-consolidation budget script passes the repository's own guideline checkers -- eslint, the literal-owner audit and the ambient-intrinsic audit -- on its own changed path, and a test measures it against a fixture tree so the epic's doneWhen probe has a witness that is not the real repository. Adapting the script changes how values are named and how intrinsics are reached; it changes no budget number and no measured value.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/consolidation-budget-check/evidence/receipt.json",
+      "requiredReceipts": [
+        "budget-script-passes-changed-path-guideline-checkers",
+        "fixture-tree-measures-every-budget-row",
+        "budget-numbers-are-unchanged-by-the-adaptation"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-budget-number-changes",
+      "statement": "No budget number changes. Extracting a value to a named constant is permitted; altering the value it holds, the comparator it is read by, or the row it gates is not."
+    },
+    {
+      "id": "measurement-is-invariant",
+      "statement": "The adapted script reports the same rows, the same values and the same unmet count against the same tree as the sealed script did. A measurement that moves is a defect in the adaptation, never a new budget."
+    },
+    {
+      "id": "satisfy-the-checker-not-the-baseline",
+      "statement": "The guideline checkers are satisfied by changing this script, never by raising a ratchet baseline, adding a baseline entry, or excluding the path from a checker (R23)."
+    },
+    {
+      "id": "fixture-not-repository",
+      "statement": "The test measures a constructed fixture tree it owns, so the witness does not move when the real repository's counts move."
+    }
+  ],
+  "sealedAt": "df5ced607ed32e06c983d95ec1dde4491f67102e"
+}
