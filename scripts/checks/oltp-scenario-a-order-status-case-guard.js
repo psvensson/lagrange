@@ -13,6 +13,7 @@ const stableStateSha256 = 'a'.repeat(64);
 const passingObservation = {
   orderId: expected.orderId,
   lineCount: expected.lineCount,
+  lines: expected.lines,
   stateBeforeSha256: stableStateSha256,
   stateAfterSha256: stableStateSha256,
 };
@@ -33,13 +34,20 @@ assert.equal(
   definition.identity.operation.districtId,
 );
 assert.equal(definition.identity.setupOperation.lines.length, 5);
+assert.equal(expected.lines.length, 5);
 assert.equal(definition.caseSha256, repeated.caseSha256);
 assert.match(definition.caseSha256, /^[0-9a-f]{64}$/u);
 assert.match(definition.identity.datasetSha256, /^[0-9a-f]{64}$/u);
-assert.equal(OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS.length, 3);
+assert.equal(OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS.length, 4);
 assert.equal(
   OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS.includes(
     'forbidden:read_only_transaction_mutation',
+  ),
+  true,
+);
+assert.equal(
+  OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS.includes(
+    'transaction:order_status:returned_lines_belong_to_returned_order',
   ),
   true,
 );
@@ -65,6 +73,13 @@ assert.equal(missingLine.passed, false);
 assert.deepEqual(missingLine.failures, ['line_count']);
 assert.deepEqual(missingLine.proofIds, []);
 
+const wrongLine = structuredClone(passingObservation);
+wrongLine.lines[0].itemId += 1;
+const foreignLine = evaluateScenarioAOrderStatusObservation(wrongLine);
+assert.equal(foreignLine.passed, false);
+assert.deepEqual(foreignLine.failures, ['order_lines']);
+assert.deepEqual(foreignLine.proofIds, []);
+
 const mutatedState = evaluateScenarioAOrderStatusObservation({
   ...passingObservation,
   stateAfterSha256: 'b'.repeat(64),
@@ -76,6 +91,13 @@ assert.deepEqual(mutatedState.proofIds, []);
 assert.throws(
   () => evaluateScenarioAOrderStatusObservation({}),
   /order-status orderId must be an integer/u,
+);
+assert.throws(
+  () => evaluateScenarioAOrderStatusObservation({
+    ...passingObservation,
+    lines: null,
+  }),
+  /order-status lines must be an array/u,
 );
 
 console.log('oltp-scenario-a-order-status-case-guard: PASS');

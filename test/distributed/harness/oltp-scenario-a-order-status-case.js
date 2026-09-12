@@ -38,6 +38,7 @@ const CLAIMED_PROOF_IDS = freezeRecord([
   'forbidden:read_only_transaction_mutation',
   'transaction:order_status:database_state_is_unchanged',
   'transaction:order_status:latest_customer_order_is_returned_when_present',
+  'transaction:order_status:returned_lines_belong_to_returned_order',
 ].sort());
 
 function requireRow(rows, predicate, label) {
@@ -66,6 +67,24 @@ function buildSetupOperation(operation) {
   });
 }
 
+function buildExpectedLines(dataset, setupOperation) {
+  return setupOperation.lines.map((line, index) => {
+    const item = requireRow(
+      dataset.items,
+      (row) => row.itemId === line.itemId,
+      `item ${line.itemId}`,
+    );
+    return {
+      lineNumber: index + ONE,
+      itemId: line.itemId,
+      supplyWarehouseId: line.supplyWarehouseId,
+      quantity: line.quantity,
+      amountCents: item.priceCents * line.quantity,
+      delivered: ZERO,
+    };
+  });
+}
+
 function buildScenarioAOrderStatusCase() {
   const dataset = buildOltpBaselineDataset(WORKLOAD);
   const plan = buildOltpBaselinePlan(WORKLOAD);
@@ -81,9 +100,11 @@ function buildScenarioAOrderStatusCase() {
     'district',
   );
   const setupOperation = buildSetupOperation(operation);
+  const lines = buildExpectedLines(dataset, setupOperation);
   const expected = freezeRecord({
     orderId: district.nextOrderId,
-    lineCount: setupOperation.lines.length,
+    lineCount: lines.length,
+    lines,
   });
   const identity = freezeRecord({
     caseId: CASE_ID,
@@ -116,12 +137,35 @@ function normalizeSha256(value, label) {
   return digest;
 }
 
+function normalizeLine(value = {}, index) {
+  const label = `order-status line ${index + ONE}`;
+  return freezeRecord({
+    lineNumber: normalizeInteger(value.lineNumber, `${label} lineNumber`),
+    itemId: normalizeInteger(value.itemId, `${label} itemId`),
+    supplyWarehouseId: normalizeInteger(
+      value.supplyWarehouseId,
+      `${label} supplyWarehouseId`,
+    ),
+    quantity: normalizeInteger(value.quantity, `${label} quantity`),
+    amountCents: normalizeInteger(value.amountCents, `${label} amountCents`),
+    delivered: normalizeInteger(value.delivered, `${label} delivered`),
+  });
+}
+
+function normalizeLines(value) {
+  if (!Array.isArray(value)) {
+    throw new Error('order-status lines must be an array');
+  }
+  return freezeRecord(value.map(normalizeLine));
+}
+
 function evaluateScenarioAOrderStatusObservation(observation = {}) {
   const definition = buildScenarioAOrderStatusCase();
   const expected = definition.identity.expected;
   const actual = freezeRecord({
     orderId: normalizeInteger(observation.orderId, 'order-status orderId'),
     lineCount: normalizeInteger(observation.lineCount, 'order-status lineCount'),
+    lines: normalizeLines(observation.lines),
     stateBeforeSha256: normalizeSha256(
       observation.stateBeforeSha256,
       'order-status stateBeforeSha256',
@@ -134,6 +178,9 @@ function evaluateScenarioAOrderStatusObservation(observation = {}) {
   const failures = [];
   if (actual.orderId !== expected.orderId) failures.push('latest_order');
   if (actual.lineCount !== expected.lineCount) failures.push('line_count');
+  if (JSON.stringify(actual.lines) !== JSON.stringify(expected.lines)) {
+    failures.push('order_lines');
+  }
   if (actual.stateBeforeSha256 !== actual.stateAfterSha256) {
     failures.push('database_state');
   }

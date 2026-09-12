@@ -6,6 +6,8 @@ on:
       - benchmark/tidb-reference-scenarios
       - benchmark/payment-proof-ownership-repair
       - benchmark/stock-proof-ownership-staging
+      - benchmark/delivery-proof-ownership-repair
+      - benchmark/scenario-a-tidb-semantic-closure
     paths:
       - '.github/workflows/tidb-scenario-a-proof-ownership.yml'
       - 'test/distributed/harness/oltp-scenario-a-semantic-gate.js'
@@ -13,10 +15,12 @@ on:
       - 'test/distributed/harness/oltp-scenario-a-visibility-case.js'
       - 'test/distributed/harness/oltp-scenario-a-payment-case.js'
       - 'test/distributed/harness/oltp-scenario-a-order-status-case.js'
+      - 'test/distributed/harness/oltp-scenario-a-delivery-case.js'
       - 'test/distributed/harness/oltp-scenario-a-stock-level-case.js'
+      - 'test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js'
+      - 'test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js'
+      - 'test/distributed/harness/oltp-scenario-a-durability-case.js'
       - 'scripts/checks/oltp-scenario-a-proof-ownership-guard.js'
-      - 'scripts/checks/oltp-scenario-a-payment-case-guard.js'
-      - 'scripts/checks/oltp-scenario-a-stock-level-case-guard.js'
   workflow_dispatch: {}
 
 permissions:
@@ -46,15 +50,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prove semantic proof ownership
+      - name: Prove semantic proof ownership and TiDB coverage
         run: |
           set -euo pipefail
-          npx eslint \
-            test/distributed/harness/oltp-scenario-a-payment-case.js \
-            test/distributed/harness/oltp-scenario-a-stock-level-case.js \
-            scripts/checks/oltp-scenario-a-payment-case-guard.js \
-            scripts/checks/oltp-scenario-a-stock-level-case-guard.js \
-            scripts/checks/oltp-scenario-a-proof-ownership-guard.js
-          node scripts/checks/oltp-scenario-a-payment-case-guard.js
-          node scripts/checks/oltp-scenario-a-stock-level-case-guard.js
+          npx eslint scripts/checks/oltp-scenario-a-proof-ownership-guard.js
           node scripts/checks/oltp-scenario-a-proof-ownership-guard.js

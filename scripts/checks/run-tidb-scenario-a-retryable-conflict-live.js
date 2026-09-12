@@ -11,14 +11,10 @@ import {
   startTiDbReferenceCluster,
 } from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
-  executePairedOltpTransactionWithRetry,
-} from '../../test/distributed/harness/oltp-paired-retry-owner.js';
-import {
-  OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
-  OLTP_SCENARIO_A_ORDER_STATUS_WORKLOAD,
-  buildScenarioAOrderStatusCase,
-  evaluateScenarioAOrderStatusObservation,
-} from '../../test/distributed/harness/oltp-scenario-a-order-status-case.js';
+  OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
+  buildScenarioARetryableConflictCase,
+  evaluateScenarioARetryableConflictObservation,
+} from '../../test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js';
 import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
@@ -29,23 +25,33 @@ import {
   createTiDbOltpAdapter,
 } from '../../test/distributed/reference-client/tidb-oltp-adapter.js';
 import {
-  observeTiDbOltpStateSnapshot,
-} from '../../test/distributed/reference-client/tidb-oltp-state-snapshot.js';
+  induceTiDbRetryableConflict,
+} from '../../test/distributed/reference-client/tidb-retryable-conflict-probe.js';
 
 const ZERO = 0;
 const ONE = 1;
 const TIKV_STORE_COUNT = 3;
 const OUTPUT_PATH =
-  process.env.TIDB_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH ||
-  'test-output/tidb-reference/scenario-a-order-status-tidb.json';
+  process.env.TIDB_SCENARIO_A_CONFLICT_EVIDENCE_PATH ||
+  'test-output/tidb-reference/scenario-a-retryable-conflict-tidb.json';
 const LABELS = Object.freeze({
-  'lagrange.benchmark': 'scenario-a-order-status-tidb',
+  'lagrange.benchmark': 'scenario-a-retryable-conflict-tidb',
 });
 const DATABASE_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
 const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
+const WORKLOAD = Object.freeze({
+  seed: 20260912,
+  workers: 1,
+  warmupOperationsPerWorker: 0,
+  measurementOperationsPerWorker: 1,
+  warehouseCount: 1,
+  districtsPerWarehouse: 1,
+  customersPerDistrict: 1,
+  itemCount: 15,
+});
 
 function uniqueRunId() {
-  return `lagrange-tidb-order-status-${process.pid}-${randomUUID().slice(0, 8)}`;
+  return `lagrange-tidb-conflict-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
 function canonicalPayloadDigest(payload) {
@@ -78,15 +84,15 @@ async function cleanup(provider, state) {
     }
   }
   if (failures.length > ZERO) {
-    throw new AggregateError(failures, 'TiDB order-status proof cleanup failed');
+    throw new AggregateError(failures, 'TiDB conflict proof cleanup failed');
   }
 }
 
-async function runTiDbOrderStatusProof(options = {}) {
+async function runTiDbRetryableConflictProof(options = {}) {
   const provider = options.provider || new DockerProvider();
   const runId = options.runId || uniqueRunId();
   const outputPath = options.outputPath || OUTPUT_PATH;
-  const definition = buildScenarioAOrderStatusCase();
+  const definition = buildScenarioARetryableConflictCase();
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -108,64 +114,32 @@ async function runTiDbOrderStatusProof(options = {}) {
       readinessResourceLimits: CLIENT_RESOURCE_LIMITS,
     });
     const host = String(state.cluster.containers.tidb.ip || '').trim();
-    if (!host) {
-      throw new Error('TiDB order-status proof requires TiDB container IP');
-    }
+    if (!host) throw new Error('TiDB conflict proof requires TiDB container IP');
     const endpoint = {host, port: TIDB_REFERENCE_DEFAULTS.tidbPort};
     const databaseName =
-      `lagrange_tidb_order_status_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
+      `lagrange_tidb_conflict_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
     state.adapter = await createTiDbOltpAdapter({
       endpoint,
       databaseName,
-      workload: OLTP_SCENARIO_A_ORDER_STATUS_WORKLOAD,
+      workload: WORKLOAD,
     });
-    if (state.adapter.datasetSha256 !== definition.identity.datasetSha256) {
-      throw new Error('TiDB order-status proof dataset identity mismatch');
-    }
 
-    const setupOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () =>
-        state.adapter.executeTransaction(definition.identity.setupOperation),
-    });
-    if (Number(setupOutcome.result?.orderId) !== definition.identity.expected.orderId) {
-      throw new Error('TiDB order-status setup allocated unexpected order id');
-    }
-
-    const before = await observeTiDbOltpStateSnapshot({
+    const probe = await induceTiDbRetryableConflict({
       endpoint,
       databaseName: state.adapter.databaseName,
     });
-    const readOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () =>
-        state.adapter.executeTransaction(definition.identity.operation),
-    });
-    const after = await observeTiDbOltpStateSnapshot({
-      endpoint,
-      databaseName: state.adapter.databaseName,
-    });
-    const observation = Object.freeze({
-      orderId: Number(readOutcome.result?.orderId),
-      lineCount: Number(readOutcome.result?.lineCount),
-      lines: readOutcome.result?.lines || [],
-      stateBeforeSha256: before.stateSha256,
-      stateAfterSha256: after.stateSha256,
-    });
-    const evaluation = evaluateScenarioAOrderStatusObservation(observation);
+    const observation = Object.freeze({sqlState: probe.victim.sqlState});
+    const evaluation = evaluateScenarioARetryableConflictObservation(observation);
     const payload = Object.freeze({
-      schemaVersion: ONE,
-      evidenceId: 'tidb-order-status-v1',
+      schemaVersion: 1,
+      evidenceId: 'tidb-retryable-conflict-v1',
       system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
-      datasetSha256: definition.identity.datasetSha256,
-      setupOperation: definition.identity.setupOperation,
-      operation: definition.identity.operation,
-      setupRetryEvidence: setupOutcome.evidence,
-      readRetryEvidence: readOutcome.evidence,
-      before,
-      after,
       observation,
       evaluation,
+      victim: probe.victim,
+      probeResults: probe.results,
       images: state.cluster.images,
       comparable: false,
       nonComparableReason:
@@ -181,7 +155,7 @@ async function runTiDbOrderStatusProof(options = {}) {
           OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED :
           OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED,
         artifactSha256,
-        proofIds: OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
+        proofIds: OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
       }),
       artifactSha256,
     });
@@ -189,7 +163,7 @@ async function runTiDbOrderStatusProof(options = {}) {
     await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
     if (!evaluation.passed) {
       throw new Error(
-        `TiDB order-status semantic proof failed: ${evaluation.failures.join(',')}`,
+        `TiDB retryable conflict proof failed: ${evaluation.failures.join(',')}`,
       );
     }
   } catch (error) {
@@ -205,7 +179,7 @@ async function runTiDbOrderStatusProof(options = {}) {
   if (primaryError && cleanupError) {
     throw new AggregateError(
       [primaryError, cleanupError],
-      'TiDB order-status proof and cleanup both failed',
+      'TiDB conflict proof and cleanup both failed',
     );
   }
   if (primaryError) throw primaryError;
@@ -214,15 +188,13 @@ async function runTiDbOrderStatusProof(options = {}) {
 }
 
 async function main() {
-  const evidence = await runTiDbOrderStatusProof();
+  const evidence = await runTiDbRetryableConflictProof();
   process.stdout.write(
-    'tidb-scenario-a-order-status-live: PASS ' +
+    'tidb-scenario-a-retryable-conflict-live: PASS ' +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      setupRetries: Number(evidence.setupRetryEvidence?.retries || ZERO),
-      readRetries: Number(evidence.readRetryEvidence?.retries || ZERO),
-      orderId: evidence.observation.orderId,
-      lineCount: evidence.observation.lineCount,
+      sqlState: evidence.observation.sqlState,
+      victimSide: evidence.victim.side,
     }) + '\n',
   );
 }
@@ -233,5 +205,5 @@ main().catch((error) => {
 });
 
 export {
-  runTiDbOrderStatusProof,
+  runTiDbRetryableConflictProof,
 };

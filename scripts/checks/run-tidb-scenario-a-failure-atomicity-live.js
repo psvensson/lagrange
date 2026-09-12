@@ -11,14 +11,15 @@ import {
   startTiDbReferenceCluster,
 } from '../../test/distributed/harness/tidb-reference-lifecycle.js';
 import {
+  OLTP_PAIRED_RETRY_OUTCOME,
   executePairedOltpTransactionWithRetry,
 } from '../../test/distributed/harness/oltp-paired-retry-owner.js';
 import {
-  OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
-  OLTP_SCENARIO_A_ORDER_STATUS_WORKLOAD,
-  buildScenarioAOrderStatusCase,
-  evaluateScenarioAOrderStatusObservation,
-} from '../../test/distributed/harness/oltp-scenario-a-order-status-case.js';
+  OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
+  OLTP_SCENARIO_A_FAILURE_ATOMICITY_WORKLOAD,
+  buildScenarioAFailureAtomicityCase,
+  evaluateScenarioAFailureAtomicityObservation,
+} from '../../test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js';
 import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
@@ -36,22 +37,39 @@ const ZERO = 0;
 const ONE = 1;
 const TIKV_STORE_COUNT = 3;
 const OUTPUT_PATH =
-  process.env.TIDB_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH ||
-  'test-output/tidb-reference/scenario-a-order-status-tidb.json';
+  process.env.TIDB_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH ||
+  'test-output/tidb-reference/scenario-a-failure-atomicity-tidb.json';
 const LABELS = Object.freeze({
-  'lagrange.benchmark': 'scenario-a-order-status-tidb',
+  'lagrange.benchmark': 'scenario-a-failure-atomicity-tidb',
 });
 const DATABASE_RESOURCE_LIMITS = Object.freeze({memory: '2g', cpus: '2.0'});
 const CLIENT_RESOURCE_LIMITS = Object.freeze({memory: '256m', cpus: '0.5'});
 
 function uniqueRunId() {
-  return `lagrange-tidb-order-status-${process.pid}-${randomUUID().slice(0, 8)}`;
+  return `lagrange-tidb-failure-atomicity-${process.pid}-${randomUUID().slice(0, 8)}`;
 }
 
 function canonicalPayloadDigest(payload) {
   return createHash('sha256')
     .update(JSON.stringify(payload))
     .digest('hex');
+}
+
+function requireTerminalRetryEvidence(error) {
+  const evidence = error?.oltpRetryEvidence;
+  if (!evidence) {
+    throw new Error('TiDB failure-atomicity proof requires paired retry evidence');
+  }
+  if (Number(evidence.retries) !== ZERO || Number(evidence.attempts) !== ONE) {
+    throw new Error('TiDB failure-atomicity terminal request must not be retried');
+  }
+  if (!Array.isArray(evidence.failures) || evidence.failures.length !== ONE ||
+      evidence.failures[ZERO].outcome !==
+        OLTP_PAIRED_RETRY_OUTCOME.TERMINAL_FAILURE ||
+      evidence.failures[ZERO].retryable !== false) {
+    throw new Error('TiDB failure-atomicity request was not classified terminal');
+  }
+  return evidence;
 }
 
 async function cleanup(provider, state) {
@@ -78,15 +96,15 @@ async function cleanup(provider, state) {
     }
   }
   if (failures.length > ZERO) {
-    throw new AggregateError(failures, 'TiDB order-status proof cleanup failed');
+    throw new AggregateError(failures, 'TiDB failure-atomicity proof cleanup failed');
   }
 }
 
-async function runTiDbOrderStatusProof(options = {}) {
+async function runTiDbFailureAtomicityProof(options = {}) {
   const provider = options.provider || new DockerProvider();
   const runId = options.runId || uniqueRunId();
   const outputPath = options.outputPath || OUTPUT_PATH;
-  const definition = buildScenarioAOrderStatusCase();
+  const definition = buildScenarioAFailureAtomicityCase();
   const state = {
     networkName: `${runId}-net`,
     networkId: null,
@@ -109,59 +127,55 @@ async function runTiDbOrderStatusProof(options = {}) {
     });
     const host = String(state.cluster.containers.tidb.ip || '').trim();
     if (!host) {
-      throw new Error('TiDB order-status proof requires TiDB container IP');
+      throw new Error('TiDB failure-atomicity proof requires TiDB container IP');
     }
     const endpoint = {host, port: TIDB_REFERENCE_DEFAULTS.tidbPort};
     const databaseName =
-      `lagrange_tidb_order_status_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
+      `lagrange_tidb_failure_atomicity_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
     state.adapter = await createTiDbOltpAdapter({
       endpoint,
       databaseName,
-      workload: OLTP_SCENARIO_A_ORDER_STATUS_WORKLOAD,
+      workload: OLTP_SCENARIO_A_FAILURE_ATOMICITY_WORKLOAD,
     });
     if (state.adapter.datasetSha256 !== definition.identity.datasetSha256) {
-      throw new Error('TiDB order-status proof dataset identity mismatch');
-    }
-
-    const setupOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () =>
-        state.adapter.executeTransaction(definition.identity.setupOperation),
-    });
-    if (Number(setupOutcome.result?.orderId) !== definition.identity.expected.orderId) {
-      throw new Error('TiDB order-status setup allocated unexpected order id');
+      throw new Error('TiDB failure-atomicity proof dataset identity mismatch');
     }
 
     const before = await observeTiDbOltpStateSnapshot({
       endpoint,
       databaseName: state.adapter.databaseName,
     });
-    const readOutcome = await executePairedOltpTransactionWithRetry({
-      executeAttempt: () =>
-        state.adapter.executeTransaction(definition.identity.operation),
-    });
+    let terminalError = null;
+    try {
+      await executePairedOltpTransactionWithRetry({
+        executeAttempt: () =>
+          state.adapter.executeTransaction(definition.identity.operation),
+      });
+    } catch (error) {
+      terminalError = error;
+    }
+    const retryEvidence = terminalError ?
+      requireTerminalRetryEvidence(terminalError) : null;
     const after = await observeTiDbOltpStateSnapshot({
       endpoint,
       databaseName: state.adapter.databaseName,
     });
     const observation = Object.freeze({
-      orderId: Number(readOutcome.result?.orderId),
-      lineCount: Number(readOutcome.result?.lineCount),
-      lines: readOutcome.result?.lines || [],
+      terminalFailureObserved: Boolean(terminalError),
+      errorMessage: terminalError?.message || '',
       stateBeforeSha256: before.stateSha256,
       stateAfterSha256: after.stateSha256,
     });
-    const evaluation = evaluateScenarioAOrderStatusObservation(observation);
+    const evaluation = evaluateScenarioAFailureAtomicityObservation(observation);
     const payload = Object.freeze({
       schemaVersion: ONE,
-      evidenceId: 'tidb-order-status-v1',
+      evidenceId: 'tidb-failure-atomicity-v1',
       system: OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
       caseId: definition.identity.caseId,
       caseSha256: definition.caseSha256,
       datasetSha256: definition.identity.datasetSha256,
-      setupOperation: definition.identity.setupOperation,
       operation: definition.identity.operation,
-      setupRetryEvidence: setupOutcome.evidence,
-      readRetryEvidence: readOutcome.evidence,
+      retryEvidence,
       before,
       after,
       observation,
@@ -181,7 +195,7 @@ async function runTiDbOrderStatusProof(options = {}) {
           OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED :
           OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.FAILED,
         artifactSha256,
-        proofIds: OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
+        proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
       }),
       artifactSha256,
     });
@@ -189,7 +203,7 @@ async function runTiDbOrderStatusProof(options = {}) {
     await writeFile(outputPath, JSON.stringify(evidence, null, 2) + '\n', 'utf8');
     if (!evaluation.passed) {
       throw new Error(
-        `TiDB order-status semantic proof failed: ${evaluation.failures.join(',')}`,
+        `TiDB failure-atomicity semantic proof failed: ${evaluation.failures.join(',')}`,
       );
     }
   } catch (error) {
@@ -205,7 +219,7 @@ async function runTiDbOrderStatusProof(options = {}) {
   if (primaryError && cleanupError) {
     throw new AggregateError(
       [primaryError, cleanupError],
-      'TiDB order-status proof and cleanup both failed',
+      'TiDB failure-atomicity proof and cleanup both failed',
     );
   }
   if (primaryError) throw primaryError;
@@ -214,15 +228,16 @@ async function runTiDbOrderStatusProof(options = {}) {
 }
 
 async function main() {
-  const evidence = await runTiDbOrderStatusProof();
+  const evidence = await runTiDbFailureAtomicityProof();
   process.stdout.write(
-    'tidb-scenario-a-order-status-live: PASS ' +
+    'tidb-scenario-a-failure-atomicity-live: PASS ' +
     JSON.stringify({
       artifactSha256: evidence.artifactSha256,
-      setupRetries: Number(evidence.setupRetryEvidence?.retries || ZERO),
-      readRetries: Number(evidence.readRetryEvidence?.retries || ZERO),
-      orderId: evidence.observation.orderId,
-      lineCount: evidence.observation.lineCount,
+      attempts: Number(evidence.retryEvidence?.attempts || ZERO),
+      retries: Number(evidence.retryEvidence?.retries || ZERO),
+      stateUnchanged:
+        evidence.observation.stateBeforeSha256 ===
+        evidence.observation.stateAfterSha256,
     }) + '\n',
   );
 }
@@ -233,5 +248,5 @@ main().catch((error) => {
 });
 
 export {
-  runTiDbOrderStatusProof,
+  runTiDbFailureAtomicityProof,
 };

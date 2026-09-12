@@ -4,6 +4,15 @@ import {
   OLTP_SCENARIO_A_SYSTEM,
 } from '../../test/distributed/harness/oltp-scenario-a-comparison-systems.js';
 import {
+  OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-delivery-case.js';
+import {
+  OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-durability-case.js';
+import {
+  OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js';
+import {
   OLTP_SCENARIO_A_NEW_ORDER_CONTENTION_PROOF_IDS,
 } from '../../test/distributed/harness/oltp-scenario-a-new-order-contention-case.js';
 import {
@@ -13,6 +22,10 @@ import {
   OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
 } from '../../test/distributed/harness/oltp-scenario-a-payment-case.js';
 import {
+  OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
+} from '../../test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js';
+import {
+  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
   OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
   buildScenarioASemanticGateEvidence,
 } from '../../test/distributed/harness/oltp-scenario-a-semantic-gate.js';
@@ -42,8 +55,24 @@ const CASES = Object.freeze([
     proofIds: OLTP_SCENARIO_A_ORDER_STATUS_PROOF_IDS,
   }),
   Object.freeze({
+    evidenceId: 'ownership-delivery',
+    proofIds: OLTP_SCENARIO_A_DELIVERY_PROOF_IDS,
+  }),
+  Object.freeze({
     evidenceId: 'ownership-stock-level',
     proofIds: OLTP_SCENARIO_A_STOCK_LEVEL_PROOF_IDS,
+  }),
+  Object.freeze({
+    evidenceId: 'ownership-failure-atomicity',
+    proofIds: OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
+  }),
+  Object.freeze({
+    evidenceId: 'ownership-retryable-conflict',
+    proofIds: OLTP_SCENARIO_A_RETRYABLE_CONFLICT_PROOF_IDS,
+  }),
+  Object.freeze({
+    evidenceId: 'ownership-durability',
+    proofIds: OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
   }),
 ]);
 
@@ -57,30 +86,33 @@ function proofFor(caseDefinition) {
   });
 }
 
-const allProofIds = CASES.flatMap(({proofIds}) => proofIds);
+const allProofIds = CASES.flatMap(({proofIds}) => proofIds).sort();
 assert.equal(
   new Set(allProofIds).size,
   allProofIds.length,
   'Scenario A semantic case owners must not claim the same proof ID twice',
 );
+assert.deepEqual(
+  allProofIds,
+  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
+  'TiDB Scenario A case owners must cover every required semantic proof ID',
+);
 
 const gate = buildScenarioASemanticGateEvidence({
   proofs: CASES.map(proofFor),
 });
+const tidb = gate.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV];
+const lagrange = gate.systems[OLTP_SCENARIO_A_SYSTEM.LAGRANGE];
 assert.equal(gate.status, 'incomplete');
 assert.equal(gate.semanticEquivalent, false);
-assert.equal(
-  gate.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV].failedProofIds.length,
-  0,
-);
-for (const caseDefinition of CASES) {
-  for (const proofId of caseDefinition.proofIds) {
-    assert.equal(
-      gate.systems[OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV]
-        .passedProofIds.includes(proofId),
-      true,
-    );
-  }
-}
+assert.deepEqual(tidb.failedProofIds, []);
+assert.deepEqual(tidb.missingProofIds, []);
+assert.deepEqual(tidb.passedProofIds, OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS);
+assert.deepEqual(lagrange.passedProofIds, []);
+assert.deepEqual(lagrange.failedProofIds, []);
+assert.deepEqual(lagrange.missingProofIds, OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS);
 
-console.log('oltp-scenario-a-proof-ownership-guard: PASS');
+console.log(
+  'oltp-scenario-a-proof-ownership-guard: PASS ' +
+  JSON.stringify({tidbProofCount: tidb.passedProofIds.length}),
+);
