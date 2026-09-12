@@ -127,10 +127,13 @@ function summarizeStep(issuePlan, records, offeredRatePerSec) {
   const succeeded = records.filter(({status}) => status === 'succeeded');
   const failed = records.length - succeeded.length;
   const firstIssueMs = issuePlan[ZERO].intendedIssueTimeMs;
+  const scheduledWindowMs =
+    (issuePlan.length * THOUSAND) / offeredRatePerSec;
   const lastCompletionMs = Math.max(
     ...records.map(({completedAtMs}) => completedAtMs),
   );
   const completionWindowMs = Math.max(ZERO, lastCompletionMs - firstIssueMs);
+  const accountingWindowMs = Math.max(scheduledWindowMs, completionWindowMs);
   const totalRetries = records.reduce(
     (sum, record) => sum + record.retries,
     ZERO,
@@ -141,9 +144,12 @@ function summarizeStep(issuePlan, records, offeredRatePerSec) {
     succeeded: succeeded.length,
     failed,
     retries: totalRetries,
+    scheduledWindowMs,
     completionWindowMs,
-    completedPerSec: completionWindowMs > ZERO ?
-      succeeded.length / (completionWindowMs / THOUSAND) : ZERO,
+    drainOverrunMs: Math.max(ZERO, completionWindowMs - scheduledWindowMs),
+    accountingWindowMs,
+    completedPerSec: accountingWindowMs > ZERO ?
+      succeeded.length / (accountingWindowMs / THOUSAND) : ZERO,
     latency: summarizeOltpBaselineLatencies(
       records.map(({latencyMs}) => latencyMs),
     ),
