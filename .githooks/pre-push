@@ -2,17 +2,25 @@
 # Push gate, fast-fail ordered: cheap static checks first (unused-code ~7s,
 # cached whole-repo lint ~30s cold / seconds warm, corpus ratchets:
 # duplication + file-size ~40s, circular-deps ~10s, unused-exports ~60s),
-# then — only once everything static is green — the long-running post-push
-# test corpus (test:gate:postpush) as the final stage. This hook is the only
-# per-push run of the static checks: the remote per-push CI gate deliberately
-# skips them and only the on-demand full-gate workflow (workflow_dispatch;
-# there is no scheduled full gate) re-runs them remotely, so drift must be
-# caught BEFORE it lands on the remote (core.md Must-Not #20). This is also
-# the ONE full-corpus run per head: CI runs the impact cone after the push
-# and a release re-proves the tagged sha inside the tag workflow (RELEASE.md),
-# so a push that passes this hook should not turn main red.
+# then - only once everything static is green - the test stage
+# (test:gate:postpush): the focused contracts, the post-push static audits,
+# the model contracts, the import-graph refresh, the golden-capability guard
+# and, last, the CHANGE PROOF - the same `npm test` selection CI runs, fed
+# the same base (the remote sha of the pushed ref, exported below as
+# LAGRANGE_CHECK_BASE), or the WHOLE corpus (test:all) when the change proof
+# cannot stand for it: scripts/checks/push-gate-change-proof.js names the
+# triggers and prints its decision. Until 2026-09-12 the last stage was the
+# whole corpus on every push; identical bytes were re-proved for 17 minutes
+# a push. The whole corpus now runs on main AFTER the push, gating nothing,
+# in the full-corpus canary workflow, and a release proves its tag's tree in
+# full-gate.yml. LAGRANGE_PUSH_FULL_CORPUS=1 asks for the whole corpus here.
+# This hook is the only per-push run of the static checks: the remote
+# per-push CI gate deliberately skips them and only the on-demand full-gate
+# workflow (workflow_dispatch; there is no scheduled full gate) re-runs them
+# remotely, so drift must be caught BEFORE it lands on the remote (core.md
+# Must-Not #20).
 # Bypass with git push --no-verify (emergencies only; skips EVERYTHING).
-# Skip only the test stage with LAGRANGE_PUSH_SKIP_TESTS=1 git push — for
+# Skip only the test stage with LAGRANGE_PUSH_SKIP_TESTS=1 git push - for
 # when the exact working tree was already gated green this session.
 # Unused-file findings on untracked paths do not block: untracked files are
 # never part of a push (a concurrent session's in-flight work must not gate
@@ -50,19 +58,22 @@ trap report_gate_exit EXIT
 # hook invocation) the guard fail-closes to checking. The local-sha of the
 stage "reading pushed refs"
 # first pushed ref is also captured so the corpus gates below measure the
-# tree being pushed rather than the working tree (epic item 6).
+# tree being pushed rather than the working tree (epic item 6), and the
+# remote sha of main is the base the change proof proves against.
 PUSHING_MAIN=0
 SAW_REF=0
 PUSHED_SHA=""
+MAIN_REMOTE_SHA=""
 ALL_PROVEN_TAG_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
-while read -r _local_ref local_sha remote_ref _remote_sha; do
+while read -r _local_ref local_sha remote_ref remote_sha; do
   SAW_REF=1
   if [ -z "${PUSHED_SHA}" ]; then
     PUSHED_SHA="${local_sha}"
   fi
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
+    MAIN_REMOTE_SHA="${remote_sha}"
   fi
   case "${remote_ref}" in
     refs/tags/*)
@@ -158,10 +169,17 @@ git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
 # in-flight files must neither dilute nor false-fail this push (parallel-
 # session architecture epic, item 6). With a captured pushed sha the exact
 # committed tree is gated; manual invocation gates the working-tree state.
-stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
-if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "0000000000000000000000000000000000000000" ]; then
+# Inside the publisher's exact-HEAD worktree (it declares its injections)
+# this tree IS the pushed tree, so the ratchets run in place: a second
+# materialization would copy the same bytes again for minutes.
+if [ -n "${LAGRANGE_WORKSPACE_INJECTIONS:-}" ]; then
+  stage "corpus ratchets in place (duplication/file-size; exact-HEAD worktree)"
+  node scripts/checks/push-gate-corpus-worktree.js --in-place
+elif [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "0000000000000000000000000000000000000000" ]; then
+  stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
   node scripts/checks/push-gate-corpus-worktree.js --ref "${PUSHED_SHA}"
 else
+  stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
   node scripts/checks/push-gate-corpus-worktree.js
 fi
 # Fast-fail ordering: circular-deps (~10s) before unused-exports (~60s).
@@ -170,11 +188,22 @@ node scripts/check-circular-dependencies.js
 stage "unused-exports ratchet (~60s)"
 node scripts/check-unused-exports.js
 
-# Final stage — the long-running post-push test corpus. Everything cheap has
-# already passed, so a failure here is a real test regression, not a lint
-# nit discovered after minutes of test time. Runs against the working tree
-# (the same surface the manual pre-flight gates); the remote CI gate re-runs
-# it against the pushed tree after the push.
+# Final stage - the test stage. Everything cheap has already passed, so a
+# failure here is a real test regression, not a lint nit discovered after
+# minutes of test time. The change proof is the selection CI runs after the
+# push, fed the same base: the remote sha of main from the pushed-ref line,
+# exported as LAGRANGE_CHECK_BASE. The pushed ref WINS over an ambient value:
+# a shell that still carries LAGRANGE_CHECK_BASE=HEAD would otherwise prove
+# zero changed paths. A push that does not update main, or a manual
+# invocation, resolves its own base (the publication merge-base) inside the
+# proof.
+if [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ] \
+  && git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
+  if [ -n "${LAGRANGE_CHECK_BASE:-}" ] && [ "${LAGRANGE_CHECK_BASE}" != "${MAIN_REMOTE_SHA}" ]; then
+    echo "pre-push: ignoring ambient LAGRANGE_CHECK_BASE=${LAGRANGE_CHECK_BASE}; the pushed ref's remote sha is the proof base"
+  fi
+  export LAGRANGE_CHECK_BASE="${MAIN_REMOTE_SHA}"
+fi
 if [ -n "${LAGRANGE_PUSH_SKIP_TESTS:-}" ]; then
   echo "pre-push: LAGRANGE_PUSH_SKIP_TESTS set — skipping test:gate:postpush (static checks all green)"
 else
@@ -197,12 +226,11 @@ else
   fi
   stage "thermal headroom gate"
   node scripts/checks/wait-for-thermal-headroom.js
-  echo "pre-push: static checks green — running the post-push test corpus (long)"
+  echo "pre-push: static checks green - running the test stage (change proof against ${LAGRANGE_CHECK_BASE:-the publication merge-base}, or the whole corpus when the proof cannot stand for it)"
   # Retry-failed-once (same owner policy as the CI lanes, 2026-08-24): a
-  # single intermittent among ~2000 files must not block a push; a failed
-  # file reruns standalone once, reported never hidden, and a standalone
-  # failure stays red (run-test-files.js owns the mechanics and the 5-file
-  # breakage cap).
-  stage "full test corpus - runs BEFORE the push; CI re-runs it after (LONG: ~30-45 min; per-file results stream below)"
+  # single intermittent must not block a push; a failed file reruns
+  # standalone once, reported never hidden, and a standalone failure stays
+  # red (run-test-files.js owns the mechanics and the 5-file breakage cap).
+  stage "test stage - contracts, audits, then the change proof or the whole corpus (per-file results stream below)"
   LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi

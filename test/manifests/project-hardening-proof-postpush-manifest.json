@@ -99,11 +99,10 @@
       }
     },
     {
-      "id": "fast-tests",
-      "executable": "npm",
+      "id": "change-proof",
+      "executable": "node",
       "argv": [
-        "run",
-        "test:fast"
+        "scripts/checks/push-gate-change-proof.js"
       ],
       "timeoutMs": 3600000,
       "acceptableExitCodes": [
@@ -111,7 +110,7 @@
       ],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening-postpush/fast-tests.json"
+        "path": "test-output/acceptance/project-hardening-postpush/change-proof.json"
       }
     }
   ]
