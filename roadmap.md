@@ -40,9 +40,17 @@ work is to make their useful envelope larger and their evidence easier to trust:
 
 A credible distributed database should not require callers to understand its
 physical partition key before ordinary queries become efficient. Phase 0.3
-makes keys, ordered access paths, secondary indexes, and continuing query
-observation coherent core capabilities rather than collections of planner or
-adapter exceptions.
+makes keys, ordered access paths, secondary indexes, locking reads, and
+continuing query observation coherent core capabilities rather than collections
+of planner or adapter exceptions.
+
+PostgreSQL `SELECT ... FOR UPDATE` is a core transaction semantic, not merely
+syntax accepted by PG wire. Phase 0.3 preserves the locking-read clause through
+the canonical SQL AST and routes it through the existing transaction/participant
+owners so conflicting work observes a real distributed write-intent/reservation
+contract with bounded timeout, cancellation, rollback and recovery behavior.
+The design boundary is specified in
+[PostgreSQL Locking Reads](architecture/postgres-locking-reads.md).
 
 The existing live-query runtime already contains useful grouping and CDC-driven
 pieces, but its generic data-plane contract is not complete. Phase 0.3 promotes
@@ -58,6 +66,10 @@ The milestone includes:
 - one type-aware total order for persisted partition keys and indexed tuples;
 - primary-key and compound-primary-key partition narrowing beyond an implicit
   `id` convention;
+- PostgreSQL `SELECT ... FOR UPDATE` retained as an explicit canonical SQL
+  semantic and enforced by the distributed transaction/participant owners,
+  including conflict, timeout/cancellation, commit/rollback release, and
+  recovery proofs;
 - ordinary and compound local `CREATE INDEX` / `DROP INDEX` support using one
   well-defined ordered B-tree index family;
 - correct left-prefix and equality-prefix-plus-range semantics for compound

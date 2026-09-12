@@ -39,10 +39,13 @@ Read these first:
    activation leases pull compute toward data.
 4. [Process: Replication](process-replication.md) - commit, propagation,
    snapshot recovery, and replica repair.
-5. [Live Query Data Plane](live-query-data-plane.md) - target contract for
+5. [PostgreSQL Locking Reads](postgres-locking-reads.md) - planned Phase 0.3
+   `SELECT ... FOR UPDATE` ownership across PG parsing, SqlCore, distributed
+   transactions, and partition participants.
+6. [Live Query Data Plane](live-query-data-plane.md) - target contract for
    push-backed query observation with no polling for distributed change
    detection.
-6. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
+7. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
    movement safety.
 
 For the developer-visible contract, read
@@ -58,6 +61,7 @@ architecture, read
 | How is a table divided? | [Partitioning](process-partitioning.md) |
 | How does a write become durable? | [Replication](process-replication.md) |
 | How are reads and writes routed? | [Request routing](process-request-routing.md) |
+| How will PostgreSQL `SELECT ... FOR UPDATE` become a real distributed locking read? | [PostgreSQL locking reads](postgres-locking-reads.md) |
 | How should a query result stay current after remote writes? | [Live query data plane](live-query-data-plane.md) |
 | How does one service call fan out and reduce? | [Minimal deployment surface](minimal-deployment-surface.md) and [query runtime](query-runtime.md) |
 | How is missing compute activated on a data host? | [Data affinity](process-data-affinity.md) |
@@ -74,6 +78,9 @@ architecture, read
   Bindings.
 - A call currently uses one literal single-table selector, one bounded row batch
   per shard, finite numeric partials, and one reducer.
+- PostgreSQL `SELECT ... FOR UPDATE` is a planned Phase 0.3 core capability, not
+  a current locking-read claim. The current transaction model uses snapshot
+  isolation plus first-committer-wins write-conflict detection.
 - The generic push-backed live-query data plane is an approved Phase 0.3 target,
   not a current general application-data capability. Existing admin/cache-backed
   live-query pieces must not be read as proof of that broader contract.
@@ -87,6 +94,8 @@ architecture, read
 
 - [Architecture overview](overview.md) - implementation principles and owner
   boundaries.
+- [PostgreSQL locking reads](postgres-locking-reads.md) - planned locking-read
+  semantic, ownership, and proof boundary.
 - [Live query data plane](live-query-data-plane.md) - target live-observation
   ownership, CDC reuse, grouping, snapshot/frontier, and no-polling contract.
 - [Runtime lifecycle](runtime-lifecycle.md) - runtime readiness and driver
