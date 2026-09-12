@@ -18,6 +18,9 @@ import {
   OLTP_PAIRED_RETRY_POLICY,
 } from './oltp-paired-retry-owner.js';
 import {
+  OLTP_SCENARIO_A_SYSTEM,
+} from './oltp-scenario-a-comparison-systems.js';
+import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
   hashScenarioASemanticProfile,
 } from './oltp-scenario-a-semantic-profile.js';
@@ -26,14 +29,12 @@ const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
 
-const SYSTEM = Object.freeze({
-  TIDB_TIKV: 'tidb-tikv',
-  LAGRANGE: 'lagrange',
-});
-
 const SWEEP_PROFILE = Object.freeze({
   id: 'scenario-a-paired-sweep-v1',
-  systems: Object.freeze([SYSTEM.TIDB_TIKV, SYSTEM.LAGRANGE]),
+  systems: Object.freeze([
+    OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
+    OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
+  ]),
   counterbalance: 'alternate-rate-direction-and-system-first',
   freshDatasetPerSystemRateRun: true,
   warmupBeforeMeasurement: true,
@@ -141,8 +142,14 @@ function canonicalIdentity(options) {
 
 function systemOrder(repetitionIndex) {
   return repetitionIndex % TWO === ZERO ?
-    Object.freeze([SYSTEM.TIDB_TIKV, SYSTEM.LAGRANGE]) :
-    Object.freeze([SYSTEM.LAGRANGE, SYSTEM.TIDB_TIKV]);
+    Object.freeze([
+      OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
+      OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
+    ]) :
+    Object.freeze([
+      OLTP_SCENARIO_A_SYSTEM.LAGRANGE,
+      OLTP_SCENARIO_A_SYSTEM.TIDB_TIKV,
+    ]);
 }
 
 function rateOrder(rates, repetitionIndex) {
@@ -183,6 +190,6 @@ function buildScenarioAPairedSweepPlan(options = {}) {
 
 export {
   SWEEP_PROFILE as OLTP_PAIRED_SWEEP_PROFILE,
-  SYSTEM as OLTP_PAIRED_SWEEP_SYSTEM,
+  OLTP_SCENARIO_A_SYSTEM as OLTP_PAIRED_SWEEP_SYSTEM,
   buildScenarioAPairedSweepPlan,
 };
