@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - benchmark/tidb-reference-scenarios
+      - benchmark/lagrange-oltp-adapter-staging
   workflow_dispatch: {}
 
 permissions:
@@ -66,10 +67,13 @@ jobs:
           npx eslint \
             test/distributed/harness/oltp-baseline-transaction-executor.js \
             test/distributed/reference-client/tidb-oltp-adapter.js \
-            scripts/checks/oltp-baseline-transaction-executor-guard.js
+            test/distributed/reference-client/lagrange-oltp-adapter.js \
+            scripts/checks/oltp-baseline-transaction-executor-guard.js \
+            scripts/checks/lagrange-oltp-adapter-guard.js
           node scripts/checks/tidb-oltp-dataset-guard.js
           node scripts/checks/tidb-oltp-workload-guard.js
           node scripts/checks/oltp-baseline-transaction-executor-guard.js
+          node scripts/checks/lagrange-oltp-adapter-guard.js
 
       - name: Run live three-store Docker SQL smoke
         env:
