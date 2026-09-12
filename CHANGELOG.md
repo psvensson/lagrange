@@ -10,6 +10,16 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.4-rc.2] — 2026-09-12
+
+Pipeline dry run, third attempt. No functional change since the `v0.2.3`
+tag. `v0.2.4-rc.0` and `v0.2.4-rc.1` both reached npm under the `next`
+dist-tag; each run then stopped because the npm publication owner watched
+the registry for ten seconds while npm was still processing the publish and
+read absence as failure, so Docker, Helm and the GitHub release were never
+attempted. The owner now observes for minutes and types an accepted,
+still-processing publish as such.
+
 ## [0.2.4-rc.1] — 2026-09-12
 
 Pipeline dry run, second attempt. No functional change since the `v0.2.3`
@@ -362,7 +372,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.2...HEAD
+[0.2.4-rc.2]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...v0.2.4-rc.2
 [0.2.4-rc.1]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...v0.2.4-rc.1
 [0.2.4-rc.0]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4-rc.0
 [0.2.3]: https://github.com/psvensson/lagrange/compare/v0.2.2...v0.2.3
