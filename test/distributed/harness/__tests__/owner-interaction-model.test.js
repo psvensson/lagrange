@@ -23,6 +23,7 @@ import {test} from 'node:test';
 import {
   loadImpactContractRegistry,
 } from '../../../../scripts/checks/impact-contract-registry.js';
+import * as model from '../owner-interaction-model.js';
 
 // Captured at module load: the harness directory is governed by the
 // ambient-intrinsics guideline (a replaced prototype method must not be able
@@ -78,10 +79,9 @@ function registeredInteractions() {
 }
 
 async function loadModel() {
-  const absolute = path.join(ROOT, MODEL_PATH);
-  assert.ok(fs.existsSync(absolute),
+  assert.ok(fs.existsSync(path.join(ROOT, MODEL_PATH)),
     `${MODEL_PATH} must exist: the harness model is derived from the registry, not typed`);
-  return import(absolute);
+  return model;
 }
 
 test('every registered owner interaction is hosted by the harness model', async () => {
