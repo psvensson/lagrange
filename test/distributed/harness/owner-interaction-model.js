@@ -13,8 +13,15 @@
 //
 // Invariant owners are hosted through the contract each invariant cites: an
 // invariant whose contractRef is a registered contract is witnessed by that
-// contract's host; one whose contract is not registered is reported, never
-// silently counted as hosted.
+// contract's host. An invariant whose subject is the architecture itself
+// (ownership topology, state-machine shape, decision structure - declared as
+// `subject: architecture` in the registry) is MODEL-WITNESSED when its
+// modelRef resolves to a named check the model:contracts chain runs: an Alloy
+// assertion that is declared and checked, a decision-table rule that names
+// it, or a forbidden owner trace whose evaluator produces it. "Appears in the
+// statechart" is not a check and does not bind. Everything else is reported
+// unbound, never silently counted as hosted: the receipt carries three
+// counts - hosted, model-witnessed, unbound - so no class hides a number.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,10 +30,18 @@ import {pathToFileURL} from 'node:url';
 import {
   loadImpactContractRegistry,
 } from '../../../scripts/checks/impact-contract-registry.js';
+import {validateAlloyModel} from '../../../scripts/check-alloy-models.js';
+import {validateDecisionTable} from '../../../scripts/check-decision-tables.js';
+import {
+  collectTraceViolations,
+  validateTraceSuite,
+} from '../../../scripts/check-owner-traces.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const regExpTest = Function.call.bind(RegExp.prototype.test);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
@@ -39,6 +54,27 @@ const FUNCTION_TYPE = 'function';
 const HOST_KIND = Object.freeze({PAIR: 'pair', CONTRACT: 'contract'});
 const SEALED_HOST_ERROR_PREFIX = 'owner host must inherit ';
 const SEALED_HOST_ERROR_SUFFIX = ' from production';
+const ARCHITECTURE_SUBJECT = 'architecture';
+const ALLOY_SUFFIX = '.als';
+const JSON_SUFFIX = '.json';
+const DECISION_TABLE_SCHEMA = 'decision-table-v1';
+const TRACE_SUITE_SCHEMA = 'owner-trace-suite-v1';
+const MODEL_WITNESS_KIND = Object.freeze({
+  ALLOY_ASSERTION: 'alloy-assertion',
+  DECISION_TABLE_RULE: 'decision-table-rule',
+  OWNER_TRACE_VIOLATION: 'owner-trace-violation',
+});
+const ALLOY_ASSERT_KEYWORD = 'assert';
+const ALLOY_CHECK_KEYWORD = 'check';
+const NO_MODEL_REF = 'no modelRef';
+const NO_NAMED_CHECK_PREFIX = 'no named check for ';
+const CHAIN_REJECTS_PREFIX = 'model:contracts chain rejects ';
+const UNKNOWN_MODEL_KIND_PREFIX = 'no checker for model ';
+const CONTRACTS_DIRECTORY = 'architecture/contracts';
+const SYSTEM_CONTRACT_BLOCK = /<!--\s*system-contract\s*([\s\S]*?)-->/u;
+const CLAIM_GROUPS = Object.freeze(['safetyInvariants', 'livenessExpectations']);
+const FOREIGN_CLAIM_INFIX = ' claims ';
+const FOREIGN_CLAIM_SUFFIX = ', which is cited by ';
 
 // Owners arrive as the registry's own records - {spec, kind} - and are
 // resolved by the registry's vocabulary, never re-classified here: an exact
@@ -181,34 +217,169 @@ function contractIdOf(contractRef) {
     base.slice(0, -MARKDOWN_SUFFIX.length) : base;
 }
 
+function alloyKeywordPattern(keyword, name) {
+  return new RegExp(`^\\s*${keyword}\\s+${name}\\b`, 'mu');
+}
+
+// A model witness is a NAMED check the chain runs, resolved with the chain's
+// own validators so the model can never accept what the checker rejects.
+function resolveAlloyWitness(root, invariant) {
+  const absolute = path.join(root, invariant.modelRef);
+  const validated = validateAlloyModel(absolute);
+  if (validated.errors.length > 0) {
+    return {problem: `${CHAIN_REJECTS_PREFIX}${invariant.modelRef}: ${validated.errors[0]}`};
+  }
+  const ref = arrayFind(validated.metadata.invariantRefs || [],
+    (entry) => entry?.id === invariant.id);
+  const name = ref?.assertion;
+  if (typeof name !== 'string' || name.length === 0 ||
+      !regExpTest(alloyKeywordPattern(ALLOY_ASSERT_KEYWORD, name), validated.content) ||
+      !regExpTest(alloyKeywordPattern(ALLOY_CHECK_KEYWORD, name), validated.content)) {
+    return {problem: `${NO_NAMED_CHECK_PREFIX}${invariant.id} in ${invariant.modelRef}`};
+  }
+  return {witness: {kind: MODEL_WITNESS_KIND.ALLOY_ASSERTION,
+    model: invariant.modelRef, name}};
+}
+
+function resolveDecisionTableWitness(root, invariant, absolute) {
+  const validated = validateDecisionTable(absolute);
+  if (validated.errors.length > 0) {
+    return {problem: `${CHAIN_REJECTS_PREFIX}${invariant.modelRef}: ${validated.errors[0]}`};
+  }
+  const rules = arrayFilter(validated.table.rules || [],
+    (rule) => arrayIncludes(rule?.invariantRefs || [], invariant.id));
+  if (rules.length === 0) {
+    return {problem: `${NO_NAMED_CHECK_PREFIX}${invariant.id} in ${invariant.modelRef}`};
+  }
+  return {witness: {kind: MODEL_WITNESS_KIND.DECISION_TABLE_RULE,
+    model: invariant.modelRef, name: arrayMap(rules, (rule) => rule.id).join(', ')}};
+}
+
+function resolveTraceSuiteWitness(root, invariant, absolute) {
+  const validated = validateTraceSuite(absolute);
+  if (validated.errors.length > 0) {
+    return {problem: `${CHAIN_REJECTS_PREFIX}${invariant.modelRef}: ${validated.errors[0]}`};
+  }
+  // Named AND evaluated: the forbidden trace declares the violation and the
+  // checker's evaluator actually produces it for that trace.
+  const traces = arrayFilter(validated.suite.forbiddenTraces || [], (trace) =>
+    arrayIncludes(trace?.expectedViolations || [], invariant.id) &&
+    arrayIncludes(collectTraceViolations(trace), invariant.id));
+  if (traces.length === 0) {
+    return {problem: `${NO_NAMED_CHECK_PREFIX}${invariant.id} in ${invariant.modelRef}`};
+  }
+  return {witness: {kind: MODEL_WITNESS_KIND.OWNER_TRACE_VIOLATION,
+    model: invariant.modelRef, name: arrayMap(traces, (trace) => trace.id).join(', ')}};
+}
+
+function resolveModelWitness(root, invariant) {
+  const modelRef = invariant.modelRef;
+  if (typeof modelRef !== 'string' || modelRef.length === 0) return {problem: NO_MODEL_REF};
+  const absolute = path.join(root, modelRef);
+  if (!fs.existsSync(absolute)) {
+    return {problem: `${NO_NAMED_CHECK_PREFIX}${invariant.id}: ${modelRef} is missing`};
+  }
+  if (stringEndsWith(modelRef, ALLOY_SUFFIX)) return resolveAlloyWitness(root, invariant);
+  if (stringEndsWith(modelRef, JSON_SUFFIX)) {
+    const schema = JSON.parse(fs.readFileSync(absolute, UTF8))?.schema;
+    if (schema === DECISION_TABLE_SCHEMA) {
+      return resolveDecisionTableWitness(root, invariant, absolute);
+    }
+    if (schema === TRACE_SUITE_SCHEMA) {
+      return resolveTraceSuiteWitness(root, invariant, absolute);
+    }
+    // A statechart lists invariants but names no property per invariant.
+    return {problem: `${UNKNOWN_MODEL_KIND_PREFIX}${modelRef} (${schema})`};
+  }
+  return {problem: `${UNKNOWN_MODEL_KIND_PREFIX}${modelRef}`};
+}
+
+// Registry as a function, not a relation: an invariant is CLAIMED (asserted
+// in safetyInvariants or livenessExpectations) by exactly one contract, the
+// one it cites and whose witness goes red when its predicate is mutated. A
+// contract that asserts another contract's invariant claims what its own
+// witness never checks - the drift mechanism in miniature - and is a problem
+// of the same class as a dangling pointer. A dependency belongs in
+// systemTheory.invariantRefs, which references without asserting.
+function contractClaimProblems(root, invariants) {
+  const citedBy = new Map();
+  for (const invariant of invariants) citedBy.set(invariant.id, invariant.contractRef);
+  const directory = path.join(root, CONTRACTS_DIRECTORY);
+  const problems = [];
+  if (!fs.existsSync(directory)) return problems;
+  for (const name of fs.readdirSync(directory)) {
+    if (!stringEndsWith(name, MARKDOWN_SUFFIX)) continue;
+    const contractPath = `${CONTRACTS_DIRECTORY}/${name}`;
+    const block = SYSTEM_CONTRACT_BLOCK.exec(fs.readFileSync(path.join(root, contractPath), UTF8));
+    if (!block) continue;
+    const contract = JSON.parse(block[1]);
+    for (const group of CLAIM_GROUPS) {
+      for (const claim of contract[group] || []) {
+        const cited = citedBy.get(claim?.id);
+        if (cited !== undefined && cited !== contractPath) {
+          problems.push(
+            `${contractPath}${FOREIGN_CLAIM_INFIX}${claim.id}${FOREIGN_CLAIM_SUFFIX}${cited}`);
+        }
+      }
+    }
+  }
+  return problems;
+}
+
 /**
  * How each registered invariant binds to the model. An invariant whose
  * contractRef names a contract the registry knows is BOUND to that contract's
- * host; one whose contract the registry does not know is UNBOUND and listed
- * with its id, so the gap is a number the harness reports rather than a
- * citation nobody can witness. The model grows bound as the registry grows.
+ * host. An invariant declared `subject: architecture` whose modelRef resolves
+ * to a named check the chain runs is MODEL-WITNESSED; one so declared whose
+ * pointer dangles is a problem, and unbound - it never falls back to a host.
+ * Everything else is UNBOUND and listed with its id, so the gap is a number
+ * the harness reports rather than a citation nobody can witness. Three
+ * counts, never one; and a contract that asserts an invariant another
+ * contract cites is a problem too (see contractClaimProblems).
  * @param {string} root
  * @return {Promise<{bound: Array<{id: string, owner: string, contract: string}>,
+ *   modelWitnessed: Array<{id: string, owner: string, witness: object}>,
  *   unbound: Array<{id: string, owner: string, contractRef: string}>,
- *   hostedOwners: Set<string>}>}
+ *   problems: string[], hostedOwners: Set<string>}>}
  */
 export async function invariantBindings(root) {
   const hosts = await hostedInteractions(root);
   const invariants = JSON.parse(
     fs.readFileSync(path.join(root, INVARIANTS_PATH), UTF8)).invariants;
   const bound = [];
+  const modelWitnessed = [];
   const unbound = [];
+  const problems = [];
   const hostedOwners = new Set();
   for (const invariant of invariants) {
+    // A declared architecture subject binds through its model check and
+    // never through a host: a contract registered under the same citation
+    // (for the runtime invariants that share the document) must not swallow
+    // it, and a dangling model pointer is a problem, never a fallback.
+    if (invariant.subject === ARCHITECTURE_SUBJECT) {
+      const resolved = resolveModelWitness(root, invariant);
+      if (resolved.witness) {
+        modelWitnessed.push({id: invariant.id, owner: invariant.owner,
+          witness: resolved.witness});
+      } else {
+        problems.push(`${invariant.id}: ${resolved.problem}`);
+        unbound.push({id: invariant.id, owner: invariant.owner,
+          contractRef: invariant.contractRef});
+      }
+      continue;
+    }
     const contract = contractIdOf(invariant.contractRef);
     if (hosts.has(contract)) {
       bound.push({id: invariant.id, owner: invariant.owner, contract});
       hostedOwners.add(invariant.owner);
-    } else {
-      unbound.push({id: invariant.id, owner: invariant.owner,
-        contractRef: invariant.contractRef});
+      continue;
     }
+    unbound.push({id: invariant.id, owner: invariant.owner,
+      contractRef: invariant.contractRef});
   }
+  problems.push(...contractClaimProblems(root, invariants));
   return {bound: arrayMap(bound, (entry) => entry),
-    unbound: arrayMap(unbound, (entry) => entry), hostedOwners};
+    modelWitnessed: arrayMap(modelWitnessed, (entry) => entry),
+    unbound: arrayMap(unbound, (entry) => entry),
+    problems: arrayMap(problems, (entry) => entry), hostedOwners};
 }

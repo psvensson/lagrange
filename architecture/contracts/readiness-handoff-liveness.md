@@ -38,14 +38,6 @@
     {
       "id": "ready-requires-serviceable-canonical-leader",
       "statement": "Startup readiness cannot become active before SQL and query transport serviceability are true for the canonical leader and the observed owner epoch is fresh."
-    },
-    {
-      "id": "stale-projection-never-promotes-readiness",
-      "statement": "A stale observer projection cannot promote readiness, admission, or owner progress across handoff boundaries."
-    },
-    {
-      "id": "durable-transition-has-recoverable-wake",
-      "statement": "Every durable owner transition that requires follow-up work has an atomic, recoverable, or replayable wake before observers depend on it."
     }
   ],
   "livenessExpectations": [
@@ -169,9 +161,17 @@ missing.
 ## Invariants
 
 Ready admission requires SQL and query transport serviceability for the
-canonical leader and a fresh observed owner epoch. Deferred handoff work must
-retain a recoverable wake. Under fair progress, the handoff reaches ready,
-blocked, or escalated instead of waiting forever.
+canonical leader and a fresh observed owner epoch. Under fair progress, the
+handoff reaches ready, blocked, or escalated instead of waiting forever.
+
+This contract depends on, and does not itself assert, two invariants that
+`core-system-logic` cites and witnesses:
+`stale-projection-never-promotes-readiness` (a stale observer projection
+cannot promote readiness across the handoff boundary) and
+`durable-transition-has-recoverable-wake` (deferred handoff work retains a
+recoverable wake). They appear in `systemTheory.invariantRefs` as
+dependencies; an invariant is claimed by exactly one contract, the one whose
+witness goes red when the predicate is mutated (2026-09-12).
 
 ## Runtime Bindings
 
