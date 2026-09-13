@@ -24,7 +24,7 @@ import {
   parseEvidenceJson,
   readJsonLines,
   safeCountSum,
-} from '../../scripts/run-raft-follower-append-sqlite-starvation-relief-scenarios.js';
+} from './helpers/raft-follower-append-starvation-relief-scenarios.js';
 import LifeRaft from '../../src/raft/liferaft.js';
 import {
   handleFollowerAppendBatch,

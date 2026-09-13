@@ -23,7 +23,6 @@ import {
 import {publishNpmPackage} from '../../scripts/release-npm-package.js';
 import {uploadAndVerify} from '../../scripts/solve/evidence-store.js';
 import {validatePublishRequest} from '../../scripts/publish-head.js';
-import {buildHarnessImage} from '../../scripts/build-gcp-harness-image.js';
 import {
   provisionGcpDockerHosts,
 } from '../../test/distributed/gcp-run-orchestration.js';
@@ -201,26 +200,13 @@ test('cloud provisioning consumes the authority', async () => {
   // it. Without the operator's out-of-band authorization nothing is created.
   const before = process.env[CLOUD_ENV];
   delete process.env[CLOUD_ENV];
-  await assert.rejects(
-    () => provisionGcpDockerHosts({gcp: {project: 'a-project'}}, false),
-    /refused/u, 'hosts were provisioned from a configuration key alone');
-  // The image builder takes the same signal from the same place, and refuses
-  // before it runs a single command.
-  const ran = [];
-  delete process.env[CLOUD_ENV];
   try {
-    await assert.rejects(() => buildHarnessImage({
-      project: 'a-project', zone: 'a-zone', builderName: 'a-builder',
-      machineType: 'a-machine',
-    }, {runCommand: (args) => {
-      ran.push(args);
-      throw new Error('resource was not found');
-    }}), /refused/u, 'the image builder created hosts without authorization');
+    await assert.rejects(
+      () => provisionGcpDockerHosts({gcp: {project: 'a-project'}}, false),
+      /refused/u, 'hosts were provisioned from a configuration key alone');
   } finally {
     if (before !== undefined) process.env[CLOUD_ENV] = before;
   }
-  assert.equal(ran.filter((args) => args.includes('create')).length, 0,
-    'a cloud host was created despite the refusal');
 });
 
 test('release tag publication is registered and performed nowhere', () => {

@@ -51,7 +51,6 @@ const localText = Object.freeze({
   VALID: 'valid',
 });
 
-
 const beginKeys = Object.freeze([
   'runId',
   'networkId',
@@ -422,33 +421,6 @@ export async function captureBenchmarkResourceLiveObservation(session) {
     state.status = statusObserving;
     throw error;
   }
-}
-
-export function resolveBenchmarkResourceLiveObservationBounds(
-  session,
-  sideId,
-) {
-  const state = weakMapGet(authorityStates, session);
-  assertBenchmarkResourceText(
-    sideId,
-    localText.LIVE_OBSERVATION_BOUNDS_SIDE_ID,
-  );
-  if (state?.status !== statusCaptured) {
-    fail(localText.LIVE_OBSERVATION_FINALIZE_CAPTURED_STATE_REQUIRED);
-  }
-  let startedAt = Number.MAX_SAFE_INTEGER;
-  let endedAt = 0;
-  let matched = 0;
-  for (let index = 0; index < state.components.length; index += 1) {
-    if (state.components[index].sideId !== sideId) continue;
-    matched += 1;
-    startedAt = mathMin(startedAt, state.start[index].stats.timestamp);
-    endedAt = mathMax(endedAt, state.end[index].stats.timestamp);
-  }
-  if (matched === 0 || endedAt <= startedAt) {
-    fail(localText.LIVE_OBSERVATION_COMPONENT_IDENTITY_OR_INTERVAL_MISMATCH);
-  }
-  return objectFreeze({startedAt, endedAt});
 }
 
 async function assertCleanup(state) {

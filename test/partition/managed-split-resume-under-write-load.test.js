@@ -61,8 +61,8 @@ import {
 // source keeps serving; no dissolution).
 //
 // Raw node:test so each scenario is selectable with --test-name-pattern
-// by its anchored name; scripts/quest-evidence-managed-split-resume-
-// under-write-load.js re-runs one scenario per receipt.
+// by its anchored name; the quest's evidence harness, since retired, re-ran
+// one scenario per receipt.
 
 // The cutover readiness constants are read through the module namespace
 // so the control scenarios still load (and stay green) on HEAD, where the

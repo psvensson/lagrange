@@ -83,9 +83,8 @@ import {
 // host event loop — progress_behind then a cadence grant when the request
 // won, a direct grant when it lost under load.
 //
-// Each test below is one quest receipt
-// (scripts/quest-evidence-learner-promotion-proof-channel-wake.js and
-// scripts/quest-evidence-learner-promotion-proof-channel-witness-determinism.js).
+// Each test below is one quest receipt (the two evidence harnesses were
+// retired by the script-reachability cull).
 
 const VIRTUAL_SECOND_MS = 200;
 const RETRY_INTERVAL_MS = VIRTUAL_SECOND_MS;

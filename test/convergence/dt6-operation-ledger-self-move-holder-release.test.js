@@ -33,8 +33,8 @@ import {
 // 691efb46 whose FAILED row already existed. The scenarios, their run-cited
 // instants and the honest real/modeled scope are documented in
 // operation-ledger-self-move-hold-fairness-witness-fixture.js; each test
-// below is one quest receipt
-// (scripts/quest-evidence-operation-ledger-self-move-holder-release-on-engagement.js).
+// below is one quest receipt (its evidence harness was retired by the
+// script-reachability cull).
 
 const {DISPATCH_RETRY_DELAY_MS} = OPERATION_WORKFLOW_OWNER_SHARED;
 const HEAD_DISPATCH_RETRY_DELAY_MS = 250;

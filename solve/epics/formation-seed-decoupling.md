@@ -36,7 +36,7 @@ authorizes:
   - test/integration/membership-consistency.integration.test.js
   - test/integration/membership-consistency-integration-test-helpers.js
   - test/shards
-  - scripts/quest-evidence-formation-harness-model-from-contracts.js
+  - scripts/quest-evidence/formation-harness-model-from-contracts.js
   - scripts/checks/formation-budget.js
   - scripts/checks/formation-sim-reproduces.js
   - scripts/checks/formation-calibration.js

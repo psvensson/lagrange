@@ -46,10 +46,8 @@ import {
 } from './comparative-efficiency-movielens-grouped-reduce-constants.js';
 
 export {
-  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_AXES,
   COMPARATIVE_MOVIELENS_GROUPED_REDUCE_CELLS,
   COMPARATIVE_MOVIELENS_GROUPED_REDUCE_REASON,
-  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_SCENARIO,
 } from './comparative-efficiency-movielens-grouped-reduce-constants.js';
 
 const inputKeys = Object.freeze([

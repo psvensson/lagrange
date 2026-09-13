@@ -64,8 +64,8 @@ import {
 //
 // The file uses raw node:test (not tap) so each top-level scenario is
 // independently selectable with --test-name-pattern by its anchored name;
-// scripts/quest-evidence-priority-recovery-add-dispatch-cadence.js re-runs one
-// scenario per receipt.
+// the quest's evidence harness, since retired, re-ran one scenario per
+// receipt.
 //
 // HONEST SCOPE (real vs modeled):
 //   - REAL: RebalanceCoordinator + OperationWorkflowOwner (createOperation

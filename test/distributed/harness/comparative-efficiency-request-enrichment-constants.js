@@ -1,12 +1,8 @@
-export const COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO =
-  'comparative-efficiency-request-enrichment';
 export const COMPARATIVE_REQUEST_ENRICHMENT_REASON =
   'candidate_capacity_adapter_not_engaged';
 export const COMPARATIVE_REQUEST_ENRICHMENT_DISPOSITION =
   'non_measuring_candidate_capacity_absent';
 export const COMPARATIVE_REQUEST_ENRICHMENT_REQUEST_COUNT = 128;
-export const COMPARATIVE_REQUEST_ENRICHMENT_ORACLE =
-  'row_count_and_sum_exact';
 export const COMPARATIVE_REQUEST_ENRICHMENT_WITNESS_VERSION =
   'comparative-request-enrichment-affinity-owner-witness-v1';
 export const COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS =
