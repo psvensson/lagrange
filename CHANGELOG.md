@@ -10,14 +10,17 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
-## [0.2.4] — 2026-09-12
+## [0.2.5] — 2026-09-13
 
-The first 0.2 release that ships. `v0.2.0`, `v0.2.1`, `v0.2.2` and `v0.2.3`
-were tagged but never published: each tagged run stopped before any
-artifact left the runner (0.2.2 in the Docker smoke test, 0.2.3 and the
-first two release candidates at the npm publication owner's ten-second
-observation window), so no npm version, Docker image, Helm chart or GitHub
-release exists for them; npm served `0.1.1` under `latest` throughout. The
+The first 0.2 release that ships. `v0.2.0`, `v0.2.1`, `v0.2.2`, `v0.2.3`
+and `v0.2.4` were tagged but never published: each tagged run stopped
+before any artifact left the runner (0.2.2 in the Docker smoke test, 0.2.3
+and the first two release candidates at the npm publication owner's
+ten-second observation window, 0.2.4 at the release identity step, which
+ranked `v0.2.4-rc.2` above `v0.2.4` with git's default version sort and
+refused to "move latest backward"), so no npm version, Docker image, Helm
+chart or GitHub release exists for them; npm served `0.1.1` under `latest`
+throughout. The
 release pipeline was then published end to end on the production path
 under `v0.2.4-rc.0`, `-rc.1` and `-rc.2` (npm under the `next` dist-tag,
 Docker tagged with the version only, GitHub pre-releases), with each run's
@@ -26,6 +29,9 @@ registries. No functional change since the `v0.2.3` tag beyond the release
 apparatus itself.
 
 ### Fixed
+- The release identity step derives the latest tag with prereleases ranked
+  below their release (`versionsort.suffix=-`), so the first release after a
+  release candidate is no longer refused as moving `latest` backward.
 - The npm publication owner observes the registry for minutes and types an
   accepted, still-processing publish as such instead of reading npm's
   post-publish processing latency as absence.
@@ -398,8 +404,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.4...HEAD
-[0.2.4]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.5
 [0.2.4-rc.2]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...v0.2.4-rc.2
 [0.2.4-rc.1]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...v0.2.4-rc.1
 [0.2.4-rc.0]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.4-rc.0
