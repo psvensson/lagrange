@@ -18,6 +18,7 @@ const {
   RECONCILE_REASON,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
+  ownerNowMs,
 } = UNIFIED_REBALANCER_SHARED;
 
 const POLICY_SCHEDULER_CONSTRUCTOR = 'constructor';
@@ -89,7 +90,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     // expired lease stops pinning, so the surplus cure reclaims the
     // activated replica on the next pass.
     const activationPinNodeIds = liveActivationPinNodeIds({
-      nowMs: this.nowFn(),
+      nowMs: ownerNowMs(this),
       serviceId: this.entityId,
       systemTableCache: this.systemTableCache,
     });
@@ -99,7 +100,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
       systemTableCache: this.systemTableCache,
       serviceId: this.entityId,
-      nowMs: this.nowFn(),
+      nowMs: ownerNowMs(this),
     });
     if (Object.keys(nodeWeights).length > 0 ||
         Object.keys(groupWeights).length > 0) {
@@ -286,10 +287,10 @@ class UnifiedRebalancerPolicySchedulerMethods {
 
   /**
    * Milliseconds remaining until this entity is eligible for rebalancing.
-   * @param {number} [nowMs=this.nowFn()] - Current timestamp on the owner's clock.
+   * @param {number} [nowMs=ownerNowMs(this)] - Current timestamp on the owner's clock.
    * @return {number} Remaining milliseconds, or 0 if eligible.
    */
-  getTimeUntilRebalanceStartEligible(nowMs = this.nowFn()) {
+  getTimeUntilRebalanceStartEligible(nowMs = ownerNowMs(this)) {
     const delayMs = this.getRebalanceStartDelayMs();
     if (delayMs <= UNIFIED_REBALANCER_LITERAL.ZERO) {
       return UNIFIED_REBALANCER_LITERAL.ZERO;
@@ -310,7 +311,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (!this.lastStateChangeTime) {
       return true;
     }
-    const elapsed = this.nowFn() - this.lastStateChangeTime;
+    const elapsed = ownerNowMs(this) - this.lastStateChangeTime;
     return elapsed >= this.stabilizationPeriodMs;
   }
 
@@ -324,7 +325,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
       return;
     }
 
-    this.lastStateChangeTime = this.nowFn();
+    this.lastStateChangeTime = ownerNowMs(this);
 
     this.logger.debug(REBALANCER_LOG_MSG.STABILIZATION_RESET, {
       entityId: this.entityId,
@@ -362,7 +363,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (!this.lastStateChangeTime) {
       return UNIFIED_REBALANCER_LITERAL.ZERO;
     }
-    const elapsed = this.nowFn() - this.lastStateChangeTime;
+    const elapsed = ownerNowMs(this) - this.lastStateChangeTime;
     const remaining = this.stabilizationPeriodMs - elapsed;
     return Math.max(UNIFIED_REBALANCER_LITERAL.ZERO, remaining);
   }

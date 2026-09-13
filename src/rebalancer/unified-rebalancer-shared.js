@@ -235,6 +235,19 @@ const REBALANCER_RUNTIME_REASON = Object.freeze({
  * NOTE: This class delegates operation execution to RebalanceCoordinator.
  */
 
+/**
+ * The owner's clock for a planning read: the rebalancer's injected nowFn
+ * when the host carries one, the ambient clock otherwise (a mixin composed
+ * onto a bare host in a fixture keeps its former behaviour).
+ * @param {Object} host the rebalancer, or a partial host
+ * @return {number} milliseconds
+ */
+function ownerNowMs(host) {
+  return typeof host?.nowFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
+    host.nowFn() :
+    Date.now();
+}
+
 export const UNIFIED_REBALANCER_SHARED = {
   CLUSTER_READINESS_TIMEOUT_MS,
   COLUMN,
@@ -351,6 +364,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   normalizeServiceEndpointRow,
   normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
+  ownerNowMs,
   resolveReplicaOperationSemanticPhase,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,

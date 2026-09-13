@@ -18,6 +18,7 @@ const {
   isNodeReadyLeaseExplicitlyCleared,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
+  ownerNowMs,
   resolveReplicaOperationSemanticPhase,
 } = UNIFIED_REBALANCER_SHARED;
 const CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
@@ -407,7 +408,7 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
   }
 
   const activeNodeIds = new Set(normalizeNodeIds(blocker.activeNodeIds));
-  const nowMs = rebalancer.nowFn();
+  const nowMs = ownerNowMs(rebalancer);
   const nonBlockingOperationIds =
     await rebalancer.buildNonBlockingPriorityOperationIdSet(entityOperations);
   const details = collectCriticalOperationDetails(
@@ -618,7 +619,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
       this.systemTableCache,
       TABLES.REPLICA_OPERATIONS,
     );
-    const nowMs = this.nowFn();
+    const nowMs = ownerNowMs(this);
     const nonBlockingPriorityOperationIds =
       this.buildNonBlockingPriorityOperationIdSetSync(rows, {
         observedAt: nowMs,

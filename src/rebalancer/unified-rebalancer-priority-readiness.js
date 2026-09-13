@@ -16,6 +16,7 @@ const {
   classifySystemPartition,
   getLocalControlPlaneMutationReadinessBlocker,
   isBackgroundWorkLifecycleReadySnapshot,
+  ownerNowMs,
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = UNIFIED_REBALANCER_SHARED;
@@ -469,7 +470,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     if (!readinessService) {
       return null;
     }
-    const observedAt = this.nowFn();
+    const observedAt = ownerNowMs(this);
     const planningSnapshot = readMembershipPlanningSnapshot(
       readinessService,
       this.nodeId,
@@ -683,7 +684,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     try {
       return readinessService.getStartupAuthoritySnapshotSync(
         this.nodeId,
-        this.nowFn(),
+        ownerNowMs(this),
       );
     } catch (_error) {
       return null;

@@ -35,7 +35,7 @@ const {
   REBALANCER_LOG_MSG,
   UNIFIED_REBALANCER_LITERAL,
   getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
+  isRetryableControlPlaneError, ownerNowMs,
 } = UNIFIED_REBALANCER_SHARED;
 
 const REBALANCER_PLANNING_GATE_METHODS = {
@@ -254,7 +254,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return null;
     }
 
-    const now = this.nowFn();
+    const now = ownerNowMs(this);
     if (this.clusterReadinessStartMs === null) {
       this.clusterReadinessStartMs = now;
     }
@@ -718,7 +718,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return;
     }
 
-    const now = this.nowFn();
+    const now = ownerNowMs(this);
     const minInterval = this.isControlPlanePriorityPartition() ?
       UNIFIED_REBALANCER_LITERAL.THOUSAND :
       NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
