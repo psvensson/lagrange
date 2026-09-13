@@ -14,10 +14,8 @@ import {
 } from '../../wasm-service/meta-service-factory.js';
 import {serializeServiceDefinition} from '../../wasm-service/wasm-service-models.js';
 import {
-  META_ENDPOINT_VERSION,
   buildMetaServiceEndpoints,
 } from '../../admin/admin-meta-endpoint-builder.js';
-import {buildEndpointRecord} from '../../wasm-service/service-endpoint-builder.js';
 import {resolveAdvertisedEndpointHost} from
   '../../transport/node-address-resolution.js';
 
@@ -32,7 +30,6 @@ const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
     'Meta service endpoint registration requires a valid address',
   ENDPOINT_PORT_REQUIRED: 'Meta service endpoint registration requires a valid port',
 });
-const POSTGRES_WIRE_DEFAULT_PORT = 5432;
 
 function assertEndpointRegistrationOptions(options = {}) {
   if (typeof options.upsertRow !== 'function') {
@@ -63,45 +60,20 @@ function resolveValidatedEndpointBinding(options = {}) {
   return {endpointAddress, endpointPort};
 }
 
-function resolvePostgresEndpointPort(postgresPort) {
-  return Number.isInteger(postgresPort) && postgresPort > 0 ?
-    postgresPort :
-    POSTGRES_WIRE_DEFAULT_PORT;
-}
-
-function resolvePositiveIntegerPort(portValue) {
-  const parsedPort = Number(portValue);
-  return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
-}
-
-function resolveBracketedEndpointPort(address) {
-  const bracketClose = address.indexOf(']');
-  const colonAfterBracket = address.lastIndexOf(':');
-  if (bracketClose <= 1 || colonAfterBracket <= bracketClose) {
-    return 0;
-  }
-  return resolvePositiveIntegerPort(address.substring(colonAfterBracket + 1));
-}
-
 function buildBuiltInMetaEndpoints(options = {}) {
   const {wasmMetaEndpoint, adminMetaEndpoint} = buildMetaServiceEndpoints(
     options.nodeId,
     options.endpointAddress,
     options.endpointPort,
   );
-  const postgresWireEndpoint = buildEndpointRecord({
-    serviceDefinition: createPostgresWireDefinition(),
-    nodeId: options.nodeId,
-    address: options.endpointAddress,
-    port: resolvePostgresEndpointPort(options.postgresPort),
-    version: META_ENDPOINT_VERSION,
-  });
-
-  return [wasmMetaEndpoint, adminMetaEndpoint, postgresWireEndpoint];
+  return [wasmMetaEndpoint, adminMetaEndpoint];
 }
 
 /**
  * Register built-in meta service definitions in service_definitions.
+ * Runtime-backed definitions such as sys-postgres-wire are desired state only;
+ * their endpoints are published by ServiceRuntimeLifecycle after placement and
+ * a successful runtime start.
  * @param {Object} options
  * @param {Function} options.upsertRow - Async callback (tableName, row) => Promise<void>.
  * @return {Promise<string[]>} Registered service IDs.
@@ -127,7 +99,9 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
 }
 
 /**
- * Register built-in meta service endpoints in service_endpoints.
+ * Register boot-owned built-in meta endpoints in service_endpoints.
+ * sys-postgres-wire is deliberately excluded: it is a placed runtime service,
+ * not a boot listener, and must publish only after its runtime binds.
  * @param {Object} options
  * @param {Function} options.upsertRow - Async callback (tableName, row) => Promise<void>.
  * @param {string} options.nodeId - Hosting node identifier.
@@ -137,13 +111,12 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {
   assertEndpointRegistrationOptions(options);
-  const {upsertRow, nodeId, postgresPort} = options;
+  const {upsertRow, nodeId} = options;
   const {endpointAddress, endpointPort} = resolveValidatedEndpointBinding(options);
   const endpoints = buildBuiltInMetaEndpoints({
     endpointAddress,
     endpointPort,
     nodeId,
-    postgresPort,
   });
   for (const endpoint of endpoints) {
     await upsertRow(SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS, endpoint);
@@ -245,6 +218,20 @@ function resolveEndpointPort(wsPort, nodeAddress) {
     return 0;
   }
   return resolvePositiveIntegerPort(trimmed.substring(lastColon + 1));
+}
+
+function resolvePositiveIntegerPort(portValue) {
+  const parsedPort = Number(portValue);
+  return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
+}
+
+function resolveBracketedEndpointPort(address) {
+  const bracketClose = address.indexOf(']');
+  const colonAfterBracket = address.lastIndexOf(':');
+  if (bracketClose <= 1 || colonAfterBracket <= bracketClose) {
+    return 0;
+  }
+  return resolvePositiveIntegerPort(address.substring(colonAfterBracket + 1));
 }
 
 export {

@@ -22,6 +22,9 @@ import {
   createJoinReadinessEvaluatorSnapshotMethods,
 } from './join-readiness-snapshot-methods.js';
 import {
+  createJoinReadinessEndpointVisibilityOwnerMethods,
+} from './join-readiness-endpoint-visibility-owner.js';
+import {
   createJoinReadinessEvaluatorTailMethods,
 } from './join-readiness-evaluator-tail-methods.js';
 
@@ -100,6 +103,14 @@ Object.defineProperties(
 Object.defineProperties(
   JoinReadinessEvaluator.prototype,
   createJoinReadinessEvaluatorSnapshotMethods(),
+);
+
+// Node admission owns bootstrap transport visibility only. Runtime-service
+// endpoint availability (including PostgreSQL wire) is owned by runtime
+// desired/actual convergence and must not create a circular join dependency.
+Object.defineProperties(
+  JoinReadinessEvaluator.prototype,
+  createJoinReadinessEndpointVisibilityOwnerMethods(),
 );
 
 Object.assign(

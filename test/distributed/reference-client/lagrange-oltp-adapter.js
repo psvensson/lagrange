@@ -282,10 +282,44 @@ async function insertRows(client, table, columns, rows) {
   }
 }
 
-async function dropTables(client) {
-  for (const table of DROP_TABLES) {
-    await client.query(`DROP TABLE IF EXISTS ${table}`);
+// Lagrange's SQL engine does not execute DROP TABLE yet (the statement parses
+// and the executor refuses it as an unsupported statement type). The proof
+// runs against a freshly formed cluster, so the reset drops only tables that
+// actually exist: a fresh cluster skips every drop honestly, and a reused
+// cluster that still holds the schema fails loudly on the product gap rather
+// than silently loading on top of stale rows.
+const TABLE_NOT_FOUND_MARKER = 'Table not found';
+const DROP_TABLE_UNSUPPORTED_MARKER = 'Unsupported statement type: DROP_TABLE';
+
+async function tableExists(client, table) {
+  try {
+    await client.query(`SELECT COUNT(*) AS row_count FROM ${table}`);
+    return true;
+  } catch (error) {
+    if (String(error?.message || '').includes(TABLE_NOT_FOUND_MARKER)) {
+      return false;
+    }
+    throw error;
   }
+}
+
+async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}) {
+  const skipped = [];
+  for (const table of DROP_TABLES) {
+    if (!(await tableExists(client, table))) continue;
+    try {
+      await client.query(`DROP TABLE IF EXISTS ${table}`);
+    } catch (error) {
+      const unsupported =
+        String(error?.message || '').includes(DROP_TABLE_UNSUPPORTED_MARKER);
+      if (unsupported && tolerateUnsupportedDrop) {
+        skipped.push(table);
+        continue;
+      }
+      throw error;
+    }
+  }
+  return Object.freeze(skipped);
 }
 
 async function createSchema(client) {
@@ -363,7 +397,7 @@ async function loadDataset(client, dataset) {
 async function prepareDataset(createClient, options, dataset) {
   const client = await openClient(createClient, options);
   try {
-    await dropTables(client);
+    await dropExistingTables(client);
     await createSchema(client);
     await loadDataset(client, dataset);
   } finally {
@@ -388,10 +422,12 @@ async function queryStateCounts(client) {
   });
 }
 
+// Cleanup is best effort: the harness destroys the cluster after the proof,
+// so a schema the engine cannot drop is reported, not fatal.
 async function cleanupDataset(createClient, options) {
   const client = await openClient(createClient, options);
   try {
-    await dropTables(client);
+    return await dropExistingTables(client, {tolerateUnsupportedDrop: true});
   } finally {
     await client.end();
   }

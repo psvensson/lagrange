@@ -13,6 +13,14 @@ import {RuntimeServiceHandler} from '../../node/runtime-service-handler.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {
+  getRegisteredControlPlaneSystemTableGateway,
+} from '../../control-plane/control-plane-gateway-registry.js';
+import {ServiceEndpointsOwner} from
+  '../../control-plane/owners/service-endpoints-owner.js';
+import {
+  wireRuntimeEndpointPublication,
+} from '../../runtime/runtime-endpoint-publication-wiring.js';
 
 const LOG_MSG = Object.freeze({
   CREATING: 'Creating RuntimeServiceHandler',
@@ -30,6 +38,19 @@ const ERROR_MSG = Object.freeze({
   SERVICE_LIFECYCLE_MANAGER_REQUIRED: 'serviceLifecycleManager',
 });
 
+function resolveServiceEndpointsOwner(options, systemTableCache) {
+  if (options.serviceEndpointsOwner instanceof ServiceEndpointsOwner) {
+    return options.serviceEndpointsOwner;
+  }
+  const controlPlaneSystemTableGateway =
+    getRegisteredControlPlaneSystemTableGateway();
+  if (!controlPlaneSystemTableGateway) return null;
+  return new ServiceEndpointsOwner({
+    controlPlaneSystemTableGateway,
+    systemTableCache,
+  });
+}
+
 class RuntimeServiceHandlerSetup {
   /**
    * Create and configure runtime service handler.
@@ -43,6 +64,9 @@ class RuntimeServiceHandlerSetup {
    *   manager (required).
    * @param {Object} [options.serviceRuntimeLifecycle] - Runtime invocation
    *   owner.
+   * @param {Object} [options.serviceEndpointsOwner] - Canonical endpoint
+   *   metadata owner override. Production resolves it over the registered
+   *   control-plane gateway.
    * @param {Object} [options.callBindingRouteResolver] - Call Binding route
    *   resolver shared with the call-cell ingress; the handler self-defaults
    *   a cache-provider-backed resolver when absent.
@@ -103,6 +127,21 @@ class RuntimeServiceHandlerSetup {
       ) : console;
 
     logger.info(LOG_MSG.CREATING, {nodeId});
+
+    if (serviceRuntimeLifecycle) {
+      const serviceEndpointsOwner = resolveServiceEndpointsOwner(
+        options,
+        systemTableCache,
+      );
+      if (serviceEndpointsOwner) {
+        wireRuntimeEndpointPublication({
+          nodeId,
+          serviceEndpointsOwner,
+          serviceRuntimeLifecycle,
+          systemTableCache,
+        });
+      }
+    }
 
     const runtimeServiceHandler = new RuntimeServiceHandler({
       nodeId,

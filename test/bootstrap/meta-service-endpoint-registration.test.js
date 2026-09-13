@@ -9,7 +9,7 @@ import {SYSTEM_TABLE_NAME} from
 import {META_SERVICE_ID} from '../../src/constants/index.js';
 
 describe('meta-service-endpoint-registration', () => {
-  it('registers endpoint rows for built-in meta services', async () => {
+  it('registers only boot-owned meta endpoints', async () => {
     const upserts = [];
     const endpointIds = await registerBuiltInMetaServiceEndpoints({
       upsertRow: async (tableName, row) => {
@@ -20,11 +20,11 @@ describe('meta-service-endpoint-registration', () => {
       wsPort: 18080,
     });
 
-    assert.equal(endpointIds.length, 3);
+    assert.equal(endpointIds.length, 2);
     const endpointUpserts = upserts.filter(
       (entry) => entry.tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
     );
-    assert.equal(endpointUpserts.length, 3);
+    assert.equal(endpointUpserts.length, 2);
 
     assert.ok(endpointUpserts.some((entry) => {
       return entry.row.service_id === META_SERVICE_ID.WASM_META &&
@@ -40,12 +40,12 @@ describe('meta-service-endpoint-registration', () => {
         entry.row.port === 18080;
     }));
 
-    assert.ok(endpointUpserts.some((entry) => {
-      return entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE &&
-        entry.row.node_id === 'node-1' &&
-        entry.row.address === '127.0.0.1' &&
-        entry.row.port === 5432;
-    }));
+    assert.equal(
+      endpointUpserts.some((entry) =>
+        entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE),
+      false,
+      'sys-postgres-wire is a placed runtime service, not a boot endpoint',
+    );
   });
 
   it('derives endpoint port from nodeAddress when wsPort is not provided', async () => {
@@ -61,23 +61,16 @@ describe('meta-service-endpoint-registration', () => {
     const endpointUpserts = upserts.filter(
       (entry) => entry.tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
     );
-    assert.equal(endpointUpserts.length, 3);
+    assert.equal(endpointUpserts.length, 2);
     for (const endpoint of endpointUpserts) {
       assert.equal(endpoint.row.address, 'localhost');
+      assert.equal(endpoint.row.port, 19090);
     }
-
-    assert.ok(endpointUpserts.some((entry) =>
-      entry.row.service_id === META_SERVICE_ID.WASM_META &&
-      entry.row.port === 19090,
-    ));
-    assert.ok(endpointUpserts.some((entry) =>
-      entry.row.service_id === META_SERVICE_ID.ADMIN_META &&
-      entry.row.port === 19090,
-    ));
-    assert.ok(endpointUpserts.some((entry) =>
-      entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE &&
-      entry.row.port === 5432,
-    ));
+    assert.equal(
+      endpointUpserts.some((entry) =>
+        entry.row.service_id === META_SERVICE_ID.POSTGRES_WIRE),
+      false,
+    );
   });
 
   it('fails when endpoint port cannot be resolved', async () => {
