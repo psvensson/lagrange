@@ -175,13 +175,14 @@ must satisfy together.
 
 ## Planned - 0.6 Native OCI Call Cells: native runtimes at the data
 
-0.6 is a release milestone, not an unversioned follow-on. It turns the existing
-Call Cell model into a practical bridge for customers whose important code and
-libraries live in ordinary native runtimes. The first part of the milestone is
-real managed OCI activation if that has not already landed while completing
-0.5; the second part is native Call Cell invocation through that managed runtime.
-The milestone must not be deferred to the later advanced-runtime work merely
-because OCI is the execution provider.
+0.6 is a release milestone, not an unversioned follow-on. It follows 0.5's
+external-usability baseline and precedes 1.0 production hardening. It turns the
+existing Call Cell model into a practical bridge for customers whose important
+code and libraries live in ordinary native runtimes. The first part of the
+milestone is real managed OCI activation if that has not already landed while
+completing 0.5; the second part is native Call Cell invocation through that
+managed runtime. The milestone must not be deferred to later advanced-runtime
+work merely because OCI is the execution provider.
 
 Lagrange should not require customers to move a useful data-local function to
 WebAssembly merely because its language runtime or important libraries are hard
