@@ -131,6 +131,20 @@ and `model:contracts` re-running in repository-health after the gate; and the
 release proof re-running a corpus CI already proved for the exact sha
 (release-tooling recommendation 4, now `test-file-content-receipts` v2).
 
+**Finding (2026-09-13, releasing 0.2.4).** The GCP proof runner is about 2.4x
+slower single-threaded than the reference machine and lands on a different
+host per start (idle auto-stop, tmpfs workspace). Two integration files
+carried fixed wall-clock budgets - a 12 s seed bootstrap and a 100 ms
+heartbeat against a 200 ms ready lease - that passed the rc.2 proof by margin
+and failed the 0.2.4 proof twice on 57e6940c7; reproduced over ssh on the
+runner, exonerating the tree (rc.2's own tree failed there too). Fixed by
+scaling work-bound budgets with `LAGRANGE_TEST_MACHINE_FACTOR` through
+`test/integration/helpers/test-machine-factor.js` (c6e80ec05); validated on
+the slow host at factor 3 and locally at 1 and 3. The lean gate's full-corpus
+branch also surfaced a corpus test writing a tracked artifact (d66ab73c1).
+Rule carried: an integration failure only on the proof runner with "timed out
+after" or an empty published set is a budget, not a regression.
+
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the
 same gate the solver uses. Probe: test-receipt for the refusal tests.
