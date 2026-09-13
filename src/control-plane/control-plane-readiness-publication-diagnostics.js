@@ -39,6 +39,7 @@ function planningMemoCurrencyEquals(left, right) {
 // Named empty-state for the memoized async candidate derivation: the
 // service produced no usable candidate, so the caller must fall through to
 // the diagnostics-derived planning snapshot instead of trusting the memo.
+const READINESS_FUNCTION_TYPE = 'function';
 const ASYNC_PLANNING_DERIVATION_UNAVAILABLE = Object.freeze({
   planningCandidateUnavailable: true,
 });
@@ -260,9 +261,11 @@ class ControlPlaneReadinessPublicationDiagnostics
   // relevant table write invalidates.
   readMembershipPlanningDerivationVersionKey(observedAt) {
     // The refresh floor is measured on the service's clock when the caller
-    // passes none, never on the ambient one.
+    // passes none; a partial host without a clock (test fixtures built
+    // below the participation base) keeps the version key's own default.
+    const serviceNow = typeof this.now === READINESS_FUNCTION_TYPE ? this.now() : undefined;
     return readPlanningVersionKeyForCache(this.systemTableCache,
-      Number.isFinite(observedAt) ? observedAt : this.now());
+      Number.isFinite(observedAt) ? observedAt : serviceNow);
   }
 
   readMembershipPlanningDerivationMemoCurrency(nodeId, observedAt) {
