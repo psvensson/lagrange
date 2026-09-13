@@ -17,15 +17,12 @@ import {
   TABLES,
   TRANSPORT_TYPE,
 } from '../constants/index.js';
-import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
-import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
   normalizeNodeEndpointRow,
   normalizeNodeRow,
-  normalizeServiceEndpointRow,
 } from '../control-plane/system-row-normalizers.js';
 import {
   getLocalQueryTransportReadiness,
@@ -208,8 +205,6 @@ class JoinReadinessEvaluatorSnapshotMethods {
         topology.excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds:
         endpointVisibility.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds:
-        endpointVisibility.missingPostgresWireNodeIds,
     };
   }
 
@@ -381,7 +376,6 @@ class JoinReadinessEvaluatorSnapshotMethods {
         excludedSelfSourcePriorityControlPlaneCount: 0,
         excludedSelfSourcePriorityControlPlaneOperationDetails: [],
         missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
       };
     }
 
@@ -435,20 +429,23 @@ class JoinReadinessEvaluatorSnapshotMethods {
         operationDetails
           .excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds: [],
-      missingPostgresWireNodeIds: [],
     };
   }
 
   /**
-   * Ensure local discovery-critical endpoint rows cover this joining node.
-   * Peer endpoint visibility converges independently and should not block the
-   * local node from becoming ready once authoritative topology is otherwise
-   * settled.
+   * Canonical join endpoint-visibility decision.
+   *
+   * Node admission requires this node's own bootstrap transport endpoint
+   * (an ACTIVE WebSocket `node_endpoints` row) and fails closed without it.
+   * Peer endpoint visibility converges independently and does not block the
+   * local node. Runtime services such as `sys-postgres-wire` are optional,
+   * placed later by the runtime-service rebalancer, and publish their own
+   * `service_endpoints` rows through the runtime lifecycle; they are never an
+   * input to generic node admission.
    * @param {Object|null} systemTableCache
    * @return {{
    *   ready: boolean,
    *   missingNodeEndpointNodeIds: string[],
-   *   missingPostgresWireNodeIds: string[],
    * }}
    */
   evaluateCanonicalJoinEndpointVisibility(systemTableCache) {
@@ -457,18 +454,13 @@ class JoinReadinessEvaluatorSnapshotMethods {
       return {
         ready: false,
         missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
       };
     }
 
     const requiredNodeIds = [this.nodeId];
-
     const nodeEndpointRows =
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
-    const serviceEndpointRows =
-      systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) || [];
     const visibleNodeEndpointNodeIds = new Set();
-    const visiblePostgresWireNodeIds = new Set();
 
     for (const row of nodeEndpointRows) {
       const normalizedRow = normalizeNodeEndpointRow(row);
@@ -487,34 +479,13 @@ class JoinReadinessEvaluatorSnapshotMethods {
       visibleNodeEndpointNodeIds.add(nodeId);
     }
 
-    for (const row of serviceEndpointRows) {
-      const normalizedRow = normalizeServiceEndpointRow(row);
-      const {nodeId, serviceId, healthStatus} = normalizedRow;
-      if (nodeId.length === 0) {
-        continue;
-      }
-      if (serviceId !== META_SERVICE_ID.POSTGRES_WIRE) {
-        continue;
-      }
-      if (healthStatus !==
-          String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()) {
-        continue;
-      }
-      visiblePostgresWireNodeIds.add(nodeId);
-    }
-
     const missingNodeEndpointNodeIds = requiredNodeIds.filter(
       (nodeId) => !visibleNodeEndpointNodeIds.has(nodeId),
     );
-    const missingPostgresWireNodeIds = requiredNodeIds.filter(
-      (nodeId) => !visiblePostgresWireNodeIds.has(nodeId),
-    );
 
     return {
-      ready: missingNodeEndpointNodeIds.length === 0 &&
-        missingPostgresWireNodeIds.length === 0,
+      ready: missingNodeEndpointNodeIds.length === 0,
       missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds,
     };
   }
 

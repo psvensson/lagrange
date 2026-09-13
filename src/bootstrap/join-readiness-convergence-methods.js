@@ -153,8 +153,6 @@ class JoinReadinessEvaluatorConvergenceMethods {
         evaluation?.excludedSelfSourcePriorityControlPlaneCount || 0,
       missingNodeEndpointNodeIds:
         evaluation?.missingNodeEndpointNodeIds || [],
-      missingPostgresWireNodeIds:
-        evaluation?.missingPostgresWireNodeIds || [],
       snapshotError:
         attemptResult?.snapshotError?.message || null,
       controlPlaneTargetAddress:
@@ -317,8 +315,6 @@ class JoinReadinessEvaluatorConvergenceMethods {
           .excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds:
         terminalEvaluation.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds:
-        terminalEvaluation.missingPostgresWireNodeIds,
       controlPlaneTargetAddress:
         terminalEvaluation.controlPlaneTargetAddress,
       controlPlaneTargetCandidates:
@@ -384,8 +380,6 @@ class JoinReadinessEvaluatorConvergenceMethods {
             .excludedSelfSourcePriorityControlPlaneOperationDetails,
         missingNodeEndpointNodeIds:
           terminalEvaluation.missingNodeEndpointNodeIds,
-        missingPostgresWireNodeIds:
-          terminalEvaluation.missingPostgresWireNodeIds,
         controlPlaneTargetAddress:
           terminalEvaluation.controlPlaneTargetAddress,
         controlPlaneTargetCandidates:
@@ -506,8 +500,6 @@ class JoinReadinessEvaluatorConvergenceMethods {
             error: error.message,
             missingNodeEndpointNodeIds:
               evaluation.missingNodeEndpointNodeIds,
-            missingPostgresWireNodeIds:
-              evaluation.missingPostgresWireNodeIds,
           },
         );
       })

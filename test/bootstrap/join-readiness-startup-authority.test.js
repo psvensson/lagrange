@@ -5,6 +5,12 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  ENDPOINT_STATUS,
+  META_SERVICE_ID,
+  TABLES,
+  TRANSPORT_TYPE,
+} from '../../src/constants/index.js';
 
 const TEST_NOW_MS = 1234;
 const TEST_JOINING_NODE_ID = 'joining-node';
@@ -23,6 +29,34 @@ function createReadiness(eligible) {
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
         eligible,
     },
+  };
+}
+
+function createEndpointEvaluator() {
+  return new JoinReadinessEvaluator({
+    nodeId: TEST_JOINING_NODE_ID,
+    now: () => TEST_NOW_MS,
+    sleep: async () => {},
+    delegates: {},
+  });
+}
+
+function createEndpointCache(rows = [], serviceEndpointRows = []) {
+  return {
+    getAll(tableName) {
+      if (tableName === TABLES.NODE_ENDPOINTS) return rows;
+      if (tableName === TABLES.SERVICE_ENDPOINTS) return serviceEndpointRows;
+      return [];
+    },
+  };
+}
+
+function createPostgresWireEndpointRow() {
+  return {
+    endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${TEST_JOINING_NODE_ID}`,
+    service_id: META_SERVICE_ID.POSTGRES_WIRE,
+    node_id: TEST_JOINING_NODE_ID,
+    health_status: 'healthy',
   };
 }
 
@@ -215,5 +249,51 @@ test('JoinReadinessEvaluator prefers startup authority over partial readiness co
     ['seed-node', 'joining-node'],
     'join readiness should follow startup authority when readiness cohort is partial',
   );
+  t.end();
+});
+
+test('JoinReadinessEvaluator requires local bootstrap transport but not pgwire', async (t) => {
+  const evaluator = createEndpointEvaluator();
+  const result = evaluator.evaluateCanonicalJoinEndpointVisibility(
+    createEndpointCache([{
+      endpoint_id: 'joining-node-ws',
+      node_id: TEST_JOINING_NODE_ID,
+      transport_type: TRANSPORT_TYPE.WEBSOCKET,
+      address: 'ws://joining-node:8082',
+      status: ENDPOINT_STATUS.ACTIVE,
+    }]),
+  );
+
+  t.same(
+    result,
+    {ready: true, missingNodeEndpointNodeIds: []},
+    'the websocket endpoint alone admits the node; no pgwire field exists',
+  );
+  t.end();
+});
+
+test('JoinReadinessEvaluator still fails closed without local bootstrap transport', async (t) => {
+  const evaluator = createEndpointEvaluator();
+  const result = evaluator.evaluateCanonicalJoinEndpointVisibility(
+    createEndpointCache([]),
+  );
+
+  t.same(result, {
+    ready: false,
+    missingNodeEndpointNodeIds: [TEST_JOINING_NODE_ID],
+  });
+  t.end();
+});
+
+test('JoinReadinessEvaluator ignores a pgwire endpoint that lacks bootstrap transport', async (t) => {
+  const evaluator = createEndpointEvaluator();
+  const result = evaluator.evaluateCanonicalJoinEndpointVisibility(
+    createEndpointCache([], [createPostgresWireEndpointRow()]),
+  );
+
+  t.same(result, {
+    ready: false,
+    missingNodeEndpointNodeIds: [TEST_JOINING_NODE_ID],
+  }, 'a healthy sys-postgres-wire row never substitutes for the websocket endpoint');
   t.end();
 });
