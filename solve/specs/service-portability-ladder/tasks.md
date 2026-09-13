@@ -8,11 +8,12 @@ result"):
 | Rung | Developer story | Phases |
 | --- | --- | --- |
 | 1 | Unchanged pg-talking app in an OCI container, managed and placed near its data | 0, 1, 2 |
-| 2 | Lagrange-aware callbacks: one surface, shared service context | 5 |
-| 3 | Genuine WASM component through the same install surface | 3 |
+| 2 | Native OCI Call Cells: same program/runtime, data-local functions with native libraries | 5 |
+| 3 | Genuine WASM component through the same install/call surface | 3 |
 
-Phase 4 (evaluator proof) spans rungs 1 and 3; rung 2 receives its own live
-terminal when Phase 5 rows seal (see requirements R8).
+Phase 4 (base evaluator proof) spans rungs 1 and 3. Rung 2 receives its own live
+terminal after real managed OCI activation exists; it must not widen E3 silently
+(see requirements R8 and `architecture/native-oci-call-cells.md`).
 
 Every row below is one executable concern and therefore one Quest unless noted as
 an existing Quest. Product runners write versioned reports under
@@ -20,7 +21,7 @@ an existing Quest. Product runners write versioned reports under
 source-changing Quest requires exact-patch and aggregate content-bound subagent
 verification before Solver checkpoint and handoff.
 
-## Phase 0 — Truth and external application portability
+## Phase 0 - Truth and external application portability
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -32,7 +33,7 @@ verification before Solver checkpoint and handoff.
 
 Milestone M1 proves database portability only.
 
-## Phase 1 — Install and control plane
+## Phase 1 - Install and control plane
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -49,7 +50,7 @@ Milestone M1 proves database portability only.
 Milestone M2 proves a validated artifact is durably recorded. Unsupported
 activation is explicitly `recorded_not_running`.
 
-## Phase 2 — Managed OCI execution and placement
+## Phase 2 - Managed OCI execution and placement
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -65,9 +66,10 @@ activation is explicitly `recorded_not_running`.
 | C4e | `placement-composition-live-engagement` | Live production decision consumes fresh access and activation evidence. |
 
 Milestone M3 proves the unchanged application image is Lagrange-managed and
-produces authentic affinity evidence. It does not prove OCI callbacks.
+produces authentic affinity evidence. It does not prove native OCI Call Cell
+invocation.
 
-## Phase 3 — Genuine WASM component
+## Phase 3 - Genuine WASM component
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -78,7 +80,7 @@ produces authentic affinity evidence. It does not prove OCI callbacks.
 
 Milestone M4 proves genuine component execution through the same install surface.
 
-## Phase 4 — Evaluator proof
+## Phase 4 - Base evaluator proof
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -87,23 +89,68 @@ Milestone M4 proves genuine component execution through the same install surface
 | E3 | `service-portability-example-live` | Fresh-clone production-path proof covers parity, security, provider-specific OCI recovery, consumed generic Cell continuity, attribution, placement, WASM, negatives, teardown, and replay. |
 | E4 | successor `movielens-portability-ladder-live` | Advanced dataset reuses terminal MovieLens evidence and the canonical owners. |
 
-Milestone M5 is the complete evaluator journey.
+Milestone M5 is the complete base evaluator journey for rungs 1 and 3.
 
-## Phase 5 — Rung 2: Lagrange-aware callbacks and shared service context
+## Phase 5 - Rung 2: native OCI Call Cells
 
-Rows in this phase cannot seal quests until the K0 and K1 decisions graduate
-from [`solve/epics/lagrange-aware-callback-shared-context.md`](../../epics/lagrange-aware-callback-shared-context.md)
-(requirements R8 is draft until then).
+Phase 5 is downstream of real OCI activation (C1/C2) and the existing public
+Call Cell path. Its canonical architecture is
+[`architecture/native-oci-call-cells.md`](../../../architecture/native-oci-call-cells.md).
+No row may add an OCI-specific scheduler, partition router, reduce path, durable
+callback registry, or fallback from failed WASM execution.
 
 | Order | Quest | Result |
 | --- | --- | --- |
-| K0 | `callback-surface-unification-decision` | One callback-module surface owns ad-hoc (embedded `runtime.run`) and installed (uploaded module) execution: packaging, identity, invocation, and the fate of the manifest-driving `SELECT` are sealed; deprecations named. |
-| K1 | `shared-service-context-contract` | Sealed contract for the replica-shared service context: storage owner, one default consistency behavior, identity scoping, lifecycle across REPLACE/upgrade, bounds and eviction. Explicitly replaces closure capture as the state story. |
-| K2 | `shared-service-context-runtime-owner` | The `ctx` shared-context surface is backed by the K1 contract through existing replication machinery, with deterministic red-on-revert proof. |
-| K3 | `unified-callback-packaging-scaffold` | One packaging path and CLI scaffold produce the same callback module for ad-hoc and installed execution. |
-| K4 | `movielens-aware-callback-leg` | The MovieLens example gains a rung-2 leg on the unified surface with shared context, reported against its rung-1 leg. |
+| K0 | `native-oci-call-cell-invocation-contract` | Seal the application-initiated process registration/invocation topology, exact manifest-export match, authenticated replica/revision identity, bounded envelopes, `ctx` projection, typed ambiguous outcomes, and the selected multi-language transport. The proof must show transport has no placement or retry authority. |
+| K1 | `oci-container-driver-call-cell-invoke` | `OciContainerDriver.invoke()` reaches one exact ready managed replica through the node-local broker from `ServiceRuntimeLifecycle.invoke()`; lifecycle host agent remains pull/create/start/inspect/stop/remove only. Driver/broker direct tests are necessary but not product acceptance. |
+| K2 | `native-call-cell-code-first-sdk` | One language SDK lets source call a local operation descriptor while packaging derives the existing Artifact, call Binding, export/interface identity, and outbound-call policy. The managed process registers the export; invocation carries no source/closure/module path. |
+| K3 | `native-call-cell-data-local-multinode` | A real `CALL BINDING`/SDK call fans out across partitions on different nodes, each destination revalidates its partition fence, reads its local replica, invokes the same pinned OCI revision, emits through existing coordination, and completes through the ordinary reduce lease/result path. |
+| K4 | `native-call-cell-native-library-recovery` | The fixture uses a genuine native dependency unavailable on the current WASM path, kills a named worker during execution, proves typed ambiguous/retry behavior and exact revision identity after replacement, and demonstrates that arbitrary external side effects are not claimed exactly-once. |
+| K5 | `native-call-cell-second-language-conformance` | A second materially different language/runtime consumes the same broker and Call Cell context semantics with no language-specific routing or lifecycle fork. |
+| K6 | `native-call-cell-evaluator-live` | Fresh-clone production-path terminal proves the rung-2 journey end to end, including native dependency, cross-node locality, nested call/emit, failure/replacement, negative identity/export cases, teardown, and replay semantics. |
 
-Milestone M6 proves the rung-2 developer journey with its own live terminal.
+Milestone M6 proves a customer can keep an ordinary language/runtime and native
+libraries while moving selected functions to the data through the same
+Artifact / Binding / Cell system as WASM.
+
+## Phase 5 acceptance details
+
+K0 must decide the wire transport only after measuring the SDK runtimes intended
+for K2 and K5. Candidate transport technologies are implementation choices, not
+new product surfaces. The selected protocol must support an application-initiated
+long-lived channel so a managed container needs no public callback listener.
+
+K2's source-level function reference is an authoring descriptor only. Its live
+proof must inspect the generated manifest and Binding and then show that the
+runtime invocation names those immutable identities rather than serialized
+function bytes.
+
+K3 must traverse this exact owner route:
+
+```text
+CALL BINDING or compiled SDK operation handle
+  -> CallCellInvoker
+  -> existing host/activation decision
+  -> RuntimeServiceHandler Call Cell admission
+  -> local partition read / bounded batch
+  -> ServiceRuntimeLifecycle.invoke
+  -> OciContainerDriver.invoke
+  -> node-local native invocation broker
+  -> exact managed process/revision/export
+```
+
+Reverting host restriction, partition-fence validation, manifest-export match,
+or the `ServiceRuntimeLifecycle.invoke()` provider boundary must turn the proof
+red. A harness that invokes the driver or broker directly cannot close K3/K6.
+
+K4 records the stable invocation id before killing the worker. The replacement
+may execute the callback again; acceptance distinguishes exactly-once-visible
+Lagrange result publication from at-least-once risk for arbitrary external
+side effects.
+
+K5 is deliberately later than the first native-library proof. It verifies that
+the broker/context contract is language-neutral after the semantics are stable,
+rather than forcing two SDK implementations to discover the protocol together.
 
 ## Quest authoring rules
 
@@ -116,7 +163,18 @@ Milestone M6 proves the rung-2 developer journey with its own live terminal.
 - F4 cannot close before authentication and TLS are terminal.
 - W1 cannot close on core magic bytes alone; the chosen component classification
   and public invocation must be measured.
-- E3 is the whole-program terminal for rungs 1 and 3. Earlier milestones make
-  narrower claims; rung 2 terminates at M6, never by widening E3 silently.
-- K2 and later K rows cannot begin before K1 is terminal; K0/K1 cannot be
-  authored before their epic decisions are recorded.
+- E3 is the base-program terminal for rungs 1 and 3. Native OCI Call Cells
+  terminate at K6, never by silently widening E3.
+- K0 cannot start implementation before C1 has a real provider-backed managed
+  container; K1 and later cannot close on the current in-memory OCI lifecycle
+  scaffold.
+- K1 may extend only the runtime-provider edge. Any proposed OCI-specific
+  planner, route resolver, call table, retry owner, or reduce path is a design
+  failure and must return to K0.
+- K2 must preserve Binding as durable execution intent; an SDK that sends an
+  arbitrary function/module path at runtime fails the architecture contract.
+- K3/K6 must use the production Call Cell owner route and inspect destination
+  partition locality; same-node or direct-broker-only tests are insufficient.
+- K4 must include one real native dependency, not a pure-language echo fixture.
+- K5 cannot introduce semantics unavailable to the first SDK; it is a
+  conformance proof, not a second feature design.
