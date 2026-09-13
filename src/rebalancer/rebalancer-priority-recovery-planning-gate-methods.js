@@ -27,6 +27,7 @@ import {
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
+  EntityType,
   REBALANCER_LOG_MSG,
   RECONCILE_REASON,
   SYSTEM_TABLE_NAME,
@@ -175,6 +176,29 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
    * @return {Object|null}
    * @private
    */
+  /**
+   * A runtime service below its desired replica count is actuating desired
+   * state the operator asked for (a service_definitions replica_count), not
+   * spreading in the background. The formation-quiescence fence that holds
+   * ordinary rebalancing until priority placement has been stable does not
+   * apply to it, exactly as it does not apply to priority partitions.
+   * @return {boolean}
+   */
+  isRuntimeServiceDesiredStateDeficit() {
+    if (this.entityType !== EntityType.RUNTIME_SERVICE) {
+      return false;
+    }
+    const targetReplicaCount = Number(
+      this.getRuntimeServicePolicy()?.targetReplicaCount,
+    );
+    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= 0) {
+      return false;
+    }
+    const healthyReplicaCount =
+      this.getHealthyReplicas(this.getCurrentReplicas()).length;
+    return healthyReplicaCount < targetReplicaCount;
+  },
+
   resolveClearedPrioritySpreadFenceDecision(priorityPartition) {
     const observedAt = this.nowFn();
     let globalTopologyBlockingOperationCount = 0;
@@ -212,7 +236,11 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         requiredStableMs:
           this.getBackgroundPrioritySpreadStableWindowMs(),
       });
-    if (priorityPartition || !stableReleaseBlocker) {
+    if (
+      priorityPartition ||
+      !stableReleaseBlocker ||
+      this.isRuntimeServiceDesiredStateDeficit()
+    ) {
       return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }
     this.registerBackgroundPrioritySpreadStableReleaseWake();
@@ -258,7 +286,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       readinessOwner: this.controlPlaneReadinessService,
       observedAt: this.nowFn(),
     });
-    if (priorityPartition) {
+    if (priorityPartition || this.isRuntimeServiceDesiredStateDeficit()) {
       return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
     }
     const blockedPartitions =

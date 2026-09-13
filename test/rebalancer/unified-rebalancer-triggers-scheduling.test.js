@@ -575,44 +575,57 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   });
 
   await t.test(
-    'the stabilization gate retries at the stabilization horizon, not the ' +
-      'ordinary cadence, for a non-priority entity',
+    'a runtime service below its desired replica count is not held by the ' +
+      'background priority-spread fence',
     async (t) => {
-      const rebalancer = createTestRebalancer({
-        entityId: 'sys-postgres-wire',
-        entityType: EntityType.RUNTIME_SERVICE,
-        nodeId: 'node-1',
-        nodes: [
-          {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ],
-      });
-      rebalancer.initialize();
-      rebalancer.setLeader(true);
-      const scheduledDelays = [];
-      rebalancer.scheduleNextCheck = (delayMs = null) => {
-        scheduledDelays.push(delayMs);
+      const nodes = [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ];
+      const decide = (targetReplicaCount) => {
+        const rebalancer = createTestRebalancer({
+          entityId: 'sys-postgres-wire',
+          entityType: EntityType.RUNTIME_SERVICE,
+          nodeId: 'node-1',
+          nodes,
+        });
+        rebalancer.initialize();
+        rebalancer.isLeader = true;
+        rebalancer.getRuntimeServicePolicy = () => ({targetReplicaCount});
+        rebalancer.getControlPlanePrioritySpreadBlocker = () => ({
+          requiredDistinctNodeCount: 3,
+          blockedPartitions: [{
+            partitionId: 'sql_write_operations-p1',
+            spreadGap: 1,
+          }],
+        });
+        rebalancer.scheduleNextCheck = () => {};
+        try {
+          return rebalancer.resolvePrioritySpreadPlanningGateDecision(
+            rebalancer.createRebalancePlanningGateEvaluationContext(),
+          );
+        } finally {
+          rebalancer.shutdown();
+        }
       };
-      try {
-        // initialize() stamps a state change, so the first check after the
-        // owner starts the rebalancer meets the stabilization gate.
-        const blocker = await rebalancer.getCheckRebalanceBlocker(
-          rebalancer.createRebalancePlanningGateEvaluationContext(),
-        );
-        t.equal(blocker?.decision?.gate, 'stabilization');
-        const remainingMs = rebalancer.getTimeUntilStabilized();
-        t.ok(remainingMs > 0 && remainingMs <= rebalancer.stabilizationPeriodMs);
-        blocker.apply();
-        t.equal(scheduledDelays.length, 1);
-        t.ok(
-          scheduledDelays[0] !== null &&
-            scheduledDelays[0] <= rebalancer.stabilizationPeriodMs,
-          'the retry is the remaining stabilization time, not the ordinary interval',
-        );
-      } finally {
-        rebalancer.shutdown();
-      }
+
+      t.equal(
+        decide(1),
+        null,
+        'desired-state actuation is not fenced while priority spread is pending',
+      );
+      const fenced = decide(0);
+      t.equal(
+        fenced?.gate,
+        'control_plane_priority_spread',
+        'a runtime service with nothing to place stays behind the fence',
+      );
+      t.equal(
+        typeof fenced?.scheduleDelayMs,
+        'number',
+        'the fence keeps its delayed retry for ordinary work',
+      );
     },
   );
 
