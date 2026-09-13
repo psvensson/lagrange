@@ -2,7 +2,6 @@
 id: service-data-affinity-placement
 status: open
 proof: deterministic
-legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
@@ -43,6 +42,12 @@ quests:
   - user-partition-remote-executor-outcome-owner-wakeup
 authorizes: []
 legacyStatus: sharpening
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: movielens-lagrange-service-affinity-live
+    consecutive: 3
+    metric: priority
 ---
 
 # Epic: Service↔data affinity placement (the differentiator, made real)
@@ -387,3 +392,7 @@ existing degenerate form of this alternative).
      PER PLANNER KIND (a fast-cadence planner's quiet masks a slow one's
      pending move). Both transfer directly to any production
      convergence-detection for affinity placement.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`movielens-lagrange-service-affinity-live`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.

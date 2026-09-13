@@ -14,11 +14,11 @@ quests:
   - public-claims-match-shipped-bytes
   - publish-gate-hygiene
   - lean-push-gate
-  - test-file-content-receipts
   - script-reachability-cull
   - workflow-budget
-  - ratchet-realignment
   - epic-board-curation
+  - ratchet-realignment
+  - test-file-content-receipts
   - raft-ownership
 authorizes:
   - scripts
@@ -106,8 +106,10 @@ and `data/formation-health/trend.ndjson` is committed (compact text, one
 record per run) so the release notes and this epic read the same file.
 Probe: script, unmet until three consecutive scheduled records measure.
 
-**public-claims-match-shipped-bytes** — the README's install line names the
-version npm actually serves, the cluster-scale claim quotes the latest measured
+**public-claims-match-shipped-bytes** — the README's install line stays
+unpinned (`npm install --global lagrange-server` installs what npm serves as
+`latest`; demanding a pinned version was the budget's error, relaxed
+2026-09-13), the cluster-scale claim quotes the latest measured
 formation verdict with its date, and the changelog's newest entry has a
 receipt. Probe: script comparing README, CHANGELOG and `data/releases`.
 
@@ -151,6 +153,29 @@ ranks `v0.2.4-rc.2` above `v0.2.4`, so the first release after a candidate
 read as "moving latest backward". Tags are immutable, so 0.2.4 joins the
 never-published list and the fix (`versionsort.suffix=-`, pinned by a
 hardening assertion) ships as 0.2.5 on a new proof.
+
+**Rule (2026-09-13, owner).** No further quest enters this epic if it adds a
+script or a workflow: the budgets this epic exists to drive down moved the
+wrong way in its first 36 hours (workflows 925 to 1,137 lines with the canary,
+`scripts/checks` at its cap of 190, loose scripts 380 to 383). Next in order:
+`formation-health-verdicts`, then `script-reachability-cull` and
+`workflow-budget`. `test-file-content-receipts` is parked (superseded on its
+log): a content-keyed skip cache over the whole corpus is a large correctness
+surface in the layer that silently failed twenty coupled pairs, and the
+non-gating full-corpus canary already covers what it would optimise.
+
+**Notes from formation-health-verdicts and the next contract (2026-09-13).**
+The nightly workflow commits the trend to `main` with the workflow token, so
+`npm run publish` refuses fast-forward until the operator rebases onto the
+night's bot commit: a daily `git pull --ff-only` before publishing. Records
+the runner kept locally before the trend was tracked are not migrated; they
+live in the earlier runs' uploaded artifacts. Budget probes name rows with
+underscores for spaces (`--rows open_legacy_epics`) because a script probe
+splits on whitespace, and an unknown row name is unmet. The npm `next`
+contract is max(latest, newest prerelease); the move needs an
+`NPM_DIST_TAG_TOKEN` secret (owner action - trusted publishing authenticates
+`publish` only); until it exists, 0.2.5's `next` still names 0.2.4-rc.2 and
+`npm dist-tag add lagrange-server@0.2.5 next` is the manual move.
 
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the

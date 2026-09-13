@@ -2,7 +2,6 @@
 id: pilot-readiness-and-public-proof
 status: open
 proof: deterministic
-legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
@@ -17,6 +16,12 @@ quests:
   - user-table-leader-placement-spread
 authorizes: []
 legacyStatus: null
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: public-path-multinode-baseline
+    consecutive: 3
+    metric: priority
 ---
 
 # Pilot readiness and public-path proof
@@ -160,3 +165,7 @@ guarantees.
   `roadmapRow` remains null pending governance. The Q1/Q11 workload must cross
   the public HTTP path, multiple partition hosts, old bounds, multi-operation
   dispatch, and an independent parity oracle with sealed inputs.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`public-path-multinode-baseline`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.

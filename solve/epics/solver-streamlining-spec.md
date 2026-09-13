@@ -1,6 +1,6 @@
 ---
 id: solver-streamlining-spec
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -734,3 +734,7 @@ precedent as shell commands: `scripts/quest-evidence-readiness-planning-verified
 runs `node --test --test-name-pattern="^<scenario>" <file>` per receipt
 (outside the classified lanes; a non-matching pattern exits 0 with zero tests,
 which is the honesty hole P6a must close).
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `solve-v2`, which shipped the streamlined solver.

@@ -1,6 +1,6 @@
 ---
 id: owner-boundary-hardening-and-unification
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -124,3 +124,7 @@ Revision 3 is approved:
   the W0 fresh-oracle bootstrap and W13 split-only correction.
 
 Source implementation may begin under the linked execution contract.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling`: owner boundaries are now witnessed through the contract registry and the derived harness model.

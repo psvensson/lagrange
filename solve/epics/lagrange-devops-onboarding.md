@@ -2,13 +2,18 @@
 id: lagrange-devops-onboarding
 status: open
 proof: deterministic
-legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
   - newcomer-onboarding-friction
 authorizes: []
 legacyStatus: active
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: newcomer-onboarding-friction
+    consecutive: 3
+    metric: priority
 ---
 
 # Epic: Lagrange DevOps Onboarding (Docker + Kubernetes try-it path)
@@ -552,3 +557,7 @@ psql round-trip on a ≥3-node cluster.
 ## Drafts carried by the solve-v2 migration
 
 - lagrange-devops-onboarding (RM-0.5-cde-helm-chart): A DevOps-savvy operator can stand up a multi-node Lagrange cluster — locally via 'docker compose up' and on Kubernetes via the charts/lagrange Helm chart (StatefulSet, per-pod stable NODE_ID, PVC-backed Raft/SQLite, probes, headless+sql+admin services) — from a published multi-arch ghcr.io image, and reach a working psql SQL round-trip by following getting-started-compose.md or getting-started-kubernetes.md, within ~30 minutes (Phase 0.5 exit criterion); the chart render-gate runs in test:ci.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`newcomer-onboarding-friction`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.

@@ -1,6 +1,6 @@
 ---
 id: strategy-gate-and-altitude-teeth
-status: open
+status: done
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -273,3 +273,7 @@ A *fresh* autonomous run launched against a prior-exhausted frontier must, **on 
 first attempt** (not hour 7), either (a) be blocked by `strategy-gate` and produce a
 decision memo / escalation, or (b) record an explicit override stating why this entry
 differs. Demonstrated by a unit harness replaying the run-3 log as prior history.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Done: the altitude rule now exists (solve-v2 attempt budget and altitude-check findings); nothing measurable remains.

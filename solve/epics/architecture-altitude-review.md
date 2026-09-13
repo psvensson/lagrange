@@ -1,6 +1,6 @@
 ---
 id: architecture-altitude-review
-status: open
+status: done
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -109,3 +109,7 @@ it to owner-boundary properties needs a cheap runtime predicate that does not ye
   [[membership-single-owner-cutover]] precedent ("delete the 7-source
   projection" REFUTED on implementation: the projection was essential
   evidence integration) is the exact failure mode to rule out first.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Done: the altitude rule now exists in the solver; the review it asked for is the altitude-check discipline.

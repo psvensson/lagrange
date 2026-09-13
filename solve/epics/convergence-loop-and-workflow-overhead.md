@@ -1,6 +1,6 @@
 ---
 id: convergence-loop-and-workflow-overhead
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -330,3 +330,7 @@ only at real durability boundaries, and on-demand standard report projection.
 Implementation is split into bounded Quests linked to this epic; the underlying
 seal, probe, append-only log, exact content verification, final composition
 review, audit, scope-safe commit, and no-push guarantees remain mandatory.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `solve-v2` (workflow overhead) and `apparatus-release-consolidation` (apparatus budgets).

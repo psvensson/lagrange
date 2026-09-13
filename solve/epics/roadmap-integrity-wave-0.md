@@ -1,6 +1,6 @@
 ---
 id: roadmap-integrity-wave-0
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -72,3 +72,7 @@ ratchet is green.
 Wave 0 is complete when focused regressions pass, consistency reports no errors
 or unexplained warnings, generated surfaces agree with projected Quest state,
 and the aggregate static gate is green without raising a baseline.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `apparatus-release-consolidation` (public claims match shipped bytes; roadmap authority audit stays).

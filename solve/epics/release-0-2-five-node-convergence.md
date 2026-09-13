@@ -2,7 +2,6 @@
 id: release-0-2-five-node-convergence
 status: open
 proof: certification
-legacy: true
 roadmapRow: RM-0.2-five-node-convergence
 graduatesTo: null
 quests:
@@ -11,6 +10,12 @@ quests:
   - admin-cdc-notification-lifecycle-contract
   - admin-cdc-authoritative-repair-race-contract
 authorizes: []
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: managed-split-cutover-handoff-closure
+    consecutive: 3
+    metric: priority
 ---
 
 # Release 0.2 five-node convergence
@@ -75,3 +80,7 @@ sixty-second window, which would reverse the 2026-09-05 release decision.
 Until that is settled this epic stays `legacy: true` with an empty
 `authorizes`, which is the honest state: it bounds nothing because nothing has
 told it what to bound.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`managed-split-cutover-handoff-closure`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.
