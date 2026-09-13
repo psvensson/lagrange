@@ -581,14 +581,9 @@ class UnifiedRebalancerPriorityReadinessMethods {
       typeof this.systemTableCache?.getAll === 'function' ?
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) :
         [];
-    const serviceEndpointRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) :
-        [];
     return this.summarizeCriticalSystemEndpointVisibility(
       activeNodeIds,
       nodeEndpointRows,
-      serviceEndpointRows,
       options,
     );
   }

@@ -425,11 +425,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
       t.same(
         authoritativeCalls.map((call) => call.tableName),
-        [
-          SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
-          SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
-        ],
-        'endpoint visibility revalidation should consult both authoritative endpoint tables',
+        [SYSTEM_TABLE_NAME.NODE_ENDPOINTS],
+        'endpoint visibility revalidation consults only the bootstrap transport table',
       );
     });
 

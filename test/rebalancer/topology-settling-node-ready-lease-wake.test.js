@@ -64,11 +64,6 @@ const JOINER_NODE_ENDPOINT_ROW = Object.freeze({
   transport_type: 'ws',
   status: 'active',
 });
-const JOINER_SERVICE_ENDPOINT_ROW = Object.freeze({
-  node_id: JOINER_NODE_ID,
-  service_id: 'sys-postgres-wire',
-  health_status: 'healthy',
-});
 const REASON_NODE_BECAME_READY = 'node_became_ready';
 const READY_LEASE_BLOCKER_REASON = 'node_ready_lease_incomplete';
 const ENDPOINT_BLOCKER_REASON = 'endpoint_visibility_incomplete';
@@ -118,13 +113,7 @@ function createSharedCache() {
         status: 'active',
       }],
     ]),
-    service_endpoints: new Map([
-      [SEED_NODE_ID, {
-        node_id: SEED_NODE_ID,
-        service_id: 'sys-postgres-wire',
-        health_status: 'healthy',
-      }],
-    ]),
+    service_endpoints: new Map(),
     replica_operations: new Map(),
     services: new Map(),
     tables: new Map(),
@@ -259,17 +248,14 @@ function driveNodeReadyLeaseEvent(rebalancerK1, mode) {
 }
 
 // The joiner's readiness + endpoint facts become true in the shared store:
-// the NODES row gains a live ready-lease and the canonical WebSocket /
-// postgres-wire endpoint rows appear. This is the same publication the real
+// the NODES row gains a live ready-lease and the canonical WebSocket
+// node_endpoints row appears. This is the same publication the real
 // heartbeat / endpoint writers produce once the joiner's first critical
-// replica reaches voter-ready and it begins heartbeating.
+// replica reaches voter-ready and it begins heartbeating. sys-postgres-wire
+// is an optional runtime service and publishes nothing at formation time.
 function publishJoinerReadinessAndEndpoints(tables) {
   tables.nodes.set(JOINER_NODE_ID, {...NODE_ROW_ACTIVE_READY});
   tables.node_endpoints.set(JOINER_NODE_ID, {...JOINER_NODE_ENDPOINT_ROW});
-  tables.service_endpoints.set(
-    JOINER_NODE_ID,
-    {...JOINER_SERVICE_ENDPOINT_ROW},
-  );
 }
 
 function buildNodeReadyLeaseCacheEvent() {
@@ -476,5 +462,65 @@ test(
       0,
       'no spurious wake for a genuinely unsettled node',
     );
+  },
+);
+
+// Critical-system endpoint visibility owns the bootstrap transport only.
+// sys-postgres-wire is an optional runtime service (replica_count defaults
+// to 0) whose service_endpoints row exists only after the runtime-service
+// rebalancer places it; it is never an input to topology settling. A
+// non-priority system partition has no readiness backfill, so with zero
+// postgres-wire rows the old predicate held its planning forever.
+const NODES_PARTITION = 'nodes-p1';
+
+function createFormedThreeNodeCache() {
+  const {cache, tables} = createSharedCache();
+  tables.partitions.set(NODES_PARTITION, {
+    partition_id: NODES_PARTITION,
+    table_id: 'nodes',
+    replica_count: 3,
+  });
+  tables.nodes.set(JOINER_NODE_ID, {...NODE_ROW_ACTIVE_READY});
+  tables.node_endpoints.set(JOINER_NODE_ID, {...JOINER_NODE_ENDPOINT_ROW});
+  return {cache, tables};
+}
+
+test(
+  'critical topology settling ignores postgres-wire endpoints for a non-priority system partition',
+  async (t) => {
+    initializeTestEnvironment();
+    const {cache} = createFormedThreeNodeCache();
+    const rebalancer = createRebalancer(cache, NODES_PARTITION);
+    rebalancer.messageRouter.getConnectedNodes =
+      () => [SEED_NODE_ID, JOINER_NODE_ID];
+
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker(),
+      null,
+      'every active node publishes its websocket endpoint, so nothing settles',
+    );
+    t.end();
+  },
+);
+
+test(
+  'critical topology settling still fails closed without websocket endpoints',
+  async (t) => {
+    initializeTestEnvironment();
+    const {cache, tables} = createFormedThreeNodeCache();
+    tables.node_endpoints.delete(JOINER_NODE_ID);
+    const rebalancer = createRebalancer(cache, NODES_PARTITION);
+    rebalancer.messageRouter.getConnectedNodes =
+      () => [SEED_NODE_ID, JOINER_NODE_ID];
+
+    const blocker = rebalancer.getCriticalSystemTopologySettlingBlocker();
+    t.equal(blocker?.reason, ENDPOINT_BLOCKER_REASON);
+    t.same(blocker.missingNodeEndpointNodeIds, [JOINER_NODE_ID]);
+    t.equal(
+      'missingPostgresWireNodeIds' in blocker,
+      false,
+      'the blocker carries no postgres-wire visibility field',
+    );
+    t.end();
   },
 );
