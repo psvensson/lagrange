@@ -197,6 +197,9 @@ function makeFakeRebalancer(record, options) {
     options,
     initialize() {},
     setLeader() {},
+    enqueueRebalanceCheck() {
+      return true;
+    },
     shutdown() {},
   };
   record.push(rebalancer);

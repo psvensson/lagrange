@@ -302,7 +302,14 @@ function createBindingCompilationKit(config) {
       serviceDefinitionsOwner: fixture.owners.serviceDefinitionsOwner,
       createRebalancer: (options) => {
         rebalancers.push(options);
-        return {initialize() {}, setLeader() {}, shutdown() {}};
+        return {
+          initialize() {},
+          setLeader() {},
+          enqueueRebalanceCheck() {
+            return true;
+          },
+          shutdown() {},
+        };
       },
     });
     return {cache, owner, rebalancers};
