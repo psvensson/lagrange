@@ -173,6 +173,78 @@ Implementation scope and sequencing remain governed by the AGPL feature map and
 edition matrix; this milestone is the product-level convergence gate those rows
 must satisfy together.
 
+## Planned - 0.6 Native OCI Call Cells: native runtimes at the data
+
+0.6 is a release milestone, not an unversioned follow-on. It follows 0.5's
+external-usability baseline and precedes 1.0 production hardening. It turns the
+existing Call Cell model into a practical bridge for customers whose important
+code and libraries live in ordinary native runtimes. The first part of the
+milestone is real managed OCI activation if that has not already landed while
+completing 0.5; the second part is native Call Cell invocation through that
+managed runtime. The milestone must not be deferred to later advanced-runtime
+work merely because OCI is the execution provider.
+
+Lagrange should not require customers to move a useful data-local function to
+WebAssembly merely because its language runtime or important libraries are hard
+to compile to WASM. An installed OCI service revision should be able to expose
+named Call Cell functions from the same program and have Lagrange execute those
+functions on the nodes holding the selected partition replicas.
+
+The architecture is specified in
+[Native OCI Call Cells](architecture/native-oci-call-cells.md). It extends the
+existing Artifact / Binding / Cell path at the runtime-provider boundary rather
+than introducing a second callback system. `CallCellInvoker` remains the sole
+fanout and reduce owner; the destination node still builds the bounded batch
+from its local partition replica; and provider-specific behavior begins only at
+`ServiceRuntimeLifecycle.invoke()`.
+
+The 0.6 milestone requires:
+
+- real digest-pinned OCI services are pulled, started, health-checked, replaced,
+  stopped and removed through the unified service lifecycle rather than an
+  in-memory or hand-managed container path;
+- an idiomatic language SDK where a source-level function/operation handle
+  compiles to the existing immutable Artifact, call Binding, export interface,
+  and outbound-call policy rather than serializing a closure at runtime;
+- an ordinary handler in that OCI program can call the generated operation
+  handle over its authenticated broker channel; the broker derives the
+  service/revision identity and generated outbound-call authority and hands the
+  request to the existing Call Cell ingress rather than resolving a partition
+  itself;
+- exact manifest/revision/export identity for every native invocation;
+- `OciContainerDriver.invoke()` as the OCI execution-provider seam, reached only
+  through the existing Call Cell owner route;
+- an authenticated application-initiated long-lived channel from each managed
+  process to a node-local invocation broker, with no public callback port;
+- the same bounded `ctx` semantics for emit, nested call, deadline, budgets,
+  identity, and typed failures as the corresponding WASM operation;
+- existing activation leases and runtime-service placement to materialize the
+  exact service revision on a selected partition host, optionally consuming
+  image-presence and warm-runtime cost as placement inputs rather than authority;
+- explicit semantics that process globals, loaded models, VM heaps, and native
+  libraries are disposable warm cache rather than distributed durable state;
+- honest retry semantics: Lagrange may make its managed result exactly-once
+  visible, but arbitrary external side effects from native code are not
+  exactly-once and need application idempotency;
+- a multi-node proof that every shard function reads from the local partition
+  replica before entering the native runtime; and
+- acceptance with a genuine native dependency plus a second materially
+  different language/runtime, proving the capability is useful beyond a
+  Node-specific transport shim.
+
+0.6 is complete only when both the handler-originated SDK path and direct call
+surface converge on the same distributed execution owner, a real native-library
+workload succeeds across multiple partition hosts, worker loss demonstrates the
+documented retry/ambiguity semantics, and a second language/runtime conforms to
+the same broker/context contract.
+
+The OCI host agent remains lifecycle-only. It may provision the managed process
+and its broker connectivity, but it must not become a partition router,
+scheduler, retry loop, or alternate Call Cell owner. A customer application may
+mix separately installed native OCI and WASM operations where ecosystem
+compatibility, portability, density, or stronger isolation make each provider
+the better fit; runtime kind remains part of each installed Artifact/revision.
+
 ## Later - 1.0 Production Ready: production support and relational invariants
 
 A production-supported release requires explicit, evidence-backed guarantees:
@@ -197,11 +269,13 @@ invariant. It therefore owns:
 - the supported tuple-order, NULL, type and collation contract exposed through
   PostgreSQL-facing metadata and constraint behavior.
 
-A commercially supported installable service additionally depends on the
-Installable Service Product Platform milestone above; first-party services
-should consume that common lifecycle rather than introducing product-specific
-installers, telemetry transports, support collectors, secret stores, or
-upgraders.
+The first live managed OCI execution path and native OCI Call Cells are assigned
+to 0.6. A commercially supported installable service in 1.0 builds on that
+substrate with production compatibility, upgrade/rollback, diagnostics, support,
+security and operating guarantees rather than reopening activation or call
+routing as separate implementations. First-party services should consume the
+common lifecycle rather than introducing product-specific installers, telemetry
+transports, support collectors, secret stores, or upgraders.
 
 ## Later 1.x - SQL Breadth and Compatibility
 
@@ -225,8 +299,12 @@ execution can add:
 - multi-stage plans with streaming exchange and backpressure;
 - deeper call composition;
 - concurrent invocations on one Cell instance;
-- query-planner-initiated pushdown; and
-- typed language SDKs and generated operation handles.
+- query-planner-initiated pushdown;
+- richer typed language SDKs and generated operation handles across both WASM
+  and native OCI Call Cell providers; and
+- provider-aware cost modeling that can account for image availability, warm
+  native workers, WASM materialization cost, and partition locality without
+  moving scheduling authority out of the existing owners.
 
 The query planner can also become substantially more sophisticated here rather
 than pulling optimizer research into 0.3. Phase 2.0 is the natural home for

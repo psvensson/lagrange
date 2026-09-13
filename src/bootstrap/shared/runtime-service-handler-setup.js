@@ -13,9 +13,6 @@ import {RuntimeServiceHandler} from '../../node/runtime-service-handler.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
-import {
-  getRegisteredControlPlaneSystemTableGateway,
-} from '../../control-plane/control-plane-gateway-registry.js';
 import {ServiceEndpointsOwner} from
   '../../control-plane/owners/service-endpoints-owner.js';
 import {
@@ -41,10 +38,10 @@ const ERROR_MSG = Object.freeze({
   CDC_INTEGRATION_SERVICE_REQUIRED: 'cdcIntegrationService',
   SYSTEM_TABLE_CACHE_REQUIRED: 'systemTableCache',
   SERVICE_LIFECYCLE_MANAGER_REQUIRED: 'serviceLifecycleManager',
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_REQUIRED:
-    'a registered controlPlaneSystemTableGateway (ControlPlaneSetup.create ' +
-    'registers it before runtime-service handler setup) or an injected ' +
-    'serviceEndpointsOwner when serviceRuntimeLifecycle is provided',
+  SERVICE_ENDPOINTS_OWNER_REQUIRED:
+    'serviceEndpointsOwner (systemMetadataOwners.serviceEndpointsOwner ' +
+    'from ControlPlaneSetup.create) when serviceRuntimeLifecycle publishes ' +
+    'endpoints',
 });
 
 /**
@@ -63,32 +60,25 @@ function ownsRuntimeEndpointPublication(serviceRuntimeLifecycle) {
 
 /**
  * Resolve the canonical endpoint-metadata owner the runtime lifecycle
- * publishes through. Production resolves it over the control-plane gateway
- * that ControlPlaneSetup.create() registers before either startup path
- * (seed or joiner) reaches this setup. A missing gateway is a startup
- * ordering defect and is refused explicitly: silently skipping the wiring
- * would leave every runtime replica ACTIVE with no published endpoint.
+ * publishes through. Both startup paths (seed workflow and joiner) receive
+ * it from ControlPlaneSetup.create() as
+ * systemMetadataOwners.serviceEndpointsOwner and hand it here explicitly;
+ * this setup never reads the control-plane gateway registry, which is an
+ * admin-side seam. A missing owner is a startup ordering defect and is
+ * refused explicitly: silently skipping the wiring would leave every
+ * runtime replica ACTIVE with no published endpoint.
  * @param {Object} options
- * @param {Object} systemTableCache
  * @return {ServiceEndpointsOwner}
- * @throws {DependencyError} When neither an owner nor a gateway is available.
+ * @throws {DependencyError} When the owner is absent.
  */
-function resolveServiceEndpointsOwner(options, systemTableCache) {
+function resolveServiceEndpointsOwner(options) {
   if (options.serviceEndpointsOwner instanceof ServiceEndpointsOwner) {
     return options.serviceEndpointsOwner;
   }
-  const controlPlaneSystemTableGateway =
-    getRegisteredControlPlaneSystemTableGateway();
-  if (!controlPlaneSystemTableGateway) {
-    throw new DependencyError(
-      RUNTIME_SERVICE_HANDLER_SETUP_NAME,
-      ERROR_MSG.CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_REQUIRED,
-    );
-  }
-  return new ServiceEndpointsOwner({
-    controlPlaneSystemTableGateway,
-    systemTableCache,
-  });
+  throw new DependencyError(
+    RUNTIME_SERVICE_HANDLER_SETUP_NAME,
+    ERROR_MSG.SERVICE_ENDPOINTS_OWNER_REQUIRED,
+  );
 }
 
 class RuntimeServiceHandlerSetup {
@@ -105,8 +95,8 @@ class RuntimeServiceHandlerSetup {
    * @param {Object} [options.serviceRuntimeLifecycle] - Runtime invocation
    *   owner.
    * @param {Object} [options.serviceEndpointsOwner] - Canonical endpoint
-   *   metadata owner override. Production resolves it over the registered
-   *   control-plane gateway.
+   *   metadata owner (systemMetadataOwners.serviceEndpointsOwner). Required
+   *   when serviceRuntimeLifecycle publishes endpoints.
    * @param {Object} [options.callBindingRouteResolver] - Call Binding route
    *   resolver shared with the call-cell ingress; the handler self-defaults
    *   a cache-provider-backed resolver when absent.
@@ -171,10 +161,7 @@ class RuntimeServiceHandlerSetup {
     if (ownsRuntimeEndpointPublication(serviceRuntimeLifecycle)) {
       wireRuntimeEndpointPublication({
         nodeId,
-        serviceEndpointsOwner: resolveServiceEndpointsOwner(
-          options,
-          systemTableCache,
-        ),
+        serviceEndpointsOwner: resolveServiceEndpointsOwner(options),
         serviceRuntimeLifecycle,
         systemTableCache,
       });

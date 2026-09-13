@@ -498,6 +498,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
         systemTableCache,
         serviceLifecycleManager: this.serviceLifecycleManager,
         serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
+        serviceEndpointsOwner:
+          this.systemMetadataOwners?.serviceEndpointsOwner,
         rpcClient: this.rpcClient,
         executorOutcomeEmitter:
           this.rebalanceCoordinator?.executorOutcomeEmitter,

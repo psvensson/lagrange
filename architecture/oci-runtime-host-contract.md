@@ -6,15 +6,21 @@ documentClass: compatibility
 # OCI Runtime Host Contract Pointer
 
 OCI container execution is an internal runtime capability and compatibility
-path. It is not part of Lagrange's main programming model: services are
-authored and deployed as WASM components, and OCI exists as a possible
-escape hatch for code that cannot yet run as WASM. OCI workloads do not
-receive the distributed, function-level, data-local execution model.
+path. Managed long-running OCI services let existing applications keep their
+ordinary runtime and PostgreSQL-facing behavior while Lagrange owns lifecycle
+and placement.
 
-Today the `oci_container` runtime kind is scaffold-only: descriptor
-validation and an in-memory lifecycle scaffold exist, while real managed
-container activation remains unsupported. Current runtime support is
-defined by
+A separate planned capability, [Native OCI Call Cells](native-oci-call-cells.md),
+lets a Lagrange-aware service expose named functions from that same OCI image so
+the existing Call Cell owner can invoke them on selected partition hosts. That
+future data plane reuses `ServiceRuntimeLifecycle.invoke()` and the registered
+runtime driver. It does **not** add `invoke` to the Docker host-agent operation
+surface or make the host agent a scheduler, router, or retry owner.
+
+Today the `oci_container` runtime kind is scaffold-only: descriptor validation
+and an in-memory lifecycle scaffold exist, while real managed container
+activation and native OCI Call Cell invocation remain unsupported. Current
+runtime support is defined by
 [`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
 
 The selected but not fully implemented OCI host-agent design is planning

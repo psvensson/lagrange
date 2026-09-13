@@ -358,6 +358,46 @@ Until `lagrange cluster init`, `lagrange node start`, `lagrange cluster join`,
 one local-cluster tutorial, and public package/CLI naming alignment are real,
 broad service-platform expansion remains design/substrate work only. It must
 not outrank Phase 0.1 representative-gate closure or Phase 0.5 operator basics.
+Phase 0.6 is the first versioned service-runtime expansion after these basics.
+
+---
+
+## Phase 0.6 — Native OCI Call Cells
+
+*"Keep the customer's runtime; move the selected function to the data."*
+
+Phase 0.6 is the versioned home for the native OCI Call Cell capability. It is
+intentionally separate from the later advanced runtime-platform work so the
+feature cannot remain an unprioritized cross-cutting aspiration. It consumes
+the existing Artifact / Binding / Cell model and the public Call Cell owner
+rather than introducing another callback scheduler.
+
+If real managed OCI activation has not already landed while finishing 0.5, it is
+the first dependency of 0.6 and is owned here at the minimum scope needed to run
+and recover digest-pinned customer containers through the unified lifecycle.
+Production support breadth, richer rollout policy, additional providers, and
+enterprise controls remain later concerns.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-0.6-managed-oci-activation | Real managed OCI activation | 🔧 | Complete the selected host-provider path so a digest-pinned `oci_container` revision is pulled, created, started, inspected, health-checked, stopped, removed, and replaced through `ServiceRuntimeLifecycle` with typed fail-closed identity/fence behavior. This is the prerequisite consumed by native Call Cells, not an alternate service manager. Spec: `solve/specs/service-portability-ladder/`; host contract: `architecture/oci-runtime-host-contract.md`. |
+| RM-0.6-native-oci-call-cells | Native OCI Call Cells | 🔧 | Extend only the runtime-provider edge of the existing Call Cell path: authorized handler-originated operation calls and direct `CALL BINDING` converge on `CallCellInvoker`; destination admission/local batch stay provider-neutral; `ServiceRuntimeLifecycle.invoke()` dispatches to `OciContainerDriver.invoke()` and a node-local authenticated process broker. Require a genuine native dependency, multi-node locality/recovery proof, honest retry semantics, and second-language conformance. Architecture: `architecture/native-oci-call-cells.md`; execution sequence: `solve/specs/service-portability-ladder/tasks.md` Phase 5. |
+
+### Phase 0.6 Exit Criteria
+
+- A real managed OCI service revision can activate and recover through the
+  ordinary service lifecycle without an in-memory or hand-managed daemon path.
+- An ordinary handler in that managed process can call a generated distributed
+  operation handle; generated outbound-call policy and server-derived identity
+  admit it into the existing Call Cell owner rather than an OCI-specific route.
+- Direct `CALL BINDING` and handler-originated SDK calls converge on the same
+  `CallCellInvoker`, destination partition-fence checks, local shard read, reduce
+  coordination, and result-visibility semantics.
+- A genuine native dependency executes on multiple partition hosts and survives
+  a named worker loss with the documented ambiguous/retry behavior and pinned
+  revision identity.
+- A second materially different language/runtime uses the same broker/context
+  semantics without adding a language-specific execution owner.
 
 ---
 
@@ -368,7 +408,9 @@ not outrank Phase 0.1 representative-gate closure or Phase 0.5 operator basics.
 ### 1. System Service Foundations
 
 These items are intentionally in scope for the AGPL repository even when they
-also enable future paid system services.
+also enable future paid system services. Phase 0.6 supplies the first live
+managed OCI activation and native Call Cell execution path; 1.0 hardens the
+service platform around that substrate rather than reopening those owners.
 
 | Item | Roadmap state | Scope notes |
 |------|--------|-------|
@@ -482,7 +524,7 @@ research.
 
 | Item | Roadmap state | Scope notes |
 |------|--------|-------|
-| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `solve/specs/activation-cost-aware-placement/` |
+| Advanced OCI provider and resource placement | 🔲 | First real managed OCI activation and native Call Cell invocation are Phase 0.6. This later row owns additional providers such as Kubernetes/containerd, deeper resource-aware placement, and runtime-platform scale without creating another lifecycle or call owner. |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
 | Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `solve/specs/activation-cost-aware-placement/`. |

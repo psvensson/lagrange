@@ -2,7 +2,7 @@
 id: service-portability-ladder
 status: open
 proof: certification
-roadmapRow: null
+roadmapRow: RM-0.6-managed-oci-activation
 graduatesTo: null
 quests:
   - oci-container-driver-live-activation-protocol-admission
@@ -33,6 +33,16 @@ Derived by the solve-v2 migration from the quests listed above (amendment 7).
 The operator seals `doneWhen` and `authorizes` before new quests start here;
 until then the epic is `legacy: true` and its scope is unenforced.
 
+## Release assignment
+
+This epic is scheduled in roadmap **0.6**. Its active managed-OCI activation
+work advances `RM-0.6-managed-oci-activation`, the prerequisite half of that
+release. Once that lifecycle terminal is available, native Call Cell Phase 5
+quests K0-K6 are also 0.6 work but must link
+`RM-0.6-native-oci-call-cells` individually when authored. The single version
+contains both steps without making one epic pretend to own both lifecycle
+activation and distributed-call semantics.
+
 ## Sealed acceptance
 
 Sealed 2026-09-07 from the derived-epic packet in
@@ -55,6 +65,13 @@ nothing new about the three frontiers already landed - those are provenance, not
 evidence. The capability flip of `realContainerActivation` and the removal of
 the mutable feature gate must happen in the same terminal aggregate; a pass that
 leaves the gate in place has not demonstrated the claim.
+
+It also does not demonstrate native OCI Call Cell invocation. That is a
+separate, downstream Phase 5 capability defined by
+`architecture/native-oci-call-cells.md` and the portability spec. It reuses this
+epic's real managed-container lifecycle but must enter through the existing
+Call Cell owner and `ServiceRuntimeLifecycle.invoke()` rather than widening the
+Docker host-agent control surface.
 
 **Open question inherited from the parent's triage.** Mint a narrower successor
 covering only the two frontiers never attempted, citing the three landed ones as

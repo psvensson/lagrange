@@ -44,6 +44,11 @@ const GENERATED_INVENTORY_PATHS = Object.freeze([
 ]);
 const SPAWN_MAX_BUFFER = 64 * 1024 * 1024;
 const TEST_TIMEOUT_MS = 90 * 60 * 1000;
+// The commit-time checks, run before the proof: `.githooks/pre-commit` over
+// the staged index (file-size ratchets, guideline audits, lint).
+const PRE_COMMIT_HOOK = '.githooks/pre-commit';
+const SHELL = 'bash';
+const PRE_COMMIT_TIMEOUT_MS = 10 * 60 * 1000;
 const COMMIT_SUBJECT_LIMIT = 72;
 const NO_VERIFY_FLAG = '--no-verify';
 const QUESTS_SUBDIR = 'quests';
@@ -67,6 +72,8 @@ const MESSAGE = Object.freeze({
   VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
   VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
   LAND_REFUSED: 'land refused:',
+  PRE_COMMIT_REFUSED:
+    'land: the commit-time checks refused the staged tree before any test ran:',
   PROBE_IMMUTABLE: 'the probe is immutable after start (supersede the quest to change it)',
   PROBLEM_BULLET: '- ',
 });
@@ -344,6 +351,16 @@ function proveLanding(root, quest, paths, options) {
     if (graphProblem) refuse(graphProblem);
   }
   stageLanding(root, quest, paths);
+  // Cheap before expensive: the commit-time checks (the pre-commit hook over
+  // the staged tree - file-size ratchets, guideline audits, lint) take a
+  // minute and used to run only after the change proof, so a ratchet miss
+  // cost a whole corpus run. They run here first, against the same index the
+  // commit will see, and a miss gives the index back before any test runs.
+  const hookProblem = preCommitProblem(root);
+  if (hookProblem) {
+    unstageLanding(root, quest, paths);
+    refuse(hookProblem);
+  }
   const proof = injected || (options.skipProof ? null : runChangeProof);
   if (!proof) return;
   try {
@@ -352,6 +369,20 @@ function proveLanding(root, quest, paths, options) {
     unstageLanding(root, quest, paths);
     throw error;
   }
+}
+
+// The pre-commit hook against the staged index, with the landing marker the
+// commit itself will carry; absent hook (a fixture repository) means nothing
+// to check. Returns the refusal text or null.
+function preCommitProblem(root) {
+  const hook = path.join(root, PRE_COMMIT_HOOK);
+  if (!fs.existsSync(hook)) return null;
+  const result = spawnSync(SHELL, [hook], {cwd: root, encoding: TEXT_ENCODING,
+    maxBuffer: SPAWN_MAX_BUFFER, timeout: PRE_COMMIT_TIMEOUT_MS,
+    env: {...process.env, [LANDING_MARKER_ENV]: LANDING_MARKER_VALUE}});
+  if (result.status === 0) return null;
+  return `${MESSAGE.PRE_COMMIT_REFUSED}${LINE_SEPARATOR}` +
+    `${result.stdout || ''}${result.stderr || ''}`;
 }
 
 function commitLanding(root, quest, paths, options) {
