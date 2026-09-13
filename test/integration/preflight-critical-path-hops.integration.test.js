@@ -2,9 +2,14 @@
  * Integration test: preflight critical-path hop coverage.
  *
  * Validates the three critical hops needed for strict preload readiness:
- * 1. Service registration yields discoverable sys-postgres-wire rows.
+ * 1. Service registration yields the sys-postgres-wire definition (desired
+ *    state only) and the boot-owned meta endpoints for every node. The
+ *    postgres-wire endpoint is runtime-owned: it is published by
+ *    ServiceRuntimeLifecycle only after the runtime-service rebalancer places
+ *    a replica, so no such row exists at boot.
  * 2. CDC forwarding advances cache watermarks.
- * 3. Service discovery returns sys-postgres-wire endpoints once caches are healthy.
+ * 3. Service discovery returns the boot-owned meta endpoints once caches are
+ *    healthy, and excludes sys-postgres-wire until a runtime is placed.
  *
  * Requirements: 5.1, 5.2, 5.3
  */
@@ -107,14 +112,23 @@ function selectFollowerMessageGroup(messageGroups) {
   return null;
 }
 
-function buildPostgresWireEndpointId(nodeId) {
-  return META_SERVICE_ID.POSTGRES_WIRE + EP_ID_SEPARATOR + nodeId;
+const BOOT_OWNED_META_SERVICE_IDS = Object.freeze([
+  META_SERVICE_ID.WASM_META,
+  META_SERVICE_ID.ADMIN_META,
+]);
+
+function buildEndpointId(serviceId, nodeId) {
+  return serviceId + EP_ID_SEPARATOR + nodeId;
 }
 
-function assertEndpointRow(t, row, expectedNodeId) {
-  t.equal(row[EP_COL.SERVICE_ID], META_SERVICE_ID.POSTGRES_WIRE, 'service_id matches');
+function buildPostgresWireEndpointId(nodeId) {
+  return buildEndpointId(META_SERVICE_ID.POSTGRES_WIRE, nodeId);
+}
+
+function assertEndpointRow(t, row, expectedServiceId, expectedNodeId) {
+  t.equal(row[EP_COL.SERVICE_ID], expectedServiceId, 'service_id matches');
   t.equal(row[EP_COL.NODE_ID], expectedNodeId, 'node_id matches');
-  t.equal(row[EP_COL.PROTOCOL], WASM_SERVICE_PROTOCOL.POSTGRESQL, 'protocol matches');
+  t.equal(row[EP_COL.PROTOCOL], WASM_SERVICE_PROTOCOL.WEBSOCKET, 'protocol matches');
   t.equal(row[EP_COL.HEALTH_STATUS], WASM_SERVICE_HEALTH_STATUS.HEALTHY, 'endpoint healthy');
   t.equal(
     typeof row[EP_COL.PORT],
@@ -233,7 +247,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       );
     }
 
-    await t.test('service registration produces sys-postgres-wire rows', async (t) => {
+    await t.test('service registration produces the desired-state and boot-owned rows', async (t) => {
       const definition = systemTableCache.get(
         TABLES.SERVICE_DEFINITIONS,
         META_SERVICE_ID.POSTGRES_WIRE,
@@ -246,7 +260,9 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       );
 
       const nodeIds = [seedNodeId, ...joiningNodeIds];
-      const endpointIds = nodeIds.map((nodeId) => buildPostgresWireEndpointId(nodeId));
+      const endpointIds = nodeIds.flatMap((nodeId) =>
+        BOOT_OWNED_META_SERVICE_IDS.map((serviceId) =>
+          buildEndpointId(serviceId, nodeId)));
 
       const endpointsReady = await waitFor(() => {
         return endpointIds.every((endpointId) =>
@@ -256,16 +272,28 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       t.equal(
         endpointsReady,
         true,
-        'service_endpoints should include sys-postgres-wire endpoints for all nodes',
+        'service_endpoints should include the boot-owned meta endpoints for all nodes',
       );
 
       for (const nodeId of nodeIds) {
-        const endpointId = buildPostgresWireEndpointId(nodeId);
-        const endpoint = systemTableCache.get(TABLES.SERVICE_ENDPOINTS, endpointId);
-        t.ok(endpoint, `sys-postgres-wire endpoint present for ${nodeId}`);
-        if (endpoint) {
-          assertEndpointRow(t, endpoint, nodeId);
+        for (const serviceId of BOOT_OWNED_META_SERVICE_IDS) {
+          const endpoint = systemTableCache.get(
+            TABLES.SERVICE_ENDPOINTS,
+            buildEndpointId(serviceId, nodeId),
+          );
+          t.ok(endpoint, `${serviceId} endpoint present for ${nodeId}`);
+          if (endpoint) {
+            assertEndpointRow(t, endpoint, serviceId, nodeId);
+          }
         }
+        t.equal(
+          systemTableCache.get(
+            TABLES.SERVICE_ENDPOINTS,
+            buildPostgresWireEndpointId(nodeId),
+          ),
+          undefined,
+          `no sys-postgres-wire endpoint exists for ${nodeId} before a runtime is placed`,
+        );
       }
     });
 
@@ -425,10 +453,19 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
           return false;
         }
         const services = Array.isArray(snapshot.services) ? snapshot.services : [];
+        const postgresWireDiscovered = services.some((entry) => {
+          const serviceIds = Array.isArray(entry?.serviceIds) ? entry.serviceIds : [];
+          return serviceIds.includes(META_SERVICE_ID.POSTGRES_WIRE);
+        });
+        if (postgresWireDiscovered) {
+          // Runtime-owned: discovery never advertises sys-postgres-wire
+          // before the runtime-service rebalancer places a replica.
+          return false;
+        }
         const service = services.find((entry) => {
           const serviceIds = Array.isArray(entry?.serviceIds) ? entry.serviceIds : [];
-          return entry?.protocol === WASM_SERVICE_PROTOCOL.POSTGRESQL &&
-            serviceIds.includes(META_SERVICE_ID.POSTGRES_WIRE);
+          return entry?.protocol === WASM_SERVICE_PROTOCOL.WEBSOCKET &&
+            serviceIds.includes(META_SERVICE_ID.ADMIN_META);
         });
         if (!service) {
           return false;
@@ -450,7 +487,12 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
         );
       }, WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
 
-      t.equal(discoveryReady, true, 'service_discovery_local should return ready postgres-wire endpoints');
+      t.equal(
+        discoveryReady,
+        true,
+        'service_discovery_local should return the ready boot-owned admin-meta ' +
+          'endpoints and no postgres-wire endpoint before placement',
+      );
     });
   } finally {
     if (adminApi) {
