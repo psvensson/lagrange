@@ -15,10 +15,6 @@ import {
 import {RuntimeServiceHandlerSetup} from
   '../../src/bootstrap/shared/runtime-service-handler-setup.js';
 import {DependencyError} from '../../src/bootstrap/bootstrap-errors.js';
-import {
-  clearRegisteredControlPlaneSystemTableGateway,
-  registerControlPlaneSystemTableGateway,
-} from '../../src/control-plane/control-plane-gateway-registry.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 
 const NODE_ID = 'node-a';
@@ -66,7 +62,7 @@ function createRuntimeEndpointFixture() {
   return {cache, lifecycle, mutations};
 }
 
-function createHandlerSetupOptions(lifecycle) {
+function createHandlerSetupOptions(lifecycle, extra = {}) {
   return {
     nodeId: NODE_ID,
     messageRouter: {register() {}},
@@ -74,7 +70,22 @@ function createHandlerSetupOptions(lifecycle) {
     systemTableCache: new SystemTableCache(),
     serviceLifecycleManager: {},
     serviceRuntimeLifecycle: lifecycle,
+    ...extra,
   };
+}
+
+function createInjectedEndpointsOwner(systemTableCache) {
+  return new ServiceEndpointsOwner({
+    controlPlaneSystemTableGateway: {
+      async upsertSystemTableRow() {
+        return {success: true};
+      },
+      async deleteSystemTableRow() {
+        return {success: true};
+      },
+    },
+    systemTableCache,
+  });
 }
 
 function createRecordingLifecycle() {
@@ -91,8 +102,7 @@ function createRecordingLifecycle() {
 }
 
 describe('runtime endpoint publication wiring at handler setup', () => {
-  it('refuses setup when no control-plane gateway is registered', () => {
-    clearRegisteredControlPlaneSystemTableGateway();
+  it('refuses setup when the canonical endpoints owner is absent', () => {
     const lifecycle = createRecordingLifecycle();
     assert.throws(
       () => RuntimeServiceHandlerSetup.create(
@@ -100,35 +110,26 @@ describe('runtime endpoint publication wiring at handler setup', () => {
       ),
       (error) =>
         error instanceof DependencyError &&
-        /controlPlaneSystemTableGateway/u.test(error.message),
-      'a missing gateway is an explicit startup-ordering failure, ' +
+        /serviceEndpointsOwner/u.test(error.message),
+      'a missing owner is an explicit startup-ordering failure, ' +
         'never a silently unwired lifecycle',
     );
     assert.equal(lifecycle.endpointWriter, null);
     assert.equal(lifecycle.endpointRemover, null);
   });
 
-  it('wires the lifecycle over the registered gateway', () => {
-    const gateway = {
-      async upsertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow() {
-        return {success: true};
-      },
-    };
-    registerControlPlaneSystemTableGateway(gateway);
-    try {
-      const lifecycle = createRecordingLifecycle();
-      const {runtimeServiceHandler} = RuntimeServiceHandlerSetup.create(
-        createHandlerSetupOptions(lifecycle),
-      );
-      assert.ok(runtimeServiceHandler);
-      assert.equal(typeof lifecycle.endpointWriter, 'function');
-      assert.equal(typeof lifecycle.endpointRemover, 'function');
-    } finally {
-      clearRegisteredControlPlaneSystemTableGateway();
-    }
+  it('wires the lifecycle over the injected canonical owner', () => {
+    const lifecycle = createRecordingLifecycle();
+    const systemTableCache = new SystemTableCache();
+    const {runtimeServiceHandler} = RuntimeServiceHandlerSetup.create(
+      createHandlerSetupOptions(lifecycle, {
+        systemTableCache,
+        serviceEndpointsOwner: createInjectedEndpointsOwner(systemTableCache),
+      }),
+    );
+    assert.ok(runtimeServiceHandler);
+    assert.equal(typeof lifecycle.endpointWriter, 'function');
+    assert.equal(typeof lifecycle.endpointRemover, 'function');
   });
 });
 
