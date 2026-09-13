@@ -186,7 +186,10 @@ jobs:
           cat "$PROOF_JSON"
           PROOF_OBJECT="$(node -e 'const fs=require("fs");const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(x.objectSha||"")' "$PROOF_JSON")"
           test -n "$PROOF_OBJECT"
-          LATEST_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
+          # versionsort.suffix=- ranks a prerelease BELOW its release, as semver
+          # does; git's default ranked v0.2.4-rc.2 above v0.2.4 and refused the
+          # first release after a release candidate (v0.2.4, 2026-09-13).
+          LATEST_TAG="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
           test "$GITHUB_REF_NAME" = "$LATEST_TAG" || { echo "::error::Refusing to move latest backward from $LATEST_TAG"; exit 1; }
           NOTES_DIR="$RUNNER_TEMP/lagrange-release-notes"
           mkdir -p "$NOTES_DIR"
