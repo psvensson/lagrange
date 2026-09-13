@@ -58,14 +58,17 @@ jobs:
     needs: wake-runner
     runs-on: [self-hosted, gcp]
     timeout-minutes: 60
+    permissions:
+      # The trend record is committed to main below.
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: false
-          # The trend file lives under gitignored data/ on the persistent
-          # runner; checkout's default clean would wipe it every night.
-          clean: false
+          # The commit step below pushes with the workflow token; a token
+          # push starts no other workflow, so a nightly record costs no run.
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: Set up Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -104,8 +107,34 @@ jobs:
 
       - name: Formation health run (one node per GCP VM)
         # The step's exit code is the formation verdict, so a red formation
-        # is a red run; the evidence upload below runs regardless.
+        # is a red run; an UNKNOWN verdict records nothing and is red too.
+        # The evidence upload and the trend commit below run regardless.
         run: npm run health:formation -- --gcp
+
+      # data/formation-health/trend.ndjson is committed evidence, one record
+      # per scheduled run, so the release notes, the README claim and the
+      # consolidation budget read the same file. Only a measuring verdict
+      # appends a record; a red measurement is committed like a green one.
+      - name: Commit the trend record to main
+        if: always()
+        run: |
+          set -euo pipefail
+          git add data/formation-health/trend.ndjson
+          if git diff --cached --quiet; then
+            echo "no new trend record to commit"
+            exit 0
+          fi
+          git config user.name "formation-health"
+          git config user.email "formation-health@users.noreply.github.com"
+          git commit -m "formation-health: trend record $(date -u +%Y-%m-%dT%H:%MZ) at ${GITHUB_SHA::9}"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::could not push the trend record after three attempts"
+          exit 1
 
       - name: Upload formation evidence
         if: always()

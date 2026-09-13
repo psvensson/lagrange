@@ -29,8 +29,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {isMeasuringVerdict} from './formation-health.js';
 import {receiptVerdicts} from './release-publication-receipt.js';
 
+const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
@@ -40,13 +43,10 @@ const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringPadEnd = Function.call.bind(String.prototype.padEnd);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
-const stringReplace = Function.call.bind(String.prototype.replace);
 const stringSplit = Function.call.bind(String.prototype.split);
-const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const UNKNOWN_VERDICT = 'unknown';
 const TREND_WINDOW = 3;
 
 const BUDGET = Object.freeze({
@@ -67,6 +67,14 @@ const LINE_SEPARATOR = '\n';
 const EMPTY_TEXT = '';
 const ARGV_OFFSET = 2;
 const JSON_FLAG = '--json';
+const ROWS_FLAG = '--rows';
+const ROW_WORD_SEPARATOR = '_';
+const UNKNOWN_ROW_PREFIX = 'unknown budget row: ';
+const UNKNOWN_ROW_VALUE = 1;
+const UNKNOWN_ROW_BUDGET = 0;
+const ROW_WORD_SPACE = ' ';
+const ROW_SEPARATOR = ',';
+const EMPTY_ROWS = '';
 const METRIC_FLAG = '--metric';
 const JSON_INDENT = 2;
 const VALUE_COLUMN_WIDTH = 7;
@@ -102,9 +110,6 @@ const METHODS_SUFFIX = '-methods.js';
 const LITERALS_CHECKER_FRAGMENT = 'guideline:literals';
 const FILE_LENGTH_AUDIT_FRAGMENT = 'file-size';
 const LIFERAFT_DEPENDENCY = 'liferaft';
-const GLOBAL_INSTALL_LINE = 'npm install --global lagrange-server';
-const PACKAGE_NAME = 'lagrange-server';
-const VERSION_TAG_PREFIX = /^v/u;
 const NAMED_STEP = /^\s+- name:/gmu;
 const NPM_RUN_TOKEN = /npm run ([A-Za-z0-9:_-]+)/gu;
 const CLUSTER_CLAIM = /five[- ]node/iu;
@@ -255,9 +260,7 @@ function measuringTrendRecords(root) {
     }
   });
   return arrayFilter(records, (record) => record &&
-    !arraySome(Object.values(record), (value) =>
-      typeof value === 'string' &&
-        stringToLowerCase(value) === UNKNOWN_VERDICT)).length;
+    isMeasuringVerdict(record.verdict)).length;
 }
 
 function claudeMdIsPointer(root) {
@@ -266,18 +269,14 @@ function claudeMdIsPointer(root) {
     stringIncludes(read(root, CLAUDE_MD), AGENTS_MD);
 }
 
-// A README offence: an install line without the version the newest receipt
-// names, or a formation claim without a dated verdict. Counted only once a
-// receipt exists; before that the release quest owns the gap.
-function readmeOffences(root, receipt) {
+// A README offence: a formation claim without a dated verdict. The install
+// line is deliberately unpinned - `npm install --global lagrange-server`
+// installs what npm serves as latest, and a pinned version would go stale on
+// every release - so it is no longer an offence (owner decision 2026-09-13).
+function readmeOffences(root, _receipt) {
   if (!exists(root, README_MD)) return 1;
   const readme = read(root, README_MD);
   let offences = 0;
-  if (receipt && receipt.tag) {
-    const version = stringReplace(String(receipt.tag), VERSION_TAG_PREFIX, EMPTY_TEXT);
-    if (stringIncludes(readme, GLOBAL_INSTALL_LINE) &&
-      !stringIncludes(readme, `${PACKAGE_NAME}@${version}`)) offences += 1;
-  }
   const claimsCluster = CLUSTER_CLAIM.test(readme);
   const datedVerdict = DATED_FORMATION_VERDICT.test(readme);
   if (claimsCluster && !datedVerdict) offences += 1;
@@ -343,8 +342,26 @@ function renderTable(rows) {
   return text;
 }
 
+// --rows <name,name>: measure only the named rows (a quest probe over a
+// subset of the table, so no quest needs a probe script of its own). A
+// probe command is split on whitespace, so a row name is written with
+// underscores for its spaces: open_legacy_epics.
+// A name that matches no row is itself an unmet row: a misspelled probe
+// must read red, never green by measuring nothing.
+function selectedRows(rows, argv) {
+  const index = arrayIndexOf(argv, ROWS_FLAG);
+  if (index < 0) return rows;
+  const names = arrayMap(
+    stringSplit(String(argv[index + 1] || EMPTY_ROWS), ROW_SEPARATOR),
+    (name) => stringReplaceAll(name, ROW_WORD_SEPARATOR, ROW_WORD_SPACE));
+  return arrayMap(names, (name) =>
+    arrayFind(rows, (row) => row.name === name) ||
+    {name: `${UNKNOWN_ROW_PREFIX}${name}`, value: UNKNOWN_ROW_VALUE,
+      budget: UNKNOWN_ROW_BUDGET, met: false});
+}
+
 function main(argv) {
-  const rows = measureConsolidationBudget();
+  const rows = selectedRows(measureConsolidationBudget(), argv);
   const unmet = arrayFilter(rows, (row) => !row.met).length;
   if (arrayIncludes(argv, JSON_FLAG)) {
     process.stdout.write(
@@ -363,4 +380,4 @@ if (isMainModule) {
   process.exitCode = main(process.argv.slice(ARGV_OFFSET));
 }
 
-export {measureConsolidationBudget};
+export {measureConsolidationBudget, selectedRows};

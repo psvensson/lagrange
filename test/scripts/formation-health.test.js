@@ -69,15 +69,16 @@ test('buildTrendRecord reduces a report to the trend fields', (t) => {
   t.end();
 });
 
-test('parseArguments reads report, gcp, summary, trend and limit', (t) => {
+test('parseArguments reads report, gcp, summary, metric, trend and limit', (t) => {
   t.same(parseArguments([]), {
-    report: null, gcp: false, summary: false,
+    report: null, gcp: false, summary: false, metric: false,
     trend: 'data/formation-health/trend.ndjson', limit: 20,
   });
   t.same(
-    parseArguments(['--report', 'r.json', '--gcp', '--summary', '--trend',
-      't.ndjson', '--limit', '5']),
-    {report: 'r.json', gcp: true, summary: true, trend: 't.ndjson', limit: 5},
+    parseArguments(['--report', 'r.json', '--gcp', '--summary', '--metric',
+      '--trend', 't.ndjson', '--limit', '5']),
+    {report: 'r.json', gcp: true, summary: true, metric: true,
+      trend: 't.ndjson', limit: 5},
   );
   t.equal(parseArguments(['--limit', 'nope']).limit, 20);
   t.end();
@@ -230,6 +231,47 @@ test('runFormationHealth appends one record per run and summarizes', (t) => {
   });
   t.equal(none.exitCode, 1);
   t.equal(none.record, null);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// formation-health-verdicts: a non-verdict is a failed run, never a trend
+// record, and --metric is the probe (unmeasured among the last three).
+test('an UNKNOWN verdict fails the run and records nothing; --metric counts the window', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-health-verdicts-'));
+  const reportDir = path.join(root, 'test-output', 'reports');
+  fs.mkdirSync(reportDir, {recursive: true});
+  const trendPath = path.join(root, 'data/formation-health/trend.ndjson');
+  const metric = () => runFormationHealth({
+    root, metric: true, run: () => t.fail('metric never runs the demo'),
+    log: () => {},
+  });
+  t.equal(metric().exitCode, 1, 'an empty trend is unmeasured');
+  fs.writeFileSync(path.join(reportDir, 'unknown.report.json'),
+    JSON.stringify(liveReport({
+      passed: false, verdict: 'UNKNOWN', reason: 'seed_log_missing',
+      seedStarved: null, blockedMs: null,
+    })));
+  const unknown = runFormationHealth({
+    root, report: 'test-output/reports/unknown.report.json', run: () => {},
+    log: () => {},
+  });
+  t.equal(unknown.exitCode, 1, 'UNKNOWN is a failed run');
+  t.equal(readTrend(trendPath).length, 0, 'UNKNOWN is never appended');
+  for (let index = 0; index < 3; index += 1) {
+    fs.writeFileSync(path.join(reportDir, `measured-${index}.report.json`),
+      JSON.stringify(liveReport({
+        passed: index !== 1, verdict: index === 1 ? 'FAIL' : 'PASS',
+        reason: index === 1 ? 'seed_event_loop_starved' : 'formed',
+        seedStarved: index === 1, blockedMs: index === 1 ? 5000 : 0,
+      })));
+    runFormationHealth({
+      root, report: `test-output/reports/measured-${index}.report.json`,
+      run: () => {}, log: () => {},
+    });
+  }
+  t.equal(readTrend(trendPath).length, 3, 'measuring runs, red or green, are records');
+  t.equal(metric().exitCode, 0, 'three measuring records make the probe green');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

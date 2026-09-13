@@ -102,6 +102,14 @@ instead of frozen. A patch release for one fix follows the same steps.
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
 
+
+The `next` dist-tag is max(`latest`, newest prerelease): after a release
+publishes under `latest`, the npm owner moves `next` onto it unless `next`
+already names a prerelease of a newer version. Trusted publishing covers
+`publish` only, so the move needs a granted npm token in the
+`NPM_DIST_TAG_TOKEN` secret; without it the run prints the exact
+`npm dist-tag add` command to run by hand and continues.
+
 ## Proof once per exact SHA
 
 The release-wide content proof has one semantic owner:

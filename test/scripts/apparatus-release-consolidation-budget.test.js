@@ -25,6 +25,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
+  selectedRows,
   measureConsolidationBudget,
 } from '../../scripts/checks/apparatus-release-consolidation-budget.js';
 
@@ -179,4 +180,21 @@ test('no budget number changed', () => {
       `${name} must keep its sealed budget; change the epic, the script and ` +
       'this test together or not at all');
   }
+});
+
+// --rows names rows with underscores for spaces (a probe command is split on
+// whitespace); a name that matches no row is itself unmet, so a misspelled
+// probe reads red instead of measuring nothing.
+test('--rows selects by name and counts an unknown name as unmet', () => {
+  const rows = [
+    {name: 'open epics', value: 12, budget: 8, met: false},
+    {name: 'open legacy epics', value: 0, budget: 0, met: true},
+  ];
+  assert.deepEqual(selectedRows(rows, ['--metric']), rows, 'no flag: every row');
+  assert.deepEqual(selectedRows(rows, ['--rows', 'open_legacy_epics']), [rows[1]]);
+  const unknown = selectedRows(rows, ['--rows', 'open_legacy_epic']);
+  assert.equal(unknown.length, 1);
+  assert.equal(unknown[0].met, false, 'an unknown row name is unmet');
+  assert.match(unknown[0].name, /unknown budget row/u);
+  assert.equal(selectedRows(rows, ['--rows'])[0].met, false, 'a missing value is unmet');
 });

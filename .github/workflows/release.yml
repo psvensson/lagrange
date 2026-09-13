@@ -226,6 +226,11 @@ jobs:
           test -f "dist/npm/lagrange-server-${VERSION}.tgz"
 
       - name: Publish npm package
+        env:
+          # Optional granted token for the `next` dist-tag move after a
+          # release (trusted publishing authenticates `publish` only); unset,
+          # the owner prints the manual command and continues.
+          NPM_DIST_TAG_TOKEN: ${{ secrets.NPM_DIST_TAG_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
