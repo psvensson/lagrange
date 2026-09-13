@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2057,
+    "ordinary": 2058,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2074,
-  "digest": "fnv1a32-8afee338",
+  "censusSize": 2075,
+  "digest": "fnv1a32-7f4440bb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1623,6 +1623,7 @@
     "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-odd-replica-policy-rebalancing.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js": "ordinary",
+    "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js": "ordinary",

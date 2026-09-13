@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 231,
+    "placement-rebalance": 232,
     "query-sql": 158,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2074,
-  "digest": "fnv1a32-c2123cbe",
+  "censusSize": 2075,
+  "digest": "fnv1a32-0d0a51b6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1641,6 +1641,7 @@
     "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-odd-replica-policy-rebalancing.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js": "placement-rebalance",
+    "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js": "placement-rebalance",

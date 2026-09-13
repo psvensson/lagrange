@@ -192,14 +192,17 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     );
     // Per-entity random offset spreads start-delay eligibility across
     // the jitter window so all system partitions don't become eligible
-    // simultaneously (thundering herd prevention).
-    this.rebalanceStartAtMs =
-      Date.now() + Math.floor(Math.random() * this.periodicCheckJitterMs);
+    // simultaneously (thundering herd prevention). Drawn from the owner's
+    // own clock and random seams so a virtual clock and a seed determine
+    // the first eligible instant (formation-sim); the defaults are the
+    // ambient clock and Math.random, byte-identical in production.
+    this.rebalanceStartAtMs = this.nowFn() +
+      Math.floor(this.randomSource.random() * this.periodicCheckJitterMs);
 
     // Stabilization state
     // Initialize to current time so rebalancer waits for stabilization period
     // before first check (prevents premature rebalancing during bootstrap)
-    this.lastStateChangeTime = Date.now();
+    this.lastStateChangeTime = this.nowFn();
     this.stabilizationTimer = null;
 
     // Logging
