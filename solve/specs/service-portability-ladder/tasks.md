@@ -15,6 +15,11 @@ Phase 4 (base evaluator proof) spans rungs 1 and 3. Rung 2 receives its own live
 terminal after real managed OCI activation exists; it must not widen E3 silently
 (see requirements R8 and `architecture/native-oci-call-cells.md`).
 
+Roadmap version assignment is explicit: the live managed OCI prerequisite in
+Phase 2 advances `RM-0.6-managed-oci-activation`; every newly authored Phase 5
+K0-K6 Quest advances `RM-0.6-native-oci-call-cells`. Both rows are Phase 0.6 in
+`docs/development/agpl-feature-map.md`.
+
 Every row below is one executable concern and therefore one Quest unless noted as
 an existing Quest. Product runners write versioned reports under
 `test-output/reports/` and must engage the production composition root. Every
@@ -51,6 +56,10 @@ Milestone M2 proves a validated artifact is durably recorded. Unsupported
 activation is explicitly `recorded_not_running`.
 
 ## Phase 2 - Managed OCI execution and placement
+
+The Phase 2 live-container work is the first half of roadmap version 0.6 and
+advances `RM-0.6-managed-oci-activation` until its production-path terminal is
+green.
 
 | Order | Quest | Result |
 | --- | --- | --- |
@@ -93,8 +102,9 @@ Milestone M5 is the complete base evaluator journey for rungs 1 and 3.
 
 ## Phase 5 - Rung 2: native OCI Call Cells
 
-Phase 5 is downstream of real OCI activation (C1/C2) and the existing public
-Call Cell path. Its canonical architecture is
+Phase 5 is the second half of roadmap version 0.6. Every K0-K6 Quest links
+`RM-0.6-native-oci-call-cells`. It is downstream of real OCI activation (C1/C2)
+and the existing public Call Cell path. Its canonical architecture is
 [`architecture/native-oci-call-cells.md`](../../../architecture/native-oci-call-cells.md).
 No row may add an OCI-specific scheduler, partition router, reduce path, durable
 callback registry, or fallback from failed WASM execution.
