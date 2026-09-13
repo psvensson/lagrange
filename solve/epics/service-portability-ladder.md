@@ -35,12 +35,13 @@ until then the epic is `legacy: true` and its scope is unenforced.
 
 ## Release assignment
 
-The active managed-OCI activation work is the first half of roadmap version
-0.6 and therefore links `RM-0.6-managed-oci-activation`. Once that lifecycle
-terminal is available, the native Call Cell Phase 5 rows K0-K6 are also 0.6 work
-but must link `RM-0.6-native-oci-call-cells` individually when authored. The
-single version contains both steps without making one epic pretend to own both
-lifecycle activation and distributed call semantics.
+This epic is scheduled in roadmap **0.6**. Its active managed-OCI activation
+work advances `RM-0.6-managed-oci-activation`, the prerequisite half of that
+release. Once that lifecycle terminal is available, native Call Cell Phase 5
+quests K0-K6 are also 0.6 work but must link
+`RM-0.6-native-oci-call-cells` individually when authored. The single version
+contains both steps without making one epic pretend to own both lifecycle
+activation and distributed-call semantics.
 
 ## Sealed acceptance
 
