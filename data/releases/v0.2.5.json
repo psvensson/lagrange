@@ -15,7 +15,10 @@
         "latest"
       ],
       "latest": "0.2.5",
-      "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.5"
+      "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.5",
+      "next": "0.2.5",
+      "nextLagging": false,
+      "nextObservedAt": "2026-09-13T08:29:30.986Z"
     },
     "docker": {
       "published": true,
