@@ -173,6 +173,55 @@ Implementation scope and sequencing remain governed by the AGPL feature map and
 edition matrix; this milestone is the product-level convergence gate those rows
 must satisfy together.
 
+## Cross-cutting milestone - Native OCI Call Cells
+
+Lagrange should not require customers to move a useful data-local function to
+WebAssembly merely because its language runtime or important libraries are hard
+to compile to WASM. After real managed OCI activation exists, an installed OCI
+service revision should be able to expose named Call Cell functions from the
+same program and have Lagrange execute those functions on the nodes holding the
+selected partition replicas.
+
+The architecture is specified in
+[Native OCI Call Cells](architecture/native-oci-call-cells.md). It extends the
+existing Artifact / Binding / Cell path at the runtime-provider boundary rather
+than introducing a second callback system. `CallCellInvoker` remains the sole
+fanout and reduce owner; the destination node still builds the bounded batch
+from its local partition replica; and provider-specific behavior begins only at
+`ServiceRuntimeLifecycle.invoke()`.
+
+The milestone requires:
+
+- an idiomatic language SDK where a source-level function/operation handle
+  compiles to the existing immutable Artifact, call Binding, export interface,
+  and outbound-call policy rather than serializing a closure at runtime;
+- exact manifest/revision/export identity for every native invocation;
+- `OciContainerDriver.invoke()` as the OCI execution-provider seam, reached only
+  through the existing Call Cell owner route;
+- an authenticated application-initiated long-lived channel from each managed
+  process to a node-local invocation broker, with no public callback port;
+- the same bounded `ctx` semantics for emit, nested call, deadline, budgets,
+  identity, and typed failures as the corresponding WASM operation;
+- existing activation leases and runtime-service placement to materialize the
+  exact service revision on a selected partition host, optionally consuming
+  image-presence and warm-runtime cost as placement inputs rather than authority;
+- explicit semantics that process globals, loaded models, VM heaps, and native
+  libraries are disposable warm cache rather than distributed durable state;
+- honest retry semantics: Lagrange may make its managed result exactly-once
+  visible, but arbitrary external side effects from native code are not
+  exactly-once and need application idempotency;
+- a multi-node proof that every shard function reads from the local partition
+  replica before entering the native runtime; and
+- acceptance with a genuine native dependency plus a second materially
+  different language/runtime, proving the capability is useful beyond a
+  Node-specific transport shim.
+
+The OCI host agent remains lifecycle-only. It may provision the managed process
+and its broker connectivity, but it must not become a partition router,
+scheduler, retry loop, or alternate Call Cell owner. The same installed service
+may use native OCI Call Cells where ecosystem compatibility matters and WASM
+Call Cells where portability, density, or stronger isolation matters.
+
 ## Later - 1.0 Production Ready: production support and relational invariants
 
 A production-supported release requires explicit, evidence-backed guarantees:
@@ -225,8 +274,12 @@ execution can add:
 - multi-stage plans with streaming exchange and backpressure;
 - deeper call composition;
 - concurrent invocations on one Cell instance;
-- query-planner-initiated pushdown; and
-- typed language SDKs and generated operation handles.
+- query-planner-initiated pushdown;
+- richer typed language SDKs and generated operation handles across both WASM
+  and native OCI Call Cell providers; and
+- provider-aware cost modeling that can account for image availability, warm
+  native workers, WASM materialization cost, and partition locality without
+  moving scheduling authority out of the existing owners.
 
 The query planner can also become substantially more sophisticated here rather
 than pulling optimizer research into 0.3. Phase 2.0 is the natural home for
