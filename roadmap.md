@@ -173,14 +173,21 @@ Implementation scope and sequencing remain governed by the AGPL feature map and
 edition matrix; this milestone is the product-level convergence gate those rows
 must satisfy together.
 
-## Cross-cutting milestone - Native OCI Call Cells
+## Planned - 0.6 Native OCI Call Cells: native runtimes at the data
+
+0.6 is a release milestone, not an unversioned follow-on. It turns the existing
+Call Cell model into a practical bridge for customers whose important code and
+libraries live in ordinary native runtimes. The first part of the milestone is
+real managed OCI activation if that has not already landed while completing
+0.5; the second part is native Call Cell invocation through that managed runtime.
+The milestone must not be deferred to the later advanced-runtime work merely
+because OCI is the execution provider.
 
 Lagrange should not require customers to move a useful data-local function to
 WebAssembly merely because its language runtime or important libraries are hard
-to compile to WASM. After real managed OCI activation exists, an installed OCI
-service revision should be able to expose named Call Cell functions from the
-same program and have Lagrange execute those functions on the nodes holding the
-selected partition replicas.
+to compile to WASM. An installed OCI service revision should be able to expose
+named Call Cell functions from the same program and have Lagrange execute those
+functions on the nodes holding the selected partition replicas.
 
 The architecture is specified in
 [Native OCI Call Cells](architecture/native-oci-call-cells.md). It extends the
@@ -190,8 +197,11 @@ fanout and reduce owner; the destination node still builds the bounded batch
 from its local partition replica; and provider-specific behavior begins only at
 `ServiceRuntimeLifecycle.invoke()`.
 
-The milestone requires:
+The 0.6 milestone requires:
 
+- real digest-pinned OCI services are pulled, started, health-checked, replaced,
+  stopped and removed through the unified service lifecycle rather than an
+  in-memory or hand-managed container path;
 - an idiomatic language SDK where a source-level function/operation handle
   compiles to the existing immutable Artifact, call Binding, export interface,
   and outbound-call policy rather than serializing a closure at runtime;
@@ -220,6 +230,12 @@ The milestone requires:
 - acceptance with a genuine native dependency plus a second materially
   different language/runtime, proving the capability is useful beyond a
   Node-specific transport shim.
+
+0.6 is complete only when both the handler-originated SDK path and direct call
+surface converge on the same distributed execution owner, a real native-library
+workload succeeds across multiple partition hosts, worker loss demonstrates the
+documented retry/ambiguity semantics, and a second language/runtime conforms to
+the same broker/context contract.
 
 The OCI host agent remains lifecycle-only. It may provision the managed process
 and its broker connectivity, but it must not become a partition router,
@@ -252,11 +268,13 @@ invariant. It therefore owns:
 - the supported tuple-order, NULL, type and collation contract exposed through
   PostgreSQL-facing metadata and constraint behavior.
 
-A commercially supported installable service additionally depends on the
-Installable Service Product Platform milestone above; first-party services
-should consume that common lifecycle rather than introducing product-specific
-installers, telemetry transports, support collectors, secret stores, or
-upgraders.
+The first live managed OCI execution path and native OCI Call Cells are assigned
+to 0.6. A commercially supported installable service in 1.0 builds on that
+substrate with production compatibility, upgrade/rollback, diagnostics, support,
+security and operating guarantees rather than reopening activation or call
+routing as separate implementations. First-party services should consume the
+common lifecycle rather than introducing product-specific installers, telemetry
+transports, support collectors, secret stores, or upgraders.
 
 ## Later 1.x - SQL Breadth and Compatibility
 
