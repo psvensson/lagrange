@@ -29,6 +29,7 @@ import {
 const ZERO = 0;
 const POSTGRES_SERVICE_ID = 'sys-postgres-wire';
 const POSTGRES_PROTOCOL = 'postgresql';
+const ACTIVE = 'active';
 const HEALTHY = 'healthy';
 const ENDPOINT_TIMEOUT_MS = 120000;
 const ENDPOINT_POLL_MS = 500;
@@ -54,6 +55,40 @@ function rowsOf(result) {
   return Array.isArray(result?.rows) ? result.rows : [];
 }
 
+async function waitForRuntimePlacementAdmission(cluster) {
+  if (typeof cluster?.waitForLoadReadinessStability !== 'function') {
+    throw new Error(
+      'Lagrange contention proof requires authoritative load-readiness admission',
+    );
+  }
+  await cluster.waitForLoadReadinessStability({
+    stableWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+    timeoutMs: ENDPOINT_TIMEOUT_MS,
+    requireActiveGatePromotion: true,
+  });
+}
+
+function assertPublicPgRuntimeConfig(row) {
+  let runtimeConfig;
+  try {
+    runtimeConfig = JSON.parse(String(row?.runtime_config || ''));
+  } catch (error) {
+    throw new Error(
+      'PostgreSQL wire desired-state runtime_config is not valid JSON: ' +
+      error.message,
+    );
+  }
+  if (
+    runtimeConfig.host !== PG_RUNTIME_CONFIG.host ||
+    runtimeConfig.authMode !== PG_RUNTIME_CONFIG.authMode ||
+    runtimeConfig.tlsMode !== PG_RUNTIME_CONFIG.tlsMode
+  ) {
+    throw new Error(
+      'PostgreSQL wire desired-state runtime_config did not become authoritative',
+    );
+  }
+}
+
 async function configurePublicPgWire(seedNode) {
   const runtimeConfig = JSON.stringify(PG_RUNTIME_CONFIG);
   await seedNode.query(
@@ -65,6 +100,24 @@ async function configurePublicPgWire(seedNode) {
     'UPDATE service_definitions SET replica_count = 1 WHERE service_id = ' +
       sqlLiteral(POSTGRES_SERVICE_ID),
   );
+  const desiredStateResult = await seedNode.query(
+    'SELECT service_id, status, replica_count, runtime_config ' +
+      'FROM service_definitions WHERE service_id = ' +
+      sqlLiteral(POSTGRES_SERVICE_ID),
+  );
+  const desiredState = rowsOf(desiredStateResult)[ZERO];
+  if (!desiredState) {
+    throw new Error('PostgreSQL wire desired-state row is not authoritative');
+  }
+  if (String(desiredState.status || '').toLowerCase() !== ACTIVE) {
+    throw new Error('PostgreSQL wire desired-state service is not active');
+  }
+  if (Number(desiredState.replica_count) !== 1) {
+    throw new Error(
+      'PostgreSQL wire desired-state replica_count did not become authoritative',
+    );
+  }
+  assertPublicPgRuntimeConfig(desiredState);
 }
 
 async function discoverPublicPgWireEndpoint(cluster, seedNode) {
@@ -157,6 +210,7 @@ async function run(cluster) {
     settleTimeoutMs: 120000,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
   });
+  await waitForRuntimePlacementAdmission(cluster);
   await configurePublicPgWire(seedNode);
   const discovered = await discoverPublicPgWireEndpoint(cluster, seedNode);
   const connection = connectionConfig();
