@@ -1,0 +1,45 @@
+{
+  "schema": "release-publication-receipt/1",
+  "tag": "v0.2.5",
+  "sha": "0d66b0cb67e7778500e33e65dcd9155163070458",
+  "version": "0.2.5",
+  "prerelease": false,
+  "intended": {
+    "distTag": "latest"
+  },
+  "observedAt": "2026-09-13T04:52:58.791Z",
+  "published": {
+    "npm": {
+      "published": true,
+      "distTags": [
+        "latest"
+      ],
+      "latest": "0.2.5",
+      "url": "https://www.npmjs.com/package/lagrange-server/v/0.2.5"
+    },
+    "docker": {
+      "published": true,
+      "digest": "sha256:b58d44906ac09ffbb7959f717ce5f1a50b087dbd74431e506620a581a894da17",
+      "latestDigest": "sha256:b58d44906ac09ffbb7959f717ce5f1a50b087dbd74431e506620a581a894da17",
+      "latestIsThisRelease": true,
+      "url": "https://hub.docker.com/r/psvensson/lagrange/tags?name=0.2.5"
+    },
+    "helm": {
+      "published": true,
+      "url": "https://github.com/psvensson/lagrange/releases/download/v0.2.5/lagrange-node-0.2.5.tgz"
+    },
+    "github": {
+      "published": true,
+      "prerelease": false,
+      "latest": true,
+      "assets": [
+        "lagrange",
+        "lagrange-cli",
+        "lagrange-node-0.2.5.tgz",
+        "lagrange-server-0.2.5.tgz",
+        "SHA256SUMS"
+      ],
+      "url": "https://github.com/psvensson/lagrange/releases/tag/v0.2.5"
+    }
+  }
+}
