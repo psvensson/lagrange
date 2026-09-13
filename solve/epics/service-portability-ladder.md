@@ -2,7 +2,7 @@
 id: service-portability-ladder
 status: open
 proof: certification
-roadmapRow: null
+roadmapRow: RM-0.6-managed-oci-activation
 graduatesTo: null
 quests:
   - oci-container-driver-live-activation-protocol-admission
@@ -32,6 +32,15 @@ Services run under the OCI container driver on a live host; the spec lives in so
 Derived by the solve-v2 migration from the quests listed above (amendment 7).
 The operator seals `doneWhen` and `authorizes` before new quests start here;
 until then the epic is `legacy: true` and its scope is unenforced.
+
+## Release assignment
+
+The active managed-OCI activation work is the first half of roadmap version
+0.6 and therefore links `RM-0.6-managed-oci-activation`. Once that lifecycle
+terminal is available, the native Call Cell Phase 5 rows K0-K6 are also 0.6 work
+but must link `RM-0.6-native-oci-call-cells` individually when authored. The
+single version contains both steps without making one epic pretend to own both
+lifecycle activation and distributed call semantics.
 
 ## Sealed acceptance
 
