@@ -145,6 +145,13 @@ branch also surfaced a corpus test writing a tracked artifact (d66ab73c1).
 Rule carried: an integration failure only on the proof runner with "timed out
 after" or an empty published set is a budget, not a regression.
 
+**Outcome (2026-09-13).** `v0.2.4` was tagged on the proven 4f7af546d and the
+tagged run refused at the release identity step: git's default version sort
+ranks `v0.2.4-rc.2` above `v0.2.4`, so the first release after a candidate
+read as "moving latest backward". Tags are immutable, so 0.2.4 joins the
+never-published list and the fix (`versionsort.suffix=-`, pinned by a
+hardening assertion) ships as 0.2.5 on a new proof.
+
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the
 same gate the solver uses. Probe: test-receipt for the refusal tests.
