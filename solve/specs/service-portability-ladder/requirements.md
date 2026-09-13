@@ -33,6 +33,12 @@ A developer evaluating Lagrange can follow one progressive, reproducible path:
    package the same operation shape as a genuine WebAssembly component and run
    it through the same call surface (rung 3).
 
+The live managed OCI prerequisite and the complete rung-2 terminal are assigned
+to roadmap version **0.6**. The AGPL roadmap rows are
+`RM-0.6-managed-oci-activation` and `RM-0.6-native-oci-call-cells` respectively.
+This version assignment is part of the program contract, not merely explanatory
+prose in the human roadmap.
+
 The canonical native-OCI execution boundary is
 [`architecture/native-oci-call-cells.md`](../../../architecture/native-oci-call-cells.md).
 The superseded callback/shared-context exploration is historical context only;
@@ -166,23 +172,18 @@ surfaces.
 
 ### R8 - Native OCI Call Cells (rung 2)
 
-Rung 2 adds one native-process adapter to the existing call ingress and one OCI
-runtime-provider edge to the existing Call Cell runtime. Neither adapter may own
-any distributed execution decision. Its detailed architecture is
+Rung 2 extends the existing Call Cell runtime at exactly one provider boundary.
+Its detailed architecture is
 [`architecture/native-oci-call-cells.md`](../../../architecture/native-oci-call-cells.md).
-The following requirements are binding for any implementation quests:
+R8 and its K0-K6 executable rows are roadmap 0.6 work and must use
+`RM-0.6-native-oci-call-cells` when authored. The following requirements are
+binding for any implementation quests:
 
 - **One distributed execution owner.** `CallCellInvoker` and its existing
   collaborators continue to own Binding resolution, partition fanout, host
   choice, activation demand, bounded parallelism, partial coordination, reduce,
   retries, and result visibility. No OCI-specific callback scheduler, partition
   router, or durable callback registry is allowed.
-- **One service-originated call ingress.** An ordinary native service handler may
-  call only a generated operation handle through the authenticated node-local
-  broker. The broker derives the caller's service/revision/replica identity and
-  generated outbound-call authority, maps the handle to its durable Binding
-  identity, and hands the request to the existing Call Cell ingress. It does not
-  resolve target partitions, activate Cells, fan out work, reduce, or retry.
 - **One runtime transition.** Destination admission and local shard reads remain
   in the existing runtime-service Call Cell handler; provider-specific behavior
   starts only at `ServiceRuntimeLifecycle.invoke()` and the selected runtime
@@ -200,24 +201,25 @@ The following requirements are binding for any implementation quests:
   language SDK may let the endpoint handler call a local operation descriptor,
   but packaging must compile that descriptor into the existing Artifact,
   Binding, and outbound-call-policy owners. Runtime calls do not carry arbitrary
-  caller-selected module paths, Binding names, export strings, or service IDs.
+  caller-selected module paths or service IDs.
+- **Service-originated calls re-enter the existing owner.** An ordinary handler
+  sends only its generated operation handle and explicit arguments over the
+  lifecycle-authenticated process channel. The broker derives caller identity,
+  enforces generated outbound-call policy, and hands an admitted request to the
+  existing Call Cell ingress. It cannot choose a partition, worker, or retry
+  policy from its native-worker registration state.
 - **Data remains local.** The destination node revalidates the partition fence
   and executes the Binding-declared statement against its local replica before
   handing the bounded batch to the native process. Rows must not cross the
   cluster network merely because the execution provider is OCI.
 - **Context parity.** The native SDK projects the same bounded Call Cell
   semantics for emit, nested call, deadlines, budgets, identity, and typed
-  failure as the equivalent WASM call context. An ordinary native handler's
-  `ctx.call` uses the same generated outbound-call authority and existing call
-  owner. Language wrappers may be idiomatic but cannot strengthen or fork the
-  semantic contract.
+  failure as the equivalent WASM call context. Language wrappers may be
+  idiomatic but cannot strengthen or fork the semantic contract.
 - **Application-initiated invocation channel.** A managed process opens an
-  authenticated long-lived bidirectional channel to a node-local broker; no
-  public callback port is required. That channel carries authorized
-  process-originated calls into existing Lagrange owners and admitted
-  invocation/result/ctx messages to and from the exact native worker. The OCI
-  host agent provisions lifecycle/connectivity only and never becomes an
-  invocation router.
+  authenticated long-lived channel to a node-local broker; no public callback
+  port is required. The OCI host agent provisions lifecycle/connectivity only
+  and never becomes an invocation router.
 - **Lifecycle-bound identity.** The broker derives cluster, node, service,
   revision, and Cell replica identity from lifecycle-issued credentials. Guest
   code cannot choose or spoof those identities or the target partition.
@@ -245,7 +247,7 @@ Unit-only, adapter-only, or hand-authored oracle evidence cannot close that
 product result.
 
 Rung 2 (R8) receives its own Phase 5 live terminal because it depends on real
-managed OCI activation and adds native-process ingress plus a new runtime
-provider execution capability. It must not silently widen the existing E3
-terminal. When Phase 5 closes, the full three-rung journey is proven: unchanged
-OCI application -> native OCI Call Cell -> WASM Call Cell.
+managed OCI activation and adds a new runtime-provider execution capability. It
+must not silently widen the existing E3 terminal. When Phase 5 closes, roadmap
+0.6's native Call Cell result is proven and the full three-rung journey is
+available: unchanged OCI application -> native OCI Call Cell -> WASM Call Cell.
