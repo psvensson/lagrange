@@ -101,13 +101,13 @@ callback registry, or fallback from failed WASM execution.
 
 | Order | Quest | Result |
 | --- | --- | --- |
-| K0 | `native-oci-call-cell-invocation-contract` | Seal the application-initiated process registration/invocation topology, exact manifest-export match, authenticated replica/revision identity, bounded envelopes, `ctx` projection, typed ambiguous outcomes, and the selected multi-language transport. The proof must show transport has no placement or retry authority. |
+| K0 | `native-oci-call-cell-invocation-contract` | Seal the application-initiated process stream, service-originated call ingress, exact manifest-export match, authenticated replica/revision identity, generated outbound-call authorization, bounded invocation/result/ctx envelopes, typed ambiguous outcomes, and selected multi-language transport. Prove the broker has no placement, fanout, reduce, or retry authority. |
 | K1 | `oci-container-driver-call-cell-invoke` | `OciContainerDriver.invoke()` reaches one exact ready managed replica through the node-local broker from `ServiceRuntimeLifecycle.invoke()`; lifecycle host agent remains pull/create/start/inspect/stop/remove only. Driver/broker direct tests are necessary but not product acceptance. |
-| K2 | `native-call-cell-code-first-sdk` | One language SDK lets source call a local operation descriptor while packaging derives the existing Artifact, call Binding, export/interface identity, and outbound-call policy. The managed process registers the export; invocation carries no source/closure/module path. |
-| K3 | `native-call-cell-data-local-multinode` | A real `CALL BINDING`/SDK call fans out across partitions on different nodes, each destination revalidates its partition fence, reads its local replica, invokes the same pinned OCI revision, emits through existing coordination, and completes through the ordinary reduce lease/result path. |
+| K2 | `native-call-cell-code-first-sdk` | One language SDK lets an ordinary handler call a local operation descriptor over the authenticated broker stream; packaging derives the existing Artifact, call Binding, export/interface identity, and outbound-call policy; the broker derives caller identity/policy and hands the request to the existing Call Cell ingress. The managed process registers the export and no invocation carries source/closure/module paths. |
+| K3 | `native-call-cell-data-local-multinode` | A real handler-originated SDK call and the equivalent direct `CALL BINDING` path converge on the same `CallCellInvoker`; fanout reaches partitions on different nodes, each destination revalidates its partition fence, reads its local replica, invokes the same pinned OCI revision, emits through existing coordination, and completes through the ordinary reduce lease/result path. |
 | K4 | `native-call-cell-native-library-recovery` | The fixture uses a genuine native dependency unavailable on the current WASM path, kills a named worker during execution, proves typed ambiguous/retry behavior and exact revision identity after replacement, and demonstrates that arbitrary external side effects are not claimed exactly-once. |
 | K5 | `native-call-cell-second-language-conformance` | A second materially different language/runtime consumes the same broker and Call Cell context semantics with no language-specific routing or lifecycle fork. |
-| K6 | `native-call-cell-evaluator-live` | Fresh-clone production-path terminal proves the rung-2 journey end to end, including native dependency, cross-node locality, nested call/emit, failure/replacement, negative identity/export cases, teardown, and replay semantics. |
+| K6 | `native-call-cell-evaluator-live` | Fresh-clone production-path terminal proves the rung-2 journey end to end, including same-program handler call, native dependency, cross-node locality, nested call/emit, failure/replacement, negative identity/policy/export cases, teardown, and replay semantics. |
 
 Milestone M6 proves a customer can keep an ordinary language/runtime and native
 libraries while moving selected functions to the data through the same
@@ -118,18 +118,41 @@ Artifact / Binding / Cell system as WASM.
 K0 must decide the wire transport only after measuring the SDK runtimes intended
 for K2 and K5. Candidate transport technologies are implementation choices, not
 new product surfaces. The selected protocol must support an application-initiated
-long-lived channel so a managed container needs no public callback listener.
+long-lived channel so a managed container needs no public callback listener. It
+must define both closed directions: process-originated authorized calls into the
+existing call owner, and admitted invocation delivery/results/ctx operations
+between the OCI driver and the exact managed process.
 
 K2's source-level function reference is an authoring descriptor only. Its live
-proof must inspect the generated manifest and Binding and then show that the
-runtime invocation names those immutable identities rather than serialized
-function bytes.
+proof must inspect the generated manifest, Binding, and outbound-call policy and
+then show that the ordinary service handler sends only the generated operation
+identity and explicit arguments. The broker derives caller identity from the
+channel, refuses an operation outside generated policy, and hands an allowed
+operation to the existing Call Cell ingress. No runtime payload may contain
+serialized function bytes or arbitrary module/Binding/service names chosen by
+the guest.
 
-K3 must traverse this exact owner route:
+K3 must prove both ingress shapes converge before distributed execution:
 
 ```text
-CALL BINDING or compiled SDK operation handle
+managed OCI handler
+  -> language SDK operation handle
+  -> authenticated node-local broker
+  -> generated outbound-call policy bridge
+  -> existing Call Cell call ingress
   -> CallCellInvoker
+
+or
+
+external direct CALL BINDING
+  -> existing Call Cell call ingress
+  -> CallCellInvoker
+```
+
+From `CallCellInvoker`, both must traverse the same route:
+
+```text
+CallCellInvoker
   -> existing host/activation decision
   -> RuntimeServiceHandler Call Cell admission
   -> local partition read / bounded batch
@@ -139,9 +162,11 @@ CALL BINDING or compiled SDK operation handle
   -> exact managed process/revision/export
 ```
 
-Reverting host restriction, partition-fence validation, manifest-export match,
-or the `ServiceRuntimeLifecycle.invoke()` provider boundary must turn the proof
-red. A harness that invokes the driver or broker directly cannot close K3/K6.
+Reverting outbound-policy admission for the SDK path, host restriction,
+partition-fence validation, manifest-export match, or the
+`ServiceRuntimeLifecycle.invoke()` provider boundary must turn the proof red. A
+harness that invokes the driver's broker-delivery path directly cannot close
+K3/K6.
 
 K4 records the stable invocation id before killing the worker. The replacement
 may execute the callback again; acceptance distinguishes exactly-once-visible
@@ -171,10 +196,13 @@ rather than forcing two SDK implementations to discover the protocol together.
 - K1 may extend only the runtime-provider edge. Any proposed OCI-specific
   planner, route resolver, call table, retry owner, or reduce path is a design
   failure and must return to K0.
-- K2 must preserve Binding as durable execution intent; an SDK that sends an
-  arbitrary function/module path at runtime fails the architecture contract.
+- K2 must preserve Binding as durable execution intent and generated
+  outbound-call policy as authorization; an SDK that sends an arbitrary
+  function/module/Binding/service path at runtime fails the architecture
+  contract.
 - K3/K6 must use the production Call Cell owner route and inspect destination
-  partition locality; same-node or direct-broker-only tests are insufficient.
+  partition locality; same-node or direct-broker-delivery-only tests are
+  insufficient.
 - K4 must include one real native dependency, not a pure-language echo fixture.
 - K5 cannot introduce semantics unavailable to the first SDK; it is a
   conformance proof, not a second feature design.
