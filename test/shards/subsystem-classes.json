@@ -7,7 +7,7 @@
     "bootstrap-membership": 249,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 185,
+    "control-plane": 186,
     "convergence-topology": 77,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2075,
-  "digest": "fnv1a32-0d0a51b6",
+  "censusSize": 2076,
+  "digest": "fnv1a32-c624a568",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1210,6 +1210,7 @@
     "test/partition/write-path-epoch-fencing.test.js": "storage-partition",
     "test/policy/policy-driven-adjustment.property.test.js": "control-plane",
     "test/policy/table-policy-application.property.test.js": "control-plane",
+    "test/policy/table-policy-clock-seam.test.js": "control-plane",
     "test/policy/table-policy-service.test.js": "control-plane",
     "test/query/aggregate-function-correctness.property.test.js": "query-sql",
     "test/query/application-database.test.js": "query-sql",

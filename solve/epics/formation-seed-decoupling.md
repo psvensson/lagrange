@@ -30,6 +30,7 @@ authorizes:
   - src/transport
   - src/admin
   - src/query
+  - src/policy
   - src/lagrange-runtime-startup.js
   - test/convergence
   - test/simulation

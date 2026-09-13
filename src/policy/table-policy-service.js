@@ -39,6 +39,7 @@ import {
 
 const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
+const TABLE_POLICY_FUNCTION_TYPE = 'function';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_CRITICAL = 'critical';
 
@@ -61,6 +62,11 @@ class TablePolicyService extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    // The clock the policy cache's TTL is measured on: injectable so a
+    // virtual clock drives expiry (formation-sim); the default is the
+    // ambient clock, byte-identical in production. Row stamps written to
+    // the tables stay on the wall clock: they are data, not scheduling.
+    this.now = typeof options.now === TABLE_POLICY_FUNCTION_TYPE ? options.now : Date.now;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -178,7 +184,7 @@ class TablePolicyService extends EventEmitter {
 
     // Check local cache first
     const cached = this.policyCache.get(tableId);
-    if (cached && Date.now() - cached.timestamp < this.cacheTTLMs) {
+    if (cached && this.now() - cached.timestamp < this.cacheTTLMs) {
       return cached.policy;
     }
 
@@ -198,7 +204,7 @@ class TablePolicyService extends EventEmitter {
     // Update cache
     this.policyCache.set(tableId, {
       policy: mergedPolicy,
-      timestamp: Date.now(),
+      timestamp: this.now(),
     });
 
     return mergedPolicy;
@@ -464,7 +470,7 @@ class TablePolicyService extends EventEmitter {
     // Check local cache
     const cacheKey = `mg:${groupId}`;
     const cached = this.policyCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.cacheTTLMs) {
+    if (cached && this.now() - cached.timestamp < this.cacheTTLMs) {
       return cached.policy;
     }
 
@@ -501,7 +507,7 @@ class TablePolicyService extends EventEmitter {
     // Update cache
     this.policyCache.set(cacheKey, {
       policy: mergedPolicy,
-      timestamp: Date.now(),
+      timestamp: this.now(),
     });
 
     return mergedPolicy;
