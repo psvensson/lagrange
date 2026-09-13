@@ -3,31 +3,72 @@
 ## Deployment ladder
 
 The program's shape follows the three-rung deployment goal (requirements
-"Program result"): rung 1 — an unchanged pg-talking OCI container becomes a
-managed, data-affinity-placed service (phases 0–2); rung 2 — Lagrange-aware
-callbacks on one unified surface with a shared service context (phase 5,
-epic-stage); rung 3 — genuine WASM components through the same install surface
-(phase 3). Each rung trades developer effort for efficiency: rung 1 moves the
-service near the data, rung 2 moves the compute into the partition owners,
-rung 3 makes that compute portable and sandboxed.
+"Program result"):
 
-## Rung 2 sketch (epic-stage)
+1. rung 1 - an unchanged pg-talking OCI container becomes a managed,
+   data-affinity-placed service (phases 0-2);
+2. rung 2 - the same language/runtime and OCI image expose native Call Cell
+   functions that Lagrange executes at selected partition replicas (phase 5);
+3. rung 3 - the same distributed-operation model is packaged as genuine WASM
+   components through the same install surface (phase 3).
 
-Today rung 2 is two surfaces sharing one `run(ctx)` contract: embedded
-`runtime.run(fn)` (the function is serialized and shipped) and the uploaded
-callback module driven by its manifest `SELECT`. The unification direction is
-one callback-module unit with ad-hoc and installed execution as artifact
-properties, not separate APIs.
+The Phase 2 live-managed-OCI prerequisite and Phase 5 native Call Cell work are
+both assigned to roadmap **0.6**. Phase 2 advances
+`RM-0.6-managed-oci-activation`; Phase 5 advances
+`RM-0.6-native-oci-call-cells`. This keeps the delivery dependency visible
+without collapsing lifecycle ownership and distributed-call ownership into one
+implementation concern.
 
-Cross-replica state is deliberately **not** closure capture: a **shared
-service context** — a redis-like keyed store scoped to the service, shared
-across its replicas, accessed through `ctx` — is the contract the
-Lagrange-aware developer writes against. Callback code stays stateless and
-serialization-safe; the store's consistency, lifecycle, bounds, and identity
-scoping are the K1 decision. Storage preference is existing replication
-machinery (a replicated, SQL-visible system table per service) over a second
-KV mechanism. Open questions and options live in
-[`solve/epics/lagrange-aware-callback-shared-context.md`](../../epics/lagrange-aware-callback-shared-context.md).
+Each rung trades implementation constraints for execution properties. Rung 1
+moves a long-running service near the data. Rung 2 moves a selected function to
+the partition host while retaining the customer's ordinary runtime and native
+libraries. Rung 3 keeps that data-local shape but gains WASM portability,
+density, and capability isolation.
+
+## Rung 2 selected model: native OCI Call Cells
+
+The canonical architecture is
+[`architecture/native-oci-call-cells.md`](../../../architecture/native-oci-call-cells.md).
+The old embedded/uploaded JavaScript callback unification and shared-service-
+context direction is superseded; it must not be revived as the implementation
+path.
+
+Rung 2 reuses the current code-first Call Cell model. A language SDK may expose
+an idiomatic local function/operation handle, but deployment compiles it into the
+same immutable Artifact, call Binding, and outbound-call policy that the public
+WASM path uses. Runtime calls identify that installed operation; they never
+serialize source, bytecode, closures, module heaps, or native library state.
+
+The installed OCI image already contains the developer's language runtime,
+native extensions, models, and libraries. When `CallCellInvoker` selects a
+partition host, the existing activation-lease path makes a Cell of that exact
+service revision ready on the host if needed. The destination Call Cell handler
+revalidates the partition fence and builds the bounded batch from its local
+partition replica. Only after that provider-neutral admission does
+`ServiceRuntimeLifecycle.invoke()` dispatch to `OciContainerDriver.invoke()`.
+
+The OCI driver talks to a node-local Native Call Cell broker. The managed
+process opens an authenticated long-lived stream to that broker and registers
+the manifest-declared call exports it can serve. Registration is readiness
+evidence, not a second export authority. The OCI host agent remains lifecycle-
+only and never becomes a callback router.
+
+That same authenticated process stream also provides the adapter for an
+ordinary handler in the managed program to initiate `ctx.call(operationHandle,
+args)`. The SDK sends only the generated operation identity and explicit
+arguments. The broker derives the caller's service/revision identity from the
+channel, checks the generated outbound-call policy, and hands an admitted call
+to the existing Call Cell ingress. It does not resolve a partition or select a
+worker. The existing `CallCellInvoker` owns those decisions and, after remote
+admission, the selected OCI worker receives the invocation through the other
+direction of the same broker.
+
+Native `ctx` is a language projection of the existing Call Cell semantics:
+bounded emit, bounded nested call, deadlines, budgets, server-derived identity,
+invocation identity, and typed failures. Process-local state may stay warm as a
+cache but is never durable or location-stable. Arbitrary external side effects
+remain retry/idempotency concerns; exactly-once-visible Lagrange results do not
+mean exactly-once native code execution.
 
 ## Ownership map
 
@@ -43,7 +84,12 @@ alternatives.
 | Running instances | Existing service lifecycle and `services` truth | Catalog references; it does not copy replica truth. |
 | Endpoints | Existing `service_endpoints` owner | Runtime drivers publish through the canonical writer. |
 | Artifact resolution | Shared OCI artifact owner | Both runtime kinds use one digest-verifying path. |
-| OCI execution | Runtime driver plus one selected provider | Production composition root binds the provider. |
+| OCI lifecycle execution | `OciContainerDriver` plus one selected host provider | Production composition root binds the provider; host agent owns engine translation only. |
+| Service-originated native call ingress | Node-local Native Call Cell broker as adapter to generated outbound-call policy + existing Call Cell ingress | Derive caller identity from the process channel and admit/refuse the generated operation; never choose partition, node, replica, fanout, or retry policy. |
+| Call Cell fanout/placement demand/reduce | Existing `CallCellInvoker` and collaborators | Provider-neutral; OCI cannot add a scheduler or route owner. |
+| Destination shard admission | Existing runtime-service Call Cell handler | Revalidate route and partition fence, then build the bounded batch from the local replica. |
+| Runtime invocation | `ServiceRuntimeLifecycle.invoke()` | Sole provider transition for both WASM and OCI Call Cells. |
+| Native process invocation transport | Node-local Native Call Cell broker | Authenticate exact replica/revision, correlate admitted calls/results and project `ctx`; no placement, fanout, reduce, or autonomous retries. |
 | WASM execution | Component runtime driver plus pinned engine | Public installed-service invocation only. |
 | SQL request identity | Authenticated PG session and canonical `SqlRequest` | Client input cannot set `issuingServiceId`. |
 | Access attribution | Existing `service_partition_access` owner | Evidence is fresh and request-caused. |
@@ -64,11 +110,17 @@ one OCI provider
   -> live activation -> health/endpoints/logs/recovery
   -> credential lifecycle -> authenticated SQL attribution
   -> activation evidence + composed placement objective + live engagement
+  -> native invocation contract
+       -> OCI driver invoke + broker
+       -> first code-first native SDK
+       -> data-local multi-node fanout/reduce
+       -> native-library + recovery proof
+       -> second-language conformance
 
 component ABI/engine/invocation decision
   -> genuine component execution -> OCI artifact activation -> template
 
-all paths
+all base paths
   -> versioned fixture -> isolated runner/report -> live acceptance
 ```
 
@@ -126,7 +178,46 @@ Kubernetes provider requires an independent Quest covering controller/CRI
 authority, network publication, privilege, recovery, and live composition-root
 engagement.
 
+## Native Call Cell provider boundary
+
+Native Call Cells consume the live OCI provider but do not extend the host
+agent's operation grammar with `invoke`. Invocation is a data-plane concern and
+uses a separate node-local broker whose Lagrange-side provider consumer is the
+OCI runtime driver and whose service-originated side is only an adapter into the
+existing Call Cell ingress.
+
+The topology is application-initiated: the managed process opens and maintains
+an authenticated stream to the broker. The container therefore needs no public
+callback listener. The lifecycle owner issues or provisions the connection
+identity, and the broker accepts registrations only for the exact local Cell
+replica and pinned service revision.
+
+The wire technology is decided in Phase 5 K0 after measuring the SDK languages
+that matter. gRPC, a small framed protocol, or a WIT/wRPC projection are
+acceptable candidates; transport choice cannot change the owner map or guest
+semantics.
+
+A native worker reports the set of call exports it registered. The broker
+compares that evidence with the installed manifest. Missing, additional, or
+interface-incompatible exports keep the Cell unready. The worker never names a
+partition or chooses where it should execute.
+
+On invocation the destination node has already built the batch from its local
+partition replica. The driver sends only the admitted export identity, explicit
+arguments, bounded batch/partials, deadline/budgets, invocation identity and
+context. Nested calls return to Lagrange and re-enter the ordinary Binding/Call
+Cell owner; workers never call one another directly.
+
+For a normal handler-originated call, the direction is reversed only as a
+transport matter: the broker authenticates the process, resolves its generated
+outbound-call authority, and forwards the operation identity and explicit
+arguments to the normal Call Cell ingress. From there the ordinary owner route
+is identical to direct `CALL BINDING`. The broker never turns its local worker
+registry into a partition or service route table.
+
 ## Identity flow
+
+For ordinary OCI SQL access:
 
 ```text
 installation revision
@@ -138,9 +229,32 @@ installation revision
   -> placement evidence input
 ```
 
-Stop/remove revokes a replica credential. Replacement rotates it. Reports and
-logs redact it. This is workload identity for core attribution, not enterprise
-authorization or tenancy.
+For native Call Cell execution:
+
+```text
+installation revision + Cell replica
+  -> lifecycle-issued broker identity
+  -> authenticated process registration
+  -> manifest export match
+  -> ServiceRuntimeLifecycle.invoke
+  -> one admitted native invocation
+  -> SDK ctx bound to invocation/service/partition identity
+```
+
+For an ordinary handler initiating a native distributed call:
+
+```text
+installed service revision + handler
+  -> generated operation handle
+  -> authenticated process channel
+  -> generated outbound-call policy admission
+  -> existing Call Cell ingress
+  -> CallCellInvoker
+```
+
+Stop/remove revokes the relevant replica credentials. Replacement rotates them.
+Reports and logs redact them. This is workload identity for core attribution and
+invocation admission, not enterprise authorization or tenancy.
 
 ## Placement slices
 
@@ -157,6 +271,12 @@ The fixture begins non-optimal when it intends to demonstrate movement. When it
 is already optimal, acceptance records `already_optimal` and still proves the
 production owner consumed fresh affinity and activation evidence.
 
+Native Call Cells reuse this evidence. A call may prefer an eligible partition
+replica whose host already has the image or a warm Cell, but only the existing
+placement/invocation owners may make that choice. Warmth is a cost input, never
+an authority to run on a node that does not satisfy the partition/consistency
+contract.
+
 ## WASM invocation
 
 The engine decision must define both the host ABI and the externally supported
@@ -169,20 +289,37 @@ The old JavaScript-envelope mechanism may remain only if renamed and isolated as
 an internal rehearsal path. It cannot be a fallback from the supported component
 runtime.
 
+Native OCI Call Cells are not a fallback from a failed WASM invocation either.
+Runtime kind is part of the installed Artifact identity and a call remains pinned
+to its selected revision/provider. A service can compose separate OCI and WASM
+Artifacts/Bindings when it wants both providers, but one installed revision never
+changes runtime kind in response to failure or placement cost.
+
 ## Example journey
 
-The canonical fixture is a small Node/`pg` HTTP service with a pure deterministic
-ranking operation that can later be extracted. Its stages are:
+The canonical fixture begins as a small ordinary application and grows one
+capability at a time:
 
 1. external application plus PostgreSQL baseline;
 2. unchanged external application plus Lagrange PG wire;
 3. same image installed as a Lagrange-managed OCI service;
-4. optional embedded `native_js` extraction rehearsal, excluded from deployment
-   and size claims; and
-5. genuine OCI-packaged WASM component invoked through the install surface.
+4. one source-level distributed operation exposed from the same program as a
+   native OCI Call Cell, using at least one genuine native dependency;
+5. the same logical operation expressed as a genuine OCI-packaged WASM
+   component; and
+6. side-by-side report of correctness, cold/warm activation, transfer shape,
+   failure/retry semantics, and runtime caveats.
+
+The native rung must prove that the function runs on the nodes that hold the
+selected partition replicas, not merely in the long-running service replica that
+received the outer request. Killing a named native Cell during execution must
+produce the documented typed ambiguous/retry behavior and replacement revision
+identity.
 
 MovieLens remains an advanced successor after its current Quest reaches an honest
-terminal. It does not block the small evaluator path.
+terminal. It is a natural higher-scale consumer once the small native Call Cell
+fixture is terminal, particularly for Python/native-library or model-loading
+experiments.
 
 ## Acceptance fidelity
 
@@ -192,3 +329,26 @@ runtime objects. Recovery acceptance names the killed instance and the distinct
 replacement. Attribution acceptance watermarks the triggering request and reads
 only later access rows. Cold/warm timing verifies cache/image preconditions and
 records every sample.
+
+Native Call Cell acceptance additionally records:
+
+- exact OCI image, package, manifest, revision, Cell replica and export identity;
+- the ordinary handler's authenticated service/revision identity and generated
+  outbound-call policy decision before a service-originated call enters the
+  existing Call Cell owner;
+- partition id and destination node selected by the ordinary Call Cell owner;
+- proof that the destination node held the admitted partition replica and built
+  the batch locally;
+- broker registration identity and exact manifest-export match;
+- driver/provider witness showing `ServiceRuntimeLifecycle.invoke()` reached the
+  OCI runtime rather than a test adapter;
+- native dependency identity/version from inside the managed image;
+- invocation id across retry/replacement; and
+- explicit classification of any external side effect as outside Lagrange's
+  exactly-once-visible result guarantee.
+
+A harness that calls the broker's worker-delivery path or
+`OciContainerDriver.invoke()` directly is a provider test, not product
+acceptance. The handler-originated path likewise is not accepted unless the
+broker hands it to the normal Call Cell ingress and the existing
+`CallCellInvoker` makes the distributed decisions.
