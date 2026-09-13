@@ -27,6 +27,10 @@ on:
         description: "Published release version to point the npm next dist-tag at (e.g. 0.2.5)"
         required: true
         type: string
+      otp:
+        description: "One-time password from your npm authenticator (the account enforces 2FA for a dist-tag change; a code stays valid through the job's setup)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -428,6 +432,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           TARGET: ${{ inputs.move_next_to }}
+          OTP: ${{ inputs.otp }}
         run: |
           set -euo pipefail
           [[ "$TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::next moves only onto a release version, got '$TARGET'"; exit 1; }
@@ -436,5 +441,9 @@ jobs:
           LATEST="$(npm view "$NPM_PACKAGE" dist-tags.latest)"
           HIGHEST="$(printf '%s\n%s\n' "$LATEST" "$TARGET" | sort -V | tail -n 1)"
           [ "$HIGHEST" = "$TARGET" ] || { echo "::error::refusing to move next below latest ($LATEST)"; exit 1; }
-          npm dist-tag add "$NPM_PACKAGE@$TARGET" next
+          if [ -n "$OTP" ]; then
+            npm dist-tag add "$NPM_PACKAGE@$TARGET" next --otp="$OTP"
+          else
+            npm dist-tag add "$NPM_PACKAGE@$TARGET" next
+          fi
           npm view "$NPM_PACKAGE" dist-tags --json
