@@ -1109,8 +1109,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance keeps priority control-plane partitions open when ' +
-      'websocket endpoint publication lags a readiness-healthy connected peer',
+    'checkRebalance waits for a readiness-healthy connected peer\'s ' +
+      'websocket endpoint row: no other endpoint table can vouch for it',
     async (t) => {
       const readinessService = {
         getNodeReadinessSync(nodeId) {
@@ -1148,11 +1148,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-1'),
           createNodeEndpoint('node-2'),
         ],
-        serviceEndpoints: [
-          createPostgresWireEndpoint('node-1'),
-          createPostgresWireEndpoint('node-2'),
-          createPostgresWireEndpoint('node-3'),
-        ],
+        serviceEndpoints: [],
         messageRouter: createMockMessageRouter('connected', [
           'node-2',
           'node-3',
@@ -1177,21 +1173,27 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       await rebalancer.checkRebalance();
 
+      // Endpoint visibility is exactly the bootstrap transport fact. The
+      // former carve-out let a healthy sys-postgres-wire row vouch for a
+      // lagging node_endpoints row; that row is optional runtime state and
+      // no longer exists at formation time, so the gate waits for the
+      // transport row itself and the endpoint publication level-trigger
+      // (topology-settling-node-ready-lease-wake) reopens it.
       t.equal(
         evaluateCalls,
-        1,
-        'priority recovery should continue when readiness and transport already make the peer visible',
+        0,
+        'priority recovery waits for the peer\'s websocket endpoint row',
       );
       t.equal(
-        scheduledDelayMs,
-        null,
-        'endpoint publication lag should not close the topology-settling gate once visibility is recoverably established',
+        typeof scheduledDelayMs,
+        'number',
+        'the topology-settling retry stays armed until the transport row is published',
       );
     });
 
   await t.test(
-    'checkRebalance keeps priority control-plane partitions open when ' +
-      'postgres wire endpoint publication lags a control-plane-writable peer',
+    'checkRebalance keeps priority control-plane partitions open when no ' +
+      'postgres wire endpoint exists anywhere',
     async (t) => {
       const readinessService = {
         getNodeReadinessSync(nodeId) {
@@ -1230,10 +1232,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-2'),
           createNodeEndpoint('node-3'),
         ],
-        serviceEndpoints: [
-          createPostgresWireEndpoint('node-1'),
-          createPostgresWireEndpoint('node-2'),
-        ],
+        serviceEndpoints: [],
         controlPlaneReadinessService: readinessService,
       });
 
@@ -1257,18 +1256,18 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         1,
-        'priority recovery should continue when control-plane writability already confirms SQL visibility',
+        'priority recovery never waits for the optional postgres wire runtime',
       );
       t.equal(
         scheduledDelayMs,
         null,
-        'postgres wire publication lag should not keep the topology-settling gate closed after readiness recovers',
+        'postgres wire endpoints are not an input to the topology-settling gate',
       );
     });
 
   await t.test(
-    'checkRebalance keeps control_plane_publications open when ' +
-      'postgres wire publication lags a control-plane-writable active peer',
+    'checkRebalance keeps control_plane_publications open when no ' +
+      'postgres wire endpoint exists anywhere',
     async (t) => {
       const readinessService = {
         getNodeReadinessSync(nodeId) {
@@ -1311,10 +1310,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-2'),
           createNodeEndpoint('node-3'),
         ],
-        serviceEndpoints: [
-          createPostgresWireEndpoint('node-1'),
-          createPostgresWireEndpoint('node-2'),
-        ],
+        serviceEndpoints: [],
         controlPlaneReadinessService: readinessService,
       });
 
@@ -1350,7 +1346,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
   await t.test(
     'checkRebalance still defers control_plane_publications when ' +
-      'an active peer is not control-plane-writable',
+      'an active peer is not control-plane-writable (readiness-owned)',
     async (t) => {
       const readinessService = {
         getNodeReadinessSync(nodeId) {
@@ -1394,10 +1390,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
           createNodeEndpoint('node-2'),
           createNodeEndpoint('node-3'),
         ],
-        serviceEndpoints: [
-          createPostgresWireEndpoint('node-1'),
-          createPostgresWireEndpoint('node-2'),
-        ],
+        serviceEndpoints: [],
         controlPlaneReadinessService: readinessService,
       });
 
@@ -1418,10 +1411,14 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       await rebalancer.checkRebalance();
 
+      // The deferral is owned by the transitional-node blocker
+      // (node_ready_lease_incomplete): readiness says node-3 is not yet a
+      // writable member. Endpoint visibility no longer stands in for that
+      // through a missing postgres-wire row.
       t.equal(
         evaluateCalls,
         0,
-        'control_plane_publications should still wait when an active node lacks canonical SQL readiness',
+        'control_plane_publications should still wait while an active node lacks canonical readiness',
       );
       t.equal(
         typeof scheduledDelayMs,
