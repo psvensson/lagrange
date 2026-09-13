@@ -81,18 +81,21 @@ for this feature:
 - `OciContainerDriver` currently owns only scaffold lifecycle behavior and has
   no `invoke()` implementation.
 
-The architecture therefore extends the last runtime-specific edge. It does not
-introduce a new planner, fanout engine, partition router, callback scheduler,
-reduce coordinator, or durable callback registry.
+The architecture therefore extends the last runtime-specific edge and adds an
+authenticated native-process adapter into the already-existing call ingress. It
+does not introduce a new planner, fanout engine, partition router, callback
+scheduler, reduce coordinator, or durable callback registry.
 
 ## Non-negotiable owner invariant
 
 A native callback is a Call Cell whose execution provider happens to be OCI.
-Nothing before `ServiceRuntimeLifecycle.invoke()` is allowed to branch into a
-second OCI-specific distributed execution path.
+The ordinary distributed-call owner route remains authoritative regardless of
+where a call originates.
+
+An externally issued call or an already-admitted nested call follows:
 
 ```text
-SDK call / CALL BINDING
+CALL BINDING / existing call bridge
           |
           v
     CallCellInvoker                 sole fanout/orchestration owner
@@ -112,10 +115,37 @@ SDK call / CALL BINDING
           v                       v
  wasm_component driver       oci_container driver
           |                       |
- canonical ABI              local invocation broker
+ canonical ABI              native invocation broker
           |                       |
  WASM component             managed OCI process
 ```
+
+A call initiated by an ordinary handler in the managed OCI process first crosses
+one additional adapter boundary:
+
+```text
+managed OCI handler
+     |
+     | ctx.call(operation-handle, arguments)
+     v
+language SDK
+     |
+     v
+node-local Native Call Cell broker
+     |
+     | authenticate service/revision/replica
+     | enforce generated outbound-call authority
+     | translate operation handle -> durable Binding identity
+     v
+existing Call Cell call ingress
+     |
+     v
+CallCellInvoker
+```
+
+The broker never resolves a partition, picks a replica, activates a Cell,
+coordinates a reduce, or autonomously retries a distributed call. It only
+projects a closed native-process protocol onto existing owners.
 
 The OCI host agent remains a lifecycle provider. It may create the container,
 mount or provision its invocation channel, inspect it, stop it, and remove it.
@@ -141,10 +171,14 @@ path supplied by the caller.
 
 For code-first SDKs, a local function reference is only an authoring handle. The
 compiler/scaffold derives the same immutable Artifact, call Binding, and
-outbound-call policy already used by the JavaScript component path. Runtime
-calls carry the generated operation/Binding identity and explicit arguments.
+outbound-call policy already used by the JavaScript component path. At runtime
+the SDK maps the local operation handle to that generated immutable operation /
+Binding identity. The caller cannot replace it with an arbitrary Binding name,
+service ID, module path, or export string.
+
 This preserves the rule that Binding is the only durable user declaration of
-execution intent.
+execution intent and that outbound call authority is compiled from reviewed
+source declarations rather than chosen by a running process.
 
 ## Native process model
 
@@ -162,14 +196,22 @@ managed OCI process
        v
 node-local Native Call Cell broker
        |
-       v
-OciContainerDriver.invoke()
+       +-- process -> Lagrange: start authorized ctx.call / nested ctx call
+       +-- Lagrange -> process: invoke exact admitted export
+       +-- process -> Lagrange: emit / result / typed failure
 ```
 
 The container does not need a public callback port. The host agent provisions
 the connection material and process identity but does not receive invocation
 payloads. The broker authenticates the exact cluster, node, service, revision,
 and Cell replica identity established by the lifecycle owner.
+
+The process-to-broker connection is bidirectional but the authority is
+asymmetric. A process may request an outbound call only through its generated
+outbound-call policy and may answer only invocations addressed to its exact
+registered revision/replica/export. It cannot claim a different service
+identity, choose a target partition, register new durable exports, or manufacture
+an invocation context.
 
 The wire technology is deliberately not selected by this architecture
 contract. The first implementation quest must compare a small closed framed
@@ -181,6 +223,34 @@ API.
 A process may keep language runtime state and expensive initialized libraries
 warm across invocations. Such process-local state is cache only: replacement,
 movement, retry, or scale-to-zero may discard it at any time.
+
+## Call initiation from the ordinary service handler
+
+The same-program value depends on the outer application handler being able to
+call a distributed function without dropping down to deployment identifiers.
+The SDK therefore exposes an idiomatic operation handle created by the source
+compiler/scaffold.
+
+For the illustrative source above, `ctx.call(score, args)` means:
+
+1. the SDK resolves `score` to the immutable operation identity generated when
+   this exact service revision was packaged;
+2. the SDK sends that identity and explicit arguments over the authenticated
+   broker channel;
+3. the broker derives the caller's service/revision/replica identity from the
+   channel, not from payload fields;
+4. the broker/bridge verifies that the generated outbound-call policy allows
+   this operation and hands the request to the existing Call Cell ingress; and
+5. `CallCellInvoker` takes over all partition resolution, activation, fanout,
+   result coordination, and retry classification.
+
+A direct external `CALL BINDING` for the same operation enters at step 5 through
+the existing SQL surface. These are two ingress adapters to one execution owner,
+not two distributed-call implementations.
+
+Inside a native Call Cell invocation, `ctx.call(...)` repeats the same path with
+the active invocation identity and nested-call budget attached. The broker must
+not call another native process directly.
 
 ## Data locality and replica choice
 
@@ -209,12 +279,14 @@ claim of exactly-once native code execution.
 
 ## Native `ctx` semantics
 
-The language SDK presents a native object corresponding to the canonical Call
-Cell context. It is backed by the authenticated process-to-node stream and
-inherits, rather than redefines, the existing operation semantics:
+The language SDK presents an idiomatic object corresponding to the canonical
+Call Cell/service-call context. It is backed by the authenticated
+process-to-node stream and inherits, rather than redefines, existing semantics:
 
-- bounded `emit(key, partial)` publishes through the current partial/reduce
-  coordination owner;
+- an ordinary handler may make only generated/authorized outbound calls and
+  those calls enter the existing Call Cell owner;
+- bounded `emit(key, partial)` during a shard invocation publishes through the
+  current partial/reduce coordination owner;
 - bounded nested `call` / `call-bounded` re-enters the existing Binding and
   Call Cell invocation owner rather than calling another worker directly;
 - invocation identity, deadline, budgets, service identity, tenant/security
@@ -287,6 +359,8 @@ by default:
 - broker authentication bound to a lifecycle-issued replica identity;
 - callback registration accepted only for the pinned revision and manifest
   exports;
+- outbound call identity and authorization derived from the authenticated
+  channel and generated policy rather than guest-selected strings;
 - no caller-supplied service, revision, partition, or authorization identity;
 - network egress governed independently from `ctx` capabilities; and
 - secrets remain referenced through the service platform rather than copied
@@ -300,15 +374,16 @@ isolation.
 
 | Concern | Authority | Rule |
 | --- | --- | --- |
-| Source-level operation descriptors | Language SDK/compiler | Produce runtime-neutral deployment records; never become a runtime scheduler. |
+| Source-level operation descriptors | Language SDK/compiler | Produce runtime-neutral deployment records and operation handles; never become a runtime scheduler. |
 | Durable executable exports | External service manifest / Artifact owner | Manifest export + interface is authority; worker registration is evidence only. |
 | Durable execution intent | Binding owner | Same call Binding contract for WASM and OCI. |
+| Native service-originated call ingress | Node-local broker + existing outbound-call policy bridge | Derive caller identity, map generated operation handle to Binding identity, then hand off to the existing call owner; no target resolution. |
 | Partition fanout, host choice, activation demand, reduce | `CallCellInvoker` and existing collaborators | Provider-neutral; no OCI branch may re-own these decisions. |
 | Destination admission and local batch build | `RuntimeServiceHandler` Call Cell path | Revalidate Cell + partition fence and read the local shard before runtime invocation. |
 | Cell placement | Existing runtime-service rebalancer/activation lease owners | May consume OCI activation evidence; no native-worker scheduler. |
 | Runtime invocation | `ServiceRuntimeLifecycle.invoke()` | Sole transition from provider-neutral Cell semantics to a runtime driver. |
 | OCI execution adaptation | `OciContainerDriver.invoke()` | Translate one admitted invocation to the exact managed replica; no routing policy. |
-| Process invocation transport | Node-local Native Call Cell broker | Authenticate stream, correlate invocation/result, project `ctx`; no placement or retries. |
+| Process invocation transport | Node-local Native Call Cell broker | Authenticate stream, correlate call/invocation/result, project `ctx`; no placement, fanout, reduce, or autonomous retries. |
 | Container lifecycle | OCI host agent/provider | Pull/create/start/inspect/stop/remove and provision broker connectivity only. |
 | Retry/result visibility | Existing invocation journal/fence and reduce coordination owners | Native provider reports typed outcome; it does not invent autonomous retry loops. |
 
@@ -318,7 +393,8 @@ The implementation should proceed only after real managed OCI activation is
 available; a fake/in-memory container cannot prove this feature.
 
 1. **N0 - native invocation contract.** Seal process registration, exact export
-   matching, invocation/result envelopes, `ctx` projection, authentication,
+   matching, service-originated call ingress, invocation/result envelopes,
+   `ctx` projection, authentication, generated outbound-call authorization,
    deadlines, bounded payloads, disconnect/ambiguous outcomes, and the selected
    bidirectional transport. Prove that no new route/placement owner is added.
 2. **N1 - OCI driver invocation.** Add `OciContainerDriver.invoke()` backed by
@@ -326,12 +402,15 @@ available; a fake/in-memory container cannot prove this feature.
    is necessary but not acceptance.
 3. **N2 - code-first SDK projection.** One language SDK compiles a direct
    function/operation descriptor into the existing manifest + Binding model,
-   registers the export from the managed process, and performs `ctx.emit` and a
-   nested bounded call without function serialization.
-4. **N3 - data-local multi-node proof.** A real call fans out to partitions on
-   different nodes; each destination reads its local replica, executes the same
-   pinned OCI revision, emits partials, and completes through the existing
-   reducer. Reverting host restriction, partition-fence admission, or the
+   lets an ordinary handler call that operation through the broker into the
+   existing Call Cell owner, registers the export from the managed process, and
+   performs `ctx.emit` plus a nested bounded call without function
+   serialization.
+4. **N3 - data-local multi-node proof.** A real service-originated or direct
+   `CALL BINDING` call fans out to partitions on different nodes; each
+   destination reads its local replica, executes the same pinned OCI revision,
+   emits partials, and completes through the existing reducer. Reverting host
+   restriction, partition-fence admission, outbound policy admission, or the
    ordinary Cell activation route must turn the proof red.
 5. **N4 - native-library and recovery proof.** The fixture uses at least one
    genuine native dependency unavailable on the current WASM path, kills a
@@ -344,11 +423,11 @@ available; a fake/in-memory container cannot prove this feature.
    Node-specific convenience API.
 
 Every source-changing rung requires a deterministic red-on-revert proof before
-its live acceptance. Live proof must traverse `CALL BINDING` or an SDK operation
-handle compiled to that same durable Binding, `CallCellInvoker`, the destination
-Call Cell handler, `ServiceRuntimeLifecycle.invoke()`, and the production OCI
-driver. A harness that invokes the broker or driver directly cannot close the
-feature.
+its live acceptance. Live proof from an ordinary OCI handler must traverse the
+SDK/broker call ingress, the existing `CallCellInvoker`, the destination Call
+Cell handler, `ServiceRuntimeLifecycle.invoke()`, and the production OCI driver.
+A direct `CALL BINDING` proof may enter at `CallCellInvoker`; a harness that
+invokes the broker's delivery side or driver directly cannot close the feature.
 
 ## Non-goals
 
