@@ -39,12 +39,19 @@ import {
 import {
   WORKSPACE_INJECTION_ENV,
 } from '../../scripts/checks/change-selection-constants.js';
+import {gitProcessEnvironment} from
+  '../../scripts/checks/git-process-environment.js';
 
 const UTF8 = 'utf8';
 const INJECTED = {[WORKSPACE_INJECTION_ENV]: 'node_modules,data'};
 
 function git(repo, args) {
-  execFileSync('git', args, {cwd: repo, encoding: UTF8, stdio: 'pipe'});
+  execFileSync('git', args, {
+    cwd: repo,
+    encoding: UTF8,
+    stdio: 'pipe',
+    env: gitProcessEnvironment(),
+  });
 }
 
 // A repository assembled the way the push gate assembles one: a committed tree
@@ -88,7 +95,8 @@ test('git reports the injected symlinks as untracked repository content', () => 
   // vacuous, so it is asserted rather than assumed.
   const untracked = execFileSync('git',
     ['ls-files', '--others', '--exclude-standard'],
-    {cwd: repo, encoding: UTF8}).split('\n').filter(Boolean);
+    {cwd: repo, encoding: UTF8, env: gitProcessEnvironment()},
+  ).split('\n').filter(Boolean);
   assert.ok(untracked.includes('node_modules'),
     'the fixture must reproduce the condition that broke the gate');
   assert.ok(untracked.includes('data'));

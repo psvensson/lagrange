@@ -34,11 +34,18 @@ import {
   CHECK_BASE_ENV,
   RANGE_SOURCE,
 } from '../../scripts/checks/change-selection-constants.js';
+import {gitProcessEnvironment} from
+  '../../scripts/checks/git-process-environment.js';
 
 const UTF8 = 'utf8';
 
 function git(repo, args) {
-  return execFileSync('git', args, {cwd: repo, encoding: UTF8, stdio: 'pipe'});
+  return execFileSync('git', args, {
+    cwd: repo,
+    encoding: UTF8,
+    stdio: 'pipe',
+    env: gitProcessEnvironment(),
+  });
 }
 
 // Four commits, each touching its own file, so any dropped commit is visible by

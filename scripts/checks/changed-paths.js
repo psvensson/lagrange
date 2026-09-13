@@ -51,6 +51,7 @@ import {
   sortStrings,
   stringCollectionHas,
 } from './change-proof-string-collections.js';
+import {gitProcessEnvironment} from './git-process-environment.js';
 
 // Intrinsics captured at module load. Every string below arrives from `git`,
 // which is external data by the adversarial-intrinsics rule: a replaced
@@ -86,8 +87,12 @@ const PUBLICATION_REMOTE = 'origin/main';
 function git(root, args) {
   try {
     return arrayFilter(
-      stringSplit(execFileSync(GIT, args,
-        {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER}), NEWLINE),
+      stringSplit(execFileSync(GIT, args, {
+        cwd: root,
+        encoding: UTF8,
+        maxBuffer: MAX_BUFFER,
+        env: gitProcessEnvironment(),
+      }), NEWLINE),
       Boolean);
   } catch {
     return null;
