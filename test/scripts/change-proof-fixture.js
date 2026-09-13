@@ -3,6 +3,8 @@ import {execFileSync, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {gitProcessEnvironment} from
+  '../../scripts/checks/git-process-environment.js';
 
 const UTF8 = 'utf8';
 const ORCHESTRATOR = 'scripts/select-change-tests.js';
@@ -25,7 +27,7 @@ function createChangeProofFixture({
     '};\n', UTF8);
 
   function fixtureEnv({preload = null} = {}) {
-    const env = {...process.env};
+    const env = gitProcessEnvironment();
     delete env[checkBaseEnvironment];
     delete env[workspaceInjectionEnvironment];
     if (preload) {
@@ -36,8 +38,12 @@ function createChangeProofFixture({
   }
 
   function git(args) {
-    return execFileSync('git', args,
-      {cwd: repo, encoding: UTF8, stdio: 'pipe'}).trim();
+    return execFileSync('git', args, {
+      cwd: repo,
+      encoding: UTF8,
+      stdio: 'pipe',
+      env: gitProcessEnvironment(),
+    }).trim();
   }
 
   let fixtureBaseSha = null;

@@ -219,7 +219,7 @@ export const FULL_CORPUS_SHARE = 0.5;
 export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   {id: 'selection-state', pattern: /^test\/(shards\/(safety-spine|impact-contracts)\.json|manifests\/)/u},
   {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|plan-test-lane|select-change-tests|check-subsystem)\.js$/u},
-  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
+  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
   {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},

@@ -32,11 +32,18 @@ import {
   existingPaths,
   semanticPaths,
 } from '../../scripts/checks/changed-paths.js';
+import {gitProcessEnvironment} from
+  '../../scripts/checks/git-process-environment.js';
 
 const UTF8 = 'utf8';
 
 function git(repo, args) {
-  execFileSync('git', args, {cwd: repo, encoding: UTF8, stdio: 'pipe'});
+  execFileSync('git', args, {
+    cwd: repo,
+    encoding: UTF8,
+    stdio: 'pipe',
+    env: gitProcessEnvironment(),
+  });
 }
 
 function buildFixtureRepo() {
@@ -123,7 +130,8 @@ test('semantic paths include vanished sides; existing paths do not', () => {
 
 test('the derivation does not modify the repository it inspects', () => {
   const fingerprint = () => execFileSync('git',
-    ['status', '--porcelain'], {cwd: repo, encoding: UTF8});
+    ['status', '--porcelain'],
+    {cwd: repo, encoding: UTF8, env: gitProcessEnvironment()});
   const before = fingerprint();
   changedRecords({root: repo});
   assert.equal(fingerprint(), before);
