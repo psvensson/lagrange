@@ -322,8 +322,66 @@ async function dropExistingTables(client, {tolerateUnsupportedDrop = false} = {}
   return Object.freeze(skipped);
 }
 
+// CREATE TABLE on Lagrange is a durable provisioning job. When the job
+// outlives the statement's provisioning deadline the wire handler answers
+// 55P03 (lock_not_available) "Schema provisioning remains active" with the
+// job id and a retry_after_ms hint instead of blocking the connection. The
+// schema load honours that contract: it waits the hinted interval and polls
+// the table's existence until the provisioning settles or the bounded wait
+// expires. The CREATE statement is not re-issued (the job already owns it).
+const SCHEMA_PROVISIONING_ACTIVE_SQLSTATE = '55P03';
+const SCHEMA_PROVISIONING_ACTIVE_MARKER = 'Schema provisioning remains active';
+const SCHEMA_PROVISIONING_DEFAULT_RETRY_MS = 500;
+const SCHEMA_PROVISIONING_WAIT_BUDGET_MS = 120000;
+const CREATE_TABLE_NAME_PATTERN = /^\s*CREATE\s+TABLE\s+([A-Za-z0-9_]+)/iu;
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isSchemaProvisioningActive(error) {
+  return error?.code === SCHEMA_PROVISIONING_ACTIVE_SQLSTATE ||
+    String(error?.message || '').includes(SCHEMA_PROVISIONING_ACTIVE_MARKER);
+}
+
+function resolveSchemaProvisioningRetryMs(error) {
+  const detail = error?.detail;
+  let parsed = null;
+  if (detail && typeof detail === 'object') parsed = detail;
+  else if (typeof detail === 'string') {
+    try {
+      parsed = JSON.parse(detail);
+    } catch {
+      parsed = null;
+    }
+  }
+  const hinted = Number(parsed?.retry_after_ms);
+  return Number.isFinite(hinted) && hinted > ZERO ?
+    hinted : SCHEMA_PROVISIONING_DEFAULT_RETRY_MS;
+}
+
+async function createSchemaStatement(client, statement) {
+  try {
+    await client.query(statement);
+    return;
+  } catch (error) {
+    if (!isSchemaProvisioningActive(error)) throw error;
+    const table = CREATE_TABLE_NAME_PATTERN.exec(statement)?.[1];
+    if (!table) throw error;
+    const deadline = Date.now() + SCHEMA_PROVISIONING_WAIT_BUDGET_MS;
+    const retryMs = resolveSchemaProvisioningRetryMs(error);
+    while (Date.now() < deadline) {
+      await sleepMs(retryMs);
+      if (await tableExists(client, table)) return;
+    }
+    throw error;
+  }
+}
+
 async function createSchema(client) {
-  for (const statement of CREATE_SCHEMA) await client.query(statement);
+  for (const statement of CREATE_SCHEMA) {
+    await createSchemaStatement(client, statement);
+  }
 }
 
 async function loadDataset(client, dataset) {
