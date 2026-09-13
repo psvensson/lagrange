@@ -221,10 +221,12 @@ boundary below.
 
 *"Keep the customer's runtime; move the selected function to the data."*
 
-Phase 0.6 makes the native-runtime bridge a scheduled product milestone rather
-than an unversioned advanced-runtime idea. It contains the minimum real managed
-OCI lifecycle needed to run customer containers, followed by native Call Cell
-invocation through the existing Artifact / Binding / Cell execution owners.
+Phase 0.6 follows the 0.5 external-usability baseline and precedes the 1.0
+production-hardening milestone. It makes the native-runtime bridge a scheduled
+product milestone rather than an unversioned advanced-runtime idea. It contains
+the minimum real managed OCI lifecycle needed to run customer containers,
+followed by native Call Cell invocation through the existing Artifact / Binding /
+Cell execution owners.
 
 ### 1. Real Managed OCI Activation — 🟢 Community core
 
