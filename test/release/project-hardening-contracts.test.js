@@ -342,6 +342,19 @@ describe('prerelease publication contract', () => {
     assert.match(identity.run, /dist_tag=/u);
   });
 
+  it('ranks a release candidate below its release when guarding latest', async () => {
+    const {release} = await load();
+    const identity = step(release, 'Resolve release identity and consume durable exact-SHA proof');
+    // git's default version sort ranks v0.2.4-rc.2 above v0.2.4, so the
+    // backward-latest guard refused the first release after a candidate
+    // (v0.2.4, never published). The suffix rule restores semver order.
+    assert.match(identity.run,
+      /git -c versionsort\.suffix=- tag --list 'v\[0-9\]\*' --sort=-version:refname/u,
+      'the latest tag is derived with prereleases ranked below releases');
+    assert.match(identity.run, /Refusing to move latest backward/u,
+      'the guard itself stays');
+  });
+
   it('publishes a prerelease under next and never moves latest', async () => {
     const {release, releaseText} = await load();
     const build = step(release, 'Build and smoke-test Docker image');
