@@ -73,7 +73,6 @@ function buildMetaServiceRoutingMetadata() {
 }
 
 export {
-  META_ENDPOINT_VERSION,
   buildMetaServiceEndpoints,
   buildMetaServiceRoutingMetadata,
 };

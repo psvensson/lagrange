@@ -329,10 +329,10 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
           row[COLUMN.SERVICE_ID]).sort(),
         [
           META_SERVICE_ID.ADMIN_META,
-          META_SERVICE_ID.POSTGRES_WIRE,
           META_SERVICE_ID.WASM_META,
         ],
-        'join should seed built-in service_endpoints in the local cache',
+        'join should seed the boot-owned service_endpoints in the local ' +
+        'cache; sys-postgres-wire publishes only from its runtime',
       );
     } finally {
       NodeService.getInstance = originalGetNodeService;
