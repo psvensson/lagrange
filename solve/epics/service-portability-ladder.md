@@ -56,6 +56,13 @@ evidence. The capability flip of `realContainerActivation` and the removal of
 the mutable feature gate must happen in the same terminal aggregate; a pass that
 leaves the gate in place has not demonstrated the claim.
 
+It also does not demonstrate native OCI Call Cell invocation. That is a
+separate, downstream Phase 5 capability defined by
+`architecture/native-oci-call-cells.md` and the portability spec. It reuses this
+epic's real managed-container lifecycle but must enter through the existing
+Call Cell owner and `ServiceRuntimeLifecycle.invoke()` rather than widening the
+Docker host-agent control surface.
+
 **Open question inherited from the parent's triage.** Mint a narrower successor
 covering only the two frontiers never attempted, citing the three landed ones as
 provenance, or keep the five-frontier seal open until the OCI lane is scheduled.
