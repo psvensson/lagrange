@@ -50,6 +50,9 @@ import {
   serializeMembershipPublicationRow,
   shouldMergePlanningEvidenceRows,
 } from './membership-publication-planning-evidence.js';
+import {
+  runMembershipPublicationActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 // FD-upgrade (cutover §5 step 3): SWIM divergence probe that diffs the SWIM
 // detector's active set against the projection's published set. Emitted only when
@@ -118,7 +121,8 @@ class MembershipPublicationCoordinatorReads {
       new OwnerKeyReconcileQueue({
         name: MEMBERSHIP_PUBLICATION_OWNER_KEY,
         reconcileFn: async (_ownerKey, _reasons, context) =>
-          this.reconcileClusterMembership(context || {}),
+          runMembershipPublicationActivity(() =>
+            this.reconcileClusterMembership(context || {})),
       });
   }
 

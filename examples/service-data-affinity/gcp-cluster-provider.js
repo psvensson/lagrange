@@ -30,12 +30,17 @@ import {
 } from '../../test/distributed/harness/cluster-factory-layer.js';
 import {buildImage} from '../../test/distributed/build-image.js';
 import {
+  CLUSTER_CLASS_SHARED_CONTEXT,
+} from '../../test/distributed/harness/cluster-class-shared-context.js';
+import {
   applySourceFingerprintConfig,
 } from '../../test/distributed/source-fingerprint-config.js';
 import {createReadStream, createWriteStream} from 'node:fs';
 import {resolve} from 'node:path';
 import {pipeline} from 'node:stream/promises';
 import {createGunzip} from 'node:zlib';
+
+const {DATA_DIR_PATH} = CLUSTER_CLASS_SHARED_CONTEXT;
 
 const {createCluster} = CLUSTER_FACTORY_LAYER;
 
@@ -103,11 +108,43 @@ async function materializeGcpFullNodeLogs(nodes, outputDir) {
   }));
 }
 
+// The seed's formation attribution profile chunks (src/diagnostics/
+// formation-attribution-window.js) live in the seed container's data
+// directory. The runtime image is distroless (no shell), so they cross to
+// the host through Docker's archive endpoint as one tar file beside the
+// node logs, before the container stops; only a measured run asks for it.
+const FORMATION_PROFILE_DIRNAME = 'formation-profile';
+const GCP_SEED_PROFILE_DIR = `${DATA_DIR_PATH}/${FORMATION_PROFILE_DIRNAME}`;
+const FORMATION_PROFILE_ARCHIVE = `${FORMATION_PROFILE_DIRNAME}.tar`;
+const ATTRIBUTION_FLAG_ENV = 'LAGRANGE_FORMATION_ATTRIBUTION';
+const ATTRIBUTION_ENABLED = '1';
+
+async function materializeGcpSeedProfile({cluster, outputDir}) {
+  if (!outputDir || process.env[ATTRIBUTION_FLAG_ENV] !== ATTRIBUTION_ENABLED) {
+    return null;
+  }
+  // The node handle carries its own docker provider (the harness binds one
+  // per host); the cluster object exposes no provider lookup.
+  const [seed] = cluster.getNodes();
+  if (!seed?.containerId || !seed._dockerProvider) return null;
+  const archive = await seed._dockerProvider.getContainerArchive(
+    seed.containerId, GCP_SEED_PROFILE_DIR);
+  const target = resolve(outputDir, FORMATION_PROFILE_ARCHIVE);
+  await pipeline(archive, createWriteStream(target));
+  return target;
+}
+
 async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
   let clusterStopError = null;
   let logMaterializationError = null;
+  let profileMaterializationError = null;
   let provisionerDestroyError = null;
   let teardownNodes = null;
+  try {
+    await materializeGcpSeedProfile({cluster, outputDir});
+  } catch (error) {
+    profileMaterializationError = error;
+  }
   try {
     // Cluster.stop() finalizes the full-log streams and then clears its node
     // registry. Retain only the immutable handles needed to map those
@@ -138,6 +175,9 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
   }
   if (logMaterializationError) {
     throw logMaterializationError;
+  }
+  if (profileMaterializationError) {
+    throw profileMaterializationError;
   }
   if (provisionerDestroyError) {
     throw provisionerDestroyError;
@@ -224,6 +264,8 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
 }
 
 export {
+  FORMATION_PROFILE_DIRNAME,
+  GCP_SEED_PROFILE_DIR,
   startGcpAffinityCluster,
   stopGcpAffinityCluster,
   GCP_DEMO_DEPLOYMENT_PROFILE,

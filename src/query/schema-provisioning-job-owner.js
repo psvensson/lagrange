@@ -23,6 +23,9 @@ import {canonicalizeSchemaProvisioningIntent} from
 import {QUERY_ERROR_CODE} from './query-constants.js';
 import {rowToWorkflow, serializeWorkflow} from
   './schema-provisioning-job-repository.js';
+import {
+  runAdminActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   CANCEL_CODE: 'CANCEL',
@@ -367,7 +370,11 @@ class SchemaProvisioningJobOwner {
     return this.buildOutcome(renewedWorkflow);
   }
 
-  async runJob(intent, executor) {
+  runJob(intent, executor) {
+    return runAdminActivity(() => this.executeJob(intent, executor));
+  }
+
+  async executeJob(intent, executor) {
     const workflow = this.workflowCoordinator.requireWorkflow(intent.workflowId);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
       this.clearScheduledRetry(intent.workflowId);

@@ -19,6 +19,9 @@ import {
 } from './operation-owner-turn-policy.js';
 import * as LEDGER_SELF_MOVE_GATE
   from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {
+  runRebalancerActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const {
   OPERATION_OWNER_ACTION,
@@ -499,7 +502,12 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
    * @param {string|Object} operationInput
    * @return {Promise<Object>}
    */
-  async dispatchOperationInternal(operationInput, options = {}) {
+  dispatchOperationInternal(operationInput, options = {}) {
+    return runRebalancerActivity(() =>
+      this.executeDispatchOperationInternal(operationInput, options));
+  }
+
+  async executeDispatchOperationInternal(operationInput, options = {}) {
     const operation = await this.resolveDispatchOperation(operationInput);
     const operationId = this.getOperationIdFromInput(operationInput);
 

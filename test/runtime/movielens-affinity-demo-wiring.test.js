@@ -26,6 +26,7 @@ import {gzip as gzipCallback} from 'node:zlib';
 import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {Readable} from 'node:stream';
 import {promisify} from 'node:util';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -164,6 +165,61 @@ test('MovieLens GCP cleanup preserves full node logs before VM destruction',
     }
     t.end();
   });
+
+// The seed's formation attribution profile (formation-calibration-run): under
+// the flag the seed container's profile directory is pulled through the node
+// handle's docker provider as one tar beside the node logs, before the
+// container stops; without the flag no container is touched.
+test('MovieLens GCP cleanup pulls the seed profile archive only when the ' +
+  'attribution flag is set', async (t) => {
+  const FLAG = 'LAGRANGE_FORMATION_ATTRIBUTION';
+  const outputDir = await mkdtemp(join(tmpdir(), 'affinity-gcp-profile-'));
+  const before = process.env[FLAG];
+  const archiveRequests = [];
+  const events = [];
+  const seed = {
+    id: 'seed-node',
+    containerId: 'seed-container',
+    _dockerProvider: {
+      getContainerArchive: async (containerId, path) => {
+        archiveRequests.push({containerId, path, events: [...events]});
+        return Readable.from(['seed-profile-tar']);
+      },
+    },
+  };
+  const cluster = {
+    getNodes: () => [seed],
+    stop: async () => {
+      events.push('cluster-stopped');
+    },
+  };
+  const provisioner = {destroy: async () => events.push('vms-destroyed')};
+  const seedLogPath = fullLogDestPath(outputDir, GCP_DEMO_SCENARIO_NAME, seed.id);
+  await mkdir(join(seedLogPath, '..'), {recursive: true});
+  await writeFile(seedLogPath, await gzip('seed-complete\n'));
+  try {
+    delete process.env[FLAG];
+    await stopGcpAffinityCluster({cluster, provisioner, outputDir});
+    assert.deepEqual(archiveRequests, [], 'no flag: the container is not touched');
+
+    process.env[FLAG] = '1';
+    events.length = 0;
+    await stopGcpAffinityCluster({cluster, provisioner, outputDir});
+    assert.equal(archiveRequests.length, 1, 'flag set: one archive pull');
+    assert.equal(archiveRequests[0].containerId, 'seed-container');
+    assert.equal(archiveRequests[0].path, '/data/formation-profile');
+    assert.deepEqual(archiveRequests[0].events, [],
+      'the archive is pulled before the container stops');
+    assert.equal(
+      await readFile(join(outputDir, 'formation-profile.tar'), 'utf8'),
+      'seed-profile-tar', 'the tar lands beside the node logs');
+  } finally {
+    if (before === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = before;
+    await rm(outputDir, {recursive: true, force: true});
+  }
+  t.end();
+});
 
 test('MovieLens GCP cleanup keeps teardown best-effort error precedence',
   async (t) => {

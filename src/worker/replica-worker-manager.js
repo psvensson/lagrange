@@ -43,6 +43,9 @@ import {
 import {
   createReplicaWorkerManagerReplicaCreationMethods,
 } from './replica-worker-manager-replica-creation.js';
+import {
+  runWorkerDispatchActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const LOCAL_STR_REPLICA_WORKER_JS = 'replica-worker.js';
 const LOCAL_STR_REPLICA_WORKER_BUNDLE_CJS = 'replica-worker.bundle.cjs';
@@ -408,10 +411,10 @@ class ReplicaWorkerManager extends EventEmitter {
   async checkWorkerHealth(replicaId, handle, now) {
     try {
       const executionPool = this.getReplicaExecutionPool(replicaId);
-      const result = await executionPool.run({
+      const result = await runWorkerDispatchActivity(() => executionPool.run({
         operation: WORKER_OPERATION.HEALTH_CHECK,
         replicaId,
-      });
+      }));
 
       handle.lastHealthCheck = now;
       handle.healthStatus = result.healthy ?
@@ -454,10 +457,10 @@ class ReplicaWorkerManager extends EventEmitter {
 
     try {
       // Send stop command to worker
-      await executionPool.run({
+      await runWorkerDispatchActivity(() => executionPool.run({
         operation: WORKER_OPERATION.STOP_REPLICA,
         replicaId,
-      });
+      }));
 
       handle.status = WORKER_STATUS.STOPPED;
 
@@ -518,11 +521,11 @@ class ReplicaWorkerManager extends EventEmitter {
     }
 
     const executionPool = this.getReplicaExecutionPool(replicaId);
-    return executionPool.run({
+    return runWorkerDispatchActivity(() => executionPool.run({
       operation: WORKER_OPERATION.DELIVER_MESSAGE,
       replicaId,
       message,
-    });
+    }));
   }
 
   /**
@@ -548,13 +551,13 @@ class ReplicaWorkerManager extends EventEmitter {
     }
 
     const executionPool = this.getReplicaExecutionPool(replicaId);
-    const response = await executionPool.run({
+    const response = await runWorkerDispatchActivity(() => executionPool.run({
       operation: WORKER_OPERATION.DELIVER_MESSAGE,
       replicaId,
       message: {
         type: LEADERSHIP_MESSAGE_TYPE.GET_LEADERSHIP_STATUS,
       },
-    });
+    }));
 
     return {
       isLeader: response.isLeader || false,

@@ -7,6 +7,10 @@
  * @module worker/replica-worker-manager-replica-creation
  */
 
+import {
+  runWorkerDispatchActivity,
+} from '../diagnostics/formation-owner-attribution.js';
+
 function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
   const {
     FACADE_MESSAGE_TYPE,
@@ -197,7 +201,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
         const executionPool = dedicatedPool || this.pool;
 
         const result = await this.withTimeout(
-          executionPool.run({
+          runWorkerDispatchActivity(() => executionPool.run({
             operation: WORKER_OPERATION.CREATE_PARTITION_REPLICA,
             nodeId: this.nodeId,
             partitionId: options.partitionId,
@@ -209,7 +213,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
             replicaIds: options.replicaIds,
             peerAddresses: options.peerAddresses,
             deferElection: shouldDeferElection,
-          }),
+          })),
           timeoutMs,
         );
 
@@ -350,7 +354,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
         const executionPool = dedicatedPool || this.pool;
 
         const result = await this.withTimeout(
-          executionPool.run({
+          runWorkerDispatchActivity(() => executionPool.run({
             operation: WORKER_OPERATION.CREATE_MESSAGE_GROUP_REPLICA,
             nodeId: this.nodeId,
             groupId: options.groupId,
@@ -358,7 +362,7 @@ function createReplicaWorkerManagerReplicaCreationMethods(deps = {}) {
             replicaIds: options.replicaIds,
             peerAddresses: options.peerAddresses,
             deferElection: shouldDeferElection,
-          }),
+          })),
           timeoutMs,
         );
 

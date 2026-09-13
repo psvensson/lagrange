@@ -288,3 +288,56 @@ test('a missing or empty seed log is UNKNOWN, never PASS', async (t) => {
   fs.rmSync(dataRoot, {recursive: true, force: true});
   t.end();
 });
+
+// The seed's attribution window reaches the verdict through the seed log:
+// the complete window when it ended by the formed mark, else the last
+// periodic snapshot at or before it, else nothing.
+const ATTRIBUTION_WINDOW_MSG = 'Formation attribution window';
+const ATTRIBUTION_SNAPSHOT_MSG = 'Formation attribution snapshot';
+const FORMED_AT_SECONDS = 22;
+
+function attributionLine(offsetSeconds, msg, attribution, reason) {
+  return JSON.stringify({
+    level: 30, time: at(offsetSeconds), nodeId: SEED, msg, reason, attribution,
+  });
+}
+
+function attributionVerdict(lines) {
+  return deriveFormationVerdict({
+    seedLogText: lines.join('\n'),
+    formation: {
+      clusterStartedAtMs: BASE_MS,
+      clusterFormedAtMs: BASE_MS + FORMED_AT_SECONDS * SECOND_MS,
+    },
+  }).attribution;
+}
+
+test('the verdict carries the seed attribution window or its last snapshot', (t) => {
+  const snapshots = [
+    attributionLine(10, ATTRIBUTION_SNAPSHOT_MSG, {windowComplete: false, turnCount: 1}),
+    attributionLine(20, ATTRIBUTION_SNAPSHOT_MSG, {windowComplete: false, turnCount: 2}),
+  ];
+  const complete = attributionVerdict([
+    ...snapshots,
+    attributionLine(25, ATTRIBUTION_WINDOW_MSG,
+      {windowComplete: true, turnCount: 3}, 'formed_signal'),
+  ]);
+  t.equal(complete.source, 'window', 'a window ended by the formed mark wins');
+  t.equal(complete.reason, 'formed_signal');
+  t.equal(complete.turnCount, 3);
+
+  const late = attributionVerdict([
+    ...snapshots,
+    attributionLine(40, ATTRIBUTION_SNAPSHOT_MSG, {windowComplete: false, turnCount: 4}),
+    attributionLine(60, ATTRIBUTION_WINDOW_MSG,
+      {windowComplete: true, turnCount: 5}, 'deadline'),
+  ]);
+  t.equal(late.source, 'snapshot',
+    'a window that ran past the formed mark yields to the last snapshot before it');
+  t.equal(late.turnCount, 2, 'the snapshot at 20 s, not the one at 40 s');
+  t.equal(late.observedAtMs, BASE_MS + 20 * SECOND_MS);
+
+  t.equal(attributionVerdict([plainLine(1, 'Starting')]), null,
+    'a seed without the flag leaves no attribution');
+  t.end();
+});

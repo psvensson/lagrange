@@ -921,3 +921,38 @@ test('formation attribution propagation counterexamples are red on revert',
       'context-only propagation destroys the released partition');
     t.end();
   });
+
+test('snapshot reads the buckets mid-window without ending it', (t) => {
+  const harness = createHarness();
+  const {attribution} = harness;
+  attribution.start();
+  const callbacks = harness.callbacks();
+  callbacks.init(1, 'Timeout', 0);
+  harness.setNow(10);
+  callbacks.before(1);
+  attribution.run('bootstrap', () => {
+    harness.setNow(40);
+    // Still inside the bootstrap segment: the snapshot accrues the segment
+    // so far and restarts it, so nothing is counted twice later.
+    const partial = attribution.snapshot();
+    t.equal(partial.windowComplete, false, 'a snapshot is not a window');
+    t.equal(partial.windowDurationUs, 40, 'window so far');
+    t.equal(ownerRow(partial, 'bootstrap').durationUs, 30, 'bootstrap so far');
+    t.equal(partial.accountedDurationUs, partial.windowDurationUs,
+      'the partial buckets still partition the window so far');
+    harness.setNow(70);
+  });
+  harness.setNow(80);
+  callbacks.after(1);
+  harness.setNow(100);
+  const final = attribution.stop();
+  t.equal(final.windowComplete, true, 'stop completes the window');
+  t.equal(final.windowDurationUs, 100);
+  t.equal(ownerRow(final, 'bootstrap').durationUs, 60,
+    'the segment across the snapshot is counted once');
+  t.equal(final.unattributedDurationUs, 10,
+    'the turn outside the owner entry stays unattributed');
+  t.equal(final.accountedDurationUs, final.windowDurationUs);
+  t.equal(attribution.snapshot(), null, 'no window, no snapshot');
+  t.end();
+});

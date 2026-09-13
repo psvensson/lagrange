@@ -1,3 +1,6 @@
+import {
+  runBootstrapActivity,
+} from '../../diagnostics/formation-owner-attribution.js';
 const LOCAL_STR_STARTUP_WORKFLOW_REQUIRES_A_DURABLE_SESS = 'startup workflow requires a durable session store';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -83,7 +86,7 @@ class StartupPipelineRunner {
       });
 
       try {
-        await phase.run();
+        await runBootstrapActivity(() => phase.run());
         completedPhases.push(phase.name);
         this.emit(STARTUP_PIPELINE_EVENT.PHASE_COMPLETE, {
           phase: phase.name,
@@ -155,7 +158,7 @@ class StartupPipelineRunner {
       }
       this.emitCheckpointStart(step, resolvedSessionId);
       try {
-        await step.run(session);
+        await runBootstrapActivity(() => step.run(session));
       } catch (error) {
         session = await this.recordWorkflowFailure({
           error,

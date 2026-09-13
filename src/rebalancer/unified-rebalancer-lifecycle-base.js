@@ -17,6 +17,9 @@ import {
 import {resolveEntitySizeBytes} from './entity-size-resolution.js';
 import {ALLOWED_UNIFIED_SERVICE_TYPES} from
   '../constants/unified-service-lifecycle.js';
+import {
+  runRebalancerActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
@@ -313,7 +316,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.rebalanceCheckQueue = new OwnerKeyReconcileQueue({
       name: `${REBALANCER_QUEUE_NAME.REBALANCE_CHECK}:${this.entityId}`,
       reconcileFn: (_ownerKey, reasons) =>
-        this.reconcileRebalanceCheck(reasons),
+        runRebalancerActivity(() => this.reconcileRebalanceCheck(reasons)),
     });
     this.priorityRecoveryVisibilityCacheListener = null;
     this.bindPriorityRecoveryVisibilityCacheListener(this.systemTableCache);

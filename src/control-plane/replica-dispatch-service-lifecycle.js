@@ -5,6 +5,10 @@ import {
 import {
   REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS,
 } from './replica-dispatch-direct-wakeup.js';
+import {
+  runMembershipPublicationActivity,
+  runRebalancerActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const {
   CONTROL_PLANE_CONFIG_KEY,
@@ -187,7 +191,8 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         return new OwnerKeyReconcileQueue({
           name: this.buildOperationDispatchQueueName(shardIndex),
           reconcileFn: (ownerKey, _reasons, context) =>
-            this.reconcileOperationDispatch(ownerKey, context),
+            runRebalancerActivity(() =>
+              this.reconcileOperationDispatch(ownerKey, context)),
         });
       },
     );
@@ -203,7 +208,8 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         return new OwnerKeyReconcileQueue({
           name: this.buildNodeStateUpdateQueueName(shardIndex),
           reconcileFn: (ownerKey, _reasons, context) =>
-            this.reconcileNodeStateUpdate(ownerKey, context),
+            runRebalancerActivity(() =>
+              this.reconcileNodeStateUpdate(ownerKey, context)),
         });
       },
     );
@@ -221,15 +227,17 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
         maxAttempts: DISPATCH_DEFAULT.NODE_READY_RETRY_MAX_ATTEMPTS,
       },
       reconcileFn: (ownerKey, _reasons, context) =>
-        this.reconcileNodeReadyRetry(ownerKey, context),
+        runRebalancerActivity(() =>
+          this.reconcileNodeReadyRetry(ownerKey, context)),
     });
     this.membershipPublicationAdvanceQueue = new OwnerKeyReconcileQueue({
       name: DISPATCH_QUEUE_NAME.MEMBERSHIP_PUBLICATION_ADVANCE,
       reconcileFn: (ownerKey, _reasons, context) =>
-        this.reconcileLocalReadyNodeMembershipPublicationAdvance(
-          ownerKey,
-          context,
-        ),
+        runMembershipPublicationActivity(() =>
+          this.reconcileLocalReadyNodeMembershipPublicationAdvance(
+            ownerKey,
+            context,
+          )),
     });
   }
 

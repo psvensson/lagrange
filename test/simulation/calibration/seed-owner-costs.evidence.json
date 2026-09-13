@@ -1,0 +1,588 @@
+{
+  "schemaVersion": 1,
+  "quest": "formation-calibration-run",
+  "recordedAt": "2026-09-13T10:52:46.608Z",
+  "head": "8a6275a4d332215d6d6c47ce2925b0f3e92c8fa3",
+  "seedVersion": "0.2.5",
+  "bootedSrcFingerprint": "8f4ebe842cff5176",
+  "trendRecord": "2026-09-13T10:47:48 head 8a6275a4d PASS schema_admitted seedBlockedMs 63127 windowMs 340473",
+  "artifacts": {
+    "liveReport": {
+      "path": "test/simulation/calibration/seed-owner-costs.report.json",
+      "originalPath": "test-output/reports/movielens-lagrange-formation-only-live-2026-09-13T10-47-48-003Z.report.json",
+      "sha256": "97f38aa5817f78c0dc0daee956f93ec40ac69286e5846b73a9c095db2150eda1"
+    },
+    "seedProfileArchive": {
+      "path": "data/examples/service-data-affinity-demo/formation-profile.tar (run archive, not committed)",
+      "sha256": "f72ea3b0e0e1050f3697ba7af444af7edf4223fdd86409f84eef404914ec9faa",
+      "bytes": 38709760,
+      "chunks": [
+        {
+          "time": "2026-09-13T10:40:02.216Z",
+          "file": "/data/formation-profile/seed-main-thread-0.cpuprofile",
+          "final": false
+        },
+        {
+          "time": "2026-09-13T10:41:02.459Z",
+          "file": "/data/formation-profile/seed-main-thread-1.cpuprofile",
+          "final": false
+        },
+        {
+          "time": "2026-09-13T10:42:03.142Z",
+          "file": "/data/formation-profile/seed-main-thread-2.cpuprofile",
+          "final": false
+        },
+        {
+          "time": "2026-09-13T10:42:31.816Z",
+          "file": "/data/formation-profile/seed-main-thread-3.cpuprofile",
+          "final": true
+        }
+      ]
+    },
+    "seedLog": {
+      "path": "data/examples/service-data-affinity-demo/node-0.log (run archive, not committed)",
+      "lines": 55602
+    }
+  },
+  "formationWindow": {
+    "startMs": 1789295746164,
+    "endMs": 1789296086637,
+    "source": "demo_phase_timing",
+    "windowMs": 340473
+  },
+  "seedGaps": {
+    "gapCount": 28,
+    "totalGapMs": 77653,
+    "unexplainedMs": 63127,
+    "maxGapMs": 6442,
+    "blockedPercentOfWindow": 18.540970943364083,
+    "topSites": [
+      {
+        "site": "raft_follower_commit_apply_slice",
+        "totalMs": 7322,
+        "count": 23423
+      },
+      {
+        "site": "publication_recovery_gate_snapshot_build",
+        "totalMs": 2956,
+        "count": 28111
+      },
+      {
+        "site": "projection_readiness_owner_build",
+        "totalMs": 1798,
+        "count": 1297
+      },
+      {
+        "site": "priority_recovery_planning_projection_build",
+        "totalMs": 1545,
+        "count": 12566
+      },
+      {
+        "site": "partition_replica_init",
+        "totalMs": 1097,
+        "count": 135
+      }
+    ]
+  },
+  "windowStarted": {
+    "time": "2026-09-13T10:38:58.851Z",
+    "deadlineMs": 210000,
+    "snapshotIntervalMs": 10000
+  },
+  "harvested": {
+    "source": "snapshot",
+    "observedAtMs": 1789296090824,
+    "schemaVersion": 1,
+    "windowComplete": false,
+    "windowStartedAtUs": 108065231,
+    "windowEndedAtUs": 260162339,
+    "windowDurationUs": 152097108,
+    "windowDurationMs": 152097.108,
+    "busyDurationUs": 139821478,
+    "idleDurationUs": 12275630,
+    "unattributedDurationUs": 5318882,
+    "unattributedDispatchCount": 89281,
+    "unattributedPercent": 3.497030331437992,
+    "accountedDurationUs": 152097108,
+    "partitionDeltaUs": 0,
+    "overlapDurationUs": 0,
+    "turnCount": 4331658,
+    "owners": [
+      {
+        "owner": "admin",
+        "durationUs": 3168753,
+        "durationMs": 3168.753,
+        "dispatchCount": 45363,
+        "handoffCount": 147,
+        "turnSegmentCount": 45510
+      },
+      {
+        "owner": "bootstrap",
+        "durationUs": 8962054,
+        "durationMs": 8962.054,
+        "dispatchCount": 218890,
+        "handoffCount": 13,
+        "turnSegmentCount": 218903
+      },
+      {
+        "owner": "membership_publication",
+        "durationUs": 23615636,
+        "durationMs": 23615.636,
+        "dispatchCount": 413850,
+        "handoffCount": 882,
+        "turnSegmentCount": 414732
+      },
+      {
+        "owner": "raft_apply",
+        "durationUs": 7843150,
+        "durationMs": 7843.15,
+        "dispatchCount": 0,
+        "handoffCount": 24680,
+        "turnSegmentCount": 24680
+      },
+      {
+        "owner": "raft_protocol",
+        "durationUs": 49830495,
+        "durationMs": 49830.495,
+        "dispatchCount": 3123519,
+        "handoffCount": 307765,
+        "turnSegmentCount": 3431284
+      },
+      {
+        "owner": "readiness",
+        "durationUs": 620393,
+        "durationMs": 620.393,
+        "dispatchCount": 80,
+        "handoffCount": 250,
+        "turnSegmentCount": 330
+      },
+      {
+        "owner": "rebalancer",
+        "durationUs": 37900105,
+        "durationMs": 37900.105,
+        "dispatchCount": 336484,
+        "handoffCount": 3747,
+        "turnSegmentCount": 340231
+      },
+      {
+        "owner": "transport",
+        "durationUs": 2562010,
+        "durationMs": 2562.01,
+        "dispatchCount": 104199,
+        "handoffCount": 28045,
+        "turnSegmentCount": 132244
+      },
+      {
+        "owner": "worker_dispatch",
+        "durationUs": 0,
+        "durationMs": 0,
+        "dispatchCount": 0,
+        "handoffCount": 0,
+        "turnSegmentCount": 0
+      }
+    ]
+  },
+  "completeWindow": {
+    "time": "2026-09-13T10:42:31.501Z",
+    "reason": "deadline",
+    "attribution": {
+      "schemaVersion": 1,
+      "windowComplete": true,
+      "windowStartedAtUs": 108065231,
+      "windowEndedAtUs": 320839529,
+      "windowDurationUs": 212774298,
+      "windowDurationMs": 212774.298,
+      "busyDurationUs": 198266087,
+      "idleDurationUs": 14508211,
+      "unattributedDurationUs": 7043667,
+      "unattributedDispatchCount": 98369,
+      "unattributedPercent": 3.310393720579917,
+      "accountedDurationUs": 212774298,
+      "partitionDeltaUs": 0,
+      "overlapDurationUs": 0,
+      "turnCount": 6167897,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 7437336,
+          "durationMs": 7437.336,
+          "dispatchCount": 81871,
+          "handoffCount": 205,
+          "turnSegmentCount": 82076
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 12771682,
+          "durationMs": 12771.682,
+          "dispatchCount": 296864,
+          "handoffCount": 13,
+          "turnSegmentCount": 296877
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 33001573,
+          "durationMs": 33001.573,
+          "dispatchCount": 574622,
+          "handoffCount": 1088,
+          "turnSegmentCount": 575710
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 11908377,
+          "durationMs": 11908.377,
+          "dispatchCount": 0,
+          "handoffCount": 37268,
+          "turnSegmentCount": 37268
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 72138436,
+          "durationMs": 72138.436,
+          "dispatchCount": 4545126,
+          "handoffCount": 454342,
+          "turnSegmentCount": 4999468
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1457848,
+          "durationMs": 1457.848,
+          "dispatchCount": 164,
+          "handoffCount": 432,
+          "turnSegmentCount": 596
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 48281463,
+          "durationMs": 48281.463,
+          "dispatchCount": 398029,
+          "handoffCount": 5374,
+          "turnSegmentCount": 403403
+        },
+        {
+          "owner": "transport",
+          "durationUs": 4225705,
+          "durationMs": 4225.705,
+          "dispatchCount": 172860,
+          "handoffCount": 45430,
+          "turnSegmentCount": 218290
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    }
+  },
+  "snapshots": [
+    {
+      "time": "2026-09-13T10:39:12.049Z",
+      "windowDurationMs": 13321.942,
+      "unattributedPercent": 4.779168082251071,
+      "idleDurationUs": 5777839,
+      "owners": {
+        "admin": 0,
+        "bootstrap": 2139874,
+        "membership_publication": 0,
+        "raft_apply": 957895,
+        "raft_protocol": 3808142,
+        "readiness": 0,
+        "rebalancer": 0,
+        "transport": 1514,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:39:22.060Z",
+      "windowDurationMs": 23333.061,
+      "unattributedPercent": 4.981785287408283,
+      "idleDurationUs": 8197126,
+      "owners": {
+        "admin": 80602,
+        "bootstrap": 3402761,
+        "membership_publication": 638979,
+        "raft_apply": 1015022,
+        "raft_protocol": 8203129,
+        "readiness": 102403,
+        "rebalancer": 522951,
+        "transport": 7685,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:39:34.206Z",
+      "windowDurationMs": 35479.472,
+      "unattributedPercent": 3.579819338912372,
+      "idleDurationUs": 8449675,
+      "owners": {
+        "admin": 107395,
+        "bootstrap": 3666271,
+        "membership_publication": 5311689,
+        "raft_apply": 1134769,
+        "raft_protocol": 10967035,
+        "readiness": 104702,
+        "rebalancer": 4376794,
+        "transport": 91041,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:39:49.896Z",
+      "windowDurationMs": 51168.839,
+      "unattributedPercent": 2.7497555690094906,
+      "idleDurationUs": 8777429,
+      "owners": {
+        "admin": 172044,
+        "bootstrap": 4244184,
+        "membership_publication": 10607226,
+        "raft_apply": 1650345,
+        "raft_protocol": 14942416,
+        "readiness": 105379,
+        "rebalancer": 8990016,
+        "transport": 272782,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:02.716Z",
+      "windowDurationMs": 63989.363,
+      "unattributedPercent": 3.9163899787531875,
+      "idleDurationUs": 9083479,
+      "owners": {
+        "admin": 293147,
+        "bootstrap": 5047856,
+        "membership_publication": 12629417,
+        "raft_apply": 2150183,
+        "raft_protocol": 18195595,
+        "readiness": 107779,
+        "rebalancer": 13370494,
+        "transport": 605340,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:14.713Z",
+      "windowDurationMs": 75986.004,
+      "unattributedPercent": 3.53646179367453,
+      "idleDurationUs": 9494757,
+      "owners": {
+        "admin": 387892,
+        "bootstrap": 5523668,
+        "membership_publication": 15135192,
+        "raft_apply": 2804256,
+        "raft_protocol": 21322462,
+        "readiness": 108650,
+        "rebalancer": 17662865,
+        "transport": 859046,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:27.562Z",
+      "windowDurationMs": 88835.709,
+      "unattributedPercent": 3.146399158023267,
+      "idleDurationUs": 9859500,
+      "owners": {
+        "admin": 473095,
+        "bootstrap": 5936137,
+        "membership_publication": 17295470,
+        "raft_apply": 3589967,
+        "raft_protocol": 25050060,
+        "readiness": 109383,
+        "rebalancer": 22699334,
+        "transport": 1027637,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:38.324Z",
+      "windowDurationMs": 99597.417,
+      "unattributedPercent": 3.15013691569933,
+      "idleDurationUs": 10217141,
+      "owners": {
+        "admin": 541100,
+        "bootstrap": 6288551,
+        "membership_publication": 18425125,
+        "raft_apply": 4257174,
+        "raft_protocol": 29041302,
+        "readiness": 112595,
+        "rebalancer": 26199175,
+        "transport": 1377799,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:48.415Z",
+      "windowDurationMs": 109687.689,
+      "unattributedPercent": 3.0345684464188136,
+      "idleDurationUs": 10553324,
+      "owners": {
+        "admin": 654199,
+        "bootstrap": 6838083,
+        "membership_publication": 19486240,
+        "raft_apply": 4834090,
+        "raft_protocol": 32532395,
+        "readiness": 159732,
+        "rebalancer": 29737697,
+        "transport": 1563381,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:40:58.456Z",
+      "windowDurationMs": 119729.192,
+      "unattributedPercent": 3.0021675916763892,
+      "idleDurationUs": 10975031,
+      "owners": {
+        "admin": 1825486,
+        "bootstrap": 7145985,
+        "membership_publication": 20589738,
+        "raft_apply": 5513160,
+        "raft_protocol": 36317510,
+        "readiness": 353752,
+        "rebalancer": 31691874,
+        "transport": 1722185,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:41:09.820Z",
+      "windowDurationMs": 131092.738,
+      "unattributedPercent": 3.6882393897364474,
+      "idleDurationUs": 11374992,
+      "owners": {
+        "admin": 2317405,
+        "bootstrap": 7598165,
+        "membership_publication": 21600835,
+        "raft_apply": 6304135,
+        "raft_protocol": 40349627,
+        "readiness": 531560,
+        "rebalancer": 34253920,
+        "transport": 1927085,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:41:20.360Z",
+      "windowDurationMs": 141633.394,
+      "unattributedPercent": 3.622630126338708,
+      "idleDurationUs": 11874482,
+      "owners": {
+        "admin": 2758303,
+        "bootstrap": 8041628,
+        "membership_publication": 22654839,
+        "raft_apply": 7025860,
+        "raft_protocol": 45069442,
+        "readiness": 576486,
+        "rebalancer": 36217663,
+        "transport": 2283837,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:41:30.824Z",
+      "windowDurationMs": 152097.108,
+      "unattributedPercent": 3.497030331437992,
+      "idleDurationUs": 12275630,
+      "owners": {
+        "admin": 3168753,
+        "bootstrap": 8962054,
+        "membership_publication": 23615636,
+        "raft_apply": 7843150,
+        "raft_protocol": 49830495,
+        "readiness": 620393,
+        "rebalancer": 37900105,
+        "transport": 2562010,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:41:41.932Z",
+      "windowDurationMs": 163205.39,
+      "unattributedPercent": 3.3663900438582326,
+      "idleDurationUs": 12704283,
+      "owners": {
+        "admin": 4729247,
+        "bootstrap": 9843208,
+        "membership_publication": 24798411,
+        "raft_apply": 8630779,
+        "raft_protocol": 54267986,
+        "readiness": 747590,
+        "rebalancer": 39158946,
+        "transport": 2830810,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:41:51.983Z",
+      "windowDurationMs": 173256.607,
+      "unattributedPercent": 3.2864391716963497,
+      "idleDurationUs": 13082608,
+      "owners": {
+        "admin": 6355196,
+        "bootstrap": 10644014,
+        "membership_publication": 25784739,
+        "raft_apply": 9346501,
+        "raft_protocol": 58048645,
+        "readiness": 890153,
+        "rebalancer": 40298598,
+        "transport": 3112180,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:42:03.645Z",
+      "windowDurationMs": 184918.093,
+      "unattributedPercent": 3.695040809230063,
+      "idleDurationUs": 13632913,
+      "owners": {
+        "admin": 6786144,
+        "bootstrap": 11497956,
+        "membership_publication": 26940408,
+        "raft_apply": 10272327,
+        "raft_protocol": 62937634,
+        "readiness": 1197507,
+        "rebalancer": 41410904,
+        "transport": 3409501,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:42:13.716Z",
+      "windowDurationMs": 194988.957,
+      "unattributedPercent": 3.5618888919950478,
+      "idleDurationUs": 14023803,
+      "owners": {
+        "admin": 7136527,
+        "bootstrap": 12325870,
+        "membership_publication": 28347096,
+        "raft_apply": 11021521,
+        "raft_protocol": 66993123,
+        "readiness": 1452898,
+        "rebalancer": 43074688,
+        "transport": 3668141,
+        "worker_dispatch": 0
+      }
+    },
+    {
+      "time": "2026-09-13T10:42:24.348Z",
+      "windowDurationMs": 205621.006,
+      "unattributedPercent": 3.4105382209831223,
+      "idleDurationUs": 14314657,
+      "owners": {
+        "admin": 7326731,
+        "bootstrap": 12592308,
+        "membership_publication": 31459946,
+        "raft_apply": 11546150,
+        "raft_protocol": 70097987,
+        "readiness": 1455985,
+        "rebalancer": 45855059,
+        "transport": 3959400,
+        "worker_dispatch": 0
+      }
+    }
+  ]
+}

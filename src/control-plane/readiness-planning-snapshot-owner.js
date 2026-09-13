@@ -33,6 +33,9 @@ import {ReadinessPlanningDiagnosticRetention} from
   './readiness-planning-diagnostic-retention.js';
 import {installReadinessPlanningSemanticCurrencyMethods} from './readiness-planning-semantic-currency-methods.js';
 import {installReadinessPlanningCompletionAdmissionMethods} from './readiness-planning-completion-admission-methods.js';
+import {
+  runReadinessActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -126,7 +129,7 @@ function createPlanningQueue(owner, options) {
     setTimeoutFn: owner.service?.setTimeoutFn,
     clearTimeoutFn: owner.service?.clearTimeoutFn,
     reconcileFn: (_queueOwnerKey, _reasons, context) =>
-      owner.reconcile(context?.ownerKey, context),
+      runReadinessActivity(() => owner.reconcile(context?.ownerKey, context)),
     retryPolicy: {
       isRetryableError: isReadinessBuildFailureRetryable,
       getRetryAfterMs: getReadinessBuildRetryAfterMs,

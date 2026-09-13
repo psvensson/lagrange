@@ -73,7 +73,15 @@ import {
 } from './host-scheduling-evidence.js';
 import {collectFormationVerdict} from './formation-verdict.js';
 import {
+  ATTRIBUTION_ENV as FORMATION_ATTRIBUTION_ENV,
+  DEADLINE_ENV as FORMATION_ATTRIBUTION_DEADLINE_ENV,
+  FORMED_SIGNAL as FORMATION_FORMED_SIGNAL,
+  PROFILE_DIR_ENV as FORMATION_PROFILE_DIR_ENV,
+} from '../../src/diagnostics/formation-attribution-window.js';
+import {
   startGcpAffinityCluster,
+  FORMATION_PROFILE_DIRNAME,
+  GCP_SEED_PROFILE_DIR,
 } from './gcp-cluster-provider.js';
 import {
   assessAffinityDemoCompletion,
@@ -108,6 +116,11 @@ const GCP_MODE_FLAG = '--gcp';
 const FORMATION_ONLY_ENV = 'LAGRANGE_AFFINITY_DEMO_FORMATION_ONLY';
 const FORMATION_ONLY_FLAG = '--formation-only';
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
+// The seed's attribution window (LAGRANGE_FORMATION_ATTRIBUTION=1) ends on
+// the formed signal or on the formation budget plus this margin.
+const FORMATION_ATTRIBUTION_MARGIN_MS = 30000;
+const FORMATION_ATTRIBUTION_ENABLED = '1';
+const SEED_NODE_INDEX = 0;
 const POLL_INTERVAL_MS = 2000;
 const OBSERVE_INTERVAL_MS = 10000;
 // Hard cap on the convergence watch - but staleness usually fires
@@ -240,6 +253,23 @@ const PARALLEL_REDUCE_CONFIG = Object.freeze({
   resultSnapshotColumn: RESULT_SNAPSHOT_COLUMN,
 });
 
+function formationAttributionEnabled() {
+  return process.env[FORMATION_ATTRIBUTION_ENV] === FORMATION_ATTRIBUTION_ENABLED;
+}
+
+// The formed event, delivered to the seed's attribution window; the seed's
+// window otherwise runs to its deadline. Only a locally supervised seed can
+// be signalled; the GCP provider exposes no signal path, so there the
+// window ends on the deadline and the verdict reads the snapshot nearest
+// the formed mark.
+function signalSeedFormed(nodes) {
+  if (!formationAttributionEnabled()) return false;
+  const seed = nodes.find((node) => node.index === SEED_NODE_INDEX);
+  if (!seed?.process || seed.process.exitCode !== null ||
+    seed.process.signalCode !== null) return false;
+  return seed.process.kill(FORMATION_FORMED_SIGNAL);
+}
+
 async function startNode(index, dataRoot) {
   const restPort = BASE_REST_PORT + index * PORT_STRIDE;
   const adminPort = BASE_ADMIN_PORT + index * PORT_STRIDE;
@@ -260,6 +290,15 @@ async function startNode(index, dataRoot) {
   if (index > 0) {
     env.SEED_NODE_ADDRESS = `localhost:${BASE_REST_PORT}`;
     args.push(DEMO_CONSTANTS.SEED_FLAG, `localhost:${BASE_REST_PORT}`);
+  }
+  // Only the seed is measured: a joiner with the flag would hook every
+  // async resource and log snapshots, perturbing the load the seed is under.
+  if (index === SEED_NODE_INDEX && formationAttributionEnabled()) {
+    env[FORMATION_ATTRIBUTION_DEADLINE_ENV] =
+      String(CLUSTER_FORM_TIMEOUT_MS + FORMATION_ATTRIBUTION_MARGIN_MS);
+    env[FORMATION_PROFILE_DIR_ENV] = resolve(dataRoot, FORMATION_PROFILE_DIRNAME);
+  } else {
+    delete env[FORMATION_ATTRIBUTION_ENV];
   }
   const child = spawn('node', args, {env, stdio: ['ignore', 'pipe', 'pipe']});
   child.stdout.pipe(logStream);
@@ -850,6 +889,13 @@ function resolveClusterMode() {
 async function startClusterNodes(mode, nodes, dataRoot) {
   if (mode === DEMO_CONSTANTS.GCP_MODE) {
     console.log(DEMO_CONSTANTS.GCP_START_MESSAGE);
+    // The harness forwards the attribution keys to the seed container only;
+    // the window ends on this deadline there, since no signal reaches it.
+    if (formationAttributionEnabled()) {
+      process.env[FORMATION_ATTRIBUTION_DEADLINE_ENV] =
+        String(CLUSTER_FORM_TIMEOUT_MS + FORMATION_ATTRIBUTION_MARGIN_MS);
+      process.env[FORMATION_PROFILE_DIR_ENV] = GCP_SEED_PROFILE_DIR;
+    }
     const gcp = await startGcpAffinityCluster({
       verbose: true,
       outputDir: dataRoot,
@@ -907,6 +953,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       await waitForActiveNodesGcp(NODE_COUNT);
     }
     formation.clusterFormedAtMs = Date.now();
+    formation.seedSignalledFormed = signalSeedFormed(nodes);
     console.log(DEMO_CONSTANTS.CLUSTER_FORMED_MESSAGE);
     console.log(SCHEMA_ADMISSION_WAIT_MESSAGE);
     const schemaAdmission = await waitForAffinityDemoSchemaAdmission({

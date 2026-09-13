@@ -27,9 +27,16 @@ authorizes:
   - src/message-group
   - src/raft
   - src/cdc
+  - src/transport
+  - src/admin
+  - src/query
+  - src/lagrange-runtime-startup.js
   - test/convergence
   - test/simulation
   - test/distributed/harness
+  - test/diagnostics
+  - test/runtime
+  - test/scripts/formation-health.test.js
   - test/integration/helpers
   - test/integration/message-group-multi-join-formation.integration.test.js
   - test/integration/preflight-critical-path-hops.integration.test.js

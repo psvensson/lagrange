@@ -263,6 +263,78 @@ class FormationTurnAttribution {
     });
   }
 
+  /**
+   * The buckets so far, without ending the window: the active segment is
+   * accrued up to now and restarted, so a later snapshot or stop() never
+   * counts the same time twice. Null when no window is open.
+   * @returns {object|null}
+   */
+  snapshot() {
+    if (!this.started) return null;
+    const nowUs = this.readClockUs();
+    if (this.depth > ZERO) {
+      this.accrueActiveSegment(nowUs);
+      this.activeSegmentStartedAtUs = nowUs;
+    }
+    return this.buildSnapshot(nowUs, false);
+  }
+
+  buildSnapshot(windowEndedAtUs, windowComplete) {
+    const windowDurationUs = windowEndedAtUs - this.windowStartedAtUs;
+    let busyDurationUs = ZERO;
+    mapForEach(this.ownerDurationsUs, (durationUs) => {
+      busyDurationUs += durationUs;
+    });
+    if (busyDurationUs > windowDurationUs) {
+      throw new Error(OVERLAP_ERROR);
+    }
+    const idleDurationUs = windowDurationUs - busyDurationUs;
+    const owners = arrayMap(sortedOwnerNames(
+      this.ownerDurationsUs,
+      this.dispatchCounts,
+      this.handoffCounts,
+    ), (owner) => {
+      const durationUs = mapGet(this.ownerDurationsUs, owner) || ZERO;
+      const dispatchCount = mapGet(this.dispatchCounts, owner) || ZERO;
+      const handoffCount = mapGet(this.handoffCounts, owner) || ZERO;
+      return {
+        owner,
+        durationUs,
+        durationMs: durationUs / MICROSECONDS_PER_MILLISECOND,
+        dispatchCount,
+        handoffCount,
+        turnSegmentCount: dispatchCount + handoffCount,
+      };
+    });
+    const unattributedDurationUs =
+      mapGet(this.ownerDurationsUs, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
+    const unattributedDispatchCount =
+      mapGet(this.dispatchCounts, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
+    return {
+      schemaVersion: 1,
+      windowComplete,
+      windowStartedAtUs: this.windowStartedAtUs,
+      windowEndedAtUs,
+      windowDurationUs,
+      windowDurationMs:
+        windowDurationUs / MICROSECONDS_PER_MILLISECOND,
+      busyDurationUs,
+      idleDurationUs,
+      unattributedDurationUs,
+      unattributedDispatchCount,
+      unattributedPercent:
+        windowDurationUs > ZERO ?
+          (unattributedDurationUs / windowDurationUs) * PERCENT_MULTIPLIER :
+          ZERO,
+      accountedDurationUs: busyDurationUs + idleDurationUs,
+      partitionDeltaUs:
+        windowDurationUs - busyDurationUs - idleDurationUs,
+      overlapDurationUs: ZERO,
+      turnCount: this.turnCount,
+      owners,
+    };
+  }
+
   stop() {
     if (!this.started) return null;
     let snapshotReady = false;
@@ -271,58 +343,7 @@ class FormationTurnAttribution {
       if (this.depth > ZERO) {
         this.accrueActiveSegment(windowEndedAtUs);
       }
-      const windowDurationUs = windowEndedAtUs - this.windowStartedAtUs;
-      let busyDurationUs = ZERO;
-      mapForEach(this.ownerDurationsUs, (durationUs) => {
-        busyDurationUs += durationUs;
-      });
-      if (busyDurationUs > windowDurationUs) {
-        throw new Error(OVERLAP_ERROR);
-      }
-      const idleDurationUs = windowDurationUs - busyDurationUs;
-      const owners = arrayMap(sortedOwnerNames(
-        this.ownerDurationsUs,
-        this.dispatchCounts,
-        this.handoffCounts,
-      ), (owner) => {
-        const durationUs = mapGet(this.ownerDurationsUs, owner) || ZERO;
-        const dispatchCount = mapGet(this.dispatchCounts, owner) || ZERO;
-        const handoffCount = mapGet(this.handoffCounts, owner) || ZERO;
-        return {
-          owner,
-          durationUs,
-          durationMs: durationUs / MICROSECONDS_PER_MILLISECOND,
-          dispatchCount,
-          handoffCount,
-          turnSegmentCount: dispatchCount + handoffCount,
-        };
-      });
-      const unattributedDurationUs =
-        mapGet(this.ownerDurationsUs, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
-      const unattributedDispatchCount =
-        mapGet(this.dispatchCounts, FORMATION_OWNER.UNATTRIBUTED) || ZERO;
-      const snapshot = {
-        schemaVersion: 1,
-        windowStartedAtUs: this.windowStartedAtUs,
-        windowEndedAtUs,
-        windowDurationUs,
-        windowDurationMs:
-          windowDurationUs / MICROSECONDS_PER_MILLISECOND,
-        busyDurationUs,
-        idleDurationUs,
-        unattributedDurationUs,
-        unattributedDispatchCount,
-        unattributedPercent:
-          windowDurationUs > ZERO ?
-            (unattributedDurationUs / windowDurationUs) * PERCENT_MULTIPLIER :
-            ZERO,
-        accountedDurationUs: busyDurationUs + idleDurationUs,
-        partitionDeltaUs:
-          windowDurationUs - busyDurationUs - idleDurationUs,
-        overlapDurationUs: ZERO,
-        turnCount: this.turnCount,
-        owners,
-      };
+      const snapshot = this.buildSnapshot(windowEndedAtUs, true);
       snapshotReady = true;
       return snapshot;
     } finally {

@@ -56,6 +56,15 @@ const FORWARDED_HOST_ENV_KEYS = Object.freeze([
   'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD',
   'LAGRANGE_LOOP_GAP_PROFILE',
 ]);
+// The formation attribution window (src/diagnostics/formation-attribution-
+// window.js) measures the seed only; these cross into the seed container and
+// no other, so joiners never carry the measurement's async hooks.
+const FORWARDED_SEED_HOST_ENV_KEYS = Object.freeze([
+  'LAGRANGE_FORMATION_ATTRIBUTION',
+  'LAGRANGE_FORMATION_ATTRIBUTION_DEADLINE_MS',
+  'LAGRANGE_FORMATION_PROFILE_DIR',
+]);
+const SEED_NODE_INDEX = 0;
 const LAGRANGE_ENV_PREFIX = 'LAGRANGE_';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
@@ -165,7 +174,8 @@ function canonicalContainerEnv(inspect) {
     if (objectHasOwn(values, key)) return null;
     values[key] = value;
     if (stringStartsWith(key, LAGRANGE_ENV_PREFIX) &&
-      !arrayIncludes(FORWARDED_HOST_ENV_KEYS, key)) {
+      !arrayIncludes(FORWARDED_HOST_ENV_KEYS, key) &&
+      !arrayIncludes(FORWARDED_SEED_HOST_ENV_KEYS, key)) {
       return null;
     }
   }
@@ -632,6 +642,14 @@ class ClusterLifecycleBase {
       const value = process.env[key];
       if (typeof value === 'string' && value.length > ZERO) {
         env[key] = value;
+      }
+    }
+    if (nodeIndex === SEED_NODE_INDEX) {
+      for (const key of FORWARDED_SEED_HOST_ENV_KEYS) {
+        const value = process.env[key];
+        if (typeof value === 'string' && value.length > ZERO) {
+          env[key] = value;
+        }
       }
     }
     return env;

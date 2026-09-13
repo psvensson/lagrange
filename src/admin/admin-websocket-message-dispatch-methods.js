@@ -1,6 +1,9 @@
 import {createAdminQueryResultMessageEnvelope} from './admin-query-result-message-envelope.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPISegment2} from './admin-websocket-load-lane-admission.js';
+import {
+  runAdminActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const STALE_SOCKET_LOG_MSG = 'Closing stale admin socket connection on lane';
 
@@ -95,66 +98,68 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
   },
 
   handleMessage(clientInfo, data) {
-    let message;
+    return runAdminActivity(() => {
+      let message;
 
-    try {
-      const messageStr = data.toString();
-      message = JSON.parse(messageStr);
-    } catch (_error) {
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.INVALID_JSON,
-        ADMIN_ERROR_HINT.INVALID_JSON,
-      );
-      return;
-    }
+      try {
+        const messageStr = data.toString();
+        message = JSON.parse(messageStr);
+      } catch (_error) {
+        this.sendError(
+          clientInfo,
+          null,
+          ErrorCode.MALFORMED_JSON,
+          ADMIN_ERROR_MESSAGE.INVALID_JSON,
+          ADMIN_ERROR_HINT.INVALID_JSON,
+        );
+        return;
+      }
 
-    if (!message || typeof message.type !== 'string') {
-      this.sendError(
-        clientInfo,
-        null,
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_TYPE,
-        ADMIN_ERROR_HINT.MISSING_TYPE,
-      );
-      return;
-    }
+      if (!message || typeof message.type !== 'string') {
+        this.sendError(
+          clientInfo,
+          null,
+          ErrorCode.MALFORMED_JSON,
+          ADMIN_ERROR_MESSAGE.MISSING_TYPE,
+          ADMIN_ERROR_HINT.MISSING_TYPE,
+        );
+        return;
+      }
 
-    this.logger.debug(ADMIN_LOG_MSG.RECEIVED_MESSAGE, {
-      clientId: clientInfo.id,
-      type: message.type,
-    });
-
-    switch (message.type) {
-    case MessageType.QUERY:
-      this.handleDispatchableAdminMessage(clientInfo, message);
-      break;
-
-    case MessageType.PARTITION_CALLBACK:
-      this.handleDispatchableAdminMessage(clientInfo, message);
-      break;
-
-    case MessageType.REFRESH:
-      this.handleDispatchableAdminMessage(clientInfo, message);
-      break;
-
-    case MessageType.LIVE_QUERY_SUBSCRIBE:
-      this.handleLiveQuerySubscribe(clientInfo, message);
-      break;
-
-    case MessageType.LIVE_QUERY_UNSUBSCRIBE:
-      this.handleLiveQueryUnsubscribe(clientInfo, message);
-      break;
-
-    default:
-      this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
+      this.logger.debug(ADMIN_LOG_MSG.RECEIVED_MESSAGE, {
         clientId: clientInfo.id,
         type: message.type,
       });
-      break;
-    }
+
+      switch (message.type) {
+      case MessageType.QUERY:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.PARTITION_CALLBACK:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.REFRESH:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.LIVE_QUERY_SUBSCRIBE:
+        this.handleLiveQuerySubscribe(clientInfo, message);
+        break;
+
+      case MessageType.LIVE_QUERY_UNSUBSCRIBE:
+        this.handleLiveQueryUnsubscribe(clientInfo, message);
+        break;
+
+      default:
+        this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
+          clientId: clientInfo.id,
+          type: message.type,
+        });
+        break;
+      }
+    });
   },
 
   async handleLiveQuerySubscribe(clientInfo, message) {

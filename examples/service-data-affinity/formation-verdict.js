@@ -11,6 +11,16 @@ import {resolve} from 'node:path';
 const FORMATION_VERDICT_SCHEMA_VERSION = 1;
 const SEED_LOG_FILE = 'node-0.log';
 const GAP_LOG_MSG = 'Event loop gap detected';
+// The seed's attribution window (src/diagnostics/formation-attribution-window):
+// a complete window, or the last periodic snapshot when the window never
+// completed or completed only after the formed mark.
+const ATTRIBUTION_WINDOW_MSG = 'Formation attribution window';
+const ATTRIBUTION_SNAPSHOT_MSG = 'Formation attribution snapshot';
+const ATTRIBUTION_SNAPSHOT_INTERVAL_MS = 10000;
+const ATTRIBUTION_SOURCE = Object.freeze({
+  WINDOW: 'window',
+  SNAPSHOT: 'snapshot',
+});
 const LEASE_WAIT_MSG_PREFIX =
   'Waiting for transitional cluster membership to settle';
 const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
@@ -74,6 +84,37 @@ function parseLogEntries(text) {
     }
   }
   return entries;
+}
+
+/**
+ * The seed's per-owner attribution over the formation window: the complete
+ * window when it ended at or before the formed mark (plus one snapshot
+ * interval of slack), else the last periodic snapshot at or before that
+ * mark; null when the seed logged no attribution at all.
+ * @param {Array<{timeMs: number, entry: Object}>} entries
+ * @param {{endMs: number}} window
+ * @return {Object|null}
+ */
+function harvestAttribution(entries, window) {
+  const cutoffMs = Number.isFinite(window?.endMs) ?
+    window.endMs + ATTRIBUTION_SNAPSHOT_INTERVAL_MS : Number.POSITIVE_INFINITY;
+  let complete = null;
+  let snapshot = null;
+  for (const {timeMs, entry} of entries) {
+    if (!entry?.attribution) continue;
+    if (entry.msg === ATTRIBUTION_WINDOW_MSG && timeMs <= cutoffMs) {
+      complete = {
+        source: ATTRIBUTION_SOURCE.WINDOW, reason: entry.reason,
+        observedAtMs: timeMs, ...entry.attribution,
+      };
+    } else if (entry.msg === ATTRIBUTION_SNAPSHOT_MSG && timeMs <= cutoffMs) {
+      snapshot = {
+        source: ATTRIBUTION_SOURCE.SNAPSHOT, observedAtMs: timeMs,
+        ...entry.attribution,
+      };
+    }
+  }
+  return complete || snapshot;
 }
 
 function resolveFormationSeedBudget(environment = process.env) {
@@ -340,6 +381,7 @@ function deriveFormationVerdict({
     leaseWaits,
     criticalSpread: spread,
     admission,
+    attribution: harvestAttribution(entries, window),
     causalChain: buildCausalChain({
       window, gaps, seedStarved, leaseWaits, spread, admission,
     }),

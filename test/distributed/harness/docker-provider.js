@@ -756,6 +756,18 @@ class DockerProvider {
   }
 
   /**
+   * Stream a path out of a container as a tar archive (Docker's archive
+   * endpoint: no shell or tools inside the image are needed).
+   * @param {string} containerId
+   * @param {string} path absolute path inside the container
+   * @returns {Promise<import('node:stream').Readable>} tar stream
+   */
+  async getContainerArchive(containerId, path) {
+    const container = this._docker.getContainer(containerId);
+    return container.getArchive({path});
+  }
+
+  /**
    * Kill a container (SIGKILL).
    * @param {string} containerId
    */

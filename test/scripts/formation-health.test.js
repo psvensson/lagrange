@@ -15,6 +15,9 @@ import {
   renderTrendSummary,
   runFormationHealth,
 } from '../../scripts/checks/formation-health.js';
+import {
+  FORMATION_OWNER,
+} from '../../src/diagnostics/formation-diagnostics-contract.js';
 
 const FORMATION_HEALTH_WORKFLOW_PATH = '.github/workflows/formation-health.yml';
 const DEPENDENCY_POLICY_PATH = 'dependency-policy.json';
@@ -289,7 +292,12 @@ test('--calibration counts formation-path owners missing from the table', (t) =>
   t.equal(metric(), 1, 'no table: every owner uncovered');
   fs.writeFileSync(table, 'The bootstrap, raft_apply, raft_protocol and readiness owners.\n');
   t.equal(metric(), 1, 'prose mentions are not rows');
-  fs.writeFileSync(table, '| owner | ms |\n| --- | --- |\n| bootstrap | 1 |\n| raft_apply | 2 |\n| raft_protocol | 3 |\n| readiness | 4 |\n');
+  const owners = Object.values(FORMATION_OWNER)
+    .filter((owner) => owner !== FORMATION_OWNER.UNATTRIBUTED);
+  const rows = owners.map((owner, index) => `| ${owner} | ${index + 1} |`);
+  fs.writeFileSync(table, `| owner | ms |\n| --- | --- |\n${rows.slice(1).join('\n')}\n`);
+  t.equal(metric(), 1, 'one owner short is one uncovered owner');
+  fs.writeFileSync(table, `| owner | ms |\n| --- | --- |\n${rows.join('\n')}\n`);
   t.equal(metric(), 0, 'one row per owner covers the contract');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();

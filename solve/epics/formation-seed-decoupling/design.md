@@ -594,6 +594,61 @@ Scope (decision, owner 2026-09-13): the epic's `authorizes` widens to
 `examples/service-data-affinity` and to the probe's owner file
 `scripts/checks/formation-health.js` - those files only.
 
+**Wiring as built (first attempt, 2026-09-13, verified r1: rejected on two
+blockers, both repaired in the same attempt).**
+- Owners are nine plus unattributed: admin, bootstrap,
+  membership_publication, raft_apply, raft_protocol, readiness, rebalancer,
+  transport, worker_dispatch. Timers are not an owner: a timer armed inside
+  an owner's turn inherits that owner through the seam's async context, and
+  there is no single timer choke point (144 raw `setTimeout` sites), so
+  charging timer dispatch would only hide who armed it.
+- Each owner is tagged at its dispatch choke point through
+  `src/diagnostics/formation-owner-attribution.js`: the inbound message
+  router, the membership-publication reconcile queue, the startup pipeline's
+  phase and step runs, the rebalancer's check queue and operation dispatch,
+  the readiness planning queue, the admin websocket dispatch and schema
+  provisioning jobs, the main-thread side of every worker pool call (the
+  worker thread has its own seam instance and no window), and the replica
+  dispatch queues (operation, node-state, node-ready retry to rebalancer;
+  membership advance to membership_publication).
+- The window (`src/diagnostics/formation-attribution-window.js`) starts in
+  runtime startup right after the logger exists, before the join decision.
+  The formed signal's listener stays for the life of the process (Node's
+  default disposition would terminate the seed on a late signal); a seam
+  invariant failure inside a snapshot or the end is logged once and never
+  thrown into the seed; profile flushes are serialised.
+- Only the seed is measured: the demo strips the flag from joiners, and the
+  Docker harness forwards the three attribution keys to the seed container
+  only (`FORWARDED_SEED_HOST_ENV_KEYS`). On GCP no signal reaches the seed,
+  so the window ends on the deadline; the verdict prefers the last 10 s
+  snapshot at or before the formed mark whenever the window completed later.
+  The seed's profile chunks are written under the container's data
+  directory and cross to the host as base64 text through the exec channel
+  before the container stops (`materializeGcpSeedProfile`).
+- Scope (owner decision, 2026-09-13): `authorizes` widened to the transport,
+  admin, schema-provisioning and runtime-startup tag sites and to the tests
+  under `test/diagnostics`, `test/runtime` and the formation-health test,
+  rather than leaving those three owners unattributed.
+- Verifier r2 found the GCP runtime image distroless: the seed's profile
+  chunks now cross to the host through Docker's archive endpoint as one
+  `formation-profile.tar` beside the node logs, only on a measured run; the
+  replica-creation pool dispatches are charged to worker_dispatch on the
+  main thread.
+
+**The run (2026-09-13, head 8a6275a4d, verifier r4 approve).** One GCP
+formation, formed and admitted. Over the seed's window from process start to
+the formed mark (152 s) the unattributed bucket was 3.50 % (2.7-5.0 % in every
+10 s snapshot), idle 8.1 %, and the owners ranked raft_protocol 32.8 %
+(3.1 M turns at 14.5 µs), rebalancer 24.9 % (111 µs per turn),
+membership_publication 15.5 %, bootstrap 5.9 %, raft_apply 5.2 % (the
+heaviest segment, 318 µs), admin 2.1 %, transport 1.7 %, readiness 0.4 %,
+worker_dispatch 0 (no pool call reaches the seed's main thread during
+formation). The gap watchdog's 63.7 s "unexplained" inside the same window is
+owner work by the seam's account, not idleness. Table and evidence:
+`test/simulation/calibration/seed-owner-costs.md`. Simulator inputs: a
+per-segment cost and a segment rate per owner; the fix targets the top three
+owners' turn rates before their per-turn weight.
+
 **Simulator design inputs carried from `formation-contracts-registration`.**
 - The cross-operation re-entry cycle: the operation-workflow owner bounds
   deferred handoff re-entry per operation (step timeout, then the operation

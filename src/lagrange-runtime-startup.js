@@ -27,9 +27,7 @@ import {
 } from './constants/entrypoint.js';
 import {VERSION} from './public-api.js';
 import {assertCritical} from './utils/assert.js';
-import {
-  attachSqlRuntimeToStartupOwner,
-} from './bootstrap/shared/startup-sql-runtime-handoff.js';
+import {attachSqlRuntimeToStartupOwner} from './bootstrap/shared/startup-sql-runtime-handoff.js';
 import {
   createReadinessStateWithDiagnostics,
   createRuntimeShutdown,
@@ -80,6 +78,7 @@ import {
 } from './query/application-database-constants.js';
 import {createApplicationDatabaseError} from
   './query/application-database-error.js';
+import {startFormationAttributionWindow} from './diagnostics/formation-attribution-window.js';
 const METADATA_KEY = 'systemTableCache';
 const METADATA_MUTATION_TARGET_KEY = 'cacheMutationTarget';
 const METADATA_GETTER_KEY = 'getSystemTableCache';
@@ -716,6 +715,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     provider: selectedRaftProvider,
   });
   ensureLiferaftProviderForRuntime(environment);
+  await startFormationAttributionWindow({environment, logger: mainLogger});
 
   configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {
     categories: config.getCategories(),

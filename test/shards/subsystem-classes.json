@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 107,
+    "admin-diagnostics": 108,
     "architecture-governance": 19,
     "bootstrap-membership": 249,
     "cdc-metadata": 56,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2073,
-  "digest": "fnv1a32-c3c86fed",
+  "censusSize": 2074,
+  "digest": "fnv1a32-c2123cbe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -733,6 +733,7 @@
     "test/diagnostics/comparative-efficiency-opportunity-calculator.test.js": "admin-diagnostics",
     "test/diagnostics/event-loop-gap-watchdog.test.js": "admin-diagnostics",
     "test/diagnostics/failure-class-taxonomy.test.js": "admin-diagnostics",
+    "test/diagnostics/formation-attribution-window.test.js": "admin-diagnostics",
     "test/diagnostics/formation-turn-attribution.test.js": "admin-diagnostics",
     "test/diagnostics/invariant-review.test.js": "admin-diagnostics",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "admin-diagnostics",

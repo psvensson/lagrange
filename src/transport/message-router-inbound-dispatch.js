@@ -1,5 +1,8 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
+import {
+  runTransportInboundActivity,
+} from '../diagnostics/formation-owner-attribution.js';
 
 const {
   ConnectionState,
@@ -41,6 +44,10 @@ class MessageRouterInboundDispatch {
     return this.nodeInboundActivityAt.get(nodeId) ?? null;
   }
   handleMessage(connectionId, ws, data) {
+    return runTransportInboundActivity(() =>
+      this.dispatchInboundMessage(connectionId, ws, data));
+  }
+  dispatchInboundMessage(connectionId, ws, data) {
     try {
       const message = JSON.parse(data.toString());
       this.recordNodeInboundActivity(connectionId);
