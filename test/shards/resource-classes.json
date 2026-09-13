@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2060,
+    "ordinary": 2061,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2077,
-  "digest": "fnv1a32-956a6335",
+  "censusSize": 2078,
+  "digest": "fnv1a32-4cb31b0f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -722,6 +722,7 @@
     "test/diagnostics/resource-diagnostics-sampler.test.js": "ordinary",
     "test/diagnostics/source-fingerprint.test.js": "ordinary",
     "test/diagnostics/stop-condition-decision.test.js": "ordinary",
+    "test/diagnostics/sync-section-clock-seam.test.js": "ordinary",
     "test/diagnostics/topology-convergence-active-gate-handoff-route.test.js": "ordinary",
     "test/diagnostics/topology-convergence-graph.test.js": "ordinary",
     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "ordinary",
