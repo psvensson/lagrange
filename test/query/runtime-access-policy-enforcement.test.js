@@ -3,14 +3,21 @@ import {describe, test} from 'node:test';
 
 import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../../src/control-plane/owners/runtime-access-policy-owner.js';
+import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {resolveIssuingServiceId} from
+  '../../src/query/sql-query-engine-request-dispatch.js';
 
 const silentLogger = Object.freeze({
   debug() {},
   error() {},
   info() {},
   warn() {},
+});
+const AUTHENTICATED_CONTEXT = Object.freeze({
+  principal: 'benchmark-user',
+  tenantId: 'benchmark-db',
 });
 
 function createEngine(owner) {
@@ -110,5 +117,33 @@ describe('runtime access policy query enforcement', () => {
       await executor.getRuntimeAccessPolicy(),
       policy,
     );
+  });
+
+  test('authenticated PG ingress is not attributed as sys-postgres-wire table access', () => {
+    const issuingServiceId = resolveIssuingServiceId(
+      {securityContext: AUTHENTICATED_CONTEXT},
+      {issuingServiceId: META_SERVICE_ID.POSTGRES_WIRE},
+    );
+
+    assert.equal(issuingServiceId, null);
+  });
+
+  test('PG runtime requests without authenticated ingress context stay service-attributed', () => {
+    const issuingServiceId = resolveIssuingServiceId(
+      {securityContext: null},
+      {issuingServiceId: META_SERVICE_ID.POSTGRES_WIRE},
+    );
+
+    assert.equal(issuingServiceId, META_SERVICE_ID.POSTGRES_WIRE);
+  });
+
+  test('ordinary runtime services remain attributed with propagated security context', () => {
+    const serviceId = 'binding-service-orders';
+    const issuingServiceId = resolveIssuingServiceId(
+      {securityContext: AUTHENTICATED_CONTEXT},
+      {issuingServiceId: serviceId},
+    );
+
+    assert.equal(issuingServiceId, serviceId);
   });
 });
