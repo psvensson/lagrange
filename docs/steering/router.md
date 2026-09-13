@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-06
+last_reviewed: 2026-09-13
 ---
 
 # Owner router
@@ -23,6 +23,7 @@ nothing below is read by default.
 | `record-history` | `npm run audit:quest-log-append-only` | correcting something already recorded |
 | `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
 | `action-authority` | [`action-authority.js`](../../scripts/action-authority.js) | taking an action that cannot be taken back, or that leaves this repository |
+| `solve-probes` | [`probes.js`](../../scripts/solve/probes.js) and [`probe-guard.js`](../../src/test-helpers/probe-guard.js) | writing a `doneWhen` probe, or a harness that must refuse to run under one |
 | `steering` | [`rules.md`](rules.md), this router, `npm run audit:steering-diet` and `npm run audit:rule-set` | adding, moving or removing steering material |
 
 ## Conditional material

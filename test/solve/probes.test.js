@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {test} from 'node:test';
 
 import {PROBE} from '../../scripts/solve/schema.js';
@@ -113,4 +114,16 @@ test('script: only scripts/checks; exit code and the last numeric line', (t) => 
   assert.equal(measure(dir, {probe: PROBE.SCRIPT, args: {command: CHECK_SCRIPT}}).reason,
     PROBE_REASON.SCRIPT_NO_METRIC);
   assert.equal(measure(dir, {probe: 'nope', args: {}}).measuring, false);
+});
+
+// R27: a probe measures, it never acts. The solver marks the script-probe
+// child with LAGRANGE_PROBE=1 and every harness refuses under it.
+test('script: the child runs under LAGRANGE_PROBE=1 and a harness refuses under it', (t) => {
+  const dir = root(t);
+  write(dir, CHECK_SCRIPT,
+    'process.stdout.write(process.env.LAGRANGE_PROBE === "1" ? "0\\n" : "1\\n");\n');
+  assert.equal(measure(dir, {probe: PROBE.SCRIPT, args: {command: CHECK_SCRIPT}}).done, true,
+    'the probe child sees LAGRANGE_PROBE=1');
+  assert.throws(() => refuseUnderProbe('a cluster', {LAGRANGE_PROBE: '1'}), /a probe never starts a cluster/u);
+  assert.doesNotThrow(() => refuseUnderProbe('a cluster', {}));
 });

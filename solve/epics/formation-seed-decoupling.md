@@ -17,6 +17,8 @@ quests:
   - seed-formation-decoupling
   - five-node-cold-formation-certification
 authorizes:
+  - examples/service-data-affinity
+  - scripts/checks/formation-health.js
   - src/control-plane
   - src/bootstrap
   - src/rebalancer
@@ -184,8 +186,9 @@ epic's scenario-harness streak.
 
 ## Relation to other epics
 
-`release-0-2-five-node-convergence` keeps its remaining split/merge quest and
-is otherwise superseded by this epic for the cold-formation surface.
+`release-0-2-five-node-convergence` is superseded by this epic for the
+cold-formation surface; its last split/merge quest moved under
+`split-merge-transition-integrity` (2026-09-13).
 `formation-complexity-consolidation`, `publication-readiness-churn-liveness-closure`
 and `hysteresis-consolidation` are superseded here. `raft-ownership` in
 `apparatus-release-consolidation` must not run concurrently with a quest here

@@ -103,12 +103,27 @@ instead of frozen. A patch release for one fix follows the same steps.
    never hand-edit between the `RELEASE-NOTES` markers.
 
 
-The `next` dist-tag is max(`latest`, newest prerelease): after a release
-publishes under `latest`, the npm owner moves `next` onto it unless `next`
-already names a prerelease of a newer version. Trusted publishing covers
-`publish` only, so the move needs a granted npm token in the
-`NPM_DIST_TAG_TOKEN` secret; without it the run prints the exact
-`npm dist-tag add` command to run by hand and continues.
+The release owner's one post-publish action: after a release publishes under
+`latest`, move `next` onto it by hand so `lagrange-server@next` never installs
+something older than `latest`:
+
+```sh
+npm dist-tag add lagrange-server@<version> next
+node scripts/checks/release-publication-receipt.js --reobserve-next
+git add data/releases/v<version>.json && git commit -m "release: next observed on <version>"
+npm run publish
+```
+
+The second command reads npm's dist-tags again and records `next` as now
+observed in the release receipt; the consolidation budget row "npm next lags
+latest" reads that record, so it clears from evidence and never by hand.
+
+The move stays manual on purpose (owner decision 2026-09-13): a long-lived npm
+write token in CI is a larger risk than a lagging `next` at this release
+cadence; trusted publishing authenticates `publish` only. The publication
+receipt records `next` as observed and `nextLagging: true` when it trails
+`latest`, and the consolidation budget reads that flag. Revisit if releases
+become weekly.
 
 ## Proof once per exact SHA
 

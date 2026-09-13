@@ -24,6 +24,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {newestReleaseReceipt, nextLagsLatest, reobserveNext} from '../../scripts/checks/release-publication-receipt.js';
 import {
   selectedRows,
   measureConsolidationBudget,
@@ -42,6 +43,7 @@ const SEALED_TABLE = Object.freeze([
   ['release receipt: artifacts published', 4, 4, 0],
   ['formation trend: measuring verdicts in last 3', 3, 3, 0],
   ['README offences', 0, 0, 1],
+  ['release receipt: npm next lags latest', 0, 0, 1],
   ['scripts/ loose top-level files', 80, 1, 0],
   ['scripts/ total lines', 90000, 2, 0],
   ['scripts/checks files', 190, 1, 0],
@@ -50,7 +52,7 @@ const SEALED_TABLE = Object.freeze([
   ['gate chains reference literals checker', 0, 0, 1],
   ['gate chains reference file-length audit', 0, 0, 1],
   ['src *-methods.js files', 160, 1, 0],
-  ['open epics', 8, 1, 2],
+  ['open epics', 12, 1, 2],
   ['open legacy epics', 0, 0, 2],
   ['open epics without doneWhen', 0, 0, 2],
   ['solve/epics total lines', 6000, 6, 8],
@@ -108,6 +110,13 @@ function offendingFixture() {
     dependencies: {liferaft: '1.0.0'},
   })}\n`);
   write(root, 'README.md', 'a five-node cluster, with no dated verdict\n');
+  // A receipt that shows nothing published and next trailing latest.
+  write(root, 'data/releases/v9.9.9.json', `${JSON.stringify({
+    tag: 'v9.9.9', published: {
+      npm: {published: false, nextLagging: true}, docker: {published: false},
+      helm: {published: false}, github: {published: false},
+    },
+  })}\n`);
   write(root, 'solve/epics/legacy-one.md',
     '---\nstatus: open\nlegacy: true\n---\n');
   write(root, 'solve/epics/legacy-two.md',
@@ -197,4 +206,36 @@ test('--rows selects by name and counts an unknown name as unmet', () => {
   assert.equal(unknown[0].met, false, 'an unknown row name is unmet');
   assert.match(unknown[0].name, /unknown budget row/u);
   assert.equal(selectedRows(rows, ['--rows'])[0].met, false, 'a missing value is unmet');
+});
+
+// next lags latest by semver order; the release owner's re-observation
+// rewrites the newest receipt from npm as observed.
+test('nextLagsLatest follows semver order and reobserveNext records it', () => {
+  assert.equal(nextLagsLatest(null, '0.2.5'), true, 'absent next lags');
+  assert.equal(nextLagsLatest('0.2.4-rc.2', '0.2.5'), true, 'older core lags');
+  assert.equal(nextLagsLatest('0.2.5-rc.9', '0.2.5'), true, 'an rc of the released core lags');
+  assert.equal(nextLagsLatest('0.2.5', '0.2.5'), false, 'equal is aligned');
+  assert.equal(nextLagsLatest('0.3.0-rc.0', '0.2.5'), false, 'a newer prerelease leads');
+  assert.equal(nextLagsLatest('0.2.4-rc.2', null), false, 'no latest, nothing to lag');
+  const root = makeRoot();
+  write(root, 'data/releases/v0.2.5.json', `${JSON.stringify({tag: 'v0.2.5',
+    published: {npm: {published: true, latest: '0.2.5', next: '0.2.4-rc.2', nextLagging: true}}})}\n`);
+  const observed = reobserveNext(root, () => ({latest: '0.2.5', next: '0.2.5'}));
+  assert.equal(observed.npm.nextLagging, false);
+  assert.equal(observed.npm.next, '0.2.5');
+  const rewritten = JSON.parse(fs.readFileSync(path.join(root, 'data/releases/v0.2.5.json'), 'utf8'));
+  assert.equal(rewritten.published.npm.nextLagging, false, 'the receipt now records the move');
+  assert.ok(rewritten.published.npm.nextObservedAt);
+});
+
+// The newest receipt is the highest release version, not the last file name:
+// v0.2.10 sorts below v0.2.9 lexically.
+test('receipts order by version core, a prerelease before its final', () => {
+  const root = makeRoot();
+  for (const tag of ['v0.2.9', 'v0.2.10', 'v0.2.5', 'v0.2.10-rc.0']) {
+    write(root, `data/releases/${tag}.json`, `${JSON.stringify({tag, published: {npm: {published: true}}})}\n`);
+  }
+  assert.equal(newestReleaseReceipt(root).tag, 'v0.2.10');
+  const observed = reobserveNext(root, () => ({latest: '0.2.10', next: '0.2.10'}));
+  assert.equal(observed.file, 'data/releases/v0.2.10.json', 'the owner\'s move lands on the newest release');
 });

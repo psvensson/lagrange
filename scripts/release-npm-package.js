@@ -35,8 +35,6 @@ const REGISTRY_OBSERVATION_DELAY_MS = 15000;
 const NPM_PROCESSING_NOTICE = /being processed and may take a few minutes/iu;
 const REGISTRY_MISMATCH_MESSAGE_PREFIX =
   'published registry state did not match the candidate: ';
-const arrayMap = Function.call.bind(Array.prototype.map);
-const stringSplit = Function.call.bind(String.prototype.split);
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const TEXT_ENCODING = 'utf8';
 const ARGUMENT_SEPARATOR = ' ';
@@ -85,23 +83,6 @@ const PRERELEASE_VERSION = /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/u;
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/u;
 const VERSION_OPTION = 'version';
 const NPM_TAG_OPTION = '--tag';
-const NPM_DIST_TAG_COMMAND = 'dist-tag';
-const NPM_DIST_TAG_TOKEN_ENV = 'NPM_DIST_TAG_TOKEN';
-// npm reads registry auth from this config key; the env form keeps the
-// token out of the process arguments.
-const NPM_AUTH_TOKEN_CONFIG_ENV = 'npm_config_//registry.npmjs.org/:_authToken';
-const DIST_TAGS_FIELD = 'dist-tags';
-const PRERELEASE_SEPARATOR = '-';
-const VERSION_PART_SEPARATOR = '.';
-const NEXT_SKIP = Object.freeze({
-  ALREADY: 'next already names this release',
-  NEWER_PRERELEASE: 'next names a prerelease of a newer version',
-  NO_TOKEN: 'no NPM_DIST_TAG_TOKEN; run the move by hand',
-});
-const NEXT_TOKEN_WARNING = 'npm next dist-tag not moved (no NPM_DIST_TAG_TOKEN); run: ';
-const NPM_DIST_TAG_ADD = 'add';
-const NPM_REGISTRY_OPTION = '--registry';
-const PACKAGE_VERSION_SEPARATOR = '@';
 const COMMAND_ARGUMENT = Object.freeze({
   TAR_EXTRACT_GZIP: '-xzf',
   TAR_DIRECTORY: '-C',
@@ -170,7 +151,6 @@ const RELEASE_OUTCOME = Object.freeze({
   // npm publish exited 0 and the registry still does not hold the version:
   // the one outcome whose only explanation is in npm's own output.
   PUBLISH_EXITED_WITHOUT_VERSION: 'PUBLISH_EXITED_WITHOUT_VERSION',
-  DIST_TAG_ALIGN_FAILED: 'DIST_TAG_ALIGN_FAILED',
   // npm accepted the publish and said it is still processing; the
   // observation window expired before the version became visible. Not a
   // refusal and not a silent non-publication: the registry was still working.
@@ -676,11 +656,7 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
   const metadata = await readRegistryMetadata(candidate.manifest.name);
   const existingState = classifyRegistryState(candidate, metadata);
   if (existingState === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
-    // A rerun still owes the dist-tag contract: the move is idempotent.
-    const nextDistTag = alignNextDistTag({
-      candidate, channel: releaseChannel(candidate.manifest.version), metadata,
-    });
-    return {outcome: existingState, candidate, nextDistTag};
+    return {outcome: existingState, candidate};
   }
   if (![RELEASE_OUTCOME.NAME_AVAILABLE, RELEASE_OUTCOME.VERSION_ABSENT]
     .includes(existingState)) {
@@ -715,62 +691,9 @@ async function publishNpmPackage(tarballPath, expectedGitHead, authorizedVersion
     );
   }
   const outcome = await observePublishedCandidate(candidate, publishResult);
-  const nextDistTag = alignNextDistTag({candidate, channel, metadata});
-  return {outcome, candidate, nextDistTag};
+  return {outcome, candidate};
 }
 
-// The `next` contract: next is max(latest, newest prerelease), so
-// `npm install lagrange-server@next` never installs something older than
-// latest (0.2.5 shipped while next still named 0.2.4-rc.2, 2026-09-13). After
-// a release publishes under latest, next is moved onto it unless next already
-// names a prerelease of a NEWER version. A prerelease leaves next where npm
-// put it. Trusted publishing authenticates `publish` only, so the move needs
-// a granted token in NPM_DIST_TAG_TOKEN; without one the move is skipped
-// loudly with the exact command, never attempted and failed.
-function alignNextDistTag({candidate, channel, metadata = null,
-  runCommand = run, env = process.env, warn = (line) => console.error(line)}) {
-  if (channel.channel !== RELEASE_CHANNEL.RELEASE) return null;
-  const version = candidate.manifest.version;
-  const spec = `${candidate.manifest.name}${PACKAGE_VERSION_SEPARATOR}${version}`;
-  const currentNext = metadata?.[DIST_TAGS_FIELD]?.[DIST_TAG.NEXT] || null;
-  if (currentNext === version) {
-    return {spec, distTag: DIST_TAG.NEXT, skipped: NEXT_SKIP.ALREADY};
-  }
-  if (currentNext && versionCoreNewer(currentNext, version)) {
-    return {spec, distTag: DIST_TAG.NEXT, skipped: NEXT_SKIP.NEWER_PRERELEASE,
-      currentNext};
-  }
-  const args = [NPM_DIST_TAG_COMMAND, NPM_DIST_TAG_ADD, spec, DIST_TAG.NEXT,
-    NPM_REGISTRY_OPTION, REGISTRY_URL];
-  const token = env[NPM_DIST_TAG_TOKEN_ENV];
-  if (!token) {
-    warn(`${NEXT_TOKEN_WARNING}${NPM_COMMAND} ${args.join(ARGUMENT_SEPARATOR)}`);
-    return {spec, distTag: DIST_TAG.NEXT, skipped: NEXT_SKIP.NO_TOKEN};
-  }
-  const result = runCommand(NPM_COMMAND, args,
-    {env: {...env, [NPM_AUTH_TOKEN_CONFIG_ENV]: token}});
-  if (result.status !== 0) {
-    throw new NpmReleaseError(RELEASE_OUTCOME.DIST_TAG_ALIGN_FAILED,
-      commandFailureMessage(NPM_COMMAND, args, result));
-  }
-  return {spec, distTag: DIST_TAG.NEXT, moved: true};
-}
-
-// Whether `candidate` (release or prerelease) has a newer major.minor.patch
-// than `version`: the one comparison the next contract needs.
-function versionCoreNewer(candidate, version) {
-  const core = (value) => arrayMap(
-    stringSplit(stringSplit(String(value), PRERELEASE_SEPARATOR)[0],
-      VERSION_PART_SEPARATOR), Number);
-  const left = core(candidate);
-  const right = core(version);
-  for (let index = 0; index < right.length; index += 1) {
-    if ((left[index] || 0) !== (right[index] || 0)) {
-      return (left[index] || 0) > (right[index] || 0);
-    }
-  }
-  return false;
-}
 
 /**
  * Which channel a version publishes to, and the npm dist-tag that carries it.
@@ -868,7 +791,6 @@ if (isMainModule) {
 }
 
 export {
-  alignNextDistTag,
   NpmReleaseError,
   PACKAGE_NAME,
   RELEASE_OUTCOME,

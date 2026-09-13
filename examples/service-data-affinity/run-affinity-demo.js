@@ -89,6 +89,7 @@ import {
   RATINGS_AGGREGATE_SQL,
   rankMovieQuality,
 } from './movie-ranking.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 
 const NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
@@ -1140,6 +1141,7 @@ const isMainModule = Boolean(
 
 if (isMainModule) {
   const phaseEvidence = {};
+  refuseUnderProbe('the affinity demo');
   runAffinityDemo({phaseEvidence})
     .then(async (result) => {
       await writeAffinityDemoLiveReport(result, null, phaseEvidence);

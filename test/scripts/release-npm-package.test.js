@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 
 import {
-  alignNextDistTag,
   RELEASE_OUTCOME,
   classifyRegistryState,
   describePublishMismatch,
@@ -146,70 +145,5 @@ describe('publish mismatch verdicts carry npm output', () => {
       RELEASE_OUTCOME.VERSION_ABSENT, {status: 1, stderr: 'npm ERR! 403'});
     assert.equal(absentAfterFailure.outcome, RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
       'a non-zero exit is not the silent case');
-  });
-});
-
-
-// The next contract: next = max(latest, newest prerelease). A release moves
-// next onto itself when a token is granted, skips loudly without one, never
-// moves next backward past a newer prerelease, leaves next alone for a
-// prerelease, and a refused move is loud.
-describe('next dist-tag after a release', () => {
-  const candidate = {manifest: {name: 'lagrange-server', version: '1.2.3'}};
-  const tags = (next) => ({'dist-tags': {latest: '1.2.3', next}});
-  it('moves next onto a release with the granted token in the environment', () => {
-    const calls = [];
-    const moved = alignNextDistTag({
-      candidate, channel: releaseChannel('1.2.3'), metadata: tags('1.2.3-rc.1'),
-      env: {NPM_DIST_TAG_TOKEN: 'tok'},
-      runCommand: (command, args, options) => {
-        calls.push([command, args, options]);
-        return {status: 0, stdout: '', stderr: ''};
-      },
-    });
-    assert.equal(moved.moved, true);
-    assert.deepEqual(calls[0][1].slice(0, 4),
-      ['dist-tag', 'add', 'lagrange-server@1.2.3', 'next']);
-    assert.ok(calls[0][1].includes('--registry'));
-    assert.equal(calls[0][2].env['npm_config_//registry.npmjs.org/:_authToken'], 'tok');
-    assert.equal(calls[0][1].includes('tok'), false, 'the token never rides in the arguments');
-  });
-  it('skips loudly without a token, naming the manual command', () => {
-    const warnings = [];
-    const result = alignNextDistTag({
-      candidate, channel: releaseChannel('1.2.3'), metadata: tags('1.2.3-rc.1'),
-      env: {}, warn: (line) => warnings.push(line),
-      runCommand: () => assert.fail('no token, no attempt'),
-    });
-    assert.match(result.skipped, /NPM_DIST_TAG_TOKEN/u);
-    assert.match(warnings[0], /dist-tag add lagrange-server@1\.2\.3 next/u);
-  });
-  it('never moves next backward past a newer prerelease, and is idempotent', () => {
-    const untouched = alignNextDistTag({
-      candidate, channel: releaseChannel('1.2.3'), metadata: tags('1.3.0-rc.0'),
-      env: {NPM_DIST_TAG_TOKEN: 'tok'},
-      runCommand: () => assert.fail('a newer prerelease keeps next'),
-    });
-    assert.match(untouched.skipped, /newer version/u);
-    const already = alignNextDistTag({
-      candidate, channel: releaseChannel('1.2.3'), metadata: tags('1.2.3'),
-      env: {NPM_DIST_TAG_TOKEN: 'tok'},
-      runCommand: () => assert.fail('already aligned'),
-    });
-    assert.match(already.skipped, /already/u);
-  });
-  it('leaves next alone for a prerelease', () => {
-    assert.equal(alignNextDistTag({
-      candidate: {manifest: {name: 'lagrange-server', version: '1.2.3-rc.0'}},
-      channel: releaseChannel('1.2.3-rc.0'), env: {NPM_DIST_TAG_TOKEN: 'tok'},
-      runCommand: () => assert.fail('a prerelease never moves next'),
-    }), null);
-  });
-  it('fails loudly when npm refuses the move', () => {
-    assert.throws(() => alignNextDistTag({
-      candidate, channel: releaseChannel('1.2.3'), metadata: tags('1.2.3-rc.1'),
-      env: {NPM_DIST_TAG_TOKEN: 'tok'},
-      runCommand: () => ({status: 1, stdout: '', stderr: 'E403'}),
-    }), (error) => error.code === RELEASE_OUTCOME.DIST_TAG_ALIGN_FAILED);
   });
 });

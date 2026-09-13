@@ -28,7 +28,10 @@ import {fileURLToPath} from 'node:url';
 import {
   FORMATION_VERDICT,
 } from '../../examples/service-data-affinity/formation-verdict.js';
+import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
@@ -68,6 +71,16 @@ const UNKNOWN_VERDICT_MESSAGE = 'formation health: the run produced no ' +
   'measuring verdict (UNKNOWN) - nothing recorded; a non-verdict is a failed ' +
   'run, not a trend record';
 const METRIC_WINDOW = 3;
+const DEMO_REFUSAL_SUBJECT = 'the formation demo';
+const TABLE_CELL = '|';
+// --calibration <table>: formation-path owners the calibration table does
+// not cover (formation-calibration-run probe); a missing table covers none.
+const CALIBRATION_OWNERS = Object.freeze(arrayFilter(
+  Object.values(FORMATION_OWNER), (owner) => owner !== FORMATION_OWNER.UNATTRIBUTED));
+// --bot-commits: commits by the nightly workflow may touch only the trend.
+const BOT_AUTHOR = 'formation-health';
+const GIT_LOG_ARGS = Object.freeze(['log', `--author=${BOT_AUTHOR}`, '--format=%H', 'HEAD']);
+const GIT_DIFF_TREE_ARGS = Object.freeze(['diff-tree', '--no-commit-id', '--name-only', '-r']);
 const THERMAL_REFUSED_MESSAGE =
   'formation health: thermal gate refused; nothing ran, nothing recorded';
 const NO_NEW_REPORT_MESSAGE =
@@ -79,6 +92,8 @@ const ARG = Object.freeze({
   SUMMARY: '--summary',
   TREND: '--trend',
   METRIC: '--metric',
+  CALIBRATION: '--calibration',
+  BOT_COMMITS: '--bot-commits',
   LIMIT: '--limit',
 });
 
@@ -96,6 +111,7 @@ const COLUMNS = Object.freeze([
 function parseArguments(argv) {
   const options = {
     report: null, gcp: false, summary: false, metric: false,
+    calibration: null, botCommits: false,
     trend: DEFAULT_TREND_PATH, limit: DEFAULT_SUMMARY_LIMIT,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -117,6 +133,11 @@ function parseArguments(argv) {
       options.summary = true;
     } else if (argument === ARG.METRIC) {
       options.metric = true;
+    } else if (argument === ARG.CALIBRATION) {
+      options.calibration = argv[index + 1] || null;
+      index += 1;
+    } else if (argument === ARG.BOT_COMMITS) {
+      options.botCommits = true;
     }
   }
   return options;
@@ -228,6 +249,7 @@ function resolveHead(root) {
 // A record is written only for a report THIS run produced: a refused thermal
 // gate or a killed demo never re-records the newest report already on disk.
 function runFormationOnlyDemo(root, gcp, run) {
+  refuseUnderProbe(DEMO_REFUSAL_SUBJECT);
   const before = newestLiveReport(root);
   const gate = run(process.execPath, [THERMAL_GATE_SCRIPT], {cwd: root});
   if (gate.status !== EXIT_OK) {
@@ -241,6 +263,34 @@ function runFormationOnlyDemo(root, gcp, run) {
     return {reportPath: null, message: NO_NEW_REPORT_MESSAGE};
   }
   return {reportPath: after, message: null};
+}
+
+// Owners the calibration table does not carry as a row: a markdown table
+// whose first cell is the owner name (`| bootstrap | ... |`), never a mention
+// in prose.
+function uncoveredCalibrationOwners(tablePath) {
+  const table = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, TEXT_ENCODING) : '';
+  const rows = arrayMap(arrayFilter(stringSplit(table, LINE_SEPARATOR),
+    (line) => stringStartsWith(stringTrim(line), TABLE_CELL)), (line) =>
+    stringTrim(stringSplit(line, TABLE_CELL)[1] || ''));
+  return arrayFilter(CALIBRATION_OWNERS, (owner) => !arrayIncludes(rows, owner));
+}
+
+// Commits by the nightly author that touch anything but the trend file: the
+// workflow token commits one inert data file and nothing else.
+function botCommitsOutsideTrend(root, trend) {
+  const shas = arrayFilter(stringSplit(execFileSync(GIT_BINARY, [...GIT_LOG_ARGS],
+    {cwd: root, encoding: TEXT_ENCODING}), LINE_SEPARATOR), (line) => line.length > 0);
+  const offending = [];
+  for (let index = 0; index < shas.length; index += 1) {
+    const paths = arrayFilter(stringSplit(execFileSync(GIT_BINARY,
+      [...GIT_DIFF_TREE_ARGS, shas[index]], {cwd: root, encoding: TEXT_ENCODING}),
+    LINE_SEPARATOR), (line) => line.length > 0);
+    if (arrayFilter(paths, (candidate) => candidate !== trend).length > 0) {
+      offending.push(`${shas[index]} touches ${paths.join(CELL_SEPARATOR)}`);
+    }
+  }
+  return offending;
 }
 
 // A record measures when it carries a verdict that is not UNKNOWN.
@@ -268,6 +318,8 @@ function runFormationHealth({
   gcp = false,
   summary = false,
   metric = false,
+  calibration = null,
+  botCommits = false,
   trend = DEFAULT_TREND_PATH,
   limit = DEFAULT_SUMMARY_LIMIT,
   run = (command, args, options) =>
@@ -275,6 +327,17 @@ function runFormationHealth({
   log = (line) => process.stdout.write(`${line}${LINE_SEPARATOR}`),
 } = {}) {
   const trendPath = path.resolve(root, trend);
+  if (calibration) {
+    const uncovered = uncoveredCalibrationOwners(path.resolve(root, calibration));
+    log(String(uncovered.length));
+    return {exitCode: uncovered.length === 0 ? EXIT_OK : EXIT_FAIL, record: null};
+  }
+  if (botCommits) {
+    const offending = botCommitsOutsideTrend(root, trend);
+    for (let index = 0; index < offending.length; index += 1) log(offending[index]);
+    log(String(offending.length));
+    return {exitCode: offending.length === 0 ? EXIT_OK : EXIT_FAIL, record: null};
+  }
   if (metric) {
     const unmeasured = unmeasuredInWindow(readTrend(trendPath));
     log(String(unmeasured));

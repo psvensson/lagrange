@@ -24,6 +24,9 @@ const NUMBER_LINE = /^-?\d+(?:\.\d+)?$/u;
 const NODE_TOKEN = 'node';
 const TARGET_ZERO = 0;
 const NO_ARTIFACTS = Object.freeze([]);
+// R27: a probe measures, it never acts. Every harness refuses under this.
+const PROBE_ENV = 'LAGRANGE_PROBE';
+const PROBE_ENV_VALUE = '1';
 
 // A live report whose harness, not the system under test, failed is a
 // non-measuring sample: it counts neither for nor against a streak.
@@ -257,6 +260,7 @@ function measureScript(root, args) {
   const result = spawnSync(process.execPath, [script, ...rest], {
     cwd: root, encoding: TEXT_ENCODING, timeout: SCRIPT_TIMEOUT_MS,
     maxBuffer: SCRIPT_MAX_BUFFER,
+    env: {...process.env, [PROBE_ENV]: PROBE_ENV_VALUE},
   });
   const numbers = String(result.stdout || '').split('\n')
     .map((line) => line.trim()).filter((line) => NUMBER_LINE.test(line));

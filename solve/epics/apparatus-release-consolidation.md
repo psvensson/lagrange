@@ -67,9 +67,9 @@ formation trend) read compact text files that their quests commit.
 | Gate chains (`check`, `test:static`, attempt preflight) reference the literals checker | yes | 0 |
 | Gate chains reference the file-length audit | yes | 0 (function-length instead) |
 | `src/**/*-methods.js` files | 160 | ≤ 160 (no growth) |
-| Open epics (incl. this one and formation) | 26 | ≤ 8 |
-| Open epics still `legacy: true` | 20 | 0 |
-| Open epics without a `doneWhen` | 20 | 0 |
+| Open epics (incl. this one and formation) | 26 (10 on 2026-09-13) | ≤ 12 (owner decision 2026-09-13: the remaining open epics all carry live quests; a target met only by closing live work is a wrong number) |
+| Open epics still `legacy: true` | 20 (0 on 2026-09-13) | 0 |
+| Open epics without a `doneWhen` | 20 (0 on 2026-09-13) | 0 |
 | `solve/epics/` total lines | 39,181 | ≤ 6,000 |
 | `liferaft` in `package.json` dependencies | yes | absent |
 | `CLAUDE.md` is a pointer to `AGENTS.md` | 75-line copy | ≤ 3 lines |
@@ -176,6 +176,23 @@ contract is max(latest, newest prerelease); the move needs an
 `NPM_DIST_TAG_TOKEN` secret (owner action - trusted publishing authenticates
 `publish` only); until it exists, 0.2.5's `next` still names 0.2.4-rc.2 and
 `npm dist-tag add lagrange-server@0.2.5 next` is the manual move.
+
+**Verifier notes recorded (2026-09-13, second brief).** The publisher's one
+rewrite is the inert-data rebase (CLAUDE.md, runbook). The budget row "npm
+next lags latest" is a release-time snapshot; the release owner clears it
+with `release-publication-receipt.js --reobserve-next` after the manual move
+(RELEASE.md). `--bot-commits` trusts the workflow's committer identity
+(`formation-health`); a workflow committing as `github-actions[bot]` is
+outside it by design (e81dbf3a6 is such a pre-existing commit).
+`split-merge-transition-integrity` carries `authorizes: []` and no `legacy`
+flag, so `managed-split-cutover-handoff-closure` cannot land source until that
+epic's scope is sealed - the next `epic-board-curation` item. The formation
+seam's `FORMATION_OWNER` enumerates four owners against the design note's
+nine; the calibration probe's zero means coverage only once the contract
+grows to the nine - the first attempt of `formation-calibration-run` owns that. Receipt order
+falls back to string order between two prereleases of one core, so an
+`rc.10` would sort before `rc.9`; theoretical at this cadence, recorded so
+nobody rediscovers it.
 
 **publish-gate-hygiene** — `npm run publish` and the pre-push hook refuse
 empty-subject commits and zero-byte untracked files; the human path uses the

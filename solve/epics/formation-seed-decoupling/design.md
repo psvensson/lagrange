@@ -563,29 +563,36 @@ captured either. `formation-calibration-run` therefore starts with the wiring,
 not the run:
 
 1. The seed starts one attribution window at process start when
-   `LAGRANGE_FORMATION_ATTRIBUTION=1` (instances are one-shot and the window
-   must end inside the process), and stops it on `SIGUSR2`, logging the
-   `stop()` snapshot as one JSON line (`Formation attribution window`) - owners,
-   unattributed, idle, partition delta, turn count. The demo sends `SIGUSR2`
-   to the seed at its own "Cluster formed." phase mark, which is the window
-   end the verdict already uses (`clusterFormedAtMs`).
+   `LAGRANGE_FORMATION_ATTRIBUTION=1`. The window ends on the formed event
+   (the demo sends `SIGUSR2` at its "Cluster formed." mark, the end the
+   verdict already uses) OR on a deadline - the formation budget window plus
+   a margin - whichever comes first, because the run this quest exists for
+   is the failing formation, where "Cluster formed." never fires (owner
+   amendment 2026-09-13). Every 10 s the seed logs a non-finalising snapshot
+   of the buckets (`Formation attribution snapshot`), so a stalled or killed
+   seed still leaves partial attribution; the seam gains a `snapshot()` that
+   reads the buckets without completing the window. The final `stop()`
+   snapshot is logged as `Formation attribution window`.
 2. `collectFormationVerdict` harvests that line from the seed log into
    `formationVerdict.attribution`; the acceptance rule reads
    `unattributedPercent` from it.
-3. With the same flag the cluster harness spawns the seed with
-   `--cpu-prof --cpu-prof-dir <report dir>`; the profile lands at process exit
-   and is an immutable sibling of the report (bound by run id, HEAD,
-   `SRC_FINGERPRINT`, digests). It corroborates the buckets, never replaces
-   them.
+3. With the same flag the seed samples its main thread through the
+   inspector `Profiler` and writes the profile periodically (and on the
+   deadline) into the report directory, rather than relying on `--cpu-prof`,
+   which writes only on a clean exit a stalled process may never reach; if
+   `--cpu-prof` is kept as a fallback, the deadline must guarantee a graceful
+   exit. The profile is an immutable sibling of the report (bound by run id,
+   HEAD, `SRC_FINGERPRINT`, digests); it corroborates the buckets, never
+   replaces them.
 4. Then `gate:preflight` with the exact question, and one fresh-container run
    on GCP through `npm run health:formation -- --gcp` with the flag set. The
    per-owner cost table is committed as text under
    `test/simulation/calibration/`, each figure citing its artifact; the probe
    counts formation-path owners the table does not cover.
 
-Scope note: steps 1-2 touch `src/index.js`/`src/bootstrap` and
-`examples/service-data-affinity` (the demo and its verdict), which the epic's
-`authorizes` must widen to; recorded as a decision on the quest when sealed.
+Scope (decision, owner 2026-09-13): the epic's `authorizes` widens to
+`examples/service-data-affinity` and to the probe's owner file
+`scripts/checks/formation-health.js` - those files only.
 
 **Simulator design inputs carried from `formation-contracts-registration`.**
 - The cross-operation re-entry cycle: the operation-workflow owner bounds

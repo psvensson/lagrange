@@ -1,11 +1,10 @@
 ---
 id: release-0-2-five-node-convergence
-status: open
+status: superseded
 proof: certification
 roadmapRow: RM-0.2-five-node-convergence
 graduatesTo: null
 quests:
-  - managed-split-cutover-handoff-closure
   - red-main-multi-join-formation-convergence
   - admin-cdc-notification-lifecycle-contract
   - admin-cdc-authoritative-repair-race-contract
@@ -84,3 +83,7 @@ told it what to bound.
 ## Disposition (2026-09-13, epic-board-curation)
 
 Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`managed-split-cutover-handoff-closure`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.
+
+## Disposition (2026-09-13, owner decision)
+
+Superseded: the cold-formation surface by `formation-seed-decoupling`, and its last live quest `managed-split-cutover-handoff-closure` moved under `split-merge-transition-integrity`, where the split/merge work lives.

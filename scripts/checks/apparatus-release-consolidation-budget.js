@@ -56,7 +56,7 @@ const BUDGET = Object.freeze({
   WORKFLOW_LINES: 500,
   RELEASE_STEPS: 12,
   METHODS_FILES: 160,
-  OPEN_EPICS: 8,
+  OPEN_EPICS: 12,
   OPEN_LEGACY_EPICS: 0,
   EPICS_LINES: 6000,
   CLAUDE_MD_LINES: 3,
@@ -283,6 +283,12 @@ function readmeOffences(root, _receipt) {
   return offences;
 }
 
+// The newest receipt records next as observed and whether it trails latest;
+// moving it is the release owner's one post-publish action (RELEASE.md).
+function nextLagging(receipt) {
+  return receipt?.published?.npm?.nextLagging === true ? 1 : 0;
+}
+
 const atMost = (value, budget) => value <= budget;
 const atLeast = (value, budget) => value >= budget;
 
@@ -302,6 +308,7 @@ function measureConsolidationBudget(root = REPO_ROOT) {
     ['formation trend: measuring verdicts in last 3',
       measuringTrendRecords(root), TREND_WINDOW, atLeast],
     ['README offences', readmeOffences(root, receipt), 0, atMost],
+    ['release receipt: npm next lags latest', nextLagging(receipt), 0, atMost],
     ['scripts/ loose top-level files',
       looseFiles(root, SCRIPTS_DIR), BUDGET.LOOSE_SCRIPTS, atMost],
     ['scripts/ total lines',

@@ -5,6 +5,7 @@ proof: deterministic
 roadmapRow: null
 graduatesTo: null
 quests:
+  - managed-split-cutover-handoff-closure
   - dead-setthresholds-removal
   - durable-replay-cursor
   - managed-partition-merge-live-validation

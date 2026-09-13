@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-06
+last_reviewed: 2026-09-13
 ---
 
 # Rules
@@ -202,3 +202,12 @@ exists.
 **Owner.** `action-authority`
 **On conflict.** Surface the boundary and stop; never infer authority from a
 previous action or from the ease of taking this one.
+
+## R27. A probe measures, it never acts
+
+**Invariant.** A `scripts/checks` probe reads the tree and prints a number; it
+never starts a cluster, a demo, or a network call. The solver sets
+`LAGRANGE_PROBE=1` while measuring, and every harness refuses to run under it.
+**Owner.** `solve-probes`
+**On conflict.** Move the work the probe would have started into an attempt;
+a probe that needs to act is a harness wearing a probe's name.

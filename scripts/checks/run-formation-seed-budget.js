@@ -24,6 +24,7 @@ import {
 import {
   FORMATION_ONLY_SCENARIO,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -220,10 +221,12 @@ function runFormationSeedBudgetGate({
   return {exitCode: decision.ok ? EXIT_OK : EXIT_FAIL, decision, reportPath};
 }
 
+const PROBE_REFUSAL_SUBJECT = 'the formation seed budget run';
 const isMainModule = process.argv[1] &&
   import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href;
 
 if (isMainModule) {
+  refuseUnderProbe(PROBE_REFUSAL_SUBJECT);
   const options = parseArguments(process.argv.slice(ARGV_OFFSET));
   process.exitCode = runFormationSeedBudgetGate(options).exitCode;
 }

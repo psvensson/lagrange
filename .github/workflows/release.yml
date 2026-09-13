@@ -226,11 +226,6 @@ jobs:
           test -f "dist/npm/lagrange-server-${VERSION}.tgz"
 
       - name: Publish npm package
-        env:
-          # Optional granted token for the `next` dist-tag move after a
-          # release (trusted publishing authenticates `publish` only); unset,
-          # the owner prints the manual command and continues.
-          NPM_DIST_TAG_TOKEN: ${{ secrets.NPM_DIST_TAG_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.release.outputs.version }}"
@@ -359,10 +354,14 @@ jobs:
           export NPM_DIST_TAGS DOCKER_VERSION_DIGEST DOCKER_LATEST_DIGEST GH_RELEASE GH_LATEST_TAG
           mkdir -p data/releases
           node --input-type=module <<'NODE' > "data/releases/${GITHUB_REF_NAME}.json"
+          import {nextLagsLatest} from './scripts/checks/release-publication-receipt.js';
           const env = process.env;
           const distTags = JSON.parse(env.NPM_DIST_TAGS);
           const npmTagsAtVersion = Object.entries(distTags)
             .filter(([, version]) => version === env.VERSION).map(([tag]) => tag).sort();
+          // next as observed, and whether it trails latest (the receipt checker owns
+          // the rule); moving it is the release owner's one post-publish action.
+          const nextLagging = nextLagsLatest(distTags.next, distTags.latest);
           const release = JSON.parse(env.GH_RELEASE);
           const assetNames = (release.assets || []).map((asset) => asset.name);
           const helmAsset = `lagrange-node-${env.VERSION}.tgz`;
@@ -379,6 +378,7 @@ jobs:
             published: {
               "npm": {published: npmTagsAtVersion.length > 0, distTags: npmTagsAtVersion,
                 latest: distTags.latest || null,
+                next: distTags.next || null, nextLagging,
                 url: `https://www.npmjs.com/package/lagrange-server/v/${env.VERSION}`},
               "docker": {published: env.DOCKER_VERSION_DIGEST !== '', digest: env.DOCKER_VERSION_DIGEST,
                 latestDigest: env.DOCKER_LATEST_DIGEST || null,
