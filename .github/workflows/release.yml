@@ -16,6 +16,17 @@ on:
       - "release-publishability/**"
     tags:
       - "v*"
+  # The release owner's one post-publish action, run by hand from the
+  # Actions page: move the npm `next` dist-tag onto a published release so
+  # `lagrange-server@next` never installs something older than `latest`.
+  # Manual on purpose (owner decision 2026-09-13): no automatic move, no
+  # token in the release job; this job alone reads the NPM_TOKEN secret.
+  workflow_dispatch:
+    inputs:
+      move_next_to:
+        description: "Published release version to point the npm next dist-tag at (e.g. 0.2.5)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +42,7 @@ env:
 jobs:
   publishability:
     name: publishability
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -139,7 +151,7 @@ jobs:
 
   release:
     name: publish
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: publishability
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -396,3 +408,33 @@ jobs:
           cat "data/releases/${GITHUB_REF_NAME}.json"
           cp "data/releases/${GITHUB_REF_NAME}.json" release-receipt.json
           gh release upload "$GITHUB_REF_NAME" release-receipt.json --clobber
+
+  move-next:
+    name: move next dist-tag (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # No checkout, no token beyond the npm secret: nothing to permit.
+    permissions: {}
+    steps:
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Move next onto the published release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TARGET: ${{ inputs.move_next_to }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::next moves only onto a release version, got '$TARGET'"; exit 1; }
+          npm view "$NPM_PACKAGE@$TARGET" version >/dev/null || { echo "::error::$NPM_PACKAGE@$TARGET is not published"; exit 1; }
+          # next never moves below latest: the highest of the two must be the target.
+          LATEST="$(npm view "$NPM_PACKAGE" dist-tags.latest)"
+          HIGHEST="$(printf '%s\n%s\n' "$LATEST" "$TARGET" | sort -V | tail -n 1)"
+          [ "$HIGHEST" = "$TARGET" ] || { echo "::error::refusing to move next below latest ($LATEST)"; exit 1; }
+          npm dist-tag add "$NPM_PACKAGE@$TARGET" next
+          npm view "$NPM_PACKAGE" dist-tags --json

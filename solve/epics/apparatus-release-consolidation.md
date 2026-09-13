@@ -181,7 +181,11 @@ contract is max(latest, newest prerelease); the move needs an
 rewrite is the inert-data rebase (CLAUDE.md, runbook). The budget row "npm
 next lags latest" is a release-time snapshot; the release owner clears it
 with `release-publication-receipt.js --reobserve-next` after the manual move
-(RELEASE.md). `--bot-commits` trusts the workflow's committer identity
+(RELEASE.md), locally or through the release workflow's manual
+`move-next` dispatch job - a deliberate exception to "no token in CI": the
+`NPM_TOKEN` secret already existed unused, the job runs only by hand and
+nothing moves automatically (owner, 2026-09-13). `--bot-commits` trusts the
+workflow's committer identity
 (`formation-health`); a workflow committing as `github-actions[bot]` is
 outside it by design (e81dbf3a6 is such a pre-existing commit).
 `split-merge-transition-integrity` carries `authorizes: []` and no `legacy`

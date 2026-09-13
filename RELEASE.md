@@ -118,6 +118,11 @@ The second command reads npm's dist-tags again and records `next` as now
 observed in the release receipt; the consolidation budget row "npm next lags
 latest" reads that record, so it clears from evidence and never by hand.
 
+Without a local npm login, run the move from the Actions page instead:
+workflow `release`, "Run workflow", input `move_next_to` = the version. That
+job is the only one reading the `NPM_TOKEN` secret and runs only by hand; the
+re-observe and commit above still follow locally.
+
 The move stays manual on purpose (owner decision 2026-09-13): a long-lived npm
 write token in CI is a larger risk than a lagging `next` at this release
 cadence; trusted publishing authenticates `publish` only. The publication
