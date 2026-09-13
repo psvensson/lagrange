@@ -195,6 +195,11 @@ The milestone requires:
 - an idiomatic language SDK where a source-level function/operation handle
   compiles to the existing immutable Artifact, call Binding, export interface,
   and outbound-call policy rather than serializing a closure at runtime;
+- an ordinary handler in that OCI program can call the generated operation
+  handle over its authenticated broker channel; the broker derives the
+  service/revision identity and generated outbound-call authority and hands the
+  request to the existing Call Cell ingress rather than resolving a partition
+  itself;
 - exact manifest/revision/export identity for every native invocation;
 - `OciContainerDriver.invoke()` as the OCI execution-provider seam, reached only
   through the existing Call Cell owner route;
@@ -218,9 +223,10 @@ The milestone requires:
 
 The OCI host agent remains lifecycle-only. It may provision the managed process
 and its broker connectivity, but it must not become a partition router,
-scheduler, retry loop, or alternate Call Cell owner. The same installed service
-may use native OCI Call Cells where ecosystem compatibility matters and WASM
-Call Cells where portability, density, or stronger isolation matters.
+scheduler, retry loop, or alternate Call Cell owner. A customer application may
+mix separately installed native OCI and WASM operations where ecosystem
+compatibility, portability, density, or stronger isolation make each provider
+the better fit; runtime kind remains part of each installed Artifact/revision.
 
 ## Later - 1.0 Production Ready: production support and relational invariants
 
