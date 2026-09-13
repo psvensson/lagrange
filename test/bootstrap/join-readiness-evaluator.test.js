@@ -110,7 +110,6 @@ function createTopologyBlockedEvaluation() {
   return {
     reasons: [JOIN_READINESS_REASON.TOPOLOGY_NOT_READY],
     missingNodeEndpointNodeIds: ['seed-node'],
-    missingPostgresWireNodeIds: ['seed-node'],
   };
 }
 
