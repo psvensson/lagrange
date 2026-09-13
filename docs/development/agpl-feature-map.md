@@ -60,10 +60,6 @@ Two rules keep the ids durable:
   number, so inserting or reordering rows never renumbers existing ids (the
   positional-renumbering trap that breaks rule-id and CL citations). A row keeps
   its id for life; a removed row's id is retired, not reused.
-- **Added on first link, not all at once.** The id encodes the phase and a topic slug, not a row
-  number, so inserting or reordering rows never renumbers existing ids (the
-  positional-renumbering trap that breaks rule-id and CL citations). A row keeps
-  its id for life; a removed row's id is retired, not reused.
 - **Added on first link, not all at once.** A table gains the `Id` column when one
   of its rows first becomes a Quest link target. Tables without active Quest links
   may omit the column until they need it; this is intentional, not drift.
