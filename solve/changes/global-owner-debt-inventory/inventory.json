@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 429733,
-        "sha256": "97f28f43ad719946e32a748c8d00624d12d7073f95d3960fb7b0cf2b6b80b75f"
+        "sha256": "c269a211f94e79634bad64e7e9ca4d0db0712aa700fb7799ddb1ad320b0ba32d"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2378779,
-        "sha256": "80de4eb652db20745940b8b7b8199a6ae9384fb211a20d58320dfe52d6659e02"
+        "sha256": "220962b347abd3bd21486a15b9fdbd660d76fd340fd2dc9e7dbafea1dbc168f1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "9b499ff914e176ee563c9618c74eb44e639d1d50499305c1998fec1a36b015be"
+        "sha256": "35aa460476b90336202c22010c9771e8d943c79c9b305434138bc1fdfa31e617"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "75fd680175a7e1a3edc9e44fe734fb90f6e083fb42eb58883104722acfea0488"
+        "sha256": "6bd551b28c4c5d64525be9c51961a7cddfa8e96e449e04cebeca76aca82c5a5a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "45ceb94adcbcf6daa54a5a76f650d1ac324946abf1a460dc0e1abe2f07f6e27a"
+    "inputDigest": "a5cb0a0904e14279d001d3b84d3358cc77de3784927cd42db35681ebbc2e0d94"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 429733,
-        "sha256": "97f28f43ad719946e32a748c8d00624d12d7073f95d3960fb7b0cf2b6b80b75f"
+        "sha256": "c269a211f94e79634bad64e7e9ca4d0db0712aa700fb7799ddb1ad320b0ba32d"
       },
       "declaredCount": 1821,
       "observedCount": 1821,
@@ -112,12 +112,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "9b499ff914e176ee563c9618c74eb44e639d1d50499305c1998fec1a36b015be"
+          "sha256": "35aa460476b90336202c22010c9771e8d943c79c9b305434138bc1fdfa31e617"
         },
         "cloneGroups": 57,
-        "duplicatedLines": 1845,
+        "duplicatedLines": 1843,
         "sourceCloneTouches": 114,
-        "sourceDuplicatedLineTouches": 3690,
+        "sourceDuplicatedLineTouches": 3686,
         "nonzeroSourceCount": 71,
         "touchMultiplicity": 2
       },
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "75fd680175a7e1a3edc9e44fe734fb90f6e083fb42eb58883104722acfea0488"
+          "sha256": "6bd551b28c4c5d64525be9c51961a7cddfa8e96e449e04cebeca76aca82c5a5a"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -167,14 +167,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2378779,
-        "sha256": "80de4eb652db20745940b8b7b8199a6ae9384fb211a20d58320dfe52d6659e02"
+        "sha256": "220962b347abd3bd21486a15b9fdbd660d76fd340fd2dc9e7dbafea1dbc168f1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "9bd4ae52baa74595762125c0f5c3b16e15e3687b3f4c9cf82f8302c55355b893",
+      "sourceDigest": "6d2927f7abeb4e10aae536e84ad7f563d11fa12b52c0a3112ae0c238d79ec2c1",
       "moduleCount": 4677,
       "edgeCount": 21565,
       "unresolvedCount": 34
@@ -184,7 +184,7 @@
     "sourceSignalCount": 2639,
     "assignedSignalCount": 2639,
     "uniqueAssignmentCount": 2639,
-    "digest": "7c664fedefc471f3b0f0ec25e0e225ab53c72019c1c43ca0995a5460b0b3e05c"
+    "digest": "1519bcec7c6c751d88a45872006d4de9b5e969b1a0ebd1e12d5ca0fdc289a7f4"
   },
   "signalCounts": {
     "cognitive": 160,
@@ -298,13 +298,13 @@
       "complexity": 122,
       "cognitive": 18,
       "oversizedFiles": 2,
-      "duplicatedLines": 216,
+      "duplicatedLines": 212,
       "cloneTouches": 6,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 344,
       "importOut": 421,
-      "score": 677.6,
+      "score": 677.2,
       "topPaths": [
         "src/bootstrap/node-joining-backfill-merge-and-status.js",
         "src/bootstrap/bootstrap-api-control-plane-methods.js",
