@@ -76,6 +76,7 @@ const POLL_BUDGET = 1000;
 const AUTHORITY_READY_AFTER_POLLS = 4;
 const EXPECTED_DISCOVERY_CONFIG_SITES = 2;
 const EXPECTED_JOIN_BUDGET_SITES = 2;
+const EXPECTED_READY_BUDGET_SITES = 3;
 const BARRIER_STATE_WAITING_COHORT = 'waiting_for_formation_cohort';
 const BARRIER_STATE_BYPASSED = 'bypassed_insufficient_formation_cohort';
 const BARRIER_STATE_WAITING_AUTHORITY = 'waiting_for_startup_authority';
@@ -258,13 +259,26 @@ test('integration-assertions-unchanged', () => {
     'the join waits carry their own measured budget (owner decision)',
   );
   assert.equal(
-    (source.match(/JOIN_READY_TIMEOUT_MS,/g) || []).length,
+    (source.match(/JOIN_READY_TIMEOUT_MS\)?,/g) || []).length,
     EXPECTED_JOIN_BUDGET_SITES,
     'exactly the two node joins use the join budget',
   );
   assert.ok(
     source.includes('const TEST_TIMEOUT_MS = 120000;'),
     'the parent test cap is unchanged',
+  );
+  // The reference budgets stay pinned above; the waits scale them by the
+  // declared machine factor at the point of use (2026-09-13: the GCP proof
+  // host is 2.4x slower and every start may land on a different host).
+  assert.equal(
+    (source.match(/scaleByMachineFactor\(READY_TIMEOUT_MS\)/g) || []).length,
+    EXPECTED_READY_BUDGET_SITES,
+    'every readiness wait scales the pinned budget by the machine factor',
+  );
+  assert.equal(
+    (source.match(/scaleByMachineFactor\(JOIN_READY_TIMEOUT_MS\)/g) || []).length,
+    EXPECTED_JOIN_BUDGET_SITES,
+    'both node joins scale the pinned join budget by the machine factor',
   );
 });
 
