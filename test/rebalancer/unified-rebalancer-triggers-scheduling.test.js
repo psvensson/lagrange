@@ -574,6 +574,48 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     t.equal(rebalancer.currentInterval, baseInterval);
   });
 
+  await t.test(
+    'the stabilization gate retries at the stabilization horizon, not the ' +
+      'ordinary cadence, for a non-priority entity',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'sys-postgres-wire',
+        entityType: EntityType.RUNTIME_SERVICE,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+      });
+      rebalancer.initialize();
+      rebalancer.setLeader(true);
+      const scheduledDelays = [];
+      rebalancer.scheduleNextCheck = (delayMs = null) => {
+        scheduledDelays.push(delayMs);
+      };
+      try {
+        // initialize() stamps a state change, so the first check after the
+        // owner starts the rebalancer meets the stabilization gate.
+        const blocker = await rebalancer.getCheckRebalanceBlocker(
+          rebalancer.createRebalancePlanningGateEvaluationContext(),
+        );
+        t.equal(blocker?.decision?.gate, 'stabilization');
+        const remainingMs = rebalancer.getTimeUntilStabilized();
+        t.ok(remainingMs > 0 && remainingMs <= rebalancer.stabilizationPeriodMs);
+        blocker.apply();
+        t.equal(scheduledDelays.length, 1);
+        t.ok(
+          scheduledDelays[0] !== null &&
+            scheduledDelays[0] <= rebalancer.stabilizationPeriodMs,
+          'the retry is the remaining stabilization time, not the ordinary interval',
+        );
+      } finally {
+        rebalancer.shutdown();
+      }
+    },
+  );
+
   await t.test('checkRebalance backs off when no actionable moves were executed', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
