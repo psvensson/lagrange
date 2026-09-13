@@ -217,6 +217,43 @@ boundary below.
 
 ---
 
+## Phase 0.6 — Native OCI Call Cells
+
+*"Keep the customer's runtime; move the selected function to the data."*
+
+Phase 0.6 makes the native-runtime bridge a scheduled product milestone rather
+than an unversioned advanced-runtime idea. It contains the minimum real managed
+OCI lifecycle needed to run customer containers, followed by native Call Cell
+invocation through the existing Artifact / Binding / Cell execution owners.
+
+### 1. Real Managed OCI Activation — 🟢 Community core
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Digest-pinned live OCI activation | 🔧 | Pull/create/start/inspect/stop/remove the exact managed revision through the unified lifecycle and selected host provider |
+| Managed health, endpoint and log integration | 🔲 | Runtime evidence feeds ordinary service readiness/diagnostics rather than a side-channel supervisor |
+| Named instance kill and replacement | 🔲 | Exact failed instance is replaced once through existing service placement/lifecycle owners |
+| Authenticated replica identity | 🔲 | Lifecycle-issued identity binds the managed process to cluster/node/service/revision/Cell identity |
+
+### 2. Native OCI Call Cells — 🟢 Community core
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Native invocation/broker contract | 🔲 | Application-initiated authenticated stream; broker adapts service-originated calls and admitted worker invocation but owns no placement, fanout, reduce or retries |
+| `OciContainerDriver.invoke()` | 🔲 | Provider-specific execution begins only after `ServiceRuntimeLifecycle.invoke()` |
+| First code-first native SDK | 🔲 | Source-level operation handle compiles to existing Artifact, Binding, export identity and outbound-call policy; no closure/function shipping |
+| Multi-node data-local execution | 🔲 | Handler-originated and direct calls converge on `CallCellInvoker`; each destination reads its local partition replica before native execution |
+| Native dependency and worker-loss proof | 🔲 | Real native library, pinned revision, typed ambiguous/retry behavior, and no false exactly-once external-side-effect claim |
+| Second-language conformance | 🔲 | Materially different runtime consumes the same broker/context semantics without a new execution owner |
+| Fresh-clone evaluator terminal | 🔲 | End-to-end proof covers identity, authorization, locality, emit/reduce, recovery, negatives, teardown and replay semantics |
+
+Phase 0.6 completes when a real managed OCI service can expose a distributed
+operation from the same ordinary program, execute that operation on multiple
+partition hosts with a genuine native dependency, recover honestly from worker
+loss, and demonstrate the same execution contract from a second language/runtime.
+
+---
+
 ## Phase 1.0 — Real Product
 
 *"Companies can run this in production."*
@@ -324,14 +361,14 @@ boundary below.
 
 ### 8. Customer-Installable Service Product Platform — 🟢 core / 🟡🔴 commercial controls
 
-This is a cross-edition convergence milestone for separately released services such as Lagrange AI. It groups existing core and paid-platform work into one customer acceptance boundary; it does not change the implementation-home rules in `edition-matrix.md`.
+This is a cross-edition convergence milestone for separately released services such as Lagrange AI. It groups existing core and paid-platform work into one customer acceptance boundary; it does not change the implementation-home rules in `edition-matrix.md`. Phase 0.6 establishes the first live managed OCI activation and native Call Cell path; Phase 1.0 hardens that substrate for supported customer operation.
 
 #### Managed package and runtime lifecycle — 🟢 Community core
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Signed immutable OCI package/revision identity | 🔧 | Build on the existing verified install catalog rather than a second package path |
-| Real managed OCI service activation | 🔲 | Fetch/start/stop/restart under the unified service lifecycle; no hand-managed daemon path |
+| Managed OCI lifecycle production hardening | 🔲 | 0.6 establishes live activation; 1.0 adds compatibility policy, rollout fencing, upgrade/rollback guarantees and supported operational envelopes |
 | Kernel/service compatibility preflight | 🔲 | Refuse incompatible kernel/API/dependency combinations before activation |
 | Configuration schema validation | 🔲 | Service-declared schema plus typed validation failures |
 | Health/readiness contribution contract | 🔲 | Service-specific readiness feeds the ordinary service actual/readiness model |
@@ -401,19 +438,21 @@ deepens the shipped call surface rather than adding a separate platform."*
 
 ### 2. Advanced Runtime Services — 🟢 Community core / future service platform
 
-| Item | Status |
-|------|--------|
-| OCI container runtime | 🔧 |
-| Vector search service | 🔲 |
-| Full-text search service | 🔲 |
-| Spatial search/index service | 🔲 |
-| Embedding service | 🔲 |
+| Item | Status | Notes |
+|------|--------|-------|
+| Advanced OCI provider/resource placement | 🔲 | First live managed OCI activation and native Call Cells belong to 0.6; this row covers additional providers, deeper resource-aware placement and runtime-platform scale |
+| Vector search service | 🔲 | Specialized search family distinct from the ordinary ordered B-tree contract |
+| Full-text search service | 🔲 | Specialized search semantics/storage rather than a required B-tree variant |
+| Spatial search/index service | 🔲 | Specialized geometry/index semantics rather than a required B-tree variant |
+| Embedding service | 🔲 | Specialized service workload |
 
 These specialized search families remain distinct from the ordinary ordered
 B-tree contract introduced in 0.3; they can use service-specific storage and
 semantics where appropriate.
 
-The foundational managed-OCI lifecycle needed by customer-installable services is now a Phase 1.0 product gate above. Phase 2.0 may deepen container/resource placement and service APIs; it should not create a second activation path.
+The foundational managed-OCI lifecycle and native Call Cell path are Phase 0.6
+product gates. Phase 2.0 may deepen container/resource placement and service
+APIs; it should not create a second activation or invocation path.
 
 ### 3. External Kernel Platform API — 🟢 Community core / 🔴 Enterprise extensions
 
