@@ -108,13 +108,13 @@ test('SeedRegistrationPhase projects local meta service endpoints into cache dur
     const projectedEndpoints = projected.filter((entry) =>
       entry.tableName === TABLES.SERVICE_ENDPOINTS,
     );
-    t.equal(projectedEndpoints.length, 3,
-      'bootstrap registration should project each built-in meta endpoint into cache');
-    t.ok(projectedEndpoints.some((entry) =>
-      entry.operation === 'INSERT' &&
-      entry.row?.service_id === META_SERVICE_ID.POSTGRES_WIRE &&
-      entry.row?.node_id === 'node-a',
-    ), 'bootstrap registration should project the local postgres-wire endpoint');
+    t.equal(projectedEndpoints.length, 2,
+      'bootstrap registration should project each boot-owned meta endpoint into cache');
+    t.equal(projectedEndpoints.some((entry) =>
+      entry.row?.service_id === META_SERVICE_ID.POSTGRES_WIRE,
+    ), false,
+    'bootstrap registration never projects a postgres-wire endpoint: ' +
+    'the runtime lifecycle publishes it after the listener binds');
   });
 
 test('SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration',
