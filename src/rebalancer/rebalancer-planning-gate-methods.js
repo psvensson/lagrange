@@ -358,6 +358,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         timeUntilStabilized,
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs: timeUntilStabilized,
     });
   },
 
@@ -710,7 +711,6 @@ const REBALANCER_PLANNING_GATE_METHODS = {
   /**
    * Perform a rebalance check.
    * Requirements: 2.2, 2.3, 2.4
-   * @return {Promise<void>}
    * @return {Promise<void>}
    */
   async checkRebalance() {
