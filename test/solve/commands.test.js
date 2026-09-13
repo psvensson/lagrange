@@ -221,6 +221,34 @@ test('a failing change proof leaves nothing staged and the quest open', (t) => {
   assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.OPEN);
 });
 
+test('the commit-time checks run before the proof and a miss costs no test run', (t) => {
+  const root = repo(t, {legacy: true});
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  // A hook that refuses the staged tree the way the file-size ratchet does.
+  write(root, '.githooks/pre-commit',
+    'echo "Source oversized-file ratchet: 28/27 over 800 lines."; exit 1\n');
+  let proofRan = false;
+  refuses(() => land(root, {id: QUEST_ID, runProof: () => {
+    proofRan = true;
+  }}), /commit-time checks refused[\s\S]*oversized-file ratchet/u);
+  assert.equal(proofRan, false, 'the proof never started');
+  assert.equal(git(root, ['diff', '--cached', '--name-only']).trim(), '',
+    'the index is given back');
+  assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.OPEN);
+  // The hook sees the staged tree and the landing marker the commit carries.
+  write(root, '.githooks/pre-commit',
+    '[ "$LAGRANGE_SOLVER_LANDING" = 1 ] && git diff --cached --name-only | grep -q docs/ ' +
+    '&& exit 0; exit 1\n');
+  const landed = land(root, {id: QUEST_ID, runProof: () => {
+    proofRan = true;
+  }});
+  assert.equal(proofRan, true, 'a passing hook lets the proof run');
+  assert.match(landed.commit, /^[0-9a-f]{40}$/u);
+});
+
 test('a path already staged as a deletion still lands', (t) => {
   const root = repo(t, {legacy: true});
   const doomed = 'docs/retired.md';
