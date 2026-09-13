@@ -33,11 +33,6 @@ function buildTopologySettlingGateLogContext(
     ) ?
       [...topologySettlingBlocker.missingNodeEndpointNodeIds] :
       [],
-    missingPostgresWireNodeIds: Array.isArray(
-      topologySettlingBlocker.missingPostgresWireNodeIds,
-    ) ?
-      [...topologySettlingBlocker.missingPostgresWireNodeIds] :
-      [],
     endpointReadyNodeCount: Number.isFinite(
       topologySettlingBlocker.endpointReadyNodeCount,
     ) ?

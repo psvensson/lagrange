@@ -1,6 +1,6 @@
 ---
 id: lagrange-aware-callback-shared-context
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -128,3 +128,7 @@ there; callback code itself stays stateless and serialization-safe.
   by design. Today the MovieLens demo's service leg runs as kernel-internal
   `native_js`; repositioning it onto an installed OCI service follows the
   ladder's C-phase (tracked there, not here).
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Closed without a successor: a design discussion with open questions and no measurable doneWhen; reopen as a quest under an open epic when a caller needs the shared context.

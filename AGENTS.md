@@ -55,7 +55,9 @@ npm run publish
 
 The publisher gates a clean temporary worktree, writes a HEAD-bound receipt,
 checks fast-forward eligibility and the remote SHA, and never stages, commits,
-amends, force-pushes, or sweeps the caller's worktree.
+amends, force-pushes, or sweeps the caller's worktree. Its one rewrite: when
+origin/main advanced only by inert data commits (the nightly formation trend),
+it rebases the local commits over them and publishes the rebased HEAD.
 
 ## Find The Right Surface
 

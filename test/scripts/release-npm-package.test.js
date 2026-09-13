@@ -147,4 +147,3 @@ describe('publish mismatch verdicts carry npm output', () => {
       'a non-zero exit is not the silent case');
   });
 });
-

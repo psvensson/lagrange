@@ -7,8 +7,6 @@ const {
   CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
   CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
   ENDPOINT_STATUS,
-  ENDPOINT_SYNC_HEALTH,
-  META_SERVICE_ID,
   NodeStatus,
   REBALANCER_LOG_MSG,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -20,7 +18,6 @@ const {
   isNodeReadyLeaseExplicitlyCleared,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
-  normalizeServiceEndpointRow,
   resolveReplicaOperationSemanticPhase,
 } = UNIFIED_REBALANCER_SHARED;
 const CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
@@ -282,63 +279,6 @@ function collectVisibleNodeEndpointNodeIds(rows) {
   return nodeIds;
 }
 
-function collectVisiblePostgresWireNodeIds(rows) {
-  const nodeIds = new Set();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const {nodeId, serviceId, healthStatus} =
-      normalizeServiceEndpointRow(row);
-    if (
-      nodeId &&
-      serviceId === META_SERVICE_ID.POSTGRES_WIRE &&
-      healthStatus === String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()
-    ) {
-      nodeIds.add(nodeId);
-    }
-  }
-  return nodeIds;
-}
-
-function collectReadinessEndpointNodeIds(rebalancer, requiredNodeIds) {
-  const visibleNodeIds = new Set();
-  const writableNodeIds = new Set();
-  const readinessService = rebalancer.controlPlaneReadinessService;
-  if (typeof readinessService?.getNodeReadinessSync !== 'function') {
-    return {visibleNodeIds, writableNodeIds};
-  }
-  for (const nodeId of requiredNodeIds) {
-    const readiness = readinessService.getNodeReadinessSync(nodeId, {
-      allowStaleOnCacheChange: false,
-    });
-    if (rebalancer.isReadinessDimensionSatisfied(
-      readiness,
-      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
-    )) {
-      visibleNodeIds.add(nodeId);
-    }
-    if (rebalancer.isReadinessDimensionSatisfied(
-      readiness,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
-    )) {
-      writableNodeIds.add(nodeId);
-    }
-  }
-  return {visibleNodeIds, writableNodeIds};
-}
-
-function intersectNodeIds(requiredNodeIds, first, second) {
-  return new Set(
-    requiredNodeIds.filter(
-      (nodeId) => first.has(nodeId) && second.has(nodeId),
-    ),
-  );
-}
-
-function buildEffectiveNodeIds(primary, readinessBacked, allowBackfill) {
-  return new Set([
-    ...primary,
-    ...(allowBackfill ? readinessBacked : []),
-  ]);
-}
 
 function readFirstTruthyField(record, fieldNames, fallback = null) {
   const fieldName = fieldNames.find((name) => record?.[name]);
@@ -424,25 +364,15 @@ async function revalidateEndpointVisibilityBlocker(rebalancer, blocker) {
     return blocker;
   }
   try {
-    const [nodeRead, serviceRead] = await Promise.all([
-      rebalancer.readCriticalSystemEndpointVisibilityAuthoritativeRows(
+    const nodeRead =
+      await rebalancer.readCriticalSystemEndpointVisibilityAuthoritativeRows(
         TABLES.NODE_ENDPOINTS,
         requiredNodeIds,
-      ),
-      rebalancer.readCriticalSystemEndpointVisibilityAuthoritativeRows(
-        TABLES.SERVICE_ENDPOINTS,
-        requiredNodeIds,
-        {serviceId: META_SERVICE_ID.POSTGRES_WIRE},
-      ),
-    ]);
+      );
     const visibility = rebalancer.summarizeCriticalSystemEndpointVisibility(
       requiredNodeIds,
       mergeEndpointRows(rebalancer, TABLES.NODE_ENDPOINTS, nodeRead),
-      mergeEndpointRows(rebalancer, TABLES.SERVICE_ENDPOINTS, serviceRead),
-      {
-        allowReadinessBackfill: blocker.allowReadinessBackfill !== false,
-        requiredReadyNodeCount: blocker.requiredReadyNodeCount,
-      },
+      {requiredReadyNodeCount: blocker.requiredReadyNodeCount},
     );
     return visibility.ready === true ?
       null :
@@ -539,9 +469,6 @@ class UnifiedRebalancerCriticalTopologyMethods {
           ...(Array.isArray(blocker?.missingNodeEndpointNodeIds) ?
             blocker.missingNodeEndpointNodeIds :
             []),
-          ...(Array.isArray(blocker?.missingPostgresWireNodeIds) ?
-            blocker.missingPostgresWireNodeIds :
-            []),
         ].filter(
           (nodeId) =>
             typeof nodeId === 'string' && nodeId.length > 0,
@@ -554,7 +481,6 @@ class UnifiedRebalancerCriticalTopologyMethods {
   async readCriticalSystemEndpointVisibilityAuthoritativeRows(
     tableName,
     requiredNodeIds,
-    options = {},
   ) {
     if (
       !this.controlPlaneSystemTableGateway ||
@@ -577,16 +503,9 @@ class UnifiedRebalancerCriticalTopologyMethods {
 
     const placeholders = normalizedNodeIds.map(() => '?').join(', ');
     const params = [...normalizedNodeIds];
-    let sql =
+    const sql =
       `SELECT * FROM ${tableName} ` +
       `WHERE ${COLUMN.NODE_ID} IN (${placeholders})`;
-    if (
-      typeof options?.serviceId === 'string' &&
-      options.serviceId.length > 0
-    ) {
-      sql += ` AND ${COLUMN.SERVICE_ID} = ?`;
-      params.push(options.serviceId);
-    }
 
     return this.controlPlaneSystemTableGateway.readAuthoritativeRows(
       tableName,
@@ -602,14 +521,17 @@ class UnifiedRebalancerCriticalTopologyMethods {
   }
 
   // Summarize endpoint visibility from explicit cached/authoritative rows.
+  // A node is endpoint-visible exactly when its bootstrap transport (an
+  // ACTIVE WebSocket node_endpoints row) is published. Runtime-service
+  // endpoints such as sys-postgres-wire are optional desired state placed
+  // later by the runtime-service rebalancer and are not an input to topology
+  // settling; readiness evidence never substitutes for the transport row.
   summarizeCriticalSystemEndpointVisibility(
     requiredNodeIds,
     nodeEndpointRows,
-    serviceEndpointRows,
     options = {},
   ) {
     const normalizedRequiredNodeIds = normalizeNodeIds(requiredNodeIds);
-    const allowReadinessBackfill = options?.allowReadinessBackfill !== false;
     const requiredReadyNodeCount = resolveRequiredReadyNodeCount(
       normalizedRequiredNodeIds,
       options?.requiredReadyNodeCount,
@@ -618,7 +540,6 @@ class UnifiedRebalancerCriticalTopologyMethods {
       return Object.freeze({
         ready: false,
         missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
         endpointReadyNodeCount: 0,
         requiredReadyNodeCount,
         endpointReadyNodeIds: [],
@@ -627,58 +548,18 @@ class UnifiedRebalancerCriticalTopologyMethods {
 
     const visibleNodeEndpointNodeIds =
       collectVisibleNodeEndpointNodeIds(nodeEndpointRows);
-    const visiblePostgresWireNodeIds =
-      collectVisiblePostgresWireNodeIds(serviceEndpointRows);
-    const {
-      visibleNodeIds: readinessVisibleNodeIds,
-      writableNodeIds: readinessWritableNodeIds,
-    } = collectReadinessEndpointNodeIds(this, normalizedRequiredNodeIds);
-
-    const readinessBackedNodeEndpointNodeIds = intersectNodeIds(
-      normalizedRequiredNodeIds,
-      readinessVisibleNodeIds,
-      visiblePostgresWireNodeIds,
-    );
-    const readinessBackedPostgresWireNodeIds = intersectNodeIds(
-      normalizedRequiredNodeIds,
-      readinessWritableNodeIds,
-      visibleNodeEndpointNodeIds,
-    );
-    const effectiveNodeEndpointNodeIds = buildEffectiveNodeIds(
-      visibleNodeEndpointNodeIds,
-      readinessBackedNodeEndpointNodeIds,
-      allowReadinessBackfill,
-    );
-    const effectivePostgresWireNodeIds = buildEffectiveNodeIds(
-      visiblePostgresWireNodeIds,
-      readinessBackedPostgresWireNodeIds,
-      allowReadinessBackfill,
-    );
     const missingNodeEndpointNodeIds = normalizedRequiredNodeIds.filter(
-      (nodeId) => !effectiveNodeEndpointNodeIds.has(nodeId),
-    );
-    const missingPostgresWireNodeIds = normalizedRequiredNodeIds.filter(
-      (nodeId) => !effectivePostgresWireNodeIds.has(nodeId),
+      (nodeId) => !visibleNodeEndpointNodeIds.has(nodeId),
     );
     const endpointReadyNodeIds = normalizedRequiredNodeIds.filter(
-      (nodeId) =>
-        effectiveNodeEndpointNodeIds.has(nodeId) &&
-        effectivePostgresWireNodeIds.has(nodeId),
+      (nodeId) => visibleNodeEndpointNodeIds.has(nodeId),
     );
     return Object.freeze({
       ready: endpointReadyNodeIds.length >= requiredReadyNodeCount,
-      allowReadinessBackfill,
       missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds,
       endpointReadyNodeCount: endpointReadyNodeIds.length,
       requiredReadyNodeCount,
       endpointReadyNodeIds,
-      readinessBackedNodeEndpointNodeIds: Object.freeze([
-        ...readinessBackedNodeEndpointNodeIds,
-      ]),
-      readinessBackedPostgresWireNodeIds: Object.freeze([
-        ...readinessBackedPostgresWireNodeIds,
-      ]),
     });
   }
 

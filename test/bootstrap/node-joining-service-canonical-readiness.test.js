@@ -367,7 +367,6 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
         completedAt: null,
       }],
       missingNodeEndpointNodeIds: ['joining-node-join-gate-3'],
-      missingPostgresWireNodeIds: ['seed-node'],
     });
 
     let thrownError = null;
@@ -384,11 +383,6 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       thrownError?.joinReadiness?.missingNodeEndpointNodeIds,
       ['joining-node-join-gate-3'],
       'timeout should retain missing websocket endpoint diagnostics',
-    );
-    t.same(
-      thrownError?.joinReadiness?.missingPostgresWireNodeIds,
-      ['seed-node'],
-      'timeout should retain missing postgres-wire diagnostics',
     );
     t.equal(
       thrownError?.joinReadiness?.inFlightReplicaOperations,
@@ -419,11 +413,6 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       errorEvents.at(-1)?.context?.missingNodeEndpointNodeIds,
       ['joining-node-join-gate-3'],
       'timeout log should include missing websocket endpoint diagnostics',
-    );
-    t.same(
-      errorEvents.at(-1)?.context?.missingPostgresWireNodeIds,
-      ['seed-node'],
-      'timeout log should include missing postgres-wire diagnostics',
     );
     t.equal(
       errorEvents.at(-1)?.context?.timeoutKind,
@@ -466,7 +455,6 @@ test('NodeJoiningService - canonical readiness blocked log includes control-plan
       requiredSchemaVersion: '1740589945123:7:seed-1',
       appliedSchemaVersion: '1740589945123:7:seed-1',
       missingNodeEndpointNodeIds: ['joining-node-join-gate-blocked'],
-      missingPostgresWireNodeIds: ['seed-node'],
       controlPlaneTargetAddress: 'seed-node/message-group/mg-1-r1',
       controlPlaneTargetCandidates: [
         'joining-node-join-gate-blocked/message-group/mg-local-r1',
@@ -594,11 +582,11 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     };
     service.backfillPropagatedCacheTablesFromAuthoritativeState = async (tableNames) => {
       repairCalls.push(Array.isArray(tableNames) ? [...tableNames] : []);
-      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-        [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-join-gate-repair',
-        [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
         [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
-        health_status: 'healthy',
+        [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
         [COLUMN.UPDATED_AT]: 3,
       });
     };
@@ -611,13 +599,8 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
       [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-      [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
-      [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
-      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-      [COLUMN.UPDATED_AT]: 2,
-    });
+    // The joining node's own websocket endpoint row was missed by CDC; only
+    // the authoritative repair backfill restores it.
 
     await service.joinReadinessEvaluator
       .waitForCanonicalJoinReadinessConvergence();
@@ -628,12 +611,13 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
       'canonical readiness should trigger one authoritative repair backfill',
     );
     t.ok(
-      repairCalls[0].includes(TABLES.SERVICE_ENDPOINTS),
-      'repair backfill should refresh service_endpoints visibility',
-    );
-    t.ok(
       repairCalls[0].includes(TABLES.NODE_ENDPOINTS),
       'repair backfill should include discovery-critical node endpoints',
+    );
+    t.ok(
+      repairCalls[0].includes(TABLES.SERVICE_ENDPOINTS),
+      'repair backfill still refreshes propagated service_endpoints rows ' +
+        'even though join admission does not gate on them',
     );
   });
 
@@ -668,10 +652,32 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
       ['joining-node-endpoint-gate'],
       'topology should require websocket node endpoints for the joining node',
     );
+    t.equal(
+      'missingPostgresWireNodeIds' in snapshot,
+      false,
+      'join readiness carries no postgres-wire visibility field',
+    );
+
+    // A healthy sys-postgres-wire endpoint is an optional runtime service and
+    // never substitutes for the bootstrap transport endpoint.
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
+      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+      health_status: 'healthy',
+    });
+
+    snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+    t.equal(
+      snapshot.topologyReady,
+      false,
+      'topology should still fail closed without the websocket endpoint',
+    );
     t.same(
-      snapshot.missingPostgresWireNodeIds,
+      snapshot.missingNodeEndpointNodeIds,
       ['joining-node-endpoint-gate'],
-      'topology should require postgres-wire endpoints for the joining node',
+      'a postgres-wire endpoint must not satisfy bootstrap transport visibility',
     );
 
     cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
@@ -683,23 +689,7 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
 
     snapshot = service.joinReadinessEvaluator
       .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
-    t.equal(snapshot.topologyReady, false, 'topology should wait for every active postgres endpoint');
-    t.same(
-      snapshot.missingPostgresWireNodeIds,
-      ['joining-node-endpoint-gate'],
-      'topology should identify nodes missing postgres-wire visibility',
-    );
-
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
-      [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
-      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
-      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
-      health_status: 'healthy',
-    });
-
-    snapshot = service.joinReadinessEvaluator
-      .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
-    t.equal(snapshot.topologyReady, true, 'topology should become ready once endpoint visibility converges');
+    t.equal(snapshot.topologyReady, true, 'topology should become ready once the websocket endpoint is visible');
   });
 
 test('NodeJoiningService - authoritative cache backfill closes the CDC blind window',
@@ -802,11 +792,6 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
         snapshot.missingNodeEndpointNodeIds,
         ['joining-node-backfill-gate'],
         'joining node websocket endpoint should be missing before backfill',
-      );
-      t.same(
-        snapshot.missingPostgresWireNodeIds,
-        ['joining-node-backfill-gate'],
-        'joining node postgres-wire endpoint should be missing before backfill',
       );
 
       await service.backfillPropagatedCacheTablesFromAuthoritativeState();

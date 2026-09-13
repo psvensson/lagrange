@@ -85,6 +85,11 @@ jobs:
       - name: Model and contract checks
         run: npm run model:contracts
 
+      # The nightly formation-health workflow commits with its token; that
+      # authority covers one inert data file and nothing else.
+      - name: Bot commits touch only the formation trend
+        run: node scripts/checks/formation-health.js --bot-commits
+
       - name: Upload health evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

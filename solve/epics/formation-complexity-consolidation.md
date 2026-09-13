@@ -1,6 +1,6 @@
 ---
 id: formation-complexity-consolidation
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -585,3 +585,7 @@ Lifecycle / membership:
   forwarded in `getOperationByIdVisibilityObservation` (F2). Targeted suites
   green: gateway 252/252, replica-operation-repository 316/316, rebalancer
   readiness/remove-safety 92/92.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling` for the cold-formation surface.

@@ -1,6 +1,6 @@
 ---
 id: publication-readiness-churn-liveness-closure
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: RM-0.2-five-node-convergence
@@ -378,3 +378,7 @@ Any negative or unproven answer blocks the live GCP gate.
 ## Drafts carried by the solve-v2 migration
 
 - publication-readiness-churn-liveness-closure (RM-0.2-five-node-convergence): Production-shaped readiness churn converges through one versioned planning owner under the sealed contract. Complete-token validation prevents stale-positive decisions. Readiness-internal reads remain recursion-free. Global heavy builds stay at one per macrotask. Three consecutive source-bound natural five-node GCP MovieLens runs reach ACTIVE 5/5 within 60 seconds. Publication coverage is 5/5. Every named frame and seed gap is at most 3000ms.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling`; its invariants are registered contracts witnessed by the derived harness.

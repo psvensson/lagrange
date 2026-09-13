@@ -2,7 +2,7 @@
  * Formation health as a standing signal (`npm run health:formation`).
  *
  *   node scripts/checks/formation-health.js [--report <path>] [--gcp]
- *     [--summary] [--trend <path>] [--limit <n>]
+ *     [--summary] [--metric] [--trend <path>] [--limit <n>]
  *
  * Runs the MovieLens demo's formation-only phase (five local processes by
  * default, one node per GCP VM with --gcp) or reads an existing live report
@@ -12,8 +12,12 @@
  * time inside the formation window, the formation window length, the
  * ready-lease wait count and the last observed critical spread gap.
  * --summary prints the recent records as a table with the pass rate instead
- * of running anything. The verdict is derived by
- * examples/service-data-affinity/formation-verdict.js; this script only
+ * of running anything. --metric prints how many of the last three records
+ * fail to measure (the formation-health-verdicts probe: 0 once three
+ * consecutive scheduled runs carry a verdict). An UNKNOWN verdict - the run
+ * produced no measurement - is a failed run and is never appended: a
+ * non-verdict in the trend would read as a data point. The verdict is derived
+ * by examples/service-data-affinity/formation-verdict.js; this script only
  * records and renders it.
  */
 
@@ -21,7 +25,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {
+  FORMATION_VERDICT,
+} from '../../examples/service-data-affinity/formation-verdict.js';
+import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
@@ -57,6 +67,20 @@ const EMPTY_CELL = '-';
 const CELL_SEPARATOR = ' ';
 const STDIO_INHERIT = 'inherit';
 const NO_REPORT_MESSAGE = 'formation health: no live report to record';
+const UNKNOWN_VERDICT_MESSAGE = 'formation health: the run produced no ' +
+  'measuring verdict (UNKNOWN) - nothing recorded; a non-verdict is a failed ' +
+  'run, not a trend record';
+const METRIC_WINDOW = 3;
+const DEMO_REFUSAL_SUBJECT = 'the formation demo';
+const TABLE_CELL = '|';
+// --calibration <table>: formation-path owners the calibration table does
+// not cover (formation-calibration-run probe); a missing table covers none.
+const CALIBRATION_OWNERS = Object.freeze(arrayFilter(
+  Object.values(FORMATION_OWNER), (owner) => owner !== FORMATION_OWNER.UNATTRIBUTED));
+// --bot-commits: commits by the nightly workflow may touch only the trend.
+const BOT_AUTHOR = 'formation-health';
+const GIT_LOG_ARGS = Object.freeze(['log', `--author=${BOT_AUTHOR}`, '--format=%H', 'HEAD']);
+const GIT_DIFF_TREE_ARGS = Object.freeze(['diff-tree', '--no-commit-id', '--name-only', '-r']);
 const THERMAL_REFUSED_MESSAGE =
   'formation health: thermal gate refused; nothing ran, nothing recorded';
 const NO_NEW_REPORT_MESSAGE =
@@ -67,6 +91,9 @@ const ARG = Object.freeze({
   GCP: GCP_FLAG,
   SUMMARY: '--summary',
   TREND: '--trend',
+  METRIC: '--metric',
+  CALIBRATION: '--calibration',
+  BOT_COMMITS: '--bot-commits',
   LIMIT: '--limit',
 });
 
@@ -83,7 +110,8 @@ const COLUMNS = Object.freeze([
 
 function parseArguments(argv) {
   const options = {
-    report: null, gcp: false, summary: false,
+    report: null, gcp: false, summary: false, metric: false,
+    calibration: null, botCommits: false,
     trend: DEFAULT_TREND_PATH, limit: DEFAULT_SUMMARY_LIMIT,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -103,6 +131,13 @@ function parseArguments(argv) {
       options.gcp = true;
     } else if (argument === ARG.SUMMARY) {
       options.summary = true;
+    } else if (argument === ARG.METRIC) {
+      options.metric = true;
+    } else if (argument === ARG.CALIBRATION) {
+      options.calibration = argv[index + 1] || null;
+      index += 1;
+    } else if (argument === ARG.BOT_COMMITS) {
+      options.botCommits = true;
     }
   }
   return options;
@@ -214,6 +249,7 @@ function resolveHead(root) {
 // A record is written only for a report THIS run produced: a refused thermal
 // gate or a killed demo never re-records the newest report already on disk.
 function runFormationOnlyDemo(root, gcp, run) {
+  refuseUnderProbe(DEMO_REFUSAL_SUBJECT);
   const before = newestLiveReport(root);
   const gate = run(process.execPath, [THERMAL_GATE_SCRIPT], {cwd: root});
   if (gate.status !== EXIT_OK) {
@@ -229,6 +265,48 @@ function runFormationOnlyDemo(root, gcp, run) {
   return {reportPath: after, message: null};
 }
 
+// Owners the calibration table does not carry as a row: a markdown table
+// whose first cell is the owner name (`| bootstrap | ... |`), never a mention
+// in prose.
+function uncoveredCalibrationOwners(tablePath) {
+  const table = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, TEXT_ENCODING) : '';
+  const rows = arrayMap(arrayFilter(stringSplit(table, LINE_SEPARATOR),
+    (line) => stringStartsWith(stringTrim(line), TABLE_CELL)), (line) =>
+    stringTrim(stringSplit(line, TABLE_CELL)[1] || ''));
+  return arrayFilter(CALIBRATION_OWNERS, (owner) => !arrayIncludes(rows, owner));
+}
+
+// Commits by the nightly author that touch anything but the trend file: the
+// workflow token commits one inert data file and nothing else.
+function botCommitsOutsideTrend(root, trend) {
+  const shas = arrayFilter(stringSplit(execFileSync(GIT_BINARY, [...GIT_LOG_ARGS],
+    {cwd: root, encoding: TEXT_ENCODING}), LINE_SEPARATOR), (line) => line.length > 0);
+  const offending = [];
+  for (let index = 0; index < shas.length; index += 1) {
+    const paths = arrayFilter(stringSplit(execFileSync(GIT_BINARY,
+      [...GIT_DIFF_TREE_ARGS, shas[index]], {cwd: root, encoding: TEXT_ENCODING}),
+    LINE_SEPARATOR), (line) => line.length > 0);
+    if (arrayFilter(paths, (candidate) => candidate !== trend).length > 0) {
+      offending.push(`${shas[index]} touches ${paths.join(CELL_SEPARATOR)}`);
+    }
+  }
+  return offending;
+}
+
+// A record measures when it carries a verdict that is not UNKNOWN.
+function isMeasuringVerdict(verdict) {
+  return typeof verdict === 'string' && verdict !== FORMATION_VERDICT.UNKNOWN;
+}
+
+// How many of the last METRIC_WINDOW records fail to measure; missing
+// records count as unmeasured, so an empty trend reads METRIC_WINDOW.
+function unmeasuredInWindow(records) {
+  const window = records.slice(-METRIC_WINDOW);
+  const measuring = arrayFilter(window,
+    (record) => isMeasuringVerdict(record.verdict)).length;
+  return METRIC_WINDOW - measuring;
+}
+
 /**
  * Record one run (or an existing report) into the trend, or summarize it.
  * @param {Object} options parsed arguments plus injectable run/log
@@ -239,6 +317,9 @@ function runFormationHealth({
   report = null,
   gcp = false,
   summary = false,
+  metric = false,
+  calibration = null,
+  botCommits = false,
   trend = DEFAULT_TREND_PATH,
   limit = DEFAULT_SUMMARY_LIMIT,
   run = (command, args, options) =>
@@ -246,6 +327,22 @@ function runFormationHealth({
   log = (line) => process.stdout.write(`${line}${LINE_SEPARATOR}`),
 } = {}) {
   const trendPath = path.resolve(root, trend);
+  if (calibration) {
+    const uncovered = uncoveredCalibrationOwners(path.resolve(root, calibration));
+    log(String(uncovered.length));
+    return {exitCode: uncovered.length === 0 ? EXIT_OK : EXIT_FAIL, record: null};
+  }
+  if (botCommits) {
+    const offending = botCommitsOutsideTrend(root, trend);
+    for (let index = 0; index < offending.length; index += 1) log(offending[index]);
+    log(String(offending.length));
+    return {exitCode: offending.length === 0 ? EXIT_OK : EXIT_FAIL, record: null};
+  }
+  if (metric) {
+    const unmeasured = unmeasuredInWindow(readTrend(trendPath));
+    log(String(unmeasured));
+    return {exitCode: unmeasured === 0 ? EXIT_OK : EXIT_FAIL, record: null};
+  }
   if (summary) {
     log(renderTrendSummary(readTrend(trendPath), limit));
     return {exitCode: EXIT_OK, record: null};
@@ -268,6 +365,10 @@ function runFormationHealth({
     head: resolveHead(root),
     reportPath: path.relative(root, reportPath),
   });
+  if (!isMeasuringVerdict(record.verdict)) {
+    log(UNKNOWN_VERDICT_MESSAGE);
+    return {exitCode: EXIT_FAIL, record};
+  }
   appendTrendRecord(trendPath, record);
   log(`formation health: recorded ${record.verdict} (${record.reason}) ` +
     `to ${path.relative(root, trendPath)}`);
@@ -287,6 +388,7 @@ if (isMainModule) {
 export {
   DEFAULT_TREND_PATH,
   buildTrendRecord,
+  isMeasuringVerdict,
   parseArguments,
   readTrend,
   renderTrendSummary,

@@ -198,7 +198,7 @@ any distributed-harness or convergence work:
   bespoke path (a) reinvents a wheel the repo lacks raw materials for, while a cheaper,
   better-precedented cut already exists. Fold the result into the coupled-invariant
   step-back reflection above; the exemplar is
-  the research synthesis note of quest formation-ledger-self-move-blocks-cluster-ops (archived in the solve-v1 evidence bundle, see `solve/epics/solve-v2/solve-v1-archive.manifest.json`).
+  the research synthesis note of quest formation-ledger-self-move-blocks-cluster-ops (archived in the solve-v1 evidence bundle; its manifest is the `solve-v1-archive.manifest.json` asset of the `solve-evidence` pre-release, recorded as evidence on quest `epic-board-curation`, 2026-09-13).
 - **Independently verify after implementing.** After a change, have a separate
   subagent independently verify it before relying on or reporting it. Arm the
   verifier with the attack checklist matching the change category from

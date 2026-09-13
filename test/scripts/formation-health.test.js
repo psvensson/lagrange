@@ -3,6 +3,7 @@
  * summarized with a pass rate; a run without a report records nothing.
  */
 
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -69,15 +70,17 @@ test('buildTrendRecord reduces a report to the trend fields', (t) => {
   t.end();
 });
 
-test('parseArguments reads report, gcp, summary, trend and limit', (t) => {
+test('parseArguments reads report, gcp, summary, metric, trend and limit', (t) => {
   t.same(parseArguments([]), {
-    report: null, gcp: false, summary: false,
+    report: null, gcp: false, summary: false, metric: false,
+    calibration: null, botCommits: false,
     trend: 'data/formation-health/trend.ndjson', limit: 20,
   });
   t.same(
-    parseArguments(['--report', 'r.json', '--gcp', '--summary', '--trend',
-      't.ndjson', '--limit', '5']),
-    {report: 'r.json', gcp: true, summary: true, trend: 't.ndjson', limit: 5},
+    parseArguments(['--report', 'r.json', '--gcp', '--summary', '--metric',
+      '--trend', 't.ndjson', '--limit', '5']),
+    {report: 'r.json', gcp: true, summary: true, metric: true,
+      calibration: null, botCommits: false, trend: 't.ndjson', limit: 5},
   );
   t.equal(parseArguments(['--limit', 'nope']).limit, 20);
   t.end();
@@ -230,6 +233,90 @@ test('runFormationHealth appends one record per run and summarizes', (t) => {
   });
   t.equal(none.exitCode, 1);
   t.equal(none.record, null);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// formation-health-verdicts: a non-verdict is a failed run, never a trend
+// record, and --metric is the probe (unmeasured among the last three).
+test('an UNKNOWN verdict fails the run and records nothing; --metric counts the window', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-health-verdicts-'));
+  const reportDir = path.join(root, 'test-output', 'reports');
+  fs.mkdirSync(reportDir, {recursive: true});
+  const trendPath = path.join(root, 'data/formation-health/trend.ndjson');
+  const metric = () => runFormationHealth({
+    root, metric: true, run: () => t.fail('metric never runs the demo'),
+    log: () => {},
+  });
+  t.equal(metric().exitCode, 1, 'an empty trend is unmeasured');
+  fs.writeFileSync(path.join(reportDir, 'unknown.report.json'),
+    JSON.stringify(liveReport({
+      passed: false, verdict: 'UNKNOWN', reason: 'seed_log_missing',
+      seedStarved: null, blockedMs: null,
+    })));
+  const unknown = runFormationHealth({
+    root, report: 'test-output/reports/unknown.report.json', run: () => {},
+    log: () => {},
+  });
+  t.equal(unknown.exitCode, 1, 'UNKNOWN is a failed run');
+  t.equal(readTrend(trendPath).length, 0, 'UNKNOWN is never appended');
+  for (let index = 0; index < 3; index += 1) {
+    fs.writeFileSync(path.join(reportDir, `measured-${index}.report.json`),
+      JSON.stringify(liveReport({
+        passed: index !== 1, verdict: index === 1 ? 'FAIL' : 'PASS',
+        reason: index === 1 ? 'seed_event_loop_starved' : 'formed',
+        seedStarved: index === 1, blockedMs: index === 1 ? 5000 : 0,
+      })));
+    runFormationHealth({
+      root, report: `test-output/reports/measured-${index}.report.json`,
+      run: () => {}, log: () => {},
+    });
+  }
+  t.equal(readTrend(trendPath).length, 3, 'measuring runs, red or green, are records');
+  t.equal(metric().exitCode, 0, 'three measuring records make the probe green');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// formation-calibration-run probe: owners the calibration table does not
+// carry as a row; prose mentions never count.
+test('--calibration counts formation-path owners missing from the table', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-calibration-'));
+  const table = path.join(root, 'table.md');
+  const metric = () => runFormationHealth({
+    root, calibration: 'table.md', run: () => t.fail('never runs the demo'), log: () => {},
+  }).exitCode;
+  t.equal(metric(), 1, 'no table: every owner uncovered');
+  fs.writeFileSync(table, 'The bootstrap, raft_apply, raft_protocol and readiness owners.\n');
+  t.equal(metric(), 1, 'prose mentions are not rows');
+  fs.writeFileSync(table, '| owner | ms |\n| --- | --- |\n| bootstrap | 1 |\n| raft_apply | 2 |\n| raft_protocol | 3 |\n| readiness | 4 |\n');
+  t.equal(metric(), 0, 'one row per owner covers the contract');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// The nightly workflow's token commits one inert file and nothing else.
+test('--bot-commits flags a formation-health commit that touches anything but the trend', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-bot-'));
+  const git = (...args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'commit.gpgsign', 'false');
+  const commit = (name, email, file, message) => {
+    fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});
+    fs.appendFileSync(path.join(root, file), `${message}\n`);
+    git('add', file);
+    git('-c', `user.name=${name}`, '-c', `user.email=${email}`, 'commit', '-q', '-m', message);
+  };
+  commit('Human', 'h@example.invalid', 'src/a.js', 'human change');
+  const check = () => runFormationHealth({
+    root, botCommits: true, run: () => t.fail('never runs the demo'), log: () => {},
+  }).exitCode;
+  t.equal(check(), 0, 'no bot commit yet');
+  commit('formation-health', 'formation-health@users.noreply.github.com',
+    'data/formation-health/trend.ndjson', 'formation-health: trend record');
+  t.equal(check(), 0, 'the trend is the bot\'s one file');
+  commit('formation-health', 'formation-health@users.noreply.github.com', 'src/b.js', 'bot touches source');
+  t.equal(check(), 1, 'anything else by the bot is flagged');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

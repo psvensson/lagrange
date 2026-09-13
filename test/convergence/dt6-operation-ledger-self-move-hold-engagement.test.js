@@ -24,8 +24,8 @@ import {
 // cure engages the hold at dispatch admissibility. The scenario, its
 // run-cited numbers and the honest real/modeled scope are documented in
 // operation-ledger-self-move-hold-engagement-witness-fixture.js; each test
-// below is one quest receipt
-// (scripts/quest-evidence-operation-ledger-self-move-hold-engagement.js).
+// below is one quest receipt (its evidence harness was retired by the
+// script-reachability cull).
 
 const FIRST_INDEX = 0;
 const NO_REFUSALS = 0;

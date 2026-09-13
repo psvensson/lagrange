@@ -341,7 +341,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
    * system partition.
    *
    * @param {string[]} activeNodeIds
-   * @return {{allowReadinessBackfill:boolean,requiredReadyNodeCount:number}}
+   * @return {{requiredReadyNodeCount:number}}
    * @private
    */
   getCriticalSystemEndpointVisibilityPolicy(activeNodeIds = []) {
@@ -367,10 +367,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
           ),
         ) :
         activeNodeCount;
-    return Object.freeze({
-      allowReadinessBackfill: isPriorityPartition,
-      requiredReadyNodeCount,
-    });
+    return Object.freeze({requiredReadyNodeCount});
   }
 
   /**

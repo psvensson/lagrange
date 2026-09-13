@@ -1,6 +1,6 @@
 ---
 id: solve-v2
-status: open
+status: done
 proof: deterministic
 doneWhen:
   probe: script
@@ -427,3 +427,7 @@ two rules resolving to owners that share nothing - and records the semantic
 reading as an independent verifier's judgement. (3) Phase 3 is unchanged and
 still closed at `c0670a2af`; the closed quest's receipt there is byte-identical
 and its now-unresolvable command is recorded as a finding rather than repaired.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Done: its budget reads 0. The migration JSON (`migration-inventory.json`, `solve-v1-archive.manifest.json`) moves to the evidence store under the `epic-board-curation` quest.

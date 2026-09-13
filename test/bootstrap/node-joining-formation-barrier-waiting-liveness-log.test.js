@@ -37,8 +37,8 @@ import {
 //
 // The file uses raw node:test so each top-level scenario is independently
 // selectable with --test-name-pattern by its anchored name;
-// scripts/quest-evidence-joiner-waiting-liveness-log.js re-runs one scenario
-// per receipt.
+// the quest's evidence harness, since retired, re-ran one scenario per
+// receipt.
 //
 // HONEST SCOPE (real vs modeled):
 //   - REAL: the joining owner's barrier loop, its snapshot projection, cohort

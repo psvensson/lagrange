@@ -232,6 +232,79 @@ tap.test('a successful publish retains no gate diagnostics', (t) => {
   t.end();
 });
 
+tap.test('publish rebases local commits over inert trend commits on the remote', (t) => {
+  const {parent, root, remote} = fixture();
+  fs.writeFileSync(path.join(root, 'local.txt'), 'local work\n');
+  git(root, ['add', 'local.txt']);
+  git(root, ['commit', '-m', 'local work']);
+  const localHead = git(root, ['rev-parse', 'HEAD']);
+  const sibling = path.join(parent, 'sibling');
+  git(parent, ['clone', '--branch', 'main', remote, sibling]);
+  git(sibling, ['config', 'user.email', 'formation-health@users.noreply.github.com']);
+  git(sibling, ['config', 'user.name', 'formation-health']);
+  fs.mkdirSync(path.join(sibling, 'data', 'formation-health'), {recursive: true});
+  fs.writeFileSync(path.join(sibling, 'data', 'formation-health', 'trend.ndjson'),
+    '{"verdict":"PASS"}\n');
+  git(sibling, ['add', 'data/formation-health/trend.ndjson']);
+  git(sibling, ['commit', '-m', 'formation-health: trend record']);
+  const botHead = git(sibling, ['rev-parse', 'HEAD']);
+  git(sibling, ['push', 'origin', 'main']);
+  const receipt = publishExactHead(root, {}, {queryCi: false});
+  const published = git(remote, ['rev-parse', 'refs/heads/main']);
+  t.equal(receipt.head, published, 'the receipt binds the rebased head');
+  t.not(published, localHead, 'the local commit was rebased');
+  // The fixture's own unpushed commit and the local one are both rebased
+  // onto the bot commit: exactly two commits above it, nothing else.
+  t.equal(git(remote, ['rev-list', '--count', `${botHead}..${published}`]), '2',
+    'the local commits sit on top of the bot commit');
+  t.equal(git(root, ['show', '--format=', '--name-only', published]).trim(),
+    'local.txt', 'the local change is intact');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('publish aborts a conflicting rebase and leaves the repo where it was', (t) => {
+  const {parent, root, remote} = fixture();
+  fs.mkdirSync(path.join(root, 'data', 'formation-health'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'data', 'formation-health', 'trend.ndjson'), 'local\n');
+  git(root, ['add', 'data/formation-health/trend.ndjson']);
+  git(root, ['commit', '-m', 'local touches the trend']);
+  const localHead = git(root, ['rev-parse', 'HEAD']);
+  const sibling = path.join(parent, 'sibling');
+  git(parent, ['clone', '--branch', 'main', remote, sibling]);
+  git(sibling, ['config', 'user.email', 'formation-health@users.noreply.github.com']);
+  git(sibling, ['config', 'user.name', 'formation-health']);
+  fs.mkdirSync(path.join(sibling, 'data', 'formation-health'), {recursive: true});
+  fs.writeFileSync(path.join(sibling, 'data', 'formation-health', 'trend.ndjson'), 'remote\n');
+  git(sibling, ['add', 'data/formation-health/trend.ndjson']);
+  git(sibling, ['commit', '-m', 'formation-health: trend record']);
+  git(sibling, ['push', 'origin', 'main']);
+  t.throws(() => publishExactHead(root, {}, {queryCi: false}), /conflicted/u);
+  t.equal(git(root, ['rev-parse', 'HEAD']), localHead, 'HEAD is untouched');
+  t.notOk(fs.existsSync(path.join(root, '.git', 'rebase-merge')), 'no rebase left in progress');
+  t.equal(git(root, ['status', '--porcelain']), '', 'the tree is clean');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('publish refuses to rebase over a dirty tracked tree', (t) => {
+  const {parent, root, remote} = fixture();
+  const sibling = path.join(parent, 'sibling');
+  git(parent, ['clone', '--branch', 'main', remote, sibling]);
+  git(sibling, ['config', 'user.email', 'formation-health@users.noreply.github.com']);
+  git(sibling, ['config', 'user.name', 'formation-health']);
+  fs.mkdirSync(path.join(sibling, 'data', 'formation-health'), {recursive: true});
+  fs.writeFileSync(path.join(sibling, 'data', 'formation-health', 'trend.ndjson'), 'remote\n');
+  git(sibling, ['add', 'data/formation-health/trend.ndjson']);
+  git(sibling, ['commit', '-m', 'formation-health: trend record']);
+  git(sibling, ['push', 'origin', 'main']);
+  const tracked = git(root, ['ls-files']).split('\n').find((name) => !name.startsWith('.githooks/'));
+  fs.appendFileSync(path.join(root, tracked), 'dirty\n');
+  t.throws(() => publishExactHead(root, {}, {queryCi: false}), /uncommitted tracked changes/u);
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('publish rejects a non-fast-forward HEAD', (t) => {
   const {parent, root, remote} = fixture();
   const sibling = path.join(parent, 'sibling');

@@ -1,6 +1,6 @@
 ---
 id: solver-streamlining-spec
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -410,7 +410,7 @@ every shared worktree; the operator today `git checkout`s files by trial).
   command, detail}`; the probe checks only that `command` is a non-empty string
   and counts required ids with `passed !== true` (`:81-118`). Any command shape
   is admissible.
-- Harness runtime (`scripts/quest-evidence-harness-runtime.js`): `testFile`
+- Harness runtime (`scripts/quest-evidence/harness-runtime.js`): `testFile`
   receipts run `npm run test:file -- <file>` (whole file through the classified
   runner, `:55-72`); `command` receipts run a verbatim `/bin/sh -c` with a
   600 s default timeout (`:77-100`). **Subtest selection already exists by
@@ -448,7 +448,7 @@ anything. Quest lint gains a warning (not error) when a test-receipt quest has
 no harness file.
 
 ### Implementation shape / tests / docs
-- `scripts/quest-evidence-harness-runtime.js`: `runSubtestReceipt`, TAP summary
+- `scripts/quest-evidence/harness-runtime.js`: `runSubtestReceipt`, TAP summary
   parse, pattern validation. `scripts/solve/harness-scaffold.js` (new);
   `scripts/solve.js` `COMMANDS` + sidecar; `operator-workflow.startQuestWorkflow`
   hook; `quest-lint.js` warning.
@@ -724,7 +724,7 @@ are matched to these categories exactly (`verifier-verdict.js:160-185`).
 **(f) `test-receipt/1` and subtest filters.** The probe
 (`scripts/solve/probes/test-receipt.js:81-118`) accepts any receipt with a
 non-empty `command` string and a boolean `passed`; it does not care what the
-command was. The runtime (`scripts/quest-evidence-harness-runtime.js:55-72`)
+command was. The runtime (`scripts/quest-evidence/harness-runtime.js:55-72`)
 runs `testFile` receipts as `npm run test:file -- <file>` (whole file, classified
 lanes) and `command` receipts verbatim through `/bin/sh -c` with a 600 s
 default timeout (`:77-100`). No first-class subtest field exists, and the
@@ -734,3 +734,7 @@ precedent as shell commands: `scripts/quest-evidence-readiness-planning-verified
 runs `node --test --test-name-pattern="^<scenario>" <file>` per receipt
 (outside the classified lanes; a non-matching pattern exits 0 with zero tests,
 which is the honesty hole P6a must close).
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `solve-v2`, which shipped the streamlined solver.

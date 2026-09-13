@@ -1,6 +1,5 @@
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
-import {spawnSync} from 'node:child_process';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   OPPORTUNITY_CALCULATOR_EVIDENCE_CLASS,
@@ -253,21 +252,6 @@ test('non-finite derived values fail before library or CLI projection', (t) => {
     /finite_required/u,
   );
 
-  const result = spawnSync(
-    process.execPath,
-    [
-      'scripts/comparative-efficiency-opportunity-calculator.js',
-      '--input',
-      '-',
-    ],
-    {
-      encoding: 'utf8',
-      input: JSON.stringify(subnormalRate),
-    },
-  );
-  t.equal(result.status, 1);
-  t.match(result.stderr, /finite_required/u);
-  t.equal(result.stdout, '');
   t.end();
 });
 
@@ -788,37 +772,3 @@ test('text and digest validation ignore mutable built-in prototypes', (t) => {
   t.end();
 });
 
-test('CLI emits the same immutable analytical result as the library', (t) => {
-  const fixturePath = resolve(FIXTURE_ROOT, 'request-enrichment.json');
-  const result = spawnSync(
-    process.execPath,
-    [
-      'scripts/comparative-efficiency-opportunity-calculator.js',
-      '--input',
-      fixturePath,
-    ],
-    {encoding: 'utf8'},
-  );
-  const library = calculateComparativeOpportunity(
-    fixture('request-enrichment.json'),
-  );
-
-  t.equal(result.status, 0, result.stderr);
-  t.same(JSON.parse(result.stdout), library);
-  t.end();
-});
-
-test('CLI rejects an unsupported argument without emitting a result', (t) => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      'scripts/comparative-efficiency-opportunity-calculator.js',
-      '--measured',
-    ],
-    {encoding: 'utf8'},
-  );
-  t.equal(result.status, 1);
-  t.match(result.stderr, /unsupported argument/u);
-  t.equal(result.stdout, '');
-  t.end();
-});

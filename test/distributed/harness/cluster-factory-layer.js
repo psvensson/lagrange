@@ -15,6 +15,7 @@ import {
   registerProcessCleanupHandlers,
   tryRemoveReusableClusterLease,
 } from './cluster-runtime-helpers.js';
+import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
 
 const {
   CLUSTER_CONFIG_DOCKER_OPERATION_SINK,
@@ -22,7 +23,11 @@ const {
   distributeNodes,
 } = CLUSTER_CLASS_LAYER;
 
+// R27: the distributed cluster is a harness; a probe never builds one.
+const PROBE_REFUSAL_SUBJECT = 'the distributed cluster';
+
 function createCluster(config) {
+  refuseUnderProbe(PROBE_REFUSAL_SUBJECT);
   let providers;
   let hostAssignment;
   const dockerOperationSink =

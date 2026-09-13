@@ -91,8 +91,8 @@ import {
 // the real-owner drive); the assertions live in
 // test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js
 // (raw node:test so each scenario is selectable with --test-name-pattern;
-// scripts/quest-evidence-operation-ledger-self-move-hold-engagement.js runs
-// one scenario per receipt). The drive accepts a scenario PROFILE (ledger
+// the quest's evidence harness, since retired, ran one scenario per
+// receipt). The drive accepts a scenario PROFILE (ledger
 // placement shape, per-table dispatch latencies, the readiness owner's
 // per-node snapshot, extra timed boundary injections and the completion
 // condition) so the sibling fairness witness

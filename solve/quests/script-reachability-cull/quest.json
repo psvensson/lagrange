@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "script-reachability-cull",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Every tracked file under scripts/ is reachable from a root that runs it - package.json, a workflow, a hook, a gate manifest, the solver, or the probe of an open quest or epic - through the closure of imports and literal mentions; everything outside that closure is deleted (git keeps it), together with the tests and documentation that existed only to exercise it; the quest-evidence receipt harnesses that survive live under scripts/quest-evidence/ so the convention stops growing the loose-file count; and npm run commands plus the generated tools index remain the only catalogue.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/push-gate-unused-files.js --unreachable-scripts",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-script",
+      "statement": "The probe is a mode on the existing unused-files gate owner; the quest adds no script and no workflow."
+    },
+    {
+      "id": "roots-are-runners",
+      "statement": "Reachability starts only from surfaces that run scripts; a mention in prose, a closed quest, or a closed epic keeps nothing alive."
+    },
+    {
+      "id": "delete-not-park",
+      "statement": "Unreachable scripts are deleted from the tree, never moved to an attic directory or excluded from the census."
+    },
+    {
+      "id": "budgets-follow",
+      "statement": "The loose-file, total-lines and checks-files budgets of the epic are read after each attempt and never raised."
+    }
+  ],
+  "sealedAt": "6c90ad8cf9a3fa6eb499331faef81ea47cf555b9"
+}

@@ -34,8 +34,8 @@ import {
 // at 66 s / 83 s, run 23-51-32 admitted a duplicate ledger self-move). The
 // scenario, its run-cited numbers and the honest real/modeled scope are
 // documented in operation-ledger-self-move-hold-fairness-witness-fixture.js;
-// each test below is one quest receipt
-// (scripts/quest-evidence-operation-ledger-self-move-hold-fairness.js).
+// each test below is one quest receipt (its evidence harness was retired by
+// the script-reachability cull).
 
 const {DISPATCH_RETRY_DELAY_MS} = OPERATION_WORKFLOW_OWNER_SHARED;
 const HEAD_DISPATCH_RETRY_DELAY_MS = 250;

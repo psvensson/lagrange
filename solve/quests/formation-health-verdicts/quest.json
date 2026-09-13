@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-health-verdicts",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The nightly formation-health workflow produces measuring verdicts and a committed trend: an UNKNOWN verdict fails the job loudly and appends nothing, every measuring run (green or red) appends one record to data/formation-health/trend.ndjson and commits it to main with the workflow token, and the release notes, the README claim and the consolidation budget read that committed file; done when three consecutive scheduled records measure.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-health.js --metric",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-script",
+      "statement": "The probe and the change live in the existing formation-health owner and workflow; no script or workflow is added (epic rule 2026-09-13)."
+    },
+    {
+      "id": "non-verdict-never-recorded",
+      "statement": "An UNKNOWN verdict is a failed run, never a trend record."
+    },
+    {
+      "id": "red-measurements-are-records",
+      "statement": "A measuring red verdict is committed like a green one; the trend is evidence, not a pass list."
+    }
+  ],
+  "sealedAt": "d39d58d86e22c8be7a68ba0cd164da8f8bcd11e5"
+}

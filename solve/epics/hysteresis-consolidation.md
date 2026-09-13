@@ -1,6 +1,6 @@
 ---
 id: hysteresis-consolidation
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -151,3 +151,7 @@ rebalancer live term `:306-312`) as a pure no-op DRY + a static guard against th
 mistake. The MODE-A fix (`a79b3728`) reused the lease-sweep pattern rather than block on this — it is the
 concrete argument for the spec. Remaining stages (self-disruption→LHM wiring, P5 formation-blip grace)
 stay at epic level until scoped.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling`.

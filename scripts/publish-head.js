@@ -215,17 +215,68 @@ export function validatePublishRequest({headMessage, runner, fixesRed, reason,
   return routedRunner;
 }
 
-function assertFastForward(run, root, remoteSha, head) {
-  if (remoteSha === ZERO_SHA) return;
+// Paths a remote-only commit may touch for the publisher to rebase over it
+// on its own: the nightly formation-health record, committed to main by the
+// workflow token (owner decision 2026-09-13). Anything else is a real
+// divergence the operator resolves.
+const INERT_REBASE_PATHS = Object.freeze(['data/formation-health/trend.ndjson']);
+const REBASE_COMMAND = 'rebase';
+const REV_PARSE_COMMAND = 'rev-parse';
+const HEAD_REF = 'HEAD';
+const REV_LIST_COMMAND = 'rev-list';
+// -m so a merge commit reports its paths too (over-reporting is the safe side).
+const DIFF_TREE_ARGUMENTS = Object.freeze(['diff-tree', '--no-commit-id', '--name-only', '-r', '-m']);
+const REBASE_ABORT_ARGUMENT = '--abort';
+const TRACKED_STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain', '--untracked-files=no']);
+const DIRTY_BEFORE_REBASE_ERROR = 'publish: origin/main advanced by inert data commits, but the working tree has uncommitted tracked changes; commit or stash them so HEAD can be rebased over the nightly record';
+const REBASE_CONFLICT_ERROR = 'publish: rebasing HEAD over the inert data commits on origin/main conflicted (a local commit also touches the inert path); the rebase was aborted - resolve by hand';
+const REBASED_MESSAGE_PREFIX = 'publish: rebased HEAD over ';
+const REBASED_MESSAGE_SUFFIX = ' inert data commit(s) on origin/main';
+
+// Whether every commit origin/main carries beyond head touches only inert
+// data paths.
+function remoteAdvanceIsInert(run, root, head) {
+  const listed = git(run, root, [REV_LIST_COMMAND, `${head}..${ORIGIN_REMOTE}/${MAIN_BRANCH}`]);
+  const shas = listed ? listed.split(NEWLINE) : [];
+  for (const sha of shas) {
+    const changed = git(run, root, [...DIFF_TREE_ARGUMENTS, sha]);
+    const paths = changed ? changed.split(NEWLINE) : [];
+    if (paths.some((candidate) => !INERT_REBASE_PATHS.includes(candidate))) {
+      return {inert: false, count: shas.length};
+    }
+  }
+  return {inert: shas.length > 0, count: shas.length};
+}
+
+// A fast-forward, or a rebase of the local commits over inert data commits
+// only; anything else refuses. Returns the head to publish and the remote sha
+// it must fast-forward.
+function ensureFastForward(run, root, remoteSha, head) {
+  if (remoteSha === ZERO_SHA) return {head, remoteSha};
   checked(run, GIT_COMMAND,
     [FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
   const result = checked(
     run, 'git', ['merge-base', '--is-ancestor', remoteSha, head],
     {cwd: root, allowFailure: true},
   );
-  if (result.status !== 0) {
-    throw new Error(FAST_FORWARD_ERROR);
+  if (result.status === 0) return {head, remoteSha};
+  const advance = remoteAdvanceIsInert(run, root, head);
+  if (!advance.inert) throw new Error(FAST_FORWARD_ERROR);
+  if (git(run, root, [...TRACKED_STATUS_ARGUMENTS])) {
+    throw new Error(DIRTY_BEFORE_REBASE_ERROR);
   }
+  const rebase = checked(run, GIT_COMMAND,
+    [REBASE_COMMAND, QUIET_ARGUMENT, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`],
+    {cwd: root, allowFailure: true});
+  if (rebase.status !== 0) {
+    checked(run, GIT_COMMAND, [REBASE_COMMAND, REBASE_ABORT_ARGUMENT],
+      {cwd: root, allowFailure: true});
+    throw new Error(REBASE_CONFLICT_ERROR);
+  }
+  process.stdout.write(
+    `${REBASED_MESSAGE_PREFIX}${advance.count}${REBASED_MESSAGE_SUFFIX}${NEWLINE}`);
+  return {head: git(run, root, [REV_PARSE_COMMAND, HEAD_REF]),
+    remoteSha: git(run, root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`])};
 }
 
 function ciRunUrl(run, root, head) {
@@ -406,9 +457,9 @@ function buildPublishReceipt(observed, args) {
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
-  const head = git(run, root, ['rev-parse', 'HEAD']);
+  let head = git(run, root, [REV_PARSE_COMMAND, HEAD_REF]);
   const headMessage = git(run, root, ['log', '-1', '--format=%B', head]);
-  const remoteBefore = remoteMainSha(run, root);
+  let remoteBefore = remoteMainSha(run, root);
   publishStage(PUBLISH_STAGE_LABEL.VALIDATE_REQUEST +
     head.slice(0, PUBLISH_SHORT_SHA_LENGTH));
   const runner = validatePublishRequest({
@@ -418,7 +469,7 @@ export function publishExactHead(root, args = {}, options = {}) {
     reason: args.reason || null,
     remoteSha: remoteBefore,
   });
-  assertFastForward(run, root, remoteBefore, head);
+  ({head, remoteBefore} = ensureFastForward(run, root, remoteBefore, head));
   assertWorkspaceDependencySources(root, args,
     options.log || ((line) => process.stdout.write(line)));
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);

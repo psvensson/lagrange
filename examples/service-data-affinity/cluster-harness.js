@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {DEFAULT_TARGET} from './lagrange-loader.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 
 const DEFAULT_NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
@@ -28,6 +29,7 @@ function nodePorts(index) {
 }
 
 async function startLocalNode(index, dataRoot) {
+  refuseUnderProbe('a cluster node');
   const {restPort, adminPort} = nodePorts(index);
   const dataDir = resolve(dataRoot, `node-${index}`);
   await mkdir(dataDir, {recursive: true});

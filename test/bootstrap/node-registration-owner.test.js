@@ -188,8 +188,9 @@ test(
       'should publish exactly one nodes row via the membership owner');
     t.equal(endpointCalls.length, 1,
       'should publish exactly one node_endpoints row via the membership owner');
-    t.equal(serviceEndpointCalls.length, NUM.THREE,
-      'should publish all built-in meta service endpoints via the membership owner');
+    t.equal(serviceEndpointCalls.length, NUM.TWO,
+      'should publish the two boot-owned meta service endpoints via the ' +
+      'membership owner; sys-postgres-wire is runtime-published');
     t.equal(
       nodeCalls[0].row[COLUMN.NODE_ID],
       TEST_NODE_ID,
@@ -301,8 +302,8 @@ test(
     );
     t.equal(
       serviceEndpointCalls.length,
-      NUM.THREE,
-      'should continue with missing built-in meta endpoint publication',
+      NUM.TWO,
+      'should continue with missing boot-owned meta endpoint publication',
     );
     t.equal(
       result.nodeRow[COLUMN.NODE_ID],

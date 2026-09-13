@@ -6,12 +6,12 @@ import {
   renderLagrangeNode,
   runHelmTemplate,
   workloadContainers,
-} from '../../scripts/helm/lagrange-node-render.js';
+} from './helpers/lagrange-node-render.js';
 import {
   assertRenderedCutover,
   buildReport,
   resolveRenderedEnvironment,
-} from '../../scripts/run-helm-admin-default-deny-live-scenario.js';
+} from './helpers/admin-default-deny-live-scenario.js';
 
 const ADMIN_HOST_ENV = 'ADMIN_WS_HOST';
 const ADMIN_INSECURE_ENV = 'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
@@ -143,7 +143,7 @@ describe('lagrange-node Helm admin default deny', () => {
         forbidden: /hardcoded runtime constant/iu,
       },
       {
-        path: 'scripts/run-helm-admin-default-deny-live-scenario.js',
+        path: 'test/helm/helpers/admin-default-deny-live-scenario.js',
         required: ['LISTENER_PORT_DEFAULT'],
         forbidden: /\bPORT\s*:\s*808[01]\b/u,
       },

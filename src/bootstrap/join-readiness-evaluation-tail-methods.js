@@ -222,13 +222,6 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
               value.length > 0,
             ) :
             [],
-        missingPostgresWireNodeIds:
-          Array.isArray(source.missingPostgresWireNodeIds) ?
-            source.missingPostgresWireNodeIds.filter((value) =>
-              typeof value === 'string' &&
-              value.length > 0,
-            ) :
-            [],
         controlPlaneTargetAddress:
           typeof source.controlPlaneTargetAddress === 'string' &&
           source.controlPlaneTargetAddress.length > 0 ?
@@ -388,8 +381,6 @@ function createJoinReadinessEvaluationTailMethods(options = {}) {
             evaluation.excludedSelfSourcePriorityControlPlaneOperationDetails,
           missingNodeEndpointNodeIds:
             evaluation.missingNodeEndpointNodeIds,
-          missingPostgresWireNodeIds:
-            evaluation.missingPostgresWireNodeIds,
           controlPlaneTargetAddress:
             evaluation.controlPlaneTargetAddress,
           controlPlaneTargetCandidates:

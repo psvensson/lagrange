@@ -17,6 +17,8 @@ quests:
   - seed-formation-decoupling
   - five-node-cold-formation-certification
 authorizes:
+  - examples/service-data-affinity
+  - scripts/checks/formation-health.js
   - src/control-plane
   - src/bootstrap
   - src/rebalancer
@@ -34,7 +36,7 @@ authorizes:
   - test/integration/membership-consistency.integration.test.js
   - test/integration/membership-consistency-integration-test-helpers.js
   - test/shards
-  - scripts/quest-evidence-formation-harness-model-from-contracts.js
+  - scripts/quest-evidence/formation-harness-model-from-contracts.js
   - scripts/checks/formation-budget.js
   - scripts/checks/formation-sim-reproduces.js
   - scripts/checks/formation-calibration.js
@@ -184,8 +186,9 @@ epic's scenario-harness streak.
 
 ## Relation to other epics
 
-`release-0-2-five-node-convergence` keeps its remaining split/merge quest and
-is otherwise superseded by this epic for the cold-formation surface.
+`release-0-2-five-node-convergence` is superseded by this epic for the
+cold-formation surface; its last split/merge quest moved under
+`split-merge-transition-integrity` (2026-09-13).
 `formation-complexity-consolidation`, `publication-readiness-churn-liveness-closure`
 and `hysteresis-consolidation` are superseded here. `raft-ownership` in
 `apparatus-release-consolidation` must not run concurrently with a quest here

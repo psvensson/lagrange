@@ -33,8 +33,7 @@
 //
 // The file uses raw node:test so each scenario is independently selectable
 // with --test-name-pattern by the quest evidence harnesses
-// (scripts/quest-evidence-formation-release-handoff-consumer-parity.js and
-// scripts/quest-evidence-formation-release-handoff-consumer-read-path.js).
+// (both since retired by the script-reachability cull).
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

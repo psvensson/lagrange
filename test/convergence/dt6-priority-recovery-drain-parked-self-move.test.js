@@ -32,8 +32,8 @@ import {
 // 39.8 s, ownerState local_owner), costing a re-plan and a successor. The
 // scenario, its run-cited instants and the honest real/modeled scope are
 // documented in priority-recovery-drain-parked-self-move-witness-fixture.js;
-// each test below is one quest receipt
-// (scripts/quest-evidence-priority-recovery-drain-parked-self-move-progress.js).
+// each test below is one quest receipt (its evidence harness was retired by
+// the script-reachability cull).
 
 const {
   DISPATCH_RETRY_DELAY_MS,

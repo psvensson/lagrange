@@ -548,3 +548,63 @@ re-evaluated before any live run is requested or started.
 - 2026-09-08 — static quality remains binding. No line-count-oriented LifeRaft
   split, methods bag, gate tuning, static override, GCP run, or calibration run
   is authorized by this continuation.
+
+## Calibration wiring and simulator inputs (2026-09-13)
+
+**Precondition state, measured.** The attribution seam
+(`src/diagnostics/formation-turn-attribution.js`, `raft-formation-attribution.js`)
+is on `main` and the Raft callbacks charge their turns to it, but no production
+path constructs or starts a `FormationTurnAttribution`: the module's active
+window is `null` in a running seed, so the live formation report
+(`examples/service-data-affinity/run-affinity-demo.js`, `formationVerdict`)
+carries no per-owner buckets and the acceptance rule (unattributed bucket
+under 10 % of the window) cannot be evaluated. No sampling CPU profile is
+captured either. `formation-calibration-run` therefore starts with the wiring,
+not the run:
+
+1. The seed starts one attribution window at process start when
+   `LAGRANGE_FORMATION_ATTRIBUTION=1`. The window ends on the formed event
+   (the demo sends `SIGUSR2` at its "Cluster formed." mark, the end the
+   verdict already uses) OR on a deadline - the formation budget window plus
+   a margin - whichever comes first, because the run this quest exists for
+   is the failing formation, where "Cluster formed." never fires (owner
+   amendment 2026-09-13). Every 10 s the seed logs a non-finalising snapshot
+   of the buckets (`Formation attribution snapshot`), so a stalled or killed
+   seed still leaves partial attribution; the seam gains a `snapshot()` that
+   reads the buckets without completing the window. The final `stop()`
+   snapshot is logged as `Formation attribution window`.
+2. `collectFormationVerdict` harvests that line from the seed log into
+   `formationVerdict.attribution`; the acceptance rule reads
+   `unattributedPercent` from it.
+3. With the same flag the seed samples its main thread through the
+   inspector `Profiler` and writes the profile periodically (and on the
+   deadline) into the report directory, rather than relying on `--cpu-prof`,
+   which writes only on a clean exit a stalled process may never reach; if
+   `--cpu-prof` is kept as a fallback, the deadline must guarantee a graceful
+   exit. The profile is an immutable sibling of the report (bound by run id,
+   HEAD, `SRC_FINGERPRINT`, digests); it corroborates the buckets, never
+   replaces them.
+4. Then `gate:preflight` with the exact question, and one fresh-container run
+   on GCP through `npm run health:formation -- --gcp` with the flag set. The
+   per-owner cost table is committed as text under
+   `test/simulation/calibration/`, each figure citing its artifact; the probe
+   counts formation-path owners the table does not cover.
+
+Scope (decision, owner 2026-09-13): the epic's `authorizes` widens to
+`examples/service-data-affinity` and to the probe's owner file
+`scripts/checks/formation-health.js` - those files only.
+
+**Simulator design inputs carried from `formation-contracts-registration`.**
+- The cross-operation re-entry cycle: the operation-workflow owner bounds
+  deferred handoff re-entry per operation (step timeout, then the operation
+  budget) and at the stop leaves the operation "for planner rearm / ready-node
+  replay" - its own stop log - so a reconciled-but-unpublished node can be
+  re-planned into a fresh operation with a fresh `createdAt` and no state
+  change. The simulator must drive reconcile -> unpublished -> pending ->
+  reconcile across operations under formation load and report recurrence and
+  rate before anyone decides what happens at the bound.
+- Ambient time on the handoff path: the handoff retry callback and the
+  transition retry grace read `Date.now()` directly rather than the owner's
+  `timeSource` (`rolling-restart-rebalancer-handoff-witness.test.js` records
+  where). The deterministic-mode guard must throw on these, which means the
+  seam lands there first.

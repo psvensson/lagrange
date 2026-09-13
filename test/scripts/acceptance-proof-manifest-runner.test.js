@@ -305,15 +305,6 @@ describe('acceptance proof manifest runner', () => {
       packageJson.scripts['test:gate'],
       /run-project-hardening-acceptance\.js/u,
     );
-    for (const script of [
-      'scripts/run-solver-acceptance-proof-manifest-scenarios.js',
-      'scripts/run-project-hardening-proof-integrity-cutover-scenarios.js',
-    ]) {
-      assert.match(
-        fs.readFileSync(script, 'utf8'),
-        /runProjectHardeningAcceptance/u,
-      );
-    }
   });
 
   it('owns the short developer proof in one acceptance manifest', () => {
@@ -361,11 +352,5 @@ describe('acceptance proof manifest runner', () => {
       /run-project-hardening-acceptance\.js/u,
     );
     assert.match(packageJson.scripts['test:smoke'], new RegExp(smokeManifestPath));
-    const scenarioRunner = fs.readFileSync(
-      'scripts/run-developer-smoke-proof-scenarios.js',
-      'utf8',
-    );
-    assert.match(scenarioRunner, /runProjectHardeningAcceptance/u);
-    assert.match(scenarioRunner, new RegExp(smokeManifestPath));
   });
 });

@@ -1,6 +1,6 @@
 ---
 id: developer-velocity-maintainability-and-product-readiness
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -609,3 +609,7 @@ literal 2s/30s body-time enforcement, total-diff A2b path/byte bounds, explicit
 R2a-to-R2b sequencing, independent P1 sequencing, single acceptance-manifest
 ownership, delegated DevOps ownership, and census-bound artifact migration.
 V1 implementation may begin.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `apparatus-release-consolidation`: its delivered quests (developer smoke, owner-debt inventory) stand; its remaining intent is the apparatus budgets and the lean push gate.

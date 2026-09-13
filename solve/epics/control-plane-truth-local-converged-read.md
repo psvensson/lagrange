@@ -1,6 +1,6 @@
 ---
 id: control-plane-truth-local-converged-read
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: RM-0.2-five-node-convergence
@@ -174,3 +174,7 @@ The implementation Quest is `movielens-nodes-priority-recovery-escape`. The
 first rung: make the spread fence read proven-local leadership (Cut 2 step 1),
 validated by flipping the repro's phantom tests from "reproduces the phantom"
 to "does not act on the stale read."
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling`, which owns the seed starvation and readiness-read amplification this epic diagnosed.

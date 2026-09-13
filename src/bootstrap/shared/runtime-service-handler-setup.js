@@ -25,6 +25,11 @@ import {
 const LOG_MSG = Object.freeze({
   CREATING: 'Creating RuntimeServiceHandler',
   CREATED: 'RuntimeServiceHandler created and registered',
+  ENDPOINT_PUBLICATION_WIRED:
+    'Runtime endpoint publication wired to the canonical endpoint owner',
+  ENDPOINT_PUBLICATION_NOT_OWNED:
+    'Runtime invocation owner publishes no endpoints; ' +
+    'endpoint publication wiring not applicable',
 });
 
 const RUNTIME_SERVICE_HANDLER_SETUP_NAME =
@@ -36,15 +41,50 @@ const ERROR_MSG = Object.freeze({
   CDC_INTEGRATION_SERVICE_REQUIRED: 'cdcIntegrationService',
   SYSTEM_TABLE_CACHE_REQUIRED: 'systemTableCache',
   SERVICE_LIFECYCLE_MANAGER_REQUIRED: 'serviceLifecycleManager',
+  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_REQUIRED:
+    'a registered controlPlaneSystemTableGateway (ControlPlaneSetup.create ' +
+    'registers it before runtime-service handler setup) or an injected ' +
+    'serviceEndpointsOwner when serviceRuntimeLifecycle is provided',
 });
 
+/**
+ * Decide whether the supplied runtime owner publishes endpoints at all.
+ * ServiceRuntimeLifecycle exposes the endpoint writer/remover registration
+ * contract; a plain runtime invocation owner (health/invoke only) never
+ * returns endpoint intents, so there is nothing to wire for it.
+ * @param {Object|null|undefined} serviceRuntimeLifecycle
+ * @return {boolean}
+ */
+function ownsRuntimeEndpointPublication(serviceRuntimeLifecycle) {
+  return Boolean(serviceRuntimeLifecycle) &&
+    typeof serviceRuntimeLifecycle.setEndpointWriter === 'function' &&
+    typeof serviceRuntimeLifecycle.setEndpointRemover === 'function';
+}
+
+/**
+ * Resolve the canonical endpoint-metadata owner the runtime lifecycle
+ * publishes through. Production resolves it over the control-plane gateway
+ * that ControlPlaneSetup.create() registers before either startup path
+ * (seed or joiner) reaches this setup. A missing gateway is a startup
+ * ordering defect and is refused explicitly: silently skipping the wiring
+ * would leave every runtime replica ACTIVE with no published endpoint.
+ * @param {Object} options
+ * @param {Object} systemTableCache
+ * @return {ServiceEndpointsOwner}
+ * @throws {DependencyError} When neither an owner nor a gateway is available.
+ */
 function resolveServiceEndpointsOwner(options, systemTableCache) {
   if (options.serviceEndpointsOwner instanceof ServiceEndpointsOwner) {
     return options.serviceEndpointsOwner;
   }
   const controlPlaneSystemTableGateway =
     getRegisteredControlPlaneSystemTableGateway();
-  if (!controlPlaneSystemTableGateway) return null;
+  if (!controlPlaneSystemTableGateway) {
+    throw new DependencyError(
+      RUNTIME_SERVICE_HANDLER_SETUP_NAME,
+      ERROR_MSG.CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_REQUIRED,
+    );
+  }
   return new ServiceEndpointsOwner({
     controlPlaneSystemTableGateway,
     systemTableCache,
@@ -128,19 +168,19 @@ class RuntimeServiceHandlerSetup {
 
     logger.info(LOG_MSG.CREATING, {nodeId});
 
-    if (serviceRuntimeLifecycle) {
-      const serviceEndpointsOwner = resolveServiceEndpointsOwner(
-        options,
-        systemTableCache,
-      );
-      if (serviceEndpointsOwner) {
-        wireRuntimeEndpointPublication({
-          nodeId,
-          serviceEndpointsOwner,
-          serviceRuntimeLifecycle,
+    if (ownsRuntimeEndpointPublication(serviceRuntimeLifecycle)) {
+      wireRuntimeEndpointPublication({
+        nodeId,
+        serviceEndpointsOwner: resolveServiceEndpointsOwner(
+          options,
           systemTableCache,
-        });
-      }
+        ),
+        serviceRuntimeLifecycle,
+        systemTableCache,
+      });
+      logger.info(LOG_MSG.ENDPOINT_PUBLICATION_WIRED, {nodeId});
+    } else if (serviceRuntimeLifecycle) {
+      logger.info(LOG_MSG.ENDPOINT_PUBLICATION_NOT_OWNED, {nodeId});
     }
 
     const runtimeServiceHandler = new RuntimeServiceHandler({

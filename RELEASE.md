@@ -102,6 +102,35 @@ instead of frozen. A patch release for one fix follows the same steps.
    output. Edit the template whenever user-facing container behavior changes;
    never hand-edit between the `RELEASE-NOTES` markers.
 
+
+The release owner's one post-publish action: after a release publishes under
+`latest`, move `next` onto it by hand so `lagrange-server@next` never installs
+something older than `latest`:
+
+```sh
+npm dist-tag add lagrange-server@<version> next
+node scripts/checks/release-publication-receipt.js --reobserve-next
+git add data/releases/v<version>.json && git commit -m "release: next observed on <version>"
+npm run publish
+```
+
+The second command reads npm's dist-tags again and records `next` as now
+observed in the release receipt; the consolidation budget row "npm next lags
+latest" reads that record, so it clears from evidence and never by hand.
+
+Without a local npm login, run the move from the Actions page instead:
+workflow `release`, "Run workflow", input `move_next_to` = the version and
+`otp` = a fresh code from your npm authenticator (the account enforces 2FA for
+a dist-tag change). That job is the only one reading the `NPM_TOKEN` secret
+and runs only by hand; the re-observe and commit above still follow locally.
+
+The move stays manual on purpose (owner decision 2026-09-13): a long-lived npm
+write token in CI is a larger risk than a lagging `next` at this release
+cadence; trusted publishing authenticates `publish` only. The publication
+receipt records `next` as observed and `nextLagging: true` when it trails
+`latest`, and the consolidation budget reads that flag. Revisit if releases
+become weekly.
+
 ## Proof once per exact SHA
 
 The release-wide content proof has one semantic owner:

@@ -2,7 +2,6 @@
 id: topology-convergence-hardening
 status: open
 proof: deterministic
-legacy: true
 roadmapRow: RM-0.1-fs-rolling-restart
 graduatesTo: membership-lifecycle-placement-hard-cutover
 quests:
@@ -84,6 +83,12 @@ quests:
   - transaction-recovery-poison-row-live-owner-engagement
 authorizes: []
 legacyStatus: sharpening
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: movielens-lagrange-service-affinity-live
+    consecutive: 3
+    metric: priority
 ---
 
 # Epic: Topology convergence hardening
@@ -208,3 +213,7 @@ cheap pilot that grounds the frontier before any expensive fan-out or gate.
   convergence push; quests linked to specs + closure records in the same pass
   (links backfill). Status `sharpening`: goal is sharp, the `closesCL` set for the
   publication tail is not yet settled.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`movielens-lagrange-service-affinity-live`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.

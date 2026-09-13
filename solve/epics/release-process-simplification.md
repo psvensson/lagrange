@@ -1,6 +1,6 @@
 ---
 id: release-process-simplification
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -75,3 +75,7 @@ evidence from the 2026-09-05T19-10-11 failed run and a passing shape), the
 preflight decisions (injected git/gh/fs), the trend store, and the seed
 budget decision; a live local `check:formation` run recorded as evidence;
 docs checked by the steering pack freshness check.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `apparatus-release-consolidation`: the release pipeline shipped 0.2.5 on 2026-09-13 with receipts, preflight and proof identity.

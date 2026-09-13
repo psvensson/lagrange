@@ -1,6 +1,6 @@
 ---
 id: core-logic-live-validation
-status: open
+status: superseded
 proof: deterministic
 legacy: true
 roadmapRow: null
@@ -176,3 +176,7 @@ quest: it validates the only mechanism in the batch that mutates topology.
 - Writer-ledger reuse: `sustained-write-throughput` and the benchmark lanes
   have acknowledged-write ledgers; confirm one is reusable for the merge
   scenario's loss detection rather than building a new one.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Superseded by `formation-seed-decoupling`'s certification quest and the release proof (full-gate on the exact SHA).

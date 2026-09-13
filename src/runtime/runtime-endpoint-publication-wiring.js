@@ -10,6 +10,8 @@ import {
   deriveEndpointId,
 } from './runtime-endpoint-writer.js';
 
+const LOGICAL_SERVICE_ID_LIST_SEPARATOR = ', ';
+
 const RUNTIME_ENDPOINT_PUBLICATION_ERROR = Object.freeze({
   LIFECYCLE_REQUIRED:
     'Runtime endpoint publication requires ServiceRuntimeLifecycle',
@@ -61,7 +63,8 @@ function resolveLogicalServiceId(systemTableCache, replicaId) {
   if (matchingServiceIds.length > 1) {
     throw new Error(
       `${RUNTIME_ENDPOINT_PUBLICATION_ERROR.LOGICAL_SERVICE_AMBIGUOUS}: ` +
-      `${String(replicaId)} -> ${matchingServiceIds.join(',')}`,
+      `${String(replicaId)} -> ` +
+      matchingServiceIds.join(LOGICAL_SERVICE_ID_LIST_SEPARATOR),
     );
   }
   return matchingServiceIds[0];
@@ -75,8 +78,9 @@ function wireRuntimeEndpointPublication(options = {}) {
     serviceRuntimeLifecycle,
     systemTableCache,
   } = options;
-  const logicalServiceIdByReplicaId = new Map();
 
+  // Both directions resolve the replica's logical service from the desired
+  // state the runtime-service rebalancer placed it for: one owner, one path.
   serviceRuntimeLifecycle.setEndpointWriter(async (
     replicaId,
     _runtimeKind,
@@ -92,12 +96,7 @@ function wireRuntimeEndpointPublication(options = {}) {
       nodeId,
       endpointIntent,
     );
-    const result = await serviceEndpointsOwner.upsertEndpoint(
-      endpointRow,
-      mutationContext,
-    );
-    logicalServiceIdByReplicaId.set(replicaId, logicalServiceId);
-    return result;
+    return serviceEndpointsOwner.upsertEndpoint(endpointRow, mutationContext);
   });
 
   serviceRuntimeLifecycle.setEndpointRemover(async (
@@ -105,15 +104,14 @@ function wireRuntimeEndpointPublication(options = {}) {
     _runtimeNodeId,
     mutationContext = {},
   ) => {
-    const logicalServiceId =
-      logicalServiceIdByReplicaId.get(replicaId) ||
-      resolveLogicalServiceId(systemTableCache, replicaId);
-    const result = await serviceEndpointsOwner.removeEndpoint(
+    const logicalServiceId = resolveLogicalServiceId(
+      systemTableCache,
+      replicaId,
+    );
+    return serviceEndpointsOwner.removeEndpoint(
       deriveEndpointId(logicalServiceId, nodeId),
       mutationContext,
     );
-    logicalServiceIdByReplicaId.delete(replicaId);
-    return result;
   });
 
   return Object.freeze({
@@ -122,8 +120,4 @@ function wireRuntimeEndpointPublication(options = {}) {
   });
 }
 
-export {
-  RUNTIME_ENDPOINT_PUBLICATION_ERROR,
-  resolveLogicalServiceId,
-  wireRuntimeEndpointPublication,
-};
+export {wireRuntimeEndpointPublication};

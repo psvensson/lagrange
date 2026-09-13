@@ -21,7 +21,7 @@
 // joiner-side CONSUMER validation, and the real operation-ledger formation
 // barrier loop on a virtual clock. Raw node:test so each scenario is
 // independently selectable with --test-name-pattern by its anchored name
-// (scripts/quest-evidence-formation-release-handoff-post-reopen-capture.js).
+// (its evidence harness was retired by the script-reachability cull).
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

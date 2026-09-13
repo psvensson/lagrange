@@ -137,7 +137,10 @@ npm run publish -- --fixes-red <origin-main-sha> --reason "<why this fixes red>"
 
 The default runner is GitHub-hosted. Self-hosted routing requires
 `[ci:self-hosted]` in the already-reviewed HEAD commit message and
-`--runner self-hosted`; publish validates the marker and never amends. Direct
+`--runner self-hosted`; publish validates the marker and never amends; when
+origin/main advanced only by inert data commits (the nightly formation trend)
+it rebases the local commits over them, refusing on a dirty tracked tree or a
+conflict. Direct
 `git push` remains an advanced escape hatch. If the exact tree already passed
 `test:gate:postpush`,
 `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static

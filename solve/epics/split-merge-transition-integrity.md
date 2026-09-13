@@ -2,10 +2,10 @@
 id: split-merge-transition-integrity
 status: open
 proof: deterministic
-legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
+  - managed-split-cutover-handoff-closure
   - dead-setthresholds-removal
   - durable-replay-cursor
   - managed-partition-merge-live-validation
@@ -21,6 +21,12 @@ quests:
   - write-path-epoch-fencing
 authorizes: []
 legacyStatus: null
+doneWhen:
+  probe: scenario-harness
+  args:
+    scenario: managed-partition-merge-live-validation
+    consecutive: 3
+    metric: priority
 ---
 
 # Epic: Split/merge transition integrity
@@ -134,3 +140,7 @@ dead `setThresholds`) are sequenced after the ladder.
   landed shape keeps every ratchet at baseline (28/28 oversized
   source files, scoped complexity strictly improved). The epic's
   entire remaining ladder is now closed.
+
+## Disposition (2026-09-13, epic-board-curation)
+
+Kept and sealed: `doneWhen` is the scenario-harness probe of its remaining quest work (`managed-partition-merge-live-validation`, 3 consecutive), and `legacy` is dropped so its `authorizes` scope now binds landings.

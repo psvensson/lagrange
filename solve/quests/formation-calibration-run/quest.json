@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-calibration-run",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The authorized single calibration run exists as a committed per-owner cost table under test/simulation/calibration/, each figure citing its immutable artifact, produced by one fresh-container five-node formation on GCP whose seed started the attribution window at process start, logged a non-finalising bucket snapshot every 10 seconds, and stopped on the formed event or on the formation budget deadline plus margin (whichever first), with a periodically written inspector CPU profile as sibling evidence; the run counts only if the unattributed bucket is under 10 percent of the window, otherwise the finding is recorded, the seam is extended under deterministic tests, and no second run happens without new authorization.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-health.js --calibration test/simulation/calibration/seed-owner-costs.md",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "wiring-before-run",
+      "statement": "The seam is started and stopped inside the seed and its snapshot reaches the live report before any GCP run; the report, not a log grep by hand, carries the buckets."
+    },
+    {
+      "id": "partial-attribution-survives",
+      "statement": "A stalled or killed seed still leaves periodic snapshots and a written profile; the window never depends on a clean exit or on the formed event firing."
+    },
+    {
+      "id": "one-run",
+      "statement": "Exactly one fresh-container run; a run with 10 percent or more unattributed is a finding and a stop, never a reason for a second run."
+    },
+    {
+      "id": "no-new-script",
+      "statement": "The probe is a flag on the formation-health owner; no script is added."
+    }
+  ],
+  "sealedAt": "d1459b97d24f2b3181d0e28d3566c22243aae0e8"
+}

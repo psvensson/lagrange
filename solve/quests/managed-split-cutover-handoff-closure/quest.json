@@ -2,7 +2,7 @@
   "schema": "solve-quest/2",
   "id": "managed-split-cutover-handoff-closure",
   "statement": "Under concurrent writes, a split source remains routable until one fenced ManagedSplitWorkflow handoff owner proves target-epoch publication and query-plane closure, after which source retirement is exact-once and no source or child routing-readiness terminal failure occurs in the named N>=2 fixed-versus-reverted live A/B.",
-  "epic": "release-0-2-five-node-convergence",
+  "epic": "split-merge-transition-integrity",
   "doneWhen": {
     "probe": "scenario-harness",
     "args": {
