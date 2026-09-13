@@ -71,6 +71,34 @@ test('the executor runs classified lanes serially with their owned budgets', () 
   assert.equal(calls[0].tapTimeoutFloor, process.env.TAP_TIMEOUT_FLOOR);
 });
 
+test('a red batch stops the executor unless it is told to keep going', () => {
+  const failing = ORDINARY;
+  const spawnFailingOrdinary = (calls) => (command, args) => {
+    calls.push(args.at(-1));
+    return {status: args.at(-1) === failing ? 3 : 0};
+  };
+
+  const gateCalls = [];
+  const gateStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
+    {root, spawn: spawnFailingOrdinary(gateCalls)});
+  assert.equal(gateStatus, 3);
+  assert.deepEqual(gateCalls, [ORDINARY],
+    'a gate fails fast: the exclusive lane never starts');
+
+  // The canary is a finder: every lane still runs and the first failure is
+  // what it reports, so a red ordinary batch cannot hide the exclusive lane
+  // that holds every integration and bootstrap file.
+  const canaryCalls = [];
+  const canaryStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
+    {root, keepGoing: true, spawn: spawnFailingOrdinary(canaryCalls)});
+  assert.equal(canaryStatus, 3, 'the red is still reported');
+  assert.deepEqual(canaryCalls, [ORDINARY, INTEGRATION]);
+
+  assert.throws(() => runClassifiedTestFiles([ORDINARY],
+    {root, keepGoing: 'yes', spawn: () => ({status: 0})}),
+  /own-data options record/u);
+});
+
 test('the classified plan fails closed on duplicates and unknown paths', () => {
   assert.throws(() => planClassifiedTestFiles(root, [ORDINARY, ORDINARY]),
     /duplicate/u);
