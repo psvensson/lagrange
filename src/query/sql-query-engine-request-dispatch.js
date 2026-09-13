@@ -2,6 +2,7 @@
  * Canonical SqlRequest execution-mode dispatch.
  */
 
+import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineLifecycleAndCallbackDispatch} from
   './sql-query-engine-lifecycle-and-callback-dispatch.js';
@@ -17,6 +18,28 @@ const {
   METRICS_LOG_TAG,
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function resolveIssuingServiceId(sqlRequest, executionOptions = {}) {
+  const issuingServiceId = executionOptions.issuingServiceId;
+  if (typeof issuingServiceId !== 'string' || issuingServiceId.length === 0) {
+    return null;
+  }
+
+  // The built-in PostgreSQL runtime is an authenticated ingress transport,
+  // not the application principal for client SQL. Once PostgresWireAdapter has
+  // attached an authenticated securityContext to the canonical SqlRequest,
+  // that session identity owns authorization. Keeping sys-postgres-wire as the
+  // issuing service here would incorrectly run every external statement
+  // through runtime-service table-access policy.
+  if (
+    issuingServiceId === META_SERVICE_ID.POSTGRES_WIRE &&
+    sqlRequest.securityContext
+  ) {
+    return null;
+  }
+
+  return issuingServiceId;
+}
 
 class SQLQueryEngineRequestDispatch extends
   SQLQueryEngineLifecycleAndCallbackDispatch {
@@ -76,6 +99,10 @@ class SQLQueryEngineRequestDispatch extends
           SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
         return lifecycleExecution.result;
       }
+      const issuingServiceId = resolveIssuingServiceId(
+        sqlRequest,
+        executionOptions,
+      );
       return this.executeQuery(
         sqlRequest.statement,
         sqlRequest.parameters,
@@ -87,8 +114,7 @@ class SQLQueryEngineRequestDispatch extends
           timeoutBudget: sqlRequest.timeoutBudget,
           cancellationToken: sqlRequest.cancellationToken || null,
           budgets: sqlRequest.budgets,
-          ...(typeof executionOptions.issuingServiceId === 'string' ?
-            {issuingServiceId: executionOptions.issuingServiceId} : {}),
+          ...(issuingServiceId ? {issuingServiceId} : {}),
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),
         },
@@ -124,4 +150,4 @@ class SQLQueryEngineRequestDispatch extends
   }
 }
 
-export {SQLQueryEngineRequestDispatch};
+export {SQLQueryEngineRequestDispatch, resolveIssuingServiceId};
