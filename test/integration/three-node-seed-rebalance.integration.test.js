@@ -35,10 +35,12 @@ import {
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const TEST_TIMEOUT_MS = 120000;
-// Work-bound budgets, calibrated on the reference machine and scaled by
-// LAGRANGE_TEST_MACHINE_FACTOR: the seed bootstrap took 5.6 s here and 13.4 s
-// on the 2.4x slower GCP proof host (2026-09-13), past a fixed 12 s.
-const READY_TIMEOUT_MS = scaleByMachineFactor(12000);
+// Reference budgets, calibrated on the reference machine and pinned by
+// test/bootstrap/join-formation-discovery-window-budget.test.js; every wait
+// below scales them by LAGRANGE_TEST_MACHINE_FACTOR at the point of use: the
+// seed bootstrap took 5.6 s here and 13.4 s on the 2.4x slower GCP proof
+// host (2026-09-13), past a fixed 12 s.
+const READY_TIMEOUT_MS = 12000;
 // The join waits get their own measured budget. READY_TIMEOUT_MS fits the
 // operations it actually bounds (seed bootstrap, seed API initialize, the
 // nodes-ready convergence poll); it does not fit a node JOIN in this harness,
@@ -56,8 +58,8 @@ const READY_TIMEOUT_MS = scaleByMachineFactor(12000);
 // they were, and no production default is involved. 25000ms is ~1.7x the
 // observed maximum, and stays far inside the UNCHANGED 120000ms TEST_TIMEOUT_MS
 // parent cap. Owner decision, recorded 2026-08-31.
-const JOIN_READY_TIMEOUT_MS = scaleByMachineFactor(25000);
-const REBALANCE_TIMEOUT_MS = scaleByMachineFactor(20000);
+const JOIN_READY_TIMEOUT_MS = 25000;
+const REBALANCE_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
 const CLEANUP_TIMEOUT_MS = 10000;
 // Harness time compression for the join-time priority-placement formation
@@ -253,7 +255,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
       try {
         bootstrapResult = await withTimeout(
           () => bootstrapService.bootstrap(),
-          READY_TIMEOUT_MS,
+          scaleByMachineFactor(READY_TIMEOUT_MS),
           'seed bootstrap',
         );
         t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
@@ -280,7 +282,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         });
         await withTimeout(
           () => seedApi.initialize(0, {listen: false}),
-          READY_TIMEOUT_MS,
+          scaleByMachineFactor(READY_TIMEOUT_MS),
           'seed API initialize',
         );
         seedApi.setSqlQueryEngine(queryEngine);
@@ -336,14 +338,14 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
 
         const node2Result = await withTimeout(
           () => node2JoinService.join(),
-          JOIN_READY_TIMEOUT_MS,
+          scaleByMachineFactor(JOIN_READY_TIMEOUT_MS),
           'node2 join',
         );
         t.equal(node2Result.success, true, 'second node should join');
 
         const node3Result = await withTimeout(
           () => node3JoinService.join(),
-          JOIN_READY_TIMEOUT_MS,
+          scaleByMachineFactor(JOIN_READY_TIMEOUT_MS),
           'node3 join',
         );
         t.equal(node3Result.success, true, 'third node should join');
@@ -359,7 +361,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
           readyNodeIds.has(node2Id) &&
           readyNodeIds.has(node3Id) &&
           readyNodeIds.size >= EXPECTED_NODE_COUNT;
-        }, READY_TIMEOUT_MS, POLL_INTERVAL_MS);
+        }, scaleByMachineFactor(READY_TIMEOUT_MS), POLL_INTERVAL_MS);
 
         t.equal(nodesReady, true, 'all three nodes should become ready');
 
@@ -372,7 +374,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
             seedNodeId,
           );
           return rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS;
-        }, REBALANCE_TIMEOUT_MS, POLL_INTERVAL_MS);
+        }, scaleByMachineFactor(REBALANCE_TIMEOUT_MS), POLL_INTERVAL_MS);
 
         if (!rebalanceObserved) {
           const finalRows = getPartitionReplicaRows(systemTableCache).map((row) => ({
