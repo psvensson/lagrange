@@ -21,6 +21,8 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {RECONCILE_REASON} from
+  '../../src/workflow/reconcile-queue-constants.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -40,6 +42,11 @@ function makeFakeRebalancer(record, opts) {
     },
     setLeader(value) {
       this.leaderCalls.push(value);
+    },
+    wakeReasons: [],
+    enqueueRebalanceCheck(reason) {
+      this.wakeReasons.push(reason);
+      return true;
     },
     shutdown() {
       this.shutdownCalls += 1;
@@ -105,6 +112,55 @@ test('RuntimeServiceRebalancerOwner', async (t) => {
     makeOwner([PG], record);
     t.equal(record.length, 0, 'inert before leadership');
   });
+
+  await t.test(
+    'a started rebalancer is level-triggered on desired state at once',
+    async (t) => {
+      const record = [];
+      const owner = makeOwner([PG], record);
+      owner.setLeader(true);
+      t.same(
+        record[0].wakeReasons,
+        [RECONCILE_REASON.RUNTIME_SERVICE_DESIRED_STATE],
+        'the owner does not wait out the generic leadership start delay',
+      );
+    },
+  );
+
+  await t.test(
+    'a service_definitions change wakes every owned rebalancer while leader',
+    async (t) => {
+      const record = [];
+      const owner = makeOwner([PG, ANOTHER_ACTIVE], record);
+      owner.setLeader(true);
+      for (const rebalancer of record) rebalancer.wakeReasons.length = 0;
+
+      owner.testCache.emitChange('service_definitions');
+      t.same(
+        record.map((rebalancer) => rebalancer.wakeReasons),
+        [
+          [RECONCILE_REASON.RUNTIME_SERVICE_DESIRED_STATE],
+          [RECONCILE_REASON.RUNTIME_SERVICE_DESIRED_STATE],
+        ],
+        'replica_count or runtime_config edits reach the owned rebalancers',
+      );
+
+      owner.testCache.emitChange('services');
+      t.same(
+        record.map((rebalancer) => rebalancer.wakeReasons.length),
+        [1, 1],
+        'placement actuals are not desired-state wakes',
+      );
+
+      owner.setLeader(false);
+      owner.testCache.emitChange('service_definitions');
+      t.same(
+        record.map((rebalancer) => rebalancer.wakeReasons.length),
+        [1, 1],
+        'a non-leader owns nothing and wakes nothing',
+      );
+    },
+  );
 
   await t.test(
     'on leader: one rebalancer per ACTIVE definition (inactive excluded)',

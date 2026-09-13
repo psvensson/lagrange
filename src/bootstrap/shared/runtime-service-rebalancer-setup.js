@@ -32,6 +32,7 @@ import {
 } from '../../wasm-service/wasm-service-constants.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
+import {RECONCILE_REASON} from '../../workflow/reconcile-queue-constants.js';
 import {
   getBindingServiceDefinitionSourceKind,
   hasRequestBindingServiceDefinitionLineage,
@@ -127,12 +128,19 @@ class RuntimeServiceRebalancerOwner {
     // deployed AFTER leadership attach get an owner (and deleted ones are
     // quiesced) without waiting for a leadership move. refresh() no-ops
     // while not leader, so the subscription is safe on every node.
+    // A service_definitions change is also a desired-state change for the
+    // services already owned (replica_count, runtime_config): the owned
+    // rebalancer is level-triggered at once instead of waiting out its
+    // periodic cadence.
     this._cacheChangeListener = (tableName) => {
       if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS ||
           tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS ||
           tableName === SYSTEM_TABLE_NAME.SERVICES ||
           tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         this.refresh();
+      }
+      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
+        this._wakeOwnedRebalancers();
       }
     };
     if (typeof this.systemTableCache.onCacheChange === 'function') {
@@ -359,7 +367,37 @@ class RuntimeServiceRebalancerOwner {
     rebalancer.initialize();
     rebalancer.setLeader(true);
     this._rebalancers.set(serviceId, rebalancer);
+    // Desired state may already differ from placement when the owner
+    // attaches (a definition activated or scaled before leadership landed);
+    // the generic leadership start delay staggers partition herds and is not
+    // this owner's cadence.
+    this._wakeRebalancer(rebalancer);
     this.logger.info(LOG_MSG.STARTED, {nodeId: this.nodeId, serviceId});
+  }
+
+  /**
+   * Level-trigger one owned rebalancer on desired-state evidence.
+   * @param {Object} rebalancer
+   * @private
+   */
+  _wakeRebalancer(rebalancer) {
+    rebalancer.enqueueRebalanceCheck(
+      RECONCILE_REASON.RUNTIME_SERVICE_DESIRED_STATE,
+    );
+  }
+
+  /**
+   * Level-trigger every owned rebalancer after a service_definitions change.
+   * No-op unless this node is the leader (non-leaders own no rebalancers).
+   * @private
+   */
+  _wakeOwnedRebalancers() {
+    if (this._shuttingDown || !this._isLeader) {
+      return;
+    }
+    for (const rebalancer of this._rebalancers.values()) {
+      this._wakeRebalancer(rebalancer);
+    }
   }
 
   /**
