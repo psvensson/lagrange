@@ -253,6 +253,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       this.rebalanceCoordinator?.startupRecoveryCoordinator ||
       new StartupRecoveryCoordinator({
         readinessState: this.bootstrapReadinessState,
+        now: this.nowFn,
       });
     // The readiness service is NODE-scoped and owned by the node composition
     // owner (bootstrap control-plane setup), which hands it to the

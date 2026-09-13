@@ -74,12 +74,23 @@ const WATCHDOG_LOG_LEVEL = Object.freeze({
   INFO: 'info',
 });
 
+const WATCHDOG_FUNCTION_TYPE = 'function';
+
 /**
  * Aggregate counters for tagged synchronous sections. Module-level singleton
  * so hot paths can tag without dependency injection.
  */
 class SyncSectionRegistry {
-  constructor() {
+  /**
+   * @param {Object} [options]
+   * @param {Function} [options.clock] monotonic millisecond clock for the
+   *   section stamps; the default is performance.now, and a deterministic
+   *   harness hands the shared registry its own clock through
+   *   configureSharedSyncSectionClock so tagging reads no ambient time.
+   */
+  constructor(options = {}) {
+    this.clock = typeof options.clock === WATCHDOG_FUNCTION_TYPE ?
+      options.clock : () => performance.now();
     this.sites = new Map();
     this.depth = 0;
     this.exclusiveTaggedMs = 0;
@@ -106,7 +117,7 @@ class SyncSectionRegistry {
    * @return {number}
    */
   enter(site) {
-    const nowMs = performance.now();
+    const nowMs = this.clock();
     if (this.depth === 0) {
       this.outermostEnterAt = nowMs;
     }
@@ -123,7 +134,7 @@ class SyncSectionRegistry {
    * @return {void}
    */
   exit(site, enterToken) {
-    const nowMs = performance.now();
+    const nowMs = this.clock();
     const durationMs = nowMs - enterToken;
     const record = this.getSite(site);
     record.count += 1;
@@ -210,6 +221,18 @@ function trackSyncSection(site, fn) {
   } finally {
     exitSyncSection(site, token);
   }
+}
+
+/**
+ * Hand the shared registry a clock (a deterministic harness's virtual or
+ * counting clock); null restores performance.now. Measurement only: no
+ * owner decision reads these stamps.
+ * @param {Function|null} clock
+ * @return {void}
+ */
+function configureSharedSyncSectionClock(clock) {
+  sharedSyncSectionRegistry.clock = typeof clock === WATCHDOG_FUNCTION_TYPE ?
+    clock : () => performance.now();
 }
 
 /**
@@ -634,7 +657,7 @@ class EventLoopGapWatchdog {
         unexplainedMs,
         memory: buildMemorySampleMb(),
         eventLoopUtilization: Number(eluDelta.utilization.toFixed(4)),
-        openSections: this.registry.openSections(performance.now()),
+        openSections: this.registry.openSections(this.registry.clock()),
         siteDeltas,
         cumulative: {
           gapCount: this.gapCount,
@@ -752,6 +775,7 @@ export {
   EventLoopGapWatchdog,
   GapSamplingProfiler,
   SyncSectionRegistry,
+  configureSharedSyncSectionClock,
   enterSyncSection,
   exitSyncSection,
   getSharedSyncSectionRegistry,

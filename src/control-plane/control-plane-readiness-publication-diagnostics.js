@@ -259,7 +259,10 @@ class ControlPlaneReadinessPublicationDiagnostics
   // interval, the same bound the CL-019 diagnostics memo accepted); any
   // relevant table write invalidates.
   readMembershipPlanningDerivationVersionKey(observedAt) {
-    return readPlanningVersionKeyForCache(this.systemTableCache, observedAt);
+    // The refresh floor is measured on the service's clock when the caller
+    // passes none, never on the ambient one.
+    return readPlanningVersionKeyForCache(this.systemTableCache,
+      Number.isFinite(observedAt) ? observedAt : this.now());
   }
 
   readMembershipPlanningDerivationMemoCurrency(nodeId, observedAt) {

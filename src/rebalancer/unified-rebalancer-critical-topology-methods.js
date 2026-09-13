@@ -407,7 +407,7 @@ async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
   }
 
   const activeNodeIds = new Set(normalizeNodeIds(blocker.activeNodeIds));
-  const nowMs = Date.now();
+  const nowMs = rebalancer.nowFn();
   const nonBlockingOperationIds =
     await rebalancer.buildNonBlockingPriorityOperationIdSet(entityOperations);
   const details = collectCriticalOperationDetails(
@@ -618,7 +618,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
       this.systemTableCache,
       TABLES.REPLICA_OPERATIONS,
     );
-    const nowMs = Date.now();
+    const nowMs = this.nowFn();
     const nonBlockingPriorityOperationIds =
       this.buildNonBlockingPriorityOperationIdSetSync(rows, {
         observedAt: nowMs,

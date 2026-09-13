@@ -469,7 +469,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     if (!readinessService) {
       return null;
     }
-    const observedAt = Date.now();
+    const observedAt = this.nowFn();
     const planningSnapshot = readMembershipPlanningSnapshot(
       readinessService,
       this.nodeId,
@@ -683,7 +683,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     try {
       return readinessService.getStartupAuthoritySnapshotSync(
         this.nodeId,
-        Date.now(),
+        this.nowFn(),
       );
     } catch (_error) {
       return null;

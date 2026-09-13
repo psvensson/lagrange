@@ -89,7 +89,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     // expired lease stops pinning, so the surplus cure reclaims the
     // activated replica on the next pass.
     const activationPinNodeIds = liveActivationPinNodeIds({
-      nowMs: Date.now(),
+      nowMs: this.nowFn(),
       serviceId: this.entityId,
       systemTableCache: this.systemTableCache,
     });
@@ -99,7 +99,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
       systemTableCache: this.systemTableCache,
       serviceId: this.entityId,
-      nowMs: Date.now(),
+      nowMs: this.nowFn(),
     });
     if (Object.keys(nodeWeights).length > 0 ||
         Object.keys(groupWeights).length > 0) {
@@ -286,10 +286,10 @@ class UnifiedRebalancerPolicySchedulerMethods {
 
   /**
    * Milliseconds remaining until this entity is eligible for rebalancing.
-   * @param {number} [nowMs=Date.now()] - Current timestamp.
+   * @param {number} [nowMs=this.nowFn()] - Current timestamp on the owner's clock.
    * @return {number} Remaining milliseconds, or 0 if eligible.
    */
-  getTimeUntilRebalanceStartEligible(nowMs = Date.now()) {
+  getTimeUntilRebalanceStartEligible(nowMs = this.nowFn()) {
     const delayMs = this.getRebalanceStartDelayMs();
     if (delayMs <= UNIFIED_REBALANCER_LITERAL.ZERO) {
       return UNIFIED_REBALANCER_LITERAL.ZERO;
@@ -310,7 +310,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (!this.lastStateChangeTime) {
       return true;
     }
-    const elapsed = Date.now() - this.lastStateChangeTime;
+    const elapsed = this.nowFn() - this.lastStateChangeTime;
     return elapsed >= this.stabilizationPeriodMs;
   }
 
@@ -324,7 +324,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
       return;
     }
 
-    this.lastStateChangeTime = Date.now();
+    this.lastStateChangeTime = this.nowFn();
 
     this.logger.debug(REBALANCER_LOG_MSG.STABILIZATION_RESET, {
       entityId: this.entityId,
@@ -362,7 +362,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (!this.lastStateChangeTime) {
       return UNIFIED_REBALANCER_LITERAL.ZERO;
     }
-    const elapsed = Date.now() - this.lastStateChangeTime;
+    const elapsed = this.nowFn() - this.lastStateChangeTime;
     const remaining = this.stabilizationPeriodMs - elapsed;
     return Math.max(UNIFIED_REBALANCER_LITERAL.ZERO, remaining);
   }

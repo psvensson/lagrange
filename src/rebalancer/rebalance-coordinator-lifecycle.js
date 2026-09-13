@@ -156,10 +156,13 @@ class RebalanceCoordinatorLifecycle {
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService || null;
     this.bootstrapReadinessState = options.bootstrapReadinessState || null;
+    // The recovery coordinator reads the coordinator's clock (resolved
+    // below); the arrow defers the read to evaluation time.
     this.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator ||
       new StartupRecoveryCoordinator({
         readinessState: this.bootstrapReadinessState,
+        now: () => this.timeSource.now(),
       });
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||

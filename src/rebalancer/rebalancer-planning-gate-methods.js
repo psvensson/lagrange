@@ -254,7 +254,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return null;
     }
 
-    const now = Date.now();
+    const now = this.nowFn();
     if (this.clusterReadinessStartMs === null) {
       this.clusterReadinessStartMs = now;
     }
@@ -718,7 +718,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return;
     }
 
-    const now = Date.now();
+    const now = this.nowFn();
     const minInterval = this.isControlPlanePriorityPartition() ?
       UNIFIED_REBALANCER_LITERAL.THOUSAND :
       NUM.FIVE * UNIFIED_REBALANCER_LITERAL.THOUSAND;
