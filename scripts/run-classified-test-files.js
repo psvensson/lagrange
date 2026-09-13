@@ -59,6 +59,10 @@ const PRIMARY_FLAG = '--primary';
 const RESOURCE_FLAG = '--resource';
 const EXCLUDE_FLAG = '--exclude';
 const EXCLUDE_PREFIX_FLAG = '--exclude-prefix';
+// A finder, not a gate: run every lane and batch and report the first
+// non-zero status at the end, so one red ordinary batch cannot hide the
+// exclusive lane that holds every integration and bootstrap file.
+const KEEP_GOING_FLAG = '--keep-going';
 const MAX_FILES_PER_RUN = 100;
 const EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS = '120';
 const NEWLINE = '\n';
@@ -167,12 +171,13 @@ export function planClassifiedTestFiles(root, inputFiles) {
 export function runClassifiedTestFiles(inputFiles, options = {}) {
   const ownedOptions = copyOwnDataRecord(options);
   if (!ownedOptions) throw new Error(INVALID_OPTIONS_PROBLEM);
-  const {root = ROOT, spawn = spawnSync} = ownedOptions;
+  const {root = ROOT, spawn = spawnSync, keepGoing = false} = ownedOptions;
   if (typeof root !== 'string' || root.length === 0 ||
-      typeof spawn !== 'function') {
+      typeof spawn !== 'function' || typeof keepGoing !== 'boolean') {
     throw new Error(INVALID_OPTIONS_PROBLEM);
   }
   const plan = planClassifiedTestFiles(root, inputFiles);
+  let firstFailure = 0;
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
     process.stdout.write(
@@ -196,10 +201,13 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
       const result = spawn(process.execPath,
         args,
         {cwd: root, env, stdio: 'inherit'});
-      if (result.status !== 0) return result.status ?? 1;
+      if (result.status !== 0) {
+        if (!keepGoing) return result.status ?? 1;
+        if (firstFailure === 0) firstFailure = result.status ?? 1;
+      }
     }
   }
-  return 0;
+  return firstFailure;
 }
 
 function readInputFiles(argv) {
@@ -233,11 +241,17 @@ function readInputFiles(argv) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const files = readInputFiles(arraySlice(process.argv, 2));
+  const argv = arraySlice(process.argv, 2);
+  const keepGoing = stringCollectionHas(argv, KEEP_GOING_FLAG);
+  const laneArgv = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== KEEP_GOING_FLAG) appendArrayValue(laneArgv, argv[index]);
+  }
+  const files = readInputFiles(laneArgv);
   if (files.length === 0) {
     process.stderr.write(NO_FILES_PROBLEM + NEWLINE);
     process.exitCode = 1;
   } else {
-    process.exitCode = runClassifiedTestFiles(files);
+    process.exitCode = runClassifiedTestFiles(files, {keepGoing});
   }
 }
