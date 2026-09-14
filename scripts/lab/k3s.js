@@ -1,9 +1,13 @@
 import {capture, run} from './process.js';
 
 const INSTALL_URL = 'https://get.k3s.io';
+const SHELL_QUOTE = String.fromCharCode(39);
+const SHELL_QUOTE_ESCAPE = SHELL_QUOTE + '\\' + SHELL_QUOTE + SHELL_QUOTE;
 
 function shellQuote(value) {
-  return `'${String(value).replaceAll(`'`, `'\\''`)}'`;
+  return SHELL_QUOTE +
+    String(value).replaceAll(SHELL_QUOTE, SHELL_QUOTE_ESCAPE) +
+    SHELL_QUOTE;
 }
 
 function requireLinuxNode(node, purpose) {
