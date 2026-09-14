@@ -194,6 +194,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
 - `release:preflight` — Evaluate the five release-exit checks for the current checkout (clean release content, HEAD is origin/main, ci gate green on the exact sha, versions and changelog agree, tag absent) and print the exact tag commands; never tags.
 
+## soak
+
+- `soak:storage` — `node test/storage-load/run-storage-load.js`
+
 ## solve
 
 - `solve:board` — `node scripts/solve.js board`
@@ -288,4 +292,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-189 scripts indexed; 31 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+190 scripts indexed; 31 have a curated description, 159 fall back to their raw command. Improve coverage in the two sources named in the header comment.
