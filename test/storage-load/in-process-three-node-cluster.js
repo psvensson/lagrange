@@ -268,4 +268,4 @@ async function startInProcessThreeNodeCluster({runDir}) {
   return {seed, joiners, nodes, nodeCount: NODE_COUNT, schemaEngine, stop};
 }
 
-export {NODE_COUNT, createTableUntilReady, startInProcessThreeNodeCluster};
+export {createTableUntilReady, startInProcessThreeNodeCluster};
