@@ -75,6 +75,18 @@ formation trend) read compact text files that their quests commit.
 | `solve/epics/` total lines | 39,181 | ≤ 6,000 |
 | `liferaft` in `package.json` dependencies | yes | absent |
 | `CLAUDE.md` is a pointer to `AGENTS.md` | 75-line copy | ≤ 3 lines |
+| Gate stages reading anything but the pushed sha | 0 (2026-09-14) | 0 |
+| Tests whose observation census has drifted | 0 (2026-09-14) | 0 |
+| Falsifier classes without a receipt bound to its witness | 0 (2026-09-14) | 0 |
+| Whole-tree metric productions beyond the first, per metric | 12 | 0 |
+| Tests in both fixed lists (spine and focused contracts) | 4 | 0 |
+| Import-graph seal readers beyond one | 3 | 0 |
+| Whole-tree checks with no declared input trigger | 27 | 0 |
+| ESLint runs off the pushed range | 1 | 0 |
+| `repository-health.yml` still separate from the exact-sha run | 1 | 0 |
+| Workflows without a concurrency group | 3 | 0 |
+| Workflow jobs whose runner or timeout is not plan-driven | 13 | 0 |
+| Canary running after a run that already proved the corpus | 1 | 0 |
 
 Adjust a number in the script and here together; never in one place.
 
@@ -262,7 +274,9 @@ whose undeclared count is a budget row; observation-aware selection consuming
 the census; and adversarial falsifiers that plant defects in an observed
 surface and in behavioural source and prove detection end to end. It adds no
 script and no workflow: the census lives in the selection owner, the falsifiers
-are tests, the rows are on the budget script. Probe: budget rows
+are tests, the rows are on the budget script, and the falsifier receipt lives
+beside the other gate manifests (`test/manifests/`) because a closed quest
+keeps only its record and log (R20). Probe: budget rows
 `gate_stages_off_pushed_sha`, `undeclared_observation_surfaces`,
 `falsifier_classes_unproven`, target 0. Until they read zero no further
 narrowing or caching enters the gate.

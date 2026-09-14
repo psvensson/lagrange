@@ -40,6 +40,10 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const stringMatchAll = Function.call.bind(String.prototype.matchAll);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -74,14 +78,58 @@ const ROWS_FLAG = '--rows';
 // committed observation census, and the falsifier receipt.
 const PRE_PUSH_STAGES_MANIFEST = 'test/manifests/pre-push-stages.json';
 const SUBSYSTEM_MANIFEST = 'test/shards/subsystem-classes.json';
-const FALSIFIER_RECEIPT =
-  'solve/quests/proof-authority-integrity/evidence/receipt.json';
+const FALSIFIER_RECEIPT = 'test/manifests/proof-authority-falsifiers.receipt.json';
 const FALSIFIER_CLASSES = Object.freeze([
   'observed-file', 'observed-directory', 'spawned-script',
   'behavioural-source', 'working-tree-not-proof',
   'hook-materialises-pushed-sha',
 ]);
 const RECEIPT_DIGESTS_FIELD = 'testFileDigests';
+// gate-work-consolidation rows: every proof produced once per push cycle.
+const PACKAGE_SCRIPTS_MANIFEST = 'package.json';
+const PRE_COMMIT_HOOK = '.githooks/pre-commit';
+const PRE_PUSH_HOOK = '.githooks/pre-push';
+const STATIC_AUDITS_MODULE = 'scripts/checks/run-static-audits.js';
+const CORPUS_WORKTREE_MODULE = 'scripts/checks/push-gate-corpus-worktree.js';
+const FAST_STATIC_MODULE = 'scripts/check-fast-static.js';
+const OWNER_DEBT_CONSTANTS = 'scripts/global-owner-debt-inventory/constants.js';
+const POSTPUSH_MANIFEST =
+  'test/manifests/project-hardening-proof-postpush-manifest.json';
+const SAFETY_SPINE = 'test/shards/safety-spine.json';
+const PROOF_OBLIGATIONS = 'test/manifests/proof-obligations.json';
+const CI_RESOURCE_PLAN = 'test/manifests/ci-resource-plan.json';
+const REPOSITORY_HEALTH_WORKFLOW = '.github/workflows/repository-health.yml';
+const CANARY_WORKFLOW = '.github/workflows/full-corpus-canary.yml';
+const CI_WORKFLOW = '.github/workflows/ci.yml';
+const WORKFLOW_SUFFIX = '.yml';
+// The whole-tree metric checkers, by the file that produces each metric.
+const METRIC_CHECKERS = Object.freeze([
+  'check-complexity.js',
+  'check-cognitive-complexity.js',
+  'check-circular-dependencies.js',
+  'check-duplication.js',
+  'check-file-size-thresholds.js',
+  'check-unused-exports.js',
+]);
+// A run that measures only the changed files is not a production of the
+// whole-tree metric.
+const SCOPED_MARKERS = Object.freeze(['--scoped', 'check-scoped-ratchets.js']);
+const NPM_RUN_PATTERN = /npm run (?:-s )?([A-Za-z0-9:_-]+)/gu;
+const STATIC_AUDIT_LIST_PATTERN =
+  /STATIC_AUDIT_SCRIPTS = Object\.freeze\(\[([\s\S]*?)\]\)/u;
+const QUOTED_PATTERN = /'([^']+)'/gu;
+const SEAL_READER_MARKERS = Object.freeze(['IMPORT_GRAPH_SEAL_PATH', 'snapshotDigest']);
+const SEAL_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
+const FOCUSED_CONTRACTS_ID = 'focused-contracts';
+const TEST_SUFFIX = '.test.js';
+const TRACKED_LINT_MARKER = 'git ls-files -z';
+const CONCURRENCY_MARKER = /^concurrency:/mu;
+const JOB_HEADER_PATTERN = /^ {2}([A-Za-z0-9_-]+):\s*$/gmu;
+const TIMEOUT_PATTERN = /timeout-minutes:\s*(\d+)/u;
+const RUNS_ON_PATTERN = /runs-on:\s*(.+)$/mu;
+const CANARY_SIGNAL_MARKERS = Object.freeze(['workflow_run', 'full-corpus']);
+const NEWLINE = '\n';
+const ARGUMENT_SEPARATOR = ' ';
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
 const TREE_PUSHED_SHA = 'pushed-sha';
@@ -256,6 +304,199 @@ function falsifierClassesUnproven(root) {
       receiptBindsWitness(root, receipt, entry))).length;
 }
 
+// --- gate-work-consolidation rows -------------------------------------------
+
+function readText(root, rel) {
+  try {
+    return read(root, rel);
+  } catch {
+    return '';
+  }
+}
+
+// The command text an npm script expands to, following `npm run` chains.
+function expandScript(scripts, name, seen = Object.create(null)) {
+  if (seen[name] === true || typeof scripts[name] !== 'string') return '';
+  seen[name] = true;
+  let text = scripts[name];
+  for (const match of stringMatchAll(scripts[name], NPM_RUN_PATTERN)) {
+    text += NEWLINE + expandScript(scripts, match[1], seen);
+  }
+  return text;
+}
+
+// Every command text a surface runs, npm chains expanded.
+function surfaceText(scripts, text) {
+  let expanded = text;
+  for (const match of stringMatchAll(text, NPM_RUN_PATTERN)) {
+    expanded += NEWLINE + expandScript(scripts, match[1]);
+  }
+  return expanded;
+}
+
+function staticAuditScripts(root) {
+  const match = STATIC_AUDIT_LIST_PATTERN.exec(readText(root, STATIC_AUDITS_MODULE));
+  if (!match) return [];
+  const names = [];
+  for (const quoted of stringMatchAll(match[1], QUOTED_PATTERN)) {
+    names.push(quoted[1]);
+  }
+  return names;
+}
+
+function packageScripts(root) {
+  const manifest = readJsonOrNull(root, PACKAGE_SCRIPTS_MANIFEST);
+  return manifest && manifest.scripts && typeof manifest.scripts === 'object' ?
+    manifest.scripts : {};
+}
+
+// The per-push-cycle surfaces that may execute a whole-tree checker: the two
+// hooks (with the modules the push hook delegates to), the post-push static
+// audits, the owner-debt refresh, the fast-static layer ci runs, and each
+// workflow. Scoped runs are dropped before counting.
+function metricSurfaces(root) {
+  const scripts = packageScripts(root);
+  const audits = staticAuditScripts(root);
+  const surfaces = [
+    readText(root, PRE_COMMIT_HOOK),
+    readText(root, PRE_PUSH_HOOK) + NEWLINE + readText(root, CORPUS_WORKTREE_MODULE),
+    arrayJoin(arrayMap(audits, (name) => `npm run ${name}`), NEWLINE),
+    readText(root, OWNER_DEBT_CONSTANTS),
+    readText(root, FAST_STATIC_MODULE),
+  ];
+  const workflows = filesUnder(root, WORKFLOWS_DIR);
+  for (const workflow of workflows) {
+    if (stringEndsWith(workflow, WORKFLOW_SUFFIX)) surfaces.push(readText(root, workflow));
+  }
+  return arrayMap(surfaces, (text) => {
+    const lines = arrayFilter(stringSplit(surfaceText(scripts, text), NEWLINE),
+      (line) => !arraySome(SCOPED_MARKERS, (marker) => stringIncludes(line, marker)));
+    return arrayJoin(lines, NEWLINE);
+  });
+}
+
+// Sum over metrics of productions beyond the first.
+function duplicateMetricProductions(root) {
+  const surfaces = metricSurfaces(root);
+  let duplicates = 0;
+  for (const checker of METRIC_CHECKERS) {
+    const productions = arrayFilter(surfaces,
+      (text) => stringIncludes(text, checker)).length;
+    if (productions > 1) duplicates += productions - 1;
+  }
+  return duplicates;
+}
+
+// Tests both in the safety spine and in the focused-contracts command.
+function duplicateFixedTestRuns(root) {
+  const spine = readJsonOrNull(root, SAFETY_SPINE);
+  const manifest = readJsonOrNull(root, POSTPUSH_MANIFEST);
+  const spineTests = Array.isArray(spine?.tests) ? spine.tests : [];
+  const focused = arrayFind(Array.isArray(manifest?.commands) ? manifest.commands : [],
+    (command) => command.id === FOCUSED_CONTRACTS_ID);
+  const focusedTests = arrayFilter(Array.isArray(focused?.argv) ? focused.argv : [],
+    (argument) => stringEndsWith(argument, TEST_SUFFIX));
+  return arrayFilter(focusedTests,
+    (testPath) => arrayIncludes(spineTests, testPath)).length;
+}
+
+// Modules under scripts/ that bind the import-graph seal, beyond one reader
+// (the producer writes it and is not a reader).
+function importGraphSealReadersBeyondOne(root) {
+  let readers = 0;
+  for (const file of filesUnder(root, SCRIPTS_DIR)) {
+    if (file === SEAL_PRODUCER) continue;
+    const text = readText(root, file);
+    if (arrayEvery(SEAL_READER_MARKERS, (marker) => stringIncludes(text, marker))) {
+      readers += 1;
+    }
+  }
+  return readers > 1 ? readers - 1 : 0;
+}
+
+// Whole-tree commands of the gate (the static audits, the model contracts,
+// the golden-capability guard, the owner-debt refresh) with no entry in the
+// proof-obligation registry naming the inputs that trigger them.
+function wholeTreeChecksWithoutInputTrigger(root) {
+  const registry = readJsonOrNull(root, PROOF_OBLIGATIONS);
+  const obligations = Array.isArray(registry?.obligations) ? registry.obligations : [];
+  const declared = Object.create(null);
+  for (const obligation of obligations) {
+    if (typeof obligation?.command === 'string' &&
+        Array.isArray(obligation.inputs) && obligation.inputs.length > 0) {
+      declared[obligation.command] = true;
+    }
+  }
+  const manifest = readJsonOrNull(root, POSTPUSH_MANIFEST);
+  const commands = [];
+  for (const name of staticAuditScripts(root)) commands.push(`npm run ${name}`);
+  for (const command of Array.isArray(manifest?.commands) ? manifest.commands : []) {
+    if (command.id === FOCUSED_CONTRACTS_ID) continue;
+    commands.push(
+      `${command.executable} ${arrayJoin(command.argv || [], ARGUMENT_SEPARATOR)}`);
+  }
+  return arrayFilter(commands, (command) => declared[command] !== true).length;
+}
+
+// The push hook lints every tracked file rather than the pushed range.
+function eslintOffPushedRange(root) {
+  return stringIncludes(readText(root, PRE_PUSH_HOOK), TRACKED_LINT_MARKER) ? 1 : 0;
+}
+
+function repositoryHealthNotCoalesced(root) {
+  return fs.existsSync(abs(root, REPOSITORY_HEALTH_WORKFLOW)) ? 1 : 0;
+}
+
+function workflowsWithoutConcurrency(root) {
+  let missing = 0;
+  for (const file of filesUnder(root, WORKFLOWS_DIR)) {
+    if (!stringEndsWith(file, WORKFLOW_SUFFIX)) continue;
+    if (!CONCURRENCY_MARKER.test(readText(root, file))) missing += 1;
+  }
+  return missing;
+}
+
+// Each workflow job's runner and timeout must equal the committed resource
+// plan's entry for `<workflow>/<job>`; a job the plan does not know, or one
+// whose literals differ, is not plan-driven.
+function ciResourcesNotPlanDriven(root) {
+  const plan = readJsonOrNull(root, CI_RESOURCE_PLAN);
+  const jobs = plan && plan.jobs && typeof plan.jobs === 'object' ? plan.jobs : {};
+  let offending = 0;
+  for (const file of filesUnder(root, WORKFLOWS_DIR)) {
+    if (!stringEndsWith(file, WORKFLOW_SUFFIX)) continue;
+    const text = readText(root, file);
+    const jobsStart = stringIndexOf(text, `${NEWLINE}jobs:`);
+    if (jobsStart < 0) continue;
+    const body = text.slice(jobsStart);
+    const headers = [...stringMatchAll(body, JOB_HEADER_PATTERN)];
+    for (let index = 0; index < headers.length; index += 1) {
+      const start = headers[index].index;
+      const end = index + 1 < headers.length ? headers[index + 1].index : body.length;
+      const jobText = body.slice(start, end);
+      const key = `${path.posix.basename(file)}/${headers[index][1]}`;
+      const timeout = TIMEOUT_PATTERN.exec(jobText);
+      const runsOn = RUNS_ON_PATTERN.exec(jobText);
+      const entry = jobs[key];
+      if (!entry || !timeout || !runsOn ||
+          Number(timeout[1]) !== entry.timeoutMinutes ||
+          stringTrim(runsOn[1]) !== entry.runsOn) {
+        offending += 1;
+      }
+    }
+  }
+  return offending;
+}
+
+// The canary must be triggered by the gated ci run and skip when that run
+// already proved the whole corpus for the same sha.
+function canaryAfterFullCorpus(root) {
+  const text = readText(root, CANARY_WORKFLOW);
+  if (text.length === 0) return 0;
+  return arrayEvery(CANARY_SIGNAL_MARKERS, (marker) => stringIncludes(text, marker)) &&
+    stringIncludes(text, path.posix.basename(CI_WORKFLOW)) ? 0 : 1;
+}
+
 function epicStats(root) {
   let open = 0;
   let openLegacy = 0;
@@ -406,6 +647,17 @@ function measureConsolidationBudget(root = REPO_ROOT) {
     ['undeclared observation surfaces',
       undeclaredObservationSurfaces(root), 0, atMost],
     ['falsifier classes unproven', falsifierClassesUnproven(root), 0, atMost],
+    ['duplicate metric productions', duplicateMetricProductions(root), 0, atMost],
+    ['duplicate fixed test runs', duplicateFixedTestRuns(root), 0, atMost],
+    ['import graph seal readers beyond one',
+      importGraphSealReadersBeyondOne(root), 0, atMost],
+    ['whole tree checks without input trigger',
+      wholeTreeChecksWithoutInputTrigger(root), 0, atMost],
+    ['eslint off pushed range', eslintOffPushedRange(root), 0, atMost],
+    ['repository health not coalesced', repositoryHealthNotCoalesced(root), 0, atMost],
+    ['workflows without concurrency', workflowsWithoutConcurrency(root), 0, atMost],
+    ['ci resources not plan driven', ciResourcesNotPlanDriven(root), 0, atMost],
+    ['canary after full corpus', canaryAfterFullCorpus(root), 0, atMost],
   ];
   return arrayMap(rows,
     ([name, value, budget, ok]) => ({name, value, budget, met: ok(value, budget)}));

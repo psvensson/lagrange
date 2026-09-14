@@ -11,8 +11,12 @@
 import {runQuestEvidenceHarness} from './harness-runtime.js';
 
 const QUEST_ID = 'proof-authority-integrity';
+// The receipt is not quest evidence: the sealed doneWhen is a budget-row
+// script probe, so a closed quest keeps only its record and log (R20), while
+// the row must still read a receipt bound to the witness bytes. It lives with
+// the other gate manifests, like the import-graph seal.
 const OUTPUT_FILE_SEGMENTS = Object.freeze([
-  'solve', 'quests', QUEST_ID, 'evidence', 'receipt.json']);
+  'test', 'manifests', 'proof-authority-falsifiers.receipt.json']);
 const FALSIFIER_TEST = 'test/scripts/proof-authority-falsifiers.test.js';
 const HOOK_TEST = 'test/scripts/pre-push-hook-control-flow.test.js';
 const PATH_JOINER = '/';
