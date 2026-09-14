@@ -562,4 +562,8 @@ if (process.argv[1] &&
   }
 }
 
-export {linkWorkspaceDependencies};
+export {
+  GATE_WORKSPACE_DIRECTORIES,
+  assertWorkspaceDependencyLinks,
+  linkWorkspaceDependencies,
+};

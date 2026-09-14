@@ -38,6 +38,12 @@ export const REASON_COUPLED_WITNESS = 'coupled-pair-witness';
 // A test whose import closure reaches changed test support code (a fixture
 // or helper the taxonomy can only route to test-infrastructure).
 export const REASON_HELPER_IMPORTER = 'helper-importer';
+// A test that observes the changed path without importing it: a file it
+// reads, a directory it lists, a script it spawns (proof-authority-integrity).
+export const REASON_OBSERVER = 'observer';
+export const OBSERVATION_DRIFT_HINT =
+  'regenerate with node scripts/generate-test-subsystem-classes.js';
+export const OBSERVATION_DRIFT_LIMIT = 5;
 export const REASON_SAFETY_SPINE = 'safety-spine';
 
 // How the layer that ASSEMBLES a worktree declares what it injected into it.

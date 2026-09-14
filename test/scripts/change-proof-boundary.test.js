@@ -33,6 +33,12 @@ import {
 } from '../../scripts/checks/change-selection-constants.js';
 import {testsForSubsystem} from '../../scripts/check-subsystem.js';
 import {loadSafetySpine} from '../../scripts/select-change-tests.js';
+import {
+  observersOf,
+} from '../../scripts/checks/test-subsystem-classification.js';
+import {
+  SUBSYSTEM_MANIFEST_PATH,
+} from '../../scripts/checks/test-subsystem-classification-constants.js';
 import {createChangeProofFixture} from './change-proof-fixture.js';
 
 const root = process.cwd();
@@ -129,13 +135,22 @@ test('a scripts-only package edit stays on the modular path', () => {
     'a scripts-only edit must select a real proof, not nothing');
 });
 
-test('a docs-only change executes exactly the safety spine', () => {
-  const proof = proofFor({'docs/development/note.md': '# note\n'});
+test('a docs-only change executes the safety spine and the document\'s observers', () => {
+  // A document cannot change behaviour, but a test that READS the document
+  // (a documentation audit walking docs/) is that document's observer and
+  // runs with it (proof-authority-integrity); nothing else does.
+  const docPath = 'docs/development/note.md';
+  const proof = proofFor({[docPath]: '# note\n'});
   assert.equal(proof.status, 0);
   assert.notEqual(proof.invocation, null,
     'inert does not mean unproved: the spine is unconditional');
-  assert.deepEqual([...proof.invocation].sort(), [...spine].sort(),
-    'a docs-only change must run the spine and nothing more');
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, SUBSYSTEM_MANIFEST_PATH), UTF8));
+  const observers = observersOf(manifest.observations, docPath,
+    manifest.classes).map((observer) => observer.test);
+  assert.deepEqual([...proof.invocation].sort(),
+    [...new Set([...spine, ...observers])].sort(),
+    'a docs-only change must run the spine, the observers, and nothing more');
 });
 
 test('a source change executes its owning subsystem AND the spine', () => {

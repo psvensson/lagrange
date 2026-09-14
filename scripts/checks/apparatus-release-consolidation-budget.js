@@ -25,7 +25,9 @@
  * module load, where the binding cannot be swapped out from under a
  * measurement.
  */
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
+import {observationDrift} from './test-subsystem-classification.js';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -68,6 +70,23 @@ const EMPTY_TEXT = '';
 const ARGV_OFFSET = 2;
 const JSON_FLAG = '--json';
 const ROWS_FLAG = '--rows';
+// proof-authority-integrity rows: the gate's declared stage manifest, the
+// committed observation census, and the falsifier receipt.
+const PRE_PUSH_STAGES_MANIFEST = 'test/manifests/pre-push-stages.json';
+const SUBSYSTEM_MANIFEST = 'test/shards/subsystem-classes.json';
+const FALSIFIER_RECEIPT =
+  'solve/quests/proof-authority-integrity/evidence/receipt.json';
+const FALSIFIER_CLASSES = Object.freeze([
+  'observed-file', 'observed-directory', 'spawned-script',
+  'behavioural-source', 'working-tree-not-proof',
+  'hook-materialises-pushed-sha',
+]);
+const RECEIPT_DIGESTS_FIELD = 'testFileDigests';
+const DIGEST_ALGORITHM = 'sha256';
+const DIGEST_ENCODING = 'hex';
+const TREE_PUSHED_SHA = 'pushed-sha';
+const TREE_NONE = 'none';
+const RECEIPT_PASSED_FIELD = 'passed';
 const ROW_WORD_SEPARATOR = '_';
 const UNKNOWN_ROW_PREFIX = 'unknown budget row: ';
 const UNKNOWN_ROW_VALUE = 1;
@@ -184,6 +203,57 @@ function frontMatter(root, rel) {
     if (match) front[match[1]] = stringTrim(match[2]);
   }
   return front;
+}
+
+function readJsonOrNull(root, rel) {
+  try {
+    return JSON.parse(read(root, rel));
+  } catch {
+    return null;
+  }
+}
+
+// Stages the hook declares to read anything but the pushed sha (a missing
+// manifest is one undeclared gate).
+function gateStagesOffPushedSha(root) {
+  const manifest = readJsonOrNull(root, PRE_PUSH_STAGES_MANIFEST);
+  if (!manifest || !Array.isArray(manifest.stages)) return 1;
+  return arrayFilter(manifest.stages,
+    (stage) => stage.tree !== TREE_PUSHED_SHA && stage.tree !== TREE_NONE).length;
+}
+
+// Tests whose live observation surfaces differ from the committed census.
+function undeclaredObservationSurfaces(root) {
+  const manifest = readJsonOrNull(root, SUBSYSTEM_MANIFEST);
+  if (!manifest || !manifest.observations) return 1;
+  return observationDrift(root, manifest).length;
+}
+
+// A receipt speaks for the witness bytes it ran: its recorded digest of the
+// witness file must be the file's digest now, or the receipt is of an older
+// witness and proves nothing about this tree.
+function receiptBindsWitness(root, receipt, entry) {
+  const digests = receipt?.[RECEIPT_DIGESTS_FIELD];
+  const file = entry?.testFile ?? null;
+  if (!digests || typeof file !== 'string' ||
+      typeof digests[file] !== 'string') return false;
+  try {
+    const current = createHash(DIGEST_ALGORITHM)
+      .update(fs.readFileSync(abs(root, file))).digest(DIGEST_ENCODING);
+    return current === digests[file];
+  } catch {
+    return false;
+  }
+}
+
+// Falsifier classes without a passing receipt bound to the current witness.
+function falsifierClassesUnproven(root) {
+  const receipt = readJsonOrNull(root, FALSIFIER_RECEIPT);
+  const receipts = Array.isArray(receipt?.receipts) ? receipt.receipts : [];
+  return arrayFilter(FALSIFIER_CLASSES, (id) =>
+    !arraySome(receipts, (entry) =>
+      entry.id === id && entry[RECEIPT_PASSED_FIELD] === true &&
+      receiptBindsWitness(root, receipt, entry))).length;
 }
 
 function epicStats(root) {
@@ -332,6 +402,10 @@ function measureConsolidationBudget(root = REPO_ROOT) {
     ['liferaft dependency present',
       dependsOn(root, LIFERAFT_DEPENDENCY) ? 1 : 0, 0, atMost],
     ['CLAUDE.md is a pointer', claudeMdIsPointer(root) ? 0 : 1, 0, atMost],
+    ['gate stages off pushed sha', gateStagesOffPushedSha(root), 0, atMost],
+    ['undeclared observation surfaces',
+      undeclaredObservationSurfaces(root), 0, atMost],
+    ['falsifier classes unproven', falsifierClassesUnproven(root), 0, atMost],
   ];
   return arrayMap(rows,
     ([name, value, budget, ok]) => ({name, value, budget, met: ok(value, budget)}));

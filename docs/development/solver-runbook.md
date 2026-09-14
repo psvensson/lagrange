@@ -146,6 +146,19 @@ conflict. Direct
 `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
 checks still run. `--no-verify` skips every gate and is emergencies-only.
 
+Whichever path runs the hook, it proves the pushed sha and nothing else: outside
+an exact checkout it materialises the first pushed local sha once into a
+throwaway worktree under `test-output/push-gate-worktrees/` (workspace
+injections declared, the pushed ref lines forwarded) and re-runs every stage
+there; an uncommitted edit in the working tree is invisible to the gate, and a
+stage that mutates the checkout refuses the push. A manual invocation gates
+`HEAD`. The stages and the tree each reads are declared in
+`test/manifests/pre-push-stages.json`; the selection also widens to every test
+that observes a changed path without importing it (a fixture read through fs,
+a listed directory, a spawned script), from the observation census in
+`test/shards/subsystem-classes.json`, and refuses when that census has drifted
+(`node scripts/generate-test-subsystem-classes.js` regenerates it).
+
 `LAGRANGE_SKIP_PRECOMMIT=1` skips the pre-commit guard. It is for a work-in-
 progress branch only, never for a commit that lands source on the shared
 branch: skipping a gate to obtain a green state is exactly what R23 forbids.

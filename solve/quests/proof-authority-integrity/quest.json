@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "proof-authority-integrity",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A push is proved against exactly the bytes being pushed and against everything a test observes: the pre-push gate materialises the pushed SHA once and runs every stage (unused-files, eslint, cycles, unused-exports, the corpus ratchets and the test stage) in that immutable checkout, naming the pushed ref, the pushed SHA and the remote base in a declared stage manifest the gate consumes; the selection's authorities include non-import observation dependencies (files read through fs, globbed directories, spawned scripts, environment variables) declared per test and censused from the test sources, so a change to an observed surface selects its observers and an undeclared surface escalates; the observation-surface census prints the number of tests with a detected-but-undeclared surface; and adversarial falsifiers plant a defect in an observed non-import surface and in behavioural source and prove end to end that the gate selects a test that goes red; the budget rows gate_stages_off_pushed_sha, undeclared_observation_surfaces and falsifier_classes_unproven read zero, and until they do no further narrowing or caching enters the gate.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/apparatus-release-consolidation-budget.js --metric --rows gate_stages_off_pushed_sha,undeclared_observation_surfaces,falsifier_classes_unproven",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-script-no-new-workflow",
+      "statement": "The census lives in the selection owner, the stage manifest is a declared contract the hook consumes, the falsifiers are tests, the rows are on the budget script; no file is added under scripts/ outside scripts/quest-evidence and no workflow is added."
+    },
+    {
+      "id": "exact-identity-everywhere",
+      "statement": "Every gate stage runs against the pushed SHA in an immutable checkout; the working tree is never a proof input; a stage that cannot run there is a refusal, not a fallback to the working tree."
+    },
+    {
+      "id": "observation-is-an-authority-that-widens",
+      "statement": "Observation dependencies add proof and never narrow it: a declared surface selects its observers in addition to what the taxonomy, the registry and the import graph select; an undeclared detected surface escalates to the whole corpus for that change."
+    },
+    {
+      "id": "falsifiers-prove-detection-not-selection",
+      "statement": "A falsifier plants a defect and asserts a red test result reached the gate's verdict; asserting that a test was merely selected is not detection."
+    },
+    {
+      "id": "no-narrowing-until-sound",
+      "statement": "While any of the three rows is unmet, no change that narrows selection, skips a stage or caches a result enters the gate; gate-work-consolidation is sealed only after this quest lands."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The gate and selection changes land only behind an independent verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "d7b1f662c7b8843be94f999b231ff4a8b6e50924"
+}

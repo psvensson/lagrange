@@ -365,11 +365,18 @@ test('unknown precise cover widens to the subsystem, never to everything', () =>
     'widening selects a subsystem, not the whole corpus');
 });
 
-test('inert paths select nothing beyond the spine', () => {
+test('inert paths select only their observers beyond the spine', () => {
+  // Documentation cannot change behaviour, so it widens no subsystem; a test
+  // that reads the document is its observer and is the only extra proof.
   const result = plan(['docs/steering/rules.md', 'solve/log/x.ndjson']);
   assert.equal(result.kind, SELECTION_PRECISE);
-  assert.equal(result.tests.length, spine.length,
-    'documentation cannot change behaviour, so it adds no behavioural proof');
+  const extra = result.tests.filter((entry) => !spine.includes(entry.path));
+  for (const entry of extra) {
+    assert.ok(entry.reasons.every((reason) => reason.startsWith('observer:')),
+      `${entry.path} is here for a non-observer reason: ${entry.reasons}`);
+  }
+  assert.ok(extra.length < spine.length,
+    'observers of a document are a handful, never a corpus');
 });
 
 test('a test selected twice executes once, carrying both reasons', () => {

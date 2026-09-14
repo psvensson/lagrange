@@ -19,6 +19,7 @@
 
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,7 +59,30 @@ const SEALED_TABLE = Object.freeze([
   ['solve/epics total lines', 6000, 6, 8],
   ['liferaft dependency present', 0, 0, 1],
   ['CLAUDE.md is a pointer', 0, 0, 1],
+  // proof-authority-integrity: the gate's declared stage trees, the drift of
+  // the committed observation census, and the falsifier receipt bound to its
+  // witness bytes (six classes, so an absent receipt reads six).
+  ['gate stages off pushed sha', 0, 0, 1],
+  ['undeclared observation surfaces', 0, 0, 1],
+  ['falsifier classes unproven', 0, 0, 6],
 ]);
+
+const FALSIFIER_CLASSES = Object.freeze([
+  'observed-file', 'observed-directory', 'spawned-script',
+  'behavioural-source', 'working-tree-not-proof',
+  'hook-materialises-pushed-sha',
+]);
+const FALSIFIER_WITNESS = 'test/scripts/falsifier-witness.test.js';
+const FALSIFIER_RECEIPT =
+  'solve/quests/proof-authority-integrity/evidence/receipt.json';
+// One test that reads README.md, so its observation census is one file.
+const OBSERVER_TEST = 'test/observer.test.js';
+const OBSERVER_SOURCE =
+  'import fs from \'node:fs\';\nconst readme = fs.readFileSync(\'README.md\');\n';
+
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
 
 function write(root, relative, text) {
   const file = path.join(root, relative);
@@ -94,6 +118,22 @@ function metFixture() {
   write(root, 'src/one-methods.js', '\n');
   write(root, 'solve/epics/kept.md',
     '---\nstatus: open\ndoneWhen: probe\n---\n\n# Kept\n');
+  write(root, 'test/manifests/pre-push-stages.json', `${JSON.stringify({
+    stages: [{id: 'refs', tree: 'none'}, {id: 'lint', tree: 'pushed-sha'}],
+  })}\n`);
+  write(root, OBSERVER_TEST, OBSERVER_SOURCE);
+  write(root, 'test/shards/subsystem-classes.json', `${JSON.stringify({
+    classes: {[OBSERVER_TEST]: 'query-sql'},
+    observations: {[OBSERVER_TEST]: {files: ['README.md']}},
+  })}\n`);
+  const witness = 'export const witness = true;\n';
+  write(root, FALSIFIER_WITNESS, witness);
+  write(root, FALSIFIER_RECEIPT, `${JSON.stringify({
+    status: 'pass',
+    testFileDigests: {[FALSIFIER_WITNESS]: sha256(witness)},
+    receipts: FALSIFIER_CLASSES.map((id) =>
+      ({id, passed: true, testFile: FALSIFIER_WITNESS})),
+  })}\n`);
   return root;
 }
 
@@ -121,6 +161,15 @@ function offendingFixture() {
     '---\nstatus: open\nlegacy: true\n---\n');
   write(root, 'solve/epics/legacy-two.md',
     '---\nstatus: open\nlegacy: true\n---\n');
+  // A stage that reads the working tree, a census that omits the observer's
+  // file, and no falsifier receipt at all.
+  write(root, 'test/manifests/pre-push-stages.json', `${JSON.stringify({
+    stages: [{id: 'lint', tree: 'working-tree'}],
+  })}\n`);
+  write(root, OBSERVER_TEST, OBSERVER_SOURCE);
+  write(root, 'test/shards/subsystem-classes.json', `${JSON.stringify({
+    classes: {[OBSERVER_TEST]: 'query-sql'}, observations: {},
+  })}\n`);
   return root;
 }
 
