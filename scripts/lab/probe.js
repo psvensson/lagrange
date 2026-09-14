@@ -28,8 +28,8 @@ async function probePosix(sshTarget) {
 
 async function probeWindows(sshTarget) {
   const script = [
-    `$os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription`,
-    `$arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()`,
+    '$os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription',
+    '$arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()',
     'Write-Output $os',
     'Write-Output $arch',
   ].join('; ');
