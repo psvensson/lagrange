@@ -16,6 +16,8 @@ quests:
 authorizes:
   - scripts/checks/storage-load-report.js
   - scripts/checks/test-subsystem-classification-constants.js
+  - scripts/quest-evidence/numeric-key-routing.js
+  - src/live-query/live-query-group.js
   - test/storage-load
   - test/partition
   - test/query
@@ -96,10 +98,12 @@ green. Probe: script, the contract problem count of the committed report,
 target 0.
 
 **numeric-key-routing** — bounded: one red test (an integer key against a
-string boundary in both comparators), the two comparators
-(`KeyRange.compareKeys`, `PartitionResolver.compareValues`) become one
-comparator that refuses mixed types the way `compareSplitKey` already does,
-and the dead vocabulary leaves `query-constants.js`. Touches no log adapter
+string boundary), the comparators (`KeyRange.compareKeys`,
+`PartitionResolver.compareValues`, and the third copy found at seal,
+`LiveQueryGroup.compareValues`) become one comparator beside
+`compareSplitKey` that compares a number against a text-encoded number
+numerically and refuses every other mixed key space the way `compareSplitKey`
+already does, and the dead vocabulary leaves `query-constants.js`. Touches no log adapter
 and no message group, so it is safe alongside the soak. Probe: test-receipt.
 
 **log-group-commit** — measure before lifting: WAL and group commit of Raft

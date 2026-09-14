@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "numeric-key-routing",
+  "status": "pass",
+  "generatedAt": "2026-09-14T06:15:29.670Z",
+  "receipts": [
+    {
+      "id": "integer-key-routes-numerically-against-text-boundary",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an integer key routes numerically against a text boundary$\" test/partition/routing-key-comparator.test.js",
+      "detail": "a JavaScript number key against the TEXT boundary the partitions table returns after a split routes by numeric order"
+    },
+    {
+      "id": "one-comparator-owns-routing-order",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one comparator owns routing order for ranges, the resolver and live queries$\" test/partition/routing-key-comparator.test.js",
+      "detail": "KeyRange.compareKeys, PartitionResolver.compareValues and LiveQueryGroup.compareValues delegate to compareRoutingKeys"
+    },
+    {
+      "id": "mixed-key-space-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a mixed key space that is not a text-encoded number is refused, never coerced$\" test/partition/routing-key-comparator.test.js",
+      "detail": "the typed split-key mismatch outcome replaces String coercion"
+    },
+    {
+      "id": "dead-query-vocabulary-removed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every query-constants entry has a consumer$\" test/query/query-constants-vocabulary.test.js",
+      "detail": "query-constants.js carries no entry that no importer references"
+    }
+  ]
+}

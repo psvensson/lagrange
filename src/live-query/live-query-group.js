@@ -1,4 +1,5 @@
 import {v4 as uuidv4} from 'uuid';
+import {compareRoutingKeys} from '../partition/split-key-comparator.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -376,20 +377,9 @@ class QueryGroup extends EventEmitter {
    * @return {number} Comparison result.
    */
   compareValues(a, b) {
-    if (a === b) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
-
-    if (typeof a === 'string' && typeof b === 'string') {
-      return a.localeCompare(b);
-    }
-
-    if (typeof a === 'number' && typeof b === 'number') {
-      return a - b;
-    }
-
-    return String(a).localeCompare(String(b));
+    return compareRoutingKeys(a, b);
   }
+
 
   /**
    * Handle a CDC event from a partition.

@@ -100,3 +100,77 @@ export function resolveSplitTargetPartitionId(value, metadata = {}) {
 }
 
 export {SPLIT_KEY_TYPE};
+
+const TEXT_ENCODED_NUMBER_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/u;
+
+function isTextEncodedNumber(value) {
+  return typeof value === SPLIT_KEY_TYPE.STRING &&
+    TEXT_ENCODED_NUMBER_PATTERN.test(value) &&
+    Number.isFinite(Number(value));
+}
+
+function compareWithinType(keyType, a, b) {
+  if (keyType === SPLIT_KEY_TYPE.BUFFER) return Buffer.compare(a, b);
+  if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
+  return a.localeCompare(b);
+}
+
+function isAbsentKey(value) {
+  return value === null || value === undefined;
+}
+
+function compareAbsentKeys(a, b) {
+  const aAbsent = isAbsentKey(a);
+  const bAbsent = isAbsentKey(b);
+  if (aAbsent && bAbsent) return COMPARISON_RESULT.EQUAL;
+  if (aAbsent) return COMPARISON_RESULT.LEFT;
+  if (bAbsent) return COMPARISON_RESULT.RIGHT;
+  return null;
+}
+
+function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
+  if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(b)) {
+    return a - Number(b);
+  }
+  if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(a)) {
+    return Number(a) - b;
+  }
+  return null;
+}
+
+/**
+ * Routing order for partition keys: the one comparator behind
+ * KeyRange.compareKeys, PartitionResolver.compareValues and
+ * QueryGroup.compareValues. Null sorts first. Two keys of one declared
+ * type compare within that type (numbers numerically, strings by
+ * localeCompare as before, buffers bytewise); two values of one other
+ * runtime type keep the String order they had. A number against a
+ * text-encoded number compares numerically: the partitions system table
+ * declares partition_key_start/end as TEXT, so a split's numeric median
+ * comes back as '500' while the routed key is the number the SQL AST
+ * carries; before this owner existed that pair fell through to String
+ * coercion and 1000 sorted left of '500'. Any other mixed key space is the
+ * typed split-key mismatch outcome, never a coerced comparison.
+ * @param {*} a - Routed key or boundary.
+ * @param {*} b - Routed key or boundary.
+ * @return {number} Negative when a sorts first, positive when b does, 0 when equal.
+ */
+export function compareRoutingKeys(a, b) {
+  if (a === b) return COMPARISON_RESULT.EQUAL;
+  const absentOrder = compareAbsentKeys(a, b);
+  if (absentOrder !== null) return absentOrder;
+  const aType = resolveSplitKeyType(a);
+  const bType = resolveSplitKeyType(b);
+  if (aType !== null && aType === bType) return compareWithinType(aType, a, b);
+  const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
+  if (numericOrder !== null) return numericOrder;
+  if (aType === null && bType === null && typeof a === typeof b) {
+    return String(a).localeCompare(String(b));
+  }
+  throw new Error(
+    PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
+      aType || typeof a,
+      bType || typeof b,
+    ),
+  );
+}

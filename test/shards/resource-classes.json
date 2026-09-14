@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2062,
+    "ordinary": 2064,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2079,
-  "digest": "fnv1a32-f7b464bd",
+  "censusSize": 2081,
+  "digest": "fnv1a32-cc1b4181",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1170,6 +1170,7 @@
     "test/partition/raft-message-delivery.property.test.js": "ordinary",
     "test/partition/range-integrity-validation.property.test.js": "ordinary",
     "test/partition/replica-operations-schema-migration.test.js": "ordinary",
+    "test/partition/routing-key-comparator.test.js": "ordinary",
     "test/partition/split-abort-fence-parity.test.js": "ordinary",
     "test/partition/split-ack-constants.test.js": "ordinary",
     "test/partition/split-backfill-internal-pacing.test.js": "ordinary",
@@ -1275,6 +1276,7 @@
     "test/query/primitive-telemetry.test.js": "ordinary",
     "test/query/provision-target-live-transport-rescue.test.js": "ordinary",
     "test/query/provisioning-parent-deadline-dependency-guard.test.js": "ordinary",
+    "test/query/query-constants-vocabulary.test.js": "ordinary",
     "test/query/query-executor-build-sql-and-routability.test.js": "ordinary",
     "test/query/query-executor-delay.test.js": "ordinary",
     "test/query/query-executor-distributed-metrics.test.js": "ordinary",
