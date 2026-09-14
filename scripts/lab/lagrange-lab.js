@@ -16,27 +16,27 @@ import {configureRunner, runnerLabels} from './runner.js';
 import {probeRemoteNode} from './probe.js';
 
 function usage() {
-  process.stdout.write(`Lagrange home lab\n\n` +
-    `  lab init\n` +
-    `  lab list\n` +
+  process.stdout.write('Lagrange home lab\n\n' +
+    '  lab init\n' +
+    '  lab list\n' +
     '  lab node add NAME --ssh USER@HOST [--ip IP] --os linux|macos|windows ' +
     '--arch x64|arm64 --roles runner,harness,k3s ' +
     '[--labels storage=nvme,gpu=nvidia]\n' +
-    `  lab node probe NAME\n` +
-    `  lab node remove NAME\n` +
-    `  lab doctor\n` +
-    `  lab runner labels NAME\n` +
-    `  lab runner configure NAME --repo OWNER/PRIVATE-LAB-REPO [--service]\n` +
-    `  lab harness doctor [--nodes a,b,c]\n` +
+    '  lab node probe NAME\n' +
+    '  lab node remove NAME\n' +
+    '  lab doctor\n' +
+    '  lab runner labels NAME\n' +
+    '  lab runner configure NAME --repo OWNER/PRIVATE-LAB-REPO [--service]\n' +
+    '  lab harness doctor [--nodes a,b,c]\n' +
     '  lab harness run [SCENARIO] [--base CONFIG] [--nodes a,b,c] ' +
     '[--nodes-per-host N] [--dry-run] [-- ...harness args]\n' +
-    `  lab k3s init-server NAME [--version VERSION]\n` +
-    `  lab k3s join NAME --server SERVER\n` +
-    `  lab k3s status --server SERVER\n` +
-    `  lab k3s labels --server SERVER\n` +
-    `  lab k3s cordon|uncordon NAME --server SERVER\n` +
-    `  lab k3s drain NAME --server SERVER\n` +
-    `  lab test changed|smoke|gate|postpush|all\n`);
+    '  lab k3s init-server NAME [--version VERSION]\n' +
+    '  lab k3s join NAME --server SERVER\n' +
+    '  lab k3s status --server SERVER\n' +
+    '  lab k3s labels --server SERVER\n' +
+    '  lab k3s cordon|uncordon NAME --server SERVER\n' +
+    '  lab k3s drain NAME --server SERVER\n' +
+    '  lab test changed|smoke|gate|postpush|all\n');
 }
 
 function parseArgs(argv) {
