@@ -143,6 +143,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'file-sql-engine', pattern: /^test\/sql-engine-/, subsystem: SUBSYSTEM_QUERY_SQL},
   {id: 'directory-partition', pattern: new RegExp(`^test\\/(partition|storage|cache)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'directory-raft', pattern: new RegExp(`^test\\/raft\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_RAFT},
+  {id: 'directory-storage-load', pattern: new RegExp(`^test\\/storage-load\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'directory-services', pattern: new RegExp(`^test\\/(runtime|service|function|worker|threading)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_SERVICES_RUNTIME},
   {id: 'directory-wasm', pattern: new RegExp(`^test\\/wasm-service\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_WASM_TOOLCHAIN},
   {id: 'directory-cli', pattern: new RegExp(`^test\\/cli\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CLI_TOOLING},

@@ -1,0 +1,575 @@
+{
+  "schema": "storage-load-report/1",
+  "contract": "scripts/checks/storage-load-report.js",
+  "run": {
+    "head": "86f84824b72e8f9a5f194fad4a6bd9f00cbc0a4a",
+    "startedAt": "2026-09-14T04:47:25.450Z",
+    "endedAt": "2026-09-14T04:50:47.480Z",
+    "keyType": "string",
+    "topology": "in-process-three-node",
+    "nodeCount": 3,
+    "nodeIds": [
+      "7a1d3d2e-0001-4c4e-9d2f-0000000a0001",
+      "7a1d3d2e-0002-4c4e-9d2f-0000000a0002",
+      "7a1d3d2e-0003-4c4e-9d2f-0000000a0003"
+    ],
+    "partitionCount": 4,
+    "durationMs": 120000,
+    "elapsedMs": 120024,
+    "snapshotIntervalMs": 10000,
+    "opsPerSec": 20,
+    "readShare": 0.5,
+    "runDir": "test-output/storage-load/2026-09-14T04-47-25-450Z",
+    "endReason": "completed",
+    "error": null
+  },
+  "write": {
+    "attempted": 1198,
+    "succeeded": 1198,
+    "failed": 0,
+    "opsPerSec": 9.981420227789673,
+    "latencyMs": {
+      "p50": 8,
+      "p95": 233,
+      "p99": 558,
+      "max": 1362
+    },
+    "lastError": null,
+    "targetOpsPerSec": 10
+  },
+  "read": {
+    "attempted": 1200,
+    "succeeded": 1200,
+    "failed": 0,
+    "opsPerSec": 9.999833336111063,
+    "latencyMs": {
+      "p50": 3,
+      "p95": 60,
+      "p99": 219,
+      "max": 807
+    },
+    "lastError": null,
+    "targetOpsPerSec": 10
+  },
+  "partitions": [
+    {
+      "tableName": "storage_load_p0",
+      "write": {
+        "attempted": 299,
+        "succeeded": 299,
+        "failed": 0,
+        "opsPerSec": 2.491189188738825,
+        "latencyMs": {
+          "p50": 8,
+          "p95": 205,
+          "p99": 546,
+          "max": 737
+        },
+        "lastError": null
+      },
+      "read": {
+        "attempted": 299,
+        "succeeded": 299,
+        "failed": 0,
+        "opsPerSec": 2.491189188738825,
+        "latencyMs": {
+          "p50": 3,
+          "p95": 50,
+          "p99": 234,
+          "max": 459
+        },
+        "lastError": null
+      }
+    },
+    {
+      "tableName": "storage_load_p1",
+      "write": {
+        "attempted": 300,
+        "succeeded": 300,
+        "failed": 0,
+        "opsPerSec": 2.4995209251560118,
+        "latencyMs": {
+          "p50": 8,
+          "p95": 252,
+          "p99": 550,
+          "max": 1362
+        },
+        "lastError": null
+      },
+      "read": {
+        "attempted": 299,
+        "succeeded": 299,
+        "failed": 0,
+        "opsPerSec": 2.491189188738825,
+        "latencyMs": {
+          "p50": 2,
+          "p95": 67,
+          "p99": 265,
+          "max": 806
+        },
+        "lastError": null
+      }
+    },
+    {
+      "tableName": "storage_load_p2",
+      "write": {
+        "attempted": 300,
+        "succeeded": 300,
+        "failed": 0,
+        "opsPerSec": 2.4995209251560118,
+        "latencyMs": {
+          "p50": 8,
+          "p95": 194,
+          "p99": 521,
+          "max": 925
+        },
+        "lastError": null
+      },
+      "read": {
+        "attempted": 298,
+        "succeeded": 298,
+        "failed": 0,
+        "opsPerSec": 2.4828574523216385,
+        "latencyMs": {
+          "p50": 3,
+          "p95": 70,
+          "p99": 213,
+          "max": 423
+        },
+        "lastError": null
+      }
+    },
+    {
+      "tableName": "storage_load_p3",
+      "write": {
+        "attempted": 299,
+        "succeeded": 299,
+        "failed": 0,
+        "opsPerSec": 2.491189188738825,
+        "latencyMs": {
+          "p50": 8,
+          "p95": 247,
+          "p99": 732,
+          "max": 836
+        },
+        "lastError": null
+      },
+      "read": {
+        "attempted": 297,
+        "succeeded": 297,
+        "failed": 0,
+        "opsPerSec": 2.4745257159044516,
+        "latencyMs": {
+          "p50": 3,
+          "p95": 58,
+          "p99": 198,
+          "max": 506
+        },
+        "lastError": null
+      }
+    }
+  ],
+  "storage": {
+    "diskBytes": 181172806,
+    "byNodeDir": {
+      "joiner-0": 31024015,
+      "joiner-1": 31378767,
+      "seed": 118770024
+    },
+    "raftLogEntries": 14688,
+    "raftLogCommandBytes": 21032240,
+    "partitionsMeasured": 147,
+    "partitionsSkipped": 12,
+    "messageGroupLogEntries": 8076,
+    "messageGroupLogApproxBytes": 6230159,
+    "messageGroupsMeasured": 3,
+    "rssBytes": 790982656,
+    "heapUsedBytes": 204817048
+  },
+  "snapshots": [
+    {
+      "at": "2026-09-14T04:48:57.457Z",
+      "elapsedMs": 10001,
+      "storage": {
+        "diskBytes": 134687630,
+        "byNodeDir": {
+          "joiner-0": 17396375,
+          "joiner-1": 17981871,
+          "seed": 99309384
+        },
+        "raftLogEntries": 7512,
+        "raftLogCommandBytes": 14045679,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7194,
+        "messageGroupLogApproxBytes": 5549767,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 730271744,
+        "heapUsedBytes": 307976856
+      },
+      "write": {
+        "succeeded": 100,
+        "opsPerSec": 9.977052778609199
+      },
+      "read": {
+        "succeeded": 100,
+        "opsPerSec": 9.977052778609199
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:07.457Z",
+      "elapsedMs": 20001,
+      "storage": {
+        "diskBytes": 152329470,
+        "byNodeDir": {
+          "joiner-0": 22735895,
+          "joiner-1": 23135991,
+          "seed": 106457584
+        },
+        "raftLogEntries": 8214,
+        "raftLogCommandBytes": 14709545,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7347,
+        "messageGroupLogApproxBytes": 5667794,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 732475392,
+        "heapUsedBytes": 422268816
+      },
+      "write": {
+        "succeeded": 200,
+        "opsPerSec": 9.990509016434387
+      },
+      "read": {
+        "succeeded": 200,
+        "opsPerSec": 9.990509016434387
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:17.457Z",
+      "elapsedMs": 30001,
+      "storage": {
+        "diskBytes": 167452878,
+        "byNodeDir": {
+          "joiner-0": 27626335,
+          "joiner-1": 28137671,
+          "seed": 111688872
+        },
+        "raftLogEntries": 8892,
+        "raftLogCommandBytes": 15353835,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7482,
+        "messageGroupLogApproxBytes": 5771937,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 774594560,
+        "heapUsedBytes": 151587000
+      },
+      "write": {
+        "succeeded": 298,
+        "opsPerSec": 9.926384863928583
+      },
+      "read": {
+        "succeeded": 300,
+        "opsPerSec": 9.9930048965724
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:27.459Z",
+      "elapsedMs": 40003,
+      "storage": {
+        "diskBytes": 171538342,
+        "byNodeDir": {
+          "joiner-0": 29500135,
+          "joiner-1": 29859055,
+          "seed": 112179152
+        },
+        "raftLogEntries": 9528,
+        "raftLogCommandBytes": 15979595,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7536,
+        "messageGroupLogApproxBytes": 5813593,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 774610944,
+        "heapUsedBytes": 191120536
+      },
+      "write": {
+        "succeeded": 398,
+        "opsPerSec": 9.946518718448543
+      },
+      "read": {
+        "succeeded": 400,
+        "opsPerSec": 9.9965012245714
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:37.463Z",
+      "elapsedMs": 50007,
+      "storage": {
+        "diskBytes": 172045102,
+        "byNodeDir": {
+          "joiner-0": 29500135,
+          "joiner-1": 29859055,
+          "seed": 112685912
+        },
+        "raftLogEntries": 10158,
+        "raftLogCommandBytes": 16602967,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7581,
+        "messageGroupLogApproxBytes": 5848306,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 765394944,
+        "heapUsedBytes": 140920496
+      },
+      "write": {
+        "succeeded": 498,
+        "opsPerSec": 9.956216637677683
+      },
+      "read": {
+        "succeeded": 501,
+        "opsPerSec": 10.01619384633839
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:47.464Z",
+      "elapsedMs": 60008,
+      "storage": {
+        "diskBytes": 173313670,
+        "byNodeDir": {
+          "joiner-0": 29500135,
+          "joiner-1": 29859055,
+          "seed": 113954480
+        },
+        "raftLogEntries": 10824,
+        "raftLogCommandBytes": 17244229,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7680,
+        "messageGroupLogApproxBytes": 5924676,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 769781760,
+        "heapUsedBytes": 197294464
+      },
+      "write": {
+        "succeeded": 598,
+        "opsPerSec": 9.962847575096212
+      },
+      "read": {
+        "succeeded": 601,
+        "opsPerSec": 10.012828415773953
+      }
+    },
+    {
+      "at": "2026-09-14T04:49:57.464Z",
+      "elapsedMs": 70008,
+      "storage": {
+        "diskBytes": 175203966,
+        "byNodeDir": {
+          "joiner-0": 30286663,
+          "joiner-1": 30633223,
+          "seed": 114284080
+        },
+        "raftLogEntries": 11454,
+        "raftLogCommandBytes": 17865051,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7725,
+        "messageGroupLogApproxBytes": 5959391,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 770232320,
+        "heapUsedBytes": 251579992
+      },
+      "write": {
+        "succeeded": 698,
+        "opsPerSec": 9.96786861835059
+      },
+      "read": {
+        "succeeded": 701,
+        "opsPerSec": 10.010710460549804
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:07.464Z",
+      "elapsedMs": 80008,
+      "storage": {
+        "diskBytes": 176789798,
+        "byNodeDir": {
+          "joiner-0": 30286663,
+          "joiner-1": 30633223,
+          "seed": 115869912
+        },
+        "raftLogEntries": 12126,
+        "raftLogCommandBytes": 18511969,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7833,
+        "messageGroupLogApproxBytes": 6042705,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 767524864,
+        "heapUsedBytes": 347432472
+      },
+      "write": {
+        "succeeded": 798,
+        "opsPerSec": 9.972631500018746
+      },
+      "read": {
+        "succeeded": 801,
+        "opsPerSec": 10.010122595883479
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:17.464Z",
+      "elapsedMs": 90008,
+      "storage": {
+        "diskBytes": 177436638,
+        "byNodeDir": {
+          "joiner-0": 30286663,
+          "joiner-1": 30633223,
+          "seed": 116516752
+        },
+        "raftLogEntries": 12774,
+        "raftLogCommandBytes": 19146326,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7905,
+        "messageGroupLogApproxBytes": 6098247,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 767733760,
+        "heapUsedBytes": 427968848
+      },
+      "write": {
+        "succeeded": 898,
+        "opsPerSec": 9.974896141114789
+      },
+      "read": {
+        "succeeded": 901,
+        "opsPerSec": 10.008219847599584
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:27.463Z",
+      "elapsedMs": 100007,
+      "storage": {
+        "diskBytes": 179225494,
+        "byNodeDir": {
+          "joiner-0": 31024015,
+          "joiner-1": 31194447,
+          "seed": 117007032
+        },
+        "raftLogEntries": 13392,
+        "raftLogCommandBytes": 19763006,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 7932,
+        "messageGroupLogApproxBytes": 6119075,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 768573440,
+        "heapUsedBytes": 490668576
+      },
+      "write": {
+        "succeeded": 998,
+        "opsPerSec": 9.9777051278206
+      },
+      "read": {
+        "succeeded": 1001,
+        "opsPerSec": 10.007698229407238
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:37.464Z",
+      "elapsedMs": 110008,
+      "storage": {
+        "diskBytes": 180682526,
+        "byNodeDir": {
+          "joiner-0": 31024015,
+          "joiner-1": 31378767,
+          "seed": 118279744
+        },
+        "raftLogEntries": 14052,
+        "raftLogCommandBytes": 20404218,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 8022,
+        "messageGroupLogApproxBytes": 6188503,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 790982656,
+        "heapUsedBytes": 153094448
+      },
+      "write": {
+        "succeeded": 1098,
+        "opsPerSec": 9.9800036357026
+      },
+      "read": {
+        "succeeded": 1101,
+        "opsPerSec": 10.007180447369139
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:47.464Z",
+      "elapsedMs": 120008,
+      "storage": {
+        "diskBytes": 181172806,
+        "byNodeDir": {
+          "joiner-0": 31024015,
+          "joiner-1": 31378767,
+          "seed": 118770024
+        },
+        "raftLogEntries": 14688,
+        "raftLogCommandBytes": 21032240,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 8076,
+        "messageGroupLogApproxBytes": 6230159,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 790982656,
+        "heapUsedBytes": 202736536
+      },
+      "write": {
+        "succeeded": 1198,
+        "opsPerSec": 9.981503391044976
+      },
+      "read": {
+        "succeeded": 1200,
+        "opsPerSec": 9.999833336111063
+      }
+    },
+    {
+      "at": "2026-09-14T04:50:47.480Z",
+      "elapsedMs": 120024,
+      "storage": {
+        "diskBytes": 181172806,
+        "byNodeDir": {
+          "joiner-0": 31024015,
+          "joiner-1": 31378767,
+          "seed": 118770024
+        },
+        "raftLogEntries": 14688,
+        "raftLogCommandBytes": 21032240,
+        "partitionsMeasured": 147,
+        "partitionsSkipped": 12,
+        "messageGroupLogEntries": 8076,
+        "messageGroupLogApproxBytes": 6230159,
+        "messageGroupsMeasured": 3,
+        "rssBytes": 790982656,
+        "heapUsedBytes": 204817048
+      },
+      "write": {
+        "succeeded": 1198,
+        "opsPerSec": 9.981420227789673
+      },
+      "read": {
+        "succeeded": 1200,
+        "opsPerSec": 9.999833336111063
+      }
+    }
+  ],
+  "growth": {
+    "diskBytesPerHour": 1059713631.9613678,
+    "raftLogEntriesPerHour": 233576.60668180778,
+    "raftLogCommandBytesPerHour": 227927062.35236397,
+    "messageGroupLogEntriesPerHour": 26813.60440929807,
+    "rssBytesPerHour": 1441453696.8751454
+  }
+}

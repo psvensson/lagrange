@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2061,
+    "ordinary": 2062,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2078,
-  "digest": "fnv1a32-4cb31b0f",
+  "censusSize": 2079,
+  "digest": "fnv1a32-f7b464bd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1907,6 +1907,7 @@
     "test/solve/schema.test.js": "ordinary",
     "test/solve/store.test.js": "ordinary",
     "test/sql-engine-read-migration.test.js": "ordinary",
+    "test/storage-load/storage-load-report.test.js": "ordinary",
     "test/storage/data-directory-manager.test.js": "ordinary",
     "test/storage/data-directory-validation.property.test.js": "ordinary",
     "test/storage/persistent-storage-paths.property.test.js": "ordinary",

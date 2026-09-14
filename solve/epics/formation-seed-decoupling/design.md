@@ -663,3 +663,149 @@ owners' turn rates before their per-turn weight.
   `timeSource` (`rolling-restart-rebalancer-handoff-witness.test.js` records
   where). The deterministic-mode guard must throw on these, which means the
   seam lands there first.
+
+## Formation-sim design note (2026-09-14): scheduler, cost model, ranking
+
+Status: for review. This section picks the simulator's scheduler and cost
+model from the calibration attribution and ranks the three mechanisms for
+`seed-formation-decoupling`. It is the authorization point before
+`formation-sim` is sealed; nothing below is a fix attempt.
+
+### Inputs
+
+1. The single calibration run (`test/simulation/calibration/seed-owner-costs.md`,
+   head 8a6275a4d, GCP, five nodes, unattributed 3.50 % of a 152 s window):
+
+   | owner | share | turns | mean segment |
+   | --- | ---: | ---: | ---: |
+   | raft_protocol | 32.8 % | 3 123 519 | 14.5 us |
+   | rebalancer | 24.9 % | 336 484 | 111.4 us |
+   | membership_publication | 15.5 % | 413 850 | 56.9 us |
+   | bootstrap | 5.9 % | 218 890 | 40.9 us |
+   | raft_apply | 5.2 % | 24 680 handoffs | 317.8 us |
+   | admin | 2.1 % | 45 363 | 69.6 us |
+   | transport | 1.7 % | 104 199 | 19.4 us |
+   | readiness | 0.4 % | 80 + 250 | 1 880 us |
+   | worker_dispatch | 0.0 % | 0 | - |
+   | idle | 8.1 % | | |
+
+   From 35 s to the formed mark the top three owners grow linearly
+   (raft_protocol +3.9 s, rebalancer +2.4 s, membership_publication +1.0 s
+   per 10 s); bootstrap is front-loaded into the first 23 s. Idle is 8.1 %:
+   the seed is not starved of CPU by anything outside its own owners.
+
+2. The cross-operation re-entry cycle (from `formation-contracts-registration`):
+   the operation-workflow owner bounds deferred handoff re-entry per
+   operation, and at the stop leaves the operation "for planner rearm /
+   ready-node replay", so a reconciled-but-unpublished node is re-planned
+   into a fresh operation with a fresh budget and no state change. Nothing
+   marks the cycle terminal. Its recurrence rate under formation load is
+   unknown; it is a candidate inflator of the rebalancer's 336 k turns.
+
+3. Ambient time on the handoff path: the handoff retry callback and the
+   transition retry grace read `Date.now()` directly rather than the owner's
+   `timeSource` (recorded by `rolling-restart-rebalancer-handoff-witness.test.js`).
+   The deterministic-mode guard cannot be armed while those reads exist.
+
+### Scheduler: charge per dispatched segment, real owners throughout
+
+The simulator is a discrete-event scheduler over the existing `VirtualNetwork`
+with one virtual event loop per node. Every node runs the real owners
+(control plane, readiness, publication, bootstrap, `UnifiedRebalancer`, real
+LifeRaft groups); the scheduler owns only *when* a turn runs and *how much
+virtual time it costs*. A turn is dispatched through the same attribution
+seam the calibration used (`formation-owner-attribution.js` choke points), so
+the owner of every segment is known at dispatch and the seam's turn count is
+the same quantity the calibration measured.
+
+Charging rule: when an owner segment is dispatched on node N, the scheduler
+advances N's virtual clock by the owner's calibrated mean segment cost
+(`meanSegmentUs[owner]`) before the next turn on N may start. The segment
+*rate* is not a coefficient: it is produced by the real owners reacting to the
+simulated topology, joins and links, exactly as the live seed produced its
+3.1 M raft_protocol turns from 135 replicas times four peers. This keeps the
+simulator honest about the two things that matter for starvation, the number
+of turns and their exclusive cost, without reproducing any owner's decision
+logic (the epic's anti-goal).
+
+Consequences for the design already in this note:
+
+- The four work keys (`raft_entries_applied`, `priority_planning_pass`,
+  `control_snapshot_build`, `membership_publication_reconcile`) are replaced
+  by the nine attribution owners as cost keys, because the calibration
+  measured owners, not those units, and because the seam already tags every
+  turn. `formation-sim-reproduces.js` refuses `calibration_missing` /
+  `calibration_invalid` / `calibration_source_unbound` for any of the nine.
+- `raft_apply` stays a distinct key (317.8 us, the heaviest segment) because
+  the off-loop-apply mechanism moves exactly that bucket; charging it inside
+  raft_protocol would make that mechanism unmeasurable.
+- The 0.5x-2x sweep runs over the nine per-segment costs. The signature must
+  hold at every point of every one-dimensional sweep.
+- Deterministic mode requires the two `Date.now()` reads on the handoff path
+  to take the owner's `timeSource` first (one bounded commit, red on revert),
+  or the ambient guard throws on the first retry.
+
+### Cost model: what the seed's window is made of
+
+Per-turn weight is low everywhere except raft_apply and readiness; the window
+is dominated by *volume* on three owners. Expressed in the simulator's terms:
+
+| owner | drives the rate | per-segment cost | what a mechanism can change |
+| --- | --- | --- | --- |
+| raft_protocol | groups with a replica on the seed x peers x heartbeat/append cadence | 14.5 us | the group count on the seed |
+| rebalancer | planning passes and operation dispatch per membership or readiness event, inflated by re-entry | 111.4 us | passes per event; the re-entry bound |
+| membership_publication | publication reconcile plus ready-node advance per node event | 56.9 us | events per node; batching |
+| bootstrap | replica initialisation (135 replicas) | 40.9 us | the replica count created on the seed |
+| raft_apply | committed entries applied on the seed | 317.8 us | where apply runs |
+
+The simulator's first scenario (the observed cold boot: 45 system tables,
+135 replicas on the seed, four joins) must reproduce the signature predicate
+already sealed above with the measured costs, then hold it across the sweep.
+The re-entry cycle is a second scenario: drive reconcile -> unpublished ->
+pending -> reconcile across operations under formation load and report
+recurrence and rate; that number decides what happens at the bound in
+`seed-formation-decoupling`, not this note.
+
+### Ranked mechanisms
+
+The attribution ranks the three mechanisms named by the epic by the share of
+the window each can remove and by what it needs first.
+
+1. **Early spread of system-table replicas** (once three nodes are joined,
+   before user-table admission opens). Attacks the rate of the top owner:
+   raft_protocol volume scales with the groups whose replicas sit on the seed,
+   and every one of the 135 does during formation. Moving replicas off the
+   seed also cuts raft_apply and the seed's share of publication reconciles.
+   Ceiling: the 32.8 % + 5.2 % buckets and part of the 15.5 %. Cost: it adds
+   rebalancer operations early, so the simulator must show the rebalancer's
+   24.9 % does not grow past what it removes. First mechanism to try.
+2. **Formation-time admission control with an explicit deadline.** Bounds
+   the rebalancer and publication rates by deferring user-table admission and
+   planning fan-out until the ready leases complete, instead of letting them
+   compete with Raft on the seed loop. Ceiling: the 24.9 % + 15.5 % buckets,
+   reduced rather than removed. It is also the mechanism that makes the
+   re-entry cycle harmless if the cycle turns out to recur, because the bound
+   is a deadline rather than a re-plan. Second.
+3. **System-partition Raft apply on the replica-worker pool.** Moves the
+   heaviest segment (317.8 us) off the loop, but the bucket is 5.2 % of the
+   window; worker_dispatch is 0 today, so the pool costs nothing yet and
+   would start to. Ceiling 5.2 %. Third; only worth it after 1 and 2 if the
+   budget (seed gap total under 10 % of the window) is still missed.
+
+Turn *rates* before per-turn weight in every case: the three owners that
+matter have 14.5-111 us segments, and the fix that halves a rate is worth
+more than any constant-factor trim.
+
+### What must be true before `formation-sim` is sealed
+
+- `formation-harness-model-from-contracts` landed (the harness model is
+  derived, not hand-maintained).
+- The handoff-path `Date.now()` seam landed under a red-on-revert witness.
+- The calibration table is the one committed here; a re-run is not
+  authorised and not needed for the model above.
+- The probe stays `formation-sim-reproduces.js`: 0 when the signature
+  reproduces on `main` and two runs hash identical, under 60 s.
+
+Decision requested: approve the per-segment charging model with the nine
+owner keys (replacing the four work keys), the two-scenario plan, and the
+ranking 1-2-3 above as the order `seed-formation-decoupling` tries them.

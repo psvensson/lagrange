@@ -23,6 +23,9 @@ data
 !/data/formation-health/
 /data/formation-health/*
 !/data/formation-health/trend.ndjson
+!/data/storage-load/
+/data/storage-load/*
+!/data/storage-load/*.json
 data2/
 .tap/
 .tmp/

@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "storage-load-harness",
+  "class": "fix",
+  "epic": "measured-storage-path",
+  "statement": "The storage-load scenario exists on the in-process three-node path (one seed and two joiners in one process, every replica on disk under the run directory, one SQL engine per node): npm run soak:storage creates a handful of single-partition tables, drives a string-keyed write stream and a read stream of already-written keys at a target rate for a duration, and writes data/storage-load/latest.json atomically on every snapshot interval and at the end with the measured write and read figures (attempted, succeeded, ops per second, p50 and p99 latency, per partition and in total), the storage footprint (bytes on disk, SQLite Raft log entries and command bytes, in-memory message-group log entries, RSS) and the growth rates fitted over the snapshots, each report naming the head, the key type, the topology and the end reason; the committed first report is a short run with string keys, and the 24-hour soak is the same scenario with a day's duration, started the moment the short run is green.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/storage-load-report.js data/storage-load/latest.json --key-type string",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "string-keys-first",
+      "statement": "The first report uses string keys for the write load so it measures the store, not the routing bug; the scenario refuses integer keys explicitly until numeric-key-routing lands."
+    },
+    {
+      "id": "snapshot-survives-kill",
+      "statement": "The report is rewritten atomically on every snapshot interval; a killed or stalled soak leaves its last snapshot and the growth figures fitted so far, and the end reason names how the run ended."
+    },
+    {
+      "id": "harness-not-probe",
+      "statement": "The scenario refuses to run under the probe mark; the probe reads the committed report and prints its contract problem count."
+    },
+    {
+      "id": "contract-owned-once",
+      "statement": "scripts/checks/storage-load-report.js owns the report vocabulary and the judgment; the scenario imports it and never restates the required fields."
+    },
+    {
+      "id": "soak-starts-now",
+      "statement": "The 24-hour soak starts detached on this machine the moment the short run is green, at a gentle rate, writing to an ignored path; its report is committed by message-group-log-bound, not by this quest."
+    }
+  ],
+  "sealedAt": "86f84824b72e8f9a5f194fad4a6bd9f00cbc0a4a"
+}
