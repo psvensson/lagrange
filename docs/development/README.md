@@ -16,6 +16,8 @@ and [`docs/steering/`](../steering/)). Zoning rules:
   contributor entry point
 - [../../DEBUGGING.md](../../DEBUGGING.md) — developer debugging entry point
 - [../../RELEASE.md](../../RELEASE.md) — release procedure
+- [home-lab.md](home-lab.md) — heterogeneous home-machine runners, physical
+  distributed harness hosts, and K3s administration
 - [solver-runbook.md](solver-runbook.md) — example-oriented operator aid for
   the Solver Quest workflow (the repo's unit of work)
 - [documentation-lifecycle.md](documentation-lifecycle.md) — current
