@@ -23,6 +23,7 @@
 // place must fail by name, because silent under-classification looks exactly
 // like correct classification.
 
+import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {collectTestFiles} from './test-primary-classification.js';
@@ -257,7 +258,51 @@ function resolveCandidate(testPath, rawLiteral, options = {}) {
   return null;
 }
 
-function surfaceKind(root, relative) {
+const GIT_BINARY = 'git';
+const GIT_TRACKED_ARGUMENTS = Object.freeze(['ls-files', '-z']);
+const GIT_UNTRACKED_ARGUMENTS = Object.freeze(
+  ['ls-files', '-z', '--others', '--exclude-standard']);
+const NUL = '\0';
+const pathIndexByRoot = objectCreate(null);
+
+// A surface is REPOSITORY content: a tracked file, an untracked file git does
+// not ignore, or a directory holding one. Resolving against the raw
+// filesystem made an ignored leftover directory (solve/log in one working
+// tree) a surface there and not in an exact checkout of the same commit, so
+// the committed census disagreed with the gate's regeneration. Outside a git
+// repository (the census witness's scratch tree) the filesystem is the index.
+function buildPathIndex(root) {
+  const files = objectCreate(null);
+  const directories = objectCreate(null);
+  let listed;
+  try {
+    listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS],
+      {cwd: root, encoding: UTF8}) +
+      execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS],
+        {cwd: root, encoding: UTF8});
+  } catch {
+    return null;
+  }
+  for (const entry of stringSplit(listed, NUL)) {
+    if (entry.length === 0) continue;
+    files[entry] = true;
+    let parent = path.posix.dirname(entry);
+    while (parent !== CURRENT_DIRECTORY && directories[parent] !== true) {
+      directories[parent] = true;
+      parent = path.posix.dirname(parent);
+    }
+  }
+  return {files, directories};
+}
+
+function pathIndex(root) {
+  if (!objectHasOwn(pathIndexByRoot, root)) {
+    pathIndexByRoot[root] = buildPathIndex(root);
+  }
+  return pathIndexByRoot[root];
+}
+
+function filesystemKind(root, relative) {
   try {
     const stat = fs.statSync(path.join(root, relative));
     if (stat.isDirectory()) return OBSERVATION_KIND_DIRECTORY;
@@ -265,6 +310,14 @@ function surfaceKind(root, relative) {
   } catch {
     // A literal naming nothing in the tree is not a surface.
   }
+  return OBSERVATION_KIND_NONE;
+}
+
+function surfaceKind(root, relative) {
+  const index = pathIndex(root);
+  if (index === null) return filesystemKind(root, relative);
+  if (index.files[relative] === true) return OBSERVATION_KIND_FILE;
+  if (index.directories[relative] === true) return OBSERVATION_KIND_DIRECTORY;
   return OBSERVATION_KIND_NONE;
 }
 

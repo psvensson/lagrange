@@ -28,7 +28,7 @@
   "censusSize": 2085,
   "digest": "fnv1a32-13ce9ed1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-265c416a",
+  "observationDigest": "fnv1a32-6e9374cc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4436,7 +4436,6 @@
     },
     "test/distributed/harness/__tests__/comparative-efficiency-movielens-grouped-reduce.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js"
       ]
     },
@@ -5412,9 +5411,6 @@
       ]
     },
     "test/examples/movielens-public-request-evidence-artifacts.test.js": {
-      "files": [
-        "data/examples/movielens-100k/u.data"
-      ],
       "directories": [
         "examples/service-data-affinity"
       ]
@@ -7877,7 +7873,6 @@
         "scripts/checks",
         "solve/changes",
         "solve/epics",
-        "solve/log",
         "solve/quests",
         "solve/report",
         "solve/specs/raft-logic-migration/reports",
@@ -8227,7 +8222,6 @@
     "test/scripts/publish-head-workspace-links.test.js": {
       "files": [
         ".githooks/pre-push",
-        "data/cluster-rejoin-hints.json",
         "data/formation-health/trend.ndjson"
       ],
       "directories": [
@@ -8243,7 +8237,6 @@
       "directories": [
         ".githooks",
         "data",
-        "data/examples/movielens-100k",
         "data/formation-health"
       ]
     },
@@ -8609,8 +8602,6 @@
         "solve/changes",
         "solve/epics",
         "solve/epics/solve-v2",
-        "solve/evidence",
-        "solve/log",
         "solve/quests",
         "solve/report",
         "test/distributed",
@@ -8943,8 +8934,6 @@
         "solve/changes",
         "solve/epics",
         "solve/epics/solve-v2",
-        "solve/evidence",
-        "solve/log",
         "solve/quests",
         "solve/report"
       ]
