@@ -38,6 +38,9 @@ const BUILD_PROGRESS_STATUS_KEY = 'status';
 const BUILD_PROGRESS_STREAM_KEY = 'stream';
 const BUILD_PROGRESS_PROGRESS_KEY = 'progress';
 const BUILD_PROGRESS_ERROR_KEY = 'error';
+const REMOTE_BUILD_HOSTS_MISSING =
+  'docker.buildOnHosts requires at least one docker.hosts entry';
+
 /**
  * Resolve current git short hash.
  * @param {string} cwd
@@ -73,8 +76,6 @@ async function resolveGitDirty(cwd = process.cwd()) {
   });
 }
 
-// Extract a single human-readable progress line from a docker build event,
-// or null when the event carries nothing worth printing.
 function defaultExtractBuildProgressLine(event) {
   if (!event || typeof event !== 'object') {
     return null;
@@ -96,13 +97,6 @@ function defaultExtractBuildProgressLine(event) {
   return null;
 }
 
-/**
- * When the tree is dirty and the config opts out of dirty rebuilds, reuse an
- * existing image if one is present; otherwise log the missing-image notice
- * and fall through to a rebuild.
- * @param {Object} options
- * @return {Promise<Object|null>} reuse result, or null when a build is needed
- */
 async function resolveDirtyImageReuse({
   provider,
   config,
@@ -133,12 +127,6 @@ async function resolveDirtyImageReuse({
   return null;
 }
 
-/**
- * Reuse the existing image when the tree is clean and the image's git-hash
- * label already matches the current commit.
- * @param {Object} options
- * @return {Object|null} reuse result, or null when a build is needed
- */
 function resolveCleanImageReuse({config, verbose, gitHash, gitDirty, existingHash}) {
   if (
     gitDirty ||
@@ -159,13 +147,6 @@ function resolveCleanImageReuse({config, verbose, gitHash, gitDirty, existingHas
   return {image: config.image, gitHash, gitDirty, reused: true};
 }
 
-/**
- * Build the per-event progress sink used while the image builds, or null when
- * the run is quiet.
- * @param {boolean} verbose
- * @param {Function} extractBuildProgressLine
- * @return {Function|null}
- */
 function buildProgressSink(verbose, extractBuildProgressLine) {
   if (!verbose) {
     return null;
@@ -195,37 +176,32 @@ function logBuildStart({config, verbose, gitHash, gitDirty}) {
   );
 }
 
-/**
- * Build the Docker image before running scenarios. Signature preserved from
- * run.js: (config, verbose, dockerOperationSink, options).
- *
- * @param {Object} config - Parsed cluster configuration
- * @param {boolean} verbose
- * @param {Function|null} dockerOperationSink
- * @param {Object} [options]
- * @param {string} [options.gitHash]
- * @param {boolean} [options.gitDirty]
- * @param {Function} [options.extractBuildProgressLine]
- */
-async function buildImage(
+function createBuildProviders(config, dockerOperationSink) {
+  const docker = config?.docker || {};
+  if (docker.buildOnHosts === true) {
+    if (!Array.isArray(docker.hosts) || docker.hosts.length === 0) {
+      throw new Error(REMOTE_BUILD_HOSTS_MISSING);
+    }
+    return docker.hosts.map((host) => new DockerProvider({
+      host,
+      tls: docker.tls,
+      operationSink: dockerOperationSink,
+    }));
+  }
+  return [new DockerProvider({
+    socketPath: docker.socketPath,
+    operationSink: dockerOperationSink,
+  })];
+}
+
+async function ensureImageOnProvider({
+  provider,
   config,
   verbose,
-  dockerOperationSink = null,
-  options = {},
-) {
-  const extractBuildProgressLine =
-    typeof options.extractBuildProgressLine === 'function' ?
-      options.extractBuildProgressLine :
-      defaultExtractBuildProgressLine;
-  const provider = new DockerProvider({
-    socketPath: config.docker.socketPath,
-    operationSink: dockerOperationSink,
-  });
-
-  const gitHash = options.gitHash || await resolveGitHash();
-  const gitDirty = typeof options.gitDirty === 'boolean' ?
-    options.gitDirty :
-    await resolveGitDirty();
+  gitHash,
+  gitDirty,
+  extractBuildProgressLine,
+}) {
   const skipBuildOnDirty = config?.docker?.skipBuildOnDirty === true;
   const existingHash = await provider.getImageLabel(
     config.image,
@@ -267,8 +243,57 @@ async function buildImage(
   if (verbose) {
     process.stdout.write(IMAGE_BUILT_LOG_PREFIX + config.image + NEWLINE);
   }
-
   return {image: config.image, gitHash, gitDirty, reused: false};
+}
+
+/**
+ * Build the Docker image before running scenarios. By default the historical
+ * local build behavior is unchanged. Explicit remote-host configs may set
+ * docker.buildOnHosts=true so image availability is owned by this module for
+ * every configured Docker provider instead of by an external provisioning
+ * layer.
+ *
+ * @param {Object} config - Parsed cluster configuration
+ * @param {boolean} verbose
+ * @param {Function|null} dockerOperationSink
+ * @param {Object} [options]
+ * @param {string} [options.gitHash]
+ * @param {boolean} [options.gitDirty]
+ * @param {Function} [options.extractBuildProgressLine]
+ * @return {Promise<Object>}
+ */
+async function buildImage(
+  config,
+  verbose,
+  dockerOperationSink = null,
+  options = {},
+) {
+  const extractBuildProgressLine =
+    typeof options.extractBuildProgressLine === 'function' ?
+      options.extractBuildProgressLine :
+      defaultExtractBuildProgressLine;
+  const gitHash = options.gitHash || await resolveGitHash();
+  const gitDirty = typeof options.gitDirty === 'boolean' ?
+    options.gitDirty :
+    await resolveGitDirty();
+  const providers = createBuildProviders(config, dockerOperationSink);
+  const results = [];
+  for (const provider of providers) {
+    results.push(await ensureImageOnProvider({
+      provider,
+      config,
+      verbose,
+      gitHash,
+      gitDirty,
+      extractBuildProgressLine,
+    }));
+  }
+  return {
+    image: config.image,
+    gitHash,
+    gitDirty,
+    reused: results.every((result) => result.reused === true),
+  };
 }
 
 export {buildImage};
