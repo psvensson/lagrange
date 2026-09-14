@@ -122,6 +122,9 @@ function mergeWithDefaults(partial = {}) {
     ...(parsedDockerBinds.length > 0 ?
       {binds: parsedDockerBinds} :
       {}),
+    ...(docker.buildOnHosts === true ?
+      {buildOnHosts: true} :
+      {}),
     ...(docker.skipBuildOnDirty === true ?
       {skipBuildOnDirty: true} :
       {}),
@@ -220,7 +223,7 @@ function mergeWithDefaults(partial = {}) {
 /**
  * Parse a JSON configuration file and merge with defaults.
  *
- * @param {string} filePath - Path to the JSON configuration file
+ * @param {string} filePath - Path to configuration file
  * @returns {Promise<Object>} Validated and complete configuration object
  * @throws {Error} If the file cannot be read or contains invalid JSON
  */
