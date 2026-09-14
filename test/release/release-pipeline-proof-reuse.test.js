@@ -5,7 +5,11 @@ import {test} from '../../src/test-helpers/tap.js';
 const RELEASE_WORKFLOW = '.github/workflows/release.yml';
 const FULL_GATE_WORKFLOW = '.github/workflows/full-gate.yml';
 const RELEASE_PROOF = 'scripts/run-release-proof.js';
+const RELEASE_NOTES = 'scripts/release-notes.js';
+const DOCKERHUB_RETIRED_OVERVIEW = 'docs/dockerhub-overview.md';
+const ROOT_README = 'README.md';
 const TAIL_MANIFEST = 'test/manifests/project-hardening-proof-release-tail-manifest.json';
+const DOCKERHUB_DESCRIPTION_MAX_BYTES = 25000;
 
 function read(path) {
   return fs.readFileSync(path, 'utf8');
@@ -27,6 +31,68 @@ test('tag publication consumes durable exact-head proof instead of rerunning it'
   );
   t.match(release, /release-publishability\/\*\*/u,
     'pre-tag publication checks have their own exact-SHA ref');
+  t.end();
+});
+
+test('Docker Hub overview is the exact tagged README and fails closed', (t) => {
+  const release = read(RELEASE_WORKFLOW);
+  const releaseNotes = read(RELEASE_NOTES);
+  const retiredOverview = read(DOCKERHUB_RETIRED_OVERVIEW);
+  const readme = read(ROOT_README);
+
+  t.match(release, /- name: Update Docker Hub overview from released README\n/u,
+    'the release owner explicitly publishes the README');
+  t.match(release,
+    /- name: Update Docker Hub overview from released README\n\s+if: steps\.release\.outputs\.prerelease != 'true'/u,
+    'prereleases cannot overwrite the overview while Docker latest stays stable');
+  t.match(release, /readme-filepath: \.\/README\.md/u,
+    'the checked-out exact-tag root README is the publication source');
+  t.match(release, /enable-url-completion: true/u,
+    'relative links are completed against the immutable release tag');
+  t.notMatch(
+    release,
+    /Update Docker Hub overview from released README[\s\S]{0,500}continue-on-error:/u,
+    'Docker Hub overview publication must not be best-effort');
+  t.notMatch(release,
+    /release-notes\.js --mode overview|readme-filepath:.*dockerhub-overview\.md/u,
+    'the workflow cannot route Docker Hub through a second authored overview');
+
+  t.match(release, /- name: Verify Docker Hub overview matches released README\n/u,
+    'the external state is read back after publication');
+  t.match(release,
+    /- name: Verify Docker Hub overview matches released README\n\s+if: steps\.release\.outputs\.prerelease != 'true'/u,
+    'only a stable release is responsible for changing and proving the shared overview');
+  t.match(release, /v2\/namespaces\/psvensson\/repositories\/lagrange/u,
+    'verification uses the namespace-scoped Docker Hub repository API');
+  t.match(release, /full_description/u,
+    'verification compares the public full description');
+  t.match(release, /createHash\('sha256'\)/u,
+    'verification records deterministic content identity');
+  t.match(release, /__DOCKERHUB_LINK__/u,
+    'comparison canonicalizes only link destinations rewritten by URL completion');
+  t.match(release, /did not converge to released README\.md/u,
+    'stale or truncated public metadata fails publication');
+  t.match(release, /overviewVerified/u,
+    'the publication receipt records that the public overview was observed');
+  t.match(release, /overviewSourceSha256/u);
+  t.match(release, /overviewCanonicalSha256/u);
+
+  t.notMatch(releaseNotes, /--mode overview|renderDockerhubOverview/u,
+    'release-notes has no dormant second Docker Hub renderer');
+  t.match(releaseNotes,
+    /Docker Hub has a different owner: the exact tagged root README\.md/u,
+    'the release-notes owner names the boundary explicitly');
+
+  t.match(retiredOverview, /RETIRED PUBLICATION SOURCE/u,
+    'the old Docker Hub document is a tombstone, not an alternate overview');
+  t.match(retiredOverview, /root README\.md from the exact release tag/u);
+  t.match(retiredOverview, /release\.yml must not use this file/u);
+  t.notMatch(retiredOverview,
+    /## Safe local quick start|## Multi-node cluster|## Configuration/u,
+    'the retired surface carries no duplicate product/configuration prose');
+
+  t.ok(Buffer.byteLength(readme, 'utf8') <= DOCKERHUB_DESCRIPTION_MAX_BYTES,
+    'the canonical README fits Docker Hub before URL-completion expansion');
   t.end();
 });
 
