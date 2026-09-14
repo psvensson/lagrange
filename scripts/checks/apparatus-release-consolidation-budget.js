@@ -100,7 +100,6 @@ const PROOF_OBLIGATIONS = 'test/manifests/proof-obligations.json';
 const CI_RESOURCE_PLAN = 'test/manifests/ci-resource-plan.json';
 const REPOSITORY_HEALTH_WORKFLOW = '.github/workflows/repository-health.yml';
 const CANARY_WORKFLOW = '.github/workflows/full-corpus-canary.yml';
-const CI_WORKFLOW = '.github/workflows/ci.yml';
 const WORKFLOW_SUFFIX = '.yml';
 // The whole-tree metric checkers, by the file that produces each metric.
 const METRIC_CHECKERS = Object.freeze([
@@ -119,15 +118,29 @@ const STATIC_AUDIT_LIST_PATTERN =
   /STATIC_AUDIT_SCRIPTS = Object\.freeze\(\[([\s\S]*?)\]\)/u;
 const QUOTED_PATTERN = /'([^']+)'/gu;
 const SEAL_READER_MARKERS = Object.freeze(['IMPORT_GRAPH_SEAL_PATH', 'snapshotDigest']);
+// The one owner of the seal-binds-graph predicate; a module that consumes it
+// reads the seal through that owner and is not a second reader.
+const SEAL_PREDICATE = 'sealBindsGraph';
+const SEAL_PREDICATE_OWNER = 'scripts/checks/helper-import-closure.js';
 const SEAL_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
+const SELF_PATH = 'scripts/checks/apparatus-release-consolidation-budget.js';
 const FOCUSED_CONTRACTS_ID = 'focused-contracts';
 const TEST_SUFFIX = '.test.js';
-const TRACKED_LINT_MARKER = 'git ls-files -z';
+const LINT_STAGE_MARKER = 'stage "lint"';
+const STAGE_MARKER = 'stage "';
+const RANGE_LINT_MARKER = 'git diff --name-only';
 const CONCURRENCY_MARKER = /^concurrency:/mu;
 const JOB_HEADER_PATTERN = /^ {2}([A-Za-z0-9_-]+):\s*$/gmu;
 const TIMEOUT_PATTERN = /timeout-minutes:\s*(\d+)/u;
 const RUNS_ON_PATTERN = /runs-on:\s*(.+)$/mu;
-const CANARY_SIGNAL_MARKERS = Object.freeze(['workflow_run', 'full-corpus']);
+// The wiring, not the prose: the canary must be triggered by the gate
+// workflow, pin its checkout to that run's head, and read the scope the run
+// recorded. A comment mentioning any of these satisfies none of them.
+const CANARY_SIGNAL_MARKERS = Object.freeze([
+  'workflows: [ci]',
+  'workflow_run.head_sha',
+  'proof-scope',
+]);
 const NEWLINE = '\n';
 const ARGUMENT_SEPARATOR = ' ';
 const DIGEST_ALGORITHM = 'sha256';
@@ -400,16 +413,23 @@ function duplicateFixedTestRuns(root) {
     (testPath) => arrayIncludes(spineTests, testPath)).length;
 }
 
-// Modules under scripts/ that bind the import-graph seal, beyond one reader
-// (the producer writes it and is not a reader).
+// Modules that decide for themselves whether the seal binds the graph,
+// beyond the one owner of that predicate. The producer writes the seal and
+// this script only names the markers it looks for, so neither is a reader; a
+// module that consumes the owner's predicate reads the seal through it and is
+// not a second opinion.
 function importGraphSealReadersBeyondOne(root) {
   let readers = 0;
   for (const file of filesUnder(root, SCRIPTS_DIR)) {
-    if (file === SEAL_PRODUCER) continue;
+    if (file === SEAL_PRODUCER || file === SELF_PATH) continue;
     const text = readText(root, file);
-    if (arrayEvery(SEAL_READER_MARKERS, (marker) => stringIncludes(text, marker))) {
-      readers += 1;
+    if (!arrayEvery(SEAL_READER_MARKERS, (marker) => stringIncludes(text, marker))) {
+      continue;
     }
+    if (file !== SEAL_PREDICATE_OWNER && stringIncludes(text, SEAL_PREDICATE)) {
+      continue;
+    }
+    readers += 1;
   }
   return readers > 1 ? readers - 1 : 0;
 }
@@ -438,9 +458,19 @@ function wholeTreeChecksWithoutInputTrigger(root) {
   return arrayFilter(commands, (command) => declared[command] !== true).length;
 }
 
-// The push hook lints every tracked file rather than the pushed range.
+// The hook's lint stage must lint the pushed range. The stage's own text is
+// read (from its stage line to the next one), so a range diff somewhere else
+// in the hook cannot answer for it, and the whole-tree fallback a manual
+// invocation needs does not count against it.
 function eslintOffPushedRange(root) {
-  return stringIncludes(readText(root, PRE_PUSH_HOOK), TRACKED_LINT_MARKER) ? 1 : 0;
+  const hook = readText(root, PRE_PUSH_HOOK);
+  const start = stringIndexOf(hook, LINT_STAGE_MARKER);
+  if (start < 0) return 1;
+  const nextStage = stringIndexOf(hook.slice(start + LINT_STAGE_MARKER.length),
+    STAGE_MARKER);
+  const stageText = nextStage < 0 ? hook.slice(start) :
+    hook.slice(start, start + LINT_STAGE_MARKER.length + nextStage);
+  return stringIncludes(stageText, RANGE_LINT_MARKER) ? 0 : 1;
 }
 
 function repositoryHealthNotCoalesced(root) {
@@ -493,8 +523,8 @@ function ciResourcesNotPlanDriven(root) {
 function canaryAfterFullCorpus(root) {
   const text = readText(root, CANARY_WORKFLOW);
   if (text.length === 0) return 0;
-  return arrayEvery(CANARY_SIGNAL_MARKERS, (marker) => stringIncludes(text, marker)) &&
-    stringIncludes(text, path.posix.basename(CI_WORKFLOW)) ? 0 : 1;
+  return arrayEvery(CANARY_SIGNAL_MARKERS,
+    (marker) => stringIncludes(text, marker)) ? 0 : 1;
 }
 
 function epicStats(root) {

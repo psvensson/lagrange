@@ -40,7 +40,6 @@ const ACTIVE_RELEASE_SURFACES = [
   '.github/workflows/ci.yml',
   '.github/workflows/full-gate.yml',
   '.github/workflows/release.yml',
-  '.github/workflows/repository-health.yml',
   'CHANGELOG.md',
   'Dockerfile',
   'README.md',
@@ -145,6 +144,66 @@ describe('project hardening contracts', () => {
     );
   });
 
+
+  // Extracted so the contract above stays one readable list of claims rather
+  // than one function the complexity ratchet refuses.
+  function assertRepositoryHealthLane(ci) {
+    // A separate LANE, never a change gate: structural debt on main must not
+    // make unrelated development unlandable. Since gate-work-consolidation it
+    // is a step of the gate job rather than a second workflow over the same
+    // sha, so the lane is kept by continue-on-error and by the red-main guard
+    // reading only this workflow's conclusion, which the step never decides.
+    const health = ci.jobs.gate.steps.find(
+      (step) => step.name === 'Whole-repository structural analysis');
+    assert.ok(health, 'the structural analysis still runs');
+    assert.equal(health['continue-on-error'], true,
+      'structural debt must never decide whether a change is proved');
+    assert.equal(health.if, 'github.event_name != \'pull_request\'',
+      'repository health belongs to main, not to a pull request');
+    assert.ok(Number.isFinite(health['timeout-minutes']),
+      'the analysis carries its own bound: continue-on-error absorbs a ' +
+      'failing step, never a job timeout, so an overrun would fail the ' +
+      'required run and block every later push');
+    assert.equal(ci.on.schedule, undefined);
+    const healthRuns = health.run;
+    for (const analysis of ['npm run test:owner-debt:prepare',
+      'npm run test:static', 'npm run model:contracts']) {
+      assert.ok(healthRuns.includes(analysis), `${analysis} still runs`);
+    }
+    assert.ok(
+      healthRuns.indexOf('npm run test:owner-debt:prepare') <
+        healthRuns.indexOf('npm run test:static'),
+      'inventory inputs are prepared before the analyses that read them');
+    assert.ok(!/test:sharded|test:fast|test:ci/u.test(healthRuns),
+      'repository health must not become a behavioural gate under another name');
+  }
+
+  function assertCanaryFollowsTheGate(canary) {
+    // Triggered BY the gate run, so the corpus follows the proof of one sha
+  // instead of racing it, and the checkout is pinned to that run's head:
+  // the default-branch tip at event time is a different tree.
+    assert.deepEqual(canary.on.workflow_run.workflows, ['ci'],
+      'the canary follows the change gate');
+    assert.equal(canary.on.push, undefined,
+      'the canary no longer races the gate it follows');
+    assert.equal(canary.on.pull_request, undefined,
+      'the canary must not gate pull requests');
+    assert.equal(canary.on.schedule, undefined,
+      'an unchanged tree cannot grow new behavioural debt');
+    assert.equal(canary.jobs.corpus.needs, 'decide');
+    assert.equal(canary.jobs.corpus.if, 'needs.decide.outputs.needed == \'true\'',
+      'the corpus runs only when the gate run left it something to prove');
+    assert.ok(!JSON.stringify(canary.jobs.decide.if).includes('conclusion'),
+      'a red gate can be an unrelated intermittent: the corpus still runs');
+    const canaryCheckout = canary.jobs.corpus.steps.find(
+      (step) => step.name === 'Checkout');
+    assert.match(String(canaryCheckout?.with?.ref),
+      /workflow_run\.head_sha/u,
+      'the corpus proves the sha the gate proved, not the branch tip');
+    assert.equal(canary.concurrency['cancel-in-progress'], true,
+      'only the newest head is worth proving');
+  }
+
   it('owns CI and release publication through GitHub Actions only', async () => {
     const [ciText, fullGateText, releaseText, ...surfaceTexts] =
       await Promise.all([
@@ -195,25 +254,7 @@ describe('project hardening contracts', () => {
     assert.equal(fullGate.on.schedule, undefined,
       'the whole-system proof must not run on a timer');
 
-    // Repository health is a separate lane, never a change gate: structural
-    // debt on main must not make unrelated development unlandable.
-    const health = parse(await readFile(
-      '.github/workflows/repository-health.yml', UTF8));
-    assert.deepEqual(health.on.push.branches, ['main']);
-    assert.equal(health.on.pull_request, undefined,
-      'repository health must not gate pull requests');
-    assert.equal(health.on.schedule, undefined);
-    const healthRuns = health.jobs.health.steps
-      .filter((step) => typeof step.run === 'string' &&
-        /npm run /u.test(step.run))
-      .map((step) => step.run.trim());
-    assert.ok(healthRuns.includes('npm run test:owner-debt:prepare'),
-      'inventory inputs are prepared before the analyses that read them');
-    assert.ok(healthRuns.includes('npm run test:static'));
-    assert.ok(healthRuns.includes('npm run model:contracts'));
-    assert.ok(!healthRuns.some((run) => /test:sharded|test:fast|test:ci/u
-      .test(run)),
-    'repository health must not become a behavioural gate under another name');
+    assertRepositoryHealthLane(ci);
 
     // The full-corpus canary: the whole behavioural corpus on main AFTER the
     // push, since the pre-push gate proves the change rather than the corpus
@@ -222,13 +263,7 @@ describe('project hardening contracts', () => {
     const canaryText = await readFile(
       '.github/workflows/full-corpus-canary.yml', UTF8);
     const canary = parse(canaryText);
-    assert.deepEqual(canary.on.push.branches, ['main']);
-    assert.equal(canary.on.pull_request, undefined,
-      'the canary must not gate pull requests');
-    assert.equal(canary.on.schedule, undefined,
-      'an unchanged tree cannot grow new behavioural debt');
-    assert.equal(canary.concurrency['cancel-in-progress'], true,
-      'only the newest head is worth proving');
+    assertCanaryFollowsTheGate(canary);
     const canaryRuns = canary.jobs.corpus.steps
       .filter((step) => typeof step.run === 'string' &&
         /npm run /u.test(step.run))
@@ -254,10 +289,8 @@ describe('project hardening contracts', () => {
     // `curl -fsSLO` has no default timeout and the step had none either, so
     // only the job's 120-minute backstop would have stopped it. This bounds
     // the failure, not the normal duration.
-    const healthText = await readFile(
-      '.github/workflows/repository-health.yml', UTF8);
     for (const workflowText of
-      [ciText, fullGateText, releaseText, healthText, canaryText]) {
+      [ciText, fullGateText, releaseText, canaryText]) {
       const workflow = parse(workflowText);
       for (const job of Object.values(workflow.jobs)) {
         for (const step of job.steps) {

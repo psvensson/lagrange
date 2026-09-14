@@ -469,7 +469,11 @@ export function publishExactHead(root, args = {}, options = {}) {
     reason: args.reason || null,
     remoteSha: remoteBefore,
   });
-  ({head, remoteBefore} = ensureFastForward(run, root, remoteBefore, head));
+  // ensureFastForward answers with `remoteSha`; destructuring it as
+  // `remoteBefore` silently produced undefined, and the gate's proof base and
+  // identity line carried that word instead of the sha this publish read.
+  ({head, remoteSha: remoteBefore} = ensureFastForward(
+    run, root, remoteBefore, head));
   assertWorkspaceDependencySources(root, args,
     options.log || ((line) => process.stdout.write(line)));
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);

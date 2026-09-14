@@ -67,6 +67,10 @@ const SEAL = Object.freeze({
 const GRAPH = Object.freeze({
   schemaVersion: SEAL.importGraphSchemaVersion,
   sourceDigest: SEAL.sourceDigest,
+  // The producer writes every digest the seal carries; a fixture that omits
+  // two of them would prove a graph the real producer never emits.
+  producerInputDigest: SEAL.producerInputDigest,
+  resolverStateDigest: SEAL.resolverStateDigest,
   snapshotDigest: SEAL.snapshotDigest,
   importers: IMPORTERS,
 });
@@ -126,6 +130,15 @@ test('only the graph the committed seal binds is an importer authority', () => {
   }));
   assert.equal(unsealed.ok, false, 'a graph the seal does not bind');
   assert.match(unsealed.problem, /seal/u);
+  // Every digest the seal carries binds, not only the two the closure reads:
+  // a graph that agrees about its content but came from other inputs or
+  // another resolver is not the sealed graph.
+  for (const field of ['sourceDigest', 'producerInputDigest', 'resolverStateDigest']) {
+    const drifted = loadSealedImporters(fixtureRoot({
+      graph: {...GRAPH, [field]: 'f'.repeat(DIGEST_LENGTH)},
+    }));
+    assert.equal(drifted.ok, false, `a graph whose ${field} drifted`);
+  }
 });
 
 test('a changed fixture widens to its taxonomy subsystem AND every test importing it', () => {

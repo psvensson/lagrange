@@ -13,6 +13,12 @@ on:
     branches:
       - "release-proof/**"
 
+# The release proof is bound to one sha; two runs of the same sha would prove
+# the same bytes twice, and a newer sha is a different proof, not a newer one.
+concurrency:
+  group: full-gate-${{ github.sha }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

@@ -18,7 +18,7 @@
 //                             to save nothing
 //   dependency boundaries     kept at ~6s - an illegal import can appear
 //                             anywhere, and six seconds is cheap insurance
-//   whole-corpus ratchets     moved to repository-health/release. Duplication,
+//   whole-corpus ratchets     moved to the ci health steps/release. Duplication,
 //                             cycles, unused-exports and full complexity are
 //                             global BY NATURE; a duplication ratchet over
 //                             changed files only is meaningless
@@ -75,7 +75,7 @@ const WORKTREE_ONLY_WARNING = 'fast-static: no publication remote reachable; ' +
 // Genuinely sub-second on a COLD cache, and each encodes a structural fact
 // worth keeping. Cold is the number that matters: CI never has a warm page
 // cache, and audit:no-legacy-naming measured 34s cold against 5s warm - so it
-// moved to repository-health rather than being kept on a warm-run figure that
+// moved to the ci run's health steps rather than kept on a warm-run figure that
 // no CI machine will ever see.
 const GLOBAL_CHEAP_CHECKS = Object.freeze([
   'audit:impact-contracts',

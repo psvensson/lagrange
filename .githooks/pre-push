@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Push gate, fast-fail ordered: cheap static checks first (unused-code ~7s,
-# cached whole-repo lint ~30s cold / seconds warm, corpus ratchets:
+# cached lint of the pushed range (whole repo only without a range),
 # duplication + file-size ~40s, circular-deps ~10s, unused-exports ~60s),
 # then - only once everything static is green - the test stage
 # (test:gate:postpush): the focused contracts, the post-push static audits,
@@ -209,18 +209,60 @@ echo "pre-push: proving ${GATE_HEAD} (ref ${PUSHED_REF:-${LAGRANGE_GATE_PUSHED_R
 
 stage "unused-files" "unused-files check"
 npm run -s test:unused:push
-# Lint TRACKED files only, honoring the same principle as the unused-files
-# check above: untracked files are never part of a push, so a concurrent
-# session's in-flight new files must not gate this one (measured 2026-07-29:
-# a push was blocked twice by another session's mid-refactor untracked file).
-# Tracked-but-modified files still gate — their committed versions ship.
+# Lint the pushed range, TRACKED files only, honoring the same principle as
+# the unused-files check above: untracked files are never part of a push, so a
+# concurrent session's in-flight new files must not gate this one (measured
+# 2026-07-29: a push was blocked twice by another session's mid-refactor
+# untracked file). Tracked-but-modified files still gate — their committed
+# versions ship.
 # Cache in this worktree's private git dir, not the (possibly symlink-shared)
 # node_modules/.cache — see the matching note in pre-commit.
-stage "lint" "tracked-files lint (eslint, cached; ~30s cold)"
+stage "lint" "pushed-range lint (eslint, cached)"
+# Lint what the push adds or changes, not the whole tree: eslint's verdict is
+# per file, so a file the range does not touch was linted by the push that
+# introduced it (gate-work-consolidation). That induction had no base case for
+# the 171 files directly under src/, test/ and scripts/: until the pathspecs
+# below gained :(glob) magic no push ever linted them. They were linted once by
+# hand at the commit that fixed the pathspec, clean, and the range covers them
+# from there on. The range is the remote base of the
+# pushed ref; with no base to diff against - a manual invocation, or a first
+# push of a branch the remote does not have - every tracked file is linted,
+# because then no earlier push proved any of them here.
 ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
-git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
-  'test/**/*.js' 'test/**/*.mjs' 'test/**/*.cjs' \
-  'scripts/**/*.js' 'scripts/**/*.mjs' 'scripts/**/*.cjs' |
+# :(glob) magic, because a bare `src/**/*.js` pathspec uses git's default
+# wildmatch, where `**` must consume at least one path component: the gate has
+# never linted the 152 tracked scripts/*.js, nor src/*.js or test/*.js, since
+# the stage was written. Under :(glob) `**/` matches zero components too, and
+# the set is what `npm run lint` and `npm run lint:scripts` already cover.
+LINT_PATHSPEC=(':(glob)src/**/*.js' ':(glob)src/**/*.mjs' ':(glob)src/**/*.cjs'
+  ':(glob)test/**/*.js' ':(glob)test/**/*.mjs' ':(glob)test/**/*.cjs'
+  ':(glob)scripts/**/*.js' ':(glob)scripts/**/*.mjs' ':(glob)scripts/**/*.cjs')
+# The pushed ref's remote sha is the base, exactly as it is for the test
+# stage below: an ambient LAGRANGE_CHECK_BASE from the caller's shell must
+# never decide what this push proves (a stale LAGRANGE_CHECK_BASE=HEAD would
+# make the range empty and lint nothing at all).
+LINT_BASE=""
+if [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ] \
+  && git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
+  LINT_BASE="${MAIN_REMOTE_SHA}"
+fi
+# A per-file verdict holds only while the contract producing it is fixed, so
+# a change to the lint configuration or to the dependency set relints the
+# whole tree rather than the range.
+if [ -n "${LINT_BASE}" ] && [ -n "$(git diff --name-only "${LINT_BASE}" HEAD \
+  -- eslint.config.js package.json package-lock.json)" ]; then
+  echo "pre-push: the lint contract changed - linting every tracked file"
+  LINT_BASE=""
+fi
+# The branch's stdout IS the file list, so every human-readable line goes to
+# stderr; an echo on stdout would arrive at eslint as a filename.
+if [ -n "${LINT_BASE}" ]; then
+  echo "pre-push: linting the pushed range ${LINT_BASE}..HEAD" >&2
+  git diff --name-only --diff-filter=ACMR -z "${LINT_BASE}" HEAD -- "${LINT_PATHSPEC[@]}"
+else
+  echo "pre-push: no pushed range to diff against - linting every tracked file" >&2
+  git ls-files -z -- "${LINT_PATHSPEC[@]}"
+fi |
   xargs -0 -r npx eslint --cache \
     --cache-location "${ESLINT_CACHE_DIR}" \
     --no-warn-ignored --ignore-pattern 'test/.gitkeep'

@@ -22,6 +22,7 @@ quests:
   - raft-ownership
   - proof-authority-integrity
   - gate-work-consolidation
+  - single-metric-production
 authorizes:
   - scripts
   - test
@@ -78,15 +79,15 @@ formation trend) read compact text files that their quests commit.
 | Gate stages reading anything but the pushed sha | 0 (2026-09-14) | 0 |
 | Tests whose observation census has drifted | 0 (2026-09-14) | 0 |
 | Falsifier classes without a receipt bound to its witness | 0 (2026-09-14) | 0 |
-| Whole-tree metric productions beyond the first, per metric | 12 | 0 |
-| Tests in both fixed lists (spine and focused contracts) | 4 | 0 |
-| Import-graph seal readers beyond one | 3 | 0 |
-| Whole-tree checks with no declared input trigger | 27 | 0 |
-| ESLint runs off the pushed range | 1 | 0 |
-| `repository-health.yml` still separate from the exact-sha run | 1 | 0 |
-| Workflows without a concurrency group | 3 | 0 |
-| Workflow jobs whose runner or timeout is not plan-driven | 13 | 0 |
-| Canary running after a run that already proved the corpus | 1 | 0 |
+| Whole-tree metric productions beyond the first, per metric | 12 (owned by `single-metric-production`) | 0 |
+| Tests in both fixed lists (spine and focused contracts) | 0 (2026-09-14) | 0 |
+| Import-graph seal readers beyond one | 0 (2026-09-14) | 0 |
+| Whole-tree checks with no declared input trigger | 0 (2026-09-14) | 0 |
+| ESLint runs off the pushed range | 0 (2026-09-14) | 0 |
+| `repository-health.yml` still separate from the exact-sha run | 0 (2026-09-14) | 0 |
+| Workflows without a concurrency group | 0 (2026-09-14) | 0 |
+| Workflow jobs whose runner or timeout is not plan-driven | 0 (2026-09-14) | 0 |
+| Canary running after a run that already proved the corpus | 0 (2026-09-14) | 0 |
 
 Adjust a number in the script and here together; never in one place.
 

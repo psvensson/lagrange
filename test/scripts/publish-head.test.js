@@ -101,6 +101,39 @@ tap.test('publish validates runner and red-main attribution without mutation', (
   t.end();
 });
 
+tap.test('the gate reads the remote sha this publish observed as its base', (t) => {
+  // The ref line's fourth field is the proof base the gate lints and tests
+  // against. It reached the hook as the word "undefined" while this function
+  // destructured `remoteBefore` from an answer whose key is `remoteSha`, and
+  // every stage that reads a base silently widened to the whole tree.
+  // Appended, and the setup push's line is discarded first: git's own push
+  // runs this hook again after the gate, with a ref line of the same shape
+  // (the refspec's local ref is HEAD) carrying git's own remote sha whatever
+  // this function computed. The gate's line is then the first one.
+  // Each invocation is tagged: the publisher's own `git push` sets
+  // LAGRANGE_PUSH_SKIP_TESTS, the gate call does not. Without the tag the two
+  // lines are indistinguishable - git's carries the correct sha whatever this
+  // function computed - and a witness reading the wrong one passes blind.
+  const {parent, root, remote} = fixture(
+    '{ printf "%s " "${LAGRANGE_PUSH_SKIP_TESTS:-GATE}"; cat; } ' +
+    '>> "$(git rev-parse --git-common-dir)/gate-ref-lines.txt"\nexit 0');
+  const recorded = path.join(root, '.git', 'gate-ref-lines.txt');
+  fs.rmSync(recorded, {force: true});
+  const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
+  const head = git(root, ['rev-parse', 'HEAD']);
+  const receipt = publishExactHead(root, {}, {queryCi: false});
+  const lines = fs.readFileSync(recorded, 'utf8').trim().split('\n');
+  t.equal(lines.length, 2, 'the gate ran the hook, and so did the push');
+  const [gateLine, pushLine] = lines;
+  t.equal(gateLine, `GATE HEAD ${head} refs/heads/main ${remoteBefore}`,
+    'the gate is handed the pushed head and the remote sha it will advance');
+  t.match(pushLine, /^1 /u, 'the second invocation is git\'s own push');
+  t.equal(JSON.parse(fs.readFileSync(receipt.receipt, 'utf8')).remoteBefore,
+    remoteBefore, 'and the receipt records the same sha, not an absent field');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('publish gates and pushes only the exact committed HEAD', (t) => {
   const {parent, root, remote} = fixture();
   const beforeStatus = git(root, ['status', '--porcelain']);

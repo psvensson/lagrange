@@ -158,11 +158,13 @@ function metFixture() {
   })}\n`);
   write(root, '.githooks/pre-commit', '#!/usr/bin/env bash\n');
   write(root, '.githooks/pre-push',
-    '#!/usr/bin/env bash\ngit diff --name-only "$BASE..$SHA" | xargs npx eslint\n');
+    '#!/usr/bin/env bash\nstage "lint" "pushed-range lint"\n' +
+    'git diff --name-only "$BASE" HEAD | xargs npx eslint\n' +
+    'stage "corpus-ratchets" "ratchets"\n');
   write(root, 'scripts/checks/run-static-audits.js',
     'const STATIC_AUDIT_SCRIPTS = Object.freeze([\n  \'test:complexity\',\n]);\n');
   write(root, 'scripts/checks/helper-import-closure.js',
-    'IMPORT_GRAPH_SEAL_PATH snapshotDigest\n');
+    'IMPORT_GRAPH_SEAL_PATH snapshotDigest sealBindsGraph\n');
   write(root, 'test/shards/safety-spine.json',
     `${JSON.stringify({tests: ['test/a.test.js']})}\n`);
   write(root, 'test/manifests/project-hardening-proof-postpush-manifest.json',
@@ -231,7 +233,9 @@ function offendingFixture() {
   write(root, '.githooks/pre-commit',
     '#!/usr/bin/env bash\nnode scripts/check-complexity.js\n');
   write(root, '.githooks/pre-push',
-    '#!/usr/bin/env bash\ngit ls-files -z | xargs -0 npx eslint\n');
+    '#!/usr/bin/env bash\nstage "lint" "tracked-files lint"\n' +
+    'git ls-files -z | xargs -0 npx eslint\n' +
+    'stage "corpus-ratchets" "ratchets"\n');
   write(root, 'scripts/checks/run-static-audits.js',
     'const STATIC_AUDIT_SCRIPTS = Object.freeze([\n  \'test:complexity\',\n]);\n');
   write(root, 'scripts/checks/helper-import-closure.js',

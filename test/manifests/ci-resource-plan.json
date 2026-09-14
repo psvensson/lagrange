@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "ci-resource-plan",
+  "contract": "The runner and timeout of every workflow job are decided here, once, and the workflow files carry the values this plan names. A job absent from the plan, or one whose literals differ from it, is counted by the budget row ci_resources_not_plan_driven: a resource decision made in a workflow file is a decision nobody can see next to its siblings.",
+  "jobs": {
+    "ci.yml/gate": {
+      "runsOn": "${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[ci:self-hosted]')) && 'self-hosted' || 'ubuntu-24.04' }}",
+      "timeoutMinutes": 120
+    },
+    "formation-health.yml/wake-runner": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 10
+    },
+    "formation-health.yml/health": {
+      "runsOn": "[self-hosted, gcp]",
+      "timeoutMinutes": 60
+    },
+    "full-corpus-canary.yml/corpus": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 300
+    },
+    "full-gate.yml/require_publishability": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 5
+    },
+    "full-gate.yml/resolve_proof": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 5
+    },
+    "full-gate.yml/wake_runner": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 10
+    },
+    "full-gate.yml/gate": {
+      "runsOn": "[self-hosted, gcp]",
+      "timeoutMinutes": 150
+    },
+    "full-gate.yml/record_proof": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 5
+    },
+    "release.yml/publishability": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 10
+    },
+    "release.yml/release": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 60
+    },
+    "release.yml/move-next": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 5
+    },
+    "full-corpus-canary.yml/decide": {
+      "runsOn": "ubuntu-24.04",
+      "timeoutMinutes": 5
+    }
+  }
+}

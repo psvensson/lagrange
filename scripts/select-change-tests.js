@@ -80,6 +80,7 @@ import {
   SELECTION_PRECISE,
   SELECTION_REFUSED,
   SELECTION_WIDENED,
+  PROOF_SCOPE_PATH,
 } from './checks/change-selection-constants.js';
 import {runClassifiedTestFiles} from './run-classified-test-files.js';
 
@@ -591,8 +592,45 @@ function main() {
   process.stdout.write(
     `${plan.kind}: ${plan.tests.length}${TESTS_SUFFIX} ` +
     `(${plan.spineCount} spine, ${plan.selectedCount} selected)${NEWLINE}`);
+  // This path never runs the whole corpus; the push gate's proof owns that
+  // decision and records it itself.
+  writeProofScope({head: headSha(), fullCorpus: false, plan});
   process.exitCode = runClassifiedTestFiles(
     planTestPaths(plan), {root});
+}
+
+/**
+ * Record what this run proves, for a consumer that must not re-prove it. The
+ * run that made the decision writes it: a reader grepping another process's
+ * log for a phrase is a sensor pointed at prose.
+ * @param {Object} options
+ * @param {string} options.head the sha under proof
+ * @param {boolean} options.fullCorpus whether the whole corpus ran
+ * @param {Object} options.plan the execution plan
+ * @param {string} [options.scopeRoot]
+ * @return {string} the file written
+ */
+export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
+  const file = path.join(scopeRoot, PROOF_SCOPE_PATH);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  fs.writeFileSync(file, `${JSON.stringify({
+    sha: head,
+    fullCorpus,
+    kind: plan?.kind ?? null,
+    tests: Array.isArray(plan?.tests) ? plan.tests.length : null,
+  })}\n`, UTF8);
+  return file;
+}
+
+const stringTrimValue = Function.call.bind(String.prototype.trim);
+const GIT_BINARY = 'git';
+const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
+
+function headSha(gitRoot = root) {
+  const result = spawnSync(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+    {cwd: gitRoot, encoding: UTF8});
+  const sha = stringTrimValue(String(result.stdout || ''));
+  return sha.length > 0 ? sha : null;
 }
 
 export function planTestPaths(plan) {

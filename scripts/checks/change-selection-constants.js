@@ -81,6 +81,9 @@ export const RANGE_SOURCE = Object.freeze({
   WORKTREE: 'worktree only',
 });
 
+// What a proof run actually proved, written by the run itself so no consumer
+// has to infer it from log text (gate-work-consolidation).
+export const PROOF_SCOPE_PATH = 'test-output/proof-scope.json';
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 export const SAFETY_SPINE_TESTS_FIELD = 'tests';
 export const INVALID_SAFETY_SPINE_PROBLEM =

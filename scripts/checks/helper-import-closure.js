@@ -92,10 +92,23 @@ function isPathArrayMap(value) {
     arrayEvery(value[key], (entry) => typeof entry === 'string'));
 }
 
-function sealBindsGraph(seal, graph) {
-  return seal.importGraphSchemaVersion === graph.schemaVersion &&
-    seal.sourceDigest === graph.sourceDigest &&
-    seal.snapshotDigest === graph.snapshotDigest;
+// THE predicate: does this seal bind this graph. One owner, because a second
+// implementation is a second opinion about whether a proof input is the one
+// the producer sealed, and the two can disagree about a single tree
+// (gate-work-consolidation). Every digest the seal carries is compared: the
+// producer writes them together, so a graph that matches on some and not
+// others is not the sealed graph.
+const SEAL_BOUND_DIGEST_FIELDS = Object.freeze([
+  'sourceDigest', 'producerInputDigest', 'resolverStateDigest', 'snapshotDigest',
+]);
+
+export function sealBindsGraph(seal, graph) {
+  if (!seal || !graph ||
+      seal.importGraphSchemaVersion !== graph.schemaVersion) {
+    return false;
+  }
+  return arrayEvery(SEAL_BOUND_DIGEST_FIELDS,
+    (field) => typeof seal[field] === 'string' && seal[field] === graph[field]);
 }
 
 /**

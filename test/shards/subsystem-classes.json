@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 143,
     "storage-raft": 76,
-    "test-infrastructure": 126,
+    "test-infrastructure": 127,
     "transactions": 12,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2085,
-  "digest": "fnv1a32-13ce9ed1",
+  "censusSize": 2086,
+  "digest": "fnv1a32-63894c57",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bea83da6",
+  "observationDigest": "fnv1a32-5a5ec163",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1879,6 +1879,7 @@
     "test/scripts/service-portability-static-gate.test.js": "test-infrastructure",
     "test/scripts/solve-footprint-accounting.test.js": "test-infrastructure",
     "test/scripts/spec-led-runtime-legacy-deletion-guard.test.js": "test-infrastructure",
+    "test/scripts/static-audit-input-triggers.test.js": "test-infrastructure",
     "test/scripts/steering-diet.test.js": "test-infrastructure",
     "test/scripts/stop-distributed-harness-containers.test.js": "test-infrastructure",
     "test/scripts/summarize-distributed-failure-report.test.js": "test-infrastructure",
@@ -6729,7 +6730,6 @@
         ".github/workflows/full-corpus-canary.yml",
         ".github/workflows/full-gate.yml",
         ".github/workflows/release.yml",
-        ".github/workflows/repository-health.yml",
         ".gitignore",
         "CHANGELOG.md",
         "Dockerfile",
@@ -7195,10 +7195,8 @@
       "files": [
         ".githooks/pre-commit",
         ".githooks/pre-push",
-        ".github/workflows/ci.yml",
         ".github/workflows/full-corpus-canary.yml",
         ".github/workflows/release.yml",
-        ".github/workflows/repository-health.yml",
         "AGENTS.md",
         "CLAUDE.md",
         "README.md",
@@ -7218,9 +7216,11 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/global-owner-debt-inventory/constants.js",
         "scripts/run-test-files.js",
+        "test/manifests/ci-resource-plan.json",
         "test/manifests/pre-push-stages.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json",
         "test/manifests/proof-authority-falsifiers.receipt.json",
+        "test/manifests/proof-obligations.json",
         "test/shards/primary-classes.json",
         "test/shards/safety-spine.json",
         "test/shards/subsystem-classes.json"
@@ -7933,6 +7933,7 @@
         "scripts",
         "scripts/checks",
         "src",
+        "src/test-helpers",
         "test",
         "test/shards",
         "wit"
@@ -7960,6 +7961,7 @@
       "directories": [
         "scripts",
         "src",
+        "src/test-helpers",
         "test"
       ]
     },
@@ -8022,6 +8024,7 @@
         "solve/epics",
         "solve/quests",
         "src",
+        "src/test-helpers",
         "test",
         "wit"
       ]
@@ -8219,6 +8222,7 @@
         "scripts",
         "scripts/checks",
         "src",
+        "src/test-helpers",
         "test",
         "wit"
       ]
@@ -8403,6 +8407,7 @@
         "solve/epics",
         "solve/quests",
         "src",
+        "src/test-helpers",
         "test",
         "test/distributed",
         "test/guidelines"
@@ -8632,6 +8637,17 @@
         "src/diagnostics",
         "src/rebalancer",
         "test/distributed/harness"
+      ]
+    },
+    "test/scripts/static-audit-input-triggers.test.js": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "CLAUDE.md",
+        "RELEASE.md",
+        "package-lock.json",
+        "package.json",
+        "src/raft/liferaft.js",
+        "test/manifests/proof-obligations.json"
       ]
     },
     "test/scripts/steering-diet.test.js": {
@@ -8895,6 +8911,7 @@
         "solve/epics",
         "solve/quests",
         "src",
+        "src/test-helpers",
         "test"
       ]
     },
@@ -8930,6 +8947,7 @@
         "solve/epics",
         "solve/quests",
         "src",
+        "src/test-helpers",
         "test"
       ]
     },

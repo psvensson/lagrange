@@ -16,7 +16,7 @@
     {"id": "materialize-pushed-tree", "tree": "none", "proves": "the pushed sha is checked out once into a throwaway worktree with the workspace injections declared; every later stage runs there"},
     {"id": "identity", "tree": "pushed-sha", "proves": "the checkout's HEAD is the pushed sha and the remote base is the change proof's base"},
     {"id": "unused-files", "tree": "pushed-sha", "proves": "no tracked file is unreachable"},
-    {"id": "lint", "tree": "pushed-sha", "proves": "eslint over the tracked JavaScript of the pushed tree"},
+    {"id": "lint", "tree": "pushed-sha", "proves": "eslint over the JavaScript the pushed range adds or changes, or over every tracked file when there is no range or the lint contract itself changed"},
     {"id": "corpus-ratchets", "tree": "pushed-sha", "proves": "duplication and file-size ratchets over the whole pushed tree"},
     {"id": "circular-dependencies", "tree": "pushed-sha", "proves": "no import cycle"},
     {"id": "unused-exports", "tree": "pushed-sha", "proves": "the unused-exports ratchet holds"},

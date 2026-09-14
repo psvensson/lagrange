@@ -1,4 +1,5 @@
-# GitHub Actions CI - the required pull-request and main-branch gate.
+# GitHub Actions CI - the required pull-request and main-branch gate, and
+# (on main only, never gating) the repository's structural analysis.
 #
 # The workflow supplies IDENTITY AND ENVIRONMENT; repository code decides what
 # must be proved. That is the whole design:
@@ -6,17 +7,12 @@
 #   this workflow        which commits are in this change, and a machine to run on
 #   npm run check        what that change obliges us to prove
 #
-# There is deliberately no path classifier here any more. One used to live in a
-# `changes` job that decided whether the gate should run at all, with special
-# cases for Markdown, docs/, architecture/ and Solver output. It was a SECOND
+# There is deliberately no path classifier here. One used to live in a
+# `changes` job deciding whether the gate should run at all. It was a SECOND
 # AUTHORITY on what a change means, competing with the source taxonomy in
-# scripts/checks/change-selection-constants.js, and two authorities on the same
+# scripts/checks/change-selection-constants.js, and two authorities on one
 # question eventually disagree. The taxonomy is exhaustive and fails closed; a
 # YAML case statement cannot be either.
-#
-# Skipping the job for documentation is no longer worth its own semantics: a
-# docs-only change now resolves to the safety spine, which is seconds of
-# behavioural proof, so the job simply always runs and the selector decides.
 #
 # Runner selection for pushes: GitHub-hosted by default; '[ci:self-hosted]' in
 # the head commit message routes that push to the maintainer's box. Pull
@@ -34,6 +30,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 # Lane-scoped tap budget: the hosted 2-vCPU VM is ~3x slower than the dev
 # corpus was tuned on, and single tests near tap's 30s default cross it
@@ -45,6 +42,13 @@ on:
 # outright and clobber declarations - that is exactly how
 # critical-replica-placement-causal-trace (300s declared, ~150s) died at
 # 120s on main 8fe278fe5.
+# One proof per ref in flight. A superseded pull-request push has nothing to
+# prove, so it is cancelled; a push to main is never cancelled, because its
+# run is the exact-sha proof the publisher and the red-main guard read.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   TAP_TIMEOUT_FLOOR: '120'
   # Retry-failed-once (owner policy 2026-08-23): a failed file is rerun
@@ -190,6 +194,18 @@ jobs:
       - name: Ordinary proof
         run: npm run check
 
+      # The proof writes test-output/proof-scope.json itself, saying which sha
+      # it proved and whether it ran the whole corpus; the canary reads it
+      # rather than inferring the scope from this job's log.
+      - name: Upload the proof scope
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: proof-scope
+          path: test-output/proof-scope.json
+          retention-days: 7
+          if-no-files-found: warn
+
       # `npm run check` prints its failures directly, so there is no receipt to
       # decode here. The artifacts still carry per-test detail that a bounded
       # console log cannot.
@@ -203,3 +219,36 @@ jobs:
             .tap/test-results/
           retention-days: 14
           if-no-files-found: warn
+
+      # Structural analysis, coalesced out of the former repository-health
+      # workflow (gate-work-consolidation), which ran the same checkers over
+      # the same sha on a second checkout and install. Its LANE survives as
+      # continue-on-error: red here is debt to pay down, red above is a change
+      # that must not land, and the red-main guard reads only this workflow's
+      # conclusion, which these steps never decide. Main pushes only. The
+      # inventory runs first: the analyses read its generated inputs; the last
+      # line holds the nightly workflow's token to one inert data file.
+      - name: Whole-repository structural analysis
+        if: github.event_name != 'pull_request'
+        # Its own bound, because continue-on-error absorbs a failing step but
+        # not a job timeout: analysis that overran would otherwise kill the
+        # required run and block every later push.
+        timeout-minutes: 45
+        continue-on-error: true
+        run: |
+          npm run test:owner-debt:prepare
+          npm run test:static
+          npm run model:contracts
+          node scripts/checks/formation-health.js --bot-commits
+
+      - name: Upload health evidence
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repository-health-evidence
+          path: |
+            test-output/analysis/
+            test-output/reports/
+          retention-days: 14
+          if-no-files-found: ignore

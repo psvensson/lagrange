@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "id": "proof-obligations",
+  "contract": "Every whole-tree check the gate runs declares the repository paths whose change makes it meaningful, and scripts/run-static-audits.js runs only the checks whose inputs the pushed range touched. Every declaration names scripts/** because a checker's own implementation decides what it proves. With no range to compare against, every check runs: an unknown range is not an unchanged tree. Skipping is admissible only when every changed path in the range is declared by some obligation: an undeclared path, or an empty range, runs every check. A check whose scope is the whole tree declares wholeTree true and is never skipped: no input list can be complete for a grep over every tracked file.",
+  "obligations": [
+    {
+      "id": "npm-run-test-unused-prod",
+      "command": "npm run test:unused:prod",
+      "inputs": [
+        "knip.json",
+        "package-lock.json",
+        "package.json",
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-deps",
+      "command": "npm run test:deps",
+      "inputs": [
+        "dependency-cruiser.config.cjs",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-file-size",
+      "command": "npm run audit:file-size",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-complexity",
+      "command": "npm run test:complexity",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-complexity-cognitive",
+      "command": "npm run test:complexity:cognitive",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-metadata-gateway-audit",
+      "command": "npm run test:metadata-gateway:audit",
+      "inputs": [
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-runtime-grammar",
+      "command": "npm run audit:runtime-grammar",
+      "inputs": [
+        "architecture/**",
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-operation-progress-authority",
+      "command": "npm run audit:operation-progress-authority",
+      "inputs": [
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-service-portability-claims",
+      "command": "npm run audit:service-portability-claims",
+      "inputs": [
+        "README.md",
+        "docs/**",
+        "examples/**",
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-current-capabilities",
+      "command": "npm run audit:current-capabilities",
+      "inputs": [
+        "README.md",
+        "charts/**",
+        "docs/**",
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-cli-docs",
+      "command": "npm run audit:cli-docs",
+      "inputs": [
+        "AGENTS.md",
+        "README.md",
+        "docs/**",
+        "scripts/**",
+        "src/cli/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-closure-ledger",
+      "command": "npm run audit:closure-ledger",
+      "inputs": [
+        "scripts/**",
+        "solve/epics/**",
+        "solve/quests/**",
+        "solve/specs/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-no-kiro",
+      "command": "npm run audit:no-kiro",
+      "inputs": [
+        "README.md",
+        "docs/**",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ],
+      "wholeTree": true
+    },
+    {
+      "id": "npm-run-audit-no-legacy-naming",
+      "command": "npm run audit:no-legacy-naming",
+      "inputs": [
+        "CHANGELOG.md",
+        "README.md",
+        "docs/**",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ],
+      "wholeTree": true
+    },
+    {
+      "id": "npm-run-audit-impact-contracts",
+      "command": "npm run audit:impact-contracts",
+      "inputs": [
+        "architecture/**",
+        "scripts/**",
+        "src/**",
+        "test/**",
+        "test/shards/**",
+        "wit/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-shards",
+      "command": "npm run audit:shards",
+      "inputs": [
+        "scripts/**",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/test-resource-classification.js",
+        "scripts/checks/test-subsystem-classification.js",
+        "test/**",
+        "test/shards/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-guidelines",
+      "command": "npm run audit:guidelines",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-doc-audience",
+      "command": "npm run audit:doc-audience",
+      "inputs": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        "DEBUGGING.md",
+        "README.md",
+        "architecture/**",
+        "docs/**",
+        "scripts/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-doc-ascii",
+      "command": "npm run audit:doc-ascii",
+      "inputs": [
+        "README.md",
+        "architecture/**",
+        "docs/**",
+        "examples/**",
+        "roadmap.md",
+        "scripts/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-documentation-current",
+      "command": "npm run audit:documentation-current",
+      "inputs": [
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "README.md",
+        "architecture/**",
+        "charts/**",
+        "ci/**",
+        "docs/**",
+        "examples/**",
+        "models/**",
+        "scripts/**",
+        "solve/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-audit-roadmap-authority",
+      "command": "npm run audit:roadmap-authority",
+      "inputs": [
+        "README.md",
+        "docs/**",
+        "roadmap.md",
+        "scripts/**",
+        "solve/epics/**",
+        "solve/quests/**",
+        "solve/specs/**"
+      ]
+    },
+    {
+      "id": "npm-run-steering-check",
+      "command": "npm run steering:check",
+      "inputs": [
+        "docs/steering/**",
+        "package.json",
+        "scripts/**"
+      ]
+    },
+    {
+      "id": "npm-run-test-static-postpush",
+      "command": "npm run test:static:postpush",
+      "inputs": [
+        "README.md",
+        "docs/**",
+        "package.json",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "npm-run-model-contracts",
+      "command": "npm run model:contracts",
+      "inputs": [
+        "architecture/**",
+        "docs/specs/**",
+        "scripts/**",
+        "src/**"
+      ]
+    },
+    {
+      "id": "node-scripts-checks-run-golden-capability-guard-scenarios-js",
+      "command": "node scripts/checks/run-golden-capability-guard-scenarios.js",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "node-scripts-generate-global-owner-debt-inventory-js-refresh",
+      "command": "node scripts/generate-global-owner-debt-inventory.js --refresh --refresh-import-graph-only --output test-output/analysis/owner-debt-live-inventory.json",
+      "inputs": [
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    },
+    {
+      "id": "node-scripts-checks-push-gate-change-proof-js",
+      "command": "node scripts/checks/push-gate-change-proof.js",
+      "inputs": [
+        "package-lock.json",
+        "package.json",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ]
+    }
+  ]
+}

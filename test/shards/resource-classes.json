@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2068,
+    "ordinary": 2069,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2085,
-  "digest": "fnv1a32-0be4b208",
+  "censusSize": 2086,
+  "digest": "fnv1a32-5885c94c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1859,6 +1859,7 @@
     "test/scripts/service-portability-static-gate.test.js": "ordinary",
     "test/scripts/solve-footprint-accounting.test.js": "ordinary",
     "test/scripts/spec-led-runtime-legacy-deletion-guard.test.js": "ordinary",
+    "test/scripts/static-audit-input-triggers.test.js": "ordinary",
     "test/scripts/steering-diet.test.js": "ordinary",
     "test/scripts/stop-distributed-harness-containers.test.js": "ordinary",
     "test/scripts/summarize-distributed-failure-report.test.js": "ordinary",

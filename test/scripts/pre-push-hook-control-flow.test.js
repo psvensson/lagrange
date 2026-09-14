@@ -63,6 +63,14 @@ function buildFixture() {
   for (const script of STUBBED_SCRIPTS) write(script, recorderSource('script'));
   write('package.json', '{"name": "pre-push-flow-fixture", "type": "module"}\n');
   write('README.md', 'fixture\n');
+  // A JavaScript file inside the lint pathspec, changed by the second commit,
+  // so the pushed range is non-empty and the lint stage actually invokes the
+  // linter rather than passing xargs an empty list. It sits directly under
+  // src/, which the pathspec reached only once it gained :(glob) magic.
+  write('src/sample.js', 'export const sample = 1;\n');
+  // Never touched again: the range must exclude it, and the whole-tree
+  // fallback must include it.
+  write('src/deep/untouched.js', 'export const untouched = 1;\n');
   // npm, npx and gh on PATH record their argv (as JSON, so quotes in the gh
   // query survive) and succeed; gh reports that CI is unavailable.
   for (const name of ['npm', 'npx', 'gh']) {
@@ -81,17 +89,27 @@ function buildFixture() {
   git(['commit', '--quiet', '-m', 'base']);
   const base = git(['rev-parse', 'HEAD']);
   write('README.md', 'fixture two\n');
+  write('src/sample.js', 'export const sample = 2;\n');
   git(['add', '.']);
   git(['commit', '--quiet', '-m', 'second']);
+  const second = git(['rev-parse', 'HEAD']);
+  // A third commit that changes the lint contract itself, so a range ending
+  // here must abandon the range and lint every tracked file.
+  write('package.json',
+    '{"name": "pre-push-flow-fixture", "type": "module", "version": "2"}\n');
+  git(['add', '.']);
+  git(['commit', '--quiet', '-m', 'lint contract']);
   git(['tag', '-a', 'v-fixture', '-m', 'annotated']);
-  return {base, head: git(['rev-parse', 'HEAD']),
+  return {base, second, head: git(['rev-parse', 'HEAD']),
+    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
     tagObject: git(['rev-parse', 'v-fixture'])};
 }
 
 const shas = buildFixture();
 
-function runHook(refLines, extraEnv = {}) {
+function runHook(refLines, extraEnv = {}, at = null) {
   fs.writeFileSync(calls, '', UTF8);
+  if (at) git(['checkout', '--quiet', '--detach', at]);
   const env = {
     ...gitProcessEnvironment(),
     PATH: `${stubBin}${path.delimiter}${path.dirname(process.execPath)}` +
@@ -106,6 +124,7 @@ function runHook(refLines, extraEnv = {}) {
   Object.assign(env, extraEnv);
   const result = spawnSync('bash', [HOOK],
     {cwd: repo, encoding: UTF8, input: refLines, env});
+  if (at) git(['checkout', '--quiet', shas.branch]);
   const recorded = fs.readFileSync(calls, UTF8).split('\n').filter(Boolean)
     .map((line) => JSON.parse(line));
   return {status: result.status, output: `${result.stdout}${result.stderr}`,
@@ -136,6 +155,62 @@ test('the hook hands the pushed commit to the materializer and runs no content s
     'no unused-files, lint, ratchet, cycle or export stage ran in the ' +
     'working tree');
   assert.match(run.output, /materialize-pushed-tree/u);
+});
+
+// The three things the lint stage decides: what reaches eslint, what the
+// range excludes, and when the range is abandoned. A stage that silently
+// linted nothing would pass a test that only asserted the first.
+function lintedPaths(run) {
+  const lint = run.recorded.filter((entry) => entry.name === 'npx');
+  assert.ok(lint.length > 0, `eslint is invoked: ${run.output}`);
+  return lint.flatMap((call) => call.argv);
+}
+
+const LINT_ENV = Object.freeze({
+  LAGRANGE_WORKSPACE_INJECTIONS: 'node_modules,data',
+  LAGRANGE_GATE_RED_MAIN_CHECKED: '1',
+  LAGRANGE_PUSH_SKIP_TESTS: '1',
+});
+
+test('the lint stage hands eslint file paths and nothing else', () => {
+  // The branch's stdout IS the file list, so a progress line printed there
+  // arrives at eslint as a filename and the stage dies with xargs' exit 123.
+  const run = runHook(
+    `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...LINT_ENV, LAGRANGE_GATE_PUSHED_SHA: shas.second}, shas.second);
+  assert.equal(run.status, 0, run.output);
+  const linted = lintedPaths(run);
+  for (const argument of linted) {
+    assert.ok(!argument.startsWith('pre-push:'),
+      `a progress line reached eslint as an argument: ${argument}`);
+  }
+  assert.ok(linted.includes('src/sample.js'),
+    `the changed file directly under src/ is linted: ${linted.join(' ')}`);
+});
+
+test('the range narrows: a tracked file the push does not touch is not linted', () => {
+  const run = runHook(
+    `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...LINT_ENV, LAGRANGE_GATE_PUSHED_SHA: shas.second}, shas.second);
+  assert.equal(run.status, 0, run.output);
+  assert.ok(!lintedPaths(run).includes('src/deep/untouched.js'),
+    'a file outside the pushed range was linted by the push that added it');
+  assert.match(run.output, /linting the pushed range/u);
+});
+
+test('a change to the lint contract abandons the range and lints every tracked file', () => {
+  // eslint's per-file verdict holds only while the configuration and the
+  // dependency set that produced it are fixed.
+  const run = runHook(
+    `refs/heads/main ${shas.head} refs/heads/main ${shas.second}\n`,
+    {...LINT_ENV, LAGRANGE_GATE_PUSHED_SHA: shas.head});
+  assert.equal(run.status, 0, run.output);
+  const linted = lintedPaths(run);
+  for (const tracked of ['src/sample.js', 'src/deep/untouched.js']) {
+    assert.ok(linted.includes(tracked),
+      `${tracked} is linted again: ${linted.join(' ')}`);
+  }
+  assert.match(run.output, /the lint contract changed/u);
 });
 
 test('the materializer\'s status is the hook\'s status', () => {
