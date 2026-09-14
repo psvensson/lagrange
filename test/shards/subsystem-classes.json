@@ -28,7 +28,7 @@
   "censusSize": 2085,
   "digest": "fnv1a32-13ce9ed1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6e9374cc",
+  "observationDigest": "fnv1a32-bea83da6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7193,7 +7193,12 @@
     },
     "test/scripts/apparatus-release-consolidation-budget.test.js": {
       "files": [
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".github/workflows/ci.yml",
+        ".github/workflows/full-corpus-canary.yml",
         ".github/workflows/release.yml",
+        ".github/workflows/repository-health.yml",
         "AGENTS.md",
         "CLAUDE.md",
         "README.md",
@@ -7205,10 +7210,19 @@
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-literals.js",
         "scripts/checks/apparatus-release-consolidation-budget.js",
+        "scripts/checks/helper-import-closure.js",
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/run-static-audits.js",
         "scripts/checks/wait-for-thermal-headroom.js",
-        "solve/quests/proof-authority-integrity/evidence/receipt.json",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/global-owner-debt-inventory/constants.js",
+        "scripts/run-test-files.js",
         "test/manifests/pre-push-stages.json",
+        "test/manifests/project-hardening-proof-postpush-manifest.json",
+        "test/manifests/proof-authority-falsifiers.receipt.json",
         "test/shards/primary-classes.json",
+        "test/shards/safety-spine.json",
         "test/shards/subsystem-classes.json"
       ],
       "directories": [
