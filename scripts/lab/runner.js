@@ -1,6 +1,9 @@
 import {capture, run} from './process.js';
 
 const RUNNER_DIR = '.lagrange-actions-runner';
+const SINGLE_QUOTE = String.fromCharCode(39);
+const POSIX_QUOTE_ESCAPE = SINGLE_QUOTE + '\\' + SINGLE_QUOTE + SINGLE_QUOTE;
+const POWERSHELL_QUOTE_ESCAPE = SINGLE_QUOTE + SINGLE_QUOTE;
 
 function runnerPlatform(node) {
   const osMap = {linux: 'linux', macos: 'osx', windows: 'win'};
@@ -36,6 +39,18 @@ async function registrationToken(repo) {
   ]);
 }
 
+function quotePosix(value) {
+  return SINGLE_QUOTE +
+    String(value).replaceAll(SINGLE_QUOTE, POSIX_QUOTE_ESCAPE) +
+    SINGLE_QUOTE;
+}
+
+function quotePowerShell(value) {
+  return SINGLE_QUOTE +
+    String(value).replaceAll(SINGLE_QUOTE, POWERSHELL_QUOTE_ESCAPE) +
+    SINGLE_QUOTE;
+}
+
 function posixInstallScript({node, repo, token, version, platform, labels, service}) {
   const archive = `actions-runner-${platform.os}-${platform.arch}-${version}.tar.gz`;
   const url = `https://github.com/actions/runner/releases/download/v${version}/${archive}`;
@@ -56,7 +71,7 @@ function posixInstallScript({node, repo, token, version, platform, labels, servi
     '  exit 2',
     'fi',
     `curl -fsSL ${url} | tar xz`,
-    args.map((part) => `'${String(part).replaceAll(`'`, `'\\''`)}'`).join(' '),
+    args.map((part) => quotePosix(part)).join(' '),
     service && node.os === 'linux' ?
       'sudo -n ./svc.sh install "$(id -un)" && sudo -n ./svc.sh start' :
       '',
@@ -75,17 +90,18 @@ function windowsInstallScript({node, repo, token, version, platform, labels, ser
   ];
   if (service) configArgs.push('--runasservice');
   const arrayItems = configArgs
-    .map((part) => `'${String(part).replaceAll(`'`, `''`)}'`)
+    .map((part) => quotePowerShell(part))
     .join(', ');
   return [
-    `$ErrorActionPreference = 'Stop'`,
+    '$ErrorActionPreference = ' + SINGLE_QUOTE + 'Stop' + SINGLE_QUOTE,
     service ?
-      `$dir = Join-Path $env:SystemDrive 'actions-runner'` :
+      '$dir = Join-Path $env:SystemDrive ' + SINGLE_QUOTE + 'actions-runner' + SINGLE_QUOTE :
       `$dir = Join-Path $HOME '${RUNNER_DIR}'`,
     'New-Item -ItemType Directory -Force -Path $dir | Out-Null',
     'Set-Location $dir',
-    `if (Test-Path '.runner') {`,
-    `  throw 'runner already configured; refusing to overwrite local identity'`,
+    'if (Test-Path ' + SINGLE_QUOTE + '.runner' + SINGLE_QUOTE + ') {',
+    '  throw ' + SINGLE_QUOTE +
+      'runner already configured; refusing to overwrite local identity' + SINGLE_QUOTE,
     '}',
     `$zip = Join-Path $dir '${archive}'`,
     `Invoke-WebRequest -UseBasicParsing -Uri '${url}' -OutFile $zip`,
@@ -94,8 +110,9 @@ function windowsInstallScript({node, repo, token, version, platform, labels, ser
     `$configArgs = @(${arrayItems})`,
     '& .\\config.cmd @configArgs',
     service ?
-      `Write-Host 'Runner configured as a Windows service.'` :
-      `Write-Host 'Runner configured. Start it with .\\run.cmd.'`,
+      'Write-Host ' + SINGLE_QUOTE + 'Runner configured as a Windows service.' + SINGLE_QUOTE :
+      'Write-Host ' + SINGLE_QUOTE +
+        'Runner configured. Start it with .\\run.cmd.' + SINGLE_QUOTE,
   ].join('; ');
 }
 
