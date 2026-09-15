@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-live-correspondence",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The production-owner composition hosted by the deterministic simulator reproduces all four live failure properties on the sealed strict substrate: seed watchdog gap fraction at least 50 percent with every joiner under 5 percent; incomplete-lease observations naming all five nodes with escalating backoff; priority spread gap non-decreasing with zero operations in flight; and admission ending in control_plane_pressure. Each missing property is closed by identifying the first missing causal arrow between the calibrated live formation and the simulator and hosting the real production boundary that supplies it - never by synthetic frequency, injected CPU, multiplied invocation counts or tuned coefficients.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-reproduces.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner-determines-rate-calibration-determines-cost",
+      "statement": "The production owner determines invocation rate; calibration determines only cost per observed segment. The simulator may invoke a real production owner, supply deterministic scheduling and the existing TimeSource, and charge calibrated work at the real owner boundary. It may not invent owner loops, schedule synthetic owner frequency, inject equivalent CPU work, multiply invocation counts, or add sleep or busy time to reproduce gaps."
+    },
+    {
+      "id": "frozen-predicates-and-calibration",
+      "statement": "The four reproduction predicates are unchanged, the watchdog contract stays at 250 ms interval and 1000 ms threshold with expectedAt measured from the previous ACTUAL callback, and no calibrated mean or rate is edited. No synthetic failure symptom is injected and control_plane_pressure is never set because a threshold was crossed."
+    },
+    {
+      "id": "red-on-revert-per-boundary",
+      "statement": "Every newly hosted owner or boundary carries a semantic witness proving the real production trigger reaches it - event to real owner invocation to calibrated segment to a change in seed busyUntil - and a mutation that bypasses the production owner goes red. Proving that calling a helper charges time is not the witness."
+    },
+    {
+      "id": "preserve-the-reproduced-property",
+      "statement": "The already-green property - prioritySpreadGap non-decreasing with zero operations in flight - is preserved and is not made 'more live-like' unless a newly hosted real owner naturally changes it."
+    },
+    {
+      "id": "substrate-frozen",
+      "statement": "The deterministic substrate sealed at 22420f874 is not reopened: attribution, generation and execution-node authority, the violation ledger, strict and discover behaviour, instant closure, scheduler and PCT, and the metered oracle all stand. Correspondence work never lands in the same commit as substrate work."
+    }
+  ],
+  "sealedAt": "22420f874c904afeb5dd1d7d317e5c3ddd5dd708"
+}
