@@ -106,6 +106,15 @@ class SystemTableCacheTombstoneStore {
     this.onEvict = typeof options.onEvict === 'function' ?
       options.onEvict :
       () => {};
+    // The tombstone store is the cache's CHILD, not a time authority. Its
+    // deletion instants, TTL and expiry checks are compared against the same
+    // physical-time domain as everything else in the authoritative-absence
+    // comparison, so it reads the clock its parent was given rather than
+    // resolving one of its own. The ambient default keeps every caller that
+    // supplies nothing byte-identical.
+    this.timeSource = options.timeSource && typeof options.timeSource.now === 'function' ?
+      options.timeSource :
+      {now: () => Date.now()};
   }
 
   writeIsFencedByAuthoritativeTableAbsence(
@@ -141,7 +150,7 @@ class SystemTableCacheTombstoneStore {
   }
 
   prune(tableName, tombstoneTable) {
-    const nowMs = Date.now();
+    const nowMs = this.timeSource.now();
     for (const [key, tombstone] of tombstoneTable) {
       this.evictIfExpired(
         tableName,
@@ -173,7 +182,7 @@ class SystemTableCacheTombstoneStore {
         tombstoneTable.delete(key);
         tombstoneTable.set(key, {
           ...existing,
-          deletedAtMs: Date.now(),
+          deletedAtMs: this.timeSource.now(),
           authoritativeAbsence,
           authoritativeObservedAtMs,
         });
@@ -186,7 +195,7 @@ class SystemTableCacheTombstoneStore {
     tombstoneTable.set(key, {
       hlc: incoming.hlc,
       updatedAt: incoming.updatedAt,
-      deletedAtMs: Date.now(),
+      deletedAtMs: this.timeSource.now(),
       authoritativeAbsence,
       authoritativeObservedAtMs,
     });
@@ -197,7 +206,7 @@ class SystemTableCacheTombstoneStore {
     const tombstoneTable = this.tables.get(tableName);
     const tombstone = tombstoneTable?.get(key);
     if (tombstone && !this.evictIfExpired(
-      tableName, tombstoneTable, key, tombstone, Date.now(),
+      tableName, tombstoneTable, key, tombstone, this.timeSource.now(),
     )) {
       if (!writeSupersedesTombstone(data, tombstone)) {
         return true;
@@ -224,7 +233,7 @@ class SystemTableCacheTombstoneStore {
       tombstoneTable,
       key,
       tombstone,
-      Date.now(),
+      this.timeSource.now(),
     )) {
       return false;
     }

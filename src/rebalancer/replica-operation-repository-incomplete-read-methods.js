@@ -347,7 +347,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
       ) {
         if (
           cachedOperations.length === 0 &&
-        this.nextIncompleteOperationSqlRetryAtMs > Date.now()
+        this.nextIncompleteOperationSqlRetryAtMs > this.timeSource.now()
         ) {
           return this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
         }
@@ -361,7 +361,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         }
       }
 
-      const queryStartedAtMs = Date.now();
+      const queryStartedAtMs = this.timeSource.now();
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_INCOMPLETE_OPERATIONS,
         [
@@ -373,7 +373,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         ],
         authoritativeReadOptions,
       );
-      const queryDurationMs = Date.now() - queryStartedAtMs;
+      const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const rowCount = Array.isArray(result?.rows) ? result.rows.length : 0;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
 
@@ -406,7 +406,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
 
         if (isRetryableControlPlaneError(result)) {
           this.nextIncompleteOperationSqlRetryAtMs =
-          Date.now() + this.getRetryableIncompleteOperationReadBackoffMs(result);
+          this.timeSource.now() + this.getRetryableIncompleteOperationReadBackoffMs(result);
           this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, logPayload);
         } else {
           this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, logPayload);
@@ -447,7 +447,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         this.lastIncompleteOperationReadOutcome = deferredOutcome;
 
         if (shouldWarnOnQueryPressure) {
-          const nowMs = Date.now();
+          const nowMs = this.timeSource.now();
           if (
             nowMs - this.lastIncompleteOperationQueryWarningAtMs >=
           INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS
@@ -471,7 +471,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
 
       this.clearIncompleteOperationReadOutcome();
       if (shouldWarnOnQueryPressure) {
-        const nowMs = Date.now();
+        const nowMs = this.timeSource.now();
         if (
           nowMs - this.lastIncompleteOperationQueryWarningAtMs >=
         INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS

@@ -296,7 +296,14 @@ class RebalanceCoordinatorLifecycle {
     );
     this.operationsInCreation = workflowInFlightExecutions;
     this.operationsInExecution = workflowInFlightExecutions;
-    this.nowFn = typeof options.nowFn === LOCAL_STR_FUNCTION ? options.nowFn : Date.now;
+    // nowFn is a COMPATIBILITY PROJECTION of this owner's TimeSource, not a
+    // second clock. It defaulted to the ambient one, so a coordinator handed a
+    // virtual TimeSource still read host time through every nowFn caller - the
+    // dual-authority shape that keeps ambient time alive underneath an owner
+    // that thought it had been seamed.
+    this.nowFn = typeof options.nowFn === LOCAL_STR_FUNCTION ?
+      options.nowFn :
+      () => this.timeSource.now();
     this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
       options.priorityRecoveryActivityStaleGraceMs,
     ) ?
@@ -331,6 +338,9 @@ class RebalanceCoordinatorLifecycle {
         controlPlaneReadinessService: this.controlPlaneReadinessService,
         logger: this.logger,
         emitter: this,
+        // The coordinator's own clock, threaded down rather than minted
+        // again: one owner, one time authority.
+        timeSource: this.timeSource,
         authoritativeVisibilityTimeoutMs:
           options.authoritativeVisibilityTimeoutMs,
         authoritativeVisibilityRetryDelayMs:

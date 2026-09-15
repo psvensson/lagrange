@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-cold-process-production-state-isolation",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "With the repaired instant closure, the first simulation in a fresh process produces exactly the trace every later simulation in that process produces: run 1 == run 2 == run 3 in one process, three or more fresh-process run-1 traces identical, plain node equal to node --test, AVAILABLE read counts identical, zero post-return production effects, attribution B/C/D green with E still failing closed. Only then is a replacement metered-trace oracle captured; its count is an output of the repaired semantics, never a target.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-attribution-isolation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "oracle-retired-not-rebaselined",
+      "statement": "The 429-entry metered trace was captured under a completion model now causally falsified: simulate() could return with accepted rebalancer production work outstanding. It remains historical, red-on-revert evidence and is no longer a certification oracle. It is not replaced by 413 or 391; there is currently no valid fixed-seed metered-trace baseline."
+    },
+    {
+      "id": "completion-contract-frozen",
+      "statement": "OwnerKeyReconcileQueue.isCurrentWorkIdle/awaitCurrentWorkIdle, UnifiedRebalancer.awaitCurrentWorkIdle and their participation in the instant-closure fixpoint are unchanged. A rebalancer reconcile admitted at T may cross pure promise continuations and observe state, so it must close inside its originating instant rather than at final scenario completion."
+    },
+    {
+      "id": "frozen-substrate",
+      "statement": "Attribution, scheduler and PCT, virtual-time ordering, calibration, priority ordering and planning consistency modes are unchanged. No warm-up run, no sleep, no tolerance, no ad-hoc resetting of production consumers by the harness."
+    }
+  ]
+}

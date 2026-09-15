@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-rebalancer-current-work-completion",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Zero production work of a simulation advances after simulate() returns. The UnifiedRebalancer's rebalance-check reconcile queue owns a current-work completion contract - isCurrentWorkIdle() and awaitCurrentWorkIdle(), idle iff draining is false, pending is empty and inFlight is empty - and the rebalancer delegates to it; future work (retry instants, exhausted items, the periodic cadence) stays the timer owner's. The simulator consumes that contract as one more explicit owner in the same instant-closure fixpoint as Raft and the gateway, never by inspecting queue internals and never by a bounded settle loop, so a scenario cannot return with an admitted rebalance check still executing and hand its continuations to the next generation.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-attribution-isolation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "reuse-the-existing-owner",
+      "statement": "No second pending-work tracker. OwnerKeyReconcileQueue already maintains draining, pending and inFlight across the real reconcile lifetime; the contract is expressed from those three and from nothing else - not timers, host turns or promise counts."
+    },
+    {
+      "id": "current-work-not-convergence",
+      "statement": "Idle means every item already admitted has completed or moved into an explicitly future-owned state. It does not mean the rebalancer will never work again, and it never waits for a retry deadline."
+    },
+    {
+      "id": "expose-do-not-introspect",
+      "statement": "The simulator consumes awaitCurrentWorkIdle() only. pending, inFlight and draining stay queue-owner internals, and the harness never discovers queues by crawling."
+    },
+    {
+      "id": "one-fixpoint",
+      "statement": "Rebalancer owners join the same explicit-owner closure set as Raft and the gateway, because a rebalancer continuation may create gateway or Raft work at the same instant. No appended Promise.all after closure and no new bounded settle(N)."
+    },
+    {
+      "id": "frozen",
+      "statement": "Attribution implementation, generation-root isolation, UUID injection, lineage retention, scheduler and PCT, current-instant ordering, owner calibration means, priority partition ordering, the AVAILABLE/AUTHORITATIVE split, rebalancer semantics and future retry cadence are unchanged. No extra host turns in simulate(), no sleeps, no warm-up runs, no transcript tolerance, no simulation-only queue drain."
+    }
+  ]
+}

@@ -105,14 +105,14 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         return executeRead();
       }
 
-      const deadlineAtMs = Date.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      const deadlineAtMs = this.timeSource.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
       while (true) {
         const result = await executeRead();
         if (result?.success !== false || !isRetryableControlPlaneError(result)) {
           return result;
         }
 
-        const remainingMs = deadlineAtMs - Date.now();
+        const remainingMs = deadlineAtMs - this.timeSource.now();
         if (remainingMs <= 0) {
           return result;
         }
@@ -311,7 +311,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       ) {
         readQueryOptions = REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS;
       }
-      const queryStartedAtMs = Date.now();
+      const queryStartedAtMs = this.timeSource.now();
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_ID,
         [operationId],
@@ -321,7 +321,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           retryOnRetryableFailure: true,
         },
       );
-      const queryDurationMs = Date.now() - queryStartedAtMs;
+      const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
 
       if (!result.success || !Array.isArray(result.rows) || result.rows.length === 0) {
         const isEmptyRead =

@@ -118,7 +118,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
    * @return {Promise<Array>}
    */
     async getOperationsByEntityAuthoritativeObservation(entityType, entityId) {
-      const queryStartedAtMs = Date.now();
+      const queryStartedAtMs = this.timeSource.now();
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATIONS_BY_ENTITY,
         [entityType, entityId],
@@ -127,7 +127,7 @@ function assignReplicaOperationRepositoryEntityReadMethods(
           leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
         },
       );
-      const queryDurationMs = Date.now() - queryStartedAtMs;
+      const queryDurationMs = this.timeSource.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
       const cachedOperations = this.getEntityInFlightOperationRows({
         entityType,

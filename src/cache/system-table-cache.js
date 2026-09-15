@@ -6,6 +6,7 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
@@ -191,8 +192,18 @@ class SystemTableCache {
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
-    // Unique ID for debugging cache instance issues
-    this._cacheId = `${CACHE_DEFAULT.CACHE_ID_PREFIX}${Date.now()}-` +
+    // The cache's own timestamp authority: the mutation watermark below is
+    // read back as evidence of when a table last changed, so it must be the
+    // owning node's time rather than the process's. The default is
+    // RealTimeSource, so production is byte-identical.
+    this.timeSource = resolveTimeSource(options);
+    // Unique ID for debugging cache instance issues. DIAGNOSTIC IDENTITY, not
+    // a clock consumer: a caller that needs a deterministic instance name
+    // supplies one, and the ambient default is untouched for everyone else.
+    // Deriving it from node time instead would quietly make a debug string
+    // into a semantic timestamp.
+    this._cacheId = options.cacheId ||
+      `${CACHE_DEFAULT.CACHE_ID_PREFIX}${Date.now()}-` +
       `${Math.random().toString(CACHE_DEFAULT.CACHE_ID_RADIX)
         .substr(CACHE_DEFAULT.CACHE_ID_START, CACHE_DEFAULT.CACHE_ID_LENGTH)}`;
 
@@ -203,6 +214,9 @@ class SystemTableCache {
       this.mutationVersionByTableKey.set(tableName, new Map());
     }
     this.tombstoneStore = new SystemTableCacheTombstoneStore(SYSTEM_TABLES, {
+      // The child reads the parent's clock: one physical-time domain for
+      // every timestamp the authoritative-absence comparison touches.
+      timeSource: this.timeSource,
       onEvict: (tableName, key) => {
         if (!this.tables.get(tableName).has(key)) {
           this.mutationVersionByTableKey.get(tableName).delete(key);
@@ -499,7 +513,7 @@ class SystemTableCache {
           this.lastCdcObservationByTableName.get(tableName),
         resultingRow: table.get(key),
       });
-      this.lastAppliedAtMsByTableName.set(tableName, Date.now());
+      this.lastAppliedAtMsByTableName.set(tableName, this.timeSource.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
       const tableMutationRevision = this.recordTableMutation(tableName, key);
       this.notifyListeners(

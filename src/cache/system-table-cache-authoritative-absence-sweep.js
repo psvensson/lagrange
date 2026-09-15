@@ -147,7 +147,8 @@ function removeSnapshotEntry(cache, tableName, entry, options, removed) {
   );
   removed.push({tableName, key});
   cache.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {tableName, key});
-  cache.lastAppliedAtMsByTableName.set(tableName, Date.now());
+  // The same watermark, and therefore the same clock authority: the cache's.
+  cache.lastAppliedAtMsByTableName.set(tableName, cache.timeSource.now());
   const tableMutationRevision = cache.recordTableMutation(tableName, key);
   cache.notifyListeners(
     tableName,

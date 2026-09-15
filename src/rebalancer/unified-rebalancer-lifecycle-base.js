@@ -351,6 +351,26 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
   }
 
   /**
+   * Resolve once every rebalance check this rebalancer has ALREADY ADMITTED
+   * has finished.
+   *
+   * The reconcile queue owns the whole outer chain, which is why the contract
+   * lives there rather than on any one evaluation: a single rebalance check
+   * calls the priority-recovery follow-up path more than once - once through
+   * getCurrentPriorityRecoveryFollowUpDecisionSnapshot and again through
+   * hasPriorityRecoveryFollowUpOperationRequired - so waiting for one of
+   * those to go idle would observe a gap between them while the evaluation is
+   * still alive.
+   *
+   * This says nothing about future work: an armed periodic check and an item
+   * waiting for its retry instant belong to the timer owner.
+   * @return {Promise<void>}
+   */
+  awaitCurrentWorkIdle() {
+    return this.rebalanceCheckQueue.awaitCurrentWorkIdle();
+  }
+
+  /**
    * Initialize the rebalancer.
    */
   initialize() {

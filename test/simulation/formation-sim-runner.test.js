@@ -27,9 +27,17 @@ import {observeHeartbeat} from '../../src/diagnostics/event-loop-gap-watchdog.js
 import {
   CalibrationRefusal, REFUSAL, REQUIRED_OWNERS, loadCalibration,
 } from './formation-sim-coefficients.js';
-import {NONDETERMINISTIC_OWNER_SEAM, guardedDispatch} from './formation-sim-guard.js';
+import {
+  NONDETERMINISTIC_OWNER_SEAM,
+  guardedDispatch,
+  installDeterministicOwnerGuard,
+} from './formation-sim-guard.js';
 import {OwnerTurnMeter} from './formation-sim-owner-passes.js';
-import {runFormationOwner} from '../../src/diagnostics/formation-turn-attribution.js';
+import {
+  runFormationOwner,
+  runOnExecutionNode,
+  runOnSimulationGenerationRoot,
+} from '../../src/diagnostics/formation-turn-attribution.js';
 import {DECISION_GRADE, REPORT_FILE, decisionGrade, writeReport} from './formation-sim-report.js';
 import {SCENARIO, simulate} from './formation-sim-runner.js';
 
@@ -146,19 +154,33 @@ test('busy stretches never overlap: gap time is bounded by charged time', () => 
   assert.ok(charges.ownerChargedMs('n', REQUIRED_OWNERS)[FORMATION_OWNER.RAFT_APPLY] > 0);
 });
 
-test('deterministic mode throws on an ambient clock or timer read inside a dispatch', () => {
-  const owner = FORMATION_OWNER.BOOTSTRAP;
-  assert.throws(() => guardedDispatch(owner, () => Date.now()),
-    (error) => error.code === NONDETERMINISTIC_OWNER_SEAM && error.owner === owner);
-  assert.throws(() => guardedDispatch(owner, () => setTimeout(() => {}, 1)),
-    (error) => error.code === NONDETERMINISTIC_OWNER_SEAM);
-  assert.throws(() => guardedDispatch(owner, () => globalThis.performance.now()),
-    (error) => error.code === NONDETERMINISTIC_OWNER_SEAM);
-  assert.equal(guardedDispatch(owner, () => 42), 42, 'a clean dispatch returns its value');
-  assert.equal(typeof Date.now(), 'number', 'the globals are restored after the dispatch');
-  assert.equal(guardedDispatch(owner, () => guardedDispatch(owner, () => 1)), 1,
-    'nested dispatches keep the outer guard');
-});
+test('deterministic mode refuses ambient time and timers while executing as a node',
+  async () => {
+    // The authority is the formation execution context - a generation and an
+    // execution node - not the dispatch wrapper. A dispatch used to establish
+    // production identity of its own, and the two answers disagreed:
+    // construction, seeding and any continuation released outside a dispatch
+    // carried the node frame without the tag and were treated as harness work.
+    // Owner attribution stays orthogonal, so the refusal does not depend on
+    // one being named.
+    const owner = FORMATION_OWNER.BOOTSTRAP;
+    const asNode = (body) => runOnSimulationGenerationRoot('runner-witness/1',
+      () => runOnExecutionNode('node-0', () => guardedDispatch(owner, body)));
+    installDeterministicOwnerGuard();
+    await assert.rejects(async () => asNode(() => Date.now()),
+      (error) => error.code === NONDETERMINISTIC_OWNER_SEAM &&
+        error.owner === owner);
+    await assert.rejects(async () => asNode(() => setTimeout(() => {}, 1)),
+      (error) => error.code === NONDETERMINISTIC_OWNER_SEAM);
+    await assert.rejects(async () => asNode(() => globalThis.performance.now()),
+      (error) => error.code === NONDETERMINISTIC_OWNER_SEAM);
+    assert.equal(await asNode(() => 42), 42,
+      'a clean dispatch returns its value');
+    assert.equal(typeof Date.now(), 'number',
+      'and harness code outside the node context keeps the real clock');
+    assert.equal(await asNode(() => guardedDispatch(owner, () => 1)), 1,
+      'nested dispatches are re-entrant');
+  });
 
 // Owner amendment 3 (2026-09-14): charging is only meaningful if occupancy
 // blocks. Each clause below is a separate way a scheduler can look right and

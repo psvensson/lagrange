@@ -234,7 +234,9 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       null;
     return buildPriorityRecoveryDecisionSnapshot({
       partitionId,
-      capturedAt: Date.now(),
+      // The workflow owner's established clock, the same one every other
+      // timing decision on this owner already reads.
+      capturedAt: this.resolveTimeoutCheckNowMs(),
       publicationConvergence: planningSnapshot,
       operationContexts,
       operationId,
@@ -348,7 +350,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       .filter((operation) => {
         return operation && typeof operation === 'object';
       });
-    const capturedAtMs = Date.now();
+    const capturedAtMs = this.resolveTimeoutCheckNowMs();
     const stepTimeoutMsByWorkflowStep =
       this.buildPriorityRecoveryWorkflowStepTimeoutMap(
         operationRecords.find((operation) =>

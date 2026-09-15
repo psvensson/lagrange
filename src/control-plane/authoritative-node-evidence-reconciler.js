@@ -522,7 +522,10 @@ class AuthoritativeNodeEvidenceReconciler {
   }
 
   async collectRepairNodeEvidenceContext(nodeId) {
-    const causeId = `${REPAIR_CAUSE_PREFIX}${nodeId}:${Date.now()}`;
+    // The same clock this owner already stamps lastRepairAtMsByKey with: a
+    // cause id is diagnostic, but inside a deterministic node a diagnostic
+    // timestamp is still the owner's time.
+    const causeId = `${REPAIR_CAUSE_PREFIX}${nodeId}:${this.now()}`;
     const repairIntent = AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE;
     const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
     if (!authoritativeControlPlaneView) {

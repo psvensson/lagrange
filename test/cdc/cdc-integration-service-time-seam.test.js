@@ -27,6 +27,8 @@ import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 
+import {METRICS_LOG_TAG} from '../../src/constants/index.js';
+import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
 const NODE_ID = 'seam-node';
 const ABSENT_KEY = 'node-that-never-arrives';
 const WAIT_BUDGET_MS = 1000;
@@ -179,22 +181,29 @@ test('the catch-up default sleep is armed on the injected clock', async () => {
     'the exhausted table is recorded as failed, the owner contract');
 });
 
-test('the catch-up sweep still reads stale rows on the wall clock under a virtual clock', async () => {
-  // readStartedAtMs is a DATA STAMP, compared against row updated_at and
-  // tombstone times the cache stamps on the wall clock. Seaming it would
-  // leave the sweep inert (verifier probe, round 3: rowsSwept 0 vs 1). So the
-  // sleep is on the seam and this stamp is not: a stale wall-stamped row is
-  // swept the same way under a virtual clock as under the platform one.
+test('the catch-up sweep sweeps a stale row under a virtual clock', async () => {
+  // Same intended scenario, same expectation: a row older than the moment the
+  // authoritative read began is swept.
+  //
+  // This witness previously recorded the opposite conclusion - that the stamp
+  // had to stay on the wall clock, because seaming it alone made the sweep
+  // inert (rowsSwept 0 vs 1). That measurement was right and the inference was
+  // wrong: the consumer was not the defect, the DOMAIN was incomplete. The row
+  // it compares against, the tombstone instants beside it and the
+  // authoritative observation boundary were each stamped by a different clock.
+  // With every producer reading an owner TimeSource, the comparison closes and
+  // the original expectation holds again.
   const {service, timeSource} = serviceOnVirtualClock();
   const cache = service.systemTableCache;
+  // The row's own writer stamps it in the same domain as the reader.
   cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
-    {service_id: 'stale', status: 'active', updated_at: Date.now() - 10_000});
+    {service_id: 'stale', status: 'active', updated_at: timeSource.now() - 10_000});
   service.executeAuthoritativeSystemTableRead = async () => ({
     success: true, rows: [], source: 'owner_rpc_lane',
     readAuthorityWitness: {
       state: 'observed', partitionId: INITIAL_PARTITION_IDS.services,
       role: RAFT_ROLE.LEADER, servingNodeId: 'N1',
-      servingReplicaId: 'services-p1-r1', observedAtMs: Date.now(),
+      servingReplicaId: 'services-p1-r1', observedAtMs: timeSource.now(),
     },
   });
   const summary = await service.hydrateCdcPropagatedTablesFromAuthority({
@@ -202,9 +211,35 @@ test('the catch-up sweep still reads stale rows on the wall clock under a virtua
   });
   assert.equal(timeSource.now(), 0, 'the virtual clock never moved');
   assert.equal(summary.rowsSwept, 1,
-    'the stale row is swept: the stamp it is compared against is on the wall clock');
+    'the stale row is swept: every stamp in the comparison is one domain');
   assert.equal(cache.has(TABLES.SERVICES, 'stale'), false);
 });
+
+test('MUTATION: one producer back on ambient time breaks the sweep again',
+  async () => {
+    // The red-on-revert for the domain repair: put the ROW's stamp back on the
+    // process clock while the reader stays on the owner clock, and the sweep
+    // goes inert exactly as it did when only the consumer had moved.
+    const {service, timeSource} = serviceOnVirtualClock();
+    const cache = service.systemTableCache;
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT,
+      {service_id: 'stale', status: 'active', updated_at: Date.now() - 10_000});
+    service.executeAuthoritativeSystemTableRead = async () => ({
+      success: true, rows: [], source: 'owner_rpc_lane',
+      readAuthorityWitness: {
+        state: 'observed', partitionId: INITIAL_PARTITION_IDS.services,
+        role: RAFT_ROLE.LEADER, servingNodeId: 'N1',
+        servingReplicaId: 'services-p1-r1', observedAtMs: timeSource.now(),
+      },
+    });
+    const summary = await service.hydrateCdcPropagatedTablesFromAuthority({
+      tables: [TABLES.SERVICES], maxAttemptsPerTable: 1,
+    });
+    assert.equal(summary.rowsSwept, 0,
+      'a row stamped in another time domain looks newer than the read that ' +
+      'began before it, so the safety check declines to sweep it');
+    assert.equal(cache.has(TABLES.SERVICES, 'stale'), true);
+  });
 
 test('the owner holds one clock, the injected one, and defaults to the platform clock', () => {
   const {service, timeSource} = serviceOnVirtualClock();
@@ -213,3 +248,108 @@ test('the owner holds one clock, the injected one, and defaults to the platform 
   assert.ok(plain.timeSource instanceof RealTimeSource,
     'with nothing injected the default is the platform clock, byte-for-byte');
 });
+
+test('the HLC is the service\'s child clock, not its own time authority', () => {
+  // The seam this pins: CDC constructed HLCClockService without threading its
+  // TimeSource, so inside a deterministic node the HLC resolved a
+  // RealTimeSource of its own and read platform time underneath a subsystem
+  // that had been handed a virtual clock. The repair is the missing arrow at
+  // the construction boundary; RealTimeSource itself is untouched and remains
+  // the default for everyone who supplies nothing.
+  const {service, timeSource} = serviceOnVirtualClock();
+  assert.equal(service.hlcClock.timeSource, timeSource,
+    'the HLC reads the clock its parent was given');
+  assert.equal(service.hlcClock.physical, timeSource.now(),
+    'and its physical component starts at the owner\'s instant');
+
+  // Advancing the owner clock moves the HLC's physical component; wall time
+  // never enters the comparison.
+  timeSource.advance(5000);
+  const stamped = service.hlcClock.now();
+  assert.equal(stamped.physical, timeSource.now(),
+    'an HLC timestamp tracks the owner clock across a threshold move');
+  assert.ok(stamped.physical < Date.now(),
+    'and is nowhere near platform time, which is what a defaulted ' +
+    'RealTimeSource would have produced');
+});
+
+test('MUTATION: an HLC that resolves its own clock leaves the owner\'s domain',
+  () => {
+    const {service, timeSource} = serviceOnVirtualClock();
+    // Exactly what the unthreaded construction produced.
+    const unthreaded = new HLCClockService(NODE_ID);
+    assert.notEqual(unthreaded.physical, timeSource.now(),
+      'a defaulted HLC starts on platform time, not the node\'s instant');
+    assert.ok(unthreaded.physical >= service.hlcClock.physical,
+      'which is the drift the threading removed');
+  });
+
+test('a write duration is measured end to end on the owner clock', async () => {
+  // A duration proof, not a threshold one: this timestamp selects no branch,
+  // it reports how long a write took. The claim is that ONE owner clock
+  // defines both ends, so the reported elapsed time is virtual time that
+  // actually passed during the dependency rather than host time that happened
+  // to pass around it.
+  const ELAPSED_MS = 4000;
+  const {service, timeSource} = serviceOnVirtualClock();
+  const metrics = [];
+  service.logger = {
+    ...QUIET_LOGGER,
+    info(tag, payload) {
+      if (tag === METRICS_LOG_TAG.CDC_WRITE) metrics.push(payload);
+    },
+  };
+  // The controlled dependency: virtual time advances while the write is in
+  // flight, exactly as a slow write would.
+  service.executeSQL = async () => {
+    timeSource.advance(ELAPSED_MS);
+    return {success: true, changes: 1};
+  };
+  service.waitForCacheUpdate = async () => undefined;
+  await service.insertSystemTableRow(TABLES.SERVICES,
+    {service_id: 'duration-witness', status: 'active'});
+  const [written] = metrics;
+  assert.ok(written, 'the write metric was emitted');
+  assert.equal(written.sqlDurationMs, ELAPSED_MS,
+    'the reported duration is the virtual time that passed during the write');
+  assert.equal(written.cacheWaitDurationMs, 0,
+    'and the cache wait, which consumed no virtual time, reports none');
+});
+
+test('MUTATION: mixing ambient time into a duration breaks its end-to-end claim',
+  async () => {
+    // Half the measurement on the owner clock and half on the process clock
+    // is exactly the shape that makes a deterministic run depend on host
+    // speed: the reported elapsed time stops being the virtual time that
+    // passed.
+    const ELAPSED_MS = 4000;
+    const {service, timeSource} = serviceOnVirtualClock();
+    const metrics = [];
+    service.logger = {
+      ...QUIET_LOGGER,
+      info(tag, payload) {
+        if (tag === METRICS_LOG_TAG.CDC_WRITE) metrics.push(payload);
+      },
+    };
+    service.executeSQL = async () => {
+      timeSource.advance(ELAPSED_MS);
+      return {success: true, changes: 1};
+    };
+    service.waitForCacheUpdate = async () => undefined;
+    // One end of the duration on ambient time.
+    const virtualNow = timeSource.now.bind(timeSource);
+    let reads = 0;
+    service.timeSource = {
+      ...timeSource,
+      now: () => {
+        reads += 1;
+        return reads === 1 ? Date.now() : virtualNow();
+      },
+    };
+    await service.insertSystemTableRow(TABLES.SERVICES,
+      {service_id: 'duration-witness', status: 'active'});
+    const [written] = metrics;
+    assert.notEqual(written.sqlDurationMs, ELAPSED_MS,
+      'a duration whose ends come from different clocks no longer reports ' +
+      'the virtual time that passed');
+  });

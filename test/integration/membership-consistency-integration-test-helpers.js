@@ -154,8 +154,11 @@ class MockMessageGroupService extends EventEmitter {
 }
 
 
-function createNodeEntry(nodeId, overrides = {}) {
-  const now = Date.now();
+// A pure row builder: it receives the observation time as DATA rather than
+// reading a clock, so a deterministic host can seed rows on its node's time.
+// The ambient default keeps every existing caller byte-identical.
+function createNodeEntry(nodeId, overrides = {}, nowMs = Date.now()) {
+  const now = nowMs;
   return {
     node_id: nodeId,
     node_address: `ws://${nodeId}:9000`,
@@ -230,6 +233,9 @@ function createMessageRouterHost(options = {}) {
     nodeId: options.nodeId || HOST_NODE_ID,
     nodeAddress: HOST_ROUTER_ADDRESS,
     wsPort: 0,
+    // A deterministic host may name its router; otherwise the ambient draw
+    // stands, exactly as before.
+    routerId: options.routerId || undefined,
   });
 }
 

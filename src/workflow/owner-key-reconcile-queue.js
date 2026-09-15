@@ -15,6 +15,14 @@
  */
 
 import {EventEmitter} from 'events';
+import {
+  recordStaleFenceRejection,
+} from './owner-key-reconcile-queue-stale-fence.js';
+import {
+  awaitReconcileQueueCurrentWorkIdle,
+  isReconcileQueueCurrentWorkIdle,
+  notifyReconcileQueueCurrentWorkIdle,
+} from './owner-key-reconcile-queue-current-work.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {
   RECONCILE_QUEUE_SUBSYSTEM,
@@ -150,6 +158,9 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this._staleClaimIndex = 0;
     this.draining = false;
     this.stopped = false;
+    // Callers waiting for the CURRENT work of this queue to finish. See
+    // awaitCurrentWorkIdle() for what that does and does not include.
+    this._currentWorkIdleWaiters = [];
 
     // Aggregate counters for stale-fence diagnostics.
     this._staleFenceRejectionCount = 0;
@@ -414,6 +425,23 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     return true;
   }
 
+  // The current-work completion contract; owner-key-reconcile-queue-current-work.js
+  // holds what it does and does not include.
+  /** @return {boolean} */
+  isCurrentWorkIdle() {
+    return isReconcileQueueCurrentWorkIdle(this);
+  }
+
+  /** @return {Promise<void>} */
+  awaitCurrentWorkIdle() {
+    return awaitReconcileQueueCurrentWorkIdle(this);
+  }
+
+  /** @private */
+  _notifyCurrentWorkIdle() {
+    notifyReconcileQueueCurrentWorkIdle(this);
+  }
+
   /**
    * Schedule a drain if not already draining.
    * Uses a microtask to batch rapid enqueues.
@@ -457,6 +485,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     } finally {
       this.draining = false;
       this._schedulePendingDrainIfAvailable();
+      this._notifyCurrentWorkIdle();
     }
   }
 
@@ -527,6 +556,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
           ownerKey,
         });
       this._schedulePendingDrainIfAvailable();
+      this._notifyCurrentWorkIdle();
     }
   }
 
@@ -631,34 +661,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   _recordStaleFenceDiagnostic(
     ownerKey, item, providedToken, currentToken,
   ) {
-    const diagnostic = {
-      type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_FENCE_TOKEN,
-      queue: this.name,
-      ownerKey,
-      reasons: snapshotSetValues(item.reasons),
-      providedToken,
-      currentToken,
-      timestamp: this.now(),
-    };
-    this._staleFenceRejectionCount++;
-    recordStaleFenceDiagnosticSamples(
-      this,
-      diagnostic,
-      STALE_FENCE_SAMPLE_CAPACITY,
-    );
-    this.emit(
-      RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_DRAIN,
-      diagnostic,
-    );
-    rejectWorkItemCompletionWaiters(
-      item,
-      new Error(RECONCILE_QUEUE_ERROR_MSG.STALE_FENCE_TOKEN),
-    );
-
-    this.logger.debug(
-      RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, {
-        ...diagnostic,
-      });
+    recordStaleFenceRejection(this, ownerKey, item, providedToken, currentToken);
   }
 
   /**
@@ -775,6 +778,10 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this._staleFenceSampleIndex = 0;
     this._retryableDrainFailureSamples = [];
     this._retryableDrainFailureSampleIndex = 0;
+    // A shut-down queue has no current work by definition; a caller waiting
+    // on it must not be left holding a promise nothing can settle.
+    this.draining = false;
+    this._notifyCurrentWorkIdle();
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {
       queue: this.name,
     });

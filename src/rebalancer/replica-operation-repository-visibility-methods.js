@@ -110,7 +110,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return;
       }
       this.ownerPersistedTransitionVisibilityWitnesses.set(operation.operationId, {
-        recordedAtMs: Date.now(),
+        recordedAtMs: this.timeSource.now(),
         operation: this.cloneIncompleteOperationObservation(operation),
       });
     }
@@ -129,7 +129,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         return null;
       }
       if (
-        Date.now() - witness.recordedAtMs >
+        this.timeSource.now() - witness.recordedAtMs >
       this.resolveOwnerPersistedTransitionVisibilityGraceMs()
       ) {
         this.ownerPersistedTransitionVisibilityWitnesses.delete(operationId);
@@ -302,7 +302,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
         INCOMPLETE_OPERATION_OBSERVATION_SOURCE.CACHE_OR_AUTHORITATIVE_READ;
       this.lastIncompleteOperationObservation =
       this.cloneIncompleteOperationObservationSet(operations);
-      this.lastIncompleteOperationObservationAtMs = Date.now();
+      this.lastIncompleteOperationObservationAtMs = this.timeSource.now();
       this.lastIncompleteOperationObservationSource = source;
     }
     syncIncompleteOperationObservation(operation) {
@@ -371,7 +371,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       if (!readinessService) {
         return null;
       }
-      const observedAt = Date.now();
+      const observedAt = this.timeSource.now();
       if (
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
         'function'
@@ -449,7 +449,7 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       return (
         Array.isArray(this.lastIncompleteOperationObservation) &&
       this.lastIncompleteOperationObservation.length > 0 &&
-      Date.now() - this.lastIncompleteOperationObservationAtMs <=
+      this.timeSource.now() - this.lastIncompleteOperationObservationAtMs <=
         this.resolveIncompleteOperationObservationGraceMs()
       );
     }

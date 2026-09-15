@@ -359,7 +359,9 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       moveLimit,
     });
 
-    this.lastRebalanceTime = Date.now();
+    // The planning cycle's own clock. This owner holds nowFn; reading the
+    // ambient one here made a deterministic node's cycle depend on host time.
+    this.lastRebalanceTime = this.nowFn();
     this.rebalanceCount++;
 
     this.emit(REBALANCER_EVENT.REBALANCE_COMPLETE, {
@@ -387,7 +389,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     }
     return readinessService.getCurrentPublishedMembershipEpochSync(
       this.nodeId,
-      Date.now(),
+      this.nowFn(),
     );
   }
 }

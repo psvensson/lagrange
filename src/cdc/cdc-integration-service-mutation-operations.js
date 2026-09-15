@@ -243,7 +243,7 @@ class CDCIntegrationServiceMutationOperations {
         const sql =
           `${options?.ignoreExisting === true ? SQL.INSERT_OR_IGNORE_INTO : SQL.INSERT_INTO} ${tableName} (${columns}) ` +
           `${SQL.VALUES} (${placeholders})`;
-        const sqlStartMs = Date.now();
+        const sqlStartMs = this.timeSource.now();
         const result = await this.executeSQL(sql, values, {
           queryTimeoutMs: options?.queryTimeoutMs,
           cancellationToken: options?.cancellationToken || null,
@@ -260,7 +260,7 @@ class CDCIntegrationServiceMutationOperations {
           recoveryCandidateSelectionKey:
             options?.recoveryCandidateSelectionKey,
         });
-        const sqlDurationMs = Date.now() - sqlStartMs;
+        const sqlDurationMs = this.timeSource.now() - sqlStartMs;
         if (!result.success) {
           throw buildSystemTableMutationError(
             result,
@@ -269,7 +269,7 @@ class CDCIntegrationServiceMutationOperations {
         }
         const pkField = this.getPrimaryKeyField(tableName);
         const pkValue = rowData[pkField];
-        const cacheWaitStartMs = Date.now();
+        const cacheWaitStartMs = this.timeSource.now();
         let visibilityResult = buildSystemTableVisibilityResult();
         if (pkValue && options?.skipCacheWait !== true) {
           visibilityResult = normalizeSystemTableVisibilityResult(
@@ -278,7 +278,7 @@ class CDCIntegrationServiceMutationOperations {
             }),
           );
         }
-        const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
+        const cacheWaitDurationMs = this.timeSource.now() - cacheWaitStartMs;
         if (shouldEmitTableWriteMetric(tableName)) {
           try {
             this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
@@ -421,7 +421,7 @@ class CDCIntegrationServiceMutationOperations {
         const sql =
           `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
           `${SQL.WHERE} ${whereStr}`;
-        const sqlStartMs = Date.now();
+        const sqlStartMs = this.timeSource.now();
         const result = await this.executeSQL(
           sql,
           [...setValues, ...whereValues],
@@ -442,14 +442,14 @@ class CDCIntegrationServiceMutationOperations {
             replacePendingKey: options?.replacePendingKey,
           },
         );
-        const sqlDurationMs = Date.now() - sqlStartMs;
+        const sqlDurationMs = this.timeSource.now() - sqlStartMs;
         if (!result.success) {
           throw buildSystemTableMutationError(
             result,
             CDC_ERROR_MSG.UPDATE_FAILED,
           );
         }
-        const cacheWaitStartMs = Date.now();
+        const cacheWaitStartMs = this.timeSource.now();
         let visibilityResult = buildSystemTableVisibilityResult();
         if (
           options?.skipCacheWait !== true &&
@@ -474,7 +474,7 @@ class CDCIntegrationServiceMutationOperations {
             }),
           );
         }
-        const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
+        const cacheWaitDurationMs = this.timeSource.now() - cacheWaitStartMs;
         if (shouldEmitTableWriteMetric(tableName)) {
           try {
             this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {

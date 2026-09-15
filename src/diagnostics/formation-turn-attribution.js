@@ -15,6 +15,8 @@ const OVERLAP_ERROR = 'formation attribution segments overlap the window';
 const CONCURRENT_WINDOW_ERROR =
   'formation attribution already has an active window';
 const RESTART_ERROR = 'formation attribution instances are one-shot';
+const NESTED_GENERATION_ERROR =
+  'formation simulation generations do not nest';
 // Provenance-report vocabulary. Debug output only: it names nothing the
 // counting or scheduling contracts depend on.
 const PROVENANCE_STACK_ABSENT = '(none)';
@@ -59,6 +61,10 @@ let activeAttribution = null;
 // immediately around the callback; storage is what carries it across the
 // awaits inside.
 const executionNodeContext = new AsyncLocalStorage();
+const FORMATION_EXECUTION_CONTEXT_NONE = Object.freeze({
+  generationId: null,
+  executionNodeId: null,
+});
 // A dispatched async resource overrides the ambient store for its own
 // callback: the resource remembers the node that scheduled it, and that must
 // beat whatever the scheduler ran most recently.
@@ -70,14 +76,98 @@ const executionNodeContext = new AsyncLocalStorage();
 // justified it, and an unfalsifiable resolver must not be authoritative. The
 // captured node survives as diagnostic metadata only (asyncExecutionNodes),
 // where it can be asserted about without deciding placement.
+// The simulation generation whose frames are authoritative right now. A
+// generation root sets it; everything outside one leaves it null, which is
+// the ordinary production case and is why production behaviour is unchanged.
+let activeExecutionGenerationId = null;
+
+// LINEAGE TRACKING, which is not the charging window.
+//
+// Which async resources belong to the active generation, tagged from the
+// moment the generation root is entered - before any scenario object exists,
+// and therefore before production work can create a resource whose ancestry
+// would otherwise be unknown. The measurement window still opens and closes
+// where it did; this map only answers "whose is this resource", so that a
+// callback dispatching inside the window is attributed correctly and a
+// foreign one is not attributed at all.
+const asyncGenerationIds = new Map();
+let generationLineageHook = null;
+
+function beginGenerationLineage(createHookFn) {
+  generationLineageHook = createHookFn({
+    init: (asyncId) => {
+      const stored = executionNodeContext.getStore();
+      // Only resources created INSIDE this generation's async scope. A host
+      // resource created while the generation happens to be running - the
+      // test runner's own, say - has no frame of ours and stays untagged.
+      if (stored !== undefined &&
+        stored.generationId === activeExecutionGenerationId) {
+        asyncGenerationIds.set(asyncId, stored.generationId);
+      }
+    },
+  });
+  // No destroy callback on purpose: a tag must not be able to disappear on a
+  // garbage-collection schedule. The whole map is dropped when the generation
+  // ends, which is the only moment its answers stop being needed.
+  generationLineageHook.enable();
+}
+
+function endGenerationLineage() {
+  if (generationLineageHook === null) return;
+  generationLineageHook.disable();
+  generationLineageHook = null;
+  asyncGenerationIds.clear();
+}
+
+// Whether a dispatching resource is this generation's work at all. Outside a
+// generation - ordinary production - everything is, and nothing changes.
+function isActiveGenerationResource(asyncId) {
+  if (activeExecutionGenerationId === null) return true;
+  return asyncGenerationIds.get(asyncId) === activeExecutionGenerationId;
+}
+
 function currentExecutionFrame() {
   const stored = executionNodeContext.getStore();
-  return stored === undefined ? null : stored;
+  if (stored === undefined) return null;
+  // A frame belonging to another generation is ambient host ancestry as far
+  // as this one is concerned. Without this, a callback left over from a
+  // finished simulation - or a caller whose promise still descends from one -
+  // hands its node to the next simulation's root work, and the same seed
+  // charges different nodes depending on what ran before it.
+  if (stored.generationId !== activeExecutionGenerationId) return null;
+  return stored;
 }
 
 function currentExecutionNodeId() {
   const frame = currentExecutionFrame();
   return frame === null ? null : frame.nodeId;
+}
+
+/**
+ * The formation execution context of whatever is running right now: the sole
+ * authority on "is this code executing as part of a simulated production
+ * process".
+ *
+ * It reads the SAME async-local record runOnExecutionNode writes, and it reads
+ * it RAW: the generation travels with the frame rather than being looked up
+ * from a module global, so a continuation that belongs to generation A is
+ * still reported as generation A even if it executes late, during B. That is
+ * what stops one generation from donating node identity to the next.
+ *
+ * Owner attribution is orthogonal. Production may legitimately run with a
+ * generation and an execution node and no owner at all, and it is production
+ * either way.
+ * @return {{generationId: (string|null), executionNodeId: (string|null)}}
+ */
+function currentFormationExecutionContext() {
+  const stored = executionNodeContext.getStore();
+  if (stored === undefined) {
+    return FORMATION_EXECUTION_CONTEXT_NONE;
+  }
+  return Object.freeze({
+    generationId: stored.generationId ?? null,
+    executionNodeId: stored.nodeId ?? null,
+  });
 }
 
 /**
@@ -89,7 +179,41 @@ function currentExecutionNodeId() {
  */
 function runOnExecutionNode(executionNodeId, callback, event = null) {
   return executionNodeContext.run(
-    {nodeId: executionNodeId, event}, callback);
+    {nodeId: executionNodeId, event, generationId: activeExecutionGenerationId},
+    callback);
+}
+
+/**
+ * Run one whole simulation inside an explicit, tracked root.
+ *
+ * The root is NODE-NEUTRAL and it OVERRIDES whatever async context invoked
+ * the simulation: harness plumbing belongs to no simulated process, and the
+ * deterministic scheduler is the only authority that introduces a node. A
+ * simulation invoked from a promise that still descends from the previous
+ * simulation's node-0 work therefore begins neutral instead of inheriting
+ * node-0, and a simulation invoked first in a fresh process is not left
+ * without a root merely because nothing had entered one yet.
+ *
+ * Establishing the root before any scenario object exists is what keeps
+ * lineage tracking ahead of production resource creation; it does not move
+ * the measurement window, which still opens and closes where it did.
+ * @param {string} generationId - unique per simulation invocation
+ * @param {Function} callback
+ * @returns {Promise<*>} the callback's result
+ */
+async function runOnSimulationGenerationRoot(generationId, callback) {
+  if (activeExecutionGenerationId !== null) {
+    throw new Error(NESTED_GENERATION_ERROR);
+  }
+  activeExecutionGenerationId = generationId;
+  beginGenerationLineage(createHook);
+  try {
+    return await executionNodeContext.run(
+      {nodeId: null, event: null, generationId}, callback);
+  } finally {
+    endGenerationLineage();
+    activeExecutionGenerationId = null;
+  }
 }
 
 function monotonicClockUs() {
@@ -187,6 +311,8 @@ class FormationTurnAttribution {
     this.activeOwnerEntryStack = null;
     this.asyncOwners = new MapConstructor();
     this.asyncExecutionNodes = new MapConstructor();
+    // Dispatches skipped as foreign, so their matching `after` closes nothing.
+    this.foreignDispatches = new MapConstructor();
     // Additive, and empty unless a scheduler binds execution nodes: owner ->
     // count per node, alongside the aggregate rows, which keep exactly the
     // values they had before this repair.
@@ -408,6 +534,15 @@ class FormationTurnAttribution {
 
   recordDispatchStart(asyncId) {
     if (!this.started) return;
+    // Foreign ambient work: a resource of no active generation - the test
+    // runner's, the caller's, or one left behind by an earlier generation -
+    // is not this simulation's work and opens no simulator segment. It is
+    // deliberately NOT charged to a node either, which is the same rule seen
+    // from the other side.
+    if (!isActiveGenerationResource(asyncId)) {
+      mapSet(this.foreignDispatches, asyncId, true);
+      return;
+    }
     // The captured node wins over whatever the scheduler ran most recently:
     // this resumption is the CPU of the node that scheduled it, even if the
     // scheduler ran another node's work in between.
@@ -417,7 +552,11 @@ class FormationTurnAttribution {
     );
   }
 
-  recordDispatchEnd(_asyncId) {
+  recordDispatchEnd(asyncId) {
+    if (mapHas(this.foreignDispatches, asyncId)) {
+      mapDelete(this.foreignDispatches, asyncId);
+      return;
+    }
     this.leaveSegment();
   }
 
@@ -604,8 +743,10 @@ function releaseFormationOwnerDescendants(owner) {
 export {
   EXECUTION_NODE_UNBOUND_ERROR,
   FormationTurnAttribution,
+  currentFormationExecutionContext,
   currentFormationExecutionNodeId,
   releaseFormationOwnerDescendants,
   runFormationOwner,
   runOnExecutionNode,
+  runOnSimulationGenerationRoot,
 };

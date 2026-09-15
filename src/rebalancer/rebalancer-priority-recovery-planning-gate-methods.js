@@ -696,7 +696,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       operationCreationPartitionId:
         operationCreationGate?.operationCreationPartitionId || null,
       syncPlanningSnapshotAvailable,
-      observedAtMs: Date.now(),
+      // The rebalancer's own clock, which this owner already holds. The
+      // stamp is diagnostic, and it belongs to the owner all the same.
+      observedAtMs: this.nowFn(),
     });
     this.lastPriorityRecoveryPlanningGateDiagnostic = diagnostic;
     this.logger.info(

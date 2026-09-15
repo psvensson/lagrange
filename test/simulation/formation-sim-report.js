@@ -105,6 +105,11 @@ function buildReport(outcome) {
     scenario: SCENARIO,
     producer: PRODUCER,
     fidelity: FIDELITY,
+    // Proof eligibility travels with the artifact. A run that recorded an
+    // ambient production seam, or that ran in migration-discovery mode, can
+    // never contribute deterministic proof, and every certification consumer
+    // reads this rather than trusting the caller.
+    proofEligibility: outcome.proofEligibility || null,
     timestamp: isoAt(outcome.windowEndedAtMs),
     formationMetrics: {
       schemaVersion: METRICS_SCHEMA_VERSION,

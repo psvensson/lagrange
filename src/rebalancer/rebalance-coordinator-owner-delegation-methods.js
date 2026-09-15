@@ -13,7 +13,9 @@ class RebalanceCoordinatorOwnerDelegationMethods {
    * @private
    */
   pruneExpiredOperationIntents() {
-    const now = Date.now();
+    // The coordinator's own clock, which it already holds and already uses
+    // for every other delegation deadline.
+    const now = this.timeSource.now();
     for (const [key, entry] of this.recentOperationIntents.entries()) {
       if (!entry || entry.expiresAt <= now) {
         this.recentOperationIntents.delete(key);
@@ -164,7 +166,7 @@ class RebalanceCoordinatorOwnerDelegationMethods {
     }
     return this.controlPlaneReadinessService.getCurrentPublishedMembershipEpochSync(
       this.nodeId,
-      Date.now(),
+      this.timeSource.now(),
     );
   }
 

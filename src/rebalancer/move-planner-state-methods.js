@@ -384,6 +384,19 @@ function createMovePlannerStateMethods(deps = {}) {
     }
 
     /**
+     * The planning cycle owner's instant, projected. The planner is not a
+     * time authority; it falls back to the platform clock only where no owner
+     * supplied one, which keeps every non-rebalancer caller byte-identical.
+     * @return {number}
+     */
+    resolveMovePlannerNowMs() {
+      const ownerNowFn = this.moveStateProvider?.nowFn;
+      return typeof ownerNowFn === MOVE_PLANNER_LITERAL.FUNCTION ?
+        ownerNowFn() :
+        Date.now();
+    }
+
+    /**
      * Capture real cache generation and observation watermarks at one edge of
      * an inventory read. Callers bracket row/operation capture with two of
      * these snapshots; the inventory owner compares like-domain revisions.
@@ -403,7 +416,11 @@ function createMovePlannerStateMethods(deps = {}) {
         causeId: canReadCause ? cache.getLastAppliedCauseId(tableName) : null,
       });
       return {
-        capturedAtMs: Date.now(),
+        // The planner is not a time authority. This watermark is compared
+        // against cache-stamped observation times, so it reads the clock of
+        // the owner that drives the planning cycle - a projection of the
+        // rebalancer's, never a second clock of the planner's own.
+        capturedAtMs: this.resolveMovePlannerNowMs(),
         committedRows: captureTable(SYSTEM_TABLE_NAME.SERVICES),
         inFlightOperations: captureTable(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
       };

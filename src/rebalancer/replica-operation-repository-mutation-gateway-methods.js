@@ -43,7 +43,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
   class ReplicaOperationRepositoryMutationGatewayMethods {
     async executeOperationMutationWithRetry(sql, params, options = {}) {
-      const startedAt = Date.now();
+      const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(
@@ -63,7 +63,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         if (result.success || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
-        const elapsedMs = Date.now() - startedAt;
+        const elapsedMs = this.timeSource.now() - startedAt;
         const remainingMs = this.resolveOperationMutationRemainingRetryMs(
           elapsedMs,
           options.timeoutBudget,
@@ -93,7 +93,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       options = {},
       fallback = {},
     ) {
-      const startedAt = Date.now();
+      const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
@@ -128,7 +128,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ) {
           return result;
         }
-        const elapsedMs = Date.now() - startedAt;
+        const elapsedMs = this.timeSource.now() - startedAt;
         const remainingMs = this.resolveOperationMutationRemainingRetryMs(
           elapsedMs,
           options.timeoutBudget,

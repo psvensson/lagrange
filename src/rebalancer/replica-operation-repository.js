@@ -15,6 +15,7 @@
  */
 
 import {v4 as uuidv4} from 'uuid';
+import {resolveTimeSource} from '../time/time-source.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -543,6 +544,14 @@ class ReplicaOperationRepository {
     this.logger = options.logger;
     this.emitter = options.emitter || null;
     this.random = typeof options.random === 'function' ? options.random : Math.random;
+    // The repository owns its own deadlines - incomplete-read backoff, query
+    // duration and staleness, warning throttles, visibility grace - and reads
+    // them from the clock its parent hands it, never from the ambient one. A
+    // host that executes faster must not be able to move a backoff predicate
+    // and change which authoritative read happens. The default is
+    // RealTimeSource, which delegates to platform time, so live behaviour is
+    // unchanged.
+    this.timeSource = resolveTimeSource(options);
     this.lastIncompleteOperationQueryWarningAtMs = 0;
     this.nextIncompleteOperationSqlRetryAtMs = 0;
     this.lastIncompleteOperationObservation = [];

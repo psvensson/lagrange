@@ -534,7 +534,7 @@ class CDCRoutedMutationReadiness {
             ERRORS.QUERY_FAILED,
           );
         }
-        const attemptStartMs = Date.now();
+        const attemptStartMs = this.timeSource.now();
         const queryOptions = {
           ...baseQueryOptions,
         };
@@ -608,7 +608,7 @@ class CDCRoutedMutationReadiness {
         }
         if (shouldEmitTableWriteMetric(tableName)) {
           try {
-            const durationMs = Date.now() - attemptStartMs;
+            const durationMs = this.timeSource.now() - attemptStartMs;
             this.logger.info(METRICS_LOG_TAG.CDC_SQL_ROUTE, {
               durationMs,
               attempt,

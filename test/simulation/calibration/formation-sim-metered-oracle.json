@@ -1,0 +1,83 @@
+{
+  "schema": "formation-sim-metered-oracle/1",
+  "supersedes": {
+    "oracle": "429-entry metered trace",
+    "reason": "Captured under a completion model since causally falsified: simulate() could return with accepted rebalancer production work outstanding, and the simulator read ambient host time from 405 sites inside simulated-node execution. Every number measured during the migration - 429, 413, 391 before closure, 411, 296 - is a transient property of an intentionally defective execution and none of them was a target."
+  },
+  "identity": {
+    "head": "5da0d7348109962a3af5083f561047d36c18895e",
+    "scenario": "formation-sim",
+    "seed": 7,
+    "calibrationHead": "8a6275a4d332215d6d6c47ce2925b0f3e92c8fa3",
+    "calibrationDigest": "97f38aa5817f78c0dc0daee956f93ec40ac69286e5846b73a9c095db2150eda1"
+  },
+  "proof": {
+    "ambientSeamMode": "strict",
+    "ambientSeamViolationCount": 0,
+    "ambientSeamSubstitutionCount": 0,
+    "deterministicProofEligible": true
+  },
+  "artifacts": {
+    "meteredEntryCount": 391,
+    "meteredTranscriptHash": "a4c6ec504df54558",
+    "deterministicEventCount": 10120,
+    "deterministicEventHash": "8bd0a05c4da0ba84",
+    "rawAttributionSegmentCount": 277623,
+    "rawAttributionHash": "ff530b9157cdc869",
+    "chargeSequenceHash": "9a13ed89486e906c",
+    "reportHash": "4ff8340d202695d8",
+    "availableReadCount": 45,
+    "clusterFormedAtMs": 1789295958026,
+    "fifthJoinAtMs": 1789295958000
+  },
+  "perNodeChargedMs": {
+    "node-0": {
+      "busyMs": 1066,
+      "membership_publication": 1,
+      "raft_protocol": 92,
+      "readiness": 105,
+      "rebalancer": 868
+    },
+    "node-1": {
+      "busyMs": 203,
+      "raft_protocol": 102,
+      "readiness": 101,
+      "rebalancer": 0
+    },
+    "node-2": {
+      "busyMs": 175,
+      "raft_protocol": 85,
+      "readiness": 90,
+      "rebalancer": 0
+    },
+    "node-3": {
+      "busyMs": 125,
+      "raft_protocol": 30,
+      "readiness": 95,
+      "rebalancer": 0
+    },
+    "node-4": {
+      "busyMs": 93,
+      "raft_protocol": 0,
+      "readiness": 93,
+      "rebalancer": 0
+    }
+  },
+  "perOwnerChargedMs": {
+    "rebalancer": 868,
+    "readiness": 484,
+    "raft_protocol": 309,
+    "membership_publication": 1,
+    "admin": 0,
+    "bootstrap": 0,
+    "raft_apply": 0,
+    "transport": 0,
+    "worker_dispatch": 0
+  },
+  "authority": "This is the first valid oracle: it was captured under complete current-instant owner closure, runner-independent attribution, generation isolation, owner-owned production clocks and zero ambient seams. The count is an output of those semantics and was never targeted; it is not 'restored' and not 'expected'.",
+  "tripwireOnly": "The hashes are a tripwire on top of causal witnesses, never the only proof. The semantic revert protections live separately: removing rebalancer current-work participation turns the instant-closure completion falsifier red; restoring an ambient repository, cache or CDC clock turns the strict seam witnesses red; restoring dispatch-only production identity turns the lineage witnesses red; swallowing an ambient exception still leaves the generation ledger refusing; and restoring the old instant driver turns the instant-closure witnesses red.",
+  "knownAmbientSiteOutsideProofCone": {
+    "site": "src/partition/partition-service-entry-apply-base.js readAuthorityWitness.observedAtMs",
+    "status": "Known ambient time source outside the current formation simulator proof cone; no clock owner exists at this boundary today. Not suppressed in the guard and not excepted: if a future deterministic scenario executes that site as simulated production, strict mode fails and forces a separate owner decision."
+  }
+}

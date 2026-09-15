@@ -54,7 +54,13 @@ class MessageRouter extends EventEmitter {
       normalizeToWebSocketAddress(this.nodeAddress) ||
       this.nodeAddress;
     this.wsPort = options.wsPort || null;
-    this.routerId = uuidv4();
+    // Injectable for the same reason nodeId is: a deterministic host must be
+    // able to supply an identity rather than draw one from the process
+    // entropy pool. The ambient draw stays the default, so production is
+    // unchanged; without the seam a deterministic simulator's transcript
+    // depends on how many UUIDs the PROCESS has minted, because the pool
+    // refills on an async crypto request every 128 draws.
+    this.routerId = options.routerId || uuidv4();
     this.identifyPayload = options.identifyPayload || null;
     // This boot's locally minted incarnation (rejoin-hints counter). Stamped
     // on every IDENTIFY frame so receivers fence stale-incarnation (zombie)

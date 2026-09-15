@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-production-time-authority-closure",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Zero ambient clock reads from simulator-hosted production code. Production time is supplied solely by the owning node or subsystem TimeSource, threaded from the owner that already holds one rather than minted locally, and the one deterministic-owner ambient-seam guard covers every tagged production execution boundary - scheduler dispatch as well as owner-pass execution - so the next missed seam refuses instead of hiding. The acceptance condition is the dynamic one: in a deterministic run, ambient clock reads and ambient timer scheduling from tagged production are both zero for the APIs the guard owns.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-production-time-authority.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "classification",
+      "statement": "Ambient-clock authority escape, superseding C1/C2/C3 for this residual. Host execution speed reaches Date.now(), which reaches a production staleness or backoff predicate, which changes an authoritative read decision, which changes charged rebalancer work, which moves a virtual instant. Making wall time deterministic eliminates the whole divergence, so no further cold-process-state theory is required."
+    },
+    {
+      "id": "owner-threaded-time",
+      "statement": "An owner that already has a TimeSource uses it. A child owner is threaded the parent's source at construction. A pure helper takes nowMs as data and never acquires a clock dependency. A leaf module never becomes a new time authority; where no clock owner exists the semantic owner is identified first. A node-scoped shared component such as the system-table cache takes the node's single clock authority at construction, so one node clock serves many node-owned subsystems."
+    },
+    {
+      "id": "one-guard-broader-boundary",
+      "statement": "There remains exactly one deterministic-owner ambient-seam authority. Its coverage boundary widens to tagged production scheduler dispatch and it stays re-entrant where boundaries nest; its intrinsic vocabulary is not broadened in this slice. Harness code outside tagged production execution stays outside the rule."
+    },
+    {
+      "id": "no-diagnostic-exemption",
+      "statement": "A Date.now() is not whitelisted because it only computes a log age, a diagnostic duration, a warning throttle or an observed-at stamp: inside deterministic hosted production those still move memo currency, transcript shape, throttling and later decisions. Owner time or an already-captured timestamp, with no exception list."
+    },
+    {
+      "id": "no-global-faking",
+      "statement": "The global wall-clock experiment was causality proof and stays reverted. No monkeypatched Date.now for the simulator, no process time override, no globally frozen host time, no fake timers around production: those hide ambient-time violations instead of repairing ownership."
+    },
+    {
+      "id": "slice-per-owner",
+      "statement": "One owner per slice, committed separately: production default unchanged under RealTimeSource, virtual-time behaviour deterministic, one decision or deadline crossing witness, a raw ambient-clock mutation that goes red, and no second clock where a parent already supplies one. Not a 28-file sweep."
+    },
+    {
+      "id": "oracle-rule",
+      "statement": "No metered-trace count is a target: not 429, 413, 391 or 411. The repaired production-time semantics decide the final trace, and 10,029 is neither re-measured nor preserved until this substrate is deterministic."
+    }
+  ],
+  "sealedAt": "5da0d7348109962a3af5083f561047d36c18895e"
+}

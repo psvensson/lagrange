@@ -143,15 +143,64 @@ No `performance.now`, `process.hrtime`, socket constructor, or direct
 comments and deterministic `new Date(nowValue)` conversion remain visible and
 become explicit allowlist candidates rather than being silently discarded.
 
-Durable enforcement belongs to the simulator. During a tagged owner dispatch,
-deterministic mode installs a guard that throws `nondeterministic_owner_seam`
-on an ambient clock read or timer scheduling call. Harness code outside the
-active owner dispatch remains able to drive virtual time. The determinism check
-must assert this guard by mutation so a reintroduced ambient dependency makes
-the hash proof fail. If a static companion proves useful, it must be a new
-zero-baseline `scripts/checks/formation-path-ambient-time.js` with the same
-sealed path set and an explicit comment/conversion allowlist; modifying or
-rebaselining the guideline checker is forbidden.
+Durable enforcement belongs to the simulator, and the boundary it enforces on
+had to be corrected twice before it held. Both corrections are contracts now.
+
+**Execution authority.** A formation generation's execution-node context is the
+sole authority that code is executing as a simulated production process:
+hosted production means the context names both a generation and an execution
+node. The context propagates through async lineage, and the generation travels
+with the frame rather than being looked up from a module global, so a
+continuation belonging to an earlier generation can never donate its node to
+the one currently running. Owner attribution is orthogonal - production
+running with no owner at all is still production - and harness code executes
+outside the node context. There was briefly a second answer to the same
+question, a production tag established by the dispatch wrapper, and the two
+disagreed: construction, seeding and every continuation released outside a
+dispatch carried the node frame without the tag, so 240 of 241 ambient reads
+executing on a simulated node were treated as harness work. One authority.
+
+**Violation authority.** Ambient access is recorded to a generation-scoped
+ledger *before* any handling. A non-zero ledger makes deterministic proof
+impossible even when production catches the local exception - which it does:
+a guard that only throws was observed to leave the scenario completing
+normally while 19 refusals were swallowed by ordinary retry paths. The throw
+still matters, because it stops the illegal value being consumed; it is not
+the verdict.
+
+**Strict and discover.** Strict is the contract and the default: record, throw,
+and require a terminal ledger of zero. Discover exists only so that migration
+diagnosis need not abort at the first defect, which was never the same concern
+as failing the proof. In discover an attempted ambient `Date.now()` is
+recorded and then answered from the clock the simulated node *already* owns,
+resolved through the simulator's own node-clock lookup; the host value is
+never consumed, nothing constructs a clock, and every other forbidden
+intrinsic still records and throws. Proof eligibility is structural: each
+report carries `proofEligibility`, and a discover run - or any run with a
+non-zero ledger - is `deterministicProofEligible: false`. Certification,
+fixed-seed reproduction, metered-oracle capture and mechanism evidence all
+require strict mode with a zero ledger.
+
+**Owner completion inside the instant.** An owner's current-work completion
+contract participates in current-instant causal closure, alongside the
+deterministic scheduler. A reconcile chain need not create a timer or a
+virtual event, so nothing the scheduler can see reports it; without the
+owner's own contract in the closure set, work admitted at instant T escapes T
+through a promise continuation and lands in a later instant - or, at the end
+of a scenario, inside the next one.
+
+**No metered oracle exists.** The 429-entry trace was captured under a
+completion model since falsified, and every number measured during migration
+(413, 391, 411, 296, 405 violations) is a transient property of an
+intentionally defective execution. A replacement oracle may be captured only
+after strict mode runs to completion with a zero ledger.
+
+The determinism check must assert the guard by mutation so a reintroduced
+ambient dependency makes the hash proof fail. If a static companion proves
+useful, it must be a new zero-baseline
+`scripts/checks/formation-path-ambient-time.js` with the same sealed path set
+and an explicit comment/conversion allowlist; modifying or rebaselining the
+guideline checker is forbidden.
 
 ## Quest 1 — `formation-sim` (`proof: simulation`)
 

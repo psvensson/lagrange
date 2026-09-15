@@ -1,0 +1,28 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-priority-recovery-drive-order-authority",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The runtime priority-recovery drive consumes one existing canonical ordering owner rather than reconstructing an ordered sequence from a process-history-sensitive collection, so the ordered partition-id sequence it drives is identical under any permutation of partition rows, service rows, cache insertion order, Map insertion order and Set insertion order, and equal to the canonical owner's sequence. Canonical drive order chooses which owner is evaluated when; semantic priority-recovery ranking still chooses which action or candidate that owner selects, and neither owns the other's decision.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-attribution-isolation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-fourth-ordering-rule",
+      "statement": "resolvePriorityControlPlanePartitionIds, buildPriorityRecoverySchedulingOwnersByPartitionId and buildPriorityRecoveryDecisionSnapshots already order deterministically. The repair makes the runtime consume one of those outputs; it does not add a fourth rule and does not sort locally unless the sorting function is itself the named ordering owner."
+    },
+    {
+      "id": "ranking-is-not-ordering",
+      "statement": "Semantic priority-recovery follow-up ranking - spread-gap ranking, scheduling-owner arbitration - is not replaced by a lexical sort."
+    },
+    {
+      "id": "frontier-scope",
+      "statement": "The simulator scheduler, async lineage, attribution, planning-read consistency and formation behaviour are not modified in this frontier."
+    }
+  ]
+}

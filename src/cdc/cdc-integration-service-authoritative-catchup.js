@@ -162,7 +162,18 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   const sleep = typeof options.sleep === 'function' ?
     options.sleep :
     (delayMs) => new Promise((resolve) => clock.setTimeout(resolve, delayMs));
-  const now = typeof options.now === 'function' ? options.now : Date.now;
+  // readStartedAtMs is a DATA STAMP compared against row updated_at, tombstone
+  // instants and the authoritative observation boundary. It moves to this
+  // service's clock only because every one of those producers now reads an
+  // owner TimeSource too: the cache watermark, the tombstone store through its
+  // parent cache, and the HLC physical component through this service. Moving
+  // the consumer alone left the sweep inert - the verifier measured rowsSwept
+  // 0 against 1 - which was evidence that the DOMAIN was incomplete, not that
+  // the consumer was wrong. An explicit options.now still wins for callers
+  // passing a projection of their own owner clock.
+  const now = typeof options.now === 'function' ?
+    options.now :
+    () => clock.now();
   // The catch-up interaction accepts exactly one authority token. Callers that
   // need leader-pinned owner reads construct that token at their own boundary;
   // the default remains the join-time local-first/owner-fallback policy.

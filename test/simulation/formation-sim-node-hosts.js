@@ -47,6 +47,8 @@ const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}
 const DRAIN_DELAY_MS = 0;
 const NEXT_TURN_DELAY_MS = 0;
 const NODE_ADDRESS_SUFFIX = ':7000';
+const SIM_ROUTER_ID_SUFFIX = '/router';
+const SIM_CACHE_ID_SUFFIX = '/cache';
 const INSERT = 'INSERT';
 const READY_LEASE_MS = 30000;
 const PARTITION_SUFFIX = '-p1';
@@ -71,12 +73,18 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   // node's deterministic queue instead of a real setImmediate the virtual
   // clock never reaches. Delivery, ordering and batching are untouched.
   const cache = new SystemTableCache({
+    // The node's own clock owns the cache's mutation watermark, and the
+    // instance id is named rather than drawn, because a debug string must not
+    // become a reason to read host time inside a simulated process.
+    timeSource,
+    cacheId: `${nodeId}${SIM_CACHE_ID_SUFFIX}`,
     scheduleCacheChangeNotification: (callback) =>
       network.setTimer(nodeId, () => chargeDispatch(nodeId, callback),
         NEXT_TURN_DELAY_MS),
   });
   const sqlQueryEngine = createSqlEngineSeamFor(cache);
-  const messageRouter = createMessageRouterHost({nodeId});
+  const messageRouter = createMessageRouterHost(
+    {nodeId, routerId: `${nodeId}${SIM_ROUTER_ID_SUFFIX}`});
   const cdcIntegrationService = new CDCIntegrationService({
     nodeId, systemTableCache: cache, cacheMutationTarget: cache, sqlQueryEngine, timeSource,
   });
@@ -241,7 +249,7 @@ function seedNodeRows(hosts, nodeIds) {
       last_heartbeat: nowMs,
       ready_lease_expires_at: nowMs + READY_LEASE_MS,
       created_at: nowMs,
-    }));
+    }, nowMs));
   }
 }
 

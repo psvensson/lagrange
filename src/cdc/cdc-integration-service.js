@@ -71,8 +71,14 @@ class CDCIntegrationService extends EventEmitter {
           null;
     this.writeRouter = this.createSqlWriteRouter();
 
-    // HLC clock for timestamps
-    this.hlcClock = new HLCClockService(this.nodeId);
+    // HLC clock for timestamps. The HLC is this service's child, not its own
+    // time authority: it already accepts a TimeSource and defaults to
+    // RealTimeSource, so threading the parent's clock is what stops a
+    // deterministic node from constructing a platform clock underneath a
+    // subsystem that was handed a virtual one.
+    this.hlcClock = new HLCClockService(this.nodeId, {
+      timeSource: this.timeSource,
+    });
 
     // Logging
     const loggingService = LoggingService.getInstance();

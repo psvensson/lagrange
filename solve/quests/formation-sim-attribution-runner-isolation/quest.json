@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-attribution-runner-isolation",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Ambient host async ancestry must never determine simulator execution-node attribution. Every simulate() establishes an explicit tracked generation root that overrides whatever async context invoked it, and the deterministic scheduler remains the only authority that introduces a node: the async hook may PROPAGATE node identity within one generation and may never ORIGINATE it from ambient host ancestry. A foreign ambient resource - the test runner's, a caller's promise, or one left from a previous generation - belongs to no active simulator generation and is charged to no simulator node; an active-generation production resource that requires a node and has none still fails closed with formation_execution_node_unbound. Three same-seed runs in one fresh process, with no warm-up run, produce one identical raw charging transcript and identical charged totals; the same seed charges identically under plain node and under node --test, through any ambient AsyncResource or promise ancestry, and across generations in one process.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-attribution-isolation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "scheduler-is-the-only-node-authority",
+      "statement": "Local scheduled work executes in that node's frame, local timers and promise descendants inherit that node within the same generation, network delivery switches explicitly to the destination node, and generation-root and harness plumbing stay node-neutral. The hook propagates; it never originates."
+    },
+    {
+      "id": "lineage-is-not-the-charging-window",
+      "statement": "Lineage tracking begins early enough that no simulator-generation production async resource is created before its ancestry is known. The measurement and charging window keeps its existing start and end semantics: pre-window work may have its lineage tracked, and must not thereby become charged work."
+    },
+    {
+      "id": "unbound-production-still-fails-closed",
+      "statement": "An attributed segment of the ACTIVE generation with no execution node keeps the loud formation_execution_node_unbound refusal. The repair must not be achieved by classifying difficult production work as host noise."
+    },
+    {
+      "id": "frozen-substrate",
+      "statement": "Calibrated owner means, turnSegmentCount = dispatchCount + handoffCount, dispatch and handoff accounting, owner attribution semantics, PCT, virtual event ordering, closeCurrentInstant, the host-turn fixpoint, horizon semantics, watchdog semantics, formation behaviour and readiness cadence are unchanged. The existing 429-entry metered scheduler and pass trace is an oracle for this repair and stays byte-identical."
+    },
+    {
+      "id": "no-hiding-fixes",
+      "statement": "No warm-up simulate(), no retry of a flaky test, no tolerance band on segments or milliseconds, no node:test special case, no global async-resource-type exemption, no mapping unbound work to node-0 or to the seed, no calibration change, no loosened raw-transcript equality, no scheduler reordering to compensate for attribution, and no resurrection of the observer parameter in closeCurrentInstant."
+    },
+    {
+      "id": "event-count-is-evidence-not-a-target",
+      "statement": "The 10,029-event baseline is not preserved by force. If correct generation and lineage attribution produces a different but exactly repeatable fixed-seed result because previously lost production work is now charged or previously foreign work is now excluded, the new result is recorded with the delta explained. The live calibration stays frozen."
+    }
+  ],
+  "sealedAt": "5da0d7348109962a3af5083f561047d36c18895e"
+}

@@ -349,7 +349,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     async confirmReplicaOperationVisibility(operation) {
       this.clearAuthoritativeOperationVisibilityOutcome();
       const deadlineMs =
-        Date.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
+        this.timeSource.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
       let deferredOutcome = ABSENT_VISIBILITY_VALUE;
       let sawVisibilityMismatch = false;
       while (true) {
@@ -417,7 +417,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         if (authorityObservation.deferredOutcome) {
           deferredOutcome = authorityObservation.deferredOutcome;
         }
-        if (Date.now() >= deadlineMs) {
+        if (this.timeSource.now() >= deadlineMs) {
           if (deferredOutcome && sawVisibilityMismatch !== true) {
             this.lastAuthoritativeOperationVisibilityOutcome = {
               ...deferredOutcome,

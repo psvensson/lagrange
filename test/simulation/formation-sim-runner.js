@@ -37,7 +37,18 @@ import {
 } from '../../src/bootstrap/system-partition-classification.js';
 import {EntityType, ReplicaStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {TABLES} from '../../src/constants/index.js';
-import {runOnExecutionNode} from '../../src/diagnostics/formation-turn-attribution.js';
+import {
+  runOnExecutionNode,
+  runOnSimulationGenerationRoot,
+} from '../../src/diagnostics/formation-turn-attribution.js';
+import {
+  AMBIENT_SEAM_MODE,
+  beginAmbientSeamDiscovery,
+  deterministicProofEligibility,
+  endAmbientSeamDiscovery,
+  installDeterministicOwnerGuard,
+  resetNondeterministicOwnerSeamLedger,
+} from './formation-sim-guard.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {
   ScenarioHostObserver, advanceToNextInstant, closeCurrentInstant,
@@ -86,6 +97,7 @@ const SCENARIO = Object.freeze({
   maxInstants: 2000000,
   targetReplicaCount: 3,
 });
+const SIMULATION_GENERATION_PREFIX = 'formation-sim/';
 const DEFAULT_GENERATION = 'scenario';
 const HEARTBEAT_STATS = Object.freeze({cpuPercent: 0, memoryPercent: 0, diskPercent: 0});
 const MS_SUFFIX = ' ms';
@@ -201,7 +213,7 @@ function publishCohortLeadership({hosts, cohorts, leadership, rebalancers, seedI
 // The owners actually hosted in this scenario that expose a current-work
 // completion contract. The harness consumes those contracts; it does not
 // reproduce their logic and does not read their internals.
-function ownerIdleContracts(hosts, cohorts) {
+function ownerIdleContracts(hosts, cohorts, rebalancers) {
   const contracts = [];
   for (const node of hosts.values()) {
     contracts.push(() => node.controlPlaneSystemTableGateway.awaitCurrentWorkIdle());
@@ -210,6 +222,15 @@ function ownerIdleContracts(hosts, cohorts) {
     for (const raft of cohort.rafts.values()) {
       contracts.push(() => raft.awaitCurrentProtocolIdle());
     }
+  }
+  // The planner is an owner of accepted work exactly as the gateway and the
+  // Raft node are. Its rebalance-check reconcile chain need not create a
+  // timer or a virtual event, so nothing the scheduler can see reports it;
+  // without its contract a scenario could return while a check it had
+  // admitted was still running, and the continuation then executed inside
+  // the NEXT scenario.
+  for (const rebalancer of rebalancers.values()) {
+    contracts.push(() => rebalancer.awaitCurrentWorkIdle());
   }
   return contracts;
 }
@@ -265,7 +286,35 @@ function startHeartbeat(node) {
  * @param {number} seed
  * @returns {Promise<object>} the report object
  */
+// Each invocation is its own tracked generation. The identity only has to be
+// unique within the process: it is what lets a frame left behind by an
+// earlier simulation be recognised as ambient host ancestry rather than
+// mistaken for this one's.
+let nextSimulationGenerationSequence = 0;
+
+/**
+ * Run one scenario inside its own explicit generation root, so that nothing
+ * about the caller's async ancestry - the test runner's resources, a caller's
+ * promise chain, or a continuation from the previous run - can decide which
+ * simulated node this run's work is charged to.
+ * @param {number} seed
+ * @param {object} [options]
+ * @returns {Promise<object>} the report
+ */
 async function simulate(seed, options = {}) {
+  // The deterministic intrinsic wrappers must already be in place before the
+  // first node executes: construction and seeding run AS a simulated node, so
+  // they are production too, and admission is decided by the execution
+  // context rather than by any dispatch that may or may not have happened.
+  installDeterministicOwnerGuard();
+  resetNondeterministicOwnerSeamLedger();
+  nextSimulationGenerationSequence += 1;
+  return runOnSimulationGenerationRoot(
+    `${SIMULATION_GENERATION_PREFIX}${nextSimulationGenerationSequence}`,
+    () => runSimulationGeneration(seed, options));
+}
+
+async function runSimulationGeneration(seed, options = {}) {
   initializeTestEnvironment();
   const calibration = loadCalibration(REPO_ROOT);
   const ids = nodeIds();
@@ -278,6 +327,18 @@ async function simulate(seed, options = {}) {
     costTable: calibration.costTable,
     startMs: SCENARIO.startEpochMs,
   });
+  // Migration diagnosis only. The substitute clock is the one this node
+  // already owns - the guard constructs nothing and the execution context
+  // stays pure identity - and the run is structurally proof-ineligible for as
+  // long as the ledger is non-empty.
+  if (options.ambientSeamMode === AMBIENT_SEAM_MODE.DISCOVER) {
+    beginAmbientSeamDiscovery({
+      resolveExecutionNodeTimeSource: (executionNodeId) =>
+        network.networkTimeSource(executionNodeId),
+    });
+  } else {
+    endAmbientSeamDiscovery();
+  }
   const charges = new ChargeAccumulator({network, calibration});
   // The gap observer is the production watchdog's rule on virtual time: one
   // heartbeat per node, deferred by that node's own occupancy exactly as any
@@ -349,7 +410,7 @@ async function simulate(seed, options = {}) {
   // the next causal instant. Joins are scenario inputs applied at the instant
   // they are due, which is why the horizon is consulted before stepping.
     let instantMs = SCENARIO.startEpochMs;
-    const owners = ownerIdleContracts(hosts, cohorts);
+    const owners = ownerIdleContracts(hosts, cohorts, rebalancers);
     await closeCurrentInstant({network, observer, owners});
     for (let guard = 0; guard < SCENARIO.maxInstants; guard += 1) {
       for (const join of joins) {
@@ -395,7 +456,8 @@ async function simulate(seed, options = {}) {
   // counters. Flushing is unconditional here rather than until-quiet: a
   // pure promise chain queues nothing, so there is no event to observe.
   const boundaryMs = network.now();
-  await settle(network, boundaryMs, observer, ownerIdleContracts(hosts, cohorts));
+  await settle(network, boundaryMs, observer,
+    ownerIdleContracts(hosts, cohorts, rebalancers));
   // Runnable at the boundary, which future-due timers are not.
   const strandedEvents = network.run({untilMs: boundaryMs}).steps;
   meter.stop();
@@ -420,8 +482,10 @@ async function simulate(seed, options = {}) {
       ownerChargedMs, ownerSegments: charges.ownerSegments(nodeId, REQUIRED_OWNERS),
     };
   });
+  const proofEligibility = deterministicProofEligibility();
   return buildReport({
     seedId,
+    proofEligibility,
     identities: {
       scenario: SCENARIO.id, seed, calibration: calibration.file,
       calibrationHead: calibration.source.head,
