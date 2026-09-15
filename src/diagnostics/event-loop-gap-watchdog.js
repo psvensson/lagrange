@@ -21,6 +21,7 @@
  */
 
 import {performance} from 'node:perf_hooks';
+import {observeHeartbeat} from './event-loop-gap-heartbeat-rule.js';
 import {Session} from 'node:inspector';
 import {LoggingService} from '../logging/logging-service.js';
 import {SUBSYSTEM} from '../constants/index.js';
@@ -33,6 +34,7 @@ const WATCHDOG_DEFAULT = Object.freeze({
   PROFILE_SAMPLING_INTERVAL_US: 2000,
   PROFILE_TOP_FRAMES: 10,
 });
+
 
 const WATCHDOG_ENV = Object.freeze({
   THRESHOLD_MS: 'LAGRANGE_LOOP_GAP_THRESHOLD_MS',
@@ -581,9 +583,13 @@ class EventLoopGapWatchdog {
    */
   tick() {
     const nowMs = Date.now();
-    const gapMs = nowMs - this.expectedAtMs;
-    this.expectedAtMs = nowMs + this.intervalMs;
-    if (gapMs >= this.thresholdMs) {
+    const beat = observeHeartbeat({
+      expectedAtMs: this.expectedAtMs, nowMs,
+      intervalMs: this.intervalMs, thresholdMs: this.thresholdMs,
+    });
+    const gapMs = beat.gapMs;
+    this.expectedAtMs = beat.nextExpectedAtMs;
+    if (beat.exceeded) {
       this.gapsInProfileWindow += 1;
     }
     if (this.profiler && this.profiler.isWindowElapsed(nowMs)) {
@@ -773,11 +779,13 @@ function getSharedSyncSectionRegistry() {
 
 export {
   EventLoopGapWatchdog,
+  WATCHDOG_DEFAULT,
   GapSamplingProfiler,
   SyncSectionRegistry,
   configureSharedSyncSectionClock,
   enterSyncSection,
   exitSyncSection,
   getSharedSyncSectionRegistry,
+  observeHeartbeat,
   trackSyncSection,
 };

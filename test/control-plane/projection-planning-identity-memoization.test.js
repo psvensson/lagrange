@@ -255,8 +255,11 @@ test('the startup-authority snapshot resolves to one identity per planning ' +
   t.end();
 });
 
-test('the per-node async planning answer resolves once per node and floored ' +
-  'generation across concurrent evaluations', async (t) => {
+// The owner-read identity fixture: an AUTHORITATIVE candidate source and no
+// synchronous one, so the answer identity under test is the authoritative
+// one. `mutate` is handed the service before any read, for falsifiers.
+function ownerReadIdentityFixture(mutate = () => undefined) {
+  const derivationsByPublisher = new Map();
   const cache = createVersionedTableCache();
   const readiness = new ControlPlaneReadinessService({
     nodeId: OWNER_NODE_ID,
@@ -264,6 +267,10 @@ test('the per-node async planning answer resolves once per node and floored ' +
     now: () => 1000,
     membershipPublicationService: {
       async deriveClusterMembershipCandidate(options = {}) {
+        derivationsByPublisher.set(
+          options.publisherNodeId,
+          (derivationsByPublisher.get(options.publisherNodeId) || 0) + 1,
+        );
         return {
           publicationEpoch: 2,
           status: 'PUBLISHED',
@@ -275,26 +282,77 @@ test('the per-node async planning answer resolves once per node and floored ' +
       },
     },
   });
+  mutate(readiness);
+  return {readiness, cache, derivationsByPublisher};
+}
+
+test('the per-node async planning answer resolves once per node and floored ' +
+  'generation across concurrent evaluations', async (t) => {
+  // This fixture supplies only an async deriveClusterMembershipCandidate and
+  // no synchronous candidate source, so the identity it asserts is
+  // AUTHORITATIVE identity. AVAILABLE planning has no candidate here and
+  // correctly answers null for every node and generation, which made these
+  // assertions trivially true rather than meaningful. The producer is the
+  // owner-read surface accordingly; every identity assertion is unchanged.
+  const {readiness, cache, derivationsByPublisher} =
+    ownerReadIdentityFixture();
   const answers = await Promise.all(
     Array.from({length: REPEAT_READS}, () =>
-      readiness.resolveNodeMembershipPublicationPlanningAnswer(
-        OWNER_NODE_ID, 1000, null)),
+      readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
+        OWNER_NODE_ID, 1000)),
   );
   t.equal(answers[0], answers[REPEAT_READS - 1],
     'concurrent evaluations of one node share one resolved answer identity');
-  const again = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
-    OWNER_NODE_ID, 1100, null);
+  t.equal(derivationsByPublisher.get(OWNER_NODE_ID), 1,
+    'a concurrent burst for one publisher shares one candidate derivation');
+  const again = await readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
+    OWNER_NODE_ID, 1100);
   t.equal(again, answers[0],
     'a later read within the floor window serves the same answer');
-  const other = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
-    'node-identity-other', 1150, null);
+  t.equal(derivationsByPublisher.get(OWNER_NODE_ID), 1,
+    'a later read in the same currency derives no new candidate');
+  const other = await readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
+    'node-identity-other', 1150);
   t.not(other, answers[0],
     'a different node resolves its own answer');
+  t.equal(derivationsByPublisher.get('node-identity-other'), 1,
+    'a different publisher derives its own candidate');
   cache.bump('nodes');
-  const next = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
-    OWNER_NODE_ID, 1400, null);
+  const next = await readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
+    OWNER_NODE_ID, 1400);
+  t.equal(derivationsByPublisher.get(OWNER_NODE_ID), 2,
+    'advancing the generation derives exactly one new candidate for that publisher');
   t.not(next, answers[0],
     'the next floored generation resolves fresh');
+  t.end();
+});
+
+// Mutation falsifier for the witness above. Disabling the authoritative
+// per-publisher in-flight memo — behaviourally, by installing a retention-free
+// slot map rather than by editing the source — must make the concurrent-A
+// identity and call-count witness red. If it does not, that witness is
+// proving something other than the memo.
+test('disabling the authoritative per-publisher memo breaks concurrent ' +
+  'candidate collapse', async (t) => {
+  class NoRetentionSlots extends Map {
+    set() {
+      return this;
+    }
+  }
+  const {readiness, derivationsByPublisher} = ownerReadIdentityFixture(
+    (service) => {
+      service.membershipPlanningSnapshotAsyncMemoByPublisher =
+        new NoRetentionSlots();
+    });
+  const answers = await Promise.all(
+    Array.from({length: REPEAT_READS}, () =>
+      readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
+        OWNER_NODE_ID, 1000)),
+  );
+  t.equal(derivationsByPublisher.get(OWNER_NODE_ID), REPEAT_READS,
+    'without the memo every concurrent read derives its own candidate');
+  t.not(answers[0], answers[REPEAT_READS - 1],
+    'and the concurrent identity witness above goes red without it');
   t.end();
 });
 

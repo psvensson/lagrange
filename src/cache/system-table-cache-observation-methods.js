@@ -323,7 +323,7 @@ class SystemTableCacheObservationMethods {
     const normalizedMetadata = metadata && typeof metadata === 'object' ?
       metadata :
       null;
-    setImmediate(() => {
+    this.scheduleCacheChangeNotification(() => {
       for (const listener of this.listeners) {
         try {
           listener(tableName, operation, record, normalizedMetadata);

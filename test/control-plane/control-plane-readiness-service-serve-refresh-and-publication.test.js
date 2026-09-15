@@ -993,9 +993,11 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
     const diagnosticsReadOptions = publicationReadOptions.find(
       (options) => options?.readProfile === 'diagnostics',
     );
-    const planningReadOptions = publicationReadOptions.find(
-      (options) => options?.readProfile === 'planning',
-    );
+    const asyncPlanningReadCount = publicationReadOptions.filter(
+      (options) => options?.readProfile === 'planning' &&
+        options?.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+    ).length;
     t.equal(
       diagnosticsReadOptions?.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -1016,16 +1018,18 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
       NUM.THOUSAND,
       'membership publication diagnostics should bound owner reads to the readiness timeout budget',
     );
+    // Retired: these two asserted that default readiness ALSO performed an
+    // opportunistic asynchronous planning owner read, with a preferred-owner
+    // mode and any-replica fallback. Default readiness planning is AVAILABLE,
+    // so no such read happens for this invocation, and the strict diagnostics
+    // assertions above are what describe the direct publication evidence it
+    // does use. A synchronous available snapshot may still go through the
+    // publication-read abstraction; that is a different path and is asserted
+    // by the synchronous planning-snapshot tests.
     t.equal(
-      planningReadOptions?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'planning publication reads should remain best-effort instead of requiring owner-RPC',
-    );
-    t.equal(
-      planningReadOptions?.replicaFallbackConsistency,
-      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-      'planning publication reads may fall back to any replica for recovery planning',
+      asyncPlanningReadCount,
+      0,
+      'AVAILABLE readiness performs no asynchronous planning owner read',
     );
     t.end();
   });

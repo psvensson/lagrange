@@ -6,6 +6,7 @@ import {FORMATION_OWNER} from
 import {
   FormationTurnAttribution,
   runFormationOwner,
+  runOnExecutionNode,
 } from '../../src/diagnostics/formation-turn-attribution.js';
 
 function createHarness(
@@ -956,3 +957,88 @@ test('snapshot reads the buckets mid-window without ending it', (t) => {
   t.equal(attribution.snapshot(), null, 'no window, no snapshot');
   t.end();
 });
+
+// Execution-node context: WHICH simulated process is consuming CPU, as
+// opposed to WHAT work is running. The two dimensions are independent, and
+// these are the directed cases the owner named after per-node charging leaked
+// between nodes (2026-09-14). They use the real AsyncLocalStorage and real
+// async hooks, because both defects they pin lived in that interaction.
+function nodeRow(snapshot, executionNodeId) {
+  return (snapshot.byExecutionNode || [])
+    .find((row) => row.executionNodeId === executionNodeId) || {owners: []};
+}
+
+function nodeOwner(snapshot, executionNodeId, owner) {
+  return nodeRow(snapshot, executionNodeId).owners
+    .find((row) => row.owner === owner) ||
+    {dispatchCount: 0, handoffCount: 0, turnSegmentCount: 0};
+}
+
+test('a continuation resumes on the node that scheduled it, not the node running now',
+  async (t) => {
+    const attribution = new FormationTurnAttribution().start();
+    let resume = null;
+    const pending = new Promise((resolve) => {
+      resume = resolve;
+    });
+    // Seed frame, readiness owner, and a continuation created inside both.
+    const continued = runOnExecutionNode('seed', () =>
+      runFormationOwner(FORMATION_OWNER.READINESS, () =>
+        pending.then(() => runFormationOwner(FORMATION_OWNER.READINESS,
+          () => 'resumed'))));
+    // Unrelated joiner work runs first, and the scheduler's ambient frame is
+    // the joiner's when the continuation becomes runnable.
+    // Nested, so the inner owner records a handoff: the frozen convention
+    // counts neither a dispatch nor a handoff for an outermost synchronous
+    // owner, so a top-level call would prove nothing about counts.
+    runOnExecutionNode('joiner-1', () =>
+      runFormationOwner(FORMATION_OWNER.REBALANCER, () =>
+        runFormationOwner(FORMATION_OWNER.RAFT_PROTOCOL, () => 'joiner work')));
+    resume();
+    t.equal(await continued, 'resumed');
+    const snapshot = attribution.stop();
+    t.ok(nodeOwner(snapshot, 'seed', FORMATION_OWNER.READINESS)
+      .turnSegmentCount > 0, 'the resumed continuation is the seed\'s CPU');
+    t.equal(nodeOwner(snapshot, 'joiner-1', FORMATION_OWNER.READINESS)
+      .turnSegmentCount, 0, 'and never the joiner\'s');
+    t.ok(nodeOwner(snapshot, 'joiner-1', FORMATION_OWNER.RAFT_PROTOCOL)
+      .turnSegmentCount > 0, 'the joiner keeps its own work');
+    t.end();
+  });
+
+test('attributed work with no execution frame fails closed, plumbing does not',
+  async (t) => {
+    const attribution = new FormationTurnAttribution(
+      {requireExecutionNode: true}).start();
+    // Node-less unattributed plumbing is allowed: it is not owner CPU.
+    await Promise.resolve().then(() => 'plumbing');
+    // Entering a real owner without a scheduler frame is not.
+    t.throws(() => runFormationOwner(FORMATION_OWNER.READINESS, () => 'work'),
+      /formation_execution_node_unbound/u,
+      'a real owner outside any execution frame refuses');
+    t.equal(runOnExecutionNode('seed', () =>
+      runFormationOwner(FORMATION_OWNER.READINESS, () => 'work')), 'work',
+    'and the same work inside a frame is fine');
+    attribution.stop();
+    t.end();
+  });
+
+test('a resource with no captured node defers to the live frame instead of hiding it',
+  async (t) => {
+    const attribution = new FormationTurnAttribution(
+      {requireExecutionNode: true}).start();
+    // Created outside every frame, so it captures no node at all. Its own
+    // dispatch must not shadow the frame the scheduler is running when the
+    // callback executes: pushing a bare null there made owner work inside a
+    // correctly bound frame report no node and refuse.
+    const plumbing = Promise.resolve();
+    const result = await runOnExecutionNode('seed', async () => {
+      await plumbing;
+      return runFormationOwner(FORMATION_OWNER.REBALANCER, () => 'inside');
+    });
+    t.equal(result, 'inside', 'owner work inside the frame is bound');
+    const snapshot = attribution.stop();
+    t.ok(nodeOwner(snapshot, 'seed', FORMATION_OWNER.REBALANCER)
+      .turnSegmentCount > 0, 'and charged to the frame\'s node');
+    t.end();
+  });

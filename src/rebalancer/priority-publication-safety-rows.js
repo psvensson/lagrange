@@ -8,9 +8,16 @@ import {
   readAuthoritativeEntityServiceRows,
 } from './entity-service-row-read.js';
 
+import {
+  hasAuthoritativeRemoveSafetyPlanningProvider,
+  hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
+  readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety as
+  readAuthoritativeRemoveSafetyPlanningSnapshot,
+  readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
+} from './priority-recovery-planning-read.js';
+
 const {
   DEFAULT_MIN_REPLICA_COUNT,
-  INITIAL_PARTITION_IDS,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
@@ -333,7 +340,16 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     return this.isReadinessDimensionSatisfied(readiness, decisionDimension);
   }
 
-  async getPriorityRecoveryPlanningSnapshot(operation) {
+  /**
+   * The planning-read context for one operation, or null when this operation
+   * is not a priority-control-plane partition or no readiness service is
+   * installed. Classification and clock belong to this family; the read
+   * POLICY belongs to priority-recovery-planning-read.js.
+   * @param {Object} operation
+   * @return {Object|null}
+   * @private
+   */
+  resolvePriorityRecoveryPlanningReadContext(operation) {
     const partitionId = normalizePriorityRecoveryOperationPartitionId(
       operation,
     );
@@ -345,74 +361,59 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     ) {
       return null;
     }
-
     const readinessService = this.controlPlaneReadinessService;
+    if (!readinessService) {
+      return null;
+    }
+    return {
+      readinessService,
+      publicationNodeId: String(this.nodeId || '').trim(),
+      // The OWNER's clock, not the ambient one. observedAt becomes the
+      // planning currency the readiness memo is keyed on, so reading host
+      // wall time here makes a simulated node's planning generation advance
+      // with the host rather than with its own virtual clock - the same
+      // ambient-clock seam the timeout path already routes through
+      // resolveTimeoutCheckNowMs.
+      observedAt: typeof this.resolveTimeoutCheckNowMs === 'function' ?
+        this.resolveTimeoutCheckNowMs() :
+        Date.now(),
+    };
+  }
+
+  /**
+   * AVAILABLE planning evidence: narration, progress and follow-up. This read
+   * can never classify a REMOVE as SAFE.
+   * @param {Object} operation
+   * @return {Promise<Object|null>}
+   */
+  async readAvailablePriorityRecoveryPlanningSnapshot(operation) {
+    const read = this.resolvePriorityRecoveryPlanningReadContext(operation);
+    if (!read || !hasAvailablePlanningProvider(read.readinessService)) {
+      return null;
+    }
+    return readAvailablePlanningSnapshot(read);
+  }
+
+  /**
+   * AUTHORITATIVE planning evidence for a REMOVE-safety decision. A safety
+   * decision must not consume evidence that merely happened to be available,
+   * and it must never fall back to the available surface to make removal
+   * progress: absent owner-read evidence means removal defers, which is the
+   * fail-closed shape this contract relies on.
+   * @param {Object} operation
+   * @return {Promise<Object|null>}
+   */
+  async readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety(
+    operation,
+  ) {
+    const read = this.resolvePriorityRecoveryPlanningReadContext(operation);
     if (
-      !readinessService ||
-      (typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead !==
-        'function' &&
-      (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-        'function' &&
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          'function'))
+      !read ||
+      !hasAuthoritativeRemoveSafetyPlanningProvider(read.readinessService)
     ) {
       return null;
     }
-
-    const publicationNodeId = String(this.nodeId || '').trim();
-    const observedAt = Date.now();
-    if (
-      partitionId ===
-        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS] &&
-      typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
-      'function'
-    ) {
-      return readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead(
-        publicationNodeId,
-        observedAt,
-      );
-    }
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-        publicationNodeId,
-        observedAt,
-      );
-    }
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-        publicationNodeId,
-        observedAt,
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      return readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-        publicationNodeId,
-        observedAt,
-      );
-    }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      return readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-        publicationNodeId,
-        observedAt,
-      );
-    }
-    return null;
+    return readAuthoritativeRemoveSafetyPlanningSnapshot(read);
   }
 
   normalizePriorityPublicationStatus(planningSnapshot) {

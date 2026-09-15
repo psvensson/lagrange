@@ -133,14 +133,20 @@ class MembershipPublicationCoordinatorPlanning extends
       options,
       nodeRows,
     );
+    // The candidate this path derives can be persisted, advanced, closed or
+    // widened as the canonical membership publication, so its planning
+    // evidence is AUTHORITATIVE: an owner read, explicitly requested, never
+    // whichever answer arrived first. The nested case keeps its existing
+    // recursion-breaking contract and derives no planning evidence at all,
+    // which is what deferNestedPriorityRecoveryPlanning already means.
     const priorityRecoveryPlanningSnapshot =
       options.deferNestedPriorityRecoveryPlanning === true ?
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getMembershipPublicationPlanningSnapshotBestEffort === 'function' ?
+              .getPriorityRecoveryPlanningAnswerForOwnerRead === 'function' ?
           await this.controlPlaneReadinessService
-            .getMembershipPublicationPlanningSnapshotBestEffort(
+            .getPriorityRecoveryPlanningAnswerForOwnerRead(
               options.publisherNodeId || this.nodeId,
               normalizePositiveInteger(options.nowMs, this.now()),
             ) :

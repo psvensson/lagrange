@@ -228,6 +228,12 @@ function createColdFormationReadinessService({denialReasonCodesByNodeId}) {
         observedAt: Date.now(),
       };
     },
+    // REMOVE safety reads the owner surface; the same modelled formation
+    // planning state is presented there, unchanged. The best-effort surfaces
+    // stay for the AVAILABLE consumers in this scenario.
+    async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+      return buildPlanningSnapshot(nodeId);
+    },
     async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },

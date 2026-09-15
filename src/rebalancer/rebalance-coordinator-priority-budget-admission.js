@@ -470,12 +470,12 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== LOCAL_STR_FUNCTION
+        ?.readAvailablePriorityRecoveryPlanningSnapshotForOperation !== LOCAL_STR_FUNCTION
     ) {
       return false;
     }
     const planningSnapshot =
-      await this.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
+      await this.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation(
         operation,
       );
     if (!planningSnapshot || typeof planningSnapshot !== LOCAL_STR_OBJECT) {

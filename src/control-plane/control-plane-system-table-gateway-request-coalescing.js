@@ -16,7 +16,67 @@ import {
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
 
+const GATEWAY_IDLE_NOT_REACHED = 'control_plane_gateway_current_work_not_idle';
+const GATEWAY_IDLE_STRANDED =
+  'control_plane_gateway_coalescing_state_stranded: entries remaining=';
+// Diagnostic ceiling only. Reaching it is an invariant failure, never idle.
+const GATEWAY_IDLE_MAX_ROUNDS = 10000;
+
 const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
+  /**
+   * Every accepted execution gets one owner-private lifecycle record. Caller
+   * completion and owner completion are different events: a caller is
+   * entitled to its result as soon as the execution produces one, while the
+   * gateway is still finishing the bookkeeping and successor scheduling that
+   * acceptance caused. Conflating them is what let an idle observer conclude
+   * the gateway was done with work it had already accepted.
+   *
+   * The registry is deliberately NOT a fifth coalescing ledger: it has no key
+   * lookup, no dedupe, no replacement choice, no effect on pressure limits or
+   * retention. It answers one question, does this gateway still own accepted
+   * work, and it is the only structure that can answer it, because
+   * runSingleFlight's saturation path intentionally executes accepted work
+   * without inserting it into any keyed map.
+   * @return {Object} the work record
+   * @private
+   */
+  beginGatewayOwnerWork() {
+    if (!this.activeGatewayWorkRecords) {
+      this.activeGatewayWorkRecords = new Set();
+    }
+    const record = {resolveOwnerCompletion: null, ownerCompletionPromise: null};
+    record.ownerCompletionPromise = new Promise((resolve) => {
+      record.resolveOwnerCompletion = resolve;
+    });
+    this.activeGatewayWorkRecords.add(record);
+    return record;
+  },
+
+  /**
+   * Retire one lifecycle record. Removal precedes resolution, never the
+   * reverse: a waiter woken by the promise must never re-read a registry that
+   * still contains the record it was waiting for.
+   * @param {Object} record
+   * @private
+   */
+  completeGatewayOwnerWork(record) {
+    if (!record) {
+      return;
+    }
+    this.activeGatewayWorkRecords?.delete(record);
+    record.resolveOwnerCompletion();
+  },
+
+  /**
+   * How much accepted work this gateway still owns. Named separately from the
+   * retained-request metrics, which describe the keyed maps and keep their
+   * existing meaning.
+   * @return {number}
+   */
+  activeOwnerWorkCount() {
+    return this.activeGatewayWorkRecords ? this.activeGatewayWorkRecords.size : 0;
+  },
+
   /**
    * @param {Object} result
    * @return {Object}
@@ -66,8 +126,21 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
       if (typeof options?.bypassMetricName === 'string') {
         this.incrementGatewayMetric(options.bypassMetricName);
       }
-      return executionFactory();
+      // Accepted work that deliberately enters no keyed map. Tracking is
+      // saturated, not absent: the gateway still owns this execution, and an
+      // idle contract reading only the maps would miss it entirely.
+      const bypassRecord = this.beginGatewayOwnerWork();
+      // The factory is still invoked synchronously and its own value is still
+      // returned: this path's public behaviour is unchanged, and only the
+      // lifecycle record is added.
+      const bypassed = executionFactory();
+      Promise.resolve(bypassed).then(
+        () => this.completeGatewayOwnerWork(bypassRecord),
+        () => this.completeGatewayOwnerWork(bypassRecord),
+      );
+      return bypassed;
     }
+    const record = this.beginGatewayOwnerWork();
     let inFlightRequest = null;
     inFlightRequest = Promise.resolve()
       .then(() => executionFactory())
@@ -76,6 +149,9 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           requestMap.delete(key);
           this.recordGatewayRetentionSnapshot();
         }
+        // Terminal bookkeeping for this request is done; the owner is done
+        // with it only now, after the caller's result has been produced.
+        this.completeGatewayOwnerWork(record);
       });
     requestMap.set(key, inFlightRequest);
     this.recordGatewayRetentionSnapshot();
@@ -202,7 +278,55 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
    * @return {Promise<Object>}
    * @private
    */
-  scheduleMutationExecution(requestKey, executionFactory, deferred = null) {
+  /**
+   * Settle every request this gateway has ALREADY accepted, without closing it
+   * to new work. The lifecycle registry is the completion authority, because
+   * the saturation path executes accepted work without inserting it into any
+   * keyed map; the coalescing ledgers are then an invariant check that no
+   * decision state was stranded behind completed work. No immediate, timeout,
+   * polling delay or host-turn settling appears here.
+   * @return {Promise<void>}
+   */
+  async awaitCurrentWorkIdle() {
+    for (let round = 0; round < GATEWAY_IDLE_MAX_ROUNDS; round += 1) {
+      const active = this.activeGatewayWorkRecords ?
+        [...this.activeGatewayWorkRecords] : [];
+      if (active.length === 0) {
+        const stranded = [
+          this.inFlightReadRequestsByKey,
+          this.inFlightQueryRequestsByKey,
+          this.inFlightMutationRequestsByKey,
+          this.pendingReplaceMutationRequestsByKey,
+        ].reduce((total, ledger) => total + (ledger ? ledger.size : 0), 0);
+        if (stranded > 0) {
+          throw new Error(`${GATEWAY_IDLE_STRANDED}${stranded}`);
+        }
+        return;
+      }
+      await Promise.all(active.map((record) => record.ownerCompletionPromise));
+    }
+    throw new Error(GATEWAY_IDLE_NOT_REACHED);
+  },
+
+  // The queue provenance every mutation result and error carries. Extracted
+  // so the scheduling method itself stays readable.
+  buildMutationQueueMetadata(deferred) {
+    return {
+      queueState:
+        deferred?.queueState || CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
+      queueWaitMs: Number.isFinite(deferred?.enqueuedAtMs) ?
+        Math.max(0, Math.floor(this.now() - deferred.enqueuedAtMs)) :
+        0,
+      pendingReplaceQueueDepth: Number.isFinite(
+        deferred?.pendingReplaceQueueDepth,
+      ) ?
+        Math.max(0, Math.floor(deferred.pendingReplaceQueueDepth)) :
+        0,
+    };
+  },
+
+  scheduleMutationExecution(requestKey, executionFactory, deferred = null,
+    adoptedRecord = null) {
     if (
       !this.inFlightMutationRequestsByKey.has(requestKey) &&
       this.inFlightMutationRequestsByKey.size >=
@@ -220,19 +344,11 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
       }
       return Promise.resolve(saturatedResult);
     }
+    // A replacement already owns a lifecycle identity from the instant it was
+    // accepted; promotion reuses it rather than minting a second one.
+    const record = adoptedRecord || this.beginGatewayOwnerWork();
     let executionPromise = null;
-    const queueMetadata = {
-      queueState:
-        deferred?.queueState || CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
-      queueWaitMs: Number.isFinite(deferred?.enqueuedAtMs) ?
-        Math.max(0, Math.floor(this.now() - deferred.enqueuedAtMs)) :
-        0,
-      pendingReplaceQueueDepth: Number.isFinite(
-        deferred?.pendingReplaceQueueDepth,
-      ) ?
-        Math.max(0, Math.floor(deferred.pendingReplaceQueueDepth)) :
-        0,
-    };
+    const queueMetadata = this.buildMutationQueueMetadata(deferred);
     executionPromise = Promise.resolve()
       .then(() => executionFactory())
       .then(
@@ -267,25 +383,36 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
         },
       )
       .finally(() => {
-        if (
+        // Terminal section. The already-accepted successor is installed
+        // before this request is retired, and this request's OWNER
+        // completion resolves last, after every continuation its acceptance
+        // caused. The ordering is hardening rather than the demonstrated
+        // fix - the whole section is synchronous, so nothing can interleave
+        // here - but the lifecycle retirement below is the fix: the caller's
+        // result has already been produced by this point, and the gateway is
+        // only now done with the request.
+        const pendingRequest =
+          this.pendingReplaceMutationRequestsByKey.get(requestKey);
+        const isCurrentInFlight =
           this.inFlightMutationRequestsByKey.get(requestKey) ===
-          executionPromise
-        ) {
+          executionPromise;
+        if (pendingRequest) {
+          this.pendingReplaceMutationRequestsByKey.delete(requestKey);
+          this.scheduleMutationExecution(
+            requestKey,
+            pendingRequest.executionFactory,
+            pendingRequest.deferred,
+            pendingRequest.record,
+          );
+          this.recordGatewayRetentionSnapshot();
+          this.completeGatewayOwnerWork(record);
+          return;
+        }
+        if (isCurrentInFlight) {
           this.inFlightMutationRequestsByKey.delete(requestKey);
           this.recordGatewayRetentionSnapshot();
         }
-        const pendingRequest =
-          this.pendingReplaceMutationRequestsByKey.get(requestKey);
-        if (!pendingRequest) {
-          return;
-        }
-        this.pendingReplaceMutationRequestsByKey.delete(requestKey);
-        this.recordGatewayRetentionSnapshot();
-        this.scheduleMutationExecution(
-          requestKey,
-          pendingRequest.executionFactory,
-          pendingRequest.deferred,
-        );
+        this.completeGatewayOwnerWork(record);
       });
     this.inFlightMutationRequestsByKey.set(requestKey, executionPromise);
     this.recordGatewayRetentionSnapshot();

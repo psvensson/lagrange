@@ -11,6 +11,10 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  createRemoveSafetyPlanningSnapshotReader,
+  resolveRemoveSafetyPlanningSnapshotReader,
+} from './priority-recovery-planning-read.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -188,9 +192,10 @@ async function resolvePriorityRecoveryQuorumProjection(
   projectedVoterReadyRows,
   minReplicaCount,
   completionSafe,
+  readPlanningSnapshot,
 ) {
-  const planningSnapshot =
-    await context.getPriorityRecoveryPlanningSnapshot(operation);
+  const planningSnapshot = await resolveRemoveSafetyPlanningSnapshotReader(
+    context, operation, readPlanningSnapshot)();
   let recoveryProjectionNodeIds = null;
   if (planningSnapshot && typeof planningSnapshot === 'object') {
     const priorityRecoveryContext =
@@ -219,7 +224,11 @@ async function resolvePriorityRecoveryQuorumProjection(
  * @param {Object} operation
  * @returns {Promise<Object|null>}
  */
-async function evaluatePriorityRecoveryCompletionRemoveSafety(context, operation) {
+async function evaluatePriorityRecoveryCompletionRemoveSafety(
+  context,
+  operation,
+  readPlanningSnapshot,
+) {
   if (
     !operation ||
     !classifySystemPartition({
@@ -229,8 +238,8 @@ async function evaluatePriorityRecoveryCompletionRemoveSafety(context, operation
     return null;
   }
 
-  const planningSnapshot =
-    await context.getPriorityRecoveryPlanningSnapshot(operation);
+  const planningSnapshot = await resolveRemoveSafetyPlanningSnapshotReader(
+    context, operation, readPlanningSnapshot)();
   if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return null;
   }
@@ -272,6 +281,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   operation,
   projectedVoterReadyRows,
   currentVoterReadyRows,
+  readPlanningSnapshot,
 ) {
   if (
     !operation ||
@@ -282,8 +292,8 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  const planningSnapshot =
-    await context.getPriorityRecoveryPlanningSnapshot(operation);
+  const planningSnapshot = await resolveRemoveSafetyPlanningSnapshotReader(
+    context, operation, readPlanningSnapshot)();
   if (!planningSnapshot || typeof planningSnapshot !== 'object') {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
@@ -608,8 +618,15 @@ async function evaluateRemoveSafety(context, operation) {
     });
   }
 
+  // One remove-safety evaluation, one authoritative planning read. Every
+  // priority sub-check below shares this resolver.
+  const readRemoveSafetyPlanningSnapshot =
+    createRemoveSafetyPlanningSnapshotReader(context, operation);
   const priorityRecoveryCompletionEvaluation =
-    await context.evaluatePriorityRecoveryCompletionRemoveSafety(operation);
+    await context.evaluatePriorityRecoveryCompletionRemoveSafety(
+      operation,
+      readRemoveSafetyPlanningSnapshot,
+    );
   const priorityRecoveryCompletionSafe =
     priorityRecoveryCompletionEvaluation?.classification ===
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE;
@@ -668,6 +685,7 @@ async function evaluateRemoveSafety(context, operation) {
         operation,
         projectedVoterReadyRows,
         currentVoterReadyRows,
+        readRemoveSafetyPlanningSnapshot,
       );
     if (
       priorityPublishedMembershipRemoveSafetyEvaluation.classification !==
@@ -697,6 +715,7 @@ async function evaluateRemoveSafety(context, operation) {
           requiresSourceLeaderHandoff &&
           !replacementLeaderRetargetCandidateAvailable,
         replacementLeaderRetargetCandidateAvailable,
+        readAuthoritativePlanningSnapshot: readRemoveSafetyPlanningSnapshot,
       },
     );
   if (
@@ -714,6 +733,7 @@ async function evaluateRemoveSafety(context, operation) {
         projectedVoterReadyRows,
         minReplicaCount,
         priorityRecoveryCompletionSafe,
+        readRemoveSafetyPlanningSnapshot,
       );
     if (!completionSafeFloor.floorSatisfied) {
       return context.buildDeferredRemoveSafetyEvaluationForOperation(

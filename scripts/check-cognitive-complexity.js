@@ -30,7 +30,9 @@ const TARGET_THRESHOLD = 20;
 // the v1 solver (measured with the checker's tightening hint).
 // 2026-09-09: tightened 162 -> 161 after the formation-convergence owner
 // extraction (measured with the checker's tightening hint).
-const BASELINE_COUNT = 161;
+// 2026-09-15: tightened 161 -> 160 after the remove-safety planning-read
+// split replaced the generic reader's branching with two named contracts.
+const BASELINE_COUNT = 160;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -190,4 +190,43 @@ defineHeartbeatServiceLifecycleMethods(HeartbeatService);
 defineHeartbeatServicePublicationMethods(HeartbeatService);
 defineHeartbeatServiceReporterVisibilityMethods(HeartbeatService);
 
-export {HeartbeatService, calculateUsageSlopePerMinute};
+/**
+ * Assemble a node's heartbeat service the one way the control plane assembles
+ * it. Production and the deterministic simulator both call this, so the
+ * collaborator list cannot drift between them: the publication service the
+ * heartbeat's scheduled reconcile tick drives is part of the composition, not
+ * an optional extra, and the readiness owner is told about the heartbeat in
+ * the same breath. Only identity, collaborators, timers and the lifecycle
+ * predicate come from the caller.
+ * @param {Object} options - identity, collaborators and host seams.
+ * @return {HeartbeatService} the initialized service.
+ */
+function assembleHeartbeatService(options = {}) {
+  const heartbeatService = new HeartbeatService({
+    nodeId: options.nodeId,
+    nodeAddress: options.nodeAddress,
+    advertisedNodeWsAddress: options.advertisedNodeWsAddress,
+    bootIncarnation: options.bootIncarnation,
+    cdcIntegrationService: options.cdcIntegrationService,
+    systemTableCache: options.systemTableCache,
+    cacheMutationTarget: options.cacheMutationTarget,
+    messageRouter: options.messageRouter,
+    controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway,
+    verifyReporterVisibilityOnSuccess:
+      options.verifyReporterVisibilityOnSuccess !== false,
+    membershipPublicationService: options.membershipPublicationService || null,
+    isNodeLifecycleReady: options.isNodeLifecycleReady,
+    now: options.now,
+    setIntervalFn: options.setIntervalFn,
+    clearIntervalFn: options.clearIntervalFn,
+    setTimeoutFn: options.setTimeoutFn,
+    clearTimeoutFn: options.clearTimeoutFn,
+  });
+  heartbeatService.initialize();
+  if (options.controlPlaneReadinessService) {
+    options.controlPlaneReadinessService.syncOwnerDependencies({heartbeatService});
+  }
+  return heartbeatService;
+}
+
+export {HeartbeatService, assembleHeartbeatService, calculateUsageSlopePerMinute};

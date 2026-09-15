@@ -227,13 +227,13 @@ async function buildPriorityPartitionAddBudgetAssessment(
   }
   if (
     typeof coordinator.workflowOwner
-      ?.getPriorityRecoveryPlanningSnapshotForOperation !==
+      ?.readAvailablePriorityRecoveryPlanningSnapshotForOperation !==
     REBALANCE_COORDINATOR_TYPE.FUNCTION
   ) {
     return null;
   }
   const planningSnapshot =
-    await coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
+    await coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation(
       representativeOperation,
     );
   if (

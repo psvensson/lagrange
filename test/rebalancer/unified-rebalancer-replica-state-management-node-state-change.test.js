@@ -313,7 +313,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       };
 
       const asyncSnapshot =
-        await rebalancer.getPriorityRecoveryPlanningSnapshot(operation);
+        await rebalancer.readAvailablePriorityRecoveryPlanningSnapshot(operation);
       const syncSnapshot =
         rebalancer.getPriorityRecoveryPlanningSnapshotSync(operation);
 

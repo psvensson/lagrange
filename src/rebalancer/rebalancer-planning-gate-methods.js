@@ -66,7 +66,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       );
     }
 
-    this.scheduledCheck = setTimeout(() => {
+    this.scheduledCheck = this.setTimeoutFn(() => {
       this.scheduledCheck = null;
       this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
     }, delay);
@@ -82,7 +82,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    */
   cancelScheduledCheck() {
     if (this.scheduledCheck) {
-      clearTimeout(this.scheduledCheck);
+      this.clearTimeoutFn(this.scheduledCheck);
       this.scheduledCheck = null;
     }
   },
@@ -93,7 +93,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    */
   cancelStabilizationTimer() {
     if (this.stabilizationTimer) {
-      clearTimeout(this.stabilizationTimer);
+      this.clearTimeoutFn(this.stabilizationTimer);
       this.stabilizationTimer = null;
     }
   },

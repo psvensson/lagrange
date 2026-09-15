@@ -1275,7 +1275,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       try {
         const workflowOwner = coordinator.workflowOwner;
         workflowOwner.repository.isOperationLocallyOwned = () => false;
-        workflowOwner.getPriorityRecoveryPlanningSnapshot = async () => ({});
+        workflowOwner.readAvailablePriorityRecoveryPlanningSnapshot = async () => ({});
         workflowOwner.buildPriorityRecoveryCompletionForOperation = () => ({
           state: TEST_COMPLETION_STATE_CONVERGED,
         });

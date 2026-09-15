@@ -154,7 +154,7 @@ function makeHandoff({stallMs = 1000} = {}) {
   instance.getPriorityPublicationSourceLeaderHandoffStallMs = () => stallMs;
   // Async leaf fetches the real emitter awaits.
   instance.getCriticalPartitionRowForSafety = async () => stalePartitionRow;
-  instance.getPriorityRecoveryPlanningSnapshot = async () => ({});
+  instance.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety = async () => ({});
   // The deferral/safe/fail constructors live on a SUBCLASS
   // (PriorityRecoverySupersededTarget) further down the runtime chain. Bind the
   // REAL ones so the deferReason resolution (replace_remove_safety_blocked) and the

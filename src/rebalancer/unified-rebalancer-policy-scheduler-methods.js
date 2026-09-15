@@ -340,7 +340,7 @@ class UnifiedRebalancerPolicySchedulerMethods {
 
     // Schedule check after stabilization period
     if (this.isLeader) {
-      this.stabilizationTimer = setTimeout(() => {
+      this.stabilizationTimer = this.setTimeoutFn(() => {
         this.stabilizationTimer = null;
         this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
       }, this.stabilizationPeriodMs);

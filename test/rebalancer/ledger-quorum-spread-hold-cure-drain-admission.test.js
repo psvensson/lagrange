@@ -263,6 +263,11 @@ function createFormationReadinessService(
   return {
     getNodeReadinessSync: (nodeId, readOptions) =>
       base.getNodeReadinessSync(nodeId, readOptions),
+    // REMOVE safety reads the owner surface; this fixture models the same
+    // planning state there, unchanged. The best-effort surfaces stay for the
+    // narration and admission consumers that read AVAILABLE evidence.
+    getPriorityRecoveryPlanningAnswerForOwnerRead: async (nodeId) =>
+      buildPlanningSnapshot(nodeId),
     getMembershipPublicationPlanningSnapshotBestEffort: async (nodeId) =>
       buildPlanningSnapshot(nodeId),
     getMembershipPublicationPlanningSnapshot: async (nodeId) =>

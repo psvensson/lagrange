@@ -102,7 +102,7 @@ function getPriorityRecoverySupersededTargetErrorFromContext(
  */
 async function getPriorityRecoverySupersededTargetError(context, operation) {
   const planningSnapshot =
-    await context.getPriorityRecoveryPlanningSnapshot(operation);
+    await context.readAvailablePriorityRecoveryPlanningSnapshot(operation);
   const priorityContext = context.buildPriorityRecoveryAssessmentContextForOperation(
     operation,
     planningSnapshot,

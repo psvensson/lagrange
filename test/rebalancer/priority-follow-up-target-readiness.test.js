@@ -200,7 +200,7 @@ test(
     rebalancer.isPriorityControlPlaneRecoveryActive = () => true;
     rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
       async () => null;
-    rebalancer.getPriorityRecoveryPlanningSnapshot = async () =>
+    rebalancer.readAvailablePriorityRecoveryPlanningSnapshot = async () =>
       Object.freeze({priorityPartitionSummary});
 
     try {

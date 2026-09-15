@@ -460,55 +460,27 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     return resolvedPlanningSnapshot;
   }
 
+  /**
+   * AVAILABLE planning evidence for this invocation: the canonical
+   * synchronous planning answer at the decision boundary.
+   *
+   * This method used to race the synchronous answer against an asynchronous
+   * refresh with a 1000 ms deadline and return whichever arrived first, which
+   * meant identical logical state could produce different planning answers
+   * purely because one machine ran the Promise chain faster. Consistency mode
+   * is now chosen by the caller's contract, never by response latency: a
+   * caller that requires the stronger evidence asks for the authoritative
+   * owner-read surface explicitly and accepts that wait as part of its own
+   * contract.
+   *
+   * The name is kept so this slice does not rename every call site, but the
+   * contract is AVAILABLE NOW.
+   * @param {string} nodeId
+   * @param {number} observedAt
+   * @return {Promise<Object|null>} the available planning answer
+   */
   async getMembershipPublicationPlanningSnapshotBestEffort(nodeId, observedAt) {
-    const syncSnapshot = this.getMembershipPublicationPlanningAnswerSync(
-      nodeId,
-      observedAt,
-    );
-    const timeoutMs =
-      this.membershipPublicationPlanningSnapshotRefreshTimeoutMs;
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-      const asyncSnapshot = await this.getMembershipPublicationPlanningSnapshot(
-        nodeId,
-        observedAt,
-      );
-      return this.resolvePriorityRecoveryPlanningAnswer(
-        nodeId,
-        observedAt,
-        asyncSnapshot || syncSnapshot,
-      );
-    }
-
-    let timeoutHandle = null;
-    try {
-      const asyncSnapshot = await Promise.race([
-        this.getMembershipPublicationPlanningSnapshot(nodeId, observedAt),
-        new Promise((_resolve, reject) => {
-          timeoutHandle = this.setTimeoutFn(() => {
-            reject(
-              new Error(
-                'Timed out refreshing membership publication planning snapshot ' +
-                  `for ${nodeId || 'unknown'} after ${timeoutMs}ms`,
-              ),
-            );
-          }, timeoutMs);
-          if (typeof timeoutHandle?.unref === 'function') {
-            timeoutHandle.unref();
-          }
-        }),
-      ]);
-      return this.resolvePriorityRecoveryPlanningAnswer(
-        nodeId,
-        observedAt,
-        asyncSnapshot || syncSnapshot,
-      );
-    } catch {
-      return syncSnapshot;
-    } finally {
-      if (timeoutHandle) {
-        this.clearTimeoutFn(timeoutHandle);
-      }
-    }
+    return this.getMembershipPublicationPlanningAnswerSync(nodeId, observedAt);
   }
 
   async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
@@ -518,6 +490,23 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     );
   }
 
+  /**
+   * AUTHORITATIVE planning evidence: the owner-read surface. It composes the
+   * authoritative direct publication row with the authoritative membership
+   * candidate and runs the canonical resolution over both.
+   *
+   * The candidate used to arrive through the best-effort machinery, which
+   * meant this authoritative surface inherited that path's latency race. It
+   * is now requested explicitly. The direct row stays authoritative for
+   * publication epoch and status precedence; the candidate contributes the
+   * richer evidence the canonical merge admits, such as required and
+   * acknowledged ack node lists in place of count-only debt. If the candidate
+   * is unavailable, the direct owner evidence stands; AVAILABLE evidence is
+   * never substituted.
+   * @param {string} nodeId
+   * @param {number} observedAt
+   * @return {Promise<Object|null>}
+   */
   async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
     let membershipPublication = null;
     try {
@@ -528,10 +517,44 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     } catch (_error) {
       membershipPublication = null;
     }
-    return this.resolveNodeMembershipPublicationPlanningAnswer(
+    let candidate = null;
+    try {
+      candidate = await this.getMembershipPublicationPlanningSnapshot(
+        nodeId,
+        observedAt,
+      );
+    } catch (_error) {
+      candidate = null;
+    }
+    // Order is the contract. The candidate is resolved FIRST so its richer
+    // evidence enters the canonical planning state, and the direct
+    // authoritative row is resolved LAST so it keeps precedence over the
+    // candidate for publication epoch and status. Returning the candidate's
+    // answer instead let stale or conflicting same-epoch planning evidence
+    // outrank a current publication row, which the owner-read precedence
+    // tests catch immediately.
+    // The candidate is resolved FIRST so its richer evidence enters canonical
+    // planning state, and the direct authoritative row is resolved LAST so it
+    // keeps publication epoch and status precedence and can demote stale or
+    // conflicting same-epoch planning state. Precedence is not erasure: when
+    // there is no direct row to prefer, the candidate-derived answer stands,
+    // which is the whole point of having asked for it.
+    const candidateAnswer = candidate ?
+      this.resolvePriorityRecoveryPlanningAnswer(nodeId, observedAt, candidate) :
+      null;
+    const directAnswer = this.resolveNodeMembershipPublicationPlanningAnswer(
       nodeId,
       observedAt,
       membershipPublication,
+    );
+    const finalAnswer = (await directAnswer) || candidateAnswer;
+    // The marker belongs on the FINAL answer, with the final direct row this
+    // composition actually resolved against.
+    return this.markResolvedNodePlanningAnswer(
+      nodeId,
+      observedAt,
+      membershipPublication,
+      finalAnswer,
     );
   }
 

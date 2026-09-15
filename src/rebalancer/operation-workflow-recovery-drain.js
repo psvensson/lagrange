@@ -497,7 +497,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     }
 
     const planningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot(operation);
+      await this.readAvailablePriorityRecoveryPlanningSnapshot(operation);
     const priorityRecoveryContext =
       this.buildPriorityRecoveryAssessmentContextForOperation(
         operation,

@@ -42,6 +42,11 @@ export function createPublishedPlanningReadinessService({
         },
       };
     },
+    // REMOVE safety reads the owner surface; the same modelled planning
+    // state is presented there, unchanged.
+    async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+      return buildPlanningSnapshot(nodeId);
+    },
     async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
       return buildPlanningSnapshot(nodeId);
     },
@@ -50,6 +55,53 @@ export function createPublishedPlanningReadinessService({
     },
     getMembershipPublicationPlanningSnapshotSync(nodeId) {
       return buildPlanningSnapshot(nodeId);
+    },
+  };
+}
+
+/**
+ * Presents a readiness fixture's existing planning state on the OWNER-READ
+ * surface as well.
+ *
+ * REMOVE safety reads getPriorityRecoveryPlanningAnswerForOwnerRead and
+ * nothing else; a fixture that models a converged planning state for a
+ * removal but exposes it only through the best-effort surfaces is modelling a
+ * node with NO owner evidence, which the fail-closed contract correctly
+ * refuses to remove on. This wrapper adds the owner surface, returning the
+ * fixture's own snapshot unchanged, and leaves every AVAILABLE surface in
+ * place for the narration, progress and budget-admission consumers that
+ * legitimately read them.
+ *
+ * A fixture that already models the owner surface - including one that
+ * deliberately makes the two contracts disagree - is returned untouched.
+ */
+export function withOwnerReadPlanningEvidence(readinessService) {
+  if (
+    !readinessService ||
+    typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead ===
+      'function'
+  ) {
+    return readinessService;
+  }
+  return {
+    ...readinessService,
+    async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId, observedAt) {
+      if (
+        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
+        'function'
+      ) {
+        return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
+          nodeId, observedAt);
+      }
+      if (
+        typeof readinessService
+          .getMembershipPublicationPlanningSnapshotBestEffort === 'function'
+      ) {
+        return readinessService
+          .getMembershipPublicationPlanningSnapshotBestEffort(
+            nodeId, observedAt);
+      }
+      return null;
     },
   };
 }

@@ -2,6 +2,9 @@
  * RebalanceCoordinator critical REMOVE safety checks.
  */
 
+import {
+  withOwnerReadPlanningEvidence,
+} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -805,7 +808,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
     const coordinator = createTestCoordinator({
       nodeId: TARGET_NODE_ID,
       enableTimeouts: false,
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: withOwnerReadPlanningEvidence({
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -830,7 +833,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
             eligible: true,
           };
         },
-      },
+      }),
       tablePolicyService: {
         getPolicyForPartition: () => ({minReplicaCount: 3}),
       },
@@ -956,7 +959,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
-      controlPlaneReadinessService: {
+      controlPlaneReadinessService: withOwnerReadPlanningEvidence({
         getNodeReadinessSync(nodeId) {
           return {
             nodeId,
@@ -1017,7 +1020,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
             }),
           };
         },
-      },
+      }),
       tablePolicyService: {
         getPolicyForPartition: () => ({minReplicaCount: 3}),
       },

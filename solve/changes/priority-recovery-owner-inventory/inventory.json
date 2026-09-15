@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "af33ed92cb72c0ad2e89e0fdaa0e41efe4e1b746b8b3c9df5b5dc4780f0a597a"
+    "sourceSha256": "f2272344821fcd4459f9bc54844024f416a4705f3d7f730e629871f8da287d94"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,8 +17,8 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 66,
-    "publicExportCount": 741,
+    "moduleCount": 67,
+    "publicExportCount": 749,
     "importEdgeCount": 311,
     "crossLayerEdgeCount": 93,
     "layerDirectionViolationCount": 45,
@@ -28,7 +28,7 @@
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 66,
+    "uniquelyClassifiedModules": 67,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -1934,6 +1934,32 @@
       ],
       "localExports": [
         "PriorityRecoveryObservation"
+      ]
+    },
+    {
+      "path": "src/rebalancer/priority-recovery-planning-read.js",
+      "owner": "rebalancer",
+      "layer": "owner_decision",
+      "rationale": "owner policy or actuation surface",
+      "exports": [
+        "AVAILABLE_PLANNING_SURFACE_ORDER",
+        "PRIORITY_RECOVERY_PLANNING_READ_MODE",
+        "createRemoveSafetyPlanningSnapshotReader",
+        "hasAuthoritativeRemoveSafetyPlanningProvider",
+        "hasAvailablePriorityRecoveryPlanningProvider",
+        "readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety",
+        "readAvailablePriorityRecoveryPlanningSnapshot",
+        "resolveRemoveSafetyPlanningSnapshotReader"
+      ],
+      "localExports": [
+        "AVAILABLE_PLANNING_SURFACE_ORDER",
+        "PRIORITY_RECOVERY_PLANNING_READ_MODE",
+        "createRemoveSafetyPlanningSnapshotReader",
+        "hasAuthoritativeRemoveSafetyPlanningProvider",
+        "hasAvailablePriorityRecoveryPlanningProvider",
+        "readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety",
+        "readAvailablePriorityRecoveryPlanningSnapshot",
+        "resolveRemoveSafetyPlanningSnapshotReader"
       ]
     },
     {
@@ -5292,6 +5318,9 @@
     ],
     [
       "src/rebalancer/priority-recovery-observation.js"
+    ],
+    [
+      "src/rebalancer/priority-recovery-planning-read.js"
     ],
     [
       "src/rebalancer/priority-recovery-superseded-target.js"

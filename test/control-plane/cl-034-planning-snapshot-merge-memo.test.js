@@ -149,7 +149,7 @@ t.test('merge memo: a stale observedAt beyond the wall-time grace forces a rebui
   t.equal(builds.length, 2, 'rebuilt once the cached entry aged past the grace');
 });
 
-t.test('async owner answer is not merged again inside the same readiness build',
+t.test('authoritative owner answer is not merged again inside the same readiness build',
   async (t) => {
     const cache = {
       addListener() {},
@@ -190,14 +190,18 @@ t.test('async owner answer is not merged again inside the same readiness build',
       mergeBuildCount++;
       return originalResolve(context);
     };
+    // This fixture supplies only an async deriveClusterMembershipCandidate and
+    // no synchronous candidate source, so it is an AUTHORITATIVE owner-read
+    // fixture by construction: AVAILABLE planning legitimately has nothing to
+    // report here. The producer is the owner-read surface accordingly, and the
+    // memo invariant below is unchanged.
     const membershipPublication = null;
-    const answer = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
+    const answer = await readiness.getPriorityRecoveryPlanningAnswerForOwnerRead(
       'seed',
       iso(1),
-      membershipPublication,
     );
     t.equal(mergeBuildCount, 1,
-      'the async owner should build one merged planning answer');
+      'the authoritative owner should build one merged planning answer');
 
     const consumed =
       readiness.resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync({

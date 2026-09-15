@@ -715,7 +715,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
 
       try {
         const snapshot =
-        await coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshot(
+        await coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshot(
           operation,
         );
 

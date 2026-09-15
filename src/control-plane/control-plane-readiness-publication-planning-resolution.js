@@ -1,5 +1,9 @@
 import {ControlPlaneReadinessPublicationPlanningSnapshot} from './control-plane-readiness-publication-planning-snapshot.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {
+  isResolvedNodePlanningAnswerForContext,
+  rememberResolvedNodePlanningAnswer,
+} from './readiness-resolved-planning-answer-context.js';
 
 const {
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -11,39 +15,6 @@ const {
   resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = SHARED;
-
-const resolvedNodePlanningAnswerContext = new WeakMap();
-
-function rememberResolvedNodePlanningAnswer(
-  owner,
-  nodeId,
-  observedAt,
-  membershipPublication,
-  answer,
-) {
-  if (answer && typeof answer === 'object') {
-    resolvedNodePlanningAnswerContext.set(answer, {
-      membershipPublication,
-      nodeId: nodeId || owner.nodeId,
-      observedAt,
-      owner,
-    });
-  }
-  return answer;
-}
-
-function isResolvedNodePlanningAnswerForContext(
-  owner,
-  provided,
-  context,
-  membershipPublication,
-) {
-  const resolvedContext = resolvedNodePlanningAnswerContext.get(provided);
-  return resolvedContext?.owner === owner &&
-    resolvedContext.nodeId === (context?.nodeId || owner.nodeId) &&
-    resolvedContext.observedAt === context?.observedAt &&
-    resolvedContext.membershipPublication === membershipPublication;
-}
 
 class ControlPlaneReadinessPublicationPlanningResolution extends
   ControlPlaneReadinessPublicationPlanningSnapshot {
@@ -628,25 +599,78 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         ),
       );
     }
-    const planningSnapshot = await this.getMembershipPublicationPlanningSnapshotBestEffort(
-      nodeId,
-      observedAt,
-    );
+    // The caller has already performed the async direct publication read;
+    // the AVAILABLE planning projection itself has no reason to be async.
     return rememberResolvedNodePlanningAnswer(
       this,
       nodeId,
       observedAt,
       membershipPublication,
-      this.resolvePriorityRecoveryPlanningAnswer(
+      this.resolveAvailableNodePlanningAnswer(
         nodeId,
         observedAt,
-        this.resolveMembershipPublicationPlanningSnapshot({
-          nodeId,
-          observedAt,
-          membershipPublication,
-          membershipPublicationPlanningSnapshot: planningSnapshot,
-        }),
+        membershipPublication,
       ),
+    );
+  }
+
+  /**
+   * The canonical AVAILABLE planning answer for one readiness evaluation.
+   *
+   * Both the async and the sync outer methods use this after their own
+   * source-mode branching, so there is exactly one AVAILABLE implementation.
+   * It merges against the SAME membershipPublication object the evaluation
+   * already captured, which is what keeps the merge identity contract intact:
+   * the async path used to reach the compatibility bestEffort surface
+   * instead, recapturing planning state and producing a second, logically
+   * equivalent but distinct product, so one readiness build merged twice.
+   * The compatibility surface is for external callers; it is not an
+   * owner-to-owner dependency.
+   * @param {string} nodeId
+   * @param {number} observedAt
+   * @param {Object} membershipPublication - the captured direct row
+   * @return {Object|null}
+   * @private
+   */
+  resolveAvailableNodePlanningAnswer(nodeId, observedAt, membershipPublication) {
+    return this.resolvePriorityRecoveryPlanningAnswer(
+      nodeId,
+      observedAt,
+      // The MEMOIZED merge, never the raw one. The raw entry point bypasses
+      // the CL-034 contract this owner already holds - publisher scoping,
+      // floored planning currency, publication epoch and status folded into
+      // freshness, frozen reuse while stable, invalidation on publication or
+      // source-generation advance - and calling it per invocation multiplied
+      // heavy planning builds roughly tenfold against their sealed bound.
+      this.resolveMemoizedMembershipPublicationPlanningSnapshotSync(
+        nodeId,
+        observedAt,
+        membershipPublication,
+        this.getMembershipPublicationPlanningAnswerSync(nodeId, observedAt),
+      ),
+    );
+  }
+
+  /**
+   * Mark one final, concrete planning answer as resolved for exactly this
+   * context. The marker describes the owner, node, observation time and the
+   * FINAL direct membership-publication object, so a later consumer can
+   * recognise a completed answer instead of merging it again. It is applied
+   * only to a final answer, never to an intermediate candidate-derived one
+   * carried across a subsequent direct-row resolution.
+   * @param {string} nodeId
+   * @param {number} observedAt
+   * @param {Object} membershipPublication
+   * @param {Object} answer
+   * @return {Object} the same answer
+   */
+  markResolvedNodePlanningAnswer(nodeId, observedAt, membershipPublication, answer) {
+    return rememberResolvedNodePlanningAnswer(
+      this,
+      nodeId,
+      observedAt,
+      membershipPublication,
+      answer,
     );
   }
 
@@ -666,19 +690,10 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         membershipPublication,
       );
     }
-    const planningSnapshot = this.getMembershipPublicationPlanningAnswerSync(
+    return this.resolveAvailableNodePlanningAnswer(
       nodeId,
       observedAt,
-    );
-    return this.resolvePriorityRecoveryPlanningAnswer(
-      nodeId,
-      observedAt,
-      this.resolveMemoizedMembershipPublicationPlanningSnapshotSync(
-        nodeId,
-        observedAt,
-        membershipPublication,
-        planningSnapshot,
-      ),
+      membershipPublication,
     );
   }
 

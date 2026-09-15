@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-calibrated",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "A deterministic five-node cold-formation simulator on the in-process path - virtual clock, seeded in-memory transport, real owners throughout, and a guard that throws on any ambient clock or timer read in deterministic mode - reproduces the seed-starvation signature of main (seed gap fraction at least 50 percent with every joiner under 5 percent, incomplete-lease observations naming all five nodes with escalating backoff, prioritySpreadGap non-decreasing with zero operations in flight, admission ending in control_plane_pressure) at the calibration's own costs, two runs of one seed produce byte-identical reports, a run completes in under 60 seconds of real time, and a live report plus its log archive can be ingested as a canonical scenario. The scheduler charges every exclusive attribution segment, counted as dispatchCount plus handoffCount, at the owner's calibrated mean from the committed table, and holds an explicit causality invariant: each node has its own busyUntil, a segment advances it, work that becomes logically due while the node is busy cannot execute until the node is available, global execution takes the earliest causally runnable event, and no cross-node delivery precedes sender completion plus link delay.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-reproduces.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "real-owners",
+      "statement": "The harness adapts transport and storage interfaces only; it never reproduces an owner's planner, readiness or rebalancer decision logic, and every adapter carries a contract test naming what it simplifies."
+    },
+    {
+      "id": "sensitivity-not-identity",
+      "statement": "The 0.5x-2x one-dimensional sweep is a sensitivity test. At 1.0x the baseline reproduces the sealed signature; at every other point the run must preserve the causal and failure classification and any mechanism conclusion the report claims, and identical wall-clock numbers are not required of deliberately perturbed costs. A sweep point that flips the classification is a finding and returns for review."
+    },
+    {
+      "id": "calibrated-active-or-refused",
+      "statement": "Eight owners are calibrated-active with a measured mean. worker_dispatch is observed-inactive: it has no measured mean, and zero is never substituted for an unmeasured cost. The baseline admits it only while its dispatch count remains zero and otherwise fails closed with uncalibrated_owner naming the owner. Any mechanism that activates it supplies a separately justified candidate cost or range first."
+    },
+    {
+      "id": "every-exclusive-segment-charged",
+      "statement": "The charging unit is dispatchCount + handoffCount, so a synchronous runFormationOwner handoff costs the destination owner exactly one segment. The seam's exclusive nested-owner semantics are retained and nothing is charged twice."
+    },
+    {
+      "id": "causality-invariant-with-falsifier",
+      "statement": "Per-node busyUntil, logically-due work that cannot execute while the node is busy, earliest causally runnable event chosen globally, and no delivery before sender completion plus link delay. A deterministic falsifier proves each clause red on revert; a scheduler that stamps costs onto a free-running queue must fail it."
+    },
+    {
+      "id": "residual-preserved-not-priced",
+      "statement": "The calibration's 3.50 percent unattributed time is carried as an explicit uncertainty band on every reported figure and is never given a cost. A conclusion whose claimed advantage falls inside that band is reported as not decision-grade in those words."
+    },
+    {
+      "id": "no-coefficient-tuning",
+      "statement": "If the fixed-mean-per-owner model cannot reproduce the baseline signature, coefficients are not tuned and no ad-hoc simulator logic is added. The divergence is recorded as evidence about owner-internal workload composition or burst shape and returns for review."
+    },
+    {
+      "id": "deterministic-guard-by-mutation",
+      "statement": "Deterministic mode throws nondeterministic_owner_seam on an ambient clock read or timer scheduling inside a tagged owner dispatch, and the reproduction check proves the guard by mutation."
+    },
+    {
+      "id": "one-report-schema",
+      "statement": "Live and simulated producers emit the same additive formationMetrics object in the existing report schema; formationVerdict and the budget readers consume either without a simulator branch."
+    },
+    {
+      "id": "bounded-seams",
+      "statement": "Every owner time seam lands as one bounded, independently verified commit with a head-red or red-on-revert test, including the two handoff-path ambient-time reads, which are a seam repair and not a formation fix."
+    }
+  ],
+  "sealedAt": "0675e87f1fef6b686db93860126a1bac33d535e6"
+}

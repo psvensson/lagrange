@@ -103,6 +103,28 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       typeof options.nowFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
         options.nowFn :
         Date.now;
+    // The planner's own timers. The periodic check and the stabilization
+    // delay were armed with the ambient setTimeout, so the one owner that
+    // decides when a planning pass happens could not be hosted on any clock
+    // but the host's - and a deterministic scheduler had to drive planning
+    // from outside, which makes the harness the owner of the rate.
+    //
+    // BINDING TIME IS PART OF THE CONTRACT, and the two cases differ:
+    // an INJECTED function is captured here, because the deterministic
+    // simulator hands over its own clock once and must keep it; the AMBIENT
+    // default is forwarded at CALL time, because the baseline armed
+    // globalThis.setTimeout directly, so replacing the ambient timer after
+    // construction was observable behaviour. Capturing the ambient function
+    // here would silently take that away. Both members follow the same rule:
+    // never a late-bound setter paired with a captured clearer.
+    this.setTimeoutFn =
+      typeof options.setTimeoutFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
+        options.setTimeoutFn :
+        (...args) => globalThis.setTimeout(...args);
+    this.clearTimeoutFn =
+      typeof options.clearTimeoutFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
+        options.clearTimeoutFn :
+        (...args) => globalThis.clearTimeout(...args);
     this.replicaInventoryBuilder =
       options.replicaInventoryBuilder || buildReplicaInventorySnapshot;
     // DT5 seam: scheduler/leadership-start jitter draws from a RandomSource

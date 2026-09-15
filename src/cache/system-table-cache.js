@@ -67,6 +67,14 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
 
+// The production next-turn hop for a cache-change notification. Listeners are
+// deliberately NOT called inside the mutating turn, so a listener can never
+// observe a half-applied batch or re-enter the cache mid-apply. A
+// deterministic host replaces the timer, never the deferral.
+function defaultCacheChangeNotificationSchedule(callback) {
+  return setImmediate(callback);
+}
+
 function isAuthoritativeUpsertMode(mutationMode) {
   return mutationMode ===
       SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
@@ -149,7 +157,21 @@ class SystemTableCache {
   /**
    * Create a new SystemTableCache instance.
    */
-  constructor() {
+  /**
+   * @param {Object} [options] - {scheduleCacheChangeNotification}.
+   * @param {Function} [options.scheduleCacheChangeNotification] - places a
+   *   cache-change notification on the next turn. Production default is
+   *   exactly `setImmediate(callback)`; a deterministic host supplies its own
+   *   next-turn queue so the hop is an ordinary scheduled event rather than
+   *   an escape from virtual time. Scheduling only: what is delivered, to
+   *   whom, in what order, and how mutation and invalidation behave are
+   *   unchanged.
+   */
+  constructor(options = {}) {
+    this.scheduleCacheChangeNotification =
+      typeof options.scheduleCacheChangeNotification === 'function' ?
+        options.scheduleCacheChangeNotification :
+        defaultCacheChangeNotificationSchedule;
     this.tables = new Map();
     this.appliedSchemaVersions = new Map();
     this.lastAppliedAtMsByTableName = new Map();

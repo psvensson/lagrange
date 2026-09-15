@@ -28,6 +28,38 @@ const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
 });
 
 class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
+  /**
+   * The authoritative planning snapshot this leader-safety evaluation should
+   * use: the one the remove-safety owner already resolved for this
+   * evaluation, or a single own read when this method was invoked directly.
+   * @param {Object} operation
+   * @param {Object} options
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  resolveLeaderRemoveSafetyPlanningSnapshot(operation, options = {}) {
+    if (typeof options.readAuthoritativePlanningSnapshot === 'function') {
+      return options.readAuthoritativePlanningSnapshot();
+    }
+    return this.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety(
+      operation,
+    );
+  }
+
+  /**
+   * Leader/source removal safety. This decides whether a removal is SAFE, so
+   * it reads the AUTHORITATIVE planning contract, never the AVAILABLE one.
+   * When the remove-safety owner has already resolved that authoritative
+   * snapshot for this evaluation it supplies it through
+   * options.readAuthoritativePlanningSnapshot, so one evaluation performs one
+   * owner read; a focused or standalone caller that supplies nothing resolves
+   * it here instead.
+   * @param {Object} operation
+   * @param {Object} sourceReplicaRow
+   * @param {Object} replacementReplicaRow
+   * @param {Object} [options]
+   * @return {Promise<Object|null>}
+   */
   async evaluatePriorityPublicationLeaderRemoveSafety(
     operation,
     sourceReplicaRow,
@@ -38,7 +70,7 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       operation?.partitionId || null,
     );
     const planningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot(operation);
+      await this.resolveLeaderRemoveSafetyPlanningSnapshot(operation, options);
     const safetySnapshot =
       this.buildPriorityPublicationLeaderRemoveSafetySnapshot(
         operation,
@@ -324,8 +356,9 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     );
   }
 
-  async getPriorityRecoveryPlanningSnapshotForOperation(operation) {
-    return this.getPriorityRecoveryPlanningSnapshot(operation);
+  // Priority BUDGET ADMISSION evidence, not a removal decision: AVAILABLE.
+  async readAvailablePriorityRecoveryPlanningSnapshotForOperation(operation) {
+    return this.readAvailablePriorityRecoveryPlanningSnapshot(operation);
   }
 
   resolvePriorityRecoveryIncompleteOperationObservation(

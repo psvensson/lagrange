@@ -430,7 +430,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       partitionId,
       partitionOperations,
     ] of groupPriorityOperations(operations)) {
-      const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot(
+      const planningSnapshot = await this.readAvailablePriorityRecoveryPlanningSnapshot(
         partitionOperations[0],
       );
       collectNonBlockingPriorityOperationIds(

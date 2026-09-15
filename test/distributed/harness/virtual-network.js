@@ -39,6 +39,13 @@
  * search layer is unchanged; only this substrate is new.
  */
 
+import {runOnExecutionNode} from
+  '../../../src/diagnostics/formation-turn-attribution.js';
+
+// Captured at module load: a replaced Array.prototype.map must not be able to
+// rewrite a diagnostic description of the queue.
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const VIRTUAL_NETWORK_NUM_ZERO = 0;
 const VIRTUAL_NETWORK_NUM_ONE = 1;
 const VIRTUAL_NETWORK_DEFAULT_MAX_STEPS = 100000;
@@ -106,6 +113,13 @@ function createVirtualNetwork(options = {}) {
     VIRTUAL_NETWORK_NUM_ZERO;
   let seq = VIRTUAL_NETWORK_NUM_ZERO;
   let timerSeq = VIRTUAL_NETWORK_NUM_ZERO;
+  const randomDrawCount = VIRTUAL_NETWORK_NUM_ZERO;
+  const onEvent =
+    typeof options.onEvent === VIRTUAL_NETWORK_STR_FUNCTION ?
+      options.onEvent : null;
+  const onAdapterTimer =
+    typeof options.onAdapterTimer === VIRTUAL_NETWORK_STR_FUNCTION ?
+      options.onAdapterTimer : null;
   const scheduler =
     options.scheduler &&
     typeof options.scheduler.pick === VIRTUAL_NETWORK_STR_FUNCTION ?
@@ -210,6 +224,23 @@ function createVirtualNetwork(options = {}) {
     queue.push({seq: seq++, ...event});
   }
 
+  // A message cannot leave before the segment that sent it finishes. The
+  // sender's handler runs at nowMs, but with a cost table its node is charged
+  // for the turn and stays busy past that instant; timing the message from
+  // nowMs alone let a saturated node's traffic arrive while that node was
+  // still, by its own accounting, occupied (formation-sim causality
+  // invariant, owner amendment 3, 2026-09-14). The receiving side is already
+  // gated by maybeDeferForBusyNode; this is the sending side of the same
+  // rule. Without a cost table busyUntilMs never exceeds nowMs, so every
+  // existing network is byte-identical.
+  function sendReadyAtMs(fromNodeId) {
+    const sender = fromNodeId === undefined ? null : nodes.get(fromNodeId);
+    if (!costTable || !sender) {
+      return nowMs;
+    }
+    return Math.max(nowMs, sender.busyUntilMs);
+  }
+
   /**
    * Send a message from one node to another, arriving after delayMs of virtual time.
    * @param {Object} message - {from, to, type, payload, delayMs}.
@@ -225,7 +256,7 @@ function createVirtualNetwork(options = {}) {
       to: message.to,
       type: message.type,
       payload: message.payload || {},
-      dueAt: nowMs + normalizeDelayMs(message.delayMs),
+      dueAt: sendReadyAtMs(message.from) + normalizeDelayMs(message.delayMs),
       fn: null,
     });
   }
@@ -264,6 +295,11 @@ function createVirtualNetwork(options = {}) {
   // a real subsystem uses (liferaft routes every duration through `ms(...)` -> an integer).
 
   function scheduleAdapterTimer(nodeId, fn, ms, args, repeating) {
+    // Diagnostic-only provenance for one predicate-selected enqueue. No stack
+    // is captured for anything else, and nothing here affects selection.
+    if (onAdapterTimer) {
+      onAdapterTimer({nodeId, intervalMs: normalizeDelayMs(ms), repeating, nowMs});
+    }
     ensureNode(nodeId);
     touch(nodeId);
     const timerId = ++timerSeq;
@@ -384,6 +420,53 @@ function createVirtualNetwork(options = {}) {
    * the result is the smallest (dueAt, seq), byte-identical to a plain priority queue.
    * @return {Object|null}
    */
+  /**
+   * The earliest instant at which any queued event could run, without
+   * consuming anything: no event is removed, the co-due scheduler is not
+   * consulted, no sequence state moves and virtual time does not advance. A
+   * driver uses it to ask "is there a next causal instant, and is it beyond
+   * my horizon" before deciding to step.
+   *
+   * Busy deferral is folded in here rather than in any caller, because the
+   * node's occupancy is this owner's rule: an event whose owning node is
+   * still busy cannot run until that node is free, so its authoritative
+   * instant is the later of the two.
+   * @return {number|null} the instant, or null when nothing is queued.
+   */
+  // Diagnostic, non-mutating: a normalized description of everything still
+  // queued. Nothing is removed, no scheduler is consulted and no state moves.
+  function pendingEvents() {
+    return arrayMap(queue, (event) => Object.freeze({
+      kind: event.kind, type: event.type, from: event.from, to: event.to,
+      dueAt: event.dueAt, seq: event.seq,
+      payload: event.payload ? JSON.stringify(event.payload) : null,
+    }));
+  }
+
+  function peekNextEventInstant() {
+    let earliest = null;
+    for (const event of queue) {
+      let dueAt = event.dueAt;
+      if (costTable) {
+        const ownerId = event.kind === VIRTUAL_NETWORK_EVENT_KIND.TIMER ?
+          event.from :
+          event.to;
+        const owner = nodes.get(ownerId);
+        if (
+          owner &&
+          owner.state === VIRTUAL_NETWORK_NODE_STATE.RUNNING &&
+          owner.busyUntilMs > dueAt
+        ) {
+          dueAt = owner.busyUntilMs;
+        }
+      }
+      if (earliest === null || dueAt < earliest) {
+        earliest = dueAt;
+      }
+    }
+    return earliest;
+  }
+
   function pickNext() {
     if (queue.length === VIRTUAL_NETWORK_NUM_ZERO) {
       return null;
@@ -435,6 +518,9 @@ function createVirtualNetwork(options = {}) {
     runStep,
     getRecords,
     pendingEventCount,
+    enqueueEpoch,
+    peekNextEventInstant,
+    pendingEvents,
     random,
   });
 
@@ -468,7 +554,9 @@ function createVirtualNetwork(options = {}) {
       type: event.type,
     });
     if (target.handler) {
-      target.handler(
+      // A delivery executes on the DESTINATION node: that is the process
+      // whose core services the message, whatever node sent it.
+      runOnExecutionNode(event.to, () => target.handler(
         Object.freeze({
           from: event.from,
           to: event.to,
@@ -476,7 +564,7 @@ function createVirtualNetwork(options = {}) {
           payload: event.payload,
         }),
         api,
-      );
+      ), {id: event.seq, kind: event.kind, nodeId: event.to});
     }
   }
 
@@ -500,7 +588,11 @@ function createVirtualNetwork(options = {}) {
       type: event.type,
     });
     if (event.fn) {
-      event.fn(api);
+      // A timer executes on the node that owns it, which is the node that
+      // scheduled it. The scheduler is the only authority here: nothing is
+      // inferred from an owner object, a row, or whichever bracket is open.
+      runOnExecutionNode(event.from, () => event.fn(api),
+        {id: event.seq, kind: event.kind, nodeId: event.from});
     }
   }
 
@@ -534,6 +626,16 @@ function createVirtualNetwork(options = {}) {
   // Returns true if the event actually fired/delivered, false if it was deferred
   // (re-timed forward, left on the queue). With no cost table it always returns true.
   function deliverOne(event) {
+    // Opt-in diagnostic trace of every scheduler decision, off unless a caller
+    // asks for it. It observes; it never changes what is delivered or when.
+    if (onEvent) {
+      onEvent({
+        nowMs, seq: event.seq, kind: event.kind, from: event.from,
+        to: event.to, type: event.type, dueAt: event.dueAt,
+        pending: queue.length, randomDraws: randomDrawCount,
+        pendingSnapshot: pendingEvents(),
+      });
+    }
     if (maybeDeferForBusyNode(event)) {
       // Deferred: the event stays queued at its new (later) dueAt; the clock does not move.
       return false;
@@ -656,6 +758,14 @@ function createVirtualNetwork(options = {}) {
 
   function pendingEventCount() {
     return queue.length;
+  }
+
+  // Monotonic count of events the scheduler has RECEIVED. A quiescence
+  // fixpoint reads it to tell "nothing new was queued" apart from "nothing
+  // ran"; `seq` already increments on every enqueue, so this reports it
+  // rather than adding a second counter.
+  function enqueueEpoch() {
+    return seq;
   }
 
   return api;

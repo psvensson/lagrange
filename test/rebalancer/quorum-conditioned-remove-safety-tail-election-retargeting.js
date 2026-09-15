@@ -1,4 +1,7 @@
 import {registerQuorumConditionedRemoveSafetyTailMoreTests} from './quorum-conditioned-remove-safety-tail-more-test-cases.js';
+import {
+  withOwnerReadPlanningEvidence,
+} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 
 export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(context) {
   const {
@@ -57,7 +60,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -123,7 +126,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },
@@ -382,7 +385,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -402,7 +405,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           getMembershipPublicationPlanningSnapshotSync(nodeId) {
             return buildPlanningSnapshot(nodeId);
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: TEST_MIN_REPLICA_COUNT}),
         },
@@ -630,7 +633,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -650,7 +653,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           getMembershipPublicationPlanningSnapshotSync(nodeId) {
             return buildPlanningSnapshot(nodeId);
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({
             minReplicaCount: TEST_MIN_REPLICA_COUNT,
@@ -841,7 +844,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -861,7 +864,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           getMembershipPublicationPlanningSnapshotSync(nodeId) {
             return buildPlanningSnapshot(nodeId);
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: TEST_MIN_REPLICA_COUNT}),
         },
@@ -970,7 +973,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -1034,7 +1037,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },

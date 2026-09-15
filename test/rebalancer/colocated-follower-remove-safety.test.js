@@ -107,7 +107,7 @@ function makeHandoff({partitionId = PARTITION_ID, rows = null} = {}) {
     partition_id: partitionId,
     leader_node_id: SOURCE_NODE_ID,
   });
-  instance.getPriorityRecoveryPlanningSnapshot = async () => ({
+  instance.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety = async () => ({
     publicationStatus: 'PUBLISHED',
   });
   instance.buildPriorityRecoveryAssessmentContextForOperation = () => ({});

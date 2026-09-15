@@ -441,7 +441,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       return null;
     }
     const planningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot(operation);
+      await this.readAvailablePriorityRecoveryPlanningSnapshot(operation);
     return this.buildPriorityRecoveryDecisionSnapshotForOperations(
       partitionId,
       [operation],
@@ -492,7 +492,7 @@ class PriorityRecoveryObservation extends PriorityPublicationHandoff {
       return null;
     }
     const planningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot(representativeOperation);
+      await this.readAvailablePriorityRecoveryPlanningSnapshot(representativeOperation);
     return this.buildPriorityRecoveryDecisionSnapshotForOperations(
       normalizedPartitionId,
       operationRecords,

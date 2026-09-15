@@ -962,6 +962,10 @@ function createTestRebalancer(options = {}) {
     storageAdmissionService,
     storageAccountingService,
     nowFn: options.nowFn,
+    // Timer seams: forwarded so a suite can hand the planner an explicit
+    // clock. Omitted by default, which leaves the ambient late-bound pair.
+    setTimeoutFn: options.setTimeoutFn,
+    clearTimeoutFn: options.clearTimeoutFn,
   });
 }
 

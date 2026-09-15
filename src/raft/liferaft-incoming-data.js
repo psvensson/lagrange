@@ -1,0 +1,684 @@
+// The inbound Raft data path: everything that happens when a packet arrives.
+//
+// This lives beside LifeRaft rather than inside it because the two have
+// different subjects. The class owns construction, timer ownership and the
+// protocol-task boundary; this module owns what one incoming packet does -
+// the append preamble, the committed-prefix and same-index-term guards, the
+// snapshot catch-up decision, follower match-index bookkeeping, and the
+// patched data listener that brackets the whole dispatch as owned protocol
+// work.
+import BaseLifeRaft from '@markwylde/liferaft';
+import {
+  runRaftProtocolActivity,
+} from '../diagnostics/raft-formation-attribution.js';
+import {
+  guardCommittedEntryWrite,
+  isRaftCommittedEntryConflict,
+} from './committed-entry-guard.js';
+import {
+  resolveDurableCommittedIndex,
+  surfaceCommittedPrefixDivergence,
+} from './committed-prefix-divergence.js';
+import {RAFT_PACKET_TYPE} from './constants.js';
+import {
+  RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
+  buildSnapshotCatchupDecision,
+} from './snapshot-catchup-constants.js';
+import {handleFollowerAppendBatch} from './liferaft-follower-batch.js';
+
+
+const NUMERIC_ONE = 1;
+const NUMERIC_ZERO = 0;
+
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_COMMAND = 'command';
+const LOCAL_STR_FUNCTION = 'function';
+
+const RAFT_EVENT = Object.freeze({
+  DATA: 'data',
+});
+
+// Leader-observed replication progress (quest learner-promotion-progress-
+// proof). Every follower acks each durably saved entry (base liferaft
+// index.js 'append ack' and the batch tail ack below), so the leader already
+// receives a complete per-follower progress signal; this map RETAINS it (the
+// dedupe map below deliberately discards it). Keyed by follower unified
+// address; value = highest acked index observed during the CURRENT
+// uninterrupted leadership tenure (cleared on every state change, so a stale
+// leader's observations die with its leadership — term-scoped by
+// construction). This is the raft layer's replication-progress truth that
+// the learner-promotion proof consumes.
+const FOLLOWER_MATCH_INDEX_MAP_PROPERTY = '_followerMatchIndexByAddress';
+
+const FOLLOWER_MATCH_INDEX_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+
+const FOLLOWER_MATCH_INDEX_UNAVAILABLE = Object.freeze({
+  state: FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
+  matchIndex: NUMERIC_ZERO,
+});
+
+/**
+ * Read the leader-observed match index for one follower address.
+ * UNAVAILABLE (matchIndex 0) when this node has observed no ack from the
+ * follower during its current tenure — fail-closed for any non-empty
+ * committed prefix.
+ * @param {Object} raft live raft instance
+ * @param {string} followerAddress follower unified address
+ * @return {Object} frozen {state, matchIndex}
+ */
+function readFollowerMatchIndex(raft, followerAddress) {
+  const matchIndexByAddress = raft?.[FOLLOWER_MATCH_INDEX_MAP_PROPERTY];
+  const matchIndex = matchIndexByAddress instanceof Map ?
+    matchIndexByAddress.get(followerAddress) :
+    undefined;
+  if (!hasFiniteNumber(matchIndex)) {
+    return FOLLOWER_MATCH_INDEX_UNAVAILABLE;
+  }
+  return Object.freeze({
+    state: FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
+    matchIndex,
+  });
+}
+
+function hasFiniteNumber(value) {
+  return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value);
+}
+
+function isRecoverableAppendEntry(entry) {
+  return !!entry &&
+    typeof entry === LOCAL_STR_OBJECT &&
+    hasFiniteNumber(entry.index) &&
+    hasFiniteNumber(entry.term) &&
+    Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMAND);
+}
+
+function getCommittedIndex(raft) {
+  return hasFiniteNumber(raft?.log?.committedIndex) ?
+    raft.log.committedIndex :
+    NUMERIC_ZERO;
+}
+
+// Catch-up batching (closure record: voter-ready residual). Base liferaft's
+// catch-up is one entry per round trip AND a backward fail-walk: the
+// follower's append-fail echoes the LEADER'S prevLog info, so the leader
+// re-sends from one index earlier each round, delivering nothing until the
+// walk reaches the follower's actual position. A REPLACE learner catching up
+// a formation-sized log therefore can never meet its voter-ready budget
+// (witnessed: 10k-18k per-source-rejected sends per learner per minute, all
+// such learners timing out). Every packet already carries the SENDER'S last
+// log info as packet.last, so the leader can fast-forward to the follower's
+// position and reply with a BATCH; the wire format natively carries data as
+// an array (old followers read data[0] and still progress — slow, not
+// broken).
+const CATCHUP_BATCH_SIZE = 64;
+const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
+// Candidacy reluctance (quest raft-candidacy-reluctance-drain-source): a
+// replica deliberately stepped down for drain kept out-racing caught-up peers
+// for the successor election and re-winning leadership the rebalancer was
+// draining away — 68% of drained-node leadership gains were undirected timer
+// wins (scripts/analyze-leadership-flap.js census). deferCandidacy() inflates
+// this node's randomized election delay by a FINITE multiplier for a bounded
+// window, so a live caught-up peer always draws a shorter delay and wins
+// first. Liveness is unconditional (finite inflation: with no viable peer the
+// reluctant node still campaigns), safety untouched (no vote/term/log logic),
+// and the deliberate replacement-election path is unaffected —
+// requestElectionNow passes an explicit 1ms duration that never consults
+// timeout().
+const RAFT_STATE_CHANGE_EVENT = 'state change';
+
+function resolveFollowerLastIndex(packet) {
+  return hasFiniteNumber(packet?.last?.index) ?
+    packet.last.index :
+    null;
+}
+
+// S4 compacted-follower catch-up (quest raft-snapshot-compacted-follower-
+// catchup): a follower whose required prefix sits at or below this leader's
+// snapshot boundary can never be caught up by log replay — the bytes are
+// legitimately gone — so the leader emits a typed install_snapshot decision
+// instead of silently dropping the append-fail forever (the b1/b2
+// livelocks). Every OTHER empty catch-up read (boundary-0 gap, an
+// above-boundary torn log) is LOG CORRUPTION and emits the DISTINCT
+// catchup_range_empty decision, never install_snapshot, so the dispatcher's
+// create-if-none fallback cannot mint a checkpoint that papers over
+// corruption. liferaft only EMITS decisions: dispatch lives in
+// snapshot-catchup.js behind the injected onSnapshotCatchupNeeded callback
+// (stashed per the _catchupTimeSource precedent); with no callback the
+// decision is still recorded on the instance (an observable no-op), and
+// emission never throws into packet handling. The in-memory adapter has no
+// getSnapshotBoundary, so message-group raft never draws a positive
+// boundary and is structurally unaffected.
+function readLeaderSnapshotBoundaryIndex(raft) {
+  const boundary = typeof raft.log?.getSnapshotBoundary === LOCAL_STR_FUNCTION ?
+    raft.log.getSnapshotBoundary() :
+    null;
+  return hasFiniteNumber(boundary?.lastIncludedIndex) ?
+    boundary.lastIncludedIndex :
+    NUMERIC_ZERO;
+}
+
+function emitSnapshotCatchupDecision(raft, facts) {
+  const decision = buildSnapshotCatchupDecision(facts);
+  raft._lastSnapshotCatchupDecision = decision;
+  if (typeof raft._onSnapshotCatchupNeeded !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  try {
+    raft._onSnapshotCatchupNeeded(decision);
+  } catch (error) {
+    // Dispatch failures must never disturb leader packet handling; the
+    // recorded decision stays observable either way.
+    raft._lastSnapshotCatchupDecisionError = error;
+  }
+}
+
+function applyIncomingAppendPreamble(raft, packet) {
+  if (packet.term > raft.term) {
+    raft.change({
+      leader: packet.state === BaseLifeRaft.LEADER ?
+        packet.address :
+        packet.leader || raft.leader,
+      state: BaseLifeRaft.FOLLOWER,
+      term: packet.term,
+    });
+  }
+  if (packet.state === BaseLifeRaft.LEADER) {
+    if (raft.state !== BaseLifeRaft.FOLLOWER) {
+      raft.change({state: BaseLifeRaft.FOLLOWER});
+    }
+    if (packet.address !== raft.leader) {
+      raft.change({leader: packet.address});
+    }
+    raft.heartbeat(raft.timeout());
+  }
+}
+
+// Typed no-conflict variant for findSameIndexTermConflict (no null/undefined
+// state encoding).
+const NO_SAME_INDEX_TERM_CONFLICT = Object.freeze({found: false});
+
+async function findSameIndexTermConflict(raft, packet) {
+  if (!raft.log ||
+      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
+      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  const lastIndex = packet?.last?.index;
+  const lastTerm = packet?.last?.term;
+  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
+      !hasFiniteNumber(lastTerm)) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  const localEntry = await raft.log.get(lastIndex);
+  if (!localEntry ||
+      !hasFiniteNumber(localEntry.term) ||
+      localEntry.term === lastTerm) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  return {found: true, lastIndex, lastTerm, localEntry};
+}
+
+// Raft §5.3 (Log Matching / State-Machine Safety): an inbound append references the leader's log
+// at `packet.last` (the leader's last entry on a heartbeat, or prevLog on an entry-append). If we
+// hold our OWN, UNCOMMITTED entry at that index with a DIFFERENT term, that is a conflicting entry
+// — delete it and everything after, so the base append-fail / catch-up path rebuilds the suffix
+// from the leader. Base liferaft only truncates on an index MISMATCH (`packet.last.index !==
+// localLastIndex`), so a same-index/different-term conflict otherwise survives and the base
+// commit-index catch-up then commits our STALE same-index entry — two nodes committing different
+// commands at one index (CL-040). This is INERT on the normal path: it fires only when a local
+// entry actually conflicts in term; a matching term or a missing entry is left untouched.
+//
+// Committed-prefix divergence branch (quest raft-committed-prefix-conflict-
+// livelock): when the conflict sits AT OR BELOW the durable committed index,
+// the truncation is impossible by design — the adapter refuses committed-
+// entry loss — so requesting it every heartbeat livelocked formation (46-363
+// identical 'Refused raft log truncation into the committed prefix' retries
+// in red runs). The old code trusted the per-entry committed FLAG, which the
+// CL-040 hazard leaves stale after base commit-index catch-up advances the
+// watermark over the entry. Never silently skip: throw the shared typed
+// conflict so the caller's rejection funnel surfaces the divergence once and
+// routes the typed append-fail to the leader's catch-up/install path.
+async function truncateConflictingSameIndexTail(raft, packet) {
+  const conflict = await findSameIndexTermConflict(raft, packet);
+  if (conflict.found !== true) {
+    return;
+  }
+  const committedIndex = resolveDurableCommittedIndex(raft.log);
+  if (conflict.lastIndex <= committedIndex) {
+    // Always throws here: the entry exists, its term differs, and its index
+    // is inside the committed prefix — the guard owns the typed conflict
+    // decision (no locally reproduced owner logic). The zero boundary is
+    // sound because the guard's compacted-row branch needs a MISSING entry
+    // and findSameIndexTermConflict guarantees localEntry is present.
+    guardCommittedEntryWrite(
+      conflict.localEntry,
+      {
+        index: conflict.lastIndex,
+        term: conflict.lastTerm,
+        command: conflict.localEntry.command,
+      },
+      committedIndex,
+      NUMERIC_ZERO,
+    );
+    return;
+  }
+  if (conflict.localEntry.committed !== true) {
+    await raft.log.removeEntriesAfter(conflict.lastIndex - NUMERIC_ONE);
+  }
+}
+
+function packetLastIdentity(packet) {
+  return {index: packet?.last?.index, term: packet?.last?.term};
+}
+
+function guardSnapshotBoundaryTermConflict(
+  existing, boundary, lastIndex, lastTerm, committedIndex) {
+  if (!existing && boundary &&
+      lastIndex === boundary.lastIncludedIndex &&
+      lastTerm !== boundary.lastIncludedTerm) {
+    guardCommittedEntryWrite(
+      existing,
+      {index: lastIndex, term: lastTerm, command: null},
+      committedIndex,
+      NUMERIC_ZERO,
+    );
+  }
+}
+
+async function validateCommittedPrevLogIdentity(raft, packet) {
+  if (!raft.log || typeof raft.log.get !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  const {index: lastIndex, term: lastTerm} = packetLastIdentity(packet);
+  const committedIndex = getCommittedIndex(raft);
+  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
+      lastIndex > committedIndex) {
+    return;
+  }
+  const existing = await raft.log.get(lastIndex);
+  // Compacted-boundary awareness (raft-snapshot-atomic-install): below or at
+  // the snapshot boundary the entry bytes are legitimately gone. Exactly AT
+  // the boundary the term is still verifiable against the boundary keys —
+  // a mismatch there is a genuine identity conflict, not compaction.
+  const boundary = typeof raft.log.getSnapshotBoundary === LOCAL_STR_FUNCTION ?
+    raft.log.getSnapshotBoundary() : null;
+  const lastIncludedIndex = boundary ? boundary.lastIncludedIndex : 0;
+  guardSnapshotBoundaryTermConflict(
+    existing, boundary, lastIndex, lastTerm, committedIndex);
+  guardCommittedEntryWrite(
+    existing,
+    {
+      index: lastIndex,
+      term: lastTerm,
+      command: existing?.command,
+    },
+    committedIndex,
+    lastIncludedIndex,
+  );
+}
+
+async function readCatchupEntries(raft, startIndex, endIndex) {
+  if (typeof raft.log.getRange === LOCAL_STR_FUNCTION) {
+    const entries = await raft.log.getRange(startIndex, endIndex);
+    return Array.isArray(entries) ? entries : [];
+  }
+  // In-memory adapter (message-group raft) has no range read; walk
+  // individually and stop at the first gap (compaction).
+  const entries = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const entry = await raft.log.get(index);
+    if (!isRecoverableAppendEntry(entry)) {
+      break;
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
+async function validateCommittedBatchEntries(log, entries, committedIndex) {
+  if (typeof log.resolveEntryWrite !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  for (const entry of entries) {
+    if (isRecoverableAppendEntry(entry) && entry.index <= committedIndex) {
+      await log.resolveEntryWrite(entry);
+    }
+  }
+}
+
+function patchIncomingDataListener(raft) {
+  const listeners = raft.listeners(RAFT_EVENT.DATA);
+  const originalListener = Array.isArray(listeners) ? listeners[0] : null;
+
+  if (typeof originalListener !== LOCAL_STR_FUNCTION ||
+      originalListener.__lagrangePatched === true) {
+    return;
+  }
+
+  raft.removeListener(RAFT_EVENT.DATA, originalListener);
+
+  // Per-follower in-flight batch dedupe: every head append/heartbeat that
+  // reaches a lagging follower spawns another append-fail; without dedupe
+  // each would trigger a redundant overlapping batch into the exact
+  // per-source lane that is already capping. Fails are self-regenerating,
+  // so suppression can never wedge — worst case is base-speed catch-up.
+  const inflightBatchByAddress = new Map();
+  const followerMatchIndexByAddress = new Map();
+  raft[FOLLOWER_MATCH_INDEX_MAP_PROPERTY] = followerMatchIndexByAddress;
+
+  const recordFollowerMatchIndex = (packet) => {
+    const followerAddress = packet?.address;
+    const ackedIndex = packet?.data?.index;
+    if (
+      typeof followerAddress !== 'string' ||
+      followerAddress.length === NUMERIC_ZERO ||
+      !hasFiniteNumber(ackedIndex) ||
+      // Tenure-precision guard (verifier finding): a delayed ack minted
+      // under a different term must never survive the state-change clear —
+      // only acks whose packet term matches this node's CURRENT term count
+      // as progress evidence for the current tenure.
+      packet?.term !== raft.term
+    ) {
+      return;
+    }
+    const knownMatchIndex =
+      followerMatchIndexByAddress.get(followerAddress) ?? NUMERIC_ZERO;
+    followerMatchIndexByAddress.set(
+      followerAddress,
+      Math.max(knownMatchIndex, ackedIndex),
+    );
+  };
+
+  const rejectCommittedEntryConflict = async (error, write) => {
+    surfaceCommittedPrefixDivergence(raft, error);
+    raft.message(
+      BaseLifeRaft.LEADER,
+      await raft.packet(RAFT_PACKET_TYPE.APPEND_FAIL, {
+        term: error.incomingTerm,
+        index: error.index,
+        code: error.code,
+      }),
+    );
+    write();
+    return undefined;
+  };
+
+  const runAppendWithConflictRejection = async (
+    operation,
+    write,
+    packet = null,
+  ) => {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isRaftCommittedEntryConflict(error)) {
+        throw error;
+      }
+      if (packet) {
+        applyIncomingAppendPreamble(raft, packet);
+      }
+      return rejectCommittedEntryConflict(error, write);
+    }
+  };
+
+  // CL-041: base liferaft's `vote` handler has a check-then-act race — the
+  // `await raft.log.getLastInfo()` (present only when a log adapter is configured) sits BETWEEN
+  // the "have I already voted this term?" check (`if (raft.votes.for && ...)`) and the assignment
+  // (`raft.votes.for = packet.address`). Two concurrent same-term vote requests both pass the
+  // check before either records the vote, so the follower grants BOTH — a double-vote that lets
+  // two candidates reach quorum (two leaders in one term -> split-brain / committed divergence).
+  // We serialize vote processing through this per-node chain so the second request runs only after
+  // the first has fully recorded its vote, and therefore correctly denies.
+  let voteSerializationChain = Promise.resolve();
+
+  const handleLeaderAppendFailBatch = async (packet, write) => {
+    // Only intercept when the base preamble would be a no-op (we are the
+    // leader in the same term); otherwise the original handler's step-down
+    // and stale-term logic must run.
+    if (
+      raft.state !== BaseLifeRaft.LEADER ||
+      packet?.term !== raft.term ||
+      !raft.log
+    ) {
+      return null;
+    }
+    const failedIndex = packet?.data?.index;
+    if (!hasFiniteNumber(failedIndex)) {
+      return null;
+    }
+    // Fast-forward to the FOLLOWER'S position: packet.last is the sender's
+    // own last log info. Without this the backward fail-walk persists and
+    // batching is cosmetic.
+    const followerLastIndex = resolveFollowerLastIndex(packet);
+    const startIndex = followerLastIndex === null ?
+      failedIndex :
+      Math.min(failedIndex, followerLastIndex + 1);
+    const leaderBoundary = readLeaderSnapshotBoundaryIndex(raft);
+    const decisionFacts = {
+      followerAddress: packet.address,
+      startIndex,
+      failedIndex,
+      leaderBoundary,
+    };
+    const recoveredEntry = await raft.log.get(failedIndex);
+    if (!isRecoverableAppendEntry(recoveredEntry)) {
+      // Existing unrecoverable guard (compacted/absent index). At or below a
+      // positive boundary the entry is legitimately compacted — the b2
+      // livelock variant — and only an install makes progress; every other
+      // unrecoverable index keeps the existing drop.
+      if (leaderBoundary > NUMERIC_ZERO && failedIndex <= leaderBoundary) {
+        emitSnapshotCatchupDecision(raft, {
+          ...decisionFacts,
+          outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+        });
+      }
+      write();
+      return true;
+    }
+    // b1 livelock variant: the follower needs entries starting at or below
+    // the boundary — the retained prefix is genuinely absent, so reading the
+    // range would come back empty and silently drop forever.
+    if (leaderBoundary > NUMERIC_ZERO && startIndex <= leaderBoundary) {
+      emitSnapshotCatchupDecision(raft, {
+        ...decisionFacts,
+        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+      });
+      write();
+      return true;
+    }
+    const lastInfo = await raft.log.getLastInfo();
+    const endIndex = Math.min(
+      startIndex + CATCHUP_BATCH_SIZE - 1,
+      lastInfo.index,
+    );
+    if (endIndex < startIndex) {
+      write();
+      return true;
+    }
+    const inflight = inflightBatchByAddress.get(packet.address);
+    // Catch-up TTL must run on the same clock as the rest of the node: under
+    // a DT virtual clock a raw Date.now() here measured REAL elapsed test
+    // time, so the inflight dedupe window never expired virtually (the
+    // wall-clock-leak class in the DT limits table). No timeSource -> real
+    // clock, byte-identical.
+    const nowMs = raft._catchupTimeSource ?
+      raft._catchupTimeSource.now() :
+      Date.now();
+    if (
+      inflight &&
+      inflight.tailIndex >= startIndex &&
+      nowMs - inflight.sentAtMs < CATCHUP_BATCH_INFLIGHT_TTL_MS
+    ) {
+      write();
+      return true;
+    }
+    const entries = await readCatchupEntries(raft, startIndex, endIndex);
+    if (entries.length === 0) {
+      // At or below a positive boundary this is redundant with the b1 site
+      // above (kept as defense in depth). Every remaining empty read —
+      // boundary-0 gaps, above-boundary torn logs — is LOG CORRUPTION and
+      // emits the DISTINCT catchup_range_empty decision, NEVER
+      // install_snapshot (design-verifier MUST-CHANGE).
+      emitSnapshotCatchupDecision(raft, {
+        ...decisionFacts,
+        outcome:
+          leaderBoundary > NUMERIC_ZERO && startIndex <= leaderBoundary ?
+            RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT :
+            RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.CATCHUP_RANGE_EMPTY,
+      });
+      write();
+      return true;
+    }
+    // appendPacket(firstEntry) supplies fresh state/term/leader and
+    // last = leader's info for (firstEntry.index - 1) — exactly the
+    // consistency precondition the follower checks for the whole batch.
+    const batchPacket = await raft.appendPacket(entries[0]);
+    batchPacket.data = entries;
+    inflightBatchByAddress.set(packet.address, {
+      tailIndex: entries[entries.length - 1].index,
+      sentAtMs: nowMs,
+    });
+    write(batchPacket);
+    return true;
+  };
+
+  const dispatchIncomingData = async (packet, write = () => {}) => {
+    // Teardown-race guard. base liferaft's end() (index.js) sets state=STOPPED
+    // and nulls raft.timers/election/Log/beat. A packet still in flight on the
+    // transport can reach this listener afterwards; the base handler would then
+    // call heartbeat()/change()/timeout() against that nulled state and throw
+    // `Cannot read properties of null` (reading 'active'/'max'/...). Because the
+    // listener runs detached on the transport, that TypeError surfaces as an
+    // unhandledRejection — crashing the process and leaking any re-armed Tick
+    // (the move-replica-handoff / node-joining-rebalance hangs). Drop the late
+    // packet via the established write() ignore-path instead of dispatching it.
+    if (raft.state === BaseLifeRaft.STOPPED || !raft.timers) {
+      return write();
+    }
+    const committedIndexBefore = getCommittedIndex(raft);
+
+    // CL-041: serialize vote processing so concurrent same-term votes cannot both pass the
+    // votes.for check across the handler's `await getLastInfo()`. Guarded on raft.log because the
+    // racy await only exists when a log is configured; a logless node (no `Log` option) has no
+    // race and must keep its synchronous append/vote timing byte-identical (cf. CL-040), so it
+    // falls through to the normal path. `.then(run, run)` keeps the chain alive past a rejection.
+    if (packet?.type === RAFT_PACKET_TYPE.VOTE && raft.log) {
+      const processVote = () => originalListener(packet, write);
+      voteSerializationChain = voteSerializationChain.then(processVote, processVote);
+      return voteSerializationChain;
+    }
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND_FAIL) {
+      const handled = await handleLeaderAppendFailBatch(packet, write);
+      if (handled === true) {
+        return undefined;
+      }
+      const recoveredEntry = await raft.log?.get?.(packet?.data?.index);
+      if (!isRecoverableAppendEntry(recoveredEntry)) {
+        return write();
+      }
+    }
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND) {
+      if (packet.term < raft.term) {
+        return originalListener(packet, write);
+      }
+      // CL-040: repair a same-index/different-term conflict before the base handler's commit
+      // catch-up can stale-commit our own entry; converts the conflict into the append-fail path.
+      // Guarded SYNCHRONOUSLY on log presence so a logless node (no `Log` option) adds no microtask
+      // hop here — keeping its append timing byte-identical (the truncation is a real-log concern).
+      if (raft.log && typeof raft.log.get === LOCAL_STR_FUNCTION) {
+        const preconditionAccepted = await runAppendWithConflictRejection(
+          async () => {
+            await validateCommittedPrevLogIdentity(raft, packet);
+            await truncateConflictingSameIndexTail(raft, packet);
+            return true;
+          },
+          write,
+          packet,
+        );
+        if (preconditionAccepted !== true) {
+          return undefined;
+        }
+      }
+      const hasEntries = Array.isArray(packet?.data) &&
+        packet.data.length > 0;
+      const entry = hasEntries ? packet.data[0] : null;
+      if (hasEntries && !isRecoverableAppendEntry(entry)) {
+        return write();
+      }
+      if (hasEntries && packet.data.length > 1) {
+        return runAppendWithConflictRejection(
+          () => handleFollowerAppendBatch({
+            raft,
+            packet,
+            write,
+            originalListener,
+            getCommittedIndex,
+            isRecoverableAppendEntry,
+            validateCommittedBatchEntries,
+          }),
+          write,
+          packet,
+        );
+      }
+    }
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK) {
+      recordFollowerMatchIndex(packet);
+      const inflight = inflightBatchByAddress.get(packet?.address);
+      if (
+        inflight &&
+        hasFiniteNumber(packet?.data?.index) &&
+        packet.data.index >= inflight.tailIndex
+      ) {
+        inflightBatchByAddress.delete(packet.address);
+      }
+    }
+
+    const result = packet?.type === RAFT_PACKET_TYPE.APPEND ?
+      await runAppendWithConflictRejection(
+        () => originalListener(packet, write),
+        write,
+      ) :
+      await originalListener(packet, write);
+    const committedIndexAfter = getCommittedIndex(raft);
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK &&
+        raft.state === BaseLifeRaft.LEADER &&
+        committedIndexAfter > committedIndexBefore) {
+      const heartbeatPacket = await raft.packet(RAFT_PACKET_TYPE.APPEND);
+      raft.message(BaseLifeRaft.FOLLOWER, heartbeatPacket);
+    }
+
+    return result;
+  };
+
+  // The inbound handler is async, so the node has accepted protocol work the
+  // moment it returns. Tracking it is what lets a caller ask whether work
+  // already started has finished; it counts no segments.
+  const patchedListener = (packet, write) => {
+    const dispatched = runRaftProtocolActivity(
+      () => dispatchIncomingData(packet, write));
+    return raft.protocolTasks ? raft.protocolTasks.track(dispatched) : dispatched;
+  };
+
+  raft.on(RAFT_STATE_CHANGE_EVENT, () => {
+    inflightBatchByAddress.clear();
+    followerMatchIndexByAddress.clear();
+  });
+
+  patchedListener.__lagrangePatched = true;
+  raft.on(RAFT_EVENT.DATA, patchedListener);
+}
+
+export {
+  FOLLOWER_MATCH_INDEX_STATE,
+  LOCAL_STR_FUNCTION,
+  patchIncomingDataListener,
+  readFollowerMatchIndex,
+};

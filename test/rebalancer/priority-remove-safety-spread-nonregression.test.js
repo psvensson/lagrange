@@ -25,7 +25,7 @@ function makeRemoveSafetyOwner() {
   owner.repository = {
     isReplaceRemovePhase: () => true,
   };
-  owner.getPriorityRecoveryPlanningSnapshot = async () => ({
+  owner.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety = async () => ({
     publishedActiveNodeIdsPresent: true,
     publishedActiveNodeIds: ['node-seed', 'node-target'],
     recoveryActiveNodeIds: ['node-seed', 'node-target'],

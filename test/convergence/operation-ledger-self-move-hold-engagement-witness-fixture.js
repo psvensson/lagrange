@@ -537,6 +537,11 @@ function bindStartupAuthority({
   };
   readinessService.getStartupAuthoritySnapshotSync = () =>
     getStartupAuthority();
+  // Published-membership REMOVE safety reads the owner surface; the same
+  // owner-derived planning answer is presented there, unchanged. The
+  // best-effort surface stays for the AVAILABLE consumers in this scenario.
+  readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead =
+    async () => getPlanningAnswer();
   readinessService.getMembershipPublicationPlanningSnapshotBestEffort =
     async () => getPlanningAnswer();
 }

@@ -1,3 +1,7 @@
+import {
+  withOwnerReadPlanningEvidence,
+} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
+
 export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
   const {
     test,
@@ -50,7 +54,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -116,7 +120,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           // Setting minReplicaCount to 5 will trigger the minimum replica count check violation
           // since we only have 4 replicas total (source, follow1, follow2, replacement)
@@ -265,7 +269,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -331,7 +335,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },
@@ -506,7 +510,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           },
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -572,7 +576,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },
@@ -725,7 +729,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           pingNode: async () => true,
           isOutboundQueueAvailable: () => true,
         },
-        controlPlaneReadinessService: {
+        controlPlaneReadinessService: withOwnerReadPlanningEvidence({
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
@@ -769,7 +773,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               }),
             };
           },
-        },
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({
             minReplicaCount: 2,

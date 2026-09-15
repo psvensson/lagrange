@@ -31,9 +31,19 @@ class VirtualTick {
    * @param {Object} timeSource - a DT4 TimeSource (now/setTimeout/clearTimeout/
    *   setInterval/clearInterval).
    */
-  constructor(context, timeSource) {
+  /**
+   * @param {Object} context - callback `this` (the raft node), as tick-tock.
+   * @param {Object} timeSource - a DT4 TimeSource.
+   * @param {Object} [protocolTasks] - optional tracker with track(thenable).
+   *   A fired timer's callback is frequently async; the timer is deterministic
+   *   but the continuation it returns was previously discarded here, so
+   *   nothing could tell whether protocol work already started had finished.
+   *   Tracking is lifecycle bookkeeping only and counts no segments.
+   */
+  constructor(context, timeSource, protocolTasks = null) {
     this.context = context || this;
     this.timeSource = timeSource;
+    this.protocolTasks = protocolTasks;
     // name -> {handle, fns, repeating}
     this.timers = {};
   }
@@ -56,7 +66,10 @@ class VirtualTick {
         this.clear(name);
       }
       for (const fn of fns) {
-        fn.call(this.context);
+        const result = fn.call(this.context);
+        if (this.protocolTasks && result && typeof result.then === 'function') {
+          this.protocolTasks.track(result);
+        }
       }
     };
   }

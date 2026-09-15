@@ -208,8 +208,15 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
    * @return {Promise<Object|null>}
    * @private
    */
-  async evaluatePriorityRecoveryCompletionRemoveSafety(operation) {
-    return evaluatePriorityRecoveryCompletionRemoveSafety(this, operation);
+  async evaluatePriorityRecoveryCompletionRemoveSafety(
+    operation,
+    readPlanningSnapshot,
+  ) {
+    return evaluatePriorityRecoveryCompletionRemoveSafety(
+      this,
+      operation,
+      readPlanningSnapshot,
+    );
   }
 
   /**
@@ -268,12 +275,14 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     operation,
     projectedVoterReadyRows,
     currentVoterReadyRows,
+    readPlanningSnapshot,
   ) {
     return evaluatePriorityPublishedMembershipRemoveSafety(
       this,
       operation,
       projectedVoterReadyRows,
       currentVoterReadyRows,
+      readPlanningSnapshot,
     );
   }
 

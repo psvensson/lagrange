@@ -188,7 +188,7 @@ class UnifiedRebalancerFollowUpAugmentationMethods {
       return decisionPlanningSnapshot;
     }
     const livePlanningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot({
+      await this.readAvailablePriorityRecoveryPlanningSnapshot({
         partitionId: this.entityId,
       });
     return livePlanningSnapshot || decisionPlanningSnapshot;

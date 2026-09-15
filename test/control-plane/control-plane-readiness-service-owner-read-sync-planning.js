@@ -370,8 +370,25 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
       false,
       'the stale planning witness should not emit the priority recovery pending readiness reason',
     );
+    // The closure witness exists only in deriveClusterMembershipCandidate, not
+    // in the current direct row, so it is AUTHORITATIVE evidence. Default
+    // readiness is AVAILABLE and no longer awaits that candidate, so the
+    // diagnostic is asserted through the explicit owner-read surface instead
+    // of being smuggled back into getNodeReadiness. Both contracts are proved
+    // on the same fixture: the direct row still wins the operational answer,
+    // and the candidate's witness survives as diagnostics-only observation.
+    const ownerRead =
+      await readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead(
+        TEST_NODE_ID,
+        TEST_OBSERVED_AT,
+      );
+    t.equal(
+      ownerRead?.priorityRecoveryActive,
+      false,
+      'the direct ready row still wins the operational answer under owner-read',
+    );
     t.match(
-      readiness.priorityControlPlaneRecovery.priorityRecoveryObservation,
+      ownerRead?.priorityRecoveryObservation,
       {
         priorityRecoveryClosureState: TEST_CLOSURE_PENDING_STATE,
         priorityRecoveryReasonCodes: [
@@ -379,7 +396,7 @@ test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses d
             .PRIORITY_PARTITIONS_NOT_SPREAD,
         ],
       },
-      'the planning closure witness should remain visible as diagnostics-only observation',
+      'the planning closure witness remains visible as diagnostics-only observation',
     );
     t.end();
   });

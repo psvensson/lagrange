@@ -143,7 +143,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       return null;
     }
     const publishedPlanningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot({
+      await this.readAvailablePriorityRecoveryPlanningSnapshot({
         partitionId: this.entityId,
       });
     const planningSnapshot =

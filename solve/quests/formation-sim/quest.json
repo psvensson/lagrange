@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "A deterministic five-node cold-formation simulator on the in-process path - virtual clock, seeded in-memory transport, a discrete-event scheduler charging each node's virtual time per owner from the committed calibration table, real owners throughout, and a guard that throws on any ambient clock or timer read in deterministic mode - reproduces the seed-starvation signature of main (seed gap fraction at least 50 percent with every joiner under 5 percent, incomplete-lease observations naming all five nodes with escalating backoff, prioritySpreadGap non-decreasing with zero operations in flight, admission ending in control_plane_pressure), two runs of one seed produce byte-identical reports, the signature holds across a 0.5x-2x one-dimensional sweep of every coefficient, a run completes in under 60 seconds of real time, and a live report plus its log archive can be ingested as a canonical scenario.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-reproduces.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "real-owners",
+      "statement": "The harness adapts transport and storage interfaces only; it never reproduces an owner's decision logic, and every adapter carries a contract test naming what it simplifies."
+    },
+    {
+      "id": "not-tuned-by-construction",
+      "statement": "The signature must hold at every point of a 0.5x-2x sweep of each calibration coefficient with the others fixed; a simulator that reproduces only at the fitted point is rejected."
+    },
+    {
+      "id": "calibrated-or-refused",
+      "statement": "The runner refuses to start when a required work class lacks non-negative coefficients with artifact provenance; unknown keys never cost zero silently."
+    },
+    {
+      "id": "deterministic-guard-by-mutation",
+      "statement": "Deterministic mode throws nondeterministic_owner_seam on an ambient clock read or timer scheduling inside a tagged owner dispatch, and the reproduction check proves the guard by mutation."
+    },
+    {
+      "id": "one-report-schema",
+      "statement": "Live and simulated producers emit the same additive formationMetrics object in the existing report schema; formationVerdict and the budget readers consume either without a simulator branch."
+    },
+    {
+      "id": "bounded-seams",
+      "statement": "Every owner time seam lands as one bounded, independently verified commit with a head-red or red-on-revert test."
+    }
+  ],
+  "sealedAt": "aec2e4bedade16cab5edcbb54aab5c2da3db3510"
+}

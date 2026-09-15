@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "basis": "segment",
+  "statement": "Virtual microseconds charged per owner turn segment (one dispatched turn or one explicit owner handoff) on the seed, from the single authorized calibration run; rate = segments per second of formation window.",
+  "source": {
+    "quest": "formation-calibration-run",
+    "head": "8a6275a4d332215d6d6c47ce2925b0f3e92c8fa3",
+    "bootedSrcFingerprint": "8f4ebe842cff5176",
+    "evidence": "test/simulation/calibration/seed-owner-costs.evidence.json",
+    "report": {
+      "path": "test/simulation/calibration/seed-owner-costs.report.json",
+      "originalPath": "test-output/reports/movielens-lagrange-formation-only-live-2026-09-13T10-47-48-003Z.report.json",
+      "sha256": "97f38aa5817f78c0dc0daee956f93ec40ac69286e5846b73a9c095db2150eda1"
+    },
+    "profileArchive": {
+      "sha256": "f72ea3b0e0e1050f3697ba7af444af7edf4223fdd86409f84eef404914ec9faa",
+      "bytes": 38709760
+    },
+    "table": "test/simulation/calibration/seed-owner-costs.md"
+  },
+  "window": {
+    "windowDurationUs": 152097108,
+    "source": "snapshot",
+    "observedAtMs": 1789296090824,
+    "unattributedPercent": 3.497030331437992
+  },
+  "extraction": "usPerSegment = durationUs / (dispatchCount + handoffCount) from harvested.owners; segmentsPerSecond = segments / windowDurationUs * 1e6",
+  "owners": {
+    "admin": {
+      "usPerSegment": 69.63,
+      "segments": 45510,
+      "durationUs": 3168753,
+      "segmentsPerSecond": 299.22
+    },
+    "bootstrap": {
+      "usPerSegment": 40.94,
+      "segments": 218903,
+      "durationUs": 8962054,
+      "segmentsPerSecond": 1439.23
+    },
+    "membership_publication": {
+      "usPerSegment": 56.94,
+      "segments": 414732,
+      "durationUs": 23615636,
+      "segmentsPerSecond": 2726.76
+    },
+    "raft_apply": {
+      "usPerSegment": 317.79,
+      "segments": 24680,
+      "durationUs": 7843150,
+      "segmentsPerSecond": 162.26
+    },
+    "raft_protocol": {
+      "usPerSegment": 14.52,
+      "segments": 3431284,
+      "durationUs": 49830495,
+      "segmentsPerSecond": 22559.82
+    },
+    "readiness": {
+      "usPerSegment": 1879.98,
+      "segments": 330,
+      "durationUs": 620393,
+      "segmentsPerSecond": 2.17
+    },
+    "rebalancer": {
+      "usPerSegment": 111.4,
+      "segments": 340231,
+      "durationUs": 37900105,
+      "segmentsPerSecond": 2236.93
+    },
+    "transport": {
+      "usPerSegment": 19.37,
+      "segments": 132244,
+      "durationUs": 2562010,
+      "segmentsPerSecond": 869.47
+    },
+    "worker_dispatch": {
+      "usPerSegment": 0,
+      "segments": 0,
+      "durationUs": 0,
+      "segmentsPerSecond": 0
+    }
+  }
+}

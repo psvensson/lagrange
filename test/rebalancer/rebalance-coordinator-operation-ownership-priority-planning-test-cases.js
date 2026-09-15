@@ -129,7 +129,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryIncompleteOperations = async () => (
         [activePriorityReplaceOperation]
       );
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => planningSnapshot;
 
       try {
@@ -264,7 +264,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           secondActivePriorityReplaceOperation,
         ]
       );
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => planningSnapshot;
 
       try {
@@ -364,7 +364,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
           operation: null,
         },
       });
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => {
         planningSnapshotCalls += 1;
         return null;
@@ -499,7 +499,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshot =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshot =
       async () => planningSnapshot;
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async (partitionId, operations) =>
@@ -776,7 +776,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       );
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async () => null;
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => null;
 
       try {
@@ -1000,7 +1000,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       );
       coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
       async () => null;
-      coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      coordinator.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
       async () => null;
 
       try {

@@ -37,7 +37,11 @@ const TARGET_THRESHOLD = 12;
 // (active-gate evidence probes, formation-barrier snapshot projection,
 // formation-release contract identity, coordinator move request decoration).
 // 2026-09-04: tightened 1823 -> 1822 after liveness predicate extraction.
-const BASELINE_COUNT = 1822;
+// 2026-09-15: tightened 1822 -> 1820 after the priority-recovery planning-read
+// split retired both generic getPriorityRecoveryPlanningSnapshot methods and
+// the gateway queue-metadata, attribution execution-node assertion and
+// superseded host-fixpoint settler were extracted or removed.
+const BASELINE_COUNT = 1820;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

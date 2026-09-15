@@ -150,6 +150,9 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'directory-test-infrastructure', pattern: new RegExp(`^test\\/(scripts|test-helpers)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_TEST_INFRASTRUCTURE},
   {id: 'directory-admin', pattern: new RegExp(`^test\\/(admin|diagnostics|debug|debug-runtime|logging)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_ADMIN_DIAGNOSTICS},
   {id: 'directory-convergence', pattern: new RegExp(`^test\\/(convergence|topology|active-gate)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},
+  // The deterministic formation simulator (formation-seed-decoupling): a
+  // convergence proof over real owners on virtual time.
+  {id: 'directory-simulation', pattern: new RegExp(`^test\\/simulation\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},
   {id: 'directory-examples', pattern: new RegExp(`^test\\/examples\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_EXAMPLES_E2E},
   {id: 'directory-transport', pattern: new RegExp(`^test\\/(transport|message-group|address)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_TRANSPORT_MESSAGING},
   {id: 'directory-cdc', pattern: new RegExp(`^test\\/(cdc|migration)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CDC_METADATA},

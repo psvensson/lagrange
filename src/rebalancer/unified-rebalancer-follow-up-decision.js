@@ -572,7 +572,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     if (!this.isControlPlanePriorityPartition()) {
       return false;
     }
-    const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot({
+    const planningSnapshot = await this.readAvailablePriorityRecoveryPlanningSnapshot({
       partitionId: this.entityId,
     });
     return Boolean(

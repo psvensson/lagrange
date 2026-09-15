@@ -17,7 +17,7 @@
  * @module bootstrap/shared/control-plane-setup
  */
 
-import {HeartbeatService} from '../../control-plane/heartbeat-service.js';
+import {assembleHeartbeatService} from '../../control-plane/heartbeat-service.js';
 import {join} from 'node:path';
 import {LeaseService} from '../../control-plane/lease-service.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
@@ -472,7 +472,7 @@ class ControlPlaneSetup {
     }
 
     // Create decomposed control plane services
-    const heartbeatService = new HeartbeatService({
+    const heartbeatService = assembleHeartbeatService({
       nodeId,
       nodeAddress,
       advertisedNodeWsAddress,
@@ -480,6 +480,7 @@ class ControlPlaneSetup {
       cdcIntegrationService,
       systemTableCache,
       controlPlaneSystemTableGateway,
+      controlPlaneReadinessService,
       verifyReporterVisibilityOnSuccess: true,
       membershipPublicationService: membershipPublicationService || null,
       isNodeLifecycleReady: () => {
@@ -491,8 +492,6 @@ class ControlPlaneSetup {
         }
       },
     });
-    heartbeatService.initialize();
-    controlPlaneReadinessService.syncOwnerDependencies({heartbeatService});
 
     const leaseService = new LeaseService({
       nodeId,

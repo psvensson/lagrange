@@ -1086,10 +1086,15 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
     maxCachedAgeMs: 0,
   });
 
+  // One planning read, not two. Default readiness planning is AVAILABLE, so
+  // it no longer performs the opportunistic asynchronous planning owner read
+  // that the retired latency race depended on; the synchronous available
+  // snapshot still goes through the publication-read abstraction and carries
+  // planning read options, which is the remaining 'planning' profile.
   t.same(
     capturedReadProfiles.map((options) => options.readProfile).sort(),
-    ['diagnostics', 'planning', 'planning'],
-    'readiness should use diagnostics for publication truth and planning for recovery truth',
+    ['diagnostics', 'planning'],
+    'readiness should use diagnostics for publication truth and one AVAILABLE planning read',
   );
   t.equal(
     readiness.membershipPublication,

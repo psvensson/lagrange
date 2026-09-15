@@ -55,6 +55,24 @@ import {
   resolveCarriedAcknowledgedNodeIds,
 } from './membership-publication-row-helpers.js';
 
+// A default argument is evaluated whether or not it is used, so
+// `normalizePositiveInteger(options.nowMs, Date.now())` read the ambient
+// clock on EVERY call, including the calls that supplied a clock. Under a
+// deterministic scheduler that read is a nondeterministic_owner_seam throw on
+// a path the caller had already threaded a time source through. The fallback
+// is now taken only when the caller gave no usable value.
+function resolveNowMs(value) {
+  // Faithful to normalizePositiveInteger's coercion, which this replaced:
+  // it took Number(value), accepted zero and above, and truncated. Tightening
+  // that to Number.isInteger and above zero silently sent null, 0, '1234' and
+  // 1234.7 to the ambient clock where they used to produce a deterministic
+  // value - and Number(null) is 0, a shape this area is known to carry.
+  const candidate = Number(value);
+  return Number.isFinite(candidate) && candidate >= 0 ?
+    Math.trunc(candidate) :
+    Date.now();
+}
+
 function normalizeTableRowsResult(result) {
   if (Array.isArray(result)) {
     return result;
@@ -385,7 +403,7 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
       typeof options.reasonCode === 'string' && options.reasonCode.length > 0 ?
         options.reasonCode :
         null,
-    nowMs: normalizePositiveInteger(options.nowMs, Date.now()),
+    nowMs: resolveNowMs(options.nowMs),
   });
 }
 
@@ -464,7 +482,7 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
     return publicationRow;
   }
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
-  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const nowMs = resolveNowMs(options.nowMs);
   const existingHistory = Array.isArray(publicationRow.transition_history) ?
     publicationRow.transition_history :
     normalizedPublication.transitionHistory;
@@ -579,7 +597,7 @@ function deriveMembershipPublicationId(candidate = {}) {
 
 function buildMembershipPublicationRow(options = {}) {
   const candidate = options.candidate || {};
-  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const nowMs = resolveNowMs(options.nowMs);
   const status = String(
     options.status ||
       candidate.publicationStatus ||

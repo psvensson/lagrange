@@ -7,9 +7,6 @@ import {
   createPublicationService,
 } from './control-plane-readiness-service-test-support.js';
 import {
-  NUM,
-} from '../../src/constants/index.js';
-import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -18,12 +15,6 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
-import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-} from '../../src/cdc/cdc-integration-service.js';
 import {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
@@ -81,132 +72,52 @@ const TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   peerProofState: 'recovered',
 });
 
-test('ControlPlaneReadinessService prefers the async planning snapshot when it arrives within the best-effort budget',
-  async (t) => {
-    let planningPublicationReadOptions = null;
-    const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-best-effort-async',
-      systemTableCache: createCache(),
-      membershipPublicationService: {
-        async getLatestPublicationForNode(_nodeId, options = {}) {
-          planningPublicationReadOptions = options;
-          return {
-            publicationEpoch: 22,
-            status: 'PUBLISHED',
-            createdAt: 1200,
-            publishedActiveNodeIds: ['node-best-effort-async'],
-          };
-        },
-        getLatestPublicationForNodeSync() {
-          return {
-            publicationEpoch: 21,
-            status: 'PUBLISHED',
-            createdAt: 1100,
-            publishedActiveNodeIds: ['node-best-effort-async'],
-          };
-        },
+test('ControlPlaneReadinessService returns the AVAILABLE planning answer whatever ' +
+  'the refresh does', async (t) => {
+  // Retired contract: this pair used to assert that best-effort planning
+  // preferred a fresher async owner snapshot when it arrived inside a 1000 ms
+  // budget, and fell back to the sync answer when it timed out. Consistency
+  // mode is now chosen by the caller, never by response latency, so there is
+  // no budget, no race and no fallback transition: AVAILABLE never leaves the
+  // available evidence domain. The latency-invariance shapes live in
+  // test/control-plane/readiness-planning-consistency-mode.test.js; what is
+  // kept here is the surface-level invariant against this module's fixture.
+  let refreshRequested = false;
+  let timeoutArmed = false;
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-available',
+    systemTableCache: createCache(),
+    membershipPublicationService: {
+      getLatestPublicationForNodeSync() {
+        return {
+          publicationEpoch: 21,
+          status: 'PUBLISHED',
+          createdAt: 1100,
+          publishedActiveNodeIds: ['node-available'],
+        };
       },
-      now: () => 1500,
-    });
-
-    const snapshot =
-      await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-        'node-best-effort-async',
-        1500,
-      );
-
-    t.equal(
-      snapshot?.publishedPlanningEpoch,
-      22,
-      'best-effort planning should use the fresher async owner snapshot when it is available',
-    );
-    t.equal(
-      planningPublicationReadOptions?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
-      'best-effort planning reads should use the best-effort owner-RPC publication mode',
-    );
-    t.equal(
-      planningPublicationReadOptions?.localReadConsistency,
-      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-      'best-effort planning reads should read from local leaders where available',
-    );
-    t.equal(
-      planningPublicationReadOptions?.replicaFallbackConsistency,
-      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-      'best-effort planning reads should allow any-replica fallback when the leader path is unavailable',
-    );
-    t.equal(
-      planningPublicationReadOptions?.workClass,
-      'control-plane-planning',
-      'best-effort planning reads should be labeled with the planning work class',
-    );
-    t.equal(
-      planningPublicationReadOptions?.queryTimeoutMs,
-      NUM.THOUSAND,
-      'best-effort planning reads should use the readiness planning budget for owner read timeout',
-    );
+    },
+    now: () => 1500,
   });
-
-test('ControlPlaneReadinessService falls back to the sync planning snapshot when the best-effort refresh times out',
-  async (t) => {
-    const timeoutHandle = {
-      id: 'planning-timeout',
-      unrefCalled: false,
-      unref() {
-        this.unrefCalled = true;
-      },
-    };
-    let clearedHandle = null;
-    const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-best-effort-timeout',
-      systemTableCache: createCache(),
-      membershipPublicationService: {
-        async getLatestPublicationForNode() {
-          return new Promise(() => {});
-        },
-        getLatestPublicationForNodeSync() {
-          return {
-            publicationEpoch: 23,
-            status: 'PUBLISHED',
-            createdAt: 1200,
-            publishedActiveNodeIds: ['node-best-effort-timeout'],
-          };
-        },
-      },
-      membershipPublicationPlanningSnapshotRefreshTimeoutMs: 5,
-      setTimeoutFn(fn) {
-        fn();
-        return timeoutHandle;
-      },
-      clearTimeoutFn(handle) {
-        clearedHandle = handle;
-      },
-      now: () => 1500,
-    });
-
-    const snapshot =
-      await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-        'node-best-effort-timeout',
-        1500,
-      );
-
-    t.equal(
-      snapshot?.publishedPlanningEpoch,
-      23,
-      'best-effort planning should fall back to the sync snapshot when async repair stalls',
-    );
-    t.equal(
-      clearedHandle,
-      timeoutHandle,
-      'best-effort planning should clear the timeout handle after the owner fallback resolves',
-    );
-    t.equal(
-      timeoutHandle.unrefCalled,
-      true,
-      'best-effort planning timeout should be unrefed so owner fallback does not pin process exit',
-    );
-  });
+  readinessService.setTimeoutFn = () => {
+    timeoutArmed = true;
+    return {};
+  };
+  readinessService.getMembershipPublicationPlanningSnapshot = async () => {
+    refreshRequested = true;
+    return {publishedPlanningEpoch: 22};
+  };
+  const snapshot =
+    await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+      'node-available', 1500);
+  t.equal(snapshot?.publishedPlanningEpoch, 21,
+    'the available answer is returned; a fresher async answer cannot replace it');
+  t.equal(timeoutArmed, false,
+    'AVAILABLE planning arms no readiness-level refresh deadline');
+  t.equal(refreshRequested, false,
+    'and performs no opportunistic owner refresh for this invocation');
+  t.end();
+});
 
 test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer sync surface',
   (t) => {
@@ -299,44 +210,65 @@ test('ControlPlaneReadinessService enriches the local planning answer with start
     t.end();
   });
 
-test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer best-effort surface',
-  async (t) => {
-    const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-priority-best-effort-contract',
-      systemTableCache: createCache(),
-      membershipPublicationService: {
-        async getLatestPublicationForNode() {
-          return {
-            publicationEpoch: 34,
-            status: 'PUBLISHED',
-            createdAt: 1450,
-            publishedActiveNodeIds: ['node-priority-best-effort-contract'],
-          };
-        },
-        getLatestPublicationForNodeSync() {
-          return {
-            publicationEpoch: 31,
-            status: 'PUBLISHED',
-            createdAt: 1100,
-            publishedActiveNodeIds: ['node-priority-best-effort-contract'],
-          };
-        },
+test('ControlPlaneReadinessService exposes the canonical AVAILABLE priority-recovery ' +
+  'answer through the best-effort compatibility surface', async (t) => {
+  // The two evidence sources deliberately disagree, which is what makes this
+  // witness strong: available evidence is epoch 31 and authoritative owner
+  // evidence is epoch 34. The compatibility surface must not upgrade itself
+  // opportunistically just because the owner answer could be fetched.
+  let ownerReadCalled = false;
+  let timeoutArmed = false;
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-priority-best-effort-contract',
+    systemTableCache: createCache(),
+    membershipPublicationService: {
+      async getLatestPublicationForNode() {
+        ownerReadCalled = true;
+        return {
+          publicationEpoch: 34,
+          status: 'PUBLISHED',
+          createdAt: 1450,
+          publishedActiveNodeIds: ['node-priority-best-effort-contract'],
+        };
       },
-      now: () => 1500,
-    });
-
-    const answer =
-      await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-        'node-priority-best-effort-contract',
-        1500,
-      );
-
-    t.equal(
-      answer?.publishedPlanningEpoch,
-      34,
-      'canonical best-effort planning answer should prefer refreshed owner snapshots',
-    );
+      getLatestPublicationForNodeSync() {
+        return {
+          publicationEpoch: 31,
+          status: 'PUBLISHED',
+          createdAt: 1100,
+          publishedActiveNodeIds: ['node-priority-best-effort-contract'],
+        };
+      },
+    },
+    now: () => 1500,
   });
+  readinessService.setTimeoutFn = () => {
+    timeoutArmed = true;
+    return {};
+  };
+
+  const answer =
+    await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
+      'node-priority-best-effort-contract',
+      1500,
+    );
+  const sync = readinessService.getPriorityRecoveryPlanningAnswerSync(
+    'node-priority-best-effort-contract',
+    1500,
+  );
+
+  t.equal(answer?.publishedPlanningEpoch, 31,
+    'the compatibility surface returns the AVAILABLE answer, not the owner one');
+  t.equal(ownerReadCalled, false,
+    'and performs no owner read for this invocation');
+  t.equal(timeoutArmed, false,
+    'and arms no planning-refresh deadline');
+  t.equal(answer?.publishedPlanningEpoch, sync?.publishedPlanningEpoch,
+    'best-effort and the canonical sync surface agree by construction');
+  t.equal(answer?.recoveryProtocolState, sync?.recoveryProtocolState,
+    'including the recovery protocol state they report');
+  t.end();
+});
 
 test('ControlPlaneReadinessService reuses the last active sync priority-recovery planning answer inside stale grace',
   (t) => {
@@ -453,7 +385,7 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
     t.end();
   });
 
-test('ControlPlaneReadinessService retains a fresher async priority-recovery planning answer across sync epoch regression',
+test('ControlPlaneReadinessService retains a fresher authoritative priority-recovery planning answer across sync epoch regression',
   async (t) => {
     const LOCAL_NODE_ID = 'seed-node';
     const TARGET_NODE_ID = 'node-priority-async-regression';
@@ -513,24 +445,30 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
       now: () => now,
     });
 
-    const bestEffortAnswer =
-      await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
+    // Producer migrated: the fresher epoch now enters through the explicit
+    // AUTHORITATIVE owner read rather than through the retired best-effort
+    // race. The retention invariant below is unchanged and is the point of
+    // this test: once a newer active recovery epoch is established, a
+    // temporarily regressed AVAILABLE view cannot erase it, and it clears
+    // only when the newer epoch is durably settled.
+    const authoritativeAnswer =
+      await readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead(
         TARGET_NODE_ID,
         INITIAL_OBSERVED_AT,
       );
 
     t.equal(
-      bestEffortAnswer?.priorityRecoveryActive,
+      authoritativeAnswer?.priorityRecoveryActive,
       true,
-      'best-effort planning should capture the fresher active recovery epoch',
+      'authoritative planning should capture the fresher active recovery epoch',
     );
     t.equal(
-      bestEffortAnswer?.publicationRecoveryGate?.active,
+      authoritativeAnswer?.publicationRecoveryGate?.active,
       true,
       'best-effort planning should expose the shared active recovery gate',
     );
     t.equal(
-      bestEffortAnswer?.publicationEpoch,
+      authoritativeAnswer?.publicationEpoch,
       ACTIVE_PUBLICATION_EPOCH,
       'best-effort planning should expose the fresher publication epoch',
     );

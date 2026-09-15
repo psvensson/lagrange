@@ -190,6 +190,13 @@ export function buildPriorityDrainReadinessService(partitionId) {
         },
       };
     },
+    // REMOVE safety reads the owner surface, so the converged planning state
+    // this fixture models is presented there as well - same snapshot, no
+    // fallback. The best-effort surface stays for the narration and progress
+    // consumers that legitimately read AVAILABLE evidence.
+    getPriorityRecoveryPlanningAnswerForOwnerRead() {
+      return planningSnapshot;
+    },
     getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
@@ -218,6 +225,13 @@ export function buildPriorityDrainOwnerUnavailableReadinessService(
         },
       };
     },
+    // REMOVE safety reads the owner surface, so the converged planning state
+    // this fixture models is presented there as well - same snapshot, no
+    // fallback. The best-effort surface stays for the narration and progress
+    // consumers that legitimately read AVAILABLE evidence.
+    getPriorityRecoveryPlanningAnswerForOwnerRead() {
+      return planningSnapshot;
+    },
     getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
@@ -240,6 +254,13 @@ export function buildPriorityDrainSupersededReadinessService(
           serveEligible: true,
         },
       };
+    },
+    // REMOVE safety reads the owner surface, so the converged planning state
+    // this fixture models is presented there as well - same snapshot, no
+    // fallback. The best-effort surface stays for the narration and progress
+    // consumers that legitimately read AVAILABLE evidence.
+    getPriorityRecoveryPlanningAnswerForOwnerRead() {
+      return planningSnapshot;
     },
     getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;

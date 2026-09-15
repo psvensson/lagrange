@@ -13,6 +13,11 @@ import {
 import {
   isEvidenceAbsentReadinessDenialSnapshot,
 } from '../control-plane/readiness-denial-classification.js';
+import {
+  AVAILABLE_PLANNING_SURFACE_ORDER,
+  hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
+  readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
+} from './priority-recovery-planning-read.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -413,15 +418,20 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   /**
-   * Resolve the current priority-recovery planning assessment for one
+   * Resolve the AVAILABLE priority-recovery planning snapshot for one
    * in-flight operation when it belongs to the startup-critical control-plane
    * lane.
+   *
+   * This family plans and narrates; it never decides REMOVE safety, so it
+   * reads the AVAILABLE contract only. The read policy itself is owned by
+   * priority-recovery-planning-read.js, which this family and the
+   * operation-workflow family both delegate to.
    *
    * @param {Object} operation
    * @return {Promise<Object|null>}
    * @private
    */
-  async getPriorityRecoveryPlanningSnapshot(operation) {
+  async readAvailablePriorityRecoveryPlanningSnapshot(operation) {
     const partitionId =
       operation?.partitionId || operation?.partition_id || null;
     const partitionRow = getPartitionRowFromCache(
@@ -433,49 +443,19 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
-    if (
-      !readinessService ||
-      (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-        'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshot !==
-          'function')
-    ) {
+    // This family has always accepted the candidate derivation as its last
+    // AVAILABLE resort; the surface order says so rather than the mixin chain.
+    const surfaces = AVAILABLE_PLANNING_SURFACE_ORDER.BEST_EFFORT_THEN_CANDIDATE;
+    if (!hasAvailablePlanningProvider(readinessService, surfaces)) {
       return null;
     }
-    const publicationNodeId = this.nodeId;
-    const observedAt = typeof readinessService.now === 'function' ?
-      readinessService.now() : this.nowFn();
-    let planningSnapshot = null;
-    if (
-      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      planningSnapshot =
-        await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
-          publicationNodeId,
-          observedAt,
-        );
-    } else if (
-      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
-      'function'
-    ) {
-      planningSnapshot =
-        await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
-          publicationNodeId,
-          observedAt,
-        );
-    } else {
-      planningSnapshot =
-        await readinessService.getMembershipPublicationPlanningSnapshot(
-          publicationNodeId,
-          observedAt,
-        );
-    }
-    return planningSnapshot && typeof planningSnapshot === 'object' ?
-      planningSnapshot :
-      null;
+    return readAvailablePlanningSnapshot({
+      readinessService,
+      surfaces,
+      publicationNodeId: this.nodeId,
+      observedAt: typeof readinessService.now === 'function' ?
+        readinessService.now() : this.nowFn(),
+    });
   }
 
   /**
@@ -488,7 +468,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
    */
   async getPriorityRecoveryPlanningAssessment(operation) {
     const planningSnapshot =
-      await this.getPriorityRecoveryPlanningSnapshot(operation);
+      await this.readAvailablePriorityRecoveryPlanningSnapshot(operation);
     if (!planningSnapshot) {
       return null;
     }
