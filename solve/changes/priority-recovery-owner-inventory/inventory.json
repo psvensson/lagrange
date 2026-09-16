@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "0f4a071a1d2985ca122bd4e50edb00e207c2c808fdd0d14f576c4cfad204d245"
+    "sourceSha256": "e02c774e9ed586a5012f01c29d6a1661606b75cbec9848e5f4bc19afad513669"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 749,
+    "publicExportCount": 748,
     "importEdgeCount": 311,
     "crossLayerEdgeCount": 93,
     "layerDirectionViolationCount": 45,
@@ -1943,7 +1943,6 @@
       "rationale": "owner policy or actuation surface",
       "exports": [
         "AVAILABLE_PLANNING_SURFACE_ORDER",
-        "PRIORITY_RECOVERY_PLANNING_READ_MODE",
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
         "hasAvailablePriorityRecoveryPlanningProvider",
@@ -1953,7 +1952,6 @@
       ],
       "localExports": [
         "AVAILABLE_PLANNING_SURFACE_ORDER",
-        "PRIORITY_RECOVERY_PLANNING_READ_MODE",
         "createRemoveSafetyPlanningSnapshotReader",
         "hasAuthoritativeRemoveSafetyPlanningProvider",
         "hasAvailablePriorityRecoveryPlanningProvider",

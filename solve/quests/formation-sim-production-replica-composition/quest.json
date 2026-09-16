@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-production-replica-composition",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "At the production-defined settled cold-seed checkpoint before the first join, the simulator hosts 45 critical partition groups, 3 replica identities per group and 135 actual Raft-capable replica runtimes, every one of them executing on node-0 and charging the single node-0 busyUntil - and every identity, grouping, placement, peer set and election start comes from the same production owners that create them outside the simulator, never from harness constants. A joining node becomes a member without automatically receiving a replica; a replica appears on a joiner only after the production placement or operation owner authorises one.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-reproduces.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "harness-adapts-never-decides",
+      "statement": "The runtime factory may adapt durable storage to an in-memory implementation, the transport endpoint to VirtualNetwork, the clock to networkTimeSource(nodeId) and the random source to a seeded RandomSource. It may not choose ids, counts, placement, peers or election eligibility: those are already production decisions. formation-sim-raft-cohort.js stops participating in the positive scenario and the one-group-per-PRIORITY_CONTROL_PLANE_TABLE_IDS mapping is retired, because table ids are not partition ids."
+    },
+    {
+      "id": "one-node-one-cpu",
+      "statement": "All 135 cold replicas execute on one simulated process. Every timer, protocol callback, transport callback, apply continuation and bootstrap continuation belonging to them carries executionNodeId node-0 and charges the single node-0 busyUntil. There is no CPU lane per replica; 135 concurrent state machines share one event loop."
+    },
+    {
+      "id": "no-same-node-shortcut",
+      "statement": "Raft traffic between co-located replicas still travels through the production transport abstraction the replica lifecycle uses. The adapter may translate a production address to an in-process VirtualNetwork destination, but the production transport calls still occur, because same-process request and reply work is still seed event-loop load."
+    },
+    {
+      "id": "cold-before-joiners",
+      "statement": "Seed starts, production creates the 45 partitions and 135 replica runtimes, the cold population settles to the production-defined bootstrap boundary, and only then do nodes 1 to 4 join. No joiner replica runtime is pre-created."
+    },
+    {
+      "id": "no-object-count-shortcut",
+      "statement": "Looping 45 x 3 and calling new PartitionService inside the harness is forbidden even though it would produce the right number: the repair is production declaration to production replica-construction authority to runtime, not creating 135 objects somehow. If faithfully invoking the production chain needs changes across too many owners, stop and decompose."
+    },
+    {
+      "id": "substrate-and-rate-parity",
+      "statement": "The strict substrate stays zero-seam and proof-eligible and repeated runs stay byte-identical. Live Raft rate parity is NOT required by this frontier: after composition correspondence the owner-rate table is remeasured without tuning, and only the opportunity-normalised residual is evidence about missing protocol triggers."
+    }
+  ],
+  "sealedAt": "3e52cd3a0f67d236f55fe16ce309ec1eb9afe834"
+}

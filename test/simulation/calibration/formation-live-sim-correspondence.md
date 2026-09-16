@@ -201,3 +201,25 @@ initialisation), `raft_apply` (committed-entry application), `transport`
 membership churn 135 replicas would produce. That is one composition
 omission rather than six independent missing-trigger bugs, and it is the next
 thing to test.
+
+## Oracle lifecycle (A0)
+
+The metered oracle captured at `22420f874` is marked
+`purpose: substrate_regression_only`, `formationCorrespondence: false`, and
+names the composition it measured: `legacySyntheticFormationComposition` -
+six cohorts keyed from table ids, one LifeRaft per node per group.
+
+It is **valid for the sealed legacy substrate composition** and **not
+authoritative for production-composed formation**. It was not invalidated and
+its hashes are not updated: 391 metered entries, 10,120 events, 277,623
+attribution segments continue to protect the scheduler, attribution, clock
+closure, current-instant closure, generation isolation and host-speed
+independence against regression.
+
+During the composition slices the production-composed positive scenario has
+**no metered oracle**. Its temporary gates are strict zero ambient seams,
+deterministic proof eligibility, same-process and fresh-process exact
+repeatability, host-block independence, and the generation and post-seal
+invariants. A new oracle is captured only after the seed handoff is complete
+and the correspondence census is stable, and it supersedes the old one **for
+positive formation only**.

@@ -74,10 +74,17 @@
     "transport": 0,
     "worker_dispatch": 0
   },
-  "authority": "This is the first valid oracle: it was captured under complete current-instant owner closure, runner-independent attribution, generation isolation, owner-owned production clocks and zero ambient seams. The count is an output of those semantics and was never targeted; it is not 'restored' and not 'expected'.",
+  "authority": "This was the first oracle captured under complete current-instant owner closure, runner-independent attribution, generation isolation, owner-owned production clocks and zero ambient seams. The count is an output of those semantics and was never targeted. It measures the LEGACY synthetic composition; the production-composed positive scenario has no metered oracle until its own closure matrix is run.",
   "tripwireOnly": "The hashes are a tripwire on top of causal witnesses, never the only proof. The semantic revert protections live separately: removing rebalancer current-work participation turns the instant-closure completion falsifier red; restoring an ambient repository, cache or CDC clock turns the strict seam witnesses red; restoring dispatch-only production identity turns the lineage witnesses red; swallowing an ambient exception still leaves the generation ledger refusing; and restoring the old instant driver turns the instant-closure witnesses red.",
   "knownAmbientSiteOutsideProofCone": {
     "site": "src/partition/partition-service-entry-apply-base.js readAuthorityWitness.observedAtMs",
     "status": "Known ambient time source outside the current formation simulator proof cone; no clock owner exists at this boundary today. Not suppressed in the guard and not excepted: if a future deterministic scenario executes that site as simulated production, strict mode fails and forces a separate owner decision."
+  },
+  "purpose": "substrate_regression_only",
+  "formationCorrespondence": false,
+  "composition": {
+    "name": "legacySyntheticFormationComposition",
+    "description": "Six raft cohorts keyed from PRIORITY_CONTROL_PLANE_TABLE_IDS, one LifeRaft per node per group, constructed by formation-sim-raft-cohort.js. Table ids are not partition ids and the placement is one replica per node, so this composition does not correspond to production replica ownership.",
+    "status": "VALID for the sealed legacy substrate composition it measured. NOT authoritative for the production-composed positive formation scenario. Not invalidated, and its hashes are not updated: it continues to protect the scheduler, attribution, clock closure, current-instant closure, generation isolation and host-speed independence against regression."
   }
 }
