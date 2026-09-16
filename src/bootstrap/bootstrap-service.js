@@ -158,6 +158,11 @@ class BootstrapService extends EventEmitter {
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_SERVICE,
     });
+    // ONE BootstrapService, one NodeService, for its whole lifetime. Every
+    // owner underneath is handed this instance rather than deciding for
+    // itself which runtime represents the node. Default is the process
+    // singleton, so single-node deployment is unchanged.
+    this.nodeService = options.nodeService || NodeService.getInstance();
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
@@ -443,7 +448,7 @@ class BootstrapService extends EventEmitter {
         getHeartbeatService: () => this.heartbeatService,
         buildHeartbeatStartOptions: () => ({
           nodeAddress: this.nodeAddress,
-          getStats: () => NodeService.getInstance().getNodeStats(),
+          getStats: () => this.nodeService.getNodeStats(),
           capabilities: [...DEFAULT_NODE_CAPABILITIES],
         }),
         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
@@ -525,6 +530,7 @@ class BootstrapService extends EventEmitter {
     );
     this.seedInfrastructurePhase = new SeedInfrastructurePhase({
       delegates: seedDelegates,
+      nodeService: this.nodeService,
     });
     this.seedMessageGroupsPhase = new SeedMessageGroupsPhase({
       delegates: seedDelegates,

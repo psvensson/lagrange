@@ -62,6 +62,11 @@ class SeedInfrastructurePhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    // The node runtime this phase belongs to. Acquiring the singleton here
+    // instead made a second hosted runtime read the FIRST one's identity
+    // back, because initialize() returns early once initialised. The default
+    // is the process singleton, so single-node deployment is unchanged.
+    this.nodeService = options.nodeService || NodeService.getInstance();
     this.startupServiceLifecycleOwner =
       new StartupServiceLifecycleOwner({
         delegates: {
@@ -141,8 +146,9 @@ class SeedInfrastructurePhase {
       configManager.get(NODE_CONFIG_KEY.ID) || uuidv4();
     d.setNodeId(resolvedNodeId);
 
-    // Initialize node service
-    const nodeService = NodeService.getInstance();
+    // Initialize node service. The SAME instance is used for the identity
+    // read-back below: reacquiring it would reintroduce the collapse.
+    const nodeService = this.nodeService;
     if (!nodeService.isInitialized()) {
       nodeService.initialize({
         nodeId: resolvedNodeId,
@@ -194,6 +200,8 @@ class SeedInfrastructurePhase {
         wsPort: wsPort,
         externalAdmissionEnabled: false,
         bootIncarnation: d.getBootIncarnation?.() || 0,
+        // The router resolves addresses from THIS runtime's cache.
+        nodeService: this.nodeService,
       });
     } catch (error) {
       d.getLogger().error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {

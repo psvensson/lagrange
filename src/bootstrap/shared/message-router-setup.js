@@ -57,13 +57,15 @@ const ERROR_MSG = Object.freeze({
   initFailed: (message) => `MessageRouter initialization failed: ${message}`,
 });
 
-function createNodeWebSocketAddressResolver() {
+// The resolver closes over ONE node runtime. The cache is not passed
+// separately: it belongs to that runtime, so the ownership chain stays
+// node runtime -> NodeService -> node-local cache -> router resolution.
+function createNodeWebSocketAddressResolver(nodeService) {
   return (targetNodeId) => {
     if (!targetNodeId) {
       return null;
     }
 
-    const nodeService = NodeService.getInstance();
     const cache = nodeService.getReadOnlySystemTableCache() ||
       nodeService.getSystemTableCache() ||
       null;
@@ -113,7 +115,12 @@ class MessageRouterSetup {
     identifyPayload,
     externalAdmissionEnabled,
     bootIncarnation,
+    nodeService,
+    routerFactory,
   }) {
+    // The node runtime whose cache resolves addresses. Default is the process
+    // singleton, so single-node deployment is unchanged.
+    const routerNodeService = nodeService || NodeService.getInstance();
     // Validate required dependencies
     if (!nodeId) {
       throw new DependencyError(LOCAL_STR_MESSAGEROUTERSETUP, LOCAL_STR_NODEID);
@@ -129,8 +136,16 @@ class MessageRouterSetup {
       wsPort,
     });
 
-    // Create MessageRouter instance
-    const messageRouter = new MessageRouter({
+    // The PHYSICAL transport environment, and nothing else. A deterministic
+    // host substitutes how bytes move - whether a websocket listener exists,
+    // how an endpoint binds - while every semantic decision below stays here:
+    // service-node resolution, node-address resolution, the bulk-channel
+    // registry, local-versus-remote routing and admission. The default
+    // constructs today's MessageRouter, so production is unchanged.
+    const createRouter = typeof routerFactory === 'function' ?
+      routerFactory :
+      (routerOptions) => new MessageRouter(routerOptions);
+    const messageRouter = createRouter({
       nodeId,
       nodeAddress,
       advertisedAddress: advertisedNodeWsAddress || null,
@@ -152,7 +167,7 @@ class MessageRouterSetup {
       return match ? match[1] : null;
     });
     messageRouter.setNodeAddressResolver(
-      createNodeWebSocketAddressResolver(),
+      createNodeWebSocketAddressResolver(routerNodeService),
     );
 
     // S6 bulk-channel bootstrap: instantiate the per-node bulk transfer

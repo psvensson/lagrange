@@ -173,6 +173,11 @@ class ControlPlaneSetup {
    * @throws {DependencyError} If required dependencies missing.
    */
   static async create(options) {
+    // One node runtime, one authority. Lifecycle state, node stats and the
+    // heartbeat payload are all projections of the same owner, so they take
+    // one dependency rather than three injected values. Default is the
+    // process singleton.
+    const nodeService = options.nodeService || NodeService.getInstance();
     const {
       nodeId,
       formationReleaseAuthorityNodeId,
@@ -485,8 +490,7 @@ class ControlPlaneSetup {
       membershipPublicationService: membershipPublicationService || null,
       isNodeLifecycleReady: () => {
         try {
-          return NodeService.getInstance()?.lifecycleStateMachine?.getState() ===
-            STATE.READY;
+          return nodeService?.lifecycleStateMachine?.getState() === STATE.READY;
         } catch {
           return false;
         }
@@ -570,6 +574,7 @@ class ControlPlaneSetup {
    * @throws {Error} If registration fails.
    */
   static async registerNode(options) {
+    const nodeService = options.nodeService || NodeService.getInstance();
     const {
       heartbeatService,
       nodeAddress,
@@ -592,8 +597,7 @@ class ControlPlaneSetup {
     });
 
     try {
-      const stats =
-        await NodeService.getInstance().getNodeStats();
+      const stats = await nodeService.getNodeStats();
       await heartbeatService.sendHeartbeat(
         {
           cpu: {
@@ -617,8 +621,7 @@ class ControlPlaneSetup {
 
       heartbeatService.start({
         nodeAddress,
-        getStats: () =>
-          NodeService.getInstance().getNodeStats(),
+        getStats: () => nodeService.getNodeStats(),
         capabilities: [...DEFAULT_NODE_CAPABILITIES],
       });
 

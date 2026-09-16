@@ -39,6 +39,13 @@ function resolveNodeServiceClock(options) {
   return typeof options.now === 'function' ? options.now : Date.now;
 }
 
+// Resolved at initialize time, not construction: the process singleton is
+// created on demand, and constructing a NodeService must not bring one into
+// existence for a runtime that was handed its own.
+function resolveNodeServiceThreadManager(providedThreadManager) {
+  return providedThreadManager || ServiceThreadManager.getInstance();
+}
+
 /**
  * NodeService is the administrative component present on every node.
  * It manages service lifecycle, health monitoring, and node statistics.
@@ -51,8 +58,18 @@ class NodeService extends EventEmitter {
    * Create a new NodeService instance.
    * @private
    */
-  constructor() {
+  constructor(options = {}) {
     super();
+    // The node's thread manager, supplied explicitly when more than one node
+    // runtime is hosted in one process. getNodeStats() reports this manager's
+    // pool as node-local evidence that heartbeat and control-plane paths
+    // consume, so two runtimes sharing one manager makes one node report the
+    // other's pool. The default is the process singleton, so single-process
+    // deployment is unchanged.
+    this.providedThreadManager =
+      options.threadManager && typeof options.threadManager === 'object' ?
+        options.threadManager :
+        null;
     this.nodeId = null;
     this.nodeAddress = null;
     this.status = NODE_STATUS.INITIALIZING;
@@ -137,7 +154,8 @@ class NodeService extends EventEmitter {
     this.lastStats = null;
 
     // Initialize thread manager
-    this.threadManager = ServiceThreadManager.getInstance();
+    this.threadManager =
+      resolveNodeServiceThreadManager(this.providedThreadManager);
     if (!this.threadManager.isInitialized()) {
       this.threadManager.initialize();
     }
