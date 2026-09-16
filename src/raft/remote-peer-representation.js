@@ -28,6 +28,17 @@
 const END_EVENT = 'end';
 
 /**
+ * The write a representation gets when its owner supplied no transport: it
+ * refuses rather than silently dropping the packet.
+ * @param {string} address
+ * @return {Function}
+ */
+function refuseWrite(address) {
+  return (packet, callback) =>
+    callback(new Error(`no transport for peer ${address}`));
+}
+
+/**
  * The listener surface base liferaft uses on a peer, and no more. It arms one
  * `once('end', fn, context)` when it joins the peer and never registers
  * anything else, so this is deliberately not a general event emitter: a
@@ -73,24 +84,19 @@ class RemotePeerRepresentation {
     this.address = options.address;
     this.ended = false;
     this.endSignal = new RemotePeerEndSignal();
-    this.sendToRemote = typeof options.write === 'function' ?
+    // The owner's outbound send IS this peer's write, installed as an OWN
+    // property exactly as base liferaft installs it on a cloned peer. That
+    // placement is part of the contract, not an implementation detail:
+    // callers rebuild a cohort by harvesting `node.write` from the peers they
+    // have and handing it back to join(). A wrapper standing in front of the
+    // owner's function would be harvested instead of it, and the next
+    // representation would be given a wrapper that calls itself.
+    //
+    // The owner's write still runs with this representation as its subject,
+    // so `this.address` is the destination exactly as it was before.
+    this.write = typeof options.write === 'function' ?
       options.write :
-      null;
-  }
-
-  /**
-   * Send one packet to the remote participant. The owner's own write
-   * implementation runs with this representation as its subject, so
-   * `this.address` is the destination exactly as it was before.
-   * @param {Object} packet - Raft protocol packet.
-   * @param {Function} callback - Completion callback.
-   * @return {*} whatever the owner's write returns.
-   */
-  write(packet, callback) {
-    if (!this.sendToRemote) {
-      return callback(new Error(`no transport for peer ${this.address}`));
-    }
-    return this.sendToRemote.call(this, packet, callback);
+      refuseWrite(this.address);
   }
 
   /**

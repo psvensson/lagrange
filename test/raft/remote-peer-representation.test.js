@@ -156,3 +156,38 @@ test('5. supplying deterministic substrates cannot restore the old abstraction',
     assert.ok(!(peer instanceof BaseLifeRaft),
       'nor has it become a runtime by acquiring substrates');
   });
+
+// Where the owner's send LIVES on the representation is part of the contract,
+// not an implementation detail. Base liferaft installs it as an own property
+// on a cloned peer, and callers rebuild a cohort by harvesting `node.write`
+// from the peers they hold and handing it back to join(). A representation
+// whose write were a prototype method that looked the send up through `this`
+// would hand that method back to the harvester, and the next representation
+// would be given a write that calls itself - unbounded recursion the first
+// time the rebuilt cohort sent anything.
+test('a harvested write rebuilds a cohort instead of calling itself', () => {
+  const owner = new LifeRaft('node-a/partition/users-p1-r1', {
+    'election min': 100, 'election max': 200,
+  });
+  const sent = [];
+  const first = owner.join(PEER_ADDRESS, (packet, callback) => {
+    sent.push({destination: this?.address, packet});
+    callback(null, {});
+  });
+
+  // Exactly what a cohort rebuild does: take the write off the peer it has.
+  const harvested = first.write;
+  assert.equal(typeof harvested, 'function',
+    'the send is readable off the representation, as base liferaft leaves it');
+
+  const rebuilt = owner.join('node-c/partition/users-p1-r3', harvested);
+  let answered = false;
+  rebuilt.write({type: 'append'}, () => {
+    answered = true;
+  });
+  assert.equal(answered, true,
+    'the rebuilt peer reaches the owner send, rather than recursing into ' +
+      'itself until the stack is exhausted');
+  assert.equal(sent.length, 1, 'and it sent exactly once');
+  owner.end();
+});

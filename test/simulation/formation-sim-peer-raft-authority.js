@@ -66,26 +66,36 @@ function observePeerRaftAuthority() {
 
   // Provenance through the production creation authority.
   const realCreate = RemotePeerRepresentation.prototype.constructor;
-  const realWrite = RemotePeerRepresentation.prototype.write;
   const realEnd = RemotePeerRepresentation.prototype.end;
   void realCreate;
-  RemotePeerRepresentation.prototype.write = function(...args) {
-    bump('peer', 'write');
-    return realWrite.apply(this, args);
-  };
   RemotePeerRepresentation.prototype.end = function(...args) {
     bump('peer', 'end');
     return realEnd.apply(this, args);
   };
   restorers.push(() => {
-    RemotePeerRepresentation.prototype.write = realWrite;
     RemotePeerRepresentation.prototype.end = realEnd;
   });
+
+  // A representation's write is the owner's own function, installed as an own
+  // property the way base liferaft installs it, so it is counted where it is
+  // created rather than on a prototype. The counter closes over the original
+  // and never re-reads this.write, so a caller that harvests the wrapped
+  // function and re-supplies it to join() still reaches the owner's send
+  // instead of calling itself.
+  const countWrites = (node) => {
+    const send = node.write;
+    if (typeof send !== 'function') return node;
+    node.write = function(...args) {
+      bump('peer', 'write');
+      return send.apply(this, args);
+    };
+    return node;
+  };
 
   // Every peer slot is filled through clone(), whoever owns that path.
   const realClone = LifeRaft.prototype.clone;
   LifeRaft.prototype.clone = function(options) {
-    const node = realClone.call(this, options);
+    const node = countWrites(realClone.call(this, options));
     representations.add(node);
     peerObjects.created += 1;
     peerObjects.addresses.add(node.address);
