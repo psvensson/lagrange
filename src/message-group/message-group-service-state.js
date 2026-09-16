@@ -29,7 +29,6 @@ import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
-  MESSAGE_GROUP_OPERATION_LEDGER_NOW,
   MESSAGE_GROUP_SERVICE_DEFAULT,
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
@@ -44,11 +43,56 @@ import {
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
 } from './message-group-service-runtime-support.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 /**
  * MessageGroupService provides reliable inter-service communication.
  * Implements a 3-replica Raft group using liferaft library.
  */
+// Five timings with one rule: an explicit positive override wins, otherwise
+// the owner's default. Stated once here rather than five times in a
+// constructor that already carries the replica's whole shape.
+function resolvePositiveMs(value, fallbackMs) {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallbackMs;
+}
+
+function resolveForwardRepairTimings(options, {suppressionCeilingMs}) {
+  const repair = FORWARD_TOPOLOGY_REPAIR_DEFAULT;
+  return {
+    forwardTargetSuppressionMs: resolvePositiveMs(
+      options.forwardTargetSuppressionMs, suppressionCeilingMs),
+    forwardTopologyRepairCooldownMs: resolvePositiveMs(
+      options.forwardTopologyRepairCooldownMs, repair.COOLDOWN_MS),
+    forwardTopologyRepairFailureCooldownMs: resolvePositiveMs(
+      options.forwardTopologyRepairFailureCooldownMs,
+      repair.FAILURE_COOLDOWN_MS),
+    forwardTopologyRepairNoChangeCooldownMs: resolvePositiveMs(
+      options.forwardTopologyRepairNoChangeCooldownMs,
+      repair.NO_CHANGE_COOLDOWN_MS),
+    forwardTopologyRepairQueryTimeoutMs: resolvePositiveMs(
+      options.forwardTopologyRepairQueryTimeoutMs, repair.QUERY_TIMEOUT_MS),
+  };
+}
+
+// The clocks a replica reads. A replica that was given one hosts everything
+// on it, including its consensus timers; one that was not falls through to the
+// host exactly as production always has.
+function resolveReplicaClocks(options) {
+  const provided =
+    options.timeSource && typeof options.timeSource.now === 'function' ?
+      options.timeSource :
+      null;
+  return {providedTimeSource: provided, timeSource: resolveTimeSource(options)};
+}
+
+// The node runtime this replica is hosted by. Reaching for the process
+// singleton here is the same collapse the bootstrap phase had: with more than
+// one runtime in a process, every replica would read one node's cache as its
+// own. Default is the singleton, so single-node deployment is unchanged.
+function resolveReplicaNodeService(options) {
+  return options.nodeService || NodeService.getInstance();
+}
+
 class MessageGroupService extends EventEmitter {
   /**
    * Create a new MessageGroupService.
@@ -77,10 +121,19 @@ class MessageGroupService extends EventEmitter {
     }
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
+    // One clock for this replica: the ledger's stamps and the turns its
+    // coalescing hops take are both statements about the node hosting it.
+    // Unsupplied, it is the host clock exactly as before.
+    const clocks = resolveReplicaClocks(options);
+    // Held separately from the resolved source: a replica that was GIVEN a
+    // clock hosts its consensus timers on it, and one that was not leaves
+    // liferaft on its own tick-tock exactly as production does.
+    this.providedTimeSource = clocks.providedTimeSource;
+    this.timeSource = clocks.timeSource;
     this.now =
       typeof options.now === 'function' ?
         options.now :
-        MESSAGE_GROUP_OPERATION_LEDGER_NOW;
+        () => this.timeSource.now();
     this.nodeId = options.nodeId || STRING.UNKNOWN;
     // COPY, for the same reason as the partition sibling: this list is
     // mutated in place by raft lifecycle, and callers hand in the shared
@@ -138,31 +191,10 @@ class MessageGroupService extends EventEmitter {
         Math.floor(options.leaderActivationNodeSpacingMs) :
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           MESSAGE_GROUP_SERVICE_LITERAL.VALUE_25);
-    this.forwardTargetSuppressionMs =
-      Number.isFinite(options.forwardTargetSuppressionMs) &&
-      options.forwardTargetSuppressionMs > 0 ?
-        Math.floor(options.forwardTargetSuppressionMs) :
-        Math.min(this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE);
-    this.forwardTopologyRepairCooldownMs =
-      Number.isFinite(options.forwardTopologyRepairCooldownMs) &&
-      options.forwardTopologyRepairCooldownMs > 0 ?
-        Math.floor(options.forwardTopologyRepairCooldownMs) :
-        FORWARD_TOPOLOGY_REPAIR_DEFAULT.COOLDOWN_MS;
-    this.forwardTopologyRepairFailureCooldownMs =
-      Number.isFinite(options.forwardTopologyRepairFailureCooldownMs) &&
-      options.forwardTopologyRepairFailureCooldownMs > 0 ?
-        Math.floor(options.forwardTopologyRepairFailureCooldownMs) :
-        FORWARD_TOPOLOGY_REPAIR_DEFAULT.FAILURE_COOLDOWN_MS;
-    this.forwardTopologyRepairNoChangeCooldownMs =
-      Number.isFinite(options.forwardTopologyRepairNoChangeCooldownMs) &&
-      options.forwardTopologyRepairNoChangeCooldownMs > 0 ?
-        Math.floor(options.forwardTopologyRepairNoChangeCooldownMs) :
-        FORWARD_TOPOLOGY_REPAIR_DEFAULT.NO_CHANGE_COOLDOWN_MS;
-    this.forwardTopologyRepairQueryTimeoutMs =
-      Number.isFinite(options.forwardTopologyRepairQueryTimeoutMs) &&
-      options.forwardTopologyRepairQueryTimeoutMs > 0 ?
-        Math.floor(options.forwardTopologyRepairQueryTimeoutMs) :
-        FORWARD_TOPOLOGY_REPAIR_DEFAULT.QUERY_TIMEOUT_MS;
+    Object.assign(this, resolveForwardRepairTimings(options, {
+      suppressionCeilingMs: Math.min(
+        this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE),
+    }));
     // Raft state - using liferaft library
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
     this.raft = null;
@@ -203,11 +235,13 @@ class MessageGroupService extends EventEmitter {
     this.systemTableCacheChangeListener =
       this.handleSystemTableCacheChange.bind(this);
     this.peerReconciliationScheduled = false;
-    const nodeService = NodeService.getInstance();
+    const nodeService = resolveReplicaNodeService(options);
     this.systemTableCache = nodeService.getSystemTableCache();
     this.readOnlyCache = nodeService.getReadOnlySystemTableCache();
-    // HLC clock for ordering
-    this.hlcClock = new HLCClockService(this.replicaId);
+    // HLC clock for ordering, on this replica's clock.
+    this.hlcClock = new HLCClockService(this.replicaId, {
+      timeSource: this.timeSource,
+    });
     // Single-owner CDC handler for subscriptions and cache application.
     this.cdcHandler = new CDCHandler(this.systemTableCache);
     // Logging

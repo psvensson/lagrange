@@ -37,6 +37,18 @@ const formatReplicaMissingAtStart = (replicaId) =>
 /**
  * Handles the message-groups phase of seed bootstrap.
  */
+// The node-local authorities a replica hosted here inherits. Both default to
+// undefined, which is what every caller that does not host several runtimes
+// in one process has always passed.
+function resolveNodeLocalReplicaAuthorities(delegates) {
+  return {
+    timeSource: delegates.getTimeSource ? delegates.getTimeSource() : undefined,
+    nodeService: delegates.getNodeService ?
+      delegates.getNodeService() :
+      undefined,
+  };
+}
+
 class SeedMessageGroupsPhase {
   /**
    * @param {Object} options
@@ -141,6 +153,9 @@ class SeedMessageGroupsPhase {
       peerAddresses: options.peerAddresses,
       transport: d.getMessageRouter(),
       deferElection: Boolean(options.deferElection),
+      // The replica is hosted by this node: this node's clock, and this
+      // node's runtime for its node-local cache.
+      ...resolveNodeLocalReplicaAuthorities(d),
       bootstrapReadinessState:
         typeof d.getBootstrapReadinessState === 'function' ?
           d.getBootstrapReadinessState() :

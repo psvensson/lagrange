@@ -228,6 +228,8 @@ function buildPhaseExecutionDelegates(service) {
           .createBootstrapServiceDescriptor(
             serviceType, serviceId,
           ),
+    getTimeSource: () => self.nodeService.getTimeSource(),
+    getNodeService: () => self.nodeService,
     queueBootstrapServiceReplica: (descriptor, options) =>
       self.seedInfrastructurePhase
         .queueBootstrapServiceReplica(

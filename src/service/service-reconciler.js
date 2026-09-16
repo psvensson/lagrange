@@ -467,8 +467,12 @@ class ServiceReconciler extends EventEmitter {
             // back-to-back, starving timers (heartbeats, the gap watchdog)
             // for the whole batch — round-10: 7-8s unexplained ELU-1.0
             // gaps wedging the lone seed out of serve eligibility. Per-
-            // queue action order is unchanged.
-            await new Promise((resolve) => setImmediate(resolve));
+            // queue action order is unchanged. The turn belongs to the node
+            // this reconciler acts for, so it is taken from that node's
+            // clock: a zero-delay timer is the same macrotask boundary, on
+            // the substrate that owns the node's scheduling.
+            await new Promise((resolve) =>
+              this._timeSource.setTimeout(resolve, LOCAL_NUM_ZERO));
           }
         }
       })());

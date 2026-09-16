@@ -266,10 +266,19 @@ function assignPeerResolution(serviceClass) {
         return;
       }
       this.peerReconciliationScheduled = true;
-      setImmediate(() => {
+      // The coalescing hop is this replica's next turn. A node that owns a
+      // clock takes it from there; otherwise setImmediate stays, because a
+      // zero-delay timer is a DIFFERENT event-loop phase and swapping one for
+      // the other would change production's ordering, not just its substrate.
+      const hop = () => {
         this.peerReconciliationScheduled = false;
         this.reconcileRaftPeersFromCache();
-      });
+      };
+      if (this.providedTimeSource) {
+        this.providedTimeSource.setTimeout(hop, 0);
+        return;
+      }
+      setImmediate(hop);
     },
   });
 }

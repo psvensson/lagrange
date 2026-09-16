@@ -351,7 +351,11 @@ function createBootstrapServiceRuntimeMethods() {
      * @private
      */
     sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
+      // A wait this node takes, on this node's clock. Replica staggering is
+      // node-local pacing, so reading the host clock here would let host
+      // speed decide how a node paces its own work.
+      const timeSource = this.nodeService.getTimeSource();
+      return new Promise((resolve) => timeSource.setTimeout(resolve, ms));
     },
 
     /**

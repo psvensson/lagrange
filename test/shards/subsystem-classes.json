@@ -8,7 +8,7 @@
     "cdc-metadata": 56,
     "cli-tooling": 96,
     "control-plane": 188,
-    "convergence-topology": 85,
+    "convergence-topology": 86,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2099,
-  "digest": "fnv1a32-41a6b9f2",
+  "censusSize": 2100,
+  "digest": "fnv1a32-c1ebd64b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1933,6 +1933,7 @@
     "test/simulation/formation-sim-instant-closure.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-five-node-composition.test.js": "convergence-topology",
+    "test/simulation/formation-sim-production-message-groups.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-time-authority.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-transcript-determinism.test.js": "convergence-topology",
     "test/simulation/formation-sim-runner.test.js": "convergence-topology",

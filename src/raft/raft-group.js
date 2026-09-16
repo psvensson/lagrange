@@ -103,6 +103,13 @@ class RaftGroup extends EventEmitter {
     this.peerAddresses = options.peerAddresses || [];
     this.logAdapter = options.logAdapter || null;
     this.deferElection = options.deferElection || false;
+    // The clock the hosting node owns, when it owns one. Consensus timers
+    // belong to that node; without one, liferaft keeps its own tick-tock and
+    // production is byte-identical.
+    this.timeSource =
+      options.timeSource && typeof options.timeSource.now === 'function' ?
+        options.timeSource :
+        null;
     this.shouldJoinPeer = typeof options.shouldJoinPeer === 'function' ?
       options.shouldJoinPeer :
       null;
@@ -231,6 +238,10 @@ class RaftGroup extends EventEmitter {
       [RAFT_GROUP_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
       [RAFT_GROUP_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
     };
+
+    if (this.timeSource) {
+      raftOptions.timeSource = this.timeSource;
+    }
 
     if (logAdapter) {
       raftOptions[RAFT_GROUP_LIFERAFT_TIMER.LOG] =

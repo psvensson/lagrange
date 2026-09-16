@@ -52,9 +52,15 @@ const PRECOMPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
 
 const INFRASTRUCTURE_READY_REASON = 'bootstrap_infrastructure_ready';
 const PHASE_INFRASTRUCTURE = 'infrastructure';
+const PHASE_MESSAGE_GROUPS = 'message_groups';
+const MESSAGE_GROUP_SERVICE_TYPE = 'message_group';
+const SERVICE_DESCRIPTOR_SERVICE_ID = 'service_id';
 // Far enough past the link delay to let a phase's consequences land, and far
 // short of the keepalive and reconcile cadences a composed node arms.
 const SETTLE_HORIZON_MS = 50;
+// Past the replica stagger a phase may pace itself on, and far short of the
+// keepalive and reconcile cadences a composed node arms.
+const PHASE_HORIZON_MS = 1000;
 
 function refusePrecomposedInfrastructure(options) {
   for (const key of PRECOMPOSED_INFRASTRUCTURE_KEYS) {
@@ -90,9 +96,91 @@ function observeLifecycleOwners(bootstrap, transcript, nodeId) {
             nodeId, owner: 'ServiceReconciler', phase: PHASE_INFRASTRUCTURE,
           });
         });
+        value.on(RECONCILER_EVENT.DECISION, (decision) => {
+          transcript.record('RECONCILER_ACTION_EXECUTED', {
+            nodeId, owner: 'ServiceReconciler',
+            actionType: decision?.action?.type ?? null,
+            replicaId: decision?.action?.serviceId ??
+              decision?.action?.definition?.serviceId ?? null,
+          });
+        });
       },
     });
   }
+}
+
+// The message-group chain, observed at the boundaries production already has:
+// the declaration the phase queues, the action the reconciler executes, and
+// the create and start hooks the lifecycle owner drives. Each is an ordinary
+// method on a phase instance, so the observation is a property descriptor
+// that records around the real one and changes nothing.
+function observeMessageGroupChain(bootstrap, transcript, nodeId) {
+  const infrastructure = bootstrap.seedInfrastructurePhase;
+  const groups = bootstrap.seedMessageGroupsPhase;
+
+  const queueReplica = infrastructure.queueBootstrapServiceReplica
+    .bind(infrastructure);
+  Object.defineProperty(infrastructure, 'queueBootstrapServiceReplica', {
+    configurable: true,
+    value: (descriptor, options) => {
+      const result = queueReplica(descriptor, options);
+      if (options?.serviceType === MESSAGE_GROUP_SERVICE_TYPE) {
+        transcript.record('MESSAGE_GROUP_REPLICA_DECLARED', {
+          nodeId, owner: 'SeedMessageGroupsPhase',
+          groupId: options.groupId, replicaId: options.replicaId,
+        });
+      }
+      return result;
+    },
+  });
+
+  for (const [method, event] of [
+    ['createBootstrapMessageGroupReplica', 'MESSAGE_GROUP_REPLICA_CREATED'],
+    ['startBootstrapMessageGroupReplica', 'MESSAGE_GROUP_REPLICA_STARTED'],
+  ]) {
+    const real = groups[method].bind(groups);
+    Object.defineProperty(groups, method, {
+      configurable: true,
+      value: async (...args) => {
+        const result = await real(...args);
+        const replicaId = resolveObservedReplicaId(bootstrap, args);
+        transcript.record(event, {
+          nodeId, owner: 'SeedMessageGroupsPhase',
+          groupId: observedGroupId(bootstrap, replicaId), replicaId,
+        });
+        return result;
+      },
+    });
+  }
+}
+
+// The replica this hook acted on, read from the arguments the lifecycle owner
+// passed rather than from any state the host keeps.
+// Where a lifecycle hook's arguments name the replica they act on. The create
+// hook is handed a context; the start hook is handed the replica handle first
+// and the context second. Both name the same replica, and the transcript uses
+// the declaration's name for both so the chain reads as one replica's story.
+const OBSERVED_REPLICA_ID_PATHS = Object.freeze([
+  (argument) => argument.replicaOptions?.replicaId,
+  (argument) => argument.definition?.[SERVICE_DESCRIPTOR_SERVICE_ID],
+  (argument) => argument.definition?.serviceId,
+  (argument) => argument.serviceId,
+]);
+
+function resolveObservedReplicaId(bootstrap, args) {
+  for (const argument of args) {
+    if (!argument || typeof argument !== 'object') continue;
+    for (const read of OBSERVED_REPLICA_ID_PATHS) {
+      const replicaId = read(argument);
+      if (replicaId) return replicaId;
+    }
+  }
+  return null;
+}
+
+function observedGroupId(bootstrap, replicaId) {
+  const service = bootstrap.messageGroupServices.get(replicaId);
+  return service?.groupId ?? null;
 }
 
 // Protocol meaning is the router's. The transport environment reports that a
@@ -133,17 +221,31 @@ function createProductionSeedSimHost(environment, options = {}) {
     nodeService: environment.nodeService, routerFactory,
   });
   observeLifecycleOwners(bootstrap, transcript, nodeId);
+  observeMessageGroupChain(bootstrap, transcript, nodeId);
   transcript.record('HOST_CREATED', {nodeId, owner: 'BootstrapService'});
 
   // The scenario's causal-closure authority, not a second one. The host never
   // decides when the world is at rest; it asks the owner that already does.
-  const closeInstant = (owners = []) => closeCurrentInstant({network, owners});
+  // One real host turn, offered to the closure authority as an owner-idle
+  // contract. Without it a composed node's production continuations never get
+  // a macrotask between rounds, because closeCurrentInstant awaits only the
+  // owners it is given. It decides nothing about closure: the authority still
+  // does, and a turn that enqueues nothing ends the fixpoint.
+  const hostTurn = () => new Promise((resolve) => setImmediate(resolve));
+  const closeInstant = (owners = []) =>
+    closeCurrentInstant({network, owners: [hostTurn, ...owners]});
+  // The horizon is how much FURTHER the scenario may run, not an instant to
+  // stop at: a phase that has already consumed virtual time still gets the
+  // same room for its consequences as one that has not.
   async function settleCausalConsequences(
     horizonMs = SETTLE_HORIZON_MS, owners = [],
   ) {
     await closeInstant(owners);
+    const until = network.now() + horizonMs;
     for (let guard = 0; guard < 10000; guard += 1) {
-      const at = await advanceToNextInstant({network, owners, horizonMs});
+      const at = await advanceToNextInstant({
+        network, owners: [hostTurn, ...owners], horizonMs: until,
+      });
       if (at === null) return;
     }
     throw new Error('the composed node did not reach causal closure');
@@ -172,6 +274,50 @@ function createProductionSeedSimHost(environment, options = {}) {
       }
       transcript.record('PHASE_INFRASTRUCTURE_COMPLETED', {
         nodeId, phase: PHASE_INFRASTRUCTURE,
+      });
+    },
+    // A production phase may itself BLOCK on virtual time - phase two paces
+    // replica creation on the node's own clock - so the scheduler has to run
+    // while the phase is in flight. Advancing only until the phase settles
+    // keeps "the phase returned" and "its consequences settled" apart, which
+    // is the distinction phase one established.
+    async driveUntilSettled(promise, horizonMs = PHASE_HORIZON_MS) {
+      let settled = false;
+      const watched = promise.then(
+        (value) => {
+          settled = true;
+          return value;
+        },
+        (error) => {
+          settled = true;
+          throw error;
+        },
+      );
+      watched.catch(() => undefined);
+      await closeInstant();
+      const until = network.now() + horizonMs;
+      while (!settled) {
+        const at = await advanceToNextInstant({
+          network, owners: [hostTurn], horizonMs: until,
+        });
+        if (at === null) break;
+      }
+      return watched;
+    },
+    startPhaseMessageGroups: async () => {
+      transcript.record('PHASE_MESSAGE_GROUPS_STARTED', {
+        nodeId, phase: PHASE_MESSAGE_GROUPS,
+      });
+      await bootstrap.seedMessageGroupsPhase.phaseMessageGroups();
+      for (const [replicaId, service] of bootstrap.messageGroupServices) {
+        if (service?.deferElection !== true) continue;
+        transcript.record('MESSAGE_GROUP_ELECTION_DEFERRED', {
+          nodeId, owner: 'MessageGroupService',
+          groupId: service.groupId ?? null, replicaId,
+        });
+      }
+      transcript.record('PHASE_MESSAGE_GROUPS_COMPLETED', {
+        nodeId, phase: PHASE_MESSAGE_GROUPS,
       });
     },
     provenance: () => ({
@@ -215,12 +361,13 @@ function createProductionSeedSimHost(environment, options = {}) {
  * @param {Object} [options] - {nodeId, nodeAddress, wsPort, hostLoad, observe}.
  * @return {Promise<Object>} the comparable artifacts.
  */
-async function runSeedPhaseOneScenario({
+async function runSeedScenario({
   nodeId = 'node-0',
   nodeAddress = 'ws://127.0.0.1:19960',
   wsPort = 19960,
   hostLoad = null,
   observer = null,
+  throughMessageGroups = false,
 } = {}) {
   installDeterministicOwnerGuard();
   resetNondeterministicOwnerSeamLedger();
@@ -239,6 +386,14 @@ async function runSeedPhaseOneScenario({
   const afterPhaseReturned = host.transcript().serialize();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   const afterCausalClosure = host.transcript().serialize();
+  if (throughMessageGroups) {
+    // Phase two paces itself on the node's clock, so the scheduler runs while
+    // the phase is in flight; the host advances only until the phase settles.
+    const running = runOnSimulationGenerationRoot(generation, () =>
+      runOnExecutionNode(nodeId, () => host.startPhaseMessageGroups()));
+    await host.driveUntilSettled(running);
+    await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
+  }
   await host.stop();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   host.seal();
@@ -270,4 +425,16 @@ async function runSeedPhaseOneScenario({
   };
 }
 
-export {createProductionSeedSimHost, runSeedPhaseOneScenario};
+// Phase one only: the composition proof and its determinism gates.
+const runSeedPhaseOneScenario = (options = {}) =>
+  runSeedScenario({...options, throughMessageGroups: false});
+
+// Phase one and then the real message-group phase: B's chain.
+const runSeedMessageGroupsScenario = (options = {}) =>
+  runSeedScenario({...options, throughMessageGroups: true});
+
+export {
+  createProductionSeedSimHost,
+  runSeedMessageGroupsScenario,
+  runSeedPhaseOneScenario,
+};

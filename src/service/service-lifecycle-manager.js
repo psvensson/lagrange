@@ -40,6 +40,7 @@ import {
   stopReplica as stopLifecycleReplica,
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
@@ -47,6 +48,10 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
  * ServiceLifecycleManager is the single lifecycle owner for all service types.
  */ class ServiceLifecycleManager {
   constructor(options = {}) {
+    // One clock for this node's lifecycle owner: every duration and stamp
+    // below describes work on one node, so they read one source. Unsupplied,
+    // that is the host clock exactly as each site read it before.
+    /** @type {Object} */ this._timeSource = resolveTimeSource(options);
     /** @type {Map<string, ServiceTypeAdapter>} */ this._adapters = new Map();
     /** @type {Function|null} */ this._operationWriter = null;
     /** @type {Function|null} */ this._idempotencyReader = null;
@@ -295,7 +300,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     }
     this._metrics.byOperation[lifecycleOperation] = opMetrics;
     this._recentOperations.push({
-      timestamp: Date.now(),
+      timestamp: this._timeSource.now(),
       lifecycleOperation,
       serviceId: logContext.serviceId,
       serviceType: logContext.serviceType,

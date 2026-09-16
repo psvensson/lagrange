@@ -86,7 +86,7 @@ function recordLifecycleSuccess(
   manager._recordLifecycleOutcome(lifecycleOperation, subject, context, {
     operationId: operationId || null,
     status: SERVICE_LIFECYCLE_METRIC_STATUS.SUCCESS,
-    durationMs: Date.now() - startedAt,
+    durationMs: manager._timeSource.now() - startedAt,
   });
 }
 
@@ -176,7 +176,7 @@ async function recordLifecycleFailure(manager, details, error) {
     {
       operationId: details.operation?.operationId || null,
       status: SERVICE_LIFECYCLE_METRIC_STATUS.FAILURE,
-      durationMs: Date.now() - details.startedAt,
+      durationMs: manager._timeSource.now() - details.startedAt,
       error,
     },
   );
@@ -184,7 +184,7 @@ async function recordLifecycleFailure(manager, details, error) {
 
 async function createReplica(manager, definition, context = {}, options = {}) {
   const lifecycleOperation = SERVICE_LIFECYCLE_OPERATION.CREATE;
-  const startedAt = Date.now();
+  const startedAt = manager._timeSource.now();
   let canonicalDefinition;
   let operation;
   let fields = {};
@@ -330,7 +330,7 @@ async function runReplicaOperation(
   options,
   spec,
 ) {
-  const startedAt = Date.now();
+  const startedAt = manager._timeSource.now();
   let operation;
   let fields = {};
   try {

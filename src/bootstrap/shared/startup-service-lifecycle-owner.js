@@ -24,7 +24,11 @@ class StartupServiceLifecycleOwner {
       return;
     }
 
-    const serviceLifecycleManager = new ServiceLifecycleManager();
+    const serviceLifecycleManager = new ServiceLifecycleManager({
+      // The lifecycle owner acts on behalf of one node, so it reads that
+      // node's clock.
+      timeSource: delegates.getTimeSource?.(),
+    });
     serviceLifecycleManager.registerAdapter(
       new MessageGroupServiceAdapter({
         createReplica: (context) =>

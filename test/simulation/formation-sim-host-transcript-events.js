@@ -30,6 +30,14 @@ const TRANSCRIPT_EVENT = Object.freeze({
 
   PHASE_INFRASTRUCTURE_COMPLETED: 'phase_infrastructure_completed',
 
+  PHASE_MESSAGE_GROUPS_STARTED: 'phase_message_groups_started',
+  MESSAGE_GROUP_REPLICA_DECLARED: 'message_group_replica_declared',
+  RECONCILER_ACTION_EXECUTED: 'reconciler_action_executed',
+  MESSAGE_GROUP_REPLICA_CREATED: 'message_group_replica_created',
+  MESSAGE_GROUP_REPLICA_STARTED: 'message_group_replica_started',
+  MESSAGE_GROUP_ELECTION_DEFERRED: 'message_group_election_deferred',
+  PHASE_MESSAGE_GROUPS_COMPLETED: 'phase_message_groups_completed',
+
   TEARDOWN_STARTED: 'teardown_started',
   VIRTUAL_ENDPOINT_RELEASED: 'virtual_endpoint_released',
   NODE_RUNTIME_STOPPED: 'node_runtime_stopped',

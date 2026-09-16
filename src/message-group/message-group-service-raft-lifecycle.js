@@ -208,6 +208,7 @@ function assignRaftLifecycle(serviceClass) {
         electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
         raftProvider: this.raftProvider,
         logger: this.logger,
+        timeSource: this.providedTimeSource,
         shouldJoinPeer: (peerId, peerAddress) =>
           this.shouldJoinRaftPeer(peerId, peerAddress),
       });
