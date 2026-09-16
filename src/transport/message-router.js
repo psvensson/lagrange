@@ -18,6 +18,7 @@ import {defineMessageRouterConnectionCloseReconnect} from './message-router-conn
 import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
+import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
 
 const {
   ConfigurationManager,
@@ -254,6 +255,12 @@ class MessageRouter extends EventEmitter {
     this.messageCount = TRANSPORT_NUM.ZERO;
     this.isShuttingDown = false;
     this.inProcessTransport = false;
+    // Physics of the in-process link: endpoint registry and frame transport.
+    // The default is the process-global registry this transport has always
+    // used; a deterministic simulator injects one whose endpoints are
+    // scenario-local and whose frames cross a virtual link.
+    this.inProcessConnectionEnvironment =
+      resolveInProcessConnectionEnvironment(options);
     this.externalAdmissionEnabled = options.externalAdmissionEnabled !== false;
     this.outboundQueues = /* @__PURE__ */ new Map();
     this.deliverMetricSampleByTarget = /* @__PURE__ */ new Map();

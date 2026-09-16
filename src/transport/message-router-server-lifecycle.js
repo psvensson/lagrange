@@ -2,7 +2,6 @@ import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
   ConnectionState,
-  INPROC,
   MESSAGE_ROUTER_LITERAL,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
@@ -143,7 +142,8 @@ class MessageRouterServerLifecycle {
         MESSAGE_ROUTER_LITERAL.STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER,
       );
     }
-    if (INPROC.serversByPort.has(portKey)) {
+    const environment = this.inProcessConnectionEnvironment;
+    if (environment.hasEndpoint(portKey)) {
       const err = new Error(
         `listen EADDRINUSE: address already in use 127.0.0.1:${portKey}`,
       );
@@ -151,14 +151,14 @@ class MessageRouterServerLifecycle {
       throw err;
     }
     this.inProcessTransport = true;
-    INPROC.serversByPort.set(portKey, {
+    environment.registerEndpoint(portKey, {
       router: this,
       nodeId: this.nodeId,
     });
     this.server = {
       clients: /* @__PURE__ */ new Set(),
       close: (cb) => {
-        INPROC.serversByPort.delete(portKey);
+        environment.releaseEndpoint(portKey);
         cb?.();
       },
     };

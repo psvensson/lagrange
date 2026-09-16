@@ -3,7 +3,6 @@ import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 const {
   ConnectionState,
   HOST,
-  INPROC,
   IPV6_ANY_HOST,
   IPV6_HOST_PREFIX,
   IPV6_HOST_SUFFIX,
@@ -18,7 +17,6 @@ const {
   URL,
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
   WebSocket,
-  createInProcWebSocketPair,
   normalizeToWebSocketAddress,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
@@ -434,13 +432,22 @@ class MessageRouterConnectionLifecycleMethods {
   async establishInProcessConnection(connectionInfo) {
     const url = new URL(connectionInfo.address);
     const portKey = Number(url.port);
-    const target = INPROC.serversByPort.get(portKey);
+    const environment = this.inProcessConnectionEnvironment;
+    const target = environment.lookupEndpoint(portKey);
     if (!target?.router) {
       const err = new Error(`connect ECONNREFUSED ${connectionInfo.address}`);
       err.code = MESSAGE_ROUTER_LITERAL.STRING_ECONNREFUSED;
       throw err;
     }
-    const {a: clientWs, b: serverWs} = createInProcWebSocketPair();
+    // The environment decides the physics of the link the two ends hold; the
+    // router still decides everything above it, starting with IDENTIFY.
+    const {clientSocket: clientWs, serverSocket: serverWs} =
+      environment.createConnectionPair({
+        portKey,
+        address: connectionInfo.address,
+        localNodeId: this.nodeId,
+        remoteNodeId: target.nodeId,
+      });
     if (this.server?.clients) {
       this.server.clients.add(serverWs);
     }
