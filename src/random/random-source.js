@@ -73,4 +73,21 @@ function resolveRandomSource(options = {}) {
   return new RealRandomSource();
 }
 
-export {RealRandomSource, SeededRandomSource, resolveRandomSource};
+/**
+ * The randomness an owner was GIVEN, or null. Consensus election timing is
+ * drawn from it; an owner that was given none leaves Math.random in place, so
+ * production is unchanged.
+ * @param {Object} [options] - Owner options.
+ * @return {Object|null}
+ */
+function resolveOwnedRandomSource(options = {}) {
+  const provided = options.randomSource;
+  return provided && typeof provided.random === 'function' ? provided : null;
+}
+
+export {
+  RealRandomSource,
+  SeededRandomSource,
+  resolveOwnedRandomSource,
+  resolveRandomSource,
+};

@@ -1,5 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceWriteMetricsBase} from './partition-service-write-metrics-base.js';
+import {
+  startPartitionSizeCadence, stopPartitionSizeCadence,
+} from './partition-service-size-cadence.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -229,7 +232,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     if (!this.resolveWriteMutationType(entry)) {
       return;
     }
-    const nowMs = Date.now();
+    const nowMs = this.timeSource.now();
     if (
       nowMs - this.lastManagedSplitWriteActivityAtMs <
       this.managedSplitWriteActivityDebounceMs
@@ -716,7 +719,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     try {
       const sizeBytes = await this.calculatePartitionSize();
       this.sizeBytes = sizeBytes;
-      this.lastSizeUpdate = Date.now();
+      this.lastSizeUpdate = this.timeSource.now();
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.PARTITION_SIZE_UPDATED, {
         partitionId: this.partitionId,
         sizeBytes,
@@ -745,7 +748,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     if (this.sizeUpdatePending) {
       return;
     }
-    const timeSinceLastUpdate = Date.now() - this.lastSizeUpdate;
+    const timeSinceLastUpdate = this.timeSource.now() - this.lastSizeUpdate;
     if (timeSinceLastUpdate < this.sizeUpdateDebounceMs) {
       return;
     }
@@ -763,36 +766,14 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   startPeriodicSizeUpdates() {
-    if (this.sizeUpdateTimer) {
-      return;
-    }
-    if (this.isShutdown) {
-      this.logger.debug(
-        PARTITION_SERVICE_LOG_MSG.TIMER_SKIPPED_AFTER_SHUTDOWN,
-        {
-          partitionId: this.partitionId,
-          timer: PARTITION_SERVICE_LITERAL.SIZEUPDATETIMER,
-        },
-      );
-      return;
-    }
-    this.sizeUpdateTimer = setInterval(async () => {
-      const timeSinceLastUpdate = Date.now() - this.lastSizeUpdate;
-      if (timeSinceLastUpdate >= this.sizeUpdateIntervalMs) {
-        await this.updatePartitionSize();
-      }
-    }, this.sizeUpdateIntervalMs);
-    this.sizeUpdateTimer.unref();
+    startPartitionSizeCadence(this);
   }
   /**
    * Stop periodic size updates.
    * @private
    */
   stopPeriodicSizeUpdates() {
-    if (this.sizeUpdateTimer) {
-      clearInterval(this.sizeUpdateTimer);
-      this.sizeUpdateTimer = null;
-    }
+    stopPartitionSizeCadence(this);
   }
 }
 

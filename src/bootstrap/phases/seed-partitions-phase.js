@@ -46,6 +46,8 @@ import {
   STRING,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
+import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
+  '../shared/hosted-replica-authorities.js';
 
 const LOCAL_STR_STRING = 'string';
 
@@ -210,6 +212,9 @@ class SeedPartitionsPhase {
         cdcIntegrationService: d.getCdcIntegrationService(),
         sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
         deferElection: Boolean(options.deferElection),
+        // The replica is hosted by this node: this node's clock, and this
+        // node's runtime for its node-local cache.
+        ...resolveHostedReplicaAuthorities(d),
         bootstrapReadinessState:
           typeof d.getBootstrapReadinessState === 'function' ?
             d.getBootstrapReadinessState() :
@@ -368,7 +373,9 @@ class SeedPartitionsPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const config = d.getConfig();
-    const startTime = Date.now();
+    // A wait this node takes, on this node's clock.
+    const now = resolveHostedNodeClock(d);
+    const startTime = now();
     const configuredTimeoutMs =
       config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
@@ -426,7 +433,7 @@ class SeedPartitionsPhase {
       return;
     }
 
-    while (Date.now() - startTime < timeoutMs) {
+    while (now() - startTime < timeoutMs) {
       await d.sleep(delay);
       delay = Math.min(delay * backoffMultiplier, maxDelay);
 
@@ -435,7 +442,7 @@ class SeedPartitionsPhase {
         this.satisfiedPartitionLeadershipSetKey = partitionSetKey;
         logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_FOUND, {
           partitionCount: partitionIds.size,
-          elapsedMs: Date.now() - startTime,
+          elapsedMs: now() - startTime,
         });
         return;
       }
@@ -449,7 +456,7 @@ class SeedPartitionsPhase {
       totalPartitions: partitionIds.size,
       leadersFound: leaders.size,
       missingLeaders: missing,
-      elapsedMs: Date.now() - startTime,
+      elapsedMs: now() - startTime,
       nodeId: d.getNodeId(),
     });
 

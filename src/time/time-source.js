@@ -242,4 +242,31 @@ function resolveTimeSource(options = {}) {
   return new RealTimeSource();
 }
 
-export {RealTimeSource, VirtualTimeSource, resolveTimeSource};
+/**
+ * Resolve an owner's clock while remembering whether one was actually given.
+ *
+ * Two different questions hide behind "what time is it here". Everything an
+ * owner STAMPS can read a resolved source, because a real one answers exactly
+ * as the host clock did. But whether an owner may hand its clock to a
+ * collaborator that would otherwise run its own timers - liferaft's tick-tock
+ * is the case that matters - depends on whether the owner was GIVEN a clock,
+ * because substituting a real TimeSource there would change which mechanism
+ * schedules, not just which clock it reads.
+ *
+ * @param {Object} [options] - Owner options.
+ * @return {{providedTimeSource: Object|null, timeSource: Object}}
+ */
+function resolveOwnedTimeSource(options = {}) {
+  const provided =
+    options.timeSource && typeof options.timeSource.now === 'function' ?
+      options.timeSource :
+      null;
+  return {providedTimeSource: provided, timeSource: resolveTimeSource(options)};
+}
+
+export {
+  RealTimeSource,
+  VirtualTimeSource,
+  resolveOwnedTimeSource,
+  resolveTimeSource,
+};

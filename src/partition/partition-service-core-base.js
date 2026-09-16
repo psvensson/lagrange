@@ -9,6 +9,8 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {resolveOwnedTimeSource} from '../time/time-source.js';
+import {resolveOwnedRandomSource} from '../random/random-source.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -165,7 +167,19 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();
     this.maxTrackedAppliedEntries =
       PARTITION_SERVICE_DEFAULT.MAX_TRACKED_APPLIED_ENTRIES;
-    this.hlcClock = new HLCClockService(this.replicaId);
+    // One clock for this replica, on the node hosting it. Held in two parts
+    // for the reason resolveOwnedTimeSource states: stamps read the resolved
+    // source, and only a clock that was actually GIVEN may take over a
+    // collaborator that would otherwise schedule for itself.
+    const clocks = resolveOwnedTimeSource(options);
+    this.providedTimeSource = clocks.providedTimeSource;
+    // The node's randomness, when it owns one. Election timing is drawn from
+    // it; unsupplied, liferaft keeps Math.random.
+    this.providedRandomSource = resolveOwnedRandomSource(options);
+    this.timeSource = clocks.timeSource;
+    this.hlcClock = new HLCClockService(this.replicaId, {
+      timeSource: this.timeSource,
+    });
     this.activeTransactions = /* @__PURE__ */ new Map();
     this.preparedTransactions = /* @__PURE__ */ new Map();
     // Replica removal owns one irreversible serving fence: once raised,
@@ -227,10 +241,12 @@ class PartitionServiceCoreBase extends EventEmitter {
       LeaderActivationScheduler.getShared({
         nodeId: this.nodeId,
         spacingMs: this.leaderActivationNodeSpacingMs,
+        timeSource: this.providedTimeSource || undefined,
       });
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
       activationScheduler: this.leaderActivationScheduler,
+      timeSource: this.providedTimeSource || undefined,
     });
     this.lastPreparedStateReconstructionTerm = null;
     this.pendingRequestTracker = new PendingRequestTracker({
@@ -799,10 +815,19 @@ class PartitionServiceCoreBase extends EventEmitter {
       return;
     }
     this.peerReconciliationScheduled = true;
-    setImmediate(() => {
+    // The coalescing hop is this replica's next turn. A node that owns a
+    // clock takes it from there; otherwise setImmediate stays, because a
+    // zero-delay timer is a DIFFERENT event-loop phase and swapping one for
+    // the other would change production's ordering, not just its substrate.
+    const hop = () => {
       this.peerReconciliationScheduled = false;
       this.reconcileRaftPeersFromCache();
-    });
+    };
+    if (this.providedTimeSource) {
+      this.providedTimeSource.setTimeout(hop, 0);
+      return;
+    }
+    setImmediate(hop);
   }
 }
 export {PartitionServiceCoreBase};

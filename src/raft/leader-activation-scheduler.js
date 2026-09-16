@@ -1,4 +1,6 @@
 
+import {resolveTimeSource} from '../time/time-source.js';
+
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_SHARED_NODE = 'shared-node';
 const LOCAL_STR_FUNCTION = 'function';
@@ -40,6 +42,9 @@ class LeaderActivationScheduler {
         options.nodeId :
         LOCAL_STR_SHARED_NODE;
     this.spacingMs = normalizeSpacingMs(options.spacingMs);
+    // Activation spacing is a node's own pacing, so it reads that node's
+    // clock. Unsupplied, it is the host clock exactly as before.
+    this.timeSource = resolveTimeSource(options);
     this.queue = [];
     this.nextEntryId = 1;
     this.dispatchTimer = null;
@@ -82,9 +87,9 @@ class LeaderActivationScheduler {
 
     const delayMs = Math.max(
       0,
-      (this.lastDispatchAt + this.spacingMs) - Date.now(),
+      (this.lastDispatchAt + this.spacingMs) - this.timeSource.now(),
     );
-    this.dispatchTimer = setTimeout(() => {
+    this.dispatchTimer = this.timeSource.setTimeout(() => {
       this.dispatchTimer = null;
       this.dispatchNext();
     }, delayMs);
@@ -103,7 +108,7 @@ class LeaderActivationScheduler {
       if (!entry || entry.canceled) {
         continue;
       }
-      this.lastDispatchAt = Date.now();
+      this.lastDispatchAt = this.timeSource.now();
       try {
         const result = entry.run();
         if (result && typeof result.catch === LOCAL_STR_FUNCTION) {
@@ -120,7 +125,7 @@ class LeaderActivationScheduler {
     this.destroyed = true;
     this.queue.length = 0;
     if (this.dispatchTimer) {
-      clearTimeout(this.dispatchTimer);
+      this.timeSource.clearTimeout(this.dispatchTimer);
       this.dispatchTimer = null;
     }
   }

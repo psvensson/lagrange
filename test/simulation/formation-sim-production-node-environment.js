@@ -14,14 +14,23 @@
 // would stop being able to tell which one it was measuring.
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {SeededRandomSource} from '../../src/random/random-source.js';
 import {
   createVirtualConnectionEnvironment,
 } from '../distributed/harness/virtual-connection-environment.js';
+import {
+  configureSharedSyncSectionClock,
+} from '../../src/diagnostics/event-loop-gap-watchdog.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {
   TRANSCRIPT_FRAME_KIND,
 } from './formation-sim-host-transcript-events.js';
 import {createHostTranscript} from './formation-sim-host-transcript.js';
+
+// One seed per scenario unless a caller wants a different stream. It is a
+// scenario input, not a measurement, and no result may depend on its value
+// being this particular number.
+const DEFAULT_RANDOM_SEED = 7;
 
 // The node's thread pool is host physics, like its sockets: a real Piscina
 // pool would spawn OS worker threads whose scheduling the simulator does not
@@ -93,6 +102,12 @@ function physicalTranscriptObserver(transcript) {
  */
 function createProductionSimScenario({startMs = 0, linkDelayMs = 1} = {}) {
   const network = createVirtualNetwork({startMs});
+  // The watchdog's sync-section stamps are MEASUREMENT, not decisions, and
+  // the seam for them already exists: point the shared registry's clock at
+  // this scenario's virtual time so tagging inside a dispatch reads no
+  // ambient clock. The registry is process-wide, which is why the scenario
+  // rather than a node owns this.
+  configureSharedSyncSectionClock(() => network.now());
   const transcript = createHostTranscript({network});
   const connectionEnvironment = createVirtualConnectionEnvironment({
     network, linkDelayMs, observe: physicalTranscriptObserver(transcript),
@@ -107,7 +122,7 @@ function createProductionSimScenario({startMs = 0, linkDelayMs = 1} = {}) {
  * @return {Object} the node environment.
  */
 function createProductionSimNodeEnvironment({
-  nodeId, nodeAddress, wsPort,
+  nodeId, nodeAddress, wsPort, randomSeed = DEFAULT_RANDOM_SEED,
   scenario = createProductionSimScenario(),
 } = {}) {
   const {network, transcript, connectionEnvironment} = scenario;
@@ -121,6 +136,11 @@ function createProductionSimNodeEnvironment({
   // Uninitialised on purpose: a production owner initialises it, and which
   // identity it ends up holding is one of the things under test.
   const nodeService = new NodeService({threadManager, timeSource});
+  // The node's own randomness. Consensus draws election timing from it, so
+  // without a seeded source the transcript would move between runs while
+  // every clock stayed deterministic - randomness is a second substrate, and
+  // the deterministic guard does not cover it.
+  const randomSource = new SeededRandomSource({seed: randomSeed});
   // initialize() is the boundary, so the entry is recorded where it happens
   // rather than inferred afterwards from the phase's return. NodeService
   // emits nothing here, so the observation is a property descriptor on the
@@ -158,7 +178,8 @@ function createProductionSimNodeEnvironment({
   return {
     nodeId, nodeAddress, wsPort,
     scenario, network, transcript, connectionEnvironment,
-    nodeService, threadManager, timeSource, routerFactory, routerOptionsSeen,
+    nodeService, threadManager, timeSource, randomSource,
+    routerFactory, routerOptionsSeen,
     // Observation only: where each object came from, never what it may do.
     provenance: () => ({
       nodeId,

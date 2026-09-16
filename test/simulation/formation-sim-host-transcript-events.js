@@ -38,6 +38,12 @@ const TRANSCRIPT_EVENT = Object.freeze({
   MESSAGE_GROUP_ELECTION_DEFERRED: 'message_group_election_deferred',
   PHASE_MESSAGE_GROUPS_COMPLETED: 'phase_message_groups_completed',
 
+  PHASE_PARTITIONS_STARTED: 'phase_partitions_started',
+  PARTITION_REPLICA_DECLARED: 'partition_replica_declared',
+  PARTITION_REPLICA_CREATED: 'partition_replica_created',
+  DEFERRED_ELECTIONS_STARTED: 'deferred_elections_started',
+  PHASE_PARTITIONS_COMPLETED: 'phase_partitions_completed',
+
   TEARDOWN_STARTED: 'teardown_started',
   VIRTUAL_ENDPOINT_RELEASED: 'virtual_endpoint_released',
   NODE_RUNTIME_STOPPED: 'node_runtime_stopped',

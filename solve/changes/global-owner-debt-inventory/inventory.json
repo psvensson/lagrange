@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429514,
-        "sha256": "b008160c3aa7cabd99c364569992866ad888ce163d93cc07b7346719e9c95102"
+        "bytes": 429513,
+        "sha256": "7976af14314e6d34101d6a6287f2733006f16da266aadc6b1ddd5ace30f44faf"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 36894,
-        "sha256": "45721fd328c7d888b007bed606ee6f61dc68ffa0e34cb52f306ca2a482172785"
+        "sha256": "43e1d93f5024335b1860b7ddf58b6040b0076e2154357795f1d1f68dc26b04f4"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2407204,
-        "sha256": "2b066c4f1384b7194d38009494be20290704db659161a6cba624b978354bfef0"
+        "bytes": 2408905,
+        "sha256": "1377fdea73b65fb98c943411630a4bf873e1ce1fda59a97dc7a0a9f82ac1f96d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "e02cfb02e02fa709d97a3824323b8e1a913a6579aec4ef77a21c21158d029f41"
+        "sha256": "413bf167951007b7dc8fa0168a1cc9ad10635784b24fd506040613f24fae69d6"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "2b3ed24770bf4fd75e19f48eba26c192e5d16fa077e192d8d15656ea50724e43"
+        "sha256": "57f9c24a6c1335a239c81f25a4d1aa2224b0d4238c78663dfb78093e9d76630d"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3e85f634e2d951977d58b64be91768f7862ee262b1ed8e6fff1448c9d3cbe8d2"
+    "inputDigest": "88b0b3ed7cf378226c99b4a962beab9c40c2758f6edcdd1722e3a7f16d6c383b"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429514,
-        "sha256": "b008160c3aa7cabd99c364569992866ad888ce163d93cc07b7346719e9c95102"
+        "bytes": 429513,
+        "sha256": "7976af14314e6d34101d6a6287f2733006f16da266aadc6b1ddd5ace30f44faf"
       },
       "declaredCount": 1820,
       "observedCount": 1820,
@@ -79,7 +79,7 @@
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 36894,
-        "sha256": "45721fd328c7d888b007bed606ee6f61dc68ffa0e34cb52f306ca2a482172785"
+        "sha256": "43e1d93f5024335b1860b7ddf58b6040b0076e2154357795f1d1f68dc26b04f4"
       },
       "declaredCount": 160,
       "observedCount": 160,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "e02cfb02e02fa709d97a3824323b8e1a913a6579aec4ef77a21c21158d029f41"
+          "sha256": "413bf167951007b7dc8fa0168a1cc9ad10635784b24fd506040613f24fae69d6"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "2b3ed24770bf4fd75e19f48eba26c192e5d16fa077e192d8d15656ea50724e43"
+          "sha256": "57f9c24a6c1335a239c81f25a4d1aa2224b0d4238c78663dfb78093e9d76630d"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2407204,
-        "sha256": "2b066c4f1384b7194d38009494be20290704db659161a6cba624b978354bfef0"
+        "bytes": 2408905,
+        "sha256": "1377fdea73b65fb98c943411630a4bf873e1ce1fda59a97dc7a0a9f82ac1f96d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "e5726fa65e250c696ca2a7173f8518803cb63a22b66d2df8324e6401e734d8ce",
-      "moduleCount": 4736,
-      "edgeCount": 21844,
+      "sourceDigest": "ff32087fcefffe611514eae2fd985104ce2b59df6a68db173a3ebf193d7c3d24",
+      "moduleCount": 4739,
+      "edgeCount": 21863,
       "unresolvedCount": 34
     }
   },
@@ -184,7 +184,7 @@
     "sourceSignalCount": 2638,
     "assignedSignalCount": 2638,
     "uniqueAssignmentCount": 2638,
-    "digest": "446edb3e6072bab59a335290e397b6d8df4bc38b75f1dc40fdc05defa5b57621"
+    "digest": "b38cb4ef1c8520de5281ac9b3c636ae623e4960ad23c835c967a0581906959e5"
   },
   "signalCounts": {
     "cognitive": 160,
@@ -303,7 +303,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 345,
-      "importOut": 421,
+      "importOut": 422,
       "score": 677.6,
       "topPaths": [
         "src/bootstrap/node-joining-backfill-merge-and-status.js",
@@ -751,7 +751,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 17,
-      "importOut": 43,
+      "importOut": 46,
       "score": 188.2,
       "topPaths": [
         "src/partition/partition-service-entry-apply-base.js",
@@ -1031,7 +1031,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 15,
-      "importOut": 41,
+      "importOut": 42,
       "score": 100.1,
       "topPaths": [
         "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
@@ -1227,7 +1227,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 177,
-      "importOut": 50,
+      "importOut": 51,
       "score": 72,
       "topPaths": [
         "src/raft/liferaft-incoming-data.js",
@@ -1309,7 +1309,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 567,
+      "importIn": 568,
       "importOut": 43,
       "score": 56,
       "topPaths": [

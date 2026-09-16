@@ -66,6 +66,20 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
+// The clock and randomness a replica hands to liferaft. Absent keys mean
+// liferaft keeps its own tick-tock and Math.random, so production is
+// byte-identical.
+function hostedConsensusSubstrate(replica) {
+  const substrate = {};
+  if (replica.providedTimeSource) {
+    substrate.timeSource = replica.providedTimeSource;
+  }
+  if (replica.providedRandomSource) {
+    substrate.randomSource = replica.providedRandomSource;
+  }
+  return substrate;
+}
+
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
    * One checkpoint-cadence tick, driven by the 1s prepared-state-hold sweep
@@ -460,6 +474,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           this.onSnapshotCatchupNeeded(decision);
         }
       },
+      // Consensus timers belong to the node hosting this replica whenever
+      // that node owns a clock. Without one the key is absent and liferaft
+      // keeps its own tick-tock, so production is byte-identical.
+      // Consensus runs on the hosting node's substrate when that node owns
+      // one, and on liferaft's own otherwise.
+      ...hostedConsensusSubstrate(this),
     });
     // Recorded-gap closure (S4, pre-existing defect): base liferaft always
     // boots at term 0, but an INSTALLED replica carries a durable

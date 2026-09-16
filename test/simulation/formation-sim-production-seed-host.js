@@ -54,6 +54,8 @@ const INFRASTRUCTURE_READY_REASON = 'bootstrap_infrastructure_ready';
 const PHASE_INFRASTRUCTURE = 'infrastructure';
 const PHASE_MESSAGE_GROUPS = 'message_groups';
 const MESSAGE_GROUP_SERVICE_TYPE = 'message_group';
+const PARTITION_SERVICE_TYPE = 'partition';
+const PHASE_PARTITIONS = 'partitions';
 const SERVICE_DESCRIPTOR_SERVICE_ID = 'service_id';
 // Far enough past the link delay to let a phase's consequences land, and far
 // short of the keepalive and reconcile cadences a composed node arms.
@@ -61,6 +63,7 @@ const SETTLE_HORIZON_MS = 50;
 // Past the replica stagger a phase may pace itself on, and far short of the
 // keepalive and reconcile cadences a composed node arms.
 const PHASE_HORIZON_MS = 1000;
+const PARTITION_PHASE_HORIZON_MS = 120000;
 
 function refusePrecomposedInfrastructure(options) {
   for (const key of PRECOMPOSED_INFRASTRUCTURE_KEYS) {
@@ -130,6 +133,12 @@ function observeMessageGroupChain(bootstrap, transcript, nodeId) {
           groupId: options.groupId, replicaId: options.replicaId,
         });
       }
+      if (options?.serviceType === PARTITION_SERVICE_TYPE) {
+        transcript.record('PARTITION_REPLICA_DECLARED', {
+          nodeId, owner: 'SeedPartitionsPhase',
+          partitionId: options.partitionId, replicaId: options.replicaId,
+        });
+      }
       return result;
     },
   });
@@ -152,6 +161,27 @@ function observeMessageGroupChain(bootstrap, transcript, nodeId) {
       },
     });
   }
+}
+
+// The partition create hook, observed at the same boundary as the message
+// group's. One event per replica, and the partition it belongs to is read
+// from the runtime the hook produced rather than from anything the host kept.
+function observePartitionChain(bootstrap, transcript, nodeId) {
+  const partitions = bootstrap.seedPartitionsPhase;
+  const real = partitions.createBootstrapPartitionReplica.bind(partitions);
+  Object.defineProperty(partitions, 'createBootstrapPartitionReplica', {
+    configurable: true,
+    value: async (...args) => {
+      const result = await real(...args);
+      const replicaId = resolveObservedReplicaId(bootstrap, args);
+      transcript.record('PARTITION_REPLICA_CREATED', {
+        nodeId, owner: 'SeedPartitionsPhase', replicaId,
+        partitionId:
+          bootstrap.partitionServices.get(replicaId)?.partitionId ?? null,
+      });
+      return result;
+    },
+  });
 }
 
 // The replica this hook acted on, read from the arguments the lifecycle owner
@@ -210,7 +240,7 @@ function createProductionSeedSimHost(environment, options = {}) {
   refusePrecomposedInfrastructure(options);
   const {
     nodeId, nodeAddress, wsPort, network, transcript, connectionEnvironment,
-    routerFactory,
+    routerFactory, randomSource,
   } = environment;
   const compositionRegistry = options.compositionRegistry ||
     createInfrastructureCompositionRegistry();
@@ -218,10 +248,11 @@ function createProductionSeedSimHost(environment, options = {}) {
 
   const bootstrap = new BootstrapService({
     nodeId, nodeAddress, wsPort,
-    nodeService: environment.nodeService, routerFactory,
+    nodeService: environment.nodeService, routerFactory, randomSource,
   });
   observeLifecycleOwners(bootstrap, transcript, nodeId);
   observeMessageGroupChain(bootstrap, transcript, nodeId);
+  observePartitionChain(bootstrap, transcript, nodeId);
   transcript.record('HOST_CREATED', {nodeId, owner: 'BootstrapService'});
 
   // The scenario's causal-closure authority, not a second one. The host never
@@ -320,6 +351,15 @@ function createProductionSeedSimHost(environment, options = {}) {
         nodeId, phase: PHASE_MESSAGE_GROUPS,
       });
     },
+    startPhasePartitions: async () => {
+      transcript.record('PHASE_PARTITIONS_STARTED', {
+        nodeId, phase: PHASE_PARTITIONS,
+      });
+      await bootstrap.seedPartitionsPhase.phasePartitions();
+      transcript.record('PHASE_PARTITIONS_COMPLETED', {
+        nodeId, phase: PHASE_PARTITIONS,
+      });
+    },
     provenance: () => ({
       ...environment.provenance(),
       router: {
@@ -333,6 +373,11 @@ function createProductionSeedSimHost(environment, options = {}) {
     // the setup owner created, then the runtime that owns both.
     async stop() {
       transcript.record('TEARDOWN_STARTED', {nodeId});
+      // Production's own teardown first, because it is what stops the
+      // RUNTIMES: with 135 partition replicas alive, stopping only the
+      // lifecycle owners and the router leaves every replica's cadence armed
+      // on the node's clock, and the scenario is not at rest afterwards.
+      await bootstrap.shutdown();
       bootstrap.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
       if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
       await environment.stop();
@@ -361,6 +406,44 @@ function createProductionSeedSimHost(environment, options = {}) {
  * @param {Object} [options] - {nodeId, nodeAddress, wsPort, hostLoad, observe}.
  * @return {Promise<Object>} the comparable artifacts.
  */
+// Ordinary host burden, offered to the closure authority as an owner-idle
+// contract rather than through a hook invented for it.
+function hostLoadOwners(hostLoad) {
+  if (typeof hostLoad !== 'function') return [];
+  return [() => {
+    hostLoad();
+  }];
+}
+
+// The strict verdict, flattened to one comparable line.
+function serializeStrictReport() {
+  const eligibility = deterministicProofEligibility();
+  return [
+    `mode=${eligibility.ambientSeamMode}`,
+    `violations=${eligibility.ambientSeamViolationCount}`,
+    `substitutions=${eligibility.ambientSeamSubstitutionCount}`,
+    `eligible=${eligibility.deterministicProofEligible}`,
+    `ledger=${nondeterministicOwnerSeamLedger().count}`,
+  ].join(' ');
+}
+
+// The phases a scenario runs after phase one, with the horizon each needs.
+// Phases after the first pace themselves on the node's clock, so the
+// scheduler runs while each one is in flight and the host advances only until
+// it settles.
+function scenarioPhases(host, {throughMessageGroups, throughPartitions}) {
+  const phases = [];
+  if (throughMessageGroups || throughPartitions) {
+    phases.push([() => host.startPhaseMessageGroups(), PHASE_HORIZON_MS]);
+  }
+  if (throughPartitions) {
+    phases.push([
+      () => host.startPhasePartitions(), PARTITION_PHASE_HORIZON_MS,
+    ]);
+  }
+  return phases;
+}
+
 async function runSeedScenario({
   nodeId = 'node-0',
   nodeAddress = 'ws://127.0.0.1:19960',
@@ -368,6 +451,7 @@ async function runSeedScenario({
   hostLoad = null,
   observer = null,
   throughMessageGroups = false,
+  throughPartitions = false,
 } = {}) {
   installDeterministicOwnerGuard();
   resetNondeterministicOwnerSeamLedger();
@@ -378,28 +462,25 @@ async function runSeedScenario({
     nodeId, nodeAddress, wsPort, scenario,
   });
   const host = createProductionSeedSimHost(environment);
-  const owners = typeof hostLoad === 'function' ? [() => {
-    hostLoad();
-  }] : [];
+  const owners = hostLoadOwners(hostLoad);
   await runOnSimulationGenerationRoot(generation, () =>
     runOnExecutionNode(nodeId, () => host.phaseInfrastructure()));
   const afterPhaseReturned = host.transcript().serialize();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   const afterCausalClosure = host.transcript().serialize();
-  if (throughMessageGroups) {
-    // Phase two paces itself on the node's clock, so the scheduler runs while
-    // the phase is in flight; the host advances only until the phase settles.
+  for (const [startPhase, horizonMs] of scenarioPhases(host, {
+    throughMessageGroups, throughPartitions,
+  })) {
     const running = runOnSimulationGenerationRoot(generation, () =>
-      runOnExecutionNode(nodeId, () => host.startPhaseMessageGroups()));
-    await host.driveUntilSettled(running);
+      runOnExecutionNode(nodeId, startPhase));
+    await host.driveUntilSettled(running, horizonMs);
     await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   }
   await host.stop();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   host.seal();
   if (observer) observer.seal();
-  const eligibility = deterministicProofEligibility();
-  const ledger = nondeterministicOwnerSeamLedger();
+  const strictReport = serializeStrictReport();
   return {
     afterPhaseReturned,
     afterCausalClosure,
@@ -409,13 +490,7 @@ async function runSeedScenario({
       .map((entry) =>
         `${entry.timeMs} ${entry.kind}:${entry.type}:${entry.from}->${entry.to}`)
       .join('\n'),
-    strictReport: [
-      `mode=${eligibility.ambientSeamMode}`,
-      `violations=${eligibility.ambientSeamViolationCount}`,
-      `substitutions=${eligibility.ambientSeamSubstitutionCount}`,
-      `eligible=${eligibility.deterministicProofEligible}`,
-      `ledger=${ledger.count}`,
-    ].join(' '),
+    strictReport,
     provenanceSnapshot: JSON.stringify(host.provenance()),
     nowMs: scenario.network.now(),
     enqueueEpoch: scenario.network.enqueueEpoch(),
@@ -433,8 +508,14 @@ const runSeedPhaseOneScenario = (options = {}) =>
 const runSeedMessageGroupsScenario = (options = {}) =>
   runSeedScenario({...options, throughMessageGroups: true});
 
+// And on through the real partition phase: C's population.
+const runSeedPartitionsScenario = (options = {}) =>
+  runSeedScenario({...options, throughMessageGroups: true,
+    throughPartitions: true});
+
 export {
   createProductionSeedSimHost,
   runSeedMessageGroupsScenario,
+  runSeedPartitionsScenario,
   runSeedPhaseOneScenario,
 };

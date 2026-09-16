@@ -1,4 +1,6 @@
 
+import {resolveTimeSource} from '../time/time-source.js';
+
 const LOCAL_STR_FUNCTION = 'function';
 
 const DEFAULT_LEADER_ACTIVATION_HOLDOFF_MS = 250;
@@ -13,6 +15,10 @@ class LeaderActivationGate {
   constructor(options = {}) {
     this.holdoffMs = normalizeHoldoffMs(options.holdoffMs);
     this.activationScheduler = options.activationScheduler || null;
+    // The holdoff is a wait the hosting node takes before a new leader
+    // serves, so it runs on that node's clock when there is one. Unsupplied,
+    // it is the host clock exactly as before.
+    this.timeSource = resolveTimeSource(options);
     this.activationHandle = null;
     this.pendingTerm = null;
     this.activatedTerm = null;
@@ -69,7 +75,7 @@ class LeaderActivationGate {
       return true;
     }
 
-    this.timer = setTimeout(runActivation, this.holdoffMs);
+    this.timer = this.timeSource.setTimeout(runActivation, this.holdoffMs);
     if (typeof this.timer?.unref === LOCAL_STR_FUNCTION) {
       this.timer.unref();
     }
@@ -78,7 +84,7 @@ class LeaderActivationGate {
 
   cancel(options = {}) {
     if (this.timer) {
-      clearTimeout(this.timer);
+      this.timeSource.clearTimeout(this.timer);
       this.timer = null;
     }
     if (this.activationHandle &&

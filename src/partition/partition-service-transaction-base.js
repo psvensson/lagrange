@@ -491,8 +491,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       );
       return;
     }
-    this.preparedStateHoldTimer = setInterval(() => {
-      const nowMs = Date.now();
+    // This replica's own sweep cadence, on this replica's clock.
+    this.preparedStateHoldTimer = this.timeSource.setInterval(() => {
+      const nowMs = this.timeSource.now();
       this.enforcePreparedStateHoldTimeouts(nowMs);
       // Leadership durability fitness rides the same sweep cadence: a
       // connection stuck non-durable (zombie transaction, silent adapter
@@ -502,7 +503,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       // Snapshot checkpoint cadence rides this sweep (S6; gates live there).
       void this.runSnapshotCadenceTick?.(nowMs);
     }, this.preparedStateHoldSweepIntervalMs);
-    this.preparedStateHoldTimer.unref();
+    // unref keeps a HOST timer from holding the event loop open; a handle
+    // from a non-host time source has no event loop to release.
+    this.preparedStateHoldTimer.unref?.();
   }
   /**
    * Stop periodic prepared-state hold-timeout enforcement.
@@ -510,7 +513,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    */
   stopPreparedStateHoldTimeoutSweep() {
     if (this.preparedStateHoldTimer) {
-      clearInterval(this.preparedStateHoldTimer);
+      this.timeSource.clearInterval(this.preparedStateHoldTimer);
       this.preparedStateHoldTimer = null;
     }
   }

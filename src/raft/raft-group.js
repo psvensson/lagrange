@@ -27,6 +27,7 @@ import {
   RAFT_GROUP_LOG_MSG,
   RAFT_GROUP_ROLE,
 } from './raft-group-constants.js';
+import {resolveOwnedRandomSource} from '../random/random-source.js';
 
 const LOCAL_STR_SHARED_NODE = 'shared-node';
 
@@ -106,6 +107,7 @@ class RaftGroup extends EventEmitter {
     // The clock the hosting node owns, when it owns one. Consensus timers
     // belong to that node; without one, liferaft keeps its own tick-tock and
     // production is byte-identical.
+    this.randomSource = resolveOwnedRandomSource(options);
     this.timeSource =
       options.timeSource && typeof options.timeSource.now === 'function' ?
         options.timeSource :
@@ -144,6 +146,7 @@ class RaftGroup extends EventEmitter {
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
       activationScheduler: this.leaderActivationScheduler,
+      timeSource: this.timeSource || undefined,
     });
 
     // Raft state
@@ -241,6 +244,9 @@ class RaftGroup extends EventEmitter {
 
     if (this.timeSource) {
       raftOptions.timeSource = this.timeSource;
+    }
+    if (this.randomSource) {
+      raftOptions.randomSource = this.randomSource;
     }
 
     if (logAdapter) {

@@ -172,6 +172,14 @@ class BootstrapService extends EventEmitter {
       typeof options.routerFactory === LOCAL_STR_FUNCTION ?
         options.routerFactory :
         undefined;
+    // The node's randomness, when it owns one. Consensus draws its election
+    // timing from here; unsupplied, liferaft keeps Math.random exactly as
+    // production does.
+    this.randomSource =
+      options.randomSource &&
+      typeof options.randomSource.random === LOCAL_STR_FUNCTION ?
+        options.randomSource :
+        undefined;
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;

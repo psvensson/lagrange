@@ -27,7 +27,7 @@ import {TRANSCRIPT_EVENT} from './formation-sim-host-transcript-events.js';
 // rather than a habit of its callers.
 const TRANSCRIPT_FIELD = Object.freeze([
   'seq', 'virtualTimeMs', 'event', 'nodeId', 'peerNodeId', 'owner', 'phase',
-  'frameKind', 'groupId', 'replicaId', 'actionType',
+  'frameKind', 'groupId', 'partitionId', 'replicaId', 'actionType',
 ]);
 const REQUIRED_FIELD = Object.freeze(['seq', 'virtualTimeMs', 'event']);
 const SEALED_ENTRY_REFUSAL = 'host_transcript_entry_after_seal';

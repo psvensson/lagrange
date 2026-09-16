@@ -43,7 +43,8 @@ import {
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
 } from './message-group-service-runtime-support.js';
-import {resolveTimeSource} from '../time/time-source.js';
+import {resolveOwnedTimeSource} from '../time/time-source.js';
+import {resolveOwnedRandomSource} from '../random/random-source.js';
 
 /**
  * MessageGroupService provides reliable inter-service communication.
@@ -72,17 +73,6 @@ function resolveForwardRepairTimings(options, {suppressionCeilingMs}) {
     forwardTopologyRepairQueryTimeoutMs: resolvePositiveMs(
       options.forwardTopologyRepairQueryTimeoutMs, repair.QUERY_TIMEOUT_MS),
   };
-}
-
-// The clocks a replica reads. A replica that was given one hosts everything
-// on it, including its consensus timers; one that was not falls through to the
-// host exactly as production always has.
-function resolveReplicaClocks(options) {
-  const provided =
-    options.timeSource && typeof options.timeSource.now === 'function' ?
-      options.timeSource :
-      null;
-  return {providedTimeSource: provided, timeSource: resolveTimeSource(options)};
 }
 
 // The node runtime this replica is hosted by. Reaching for the process
@@ -124,11 +114,14 @@ class MessageGroupService extends EventEmitter {
     // One clock for this replica: the ledger's stamps and the turns its
     // coalescing hops take are both statements about the node hosting it.
     // Unsupplied, it is the host clock exactly as before.
-    const clocks = resolveReplicaClocks(options);
+    const clocks = resolveOwnedTimeSource(options);
     // Held separately from the resolved source: a replica that was GIVEN a
     // clock hosts its consensus timers on it, and one that was not leaves
     // liferaft on its own tick-tock exactly as production does.
     this.providedTimeSource = clocks.providedTimeSource;
+    // The node's randomness, when it owns one. Election timing is drawn from
+    // it; unsupplied, liferaft keeps Math.random.
+    this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
     this.now =
       typeof options.now === 'function' ?
@@ -277,10 +270,12 @@ class MessageGroupService extends EventEmitter {
       LeaderActivationScheduler.getShared({
         nodeId: this.nodeId,
         spacingMs: this.leaderActivationNodeSpacingMs,
+        timeSource: this.providedTimeSource || undefined,
       });
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
       activationScheduler: this.leaderActivationScheduler,
+      timeSource: this.providedTimeSource || undefined,
     });
     this.lastLeaderCdcResubscribeTerm = undefined;
     // Defer election start until all replicas are ready

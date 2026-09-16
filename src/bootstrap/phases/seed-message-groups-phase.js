@@ -25,6 +25,8 @@ import {
   SERVICE_LIFECYCLE_STATE,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
+import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
+  '../shared/hosted-replica-authorities.js';
 
 /**
  * Format missing-replica assertion message for bootstrap lifecycle.
@@ -37,18 +39,6 @@ const formatReplicaMissingAtStart = (replicaId) =>
 /**
  * Handles the message-groups phase of seed bootstrap.
  */
-// The node-local authorities a replica hosted here inherits. Both default to
-// undefined, which is what every caller that does not host several runtimes
-// in one process has always passed.
-function resolveNodeLocalReplicaAuthorities(delegates) {
-  return {
-    timeSource: delegates.getTimeSource ? delegates.getTimeSource() : undefined,
-    nodeService: delegates.getNodeService ?
-      delegates.getNodeService() :
-      undefined,
-  };
-}
-
 class SeedMessageGroupsPhase {
   /**
    * @param {Object} options
@@ -155,7 +145,7 @@ class SeedMessageGroupsPhase {
       deferElection: Boolean(options.deferElection),
       // The replica is hosted by this node: this node's clock, and this
       // node's runtime for its node-local cache.
-      ...resolveNodeLocalReplicaAuthorities(d),
+      ...resolveHostedReplicaAuthorities(d),
       bootstrapReadinessState:
         typeof d.getBootstrapReadinessState === 'function' ?
           d.getBootstrapReadinessState() :
@@ -278,7 +268,9 @@ class SeedMessageGroupsPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const config = d.getConfig();
-    const startTime = Date.now();
+    // A wait this node takes, on this node's clock.
+    const now = resolveHostedNodeClock(d);
+    const startTime = now();
     const timeoutMs = config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
     let delay = config.leadershipWaitInitialDelayMs ||
@@ -310,7 +302,7 @@ class SeedMessageGroupsPhase {
       }
     }
 
-    while (Date.now() - startTime < timeoutMs) {
+    while (now() - startTime < timeoutMs) {
       await d.sleep(delay);
       delay = Math.min(delay * backoffMultiplier, maxDelay);
 
@@ -322,7 +314,7 @@ class SeedMessageGroupsPhase {
             BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_LEADER_FOUND, {
               groupId,
               leaderId: replicaId,
-              elapsedMs: Date.now() - startTime,
+              elapsedMs: now() - startTime,
             });
           return;
         }

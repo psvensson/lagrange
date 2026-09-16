@@ -209,6 +209,7 @@ function assignRaftLifecycle(serviceClass) {
         raftProvider: this.raftProvider,
         logger: this.logger,
         timeSource: this.providedTimeSource,
+        randomSource: this.providedRandomSource,
         shouldJoinPeer: (peerId, peerAddress) =>
           this.shouldJoinRaftPeer(peerId, peerAddress),
       });

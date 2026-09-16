@@ -230,6 +230,7 @@ function buildPhaseExecutionDelegates(service) {
           ),
     getTimeSource: () => self.nodeService.getTimeSource(),
     getNodeService: () => self.nodeService,
+    getRandomSource: () => self.randomSource,
     queueBootstrapServiceReplica: (descriptor, options) =>
       self.seedInfrastructurePhase
         .queueBootstrapServiceReplica(

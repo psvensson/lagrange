@@ -74,6 +74,9 @@ test('PartitionService requests managed split evaluation from the local ' +
     isLeader: true,
     partitionId: 'tbl-users-p1',
     tableName: 'users',
+    // A replica carries its own clock; the debounce window is measured on it
+    // rather than read from the host directly.
+    timeSource: {now: () => Date.now()},
     managedSplitWriteActivityDebounceMs: 5000,
     lastManagedSplitWriteActivityAtMs: 0,
     sqlQueryEngine: {
