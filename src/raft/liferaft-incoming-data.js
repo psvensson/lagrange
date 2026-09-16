@@ -660,12 +660,17 @@ function patchIncomingDataListener(raft) {
 
   // The inbound handler is async, so the node has accepted protocol work the
   // moment it returns. Tracking it is what lets a caller ask whether work
-  // already started has finished; it counts no segments.
-  const patchedListener = (packet, write) => {
-    const dispatched = runRaftProtocolActivity(
-      () => dispatchIncomingData(packet, write));
+  // already started has finished; it counts no segments, and it happens
+  // INSIDE the owner's region. The tracker keeps its bookkeeping in promises
+  // of its own, and creating them one statement after runRaftProtocolActivity
+  // returned left every continuation of this same inbound dispatch without the
+  // owner the dispatch had. The boundary has not moved: it is still the
+  // inbound DATA dispatch, and the caller still receives the base library's
+  // own task.
+  const patchedListener = (packet, write) => runRaftProtocolActivity(() => {
+    const dispatched = dispatchIncomingData(packet, write);
     return raft.protocolTasks ? raft.protocolTasks.track(dispatched) : dispatched;
-  };
+  });
 
   raft.on(RAFT_STATE_CHANGE_EVENT, () => {
     inflightBatchByAddress.clear();

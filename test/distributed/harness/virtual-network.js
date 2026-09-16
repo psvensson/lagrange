@@ -39,6 +39,7 @@
  * search layer is unchanged; only this substrate is new.
  */
 
+import {AsyncResource} from 'node:async_hooks';
 import {runOnExecutionNode} from
   '../../../src/diagnostics/formation-turn-attribution.js';
 
@@ -58,6 +59,12 @@ const VIRTUAL_NETWORK_MIN_INTERVAL_MS = 1;
 // The event type carried by timers scheduled through networkTimeSource (a hosted real
 // state machine's VirtualTick), so records/keyOf can distinguish them from scenario timers.
 const VIRTUAL_NETWORK_ADAPTER_TIMER_TYPE = 'adapter-timer';
+// A real setTimeout creates a Timeout async resource when the timer is ARMED
+// and dispatches the callback inside it, which is how async context - the
+// formation owner among it - reaches the callback. Substituting the substrate
+// must substitute the substrate, not silently discard that lineage, so an
+// adapter timer carries its own resource from arm to fire.
+const VIRTUAL_NETWORK_TIMER_RESOURCE = 'LagrangeVirtualAdapterTimer';
 
 const VIRTUAL_NETWORK_EVENT_KIND = Object.freeze({
   MESSAGE: 'message',
@@ -314,6 +321,7 @@ function createVirtualNetwork(options = {}) {
       intervalMs: normalizeDelayMs(ms),
       cancelled: false,
       event: null,
+      resource: new AsyncResource(VIRTUAL_NETWORK_TIMER_RESOURCE),
     };
     adapterTimers.set(timerId, record);
     enqueueAdapterTimer(record, nowMs + record.intervalMs);
@@ -350,7 +358,10 @@ function createVirtualNetwork(options = {}) {
       adapterTimers.delete(record.timerId);
     }
     if (record.fn) {
-      record.fn(...record.args);
+      record.resource.runInAsyncScope(record.fn, undefined, ...record.args);
+    }
+    if (!record.repeating) {
+      record.resource.emitDestroy();
     }
   }
 
@@ -360,6 +371,7 @@ function createVirtualNetwork(options = {}) {
       return;
     }
     record.cancelled = true;
+    record.resource.emitDestroy();
     if (record.event) {
       removeFromQueue(record.event);
     }

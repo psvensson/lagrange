@@ -14,6 +14,12 @@
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {
+  BOOTSTRAP_PHASE,
+} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  StartupPipelineRunner,
+} from '../../src/bootstrap/pipeline/startup-pipeline-runner.js';
 import {RECONCILER_EVENT} from '../../src/service/service-reconciler-contract.js';
 import {
   runOnExecutionNode, runOnSimulationGenerationRoot,
@@ -51,13 +57,13 @@ const PRECOMPOSED_INFRASTRUCTURE_KEYS = Object.freeze([
 ]);
 
 const INFRASTRUCTURE_READY_REASON = 'bootstrap_infrastructure_ready';
-const PHASE_INFRASTRUCTURE = 'infrastructure';
-const PHASE_MESSAGE_GROUPS = 'message_groups';
+const PHASE_INFRASTRUCTURE = BOOTSTRAP_PHASE.INFRASTRUCTURE;
+const PHASE_MESSAGE_GROUPS = BOOTSTRAP_PHASE.MESSAGE_GROUPS;
 const MESSAGE_GROUP_SERVICE_TYPE = 'message_group';
 const PARTITION_SERVICE_TYPE = 'partition';
-const PHASE_PARTITIONS = 'partitions';
-const PHASE_REGISTRATION = 'registration';
-const PHASE_CACHE_HYDRATION = 'cache_hydration';
+const PHASE_PARTITIONS = BOOTSTRAP_PHASE.PARTITIONS;
+const PHASE_REGISTRATION = BOOTSTRAP_PHASE.REGISTRATION;
+const PHASE_CACHE_HYDRATION = BOOTSTRAP_PHASE.CACHE_HYDRATION;
 const BOOTSTRAP_WRITER = 'BootstrapSystemTableWriter';
 const SERVICE_DESCRIPTOR_SERVICE_ID = 'service_id';
 // Far enough past the link delay to let a phase's consequences land, and far
@@ -300,6 +306,18 @@ function createProductionSeedSimHost(environment, options = {}) {
     nodeId, nodeAddress, wsPort,
     nodeService: environment.nodeService, routerFactory, randomSource,
   });
+  // A seed phase is production's work, and production already owns the
+  // boundary it is entered through: StartupPipelineRunner.run() is where
+  // runBootstrapActivity wraps a phase. Calling the phase objects directly
+  // executed the same work one level BELOW that boundary, so the bootstrap
+  // owner was never entered. The host enters through the real runner instead
+  // of declaring an owner itself - the phase set is unchanged, one phase per
+  // call, exactly as the production seed workflow runs them.
+  const startupPipelineRunner = new StartupPipelineRunner({
+    logger: environment.nodeService?.logger ?? console,
+  });
+  const runSeedPhase = (name, run) =>
+    startupPipelineRunner.run({phases: [{name, run}]});
   observeLifecycleOwners(bootstrap, transcript, nodeId);
   observeMessageGroupChain(bootstrap, transcript, nodeId);
   observePartitionChain(bootstrap, transcript, nodeId);
@@ -350,7 +368,8 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_INFRASTRUCTURE_STARTED', {
         nodeId, phase: PHASE_INFRASTRUCTURE,
       });
-      await bootstrap.seedInfrastructurePhase.phaseInfrastructure();
+      await runSeedPhase(PHASE_INFRASTRUCTURE,
+        () => bootstrap.seedInfrastructurePhase.phaseInfrastructure());
       if (bootstrap.messageRouter) {
         observeIdentification(bootstrap.messageRouter, transcript, nodeId);
       }
@@ -390,7 +409,8 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_MESSAGE_GROUPS_STARTED', {
         nodeId, phase: PHASE_MESSAGE_GROUPS,
       });
-      await bootstrap.seedMessageGroupsPhase.phaseMessageGroups();
+      await runSeedPhase(PHASE_MESSAGE_GROUPS,
+        () => bootstrap.seedMessageGroupsPhase.phaseMessageGroups());
       for (const [replicaId, service] of bootstrap.messageGroupServices) {
         if (service?.deferElection !== true) continue;
         transcript.record('MESSAGE_GROUP_ELECTION_DEFERRED', {
@@ -406,7 +426,8 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_PARTITIONS_STARTED', {
         nodeId, phase: PHASE_PARTITIONS,
       });
-      await bootstrap.seedPartitionsPhase.phasePartitions();
+      await runSeedPhase(PHASE_PARTITIONS,
+        () => bootstrap.seedPartitionsPhase.phasePartitions());
       transcript.record('PHASE_PARTITIONS_COMPLETED', {
         nodeId, phase: PHASE_PARTITIONS,
       });
@@ -415,7 +436,8 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_REGISTRATION_STARTED', {
         nodeId, phase: PHASE_REGISTRATION,
       });
-      await bootstrap.seedRegistrationPhase.phaseRegistration();
+      await runSeedPhase(PHASE_REGISTRATION,
+        () => bootstrap.seedRegistrationPhase.phaseRegistration());
       transcript.record('PHASE_REGISTRATION_COMPLETED', {
         nodeId, phase: PHASE_REGISTRATION,
       });
@@ -424,7 +446,8 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_CACHE_HYDRATION_STARTED', {
         nodeId, phase: PHASE_CACHE_HYDRATION,
       });
-      await bootstrap.seedCacheHydrationPhase.phaseCacheHydration();
+      await runSeedPhase(PHASE_CACHE_HYDRATION,
+        () => bootstrap.seedCacheHydrationPhase.phaseCacheHydration());
       if (bootstrap.systemCacheHydrated) {
         transcript.record('SYSTEM_CACHE_HYDRATED', {
           nodeId, owner: 'SeedCacheHydrationPhase',
