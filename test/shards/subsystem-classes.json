@@ -8,7 +8,7 @@
     "cdc-metadata": 56,
     "cli-tooling": 96,
     "control-plane": 188,
-    "convergence-topology": 89,
+    "convergence-topology": 90,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2105,
-  "digest": "fnv1a32-dcdc49a0",
+  "censusSize": 2106,
+  "digest": "fnv1a32-4997eba6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1930,6 +1930,7 @@
     "test/service/service-reconciler.test.js": "services-runtime",
     "test/service/service-source-contract.test.js": "services-runtime",
     "test/service/service-type-adapter.test.js": "services-runtime",
+    "test/simulation/formation-attribution-provenance.test.js": "convergence-topology",
     "test/simulation/formation-sim-attribution-isolation.test.js": "convergence-topology",
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": "convergence-topology",
     "test/simulation/formation-sim-connection-environment.test.js": "convergence-topology",

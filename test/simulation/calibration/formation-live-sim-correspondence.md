@@ -223,3 +223,64 @@ repeatability, host-block independence, and the generation and post-seal
 invariants. A new oracle is captured only after the seed handoff is complete
 and the correspondence census is stable, and it supersedes the old one **for
 positive formation only**.
+
+## Supersession: the 2026-09-13 owner-cost table (recorded 2026-09-16)
+
+```
+status:                     historical_live_calibration
+quantitativeCorrespondence: superseded
+reason:                     production formation-attribution semantics
+                            changed after calibration
+replacement:                pending fresh live calibration
+```
+
+The run itself remains valid historical evidence and none of its evidence
+files is rewritten: `seed-owner-costs.md`, `seed-owner-costs.evidence.json`
+and `seed-owner-costs.report.json` stand as they are, along with the live
+five-node formation behaviour, the watchdog gaps, the readiness, backoff,
+spread and admission observations, the formed timing, the raw logs and the
+CPU profile digest.
+
+What lapses is the QUANTITATIVE table. Two source repairs changed what the
+same code now reports as owned: the protocol task tracker's bookkeeping and
+the seed pipeline's phase completion both keep the lineage of the interaction
+they belong to, so turns this run measured as unattributed are measured as
+their owner now. The table is therefore no longer admissible for:
+
+- sim/live owner-rate ratios
+- per-owner simulator coefficients
+- mechanism ranking
+- the Q1b residual
+- any claim that an owner is under-rate by some factor
+
+No arithmetic adjustment of the old numbers is admissible either. A corrected
+table comes from a new measured run, not from adding an estimate of the lost
+segments to `raft_protocol`.
+
+**Two kinds of repair, and only one of them touches the live run.** The
+simulator-only correspondence repairs - restoring the StartupPipelineRunner
+entry, and carrying an AsyncResource across the virtual adapter timer - do not
+invalidate the historical run at all. A real Node timer already creates its
+async resource when armed, so a live process never lost that lineage; those
+repairs explain why the SIMULATOR was losing what live retains. It is the
+production attribution-semantic repairs that make the table stale. Nothing
+here says that the simulator's newly attributed Raft turns were necessarily
+unattributed in the old live run.
+
+**Fail closed.** `formation-seed-2026-09-13.json` now carries its own
+supersession record and `loadCalibration()` refuses it with
+`calibration_superseded` unless the caller states what it is reading it for.
+The metered oracle states that it uses the table for within-run determinism
+and never for correspondence. Any new consumer has to make the same statement
+in the same place, where a reviewer sees it.
+
+**The replacement run** uses the same external scenario - fresh five-node cold
+formation, same machine class or a documented machine factor, same formation
+verdict, same owner vocabulary, same formed-mark harvesting rule, same
+watchdog and probe evidence - with the repaired attribution implementation,
+and records both the formed-window and the complete/deadline snapshot as
+before. Owner durations, dispatch and handoff counts, turn segments, mean
+microseconds per segment, unattributed and idle are recomputed from the
+measured data. No old number is a target. It should be run after the
+AddressManager frontier is sealed, so a second live calibration is not needed
+if that frontier changes a production formation path.

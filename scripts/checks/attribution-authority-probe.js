@@ -33,6 +33,7 @@ const CENSUS_UNAVAILABLE = 'the provenance census did not produce a reading';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const stringSplit = Function.call.bind(String.prototype.split);
 
 /**
  * Every clause carries the acceptance item it discharges, so the printed
@@ -113,11 +114,16 @@ function evaluateWitnessClause(clause) {
   };
 }
 
+// The census prints one JSON line last. Production logging shares stdout, so
+// the reading is the final line and never the whole stream.
 function readCensus() {
   const result = runNode([CENSUS_SCRIPT, JSON_FLAG]);
   if (result.status !== EXIT_OK) return null;
+  const lines = arrayFilter(stringSplit(result.stdout, NEWLINE),
+    (line) => line.length > ZERO);
+  if (lines.length === ZERO) return null;
   try {
-    return JSON.parse(result.stdout);
+    return JSON.parse(lines[lines.length - 1]);
   } catch {
     return null;
   }

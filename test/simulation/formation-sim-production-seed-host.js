@@ -573,12 +573,35 @@ function beginSeedScenario({nodeId, nodeAddress, wsPort, hostLoad, observer}) {
   };
 }
 
+// The simulator's counterpart of production's "Cluster formed." mark: the
+// last phase has returned, its consequences have settled, write authority has
+// already changed hands, and nothing has been torn down yet.
+function markFormationComplete(scenario, host, onFormationComplete) {
+  const atMs = scenario.network.now();
+  const enqueueEpoch = scenario.network.enqueueEpoch();
+  if (onFormationComplete) {
+    onFormationComplete({
+      atMs,
+      enqueueEpoch,
+      transcript: host.transcript().serialize(),
+      provenance: JSON.stringify(host.provenance()),
+    });
+  }
+  return {atMs, enqueueEpoch};
+}
+
 async function runSeedScenario({
   nodeId = 'node-0',
   nodeAddress = 'ws://127.0.0.1:19960',
   wsPort = 19960,
   hostLoad = null,
   observer = null,
+  // Told once, when formation is complete and before teardown begins. It is
+  // the simulator's counterpart of production's "Cluster formed." mark: the
+  // last phase has returned and its consequences have settled, write
+  // authority has already changed hands, and nothing has yet been torn down.
+  // Nothing production does depends on whether anyone is listening.
+  onFormationComplete,
   throughMessageGroups = false,
   throughPartitions = false,
   throughHandoff = false,
@@ -599,6 +622,7 @@ async function runSeedScenario({
     await host.driveUntilSettled(running, horizonMs);
     await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   }
+  const mark = markFormationComplete(scenario, host, onFormationComplete);
   await host.stop();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   host.seal();
@@ -616,6 +640,8 @@ async function runSeedScenario({
     strictReport,
     provenanceSnapshot: JSON.stringify(host.provenance()),
     nowMs: scenario.network.now(),
+    formationCompleteAtMs: mark.atMs,
+    formationEnqueueEpoch: mark.enqueueEpoch,
     enqueueEpoch: scenario.network.enqueueEpoch(),
     pendingEventCount: scenario.network.pendingEventCount(),
     // Held so a caller can prove the seal holds without re-running anything.

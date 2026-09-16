@@ -20,8 +20,11 @@ const REFUSAL = Object.freeze({
   MISSING: 'calibration_missing',
   INVALID: 'calibration_invalid',
   SOURCE_UNBOUND: 'calibration_source_unbound',
+  SUPERSEDED: 'calibration_superseded',
   UNCALIBRATED_OWNER: 'uncalibrated_owner',
 });
+
+const SUPERSEDED = 'superseded';
 
 const REQUIRED_OWNERS = Object.freeze(Object.values(FORMATION_OWNER)
   .filter((owner) => owner !== FORMATION_OWNER.UNATTRIBUTED));
@@ -35,6 +38,20 @@ class CalibrationRefusal extends Error {
 
 function ownerKey(owner) {
   return `${OWNER_KEY_PREFIX}${owner}`;
+}
+
+// A calibration measured under different attribution semantics is not a
+// calibration for these ones. The run itself stays valid historical evidence;
+// what lapses is the QUANTITATIVE correspondence, because work it measured as
+// unattributed is measured as its owner now. A caller may still read such a
+// file, but only by saying in one sentence what it is using it for - so that
+// consuming it is a visible decision rather than a default.
+function validateSupersession(parsed, acknowledgement) {
+  if (parsed?.supersession?.quantitativeCorrespondence !== SUPERSEDED) return;
+  if (typeof acknowledgement === 'string' && acknowledgement.length > 0) return;
+  throw new CalibrationRefusal(REFUSAL.SUPERSEDED,
+    `${parsed.supersession.reason}; replacement: ` +
+    `${parsed.supersession.replacement}`);
 }
 
 function validateProvenance(source) {
@@ -76,9 +93,12 @@ function validateOwner(owner, entry) {
  * Load and validate the calibration file.
  * @param {string} root repository root
  * @param {string} [relativePath]
+ * @param {string} [acknowledgeSuperseded] - what a superseded calibration is
+ *   being used for, when it is being used at all.
  * @returns {{file: string, owners: Object, source: Object, costTable: Object}}
  */
-function loadCalibration(root, relativePath = CALIBRATION_FILE) {
+function loadCalibration(root, relativePath = CALIBRATION_FILE,
+  acknowledgeSuperseded = null) {
   const file = path.join(root, relativePath);
   if (!fs.existsSync(file)) {
     throw new CalibrationRefusal(REFUSAL.MISSING, `no calibration at ${relativePath}`);
@@ -89,6 +109,7 @@ function loadCalibration(root, relativePath = CALIBRATION_FILE) {
   } catch (error) {
     throw new CalibrationRefusal(REFUSAL.INVALID, `unreadable: ${error.message}`);
   }
+  validateSupersession(parsed, acknowledgeSuperseded);
   validateProvenance(parsed.source);
   const owners = {};
   const spec = {};
@@ -107,6 +128,8 @@ function loadCalibration(root, relativePath = CALIBRATION_FILE) {
   return Object.freeze({
     file: relativePath,
     source: parsed.source,
+    status: parsed.status ?? null,
+    supersession: parsed.supersession ?? null,
     // The share of the calibration window no owner claimed. It is carried as
     // an uncertainty band and never given a cost (owner amendment 7).
     residualPercent: Number(parsed.window?.unattributedPercent),

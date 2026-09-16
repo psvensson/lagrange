@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1842,
+    "unit": 1843,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2105,
-  "digest": "fnv1a32-d8dbfc46",
+  "censusSize": 2106,
+  "digest": "fnv1a32-5d17611b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1913,6 +1913,7 @@
     "test/service/service-reconciler.test.js": "unit",
     "test/service/service-source-contract.test.js": "unit",
     "test/service/service-type-adapter.test.js": "unit",
+    "test/simulation/formation-attribution-provenance.test.js": "unit",
     "test/simulation/formation-sim-attribution-isolation.test.js": "unit",
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": "unit",
     "test/simulation/formation-sim-connection-environment.test.js": "unit",
