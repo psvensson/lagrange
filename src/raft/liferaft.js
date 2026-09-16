@@ -12,6 +12,9 @@ import {
   resolveRaftNowMs,
 } from './liferaft-timing-api.js';
 import {
+  createRemotePeerRepresentation,
+} from './remote-peer-representation.js';
+import {
   FOLLOWER_MATCH_INDEX_STATE,
   LOCAL_STR_FUNCTION,
   patchIncomingDataListener,
@@ -139,6 +142,32 @@ class LifeRaft extends BaseLifeRaft {
   indefinitely(attempt, fn, timeout) {
     return indefinitelyWithProtocolAttribution(() =>
       super.indefinitely(attempt, fn, timeout));
+  }
+
+  /**
+   * The one creation authority for remote-peer representations.
+   *
+   * Base liferaft models a peer by cloning this class, which hands a remote
+   * participant a complete local Raft runtime. Production asks a peer for its
+   * address and its write, and disposes of it at teardown; the rest of that
+   * inherited runtime is capability belonging to a different semantic role,
+   * and it acts on its own initiative - disposal alone made every cloned peer
+   * compute an election timeout and arm a heartbeat.
+   *
+   * So the clone path returns a REPRESENTATION instead. The owner's own write
+   * travels with it, so sends are unchanged and `this.address` is still the
+   * destination; identity and owner-directed disposal are unchanged. What is
+   * gone is the ability to be a local Raft participant at all.
+   * @param {Object} options - liferaft's clone options.
+   * @return {Object} the remote-peer representation.
+   */
+  clone(options = {}) {
+    return createRemotePeerRepresentation({
+      address: options.address,
+      write: typeof options.write === LOCAL_STR_FUNCTION ?
+        options.write :
+        this.write,
+    });
   }
 
   /**

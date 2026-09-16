@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1839,
+    "unit": 1840,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2102,
-  "digest": "fnv1a32-56827c34",
+  "censusSize": 2103,
+  "digest": "fnv1a32-25155481",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1386,6 +1386,7 @@
     "test/raft/raft-replica-base.test.js": "unit",
     "test/raft/raft-timing-utils.test.js": "unit",
     "test/raft/raft-transport-backpressure-mute.test.js": "unit",
+    "test/raft/remote-peer-representation.test.js": "unit",
     "test/raft/replica-voter-readiness.test.js": "unit",
     "test/raft/shared-raft-detection-consistency.property.test.js": "unit",
     "test/raft/snapshot-boundary-observability.test.js": "unit",
