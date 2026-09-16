@@ -25,6 +25,9 @@ function createRegistryWithStubRouter({maxPending = 2} = {}) {
   const warns = [];
   const router = {
     nodeId: 'node-a',
+    // A router carries its own clock; the queue stamps queue-wait and the
+    // warn interval from it rather than reading the host directly.
+    timeSource: {now: () => Date.now()},
     outboundQueues: new Map(),
     outboundQueueMaxConcurrent: 1,
     outboundQueueMaxPending: maxPending,

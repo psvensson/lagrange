@@ -40,11 +40,11 @@ const OUTBOUND_SATURATION_WARN_INTERVAL_MS = 1000;
  * Rejections themselves are unaffected.
  *
  * @param {Object} queue - Per-target outbound queue.
- * @param {number} [nowMs=Date.now()]
+ * @param {number} nowMs - The router clock's reading.
  * @return {{suppressedSinceLastWarn: number}|null} Sample to log, or null
  *   when this occurrence must stay silent.
  */
-function takeOutboundSaturationWarnSample(queue, nowMs = Date.now()) {
+function takeOutboundSaturationWarnSample(queue, nowMs) {
   if (!queue.saturationWarnState) {
     queue.saturationWarnState = {
       lastWarnAtMs: TRANSPORT_NUM.ZERO,
@@ -297,7 +297,7 @@ class OutboundDeliveryRegistryOwner {
             deliverFn,
             resolve,
             reject,
-            queuedAt: Date.now(),
+            queuedAt: this.router.timeSource.now(),
             priority: deliveryPriority,
             deliverySource,
             deliverySourceAdmissionKey,
@@ -361,7 +361,8 @@ class OutboundDeliveryRegistryOwner {
           preemptionError.preemptedByCriticalSource = deliverySource;
           preemptedItem.reject(preemptionError);
           const preemptionWarnSample =
-            takeOutboundSaturationWarnSample(queue);
+            takeOutboundSaturationWarnSample(
+              queue, this.router.timeSource.now());
           if (preemptionWarnSample) {
             this.router.logger.warn(
               MESSAGE_ROUTER_LITERAL
@@ -415,7 +416,8 @@ class OutboundDeliveryRegistryOwner {
             OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
             OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE,
         );
-        const rejectionWarnSample = takeOutboundSaturationWarnSample(queue);
+        const rejectionWarnSample = takeOutboundSaturationWarnSample(
+          queue, this.router.timeSource.now());
         if (rejectionWarnSample) {
           this.router.logger.warn(
             MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
@@ -462,7 +464,7 @@ class OutboundDeliveryRegistryOwner {
         deliverFn,
         resolve,
         reject,
-        queuedAt: Date.now(),
+        queuedAt: this.router.timeSource.now(),
         priority: deliveryPriority,
         deliverySource,
         deliverySourceAdmissionKey:
@@ -515,7 +517,8 @@ class OutboundDeliveryRegistryOwner {
       }
       const queueWaitMs = Math.max(
         TRANSPORT_NUM.ZERO,
-        Date.now() - (item?.queuedAt || Date.now()),
+        this.router.timeSource.now() -
+          (item?.queuedAt || this.router.timeSource.now()),
       );
       recordQueueWaitDuration(queue, queueWaitMs);
       Promise.resolve()

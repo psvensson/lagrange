@@ -147,7 +147,7 @@ class MessageRouterConnectionLifecycleMethods {
       }
       return;
     }
-    clearTimeout(connectionInfo.reconnectTimeout);
+    this.timeSource.clearTimeout(connectionInfo.reconnectTimeout);
     connectionInfo.reconnectTimeout = null;
     connectionInfo.reconnectDueAt = null;
   }
@@ -162,7 +162,7 @@ class MessageRouterConnectionLifecycleMethods {
       return;
     }
     if (connectionInfo.keepalivePongTimer) {
-      clearTimeout(connectionInfo.keepalivePongTimer);
+      this.timeSource.clearTimeout(connectionInfo.keepalivePongTimer);
       connectionInfo.keepalivePongTimer = null;
     }
     if (connectionInfo.keepalivePingId) {
@@ -172,7 +172,7 @@ class MessageRouterConnectionLifecycleMethods {
     if (!connectionInfo.pingInterval) {
       return;
     }
-    clearInterval(connectionInfo.pingInterval);
+    this.timeSource.clearInterval(connectionInfo.pingInterval);
     connectionInfo.pingInterval = null;
   }
   /**
@@ -251,7 +251,7 @@ class MessageRouterConnectionLifecycleMethods {
       lastAckAt: null,
       lastAckTimeoutAt: null,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: this.timeSource.now(),
     };
     this.nodeConnections.set(nodeId, connectionInfo);
     try {
@@ -281,7 +281,7 @@ class MessageRouterConnectionLifecycleMethods {
         let connectTimeout = null;
         const clearConnectTimeout = () => {
           if (connectTimeout) {
-            clearTimeout(connectTimeout);
+            this.timeSource.clearTimeout(connectTimeout);
             connectTimeout = null;
           }
         };
@@ -300,7 +300,7 @@ class MessageRouterConnectionLifecycleMethods {
           30000,
           this.connectTimeoutMs + attempts * 5000,
         );
-        connectTimeout = setTimeout(() => {
+        connectTimeout = this.timeSource.setTimeout(() => {
           const error = new Error(
             `WebSocket connection timeout after ${currentConnectTimeoutMs}ms`,
           );
@@ -509,7 +509,7 @@ class MessageRouterConnectionLifecycleMethods {
       nodeId: this.nodeId,
       nodeAddress: this.advertisedAddress,
       address: this.advertisedAddress,
-      timestamp: Date.now(),
+      timestamp: this.timeSource.now(),
     };
     // Stamp this boot's incarnation so receivers fence stale-incarnation
     // (zombie) identifications. 0 (pre-incarnation) leaves the field OFF the

@@ -372,7 +372,7 @@ class RouterConnectionAuthorityOwner {
     }
     return `${targetNodeId}::${address}`;
   }
-  pruneReconnectAddressSuppressions(nowMs = Date.now()) {
+  pruneReconnectAddressSuppressions(nowMs = this.router.timeSource.now()) {
     for (const [
       key,
       expiresAt,
@@ -389,7 +389,8 @@ class RouterConnectionAuthorityOwner {
     }
     this.pruneReconnectAddressSuppressions();
     const expiresAt = this.router.suppressedReconnectAddresses.get(key);
-    return numberIsFinite(expiresAt) && expiresAt > Date.now();
+    return numberIsFinite(expiresAt) &&
+      expiresAt > this.router.timeSource.now();
   }
   suppressReconnectAddress(targetNodeId, address) {
     const key = this.getReconnectAddressSuppressionKey(targetNodeId, address);
@@ -406,7 +407,7 @@ class RouterConnectionAuthorityOwner {
     }
     this.router.suppressedReconnectAddresses.set(
       key,
-      Date.now() + suppressionMs,
+      this.router.timeSource.now() + suppressionMs,
     );
   }
   clearReconnectAddressSuppression(targetNodeId, address) {

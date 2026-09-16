@@ -128,7 +128,7 @@ class MessageRouterStatsShutdown {
     // dialed bulk sockets plus the token-bucket drain timer.
     this.bulkChannelRegistry?.closeAll();
     for (const [, pending] of this.pendingMessages) {
-      clearTimeout(pending.timeout);
+      this.timeSource.clearTimeout(pending.timeout);
       pending.resolve({
         messageId: pending.messageId,
         acknowledged: false,
@@ -139,7 +139,7 @@ class MessageRouterStatsShutdown {
     this.pendingMessages.clear();
     const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     for (const [, pending] of this.pendingResponses) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
       this.detachPendingResponseAbortSignal(pending);
       pending.reject(shutdownError);
     }
@@ -147,7 +147,7 @@ class MessageRouterStatsShutdown {
     this.retiredPendingResponses.clear();
     this.serviceResponseDispositionCounts.clear();
     for (const [, pending] of this.pendingPings) {
-      clearTimeout(pending.timeout);
+      this.timeSource.clearTimeout(pending.timeout);
       pending.resolve(false);
     }
     this.pendingPings.clear();
@@ -158,11 +158,11 @@ class MessageRouterStatsShutdown {
     const closePromises = [];
     for (const [, connection] of this.nodeConnections) {
       if (connection.pingInterval) {
-        clearInterval(connection.pingInterval);
+        this.timeSource.clearInterval(connection.pingInterval);
         connection.pingInterval = null;
       }
       if (connection.reconnectTimeout) {
-        clearTimeout(connection.reconnectTimeout);
+        this.timeSource.clearTimeout(connection.reconnectTimeout);
         connection.reconnectTimeout = null;
       }
       if (connection.ws) {
@@ -178,9 +178,9 @@ class MessageRouterStatsShutdown {
     if (closePromises.length > TRANSPORT_NUM.ZERO) {
       let timeoutId;
       await Promise.race([Promise.all(closePromises), new Promise((resolve) => {
-        timeoutId = setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
+        timeoutId = this.timeSource.setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
       })]).finally(() => {
-        clearTimeout(timeoutId);
+        this.timeSource.clearTimeout(timeoutId);
       });
     }
     if (this.server) {

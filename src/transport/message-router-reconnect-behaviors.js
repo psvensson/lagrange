@@ -57,7 +57,8 @@ export function resolveReconnectRetryAfterMs(router, connectionInfo) {
   if (!Number.isFinite(dueAt)) {
     return router.reconnectIntervalMs;
   }
-  return Math.max(TRANSPORT_NUM.ZERO, Math.ceil(dueAt - Date.now()));
+  return Math.max(
+    TRANSPORT_NUM.ZERO, Math.ceil(dueAt - router.timeSource.now()));
 }
 
 export function buildConnectionClosedError(
@@ -111,7 +112,8 @@ export function getReconnectAddressSuppressionKey(
   );
 }
 
-export function pruneReconnectAddressSuppressions(router, nowMs = Date.now()) {
+export function pruneReconnectAddressSuppressions(
+  router, nowMs = router.timeSource.now()) {
   router.connectionAuthorityOwner.pruneReconnectAddressSuppressions(nowMs);
 }
 
@@ -214,7 +216,7 @@ export function ensureReconnectOwnerConnection(
     lastAckAt: null,
     lastAckTimeoutAt: null,
     retired: false,
-    createdAt: Date.now(),
+    createdAt: router.timeSource.now(),
   };
   router.nodeConnections.set(targetNodeId, connectionInfo);
   return connectionInfo;
@@ -311,7 +313,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
   }
   if (existing && existing.reconnectAttempts >= router.reconnectMaxAttempts) {
     const lastAttempt = existing.lastAdHocAttemptAtMs || TRANSPORT_NUM.ZERO;
-    const nowMs = Date.now();
+    const nowMs = router.timeSource.now();
     if (nowMs - lastAttempt < AD_HOC_RECONNECT_COOLDOWN_MS) {
       return null;
     }
@@ -511,7 +513,7 @@ export function scheduleRetiredSocketTermination(router, staleWs) {
     router.reconnectIntervalMs,
     router.messageTimeoutMs,
   );
-  const timeout = setTimeout(() => {
+  const timeout = router.timeSource.setTimeout(() => {
     try {
       if (typeof staleWs.terminate === TRANSPORT_TYPEOF.FUNCTION) {
         staleWs.terminate();
@@ -552,7 +554,7 @@ export function quarantineConnectionAfterAckTimeout(
   activeConnection.ackTimeoutStreak =
     (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) +
     TRANSPORT_NUM.ONE;
-  activeConnection.lastAckTimeoutAt = Date.now();
+  activeConnection.lastAckTimeoutAt = router.timeSource.now();
   if (
     activeConnection.ackTimeoutStreak < router.ackTimeoutQuarantineThreshold
   ) {
@@ -588,7 +590,7 @@ export function quarantineConnectionAfterAckTimeout(
     Number.isFinite(livenessWindowMs) &&
     livenessWindowMs > TRANSPORT_NUM.ZERO &&
     lastInboundAt > TRANSPORT_NUM.ZERO &&
-    Date.now() - lastInboundAt < livenessWindowMs
+    router.timeSource.now() - lastInboundAt < livenessWindowMs
   ) {
     router.logger.warn(
       MESSAGE_ROUTER_LITERAL.STRING_QUARANTINE_SKIPPED_PEER_RECENTLY_ALIVE,
@@ -600,7 +602,7 @@ export function quarantineConnectionAfterAckTimeout(
         connectionId: activeConnection.connectionId,
         ackTimeoutStreak: activeConnection.ackTimeoutStreak,
         ackTimeoutQuarantineThreshold: router.ackTimeoutQuarantineThreshold,
-        lastInboundAgoMs: Date.now() - lastInboundAt,
+        lastInboundAgoMs: router.timeSource.now() - lastInboundAt,
         livenessWindowMs,
       },
     );
@@ -639,7 +641,7 @@ export function quarantineConnectionAfterAckTimeout(
     lastAckAt: activeConnection.lastAckAt || null,
     lastAckTimeoutAt: activeConnection.lastAckTimeoutAt || null,
     retired: false,
-    createdAt: Date.now(),
+    createdAt: router.timeSource.now(),
   };
   router.retireConnection(activeConnection);
   activeConnection.state = ConnectionState.CLOSED;

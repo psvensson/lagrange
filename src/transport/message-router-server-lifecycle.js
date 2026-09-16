@@ -183,7 +183,7 @@ class MessageRouterServerLifecycle {
       bootIncarnation: TRANSPORT_NUM.ZERO,
       isIncoming: true,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: this.timeSource.now(),
     };
     this.logger.debug(ROUTER_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,

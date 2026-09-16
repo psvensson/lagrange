@@ -59,6 +59,8 @@ class StartupServiceLifecycleOwner {
       checkIntervalMs: delegates.getCheckIntervalMs?.(),
       maxConcurrentServiceActions:
         delegates.getMaxConcurrentServiceActions?.(),
+      // The reconciler's cadence belongs to the node it reconciles for.
+      timeSource: delegates.getTimeSource?.(),
     });
     await serviceReconciler.start();
     delegates.setServiceReconciler?.(serviceReconciler);

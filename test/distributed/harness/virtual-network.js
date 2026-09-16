@@ -221,7 +221,9 @@ function createVirtualNetwork(options = {}) {
   }
 
   function enqueue(event) {
-    queue.push({seq: seq++, ...event});
+    const queued = {seq: seq++, ...event};
+    queue.push(queued);
+    return queued;
   }
 
   // A message cannot leave before the segment that sent it finishes. The
@@ -328,8 +330,7 @@ function createVirtualNetwork(options = {}) {
       dueAt,
       fn: () => fireAdapterTimer(record),
     };
-    record.event = event;
-    enqueue(event);
+    record.event = enqueue(event);
   }
 
   // Invoked from fireTimer (so the owner-running guard already gated a stopped node out).

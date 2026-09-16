@@ -19,6 +19,7 @@ import {defineMessageRouterHandlerRegistry} from './message-router-handler-regis
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
 import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const {
   ConfigurationManager,
@@ -255,6 +256,11 @@ class MessageRouter extends EventEmitter {
     this.messageCount = TRANSPORT_NUM.ZERO;
     this.isShuttingDown = false;
     this.inProcessTransport = false;
+    // ONE clock for this router. Connection age, queue wait, ping liveness,
+    // reconnect due-times and quarantine windows are all statements about
+    // the same node's time, so they read the same source. The default is the
+    // host clock, exactly as every one of those sites read it before.
+    this.timeSource = resolveTimeSource(options);
     // Physics of the in-process link: endpoint registry and frame transport.
     // The default is the process-global registry this transport has always
     // used; a deterministic simulator injects one whose endpoints are

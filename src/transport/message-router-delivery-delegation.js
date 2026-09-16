@@ -152,7 +152,7 @@ class MessageRouterDeliveryDelegation {
     return getReconnectAddressSuppressionKey(this, targetNodeId, address);
   }
 
-  pruneReconnectAddressSuppressions(nowMs = Date.now()) {
+  pruneReconnectAddressSuppressions(nowMs = this.timeSource.now()) {
     return pruneReconnectAddressSuppressions(this, nowMs);
   }
 

@@ -67,11 +67,17 @@ class SeedInfrastructurePhase {
     // back, because initialize() returns early once initialised. The default
     // is the process singleton, so single-node deployment is unchanged.
     this.nodeService = options.nodeService || NodeService.getInstance();
+    // Passed straight through to MessageRouterSetup: the phase decides that a
+    // router is created, never how its bytes physically move.
+    this.routerFactory = options.routerFactory;
     this.startupServiceLifecycleOwner =
       new StartupServiceLifecycleOwner({
         delegates: {
           getNodeId: () => this.delegates.getNodeId(),
           getPhase: () => this.delegates.getPhase(),
+          // The node runtime is the clock authority for everything this
+          // phase starts on its behalf.
+          getTimeSource: () => this.nodeService.getTimeSource(),
           getServiceLifecycleManager: () =>
             this.delegates.getServiceLifecycleManager(),
           setServiceLifecycleManager: (value) =>
@@ -202,6 +208,7 @@ class SeedInfrastructurePhase {
         bootIncarnation: d.getBootIncarnation?.() || 0,
         // The router resolves addresses from THIS runtime's cache.
         nodeService: this.nodeService,
+        routerFactory: this.routerFactory,
       });
     } catch (error) {
       d.getLogger().error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {

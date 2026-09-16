@@ -317,6 +317,11 @@ function createBulkTransferConnection(context) {
  */
 function createBulkTransferChannelRegistry(options = {}) {
   const logger = options.logger || NO_OP_LOGGER;
+  // The registry belongs to one node's router, so it reads that router's
+  // clock. Unsupplied, it is the host clock, exactly as before.
+  const now = typeof options.now === BULK_CHANNEL_TYPEOF.FUNCTION ?
+    options.now :
+    () => Date.now();
   const maxPendingSends = Number.isFinite(options.maxPendingSends) &&
       options.maxPendingSends > 0 ?
     Math.floor(options.maxPendingSends) :
@@ -403,7 +408,7 @@ function createBulkTransferChannelRegistry(options = {}) {
         nodeAddress: identify.nodeAddress,
         address: identify.nodeAddress,
         channel: ROUTER_IDENTIFY_CHANNEL.BULK,
-        timestamp: Date.now(),
+        timestamp: now(),
       }));
       return attach(nodeId, ws);
     },

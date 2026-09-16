@@ -73,4 +73,48 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
   return sample;
 }
 
-export {sampleNodeHostStatistics};
+/**
+ * Assemble the node-local statistics snapshot a runtime reports as its own.
+ *
+ * Everything here is evidence ABOUT ONE NODE - its uptime against its own
+ * start time, its own service registry, its own thread pool - which is why it
+ * takes the runtime rather than reading any of it from the process.
+ *
+ * @param {Object} runtime - the NodeService.
+ * @param {Object} reading - {nowMs, hostStats, poolStats}.
+ * @return {Object} the node statistics snapshot.
+ */
+function buildNodeStatsSnapshot(runtime, {nowMs, hostStats, poolStats}) {
+  return {
+    nodeId: runtime.nodeId,
+    nodeAddress: runtime.nodeAddress,
+    status: runtime.status,
+    uptime: nowMs - runtime.startTime,
+    timestamp: nowMs,
+    cpu: {
+      count: hostStats.cpuCount,
+      model: hostStats.cpuModel,
+      usagePercent: hostStats.cpuUsagePercent,
+    },
+    memory: {
+      totalBytes: hostStats.totalMemory,
+      usedBytes: hostStats.usedMemory,
+      freeBytes: hostStats.freeMemory,
+      usagePercent: hostStats.memoryUsagePercent,
+    },
+    services: {
+      total: runtime.services.size,
+      running: runtime.getRunningServiceCount(),
+      messageGroups: runtime.messageGroupServices.size,
+    },
+    threadPool: poolStats,
+    platform: {
+      os: hostStats.platform,
+      arch: hostStats.arch,
+      nodeVersion: process.version,
+      hostname: hostStats.hostname,
+    },
+  };
+}
+
+export {buildNodeStatsSnapshot, sampleNodeHostStatistics};

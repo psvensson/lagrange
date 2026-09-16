@@ -175,7 +175,12 @@ class MessageRouterSetup {
     // `channel: bulk` IDENTIFY is adopted from the first frame instead of
     // warn-and-closed (the previously dead S3 link).
     messageRouter.attachBulkChannelRegistry(
-      createBulkTransferChannelRegistry({nodeId}),
+      createBulkTransferChannelRegistry({
+        nodeId,
+        // The registry is this router's, so it reads this router's clock
+        // rather than a second one of its own.
+        now: () => messageRouter.timeSource.now(),
+      }),
     );
 
     // Initialize the router

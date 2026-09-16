@@ -11,7 +11,7 @@ const {
 function buildRecentPeerLivenessEvidence(
   lastInboundAt,
   livenessWindowMs,
-  nowMs = Date.now(),
+  nowMs,
 ) {
   const lastInboundAgoMs = nowMs - lastInboundAt;
   return Object.freeze({
@@ -27,7 +27,8 @@ function buildRecentPeerLivenessEvidence(
   });
 }
 
-function getRouterPeerLivenessEvidence(router, nodeId, nowMs = Date.now()) {
+function getRouterPeerLivenessEvidence(
+  router, nodeId, nowMs = router.timeSource.now()) {
   return buildRecentPeerLivenessEvidence(
     router.getNodeInboundActivityAt(nodeId),
     router.ackTimeoutQuarantineLivenessWindowMs,
@@ -77,7 +78,7 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
   const timeout = timeoutMs ?? router.pingTimeoutMs;
   const initiatingWebSocket = connection.ws;
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
+    const timer = router.timeSource.setTimeout(() => {
       resolvePingTimeout(
         router,
         nodeId,
@@ -94,7 +95,7 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
     router.sendRaw(initiatingWebSocket, {
       type: RouterMessageType.PING,
       pingId,
-      timestamp: Date.now(),
+      timestamp: router.timeSource.now(),
     });
   });
 }

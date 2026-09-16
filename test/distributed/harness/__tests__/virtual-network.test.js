@@ -317,3 +317,40 @@ t.test('run({untilMs}) stops at the boundary and advances the clock; a later run
     t.same(delivered, ['early', 'late'], 'the deferred event fires on the next run');
     t.equal(net.now(), 30, 'the clock advanced to the final delivery');
   });
+
+// A cancelled adapter timer must leave the queue, not merely decline to fire.
+//
+// enqueue() stores a COPY of the event it is handed, so the record's own
+// reference was never the queued object and removeFromQueue found nothing. A
+// cancelled timer therefore stayed pending: it declined to run when its
+// instant arrived, but until then it answered pendingEventCount() and
+// peekNextEventInstant() - the two readings a quiescence driver uses to
+// decide the world is at rest - and firing it still stamped the node's clock
+// and wrote a FIRED record.
+//
+// Nothing in the legacy scenario cancels a timer before it fires, which is
+// why this was latent. A composed production node does: shutting a router or
+// a reconciler down clears intervals that are still far in the future.
+t.test('a cancelled adapter timer leaves the queue', async (t) => {
+  const net = createVirtualNetwork();
+  const fired = [];
+  net.registerNode('a');
+  const clock = net.networkTimeSource('a');
+
+  const keepalive = clock.setInterval(() => fired.push('keepalive'), 30000);
+  const cadence = clock.setTimeout(() => fired.push('cadence'), 3600000);
+  t.equal(net.pendingEventCount(), 2, 'both timers are pending');
+
+  clock.clearInterval(keepalive);
+  t.equal(net.pendingEventCount(), 1,
+    'cancelling removes the timer from the queue, not just from firing');
+  t.equal(net.peekNextEventInstant(), 3600000,
+    'and the next instant is the surviving timer, not the cancelled one');
+
+  clock.clearTimeout(cadence);
+  t.equal(net.pendingEventCount(), 0, 'the world is genuinely at rest');
+  t.equal(net.peekNextEventInstant(), null, 'with no next instant at all');
+
+  net.run();
+  t.same(fired, [], 'and neither cancelled timer ever ran');
+});

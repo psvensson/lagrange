@@ -236,7 +236,8 @@ class MessageRouterPendingResponseLedger {
       return;
     }
     const nowMs = Number(this.nowFn());
-    const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+    const effectiveNowMs =
+      Number.isFinite(nowMs) ? nowMs : this.timeSource.now();
     this.pruneRetiredPendingResponses(effectiveNowMs);
     this.retiredPendingResponses.set(normalizedMessageId, {
       reason:
@@ -323,7 +324,7 @@ class MessageRouterPendingResponseLedger {
     const pending = this.pendingResponses.get(messageId);
     if (!pending) return false;
     if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.detachPendingResponseAbortSignal(pending);
     this.pendingResponses.delete(messageId);
@@ -353,7 +354,7 @@ class MessageRouterPendingResponseLedger {
     if (!pending || pending.timeoutId) {
       return false;
     }
-    const timeoutId = setTimeout(() => {
+    const timeoutId = this.timeSource.setTimeout(() => {
       this.pendingResponses.delete(messageId);
       this.detachPendingResponseAbortSignal(pending);
       this.rememberRetiredPendingResponse(
@@ -384,7 +385,7 @@ class MessageRouterPendingResponseLedger {
       return false;
     }
     if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.detachPendingResponseAbortSignal(pending);
     this.pendingResponses.delete(messageId);
@@ -407,7 +408,7 @@ class MessageRouterPendingResponseLedger {
       return false;
     }
     if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.detachPendingResponseAbortSignal(pending);
     this.pendingResponses.delete(messageId);
@@ -430,7 +431,7 @@ class MessageRouterPendingResponseLedger {
     for (const [messageId, pending] of this.pendingResponses) {
       if (pending.targetNodeId === nodeId) {
         if (pending.timeoutId) {
-          clearTimeout(pending.timeoutId);
+          this.timeSource.clearTimeout(pending.timeoutId);
         }
         this.detachPendingResponseAbortSignal(pending);
         this.pendingResponses.delete(messageId);
@@ -493,7 +494,7 @@ class MessageRouterPendingResponseLedger {
     const {messageId, acknowledged, error, type: _type, ...rest} = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
-      clearTimeout(pending.timeout);
+      this.timeSource.clearTimeout(pending.timeout);
       this.pendingMessages.delete(messageId);
       if (acknowledged) {
         const connection = this.nodeConnections.get(pending.targetNodeId);
@@ -503,7 +504,7 @@ class MessageRouterPendingResponseLedger {
           connection.isSelfConnection !== true
         ) {
           connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
-          connection.lastAckAt = Date.now();
+          connection.lastAckAt = this.timeSource.now();
           connection.lastAckTimeoutAt = null;
         }
         const resolved = {

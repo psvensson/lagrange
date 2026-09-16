@@ -88,7 +88,7 @@ export async function deliverLocal(
     sourceNodeId: router.nodeId,
     targetAddress,
     payload,
-    timestamp: Date.now(),
+    timestamp: router.timeSource.now(),
   };
   try {
     const result = await Promise.resolve(handler(envelope));
@@ -135,7 +135,7 @@ export async function deliver(
   message,
   options = {},
 ) {
-  const deliverStartMs = Date.now();
+  const deliverStartMs = router.timeSource.now();
   assertDeliveryOpen(options.signal);
   if (!router.initialized) {
     await router.initialize();
@@ -191,7 +191,7 @@ export async function deliver(
     const queue = router.outboundQueues.get(targetNodeId);
     const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
     const queueWaitSummary = buildQueueWaitSummary(queue);
-    const durationMs = Date.now() - deliverStartMs;
+    const durationMs = router.timeSource.now() - deliverStartMs;
     const acknowledged = result?.acknowledged === true;
     const trigger = router.getDeliverMetricTrigger(
       targetNodeId,
@@ -252,7 +252,7 @@ export function tryDeliverRaftDirect(
     sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
     sourceNodeId: router.nodeId,
     payload,
-    timestamp: Date.now(),
+    timestamp: router.timeSource.now(),
   };
   router.logger.debug(ROUTER_LOG_MSG.RAFT_DIRECT_DELIVERY, {
     messageId,
@@ -574,7 +574,7 @@ export function sendMessage(
       sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
       sourceNodeId: router.nodeId,
       payload,
-      timestamp: Date.now(),
+      timestamp: router.timeSource.now(),
     };
     const deliveryTimeoutMs =
       Number.isFinite(timeoutMs) && timeoutMs > TRANSPORT_NUM.ZERO ?
@@ -613,7 +613,7 @@ export function sendMessage(
       failBeforeSend();
       return;
     }
-    const timeout = setTimeout(() => {
+    const timeout = router.timeSource.setTimeout(() => {
       router.pendingMessages.delete(messageId);
       const recoveryOwner = router.quarantineConnectionAfterAckTimeout(
         targetNodeId,
@@ -640,13 +640,13 @@ export function sendMessage(
       resolve,
       reject,
       timeout,
-      sentAt: Date.now(),
+      sentAt: router.timeSource.now(),
       targetNodeId,
     });
     try {
       connection.ws.send(JSON.stringify(message));
     } catch (_sendError) {
-      clearTimeout(timeout);
+      router.timeSource.clearTimeout(timeout);
       router.pendingMessages.delete(messageId);
       failBeforeSend();
     }

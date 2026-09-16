@@ -9,14 +9,12 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {ServiceThreadManager, ServiceStatus} from '../threading/service-thread-manager.js';
+import {ServiceStatus} from '../threading/service-thread-manager.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   NodeLifecycleStateMachine,
   NodeState,
 } from './node-lifecycle-state-machine.js';
-import {SystemTableCache} from '../cache/system-table-cache.js';
-import {createReadOnlyCache} from '../cache/read-only-system-table-cache.js';
 import {
   NODE_CONFIG_KEY,
   NODE_LIFECYCLE_EVENT,
@@ -28,23 +26,20 @@ import {
   NODE_SERVICE_SUBSYSTEM,
   NODE_STATUS,
 } from './node-constants.js';
-import {sampleNodeHostStatistics} from './node-host-statistics-sampler.js';
+import {
+  buildNodeStatsSnapshot, sampleNodeHostStatistics,
+} from './node-host-statistics-sampler.js';
+import {
+  ensureNodeLocalSystemTableCache,
+  resolveNodeRuntimeTimeSource,
+  resolveNodeServiceClock,
+  resolveNodeServiceThreadManager,
+} from './node-runtime-local-authorities.js';
 
 /**
  * Node status enumeration.
  */
 const NodeStatus = NODE_STATUS;
-
-function resolveNodeServiceClock(options) {
-  return typeof options.now === 'function' ? options.now : Date.now;
-}
-
-// Resolved at initialize time, not construction: the process singleton is
-// created on demand, and constructing a NodeService must not bring one into
-// existence for a runtime that was handed its own.
-function resolveNodeServiceThreadManager(providedThreadManager) {
-  return providedThreadManager || ServiceThreadManager.getInstance();
-}
 
 /**
  * NodeService is the administrative component present on every node.
@@ -70,6 +65,18 @@ class NodeService extends EventEmitter {
       options.threadManager && typeof options.threadManager === 'object' ?
         options.threadManager :
         null;
+    // This runtime's clock authority, if it was given one. A TimeSource is
+    // what the node's own collaborators (its system-table cache above all)
+    // expect, so the runtime holds the source and derives its own `now` from
+    // it rather than keeping two answers. Production supplies neither and
+    // falls through to the host clock exactly as before.
+    this.providedTimeSource =
+      options.timeSource && typeof options.timeSource.now === 'function' ?
+        options.timeSource :
+        null;
+    this.providedNow = typeof options.now === 'function' ?
+      options.now :
+      this.providedTimeSource && (() => this.providedTimeSource.now());
     this.nodeId = null;
     this.nodeAddress = null;
     this.status = NODE_STATUS.INITIALIZING;
@@ -150,7 +157,7 @@ class NodeService extends EventEmitter {
       this.config.get(NODE_CONFIG_KEY.STATS_COLLECTION_INTERVAL_MS) ||
       NODE_SERVICE_DEFAULT.STATS_COLLECTION_INTERVAL_MS;
     this.nodeStatsSource = options.nodeStatsSource || os;
-    this.now = resolveNodeServiceClock(options);
+    this.now = resolveNodeServiceClock(options, this.providedNow);
     this.lastStats = null;
 
     // Initialize thread manager
@@ -167,6 +174,10 @@ class NodeService extends EventEmitter {
       new NodeLifecycleStateMachine({
         nodeId: this.nodeId,
         initialState: NodeState.STARTING,
+        // The lifecycle machine stamps THIS node's transitions, so it reads
+        // this node's clock. It has always had the seam; nothing threaded the
+        // runtime's answer into it, so it fell back to the host.
+        now: this.now,
       }));
 
     this.startTime = this.now();
@@ -260,7 +271,7 @@ class NodeService extends EventEmitter {
       nodeId: this.nodeId,
       status: ServiceStatus.STARTING,
       config: serviceConfig.config || {},
-      startedAt: Date.now(),
+      startedAt: this.now(),
       lastHealthCheck: null,
       healthStatus: null,
     };
@@ -349,7 +360,7 @@ class NodeService extends EventEmitter {
       return {
         id: serviceId,
         status: ServiceStatus.STOPPED,
-        stoppedAt: Date.now(),
+        stoppedAt: this.now(),
       };
     } catch (error) {
       serviceInfo.status = ServiceStatus.FAILED;
@@ -386,36 +397,9 @@ class NodeService extends EventEmitter {
     // Get pool stats from thread manager
     const poolStats = this.threadManager?.getPoolStats() || {};
 
-    const stats = {
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      status: this.status,
-      uptime: now - this.startTime,
-      timestamp: now,
-      cpu: {
-        count: hostStats.cpuCount,
-        model: hostStats.cpuModel,
-        usagePercent: hostStats.cpuUsagePercent,
-      },
-      memory: {
-        totalBytes: hostStats.totalMemory,
-        usedBytes: hostStats.usedMemory,
-        freeBytes: hostStats.freeMemory,
-        usagePercent: hostStats.memoryUsagePercent,
-      },
-      services: {
-        total: this.services.size,
-        running: this.getRunningServiceCount(),
-        messageGroups: this.messageGroupServices.size,
-      },
-      threadPool: poolStats,
-      platform: {
-        os: hostStats.platform,
-        arch: hostStats.arch,
-        nodeVersion: process.version,
-        hostname: hostStats.hostname,
-      },
-    };
+    const stats = buildNodeStatsSnapshot(this, {
+      nowMs: now, hostStats, poolStats,
+    });
 
     this.lastStats = stats;
     return stats;
@@ -438,7 +422,7 @@ class NodeService extends EventEmitter {
 
     const health = await this.threadManager.checkServiceHealth(serviceId);
 
-    serviceInfo.lastHealthCheck = Date.now();
+    serviceInfo.lastHealthCheck = this.now();
     serviceInfo.healthStatus = health.healthy ?
       NODE_SERVICE_HEALTH_STATUS.HEALTHY :
       NODE_SERVICE_HEALTH_STATUS.UNHEALTHY;
@@ -564,22 +548,35 @@ class NodeService extends EventEmitter {
   }
 
   /**
+   * This node runtime's clock authority. Every node-local collaborator that
+   * stamps or schedules on behalf of this node reads it, so one runtime's
+   * evidence is never another runtime's - or the host's - time.
+   * @return {Object} The node's TimeSource; a real one unless supplied.
+   */
+  getTimeSource() {
+    if (!this._timeSource) {
+      this._timeSource = resolveNodeRuntimeTimeSource(this.providedTimeSource);
+    }
+    return this._timeSource;
+  }
+
+  /**
    * Get the system table cache for this node.
    * Creates the cache on first access (lazy initialization).
    * The cache is a singleton per node - only created once.
    * @return {SystemTableCache} The writable system table cache.
    */
   getSystemTableCache() {
-    if (!this._systemTableCache) {
-      this._systemTableCache = new SystemTableCache();
-      this._readOnlyCache = createReadOnlyCache(this._systemTableCache);
-      if (this.logger) {
-        this.logger.debug(NODE_SERVICE_LOG_MSG.SYSTEM_TABLE_CACHE_CREATED, {
-          nodeId: this.nodeId,
-        });
-      }
+    if (this._systemTableCache) {
+      return this._systemTableCache;
     }
-    return this._systemTableCache;
+    // The cache belongs to THIS node runtime, so it is named after the node
+    // and reads the node's clock.
+    const cache = ensureNodeLocalSystemTableCache(this);
+    this.logger?.debug(NODE_SERVICE_LOG_MSG.SYSTEM_TABLE_CACHE_CREATED, {
+      nodeId: this.nodeId,
+    });
+    return cache;
   }
 
   /**

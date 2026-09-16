@@ -406,7 +406,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
   failPendingMessagesForNode(nodeId, error) {
     for (const [messageId, pending] of this.pendingMessages) {
       if (pending.targetNodeId === nodeId) {
-        clearTimeout(pending.timeout);
+        this.timeSource.clearTimeout(pending.timeout);
         this.pendingMessages.delete(messageId);
         pending.reject(error);
       }

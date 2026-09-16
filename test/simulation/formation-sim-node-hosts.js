@@ -42,6 +42,8 @@ import {
   createNodeEntry,
   createSqlEngineSeamFor,
 } from '../integration/membership-consistency-integration-test-helpers.js';
+import {LEGACY_SIMULATED_NODE_HOST_COMPOSER} from
+  './formation-sim-infrastructure-composition.js';
 
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
 const DRAIN_DELAY_MS = 0;
@@ -65,7 +67,13 @@ const PARTITION_SUFFIX = '-p1';
  * @returns {object} the hosts
  */
 function createSimulatedNodeHosts({network, nodeId, randomSource,
+  compositionRegistry = null,
   chargeDispatch = (id, callback) => callback()}) {
+  // This composer builds the node's cache, CDC service and router host, so it
+  // declares itself where a scenario tracks composition. Scenarios that do
+  // not track it (the legacy formation scenario, which has only this
+  // composer) pass no registry and are unaffected.
+  compositionRegistry?.claim(nodeId, LEGACY_SIMULATED_NODE_HOST_COMPOSER);
   const timeSource = network.networkTimeSource(nodeId);
   const now = () => timeSource.now();
   // The cache-change hop is production's, not the harness's: the notification

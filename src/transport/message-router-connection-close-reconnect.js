@@ -162,13 +162,13 @@ class MessageRouterConnectionCloseReconnect {
         this.reconnectBackoffMultiplier,
         connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
       );
-    connectionInfo.reconnectDueAt = Date.now() + delay;
+    connectionInfo.reconnectDueAt = this.timeSource.now() + delay;
     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,
       attempt: connectionInfo.reconnectAttempts,
       delayMs: delay,
     });
-    connectionInfo.reconnectTimeout = setTimeout(() => {
+    connectionInfo.reconnectTimeout = this.timeSource.setTimeout(() => {
       connectionInfo.reconnectTimeout = null;
       connectionInfo.reconnectDueAt = null;
       if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
@@ -242,7 +242,7 @@ class MessageRouterConnectionCloseReconnect {
     // record can be re-armed after a reconnect; never leak a prior interval.
     this.clearPingInterval(connectionInfo);
     connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
-    connectionInfo.pingInterval = setInterval(() => {
+    connectionInfo.pingInterval = this.timeSource.setInterval(() => {
       if (
         !connectionInfo.ws ||
         connectionInfo.ws.readyState !== WebSocket.OPEN
@@ -255,7 +255,7 @@ class MessageRouterConnectionCloseReconnect {
       // half-open socket to a departed/relocated peer is severed rather than
       // pinned forever (the peer may have restarted on a new address).
       const pingId = uuidv4();
-      const timeout = setTimeout(() => {
+      const timeout = this.timeSource.setTimeout(() => {
         this.pendingPings.delete(pingId);
         this.recordMissedKeepalivePing(connectionInfo);
       }, this.pingTimeoutMs);
@@ -277,10 +277,18 @@ class MessageRouterConnectionCloseReconnect {
       this.sendRaw(connectionInfo.ws, {
         type: RouterMessageType.PING,
         pingId,
-        timestamp: Date.now(),
+        timestamp: this.timeSource.now(),
       });
     }, this.pingIntervalMs);
-    connectionInfo.pingInterval.unref();
+    // unref keeps a HOST timer from holding the event loop open. Every other
+    // timer in this owner already guards it; a handle from a non-host time
+    // source has no event loop to release and offers no unref.
+    if (
+      typeof connectionInfo.pingInterval?.unref ===
+        MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
+    ) {
+      connectionInfo.pingInterval.unref();
+    }
   }
   /**
    * Account an unanswered keepalive ping and sever the connection once the
@@ -311,6 +319,7 @@ class MessageRouterConnectionCloseReconnect {
     const livenessEvidence = buildRecentPeerLivenessEvidence(
       lastInboundAt,
       livenessWindowMs,
+      this.timeSource.now(),
     );
     if (livenessEvidence.recent) {
       this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE, {

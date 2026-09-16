@@ -163,6 +163,15 @@ class BootstrapService extends EventEmitter {
     // itself which runtime represents the node. Default is the process
     // singleton, so single-node deployment is unchanged.
     this.nodeService = options.nodeService || NodeService.getInstance();
+    // The PHYSICAL transport environment this node's router is built in, and
+    // nothing else: a deterministic host substitutes how bytes move, while
+    // every routing decision stays with MessageRouterSetup and the router it
+    // returns. Undefined in production, where the setup owner constructs
+    // today's MessageRouter.
+    this.routerFactory =
+      typeof options.routerFactory === LOCAL_STR_FUNCTION ?
+        options.routerFactory :
+        undefined;
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
@@ -531,6 +540,7 @@ class BootstrapService extends EventEmitter {
     this.seedInfrastructurePhase = new SeedInfrastructurePhase({
       delegates: seedDelegates,
       nodeService: this.nodeService,
+      routerFactory: this.routerFactory,
     });
     this.seedMessageGroupsPhase = new SeedMessageGroupsPhase({
       delegates: seedDelegates,

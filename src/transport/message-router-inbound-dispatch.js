@@ -33,7 +33,7 @@ class MessageRouterInboundDispatch {
    */
   recordNodeInboundActivity(nodeId) {
     if (typeof nodeId === TRANSPORT_TYPEOF.STRING && nodeId.length > TRANSPORT_NUM.ZERO) {
-      this.nodeInboundActivityAt.set(nodeId, Date.now());
+      this.nodeInboundActivityAt.set(nodeId, this.timeSource.now());
     }
   }
   /**
@@ -64,14 +64,14 @@ class MessageRouterInboundDispatch {
         this.sendRaw(ws, {
           type: RouterMessageType.PONG,
           pingId: message.pingId || null,
-          timestamp: Date.now(),
+          timestamp: this.timeSource.now(),
         });
         return;
       }
       if (message.type === RouterMessageType.PONG) {
         if (message.pingId && this.pendingPings.has(message.pingId)) {
           const pending = this.pendingPings.get(message.pingId);
-          clearTimeout(pending.timeout);
+          this.timeSource.clearTimeout(pending.timeout);
           this.pendingPings.delete(message.pingId);
           pending.resolve(true);
         }

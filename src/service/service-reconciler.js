@@ -9,6 +9,7 @@ import {
   SUBSYSTEM,
 } from '../constants/index.js';
 import {ServiceLifecycleManager} from './service-lifecycle-manager.js';
+import {resolveTimeSource} from '../time/time-source.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 import {
   DEFAULT_DECISION_HISTORY_LIMIT,
@@ -104,6 +105,11 @@ class ServiceReconciler extends EventEmitter {
     /** @type {number} */
     this._checkIntervalMs = checkIntervalMs;
 
+    // The reconciler's cadence and its cycle timings are one node's, so they
+    // come from one clock. Unsupplied, that is the host clock exactly as
+    // every site below read it before.
+    this._timeSource = resolveTimeSource(options);
+
     /** @type {number} */
     this._maxConcurrentServiceActions = Math.floor(maxConcurrentServiceActions);
 
@@ -191,7 +197,7 @@ class ServiceReconciler extends EventEmitter {
       return;
     }
 
-    this._interval = setInterval(() => {
+    this._interval = this._timeSource.setInterval(() => {
       this.trigger(LOCAL_STR_INTERVAL);
     }, this._checkIntervalMs);
 
@@ -204,7 +210,7 @@ class ServiceReconciler extends EventEmitter {
    */
   stop() {
     if (this._interval) {
-      clearInterval(this._interval);
+      this._timeSource.clearInterval(this._interval);
       this._interval = null;
     }
 
@@ -315,7 +321,7 @@ class ServiceReconciler extends EventEmitter {
         this._rerunRequested = false;
         this._pendingTrigger = null;
 
-        const cycleStartedAt = Date.now();
+        const cycleStartedAt = this._timeSource.now();
         this._logger.debug(RECONCILER_LOG.CYCLE_START, {
           reason: nextReason,
           metadata: nextMetadata,
@@ -342,7 +348,7 @@ class ServiceReconciler extends EventEmitter {
           metadata: nextMetadata,
         });
 
-        const durationMs = Date.now() - cycleStartedAt;
+        const durationMs = this._timeSource.now() - cycleStartedAt;
         this._stats.cycleCount += LOCAL_NUM_ONE;
         this._stats.cycleSuccessCount += LOCAL_NUM_ONE;
         this._stats.lastCycleDurationMs = durationMs;
@@ -351,7 +357,7 @@ class ServiceReconciler extends EventEmitter {
           this._stats.cycleLatencyMsMax,
           durationMs,
         );
-        this._stats.lastCycleAt = Date.now();
+        this._stats.lastCycleAt = this._timeSource.now();
         this._stats.lastCycleReason = nextReason;
         this._stats.lastError = null;
 
@@ -482,11 +488,11 @@ class ServiceReconciler extends EventEmitter {
    * @private
    */
   async _executeAction(action, context) {
-    const actionStartedAt = Date.now();
+    const actionStartedAt = this._timeSource.now();
     const serviceContext = action.definition || action.replica || {};
     this._stats.actionCount += LOCAL_NUM_ONE;
     const decision = {
-      timestamp: Date.now(),
+      timestamp: this._timeSource.now(),
       reason: context.reason,
       metadata: context.metadata,
       action,
@@ -504,7 +510,7 @@ class ServiceReconciler extends EventEmitter {
       decision.error = error;
     }
 
-    const durationMs = Date.now() - actionStartedAt;
+    const durationMs = this._timeSource.now() - actionStartedAt;
     decision.durationMs = durationMs;
     this._stats.lastActionDurationMs = durationMs;
     this._stats.actionLatencyMsTotal += durationMs;
