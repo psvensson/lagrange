@@ -1,0 +1,41 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-production-interaction-attribution-authority",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Every production semantic interaction in the measured formation proof cone has exactly one authoritative formation owner at its semantic boundary, or is explicitly demonstrated to be outside the semantic-attribution domain. No generic execution mechanism - the execution-node context, VirtualNetwork delivery, a promise continuation, a remote peer representation, the transcript or observer machinery - may become a semantic owner, and no owner may be supplied by a fallback or default. Until that is established, neither the per-owner totals nor the unattributed fraction is admissible evidence about anything.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-attribution-authority.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "counts-are-outputs-never-targets",
+      "statement": "The current owner totals and the ~34% unattributed observation are inputs to classification, never acceptance targets. No measurement may be compared with the live calibration in this quest, no cost coefficient or invocation rate may be tuned, and calibration is not re-run."
+    },
+    {
+      "id": "no-fallback-owner",
+      "statement": "An owner is assigned at a semantic boundary or not at all. owner ?? executionNodeOwner, owner ?? previousOwner, owner ?? raft_protocol and every equivalent catch-all are forbidden, as is wrapping a generic carrier - a VirtualNetwork callback, a microtask continuation, the transcript - to make its contents attributed."
+    },
+    {
+      "id": "outside-domain-requires-proof",
+      "statement": "A segment is OUTSIDE_DOMAIN only when it is shown to perform no production semantic decision or effect before entering a production-owned boundary. Filename is not evidence. A segment that updates Raft state, writes a production cache, mutates membership, plans placement, executes a retry decision or emits a production semantic effect before crossing an owner boundary is PRODUCTION_UNOWNED and is traced to its first missing semantic boundary."
+    },
+    {
+      "id": "dispatch-and-handoff-stay-distinct",
+      "statement": "A dispatch inherited through an async resource is not a fresh semantic owner decision; a handoff through runFormationOwner(B) while A is active is a new semantic boundary and must be visible as one. The census preserves the difference."
+    },
+    {
+      "id": "e-topology-is-sealed",
+      "statement": "F changes none of: the 138 production owner runtimes, the 276 remote peer representations, the peer topology, the peer/runtime abstraction, LifeRaft protocol behaviour, Raft timings, the formation calibration coefficients, VirtualNetwork scheduling, the three unmet reproduction predicates, or AddressManager. Observation is added without altering owner assignment to obtain it."
+    },
+    {
+      "id": "stop-rather-than-account",
+      "statement": "Stop and report if correctness would require making VirtualNetwork, the execution-node context or a peer representation an owner, assigning an owner from a fallback, changing Raft protocol behaviour, changing the 138/276 topology or changing scheduler/clock closure semantics - and equally if one production continuation appears to require two semantic owners at once. That is an ownership-boundary question, not an accounting problem."
+    }
+  ],
+  "sealedAt": "9c3595927287fcd3e3c9595611d272b2533e96e4"
+}

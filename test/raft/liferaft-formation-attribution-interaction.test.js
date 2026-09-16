@@ -1,5 +1,5 @@
 import {AsyncResource} from 'node:async_hooks';
-import {readFileSync} from 'node:fs';
+import {readdirSync, readFileSync} from 'node:fs';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {FORMATION_OWNER} from
@@ -24,6 +24,44 @@ const APPLY_STEP_US = 7;
 const TARGET_ATTEMPT_COUNT = 3;
 const EXPECTED_RETRY_ERRORS = 2;
 const LONG_TIMER_MS = 60_000;
+const ZERO_DEPTH = 0;
+// The neutral parent: the accounting owner normalises an empty store to its
+// own unattributed bucket, so "no ownership transition occurred" is observed
+// as unattributed rather than as an absent value.
+const NEUTRAL_OWNER = FORMATION_OWNER.UNATTRIBUTED;
+const NO_DURATION_US = 0;
+const ONE_HANDOFF = 1;
+// The production consumers that may legitimately enter the interaction
+// contract. The mutation is only authoritative if every exercised one of them
+// resolved the MUTATED module, so the witness names them rather than trusting
+// a single mocked specifier.
+const PROTOCOL_ENTRY_MODULE = Object.freeze({
+  DATA: 'liferaft-incoming-data.js',
+  TIMING: 'liferaft-timing-api.js',
+});
+const APPLY_ENTRY_MODULE = 'liferaft-commit-scheduler.js';
+const SRC_URL = new URL('../../src/', import.meta.url);
+const INTERACTION_SPECIFIER = 'raft-formation-attribution.js';
+// The complete production consumer set. A new consumer added outside this list
+// would be exercised by the host without being covered by the mutation, so the
+// inventory is asserted rather than inspected.
+const INTERACTION_CONSUMERS = Object.freeze([
+  'raft/liferaft-commit-scheduler.js',
+  'raft/liferaft-incoming-data.js',
+  'raft/liferaft-timing-api.js',
+]);
+const OWNER_SAMPLE = Object.freeze({
+  APPEND_READ: 'append-read',
+  APPLY: 'apply',
+  DATA_WRITE: 'data-write',
+  HEARTBEAT: 'heartbeat',
+  RETRY_ATTEMPT: 'retry-attempt',
+});
+const INTERACTION_VARIANT = Object.freeze({
+  APPLY_REVERTED: 'apply',
+  CURRENT: 'current',
+  PROTOCOL_REVERTED: 'protocol',
+});
 const INTERACTION_URL = new URL(
   '../../src/diagnostics/raft-formation-attribution.js',
   import.meta.url,
@@ -170,12 +208,25 @@ class DeterministicTick {
 
 function createClock() {
   let nowUs = 0;
+  const attribution = new FormationTurnAttribution({clock: () => nowUs});
+  const ownerSamples = [];
   return {
     advance: (durationUs) => {
       nowUs += durationUs;
     },
-    attribution: new FormationTurnAttribution({clock: () => nowUs}),
+    attribution,
     now: () => nowUs,
+    ownerSamples,
+    // The owner in force right now, read by the accounting owner's own rule:
+    // the exclusive segment is authoritative while JavaScript runs, and the
+    // async-local store answers only outside an observed segment.
+    sampleOwner: (label) => {
+      const owner = attribution.depth > ZERO_DEPTH ?
+        attribution.activeOwner : attribution.context.getStore();
+      const resolved = typeof owner === 'string' ? owner : NEUTRAL_OWNER;
+      ownerSamples.push({label, owner: resolved});
+      return resolved;
+    },
   };
 }
 
@@ -214,6 +265,7 @@ async function measureHeartbeat(RaftClass = LifeRaft) {
   raft.state = RaftClass.LEADER;
   raft.on('heartbeat', () => {
     heartbeatCount += 1;
+    clock.sampleOwner(OWNER_SAMPLE.HEARTBEAT);
     clock.advance(PROTOCOL_STEP_US);
   });
   clock.attribution.start();
@@ -228,6 +280,7 @@ async function measureHeartbeat(RaftClass = LifeRaft) {
     heartbeatCount,
     rearmedAfterFirst,
     rearmedAfterSecond,
+    ownerSamples: clock.ownerSamples,
     returnedSelf: returned === raft,
     snapshot,
   };
@@ -262,6 +315,7 @@ async function measureIndefinite(RaftClass = LifeRaft) {
   clock.attribution.start();
   const returned = raft.indefinitely((done) => {
     attempts += 1;
+    clock.sampleOwner(OWNER_SAMPLE.RETRY_ATTEMPT);
     clock.advance(ATTEMPT_STEP_US);
     if (attempts === TARGET_ATTEMPT_COUNT) done(null, 'complete');
   }, (value) => {
@@ -279,6 +333,7 @@ async function measureIndefinite(RaftClass = LifeRaft) {
     attempts,
     completion,
     errors,
+    ownerSamples: clock.ownerSamples,
     returnedSelf: returned === raft,
     snapshot,
   };
@@ -297,13 +352,14 @@ async function measureInboundData(RaftClass = LifeRaft) {
       term: raft.term,
       type: 'diagnostic-probe',
     }, (packet) => {
+      clock.sampleOwner(OWNER_SAMPLE.DATA_WRITE);
       clock.advance(DATA_STEP_US);
       resolve(packet);
     });
   });
   const snapshot = clock.attribution.stop();
   raft.end();
-  return {emitted, response, snapshot};
+  return {emitted, ownerSamples: clock.ownerSamples, response, snapshot};
 }
 
 function createApplyLog(clock, appliedCommands) {
@@ -313,6 +369,7 @@ function createApplyLog(clock, appliedCommands) {
       return null;
     },
     async getLastInfo() {
+      clock.sampleOwner(OWNER_SAMPLE.APPEND_READ);
       clock.advance(APPEND_READ_STEP_US);
       return {index: 0, term: 0};
     },
@@ -323,6 +380,7 @@ function createApplyLog(clock, appliedCommands) {
       return this.committedIndex;
     },
     commitAndApplySlice(entries, options) {
+      clock.sampleOwner(OWNER_SAMPLE.APPLY);
       clock.advance(APPLY_STEP_US);
       for (const entry of entries) {
         options.apply(entry.command);
@@ -358,20 +416,58 @@ async function measureApply(RaftClass = LifeRaft) {
   const snapshot = clock.attribution.stop();
   const committedIndex = raft.log.committedIndex;
   raft.end();
-  return {appliedCommands, committedIndex, snapshot};
+  return {
+    appliedCommands,
+    committedIndex,
+    ownerSamples: clock.ownerSamples,
+    snapshot,
+  };
 }
 
-async function loadMutatedInteraction(kind) {
+// Appended to every loaded variant. It records WHICH production consumer
+// resolved THIS module instance, so the witness can prove the mutation
+// reached the whole exercised graph instead of inferring it from a specifier.
+const INTERACTION_RECORDER_SOURCE = `
+const INTERACTION_ENTRIES = [];
+function recordInteractionEntry(name) {
+  const frames = new Error().stack.split('\\n');
+  let caller = 'unknown';
+  for (const frame of frames.slice(2)) {
+    const match = /src\\/raft\\/([a-z0-9-]+\\.js)/u.exec(frame);
+    if (match) {
+      caller = match[1];
+      break;
+    }
+  }
+  INTERACTION_ENTRIES.push({caller, name});
+}
+export {INTERACTION_ENTRIES};
+`;
+
+const PROTOCOL_ENTRY_SIGNATURE = 'function runRaftProtocolActivity(callback) {';
+const APPLY_ENTRY_SIGNATURE = 'function runRaftApplySlice(callback) {';
+const PROTOCOL_ENTRY_INJECTION = `${PROTOCOL_ENTRY_SIGNATURE}
+  recordInteractionEntry('protocol');`;
+const APPLY_ENTRY_INJECTION = `${APPLY_ENTRY_SIGNATURE}
+  recordInteractionEntry('apply');`;
+
+function instrumentInteractionEntries(source) {
+  return source
+    .replace(PROTOCOL_ENTRY_SIGNATURE, PROTOCOL_ENTRY_INJECTION)
+    .replace(APPLY_ENTRY_SIGNATURE, APPLY_ENTRY_INJECTION);
+}
+
+async function loadInteractionVariant(kind) {
   let source = readFileSync(INTERACTION_URL, 'utf8')
     .replace('./formation-diagnostics-contract.js', CONTRACT_URL.href)
     .replace('./formation-turn-attribution.js', ATTRIBUTION_URL.href)
     .replace('./raft-churn-sync-sections.js', SYNC_SECTIONS_URL.href);
-  if (kind === 'protocol') {
+  if (kind === INTERACTION_VARIANT.PROTOCOL_REVERTED) {
     const mapping =
       '  return runFormationOwner(FORMATION_OWNER.RAFT_PROTOCOL, callback);';
     if (!source.includes(mapping)) throw new Error('protocol mapping changed');
     source = source.replace(mapping, '  return callback();');
-  } else if (kind === 'apply') {
+  } else if (kind === INTERACTION_VARIANT.APPLY_REVERTED) {
     const mapping = `  return runFormationOwner(FORMATION_OWNER.RAFT_APPLY, () =>
     trackRaftFollowerCommitApplySlice(callback));`;
     if (!source.includes(mapping)) throw new Error('apply mapping changed');
@@ -379,11 +475,38 @@ async function loadMutatedInteraction(kind) {
       mapping,
       '  return trackRaftFollowerCommitApplySlice(callback);',
     );
-  } else {
-    throw new Error(`unknown interaction mutation: ${kind}`);
+  } else if (kind !== INTERACTION_VARIANT.CURRENT) {
+    throw new Error(`unknown interaction variant: ${kind}`);
   }
+  source = instrumentInteractionEntries(source) + INTERACTION_RECORDER_SOURCE;
   const encoded = Buffer.from(source).toString('base64');
   return import(`data:text/javascript;base64,${encoded}#${kind}`);
+}
+
+function interactionConsumers() {
+  const found = [];
+  for (const entry of readdirSync(SRC_URL, {recursive: true})) {
+    const relative = String(entry).split('\\').join('/');
+    if (!relative.endsWith('.js')) continue;
+    if (relative.endsWith(INTERACTION_SPECIFIER)) continue;
+    const source = readFileSync(new URL(relative, SRC_URL), 'utf8');
+    if (source.includes(INTERACTION_SPECIFIER)) found.push(relative);
+  }
+  return found.sort();
+}
+
+function ownersAt(measured, label) {
+  return measured.ownerSamples
+    .filter((sample) => sample.label === label)
+    .map((sample) => sample.owner);
+}
+
+function callersOf(interaction, name) {
+  const seen = new Set();
+  for (const entry of interaction.INTERACTION_ENTRIES) {
+    if (entry.name === name) seen.add(entry.caller);
+  }
+  return [...seen].sort();
 }
 
 async function loadLifeRaftWithInteraction(tapTest, interaction) {
@@ -430,7 +553,7 @@ async function runInactiveScenario(RaftClass) {
   });
 
   const appliedCommands = [];
-  const inertClock = {advance() {}};
+  const inertClock = {advance() {}, sampleOwner() {}};
   raft.log = createApplyLog(inertClock, appliedCommands);
   await raft.commitEntries([{command: 'set-y', index: 1, term: 0}]);
   const result = {
@@ -477,6 +600,11 @@ test('Raft formation attribution has a registered owner-interaction contract',
     t.ok(mappingEndpoint.owners.includes(
       'src/diagnostics/formation-turn-attribution.js'),
     'mapping endpoint protects changes to the accounting implementation');
+
+    t.same(interactionConsumers(), INTERACTION_CONSUMERS,
+      'the interaction contract has exactly these production consumers: a ' +
+        'fourth one would be exercised by the host without being covered by ' +
+        'the mutation below');
 
     const quest = JSON.parse(readFileSync(QUEST_RECORD_URL, 'utf8'));
     const review = `${quest.legacy.cohesionReview.lines.join('\n')}\n`;
@@ -608,7 +736,7 @@ test('cooperative apply stays distinct and the full window is charged once',
 
 test('inactive attribution leaves normalized Raft behavior unchanged',
   async (t) => {
-    const revertedInteraction = await loadMutatedInteraction('protocol');
+    const revertedInteraction = await loadInteractionVariant(INTERACTION_VARIANT.PROTOCOL_REVERTED);
     const RevertedLifeRaft = await loadLifeRaftWithInteraction(
       t,
       revertedInteraction,
@@ -621,47 +749,118 @@ test('inactive attribution leaves normalized Raft behavior unchanged',
     t.end();
   });
 
-test('reverting either interaction mapping makes owner proofs red',
+test('the loaded interaction variant is the module every exercised path used',
   async (t) => {
-    const protocolMutation = await loadMutatedInteraction('protocol');
+    const protocolVariant = await loadInteractionVariant(
+      INTERACTION_VARIANT.PROTOCOL_REVERTED);
     const ProtocolRevertedLifeRaft = await loadLifeRaftWithInteraction(
-      t,
-      protocolMutation,
-    );
-    const heartbeat = await measureHeartbeat(ProtocolRevertedLifeRaft);
-    const indefinite = await measureIndefinite(ProtocolRevertedLifeRaft);
-    const inbound = await measureInboundData(ProtocolRevertedLifeRaft);
-    t.equal(
-      ownerRow(heartbeat.snapshot, FORMATION_OWNER.RAFT_PROTOCOL).durationUs,
-      0,
-      'removing protocol mapping makes heartbeat ownership red',
-    );
-    t.equal(
-      ownerRow(indefinite.snapshot, FORMATION_OWNER.RAFT_PROTOCOL).durationUs,
-      0,
-      'removing protocol mapping makes indefinite generations red',
-    );
-    t.equal(
-      ownerRow(inbound.snapshot, FORMATION_OWNER.RAFT_PROTOCOL).durationUs,
-      0,
-      'removing protocol mapping makes inbound DATA ownership red',
-    );
+      t, protocolVariant);
+    await measureHeartbeat(ProtocolRevertedLifeRaft);
+    await measureIndefinite(ProtocolRevertedLifeRaft);
+    await measureInboundData(ProtocolRevertedLifeRaft);
+    t.ok(protocolVariant.INTERACTION_ENTRIES.length > ZERO_DEPTH,
+      'production resolved the mutated interaction module: an empty record ' +
+        'means the substitution never applied and every ownership assertion ' +
+        'would be measuring the unmutated mapping instead');
+    t.same(callersOf(protocolVariant, 'protocol'),
+      [PROTOCOL_ENTRY_MODULE.DATA, PROTOCOL_ENTRY_MODULE.TIMING],
+      'both production protocol entries - the timing API and inbound DATA ' +
+        'dispatch - entered the mutated mapping, so no exercised path kept ' +
+        'the original one');
 
-    const applyMutation = await loadMutatedInteraction('apply');
+    const applyVariant = await loadInteractionVariant(
+      INTERACTION_VARIANT.APPLY_REVERTED);
     const ApplyRevertedLifeRaft = await loadLifeRaftWithInteraction(
-      t,
-      applyMutation,
-    );
-    const apply = await measureApply(ApplyRevertedLifeRaft);
+      t, applyVariant);
+    await measureApply(ApplyRevertedLifeRaft);
+    t.same(callersOf(applyVariant, 'apply'), [APPLY_ENTRY_MODULE],
+      'the commit scheduler is the production apply entry, and it entered ' +
+        'the mutated mapping');
+    t.same(callersOf(applyVariant, 'protocol'),
+      [PROTOCOL_ENTRY_MODULE.DATA, PROTOCOL_ENTRY_MODULE.TIMING],
+      'the same run entered protocol from inbound DATA dispatch and from the ' +
+        'constructor heartbeat, so the parent owner in the nested claim ' +
+        'below is production-established');
+    t.end();
+  });
+
+// The falsifier is semantic, not numeric: from a neutral parent, the current
+// mapping must CAUSE an ownership transition that the reverted mapping does
+// not, while the production behaviour underneath is unchanged.
+const PROTOCOL_SCENARIO = Object.freeze([
+  Object.freeze({
+    label: OWNER_SAMPLE.HEARTBEAT,
+    measure: measureHeartbeat,
+    name: 'leader heartbeat',
+  }),
+  Object.freeze({
+    label: OWNER_SAMPLE.RETRY_ATTEMPT,
+    measure: measureIndefinite,
+    name: 'indefinite retry',
+  }),
+  Object.freeze({
+    label: OWNER_SAMPLE.DATA_WRITE,
+    measure: measureInboundData,
+    name: 'inbound DATA dispatch',
+  }),
+]);
+
+test('reverting the protocol mapping removes the ownership transition',
+  async (t) => {
+    const variant = await loadInteractionVariant(
+      INTERACTION_VARIANT.PROTOCOL_REVERTED);
+    const RevertedLifeRaft = await loadLifeRaftWithInteraction(t, variant);
+    for (const scenario of PROTOCOL_SCENARIO) {
+      const current = await scenario.measure(LifeRaft);
+      const reverted = await scenario.measure(RevertedLifeRaft);
+      const currentOwners = ownersAt(current, scenario.label);
+      const revertedOwners = ownersAt(reverted, scenario.label);
+      t.ok(currentOwners.length > ZERO_DEPTH,
+        `${scenario.name}: production work runs inside the window`);
+      t.same(currentOwners,
+        currentOwners.map(() => FORMATION_OWNER.RAFT_PROTOCOL),
+        `${scenario.name}: an unowned parent acquires raft_protocol at the ` +
+          'semantic boundary');
+      t.equal(revertedOwners.length, currentOwners.length,
+        `${scenario.name}: the same production work still executes with the ` +
+          'mapping reverted');
+      t.same(revertedOwners, revertedOwners.map(() => NEUTRAL_OWNER),
+        `${scenario.name}: and that ownership transition does not occur`);
+    }
+    t.end();
+  });
+
+test('reverting the apply mapping leaves apply under the parent protocol owner',
+  async (t) => {
+    const variant = await loadInteractionVariant(
+      INTERACTION_VARIANT.APPLY_REVERTED);
+    const RevertedLifeRaft = await loadLifeRaftWithInteraction(t, variant);
+    const current = await measureApply(LifeRaft);
+    const reverted = await measureApply(RevertedLifeRaft);
+    t.same(ownersAt(current, OWNER_SAMPLE.APPEND_READ),
+      [FORMATION_OWNER.RAFT_PROTOCOL],
+      'the DATA-side parent is raft_protocol in both arms');
+    t.same(ownersAt(reverted, OWNER_SAMPLE.APPEND_READ),
+      [FORMATION_OWNER.RAFT_PROTOCOL],
+      'the apply revert does not disturb the parent boundary');
+    t.same(ownersAt(current, OWNER_SAMPLE.APPLY),
+      [FORMATION_OWNER.RAFT_APPLY],
+      'apply work explicitly hands off from the parent to raft_apply');
     t.equal(
-      ownerRow(apply.snapshot, FORMATION_OWNER.RAFT_APPLY).durationUs,
-      0,
-      'removing apply mapping makes the distinct raft_apply proof red',
-    );
-    t.equal(
-      ownerRow(apply.snapshot, FORMATION_OWNER.RAFT_PROTOCOL).durationUs,
-      APPEND_READ_STEP_US + APPLY_STEP_US,
-      'the reverted apply work is visibly misattributed to protocol',
-    );
+      ownerRow(current.snapshot, FORMATION_OWNER.RAFT_APPLY).handoffCount,
+      ONE_HANDOFF,
+      'and the handoff is counted as a new semantic boundary, not a dispatch');
+    t.same(reverted.appliedCommands, current.appliedCommands,
+      'the same production commands apply either way');
+    t.same(ownersAt(reverted, OWNER_SAMPLE.APPLY),
+      [FORMATION_OWNER.RAFT_PROTOCOL],
+      'with the mapping reverted the apply work remains under the parent ' +
+        'protocol owner');
+    const revertedApply =
+      ownerRow(reverted.snapshot, FORMATION_OWNER.RAFT_APPLY);
+    t.equal(revertedApply.durationUs, NO_DURATION_US,
+      'and raft_apply receives none of the apply duration');
+    t.equal(revertedApply.handoffCount, NO_DURATION_US,
+      'nor any handoff: no second semantic boundary was crossed');
     t.end();
   });
