@@ -100,6 +100,8 @@ const LOG_REPAIRED =
 const LOG_REPAIR_ERROR_PREFIX =
   'Failed to repair propagated cache tables from ' +
   'local partitions';
+import {resolveHostedNodeClock} from
+  '../shared/hosted-replica-authorities.js';
 /**
  * Handles the cache-hydration phase of seed bootstrap.
  */
@@ -149,7 +151,7 @@ class SeedCacheHydrationPhase {
       nodeId: d.getNodeId(),
     });
 
-    const phaseStepStartedAt = Date.now();
+    const phaseStepStartedAt = resolveHostedNodeClock(this.delegates)();
     const result = await this.hydrateFromLocalPartitions(
       systemTableCache,
       leaderMessageGroup,
@@ -157,39 +159,39 @@ class SeedCacheHydrationPhase {
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.HYDRATE_FROM_LOCAL,
-      durationMs: Date.now() - phaseStepStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - phaseStepStartedAt,
     });
 
-    const verifyStartedAt = Date.now();
+    const verifyStartedAt = resolveHostedNodeClock(this.delegates)();
     this.verifyCacheHydration(systemTableCache, result);
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.VERIFY,
-      durationMs: Date.now() - verifyStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - verifyStartedAt,
     });
 
-    const leaderWaitStartedAt = Date.now();
+    const leaderWaitStartedAt = resolveHostedNodeClock(this.delegates)();
     await this.waitForSystemServiceLeadersInCache();
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.WAIT_LEADERS,
-      durationMs: Date.now() - leaderWaitStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - leaderWaitStartedAt,
     });
 
-    const latencyOwnersStartedAt = Date.now();
+    const latencyOwnersStartedAt = resolveHostedNodeClock(this.delegates)();
     this.ensureLatencyTopologyOwners();
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.LATENCY_OWNERS,
-      durationMs: Date.now() - latencyOwnersStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - latencyOwnersStartedAt,
     });
 
-    const subscribeStartedAt = Date.now();
+    const subscribeStartedAt = resolveHostedNodeClock(this.delegates)();
     await this.subscribeToInitialSystemTableCDC();
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.SUBSCRIBE_CDC,
-      durationMs: Date.now() - subscribeStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - subscribeStartedAt,
     });
 
     const cdcReadinessGate =
@@ -197,7 +199,7 @@ class SeedCacheHydrationPhase {
     const cdcReadinessTimeoutMs =
       config.cdcPipelineReadinessTimeoutMs ||
       CDC_PIPELINE_READINESS_TIMEOUT_MS;
-    const readinessStartedAt = Date.now();
+    const readinessStartedAt = resolveHostedNodeClock(this.delegates)();
     await cdcReadinessGate.waitForReady(
       {
         partitionServices: d.getPartitionServices(),
@@ -208,10 +210,12 @@ class SeedCacheHydrationPhase {
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.CDC_READINESS,
-      durationMs: Date.now() - readinessStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - readinessStartedAt,
     });
 
     const cdcQueryEngine = new SQLQueryEngine({
+      // The engine stamps and times for THIS node.
+      nowFn: resolveHostedNodeClock(d),
       systemCache: systemTableCache,
       messageRouter: d.getMessageRouter(),
       nodeId: d.getNodeId(),
@@ -229,13 +233,14 @@ class SeedCacheHydrationPhase {
       systemTableCache,
       transactionCoordinator: cdcQueryEngine.transactionCoordinator,
       logger,
-      now: () => Date.now(),
+      now: () => resolveHostedNodeClock(this.delegates)(),
     });
 
-    const cdcUpgradeStartedAt = Date.now();
+    const cdcUpgradeStartedAt = resolveHostedNodeClock(this.delegates)();
     let cdcIntegrationService = d.getCdcIntegrationService();
     if (!cdcIntegrationService) {
       cdcIntegrationService = CDCIntegrationSetup.createForNormal({
+        timeSource: d.getTimeSource?.(),
         nodeId: d.getNodeId(),
         sqlQueryEngine: cdcQueryEngine,
         systemTableCache,
@@ -266,7 +271,7 @@ class SeedCacheHydrationPhase {
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.CDC_NORMAL_MODE,
-      durationMs: Date.now() - cdcUpgradeStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - cdcUpgradeStartedAt,
     });
 
     const epochManager = d.getEpochManager();
@@ -299,7 +304,7 @@ class SeedCacheHydrationPhase {
         cdcIntegrationService;
     }
 
-    const partitionWiringStartedAt = Date.now();
+    const partitionWiringStartedAt = resolveHostedNodeClock(this.delegates)();
     for (const partition of d.getPartitionServices().values()) {
       partition.systemTableCache = systemTableCache;
       partition.cdcIntegrationService = cdcIntegrationService;
@@ -309,11 +314,11 @@ class SeedCacheHydrationPhase {
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.WIRE_PARTITIONS,
-      durationMs: Date.now() - partitionWiringStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - partitionWiringStartedAt,
       partitionServiceCount: d.getPartitionServices().size,
     });
 
-    const messageGroupWiringStartedAt = Date.now();
+    const messageGroupWiringStartedAt = resolveHostedNodeClock(this.delegates)();
     for (const messageGroup of
       d.getMessageGroupServices().values()) {
       messageGroup.cdcIntegrationService = cdcIntegrationService;
@@ -321,7 +326,7 @@ class SeedCacheHydrationPhase {
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.WIRE_MESSAGE_GROUPS,
-      durationMs: Date.now() - messageGroupWiringStartedAt,
+      durationMs: resolveHostedNodeClock(this.delegates)() - messageGroupWiringStartedAt,
       messageGroupServiceCount:
         d.getMessageGroupServices().size,
     });
@@ -585,6 +590,8 @@ class SeedCacheHydrationPhase {
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
     await waitForStartupConvergence({
       timeoutMs,
+      // A wait this node takes, on this node's clock.
+      now: resolveHostedNodeClock(d),
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(cache, notify),
       ],

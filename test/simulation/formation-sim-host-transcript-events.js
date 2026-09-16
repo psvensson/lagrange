@@ -44,6 +44,16 @@ const TRANSCRIPT_EVENT = Object.freeze({
   DEFERRED_ELECTIONS_STARTED: 'deferred_elections_started',
   PHASE_PARTITIONS_COMPLETED: 'phase_partitions_completed',
 
+  PHASE_REGISTRATION_STARTED: 'phase_registration_started',
+  BOOTSTRAP_MODE_ENTERED: 'bootstrap_mode_entered',
+  PHASE_REGISTRATION_COMPLETED: 'phase_registration_completed',
+
+  PHASE_CACHE_HYDRATION_STARTED: 'phase_cache_hydration_started',
+  SYSTEM_CACHE_HYDRATED: 'system_cache_hydrated',
+  BOOTSTRAP_MODE_EXITED: 'bootstrap_mode_exited',
+  RUNTIME_WRITE_AUTHORITY_ENABLED: 'runtime_write_authority_enabled',
+  PHASE_CACHE_HYDRATION_COMPLETED: 'phase_cache_hydration_completed',
+
   TEARDOWN_STARTED: 'teardown_started',
   VIRTUAL_ENDPOINT_RELEASED: 'virtual_endpoint_released',
   NODE_RUNTIME_STOPPED: 'node_runtime_stopped',

@@ -47,7 +47,15 @@ function applyCommitCommand(raft, command, effects) {
   return raft.emit(RAFT_COMMIT_EVENT, command);
 }
 
-function yieldEventLoopTurn() {
+// The apply loop's turn belongs to the node running it. A node that owns a
+// clock takes it there; otherwise setImmediate stays, because a zero-delay
+// timer is a different event-loop phase and swapping one for the other would
+// change production's ordering rather than its substrate.
+function yieldEventLoopTurn(raft) {
+  const timeSource = raft?.timers?.timeSource || null;
+  if (timeSource) {
+    return new Promise((resolve) => timeSource.setTimeout(resolve, 0));
+  }
   return new Promise((resolve) => setImmediate(resolve));
 }
 
@@ -109,7 +117,7 @@ async function commitAndApplyEntries(raft, entries) {
     runDeferredEffects(raft, effects.afterCommit);
     pending = pendingCommittedEntries(raft.log, pending);
     if (pending.length > 0) {
-      await yieldEventLoopTurn();
+      await yieldEventLoopTurn(raft);
     }
   }
 }

@@ -132,6 +132,9 @@ async function waitForStartupConvergence(options = {}) {
     TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED;
   const timeoutBudget = createTimeoutBudget({
     configuredBudgetMs: timeoutMs,
+    // The gate already resolves the caller's clock; its budget reads the
+    // same one instead of the host.
+    now,
   });
 
   let settled = false;

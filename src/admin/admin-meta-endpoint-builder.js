@@ -29,16 +29,18 @@ const META_ENDPOINT_VERSION = '1.0.0';
  * @param {string} nodeId - The hosting node identifier.
  * @param {string} address - The endpoint address.
  * @param {number} port - The allocated port number.
+ * @param {number} [nowMs] - The publishing node's clock reading.
  * @return {{wasmMetaEndpoint: Object, adminMetaEndpoint: Object}}
  *   Endpoint records for both meta services.
  */
-function buildMetaServiceEndpoints(nodeId, address, port) {
+function buildMetaServiceEndpoints(nodeId, address, port, nowMs) {
   const wasmMetaEndpoint = buildEndpointRecord({
     serviceDefinition: createWasmMetaDefinition(),
     nodeId,
     address,
     port,
     version: META_ENDPOINT_VERSION,
+    nowMs,
   });
 
   const adminMetaEndpoint = buildEndpointRecord({
@@ -47,6 +49,7 @@ function buildMetaServiceEndpoints(nodeId, address, port) {
     address,
     port,
     version: META_ENDPOINT_VERSION,
+    nowMs,
   });
 
   return {wasmMetaEndpoint, adminMetaEndpoint};

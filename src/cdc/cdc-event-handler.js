@@ -31,6 +31,7 @@ import {
   resolveNodeWebSocketAddress,
 } from
   '../transport/node-address-resolution.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 /**
  * CDCEventHandler processes CDC events for system state changes.
@@ -125,6 +126,9 @@ class CDCEventHandler {
 
     this.nodeId = options.nodeId;
     this.eventContext = options.eventContext;
+    // Handler timings describe work on ONE node, so they read that node's
+    // clock. Unsupplied, it is the host clock exactly as before.
+    this.timeSource = resolveTimeSource(options);
 
     // Track previous node states for detecting changes
     this._nodeStates = new Map();
@@ -151,7 +155,7 @@ class CDCEventHandler {
    *   Result object indicating if epoch was applied.
    */
   handleEpochChangeCDC(cdcEvent) {
-    const handlerStartMs = Date.now();
+    const handlerStartMs = this.timeSource.now();
 
     // Validate cdcEvent
     if (!cdcEvent || typeof cdcEvent !== 'object') {
@@ -249,14 +253,14 @@ class CDCEventHandler {
     }
 
     try {
-      const handlerDurationMs = Date.now() - handlerStartMs;
+      const handlerDurationMs = this.timeSource.now() - handlerStartMs;
       const metricsData = {
         tableName: cdcEvent.tableName,
         operation: cdcEvent.operation,
         handlerDurationMs,
       };
       if (cdcEvent.timestamp != null) {
-        metricsData.eventAgeMs = Date.now() - cdcEvent.timestamp;
+        metricsData.eventAgeMs = this.timeSource.now() - cdcEvent.timestamp;
       }
       this.logger.info(METRICS_LOG_TAG.CDC_PROPAGATION, metricsData);
     } catch (metricsErr) {
@@ -295,7 +299,7 @@ class CDCEventHandler {
    *   Result object indicating if the event was processed.
    */
   handleNodeStateCDC(cdcEvent) {
-    const handlerStartMs = Date.now();
+    const handlerStartMs = this.timeSource.now();
 
     // Validate cdcEvent
     if (!cdcEvent || typeof cdcEvent !== 'object') {
@@ -398,7 +402,7 @@ class CDCEventHandler {
       nodeId,
       oldState,
       newState,
-      timestamp: Date.now(),
+      timestamp: this.timeSource.now(),
       source: CDC_SOURCE.CDC,
     });
 
@@ -428,14 +432,14 @@ class CDCEventHandler {
     }
 
     try {
-      const handlerDurationMs = Date.now() - handlerStartMs;
+      const handlerDurationMs = this.timeSource.now() - handlerStartMs;
       const metricsData = {
         tableName: cdcEvent.tableName,
         operation: cdcEvent.operation,
         handlerDurationMs,
       };
       if (cdcEvent.timestamp != null) {
-        metricsData.eventAgeMs = Date.now() - cdcEvent.timestamp;
+        metricsData.eventAgeMs = this.timeSource.now() - cdcEvent.timestamp;
       }
       this.logger.info(
         METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
@@ -601,7 +605,7 @@ class CDCEventHandler {
           nodeId: targetNodeId,
           nodeAddress,
           wsAddress,
-          timestamp: Date.now(),
+          timestamp: this.timeSource.now(),
           source: CDC_SOURCE.CDC,
         });
         return {success: true};

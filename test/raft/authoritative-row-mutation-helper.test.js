@@ -447,10 +447,15 @@ test('AuthoritativeRowMutationHelper - flushes newer pending value after in-flig
     await new Promise((resolve) => setImmediate(resolve));
 
     t.equal(updates.length, 2, 'should perform a follow-up authoritative write');
-    t.same(updates.map((update) => update.data), [
-      {raft_role: 'candidate', updated_at: 100},
-      {raft_role: 'leader', updated_at: 101},
-    ], 'should persist both the in-flight value and the newer pending value in order');
+    t.same(updates.map((update) => update.data.raft_role),
+      ['candidate', 'leader'],
+      'should persist both the in-flight value and the newer pending value in order');
+    // The stamps must ADVANCE, not hit particular numbers. The helper shares
+    // its clock with the gateway it falls back to - one node, one clock - so
+    // an exact value here would assert how many times that clock is read
+    // rather than that the second write is later than the first.
+    t.ok(updates[1].data.updated_at > updates[0].data.updated_at,
+      'and the follow-up write is stamped later than the one it follows');
     t.equal(helper.persistedValue, 'leader', 'should track the latest persisted value');
     t.equal(helper.pendingValue, null, 'should clear the newer pending value after follow-up flush');
   });
@@ -595,17 +600,17 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
 
     t.equal(updateCallCount, 2,
       'a newer queued owner update should converge before the retry timer fires');
-    t.same(writes, [
+    t.same(writes.map((write) => ({
+      whereClause: write.whereClause,
+      leaderNodeId: write.data.leader_node_id,
+    })), [
       {
         whereClause: {
           partition_id: 'p1',
           leader_node_id: 'node-a',
           updated_at: 7,
         },
-        data: {
-          leader_node_id: 'node-b',
-          updated_at: 11,
-        },
+        leaderNodeId: 'node-b',
       },
       {
         whereClause: {
@@ -613,12 +618,14 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
           leader_node_id: 'node-b',
           updated_at: 8,
         },
-        data: {
-          leader_node_id: 'node-c',
-          updated_at: 12,
-        },
+        leaderNodeId: 'node-c',
       },
     ], 'follow-up writes should eventually advance to the latest observed owner row');
+    // The stamps must ADVANCE, not hit particular numbers: the helper shares
+    // its clock with the gateway it falls back to, so an exact value would
+    // assert how many times that clock is read.
+    t.ok(writes[1].data.updated_at > writes[0].data.updated_at,
+      'and each follow-up write is stamped later than the one it follows');
 
     cachedRow.leader_node_id = 'node-c';
     cachedRow.updated_at = 9;

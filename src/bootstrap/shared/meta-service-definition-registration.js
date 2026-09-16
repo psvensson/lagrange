@@ -65,6 +65,7 @@ function buildBuiltInMetaEndpoints(options = {}) {
     options.nodeId,
     options.endpointAddress,
     options.endpointPort,
+    options.nowMs,
   );
   return [wasmMetaEndpoint, adminMetaEndpoint];
 }
@@ -76,10 +77,11 @@ function buildBuiltInMetaEndpoints(options = {}) {
  * a successful runtime start.
  * @param {Object} options
  * @param {Function} options.upsertRow - Async callback (tableName, row) => Promise<void>.
+ * @param {number} [options.nowMs] - The registering node's clock reading.
  * @return {Promise<string[]>} Registered service IDs.
  */
 async function registerBuiltInMetaServiceDefinitions(options = {}) {
-  const {upsertRow} = options;
+  const {upsertRow, nowMs} = options;
   if (typeof upsertRow !== 'function') {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.UPSERT_REQUIRED);
   }
@@ -91,7 +93,7 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
   ];
 
   for (const definition of definitions) {
-    const row = serializeServiceDefinition(definition);
+    const row = serializeServiceDefinition(definition, nowMs);
     await upsertRow(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, row);
   }
 
@@ -111,12 +113,13 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {
   assertEndpointRegistrationOptions(options);
-  const {upsertRow, nodeId} = options;
+  const {upsertRow, nodeId, nowMs} = options;
   const {endpointAddress, endpointPort} = resolveValidatedEndpointBinding(options);
   const endpoints = buildBuiltInMetaEndpoints({
     endpointAddress,
     endpointPort,
     nodeId,
+    nowMs,
   });
   for (const endpoint of endpoints) {
     await upsertRow(SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS, endpoint);

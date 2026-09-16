@@ -69,10 +69,20 @@ function resolveNodeRuntimeTimeSource(providedTimeSource) {
  * @param {Object} runtime - {nodeId, timeSource}.
  * @return {SystemTableCache} the node-local cache.
  */
-function createNodeLocalSystemTableCache({nodeId, timeSource}) {
+function createNodeLocalSystemTableCache({nodeId, timeSource, ownsClock}) {
   return new SystemTableCache({
     timeSource,
     cacheId: `${CACHE_ID_PREFIX}${nodeId}${CACHE_ID_SUFFIX}`,
+    // The cache-change hop is a next turn on THIS node. A node that owns a
+    // clock takes it there; one that does not keeps setImmediate, because a
+    // zero-delay timer is a different event-loop phase and swapping one for
+    // the other would change production's ordering.
+    ...(ownsClock ?
+      {
+        scheduleCacheChangeNotification: (callback) =>
+          timeSource.setTimeout(callback, 0),
+      } :
+      {}),
   });
 }
 
@@ -87,7 +97,9 @@ function ensureNodeLocalSystemTableCache(runtime) {
     return runtime._systemTableCache;
   }
   const cache = createNodeLocalSystemTableCache({
-    nodeId: runtime.nodeId, timeSource: runtime.getTimeSource(),
+    nodeId: runtime.nodeId,
+    timeSource: runtime.getTimeSource(),
+    ownsClock: Boolean(runtime.providedTimeSource),
   });
   runtime._systemTableCache = cache;
   runtime._readOnlyCache = createReadOnlyCache(cache);

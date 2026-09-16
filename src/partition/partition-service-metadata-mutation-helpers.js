@@ -7,6 +7,7 @@ import {
 } from './partition-leader-publication-criticality.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -40,6 +41,17 @@ function hasAuthoritativeReadOwner(gateway) {
   return typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
     PARTITION_SERVICE_LITERAL.FUNCTION ||
     typeof sqlQueryEngine?.executeQuery === PARTITION_SERVICE_LITERAL.FUNCTION;
+}
+
+// The clock a metadata mutation stamps and retries on: the owning replica's
+// when it has one, the host's otherwise.
+function hostedMutationTimers(owner) {
+  const timeSource = resolveTimeSource({timeSource: owner.timeSource});
+  return {
+    now: () => timeSource.now(),
+    setTimeoutFn: (fn, delayMs) => timeSource.setTimeout(fn, delayMs),
+    clearTimeoutFn: (handle) => timeSource.clearTimeout(handle),
+  };
 }
 
 async function readAuthoritativeRoleRow(owner) {
@@ -180,6 +192,10 @@ function buildLeaderNodeMutationDeliveryOptions(
 
 function createRoleMutationHelper(owner) {
   return new AuthoritativeRowMutationHelper({
+    // Mutation stamps and retry deadlines belong to the hosting node. A
+    // reduced harness owner that carries no clock falls back to the host,
+    // exactly as these sites read it before.
+    ...hostedMutationTimers(owner),
     tableName: SYSTEM_TABLE_NAME.SERVICES,
     buildWhereClause: (_role, context = {}) => {
       const whereClause = {service_id: owner.replicaId};
@@ -254,6 +270,10 @@ function createRoleMutationHelper(owner) {
 
 function createLeaderNodeMutationHelper(owner) {
   return new AuthoritativeRowMutationHelper({
+    // Mutation stamps and retry deadlines belong to the hosting node. A
+    // reduced harness owner that carries no clock falls back to the host,
+    // exactly as these sites read it before.
+    ...hostedMutationTimers(owner),
     tableName: SYSTEM_TABLE_NAME.PARTITIONS,
     buildWhereClause: (_leaderNodeId, context = {}) => {
       const whereClause = {[COLUMN.PARTITION_ID]: owner.partitionId};

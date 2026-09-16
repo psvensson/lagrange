@@ -27,12 +27,13 @@ class PartitionRaftLogEntry {
    * @param {number} term - Raft term.
    * @param {number} index - Log index.
    * @param {Object} data - Entry data.
+   * @param {number} [nowMs] - The owning replica's clock reading.
    */
-  constructor(term, index, data) {
+  constructor(term, index, data, nowMs) {
     this.term = term;
     this.index = index;
     this.data = data;
-    this.timestamp = Date.now();
+    this.timestamp = Number.isFinite(nowMs) ? nowMs : Date.now();
   }
 }
 
@@ -300,9 +301,14 @@ class PartitionRaftStorage {
    * @private
    */
   toPartitionEntry(entry) {
-    return entry ?
-      new PartitionRaftLogEntry(entry.term, entry.index, entry.command) :
-      null;
+    if (!entry) {
+      return null;
+    }
+    // The entry is this replica's, so it is stamped on this replica's clock.
+    return new PartitionRaftLogEntry(
+      entry.term, entry.index, entry.command,
+      this.logAdapter?.timeSource?.now(),
+    );
   }
 }
 

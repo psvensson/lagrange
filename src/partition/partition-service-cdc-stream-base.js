@@ -261,7 +261,8 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       resolvePending = resolve;
       rejectPending = reject;
     });
-    const timeoutId = setTimeout(() => {
+    // The commit deadline is this replica's, on this replica's clock.
+    const timeoutId = this.timeSource.setTimeout(() => {
       this.rejectCommittedWrite(
         entryId,
         new Error(`Raft write commit timed out after ${timeoutMs}ms`),
@@ -279,7 +280,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
             null,
       });
     } catch (error) {
-      clearTimeout(timeoutId);
+      this.timeSource.clearTimeout(timeoutId);
       throw error;
     }
     return commitPromise;

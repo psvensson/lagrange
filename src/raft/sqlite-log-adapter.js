@@ -41,6 +41,7 @@ const LOCAL_STR_DELETE_COMMITTED_PREFIX =
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
   'Refused raft log truncation into the committed prefix ' +
   '(committed-entry-loss prevented)';
+import {resolveTimeSource} from '../time/time-source.js';
 
 /**
  * SQLite log adapter for liferaft.
@@ -52,12 +53,16 @@ class SQLiteLogAdapter {
    * @param {Database} db - better-sqlite3 database instance
    * @param {Object} node - The raft node using this log (optional)
    */
-  constructor(db, node = null, logger = null) {
+  constructor(db, node = null, logger = null, timeSource = null) {
     if (!db) {
       throw new Error(LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED);
     }
     this.db = db;
     this.node = node;
+    // The log belongs to one replica on one node, so its append and
+    // acknowledgement stamps read that node's clock. Unsupplied, they read
+    // the host clock exactly as before.
+    this.timeSource = resolveTimeSource({timeSource});
     // Optional logger so the adapter can SURFACE a raft-safety-invariant breach
     // (a truncation reaching into the committed prefix) on the live path; the
     // adapter is constructed without one in reduced harnesses, so all logging
@@ -199,7 +204,7 @@ class SQLiteLogAdapter {
       normalizedEntry.index,
       normalizedEntry.term,
       JSON.stringify(normalizedEntry),
-      Date.now(),
+      this.timeSource.now(),
     );
     return normalizedEntry;
   }
@@ -423,7 +428,7 @@ class SQLiteLogAdapter {
       if (!this.lastFollowerAckAtByAddress) {
         this.lastFollowerAckAtByAddress = new Map();
       }
-      this.lastFollowerAckAtByAddress.set(ackAddress, Date.now());
+      this.lastFollowerAckAtByAddress.set(ackAddress, this.timeSource.now());
     }
     if (!this.isOpen()) {
       return {responses: []};
@@ -626,7 +631,7 @@ class SQLiteLogAdapter {
     this.lastCommittedTruncationBlocked = {
       requestedIndex,
       committedIndex,
-      atMs: Date.now(),
+      atMs: this.timeSource.now(),
     };
     if (this.logger && typeof this.logger.error === 'function') {
       this.logger.error(

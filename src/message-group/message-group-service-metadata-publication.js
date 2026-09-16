@@ -20,6 +20,7 @@ import {
   MESSAGE_GROUP_SERVICE_LITERAL,
   ROLE_PERSIST_ERROR_MSG,
 } from './message-group-service-runtime-support.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 /**
  * Attach metadata-publication readiness predicates and mutation-helper
@@ -27,6 +28,17 @@ import {
  * @param {Function} serviceClass - The MessageGroupService class.
  * @return {void}
  */
+// The clock a metadata mutation stamps and retries on: the owning replica's
+// when it has one, the host's otherwise.
+function hostedMutationTimers(owner) {
+  const timeSource = resolveTimeSource({timeSource: owner.timeSource});
+  return {
+    now: () => timeSource.now(),
+    setTimeoutFn: (fn, delayMs) => timeSource.setTimeout(fn, delayMs),
+    clearTimeoutFn: (handle) => timeSource.clearTimeout(handle),
+  };
+}
+
 function assignMetadataPublication(serviceClass) {
   Object.assign(serviceClass.prototype, {
     isMetadataPublicationReady() {
@@ -112,6 +124,10 @@ function assignMetadataPublication(serviceClass) {
     },
     createRoleMutationHelper() {
       return new AuthoritativeRowMutationHelper({
+        // Mutation stamps and retry deadlines belong to the hosting node. A
+        // reduced harness owner that carries no clock falls back to the
+        // host, exactly as these sites read it before.
+        ...hostedMutationTimers(this),
         tableName: SYSTEM_TABLE_NAME.SERVICES,
         buildWhereClause: (_role, context = {}) => {
           const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
@@ -169,6 +185,10 @@ function assignMetadataPublication(serviceClass) {
     },
     createLeaderNodeMutationHelper() {
       return new AuthoritativeRowMutationHelper({
+        // Mutation stamps and retry deadlines belong to the hosting node. A
+        // reduced harness owner that carries no clock falls back to the
+        // host, exactly as these sites read it before.
+        ...hostedMutationTimers(this),
         tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
         buildWhereClause: (_leaderNodeId, context = {}) => {
           const whereClause = {[COLUMN.GROUP_ID]: this.groupId};

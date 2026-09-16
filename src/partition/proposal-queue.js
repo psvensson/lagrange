@@ -13,6 +13,7 @@ import {
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
 } from './proposal-queue-constants.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 /**
  * Bounded queue for pending Raft write proposals with backpressure.
@@ -34,6 +35,11 @@ class ProposalQueue {
     this.maxCapacity =
       options.maxCapacity || PROPOSAL_QUEUE_DEFAULT.MAX_CAPACITY;
     this.pendingCommits = new Map();
+    // The deadlines in this queue were armed by the owning replica's clock,
+    // so they are cleared on the same one. Clearing a non-host handle through
+    // the global would miss it, or cancel an unrelated host timer that
+    // happened to share its numeric id.
+    this.timeSource = resolveTimeSource(options);
   }
 
   /**
@@ -105,7 +111,7 @@ class ProposalQueue {
       return false;
     }
     if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.pendingCommits.delete(entryId);
     if (pending.resolve) {
@@ -129,7 +135,7 @@ class ProposalQueue {
       return false;
     }
     if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+      this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.pendingCommits.delete(entryId);
     if (pending.reject) {
@@ -148,7 +154,7 @@ class ProposalQueue {
   clear(reason) {
     for (const [entryId, pending] of this.pendingCommits) {
       if (pending.timeoutId) {
-        clearTimeout(pending.timeoutId);
+        this.timeSource.clearTimeout(pending.timeoutId);
       }
       if (pending.reject) {
         pending.reject(new Error(reason));

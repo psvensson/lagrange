@@ -155,6 +155,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     });
 
   engine.queryExecutor = new QueryExecutor({
+    // The executor orders for THIS node, on this node's clock.
+    nowFn: engine.nowFn,
     messageRouter: engine.messageRouter,
     systemCache: engine.systemCache,
     bootstrapTopologySnapshotOwner:
@@ -187,6 +189,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
   engine.transactionCoordinator =
     options.transactionCoordinator ||
     new DistributedTransactionCoordinator({
+      // Transaction epochs and deadlines are this node's.
+      now: engine.nowFn,
       beginParticipant: async (sessionId, partitionId, transactionEpoch) =>
         engine.deliverTransactionOperation(
           sessionId,

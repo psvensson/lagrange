@@ -378,6 +378,8 @@ async (t) => {
     tableId: FIXTURE_TABLE_ID,
     tableName: 'users',
     role: 'leader',
+    // A replica carries its own clock; split replication is stamped on it.
+    timeSource: {now: () => Date.now()},
     splitReplication: null,
     splitReplicationRun: null,
     sqlQueryEngine: {

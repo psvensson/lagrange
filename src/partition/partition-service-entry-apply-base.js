@@ -511,7 +511,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       servingReplicaId: this.replicaId,
       term: this.storage.currentTerm,
       role: this.role,
-      observedAtMs: Date.now(),
+      // The witness records WHEN THIS REPLICA observed its own authority, so
+      // it reads this replica's clock. This is the owner decision the metered
+      // oracle's knownAmbientSiteOutsideProofCone reserved: the site had no
+      // clock owner when it was recorded, and the composed formation reaching
+      // it is what supplied one.
+      observedAtMs: this.timeSource.now(),
     };
   }
   /**
@@ -813,7 +818,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
       pendingEntries: [],
       flushPromise: null,
-      startedAt: Date.now(),
+      startedAt: this.timeSource.now(),
       lastError: null,
     };
     this.splitReplicationRun = this.runSplitReplicationWorkflow().catch(

@@ -70,6 +70,16 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (!options.replicaId) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_REPLICA_ID);
     }
+    // One clock for this replica, on the node hosting it. Held in two parts
+    // for the reason resolveOwnedTimeSource states: stamps read the resolved
+    // source, and only a clock that was actually GIVEN may take over a
+    // collaborator that would otherwise schedule for itself.
+    const clocks = resolveOwnedTimeSource(options);
+    this.providedTimeSource = clocks.providedTimeSource;
+    // The node's randomness, when it owns one. Election timing is drawn from
+    // it; unsupplied, liferaft keeps Math.random.
+    this.providedRandomSource = resolveOwnedRandomSource(options);
+    this.timeSource = clocks.timeSource;
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
@@ -123,6 +133,8 @@ class PartitionServiceCoreBase extends EventEmitter {
         (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           PARTITION_SERVICE_LITERAL.VALUE_25);
     this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
+      // The gateway stamps and times for the node hosting this replica.
+      now: () => this.timeSource.now(),
       nodeId: this.nodeId,
       getSqlQueryEngine: () => this.sqlQueryEngine,
       getCdcIntegrationService: () => this.cdcIntegrationService,
@@ -158,7 +170,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       options.cdcPipelineMetrics || new CDCPipelineMetrics();
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     this.pendingCDCEventDeliveries = /* @__PURE__ */ new Set();
-    this.proposalQueue = new ProposalQueue();
+    this.proposalQueue = new ProposalQueue({timeSource: this.timeSource});
     this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
     this.cdcDelivery = new PartitionCDCDelivery(this);
     this.recentlyAppliedEntryKeys = /* @__PURE__ */ new Set();
@@ -167,16 +179,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();
     this.maxTrackedAppliedEntries =
       PARTITION_SERVICE_DEFAULT.MAX_TRACKED_APPLIED_ENTRIES;
-    // One clock for this replica, on the node hosting it. Held in two parts
-    // for the reason resolveOwnedTimeSource states: stamps read the resolved
-    // source, and only a clock that was actually GIVEN may take over a
-    // collaborator that would otherwise schedule for itself.
-    const clocks = resolveOwnedTimeSource(options);
-    this.providedTimeSource = clocks.providedTimeSource;
-    // The node's randomness, when it owns one. Election timing is drawn from
-    // it; unsupplied, liferaft keeps Math.random.
-    this.providedRandomSource = resolveOwnedRandomSource(options);
-    this.timeSource = clocks.timeSource;
     this.hlcClock = new HLCClockService(this.replicaId, {
       timeSource: this.timeSource,
     });

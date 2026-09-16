@@ -51,6 +51,8 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
       }
 
       const controlPlane = await ControlPlaneSetup.create({
+        // This node's clock, for everything the control plane stamps here.
+        now: () => this.nodeService.getTimeSource().now(),
         dataDir: this.dataDirectoryManager?.isInitialized() ?
           this.dataDirectoryManager.getDataDir() :
           null,

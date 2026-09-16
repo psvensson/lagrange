@@ -107,6 +107,8 @@ class LoggingService {
 
     const configuredLevel =
       options.level || config.get(CONFIG_KEY.LOGGING_LEVEL) || LOGGING_DEFAULT.LEVEL;
+    // The clock log stamps read. Unsupplied, pino's own and the host's.
+    this.now = typeof options.now === 'function' ? options.now : null;
     this.level = this.normalizeLogLevel(configuredLevel);
     this.levelPriority = this.getLogLevelPriority(this.level);
     // Persistence threshold defaults to the console level (unchanged behavior).
@@ -148,7 +150,15 @@ class LoggingService {
         nodeId: this.nodeId,
         pid: process.pid,
       },
-      timestamp: pino.stdTimeFunctions.isoTime,
+      // Log stamps are MEASUREMENT, not decisions, but they are still reads
+      // of a clock. A deterministic host supplies one; without it pino keeps
+      // its own iso-time function exactly as before.
+      // Resolved at CALL time, not at construction: a deterministic host may
+      // supply the clock after the logger exists, and production with no
+      // clock calls pino's own function exactly as before.
+      timestamp: () => (this.now ?
+        `,"time":"${new Date(this.now()).toISOString()}"` :
+        pino.stdTimeFunctions.isoTime()),
     };
 
     // Optional file destination (LAGRANGE_LOG_FILE) for observable runs. Writing
@@ -201,7 +211,7 @@ class LoggingService {
   createLogEntry(level, message, context = {}) {
     return {
       logId: uuidv4(),
-      timestamp: Date.now(),
+      timestamp: this.now ? this.now() : Date.now(),
       level: level.toUpperCase(),
       nodeId: this.nodeId,
       subsystem: context.subsystem || null,
@@ -210,7 +220,7 @@ class LoggingService {
       message,
       traceId: context.traceId || null,
       metadata: context,
-      createdAt: Date.now(),
+      createdAt: this.now ? this.now() : Date.now(),
     };
   }
 

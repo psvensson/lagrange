@@ -265,6 +265,8 @@ class ControlPlaneSetup {
       cdcIntegrationService,
       systemTableCache,
       messageRouter,
+      // The gateway stamps mutations for THIS node, on this node's clock.
+      now: options.now,
     });
     const controlPlaneSystemTableGateway =
       controlPlaneRuntimeBundle.controlPlaneSystemTableGateway;

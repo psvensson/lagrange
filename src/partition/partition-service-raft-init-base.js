@@ -358,7 +358,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       this.db = new Database(this.dbPath);
       this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
       this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
-      this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+      this.logAdapter = new SQLiteLogAdapter(
+        this.db, null, this.logger, this.providedTimeSource);
       this.storage = new PartitionRaftStorage(
         this.db,
         this.partitionId,

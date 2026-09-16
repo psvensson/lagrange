@@ -66,9 +66,11 @@ const DEFAULT_VERSION = '1.0.0';
 function buildEndpointRecord(options) {
   const {serviceDefinition, nodeId, address, port} = options;
   const version = options.version ?? DEFAULT_VERSION;
+  // The record is stamped by the node publishing it.
+  const nowMs = options.nowMs;
   const protocol = serviceDefinition.protocol ??
     WASM_SERVICE_PROTOCOL.WEBSOCKET;
-  const now = Date.now();
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
 
   const metadata = {
     [EP_META.SERVICE_NAME]: serviceDefinition.serviceName,

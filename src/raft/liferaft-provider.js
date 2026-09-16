@@ -65,21 +65,24 @@ function resolveRouteMode(raftNode, options = {}) {
     LIFERAFT_ROUTE_MODE.FORWARD;
 }
 
-function awaitWithTimeout(promise, timeoutMs, timeoutMessage) {
+function awaitWithTimeout(promise, timeoutMs, timeoutMessage, timeSource) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return Promise.resolve(promise);
   }
+  // The deadline belongs to the node proposing, so it is armed on that
+  // node's clock when one is supplied.
+  const timers = timeSource || {setTimeout, clearTimeout};
   return new Promise((resolve, reject) => {
-    const timeoutHandle = setTimeout(() => {
+    const timeoutHandle = timers.setTimeout(() => {
       reject(new Error(timeoutMessage));
     }, timeoutMs);
     Promise.resolve(promise)
       .then((value) => {
-        clearTimeout(timeoutHandle);
+        timers.clearTimeout(timeoutHandle);
         resolve(value);
       })
       .catch((error) => {
-        clearTimeout(timeoutHandle);
+        timers.clearTimeout(timeoutHandle);
         reject(error);
       });
   });
@@ -190,6 +193,7 @@ class LiferaftProvider {
             this.propose(raftNode, command),
             proposeTimeoutMs,
             timeoutMessage,
+            options.timeSource,
           );
         } else {
           if (typeof options.forwardToLeader !== 'function') {
@@ -229,7 +233,8 @@ class LiferaftProvider {
         });
       }
       if (retryDelayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        const timers = options.timeSource || {setTimeout};
+        await new Promise((resolve) => timers.setTimeout(resolve, retryDelayMs));
       }
       attempt += 1;
     }

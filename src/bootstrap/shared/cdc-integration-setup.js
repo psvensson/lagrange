@@ -82,7 +82,7 @@ class CDCIntegrationSetup {
    * bootstrap-direct write phase.
    * @throws {DependencyError} If nodeId is not provided.
    */
-  static createForBootstrap({nodeId, messageRouter}) {
+  static createForBootstrap({nodeId, messageRouter, timeSource}) {
     // Validate required dependencies
     if (!nodeId) {
       throw new DependencyError(LOCAL_STR_CDCINTEGRATIONSETUP, ERROR_MSG.NODE_ID_REQUIRED);
@@ -102,6 +102,10 @@ class CDCIntegrationSetup {
     // setBootstrapMode(), bypassing the SQL query engine.
     const cdcIntegrationService = new CDCIntegrationService({
       nodeId,
+      // The CDC service belongs to this node, so it stamps on this node's
+      // clock rather than constructing a platform clock underneath a
+      // subsystem that was handed a virtual one.
+      timeSource,
     });
     cdcIntegrationService.initialize();
 
@@ -144,6 +148,7 @@ class CDCIntegrationSetup {
     messageRouter,
     cacheMutationTarget = null,
     partitionServicesProvider = null,
+    timeSource = undefined,
   }) {
     // Validate required dependencies
     if (!nodeId) {
@@ -177,6 +182,7 @@ class CDCIntegrationSetup {
       systemTableCache,
       cacheMutationTarget,
       partitionServicesProvider,
+      timeSource,
     });
     cdcIntegrationService.initialize();
     cdcIntegrationService.setSystemTableCache(systemTableCache);

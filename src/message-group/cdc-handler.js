@@ -15,6 +15,7 @@ import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
+import {resolveTimeSource} from '../time/time-source.js';
 
 const LOCAL_STR_CDCHANDLER_REQUIRES_A_SYSTEMTABLECACHE = 'CDCHandler requires a SystemTableCache';
 const LOCAL_NUM_ONE_HUNDRED = 100;
@@ -59,6 +60,7 @@ class CDCEvent {
     timestamp,
     sourcePartition = null,
     causeId = null,
+    receivedAtMs = undefined,
   ) {
     this.tableName = tableName;
     this.operation = operation;
@@ -66,7 +68,8 @@ class CDCEvent {
     this.timestamp = timestamp;
     this.sourcePartition = sourcePartition;
     this.causeId = causeId;
-    this.receivedAt = Date.now();
+    this.receivedAt =
+      Number.isFinite(receivedAtMs) ? receivedAtMs : Date.now();
   }
 
   /**
@@ -136,6 +139,8 @@ class CDCHandler extends EventEmitter {
     }
 
     this.cache = cache;
+    // Receipt is stamped by the node that received the event.
+    this.timeSource = resolveTimeSource(options);
     this.subscriptions = new Set();
     this.eventBuffer = new Map(); // tableName -> array of pending events
     this.lastAppliedTimestamp = new Map(); // tableName -> last applied HLC timestamp
@@ -252,6 +257,7 @@ class CDCHandler extends EventEmitter {
         event.timestamp,
         event.sourcePartition,
         event.causeId,
+        this.timeSource.now(),
       );
 
     const {tableName} = cdcEvent;
@@ -311,6 +317,7 @@ class CDCHandler extends EventEmitter {
         event.timestamp,
         event.sourcePartition,
         event.causeId,
+        this.timeSource.now(),
       );
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;

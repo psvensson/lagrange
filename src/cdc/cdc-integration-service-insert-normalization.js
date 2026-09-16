@@ -92,9 +92,10 @@ export function applySchemaDefaults(schema, rowData) {
  * Apply generic timestamp defaults for inserts when columns exist.
  * @param {Object} schema - Table schema.
  * @param {Object} rowData - Row data to mutate.
+ * @param {number} [nowMs] - The writing node's clock reading.
  */
-export function applyTimestampDefaults(schema, rowData) {
-  const now = Date.now();
+export function applyTimestampDefaults(schema, rowData, nowMs) {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   const columnNames = new Set(schema.columns.map((col) => col.name));
   if (
     columnNames.has(COLUMN.CREATED_AT) &&
@@ -115,9 +116,10 @@ export function applyTimestampDefaults(schema, rowData) {
  * @param {string} tableName - System table name.
  * @param {Object} schema - Table schema.
  * @param {Object} rowData - Row data to mutate.
+ * @param {number} [nowMs] - The writing node's clock reading.
  */
-export function applyTableInsertDefaults(tableName, _schema, rowData) {
-  const now = Date.now();
+export function applyTableInsertDefaults(tableName, _schema, rowData, nowMs) {
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   if (tableName !== SYSTEM_TABLE_NAME.NODES) {
     return;
   }
@@ -184,7 +186,9 @@ export function prepareInsertData(context, tableName, data, options = {}) {
     rowData[idField] = uuidv4();
   }
   applySchemaDefaults(schema, rowData);
-  applyTableInsertDefaults(tableName, schema, rowData);
-  applyTimestampDefaults(schema, rowData);
+  // Row stamps are the WRITING NODE's, so they come from that node's clock.
+  const nowMs = context.timeSource ? context.timeSource.now() : undefined;
+  applyTableInsertDefaults(tableName, schema, rowData, nowMs);
+  applyTimestampDefaults(schema, rowData, nowMs);
   return rowData;
 }

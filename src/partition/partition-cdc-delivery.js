@@ -281,7 +281,8 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       bufferedEvents: this.owner.cdcEventBuffer.size(),
       subscriberCount: this.owner.cdcSubscribers.size,
     });
-    this.owner.cdcBufferReplayTimer = setTimeout(() => {
+    // The replay hop is the owning replica's, on its clock.
+    this.owner.cdcBufferReplayTimer = this.owner.timeSource.setTimeout(() => {
       this.owner.cdcBufferReplayTimer = null;
       this.flushBufferedCDCEvents(reason).catch((error) => {
         incrementBoundedOwnerCounter(
@@ -412,7 +413,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
       this.owner.cdcEventBuffer.recordDelivered(cdcEvent);
       subscriptionState.lastDeliveredSequenceNumber = decoratedEvent.sequenceNumber;
-      subscriptionState.lastDeliveredAt = Date.now();
+      subscriptionState.lastDeliveredAt = this.owner.timeSource.now();
     };
   }
   /**
@@ -467,7 +468,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL :
         PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE;
     let bufferedEventsReplayed = 0;
-    let catchupCompletedAt = Date.now();
+    let catchupCompletedAt = this.owner.timeSource.now();
     let preserveReplayDelayAfterHandshake = false;
     const deliveredIdentities = new Set();
     if (catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL) {
@@ -511,7 +512,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
           replayBufferGrowthCount: this.owner.cdcReplayBufferGrowthCount || 0,
         });
       }
-      catchupCompletedAt = Date.now();
+      catchupCompletedAt = this.owner.timeSource.now();
       nextCatchupCompletedAt = catchupCompletedAt;
       this.owner.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, {
         partitionId: this.owner.partitionId,
@@ -553,7 +554,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         };
         await this.deliverCDCEventToSubscriber(subscriber, replayEvent);
         subscriptionState.lastDeliveredSequenceNumber = replayEvent.sequenceNumber;
-        subscriptionState.lastDeliveredAt = Date.now();
+        subscriptionState.lastDeliveredAt = this.owner.timeSource.now();
         slidingWindowEventsReplayed++;
       }
       if (
@@ -619,7 +620,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     this.owner.cdcSubscriberWrappers.delete(subscriber);
     this.owner.cdcSubscriberStates.delete(subscriber);
     if (this.owner.cdcSubscribers.size === 0 && this.owner.cdcBufferReplayTimer) {
-      clearTimeout(this.owner.cdcBufferReplayTimer);
+      this.owner.timeSource.clearTimeout(this.owner.cdcBufferReplayTimer);
       this.owner.cdcBufferReplayTimer = null;
     }
     this.owner.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_REMOVED, {

@@ -56,6 +56,9 @@ const PHASE_MESSAGE_GROUPS = 'message_groups';
 const MESSAGE_GROUP_SERVICE_TYPE = 'message_group';
 const PARTITION_SERVICE_TYPE = 'partition';
 const PHASE_PARTITIONS = 'partitions';
+const PHASE_REGISTRATION = 'registration';
+const PHASE_CACHE_HYDRATION = 'cache_hydration';
+const BOOTSTRAP_WRITER = 'BootstrapSystemTableWriter';
 const SERVICE_DESCRIPTOR_SERVICE_ID = 'service_id';
 // Far enough past the link delay to let a phase's consequences land, and far
 // short of the keepalive and reconcile cadences a composed node arms.
@@ -213,6 +216,53 @@ function observedGroupId(bootstrap, replicaId) {
   return service?.groupId ?? null;
 }
 
+// Write authority changes hands exactly once, and the transcript records the
+// two halves of the handover separately: the bootstrap writer is DISABLED and
+// only then is the runtime writer ENABLED. Observed by wrapping the writer
+// field production already assigns and the enable/disable each writer already
+// has, so there is no interval in which the host has to infer who was
+// writing.
+function observeWriteAuthority(bootstrap, transcript, nodeId) {
+  let held = bootstrap.systemTableWriter;
+  const observeWriter = (writer) => {
+    if (!writer || writer.__hostObserved) return writer;
+    const name = writer.constructor.name;
+    const isBootstrapWriter = name === BOOTSTRAP_WRITER;
+    for (const [method, event] of [
+      ['enable', isBootstrapWriter ? 'BOOTSTRAP_MODE_ENTERED' : null],
+      ['disable', isBootstrapWriter ? 'BOOTSTRAP_MODE_EXITED' : null],
+    ]) {
+      if (!event || typeof writer[method] !== 'function') continue;
+      const real = writer[method].bind(writer);
+      Object.defineProperty(writer, method, {
+        configurable: true,
+        value: (...args) => {
+          const result = real(...args);
+          transcript.record(event, {nodeId, writer: name});
+          return result;
+        },
+      });
+    }
+    writer.__hostObserved = true;
+    return writer;
+  };
+  Object.defineProperty(bootstrap, 'systemTableWriter', {
+    configurable: true,
+    get: () => held,
+    set: (value) => {
+      held = observeWriter(value);
+      // Production enables the runtime writer BEFORE installing it, so the
+      // enable itself is preparation. Authority changes hands at the
+      // INSTALL, because that is the field every consumer reads.
+      if (value && value.constructor.name !== BOOTSTRAP_WRITER) {
+        transcript.record('RUNTIME_WRITE_AUTHORITY_ENABLED', {
+          nodeId, writer: value.constructor.name,
+        });
+      }
+    },
+  });
+}
+
 // Protocol meaning is the router's. The transport environment reports that a
 // frame moved; that a frame WAS an IDENTIFY is decided here, at the router's
 // own control boundary, from the event it already emits.
@@ -253,6 +303,7 @@ function createProductionSeedSimHost(environment, options = {}) {
   observeLifecycleOwners(bootstrap, transcript, nodeId);
   observeMessageGroupChain(bootstrap, transcript, nodeId);
   observePartitionChain(bootstrap, transcript, nodeId);
+  observeWriteAuthority(bootstrap, transcript, nodeId);
   transcript.record('HOST_CREATED', {nodeId, owner: 'BootstrapService'});
 
   // The scenario's causal-closure authority, not a second one. The host never
@@ -360,6 +411,29 @@ function createProductionSeedSimHost(environment, options = {}) {
         nodeId, phase: PHASE_PARTITIONS,
       });
     },
+    startPhaseRegistration: async () => {
+      transcript.record('PHASE_REGISTRATION_STARTED', {
+        nodeId, phase: PHASE_REGISTRATION,
+      });
+      await bootstrap.seedRegistrationPhase.phaseRegistration();
+      transcript.record('PHASE_REGISTRATION_COMPLETED', {
+        nodeId, phase: PHASE_REGISTRATION,
+      });
+    },
+    startPhaseCacheHydration: async () => {
+      transcript.record('PHASE_CACHE_HYDRATION_STARTED', {
+        nodeId, phase: PHASE_CACHE_HYDRATION,
+      });
+      await bootstrap.seedCacheHydrationPhase.phaseCacheHydration();
+      if (bootstrap.systemCacheHydrated) {
+        transcript.record('SYSTEM_CACHE_HYDRATED', {
+          nodeId, owner: 'SeedCacheHydrationPhase',
+        });
+      }
+      transcript.record('PHASE_CACHE_HYDRATION_COMPLETED', {
+        nodeId, phase: PHASE_CACHE_HYDRATION,
+      });
+    },
     provenance: () => ({
       ...environment.provenance(),
       router: {
@@ -431,17 +505,49 @@ function serializeStrictReport() {
 // Phases after the first pace themselves on the node's clock, so the
 // scheduler runs while each one is in flight and the host advances only until
 // it settles.
-function scenarioPhases(host, {throughMessageGroups, throughPartitions}) {
-  const phases = [];
-  if (throughMessageGroups || throughPartitions) {
-    phases.push([() => host.startPhaseMessageGroups(), PHASE_HORIZON_MS]);
-  }
-  if (throughPartitions) {
-    phases.push([
-      () => host.startPhasePartitions(), PARTITION_PHASE_HORIZON_MS,
-    ]);
-  }
-  return phases;
+// The seed phases in production order, with the horizon each needs. A
+// scenario names how far it runs; everything before that point is implied,
+// because a seed cannot hydrate a cache it never populated.
+const SEED_PHASE_LADDER = Object.freeze([
+  ['startPhaseMessageGroups', PHASE_HORIZON_MS],
+  ['startPhasePartitions', PARTITION_PHASE_HORIZON_MS],
+  ['startPhaseRegistration', PARTITION_PHASE_HORIZON_MS],
+  ['startPhaseCacheHydration', PARTITION_PHASE_HORIZON_MS],
+]);
+
+function scenarioPhaseCount({throughMessageGroups, throughPartitions,
+  throughHandoff}) {
+  if (throughHandoff) return SEED_PHASE_LADDER.length;
+  if (throughPartitions) return 2;
+  return throughMessageGroups ? 1 : 0;
+}
+
+function scenarioPhases(host, reach) {
+  return SEED_PHASE_LADDER
+    .slice(0, scenarioPhaseCount(reach))
+    .map(([method, horizonMs]) => [() => host[method](), horizonMs]);
+}
+
+// Everything a scenario needs before its first production phase: the guard
+// armed and its ledger cleared, one generation named, the scenario's
+// surroundings, one node environment, the seed host on it, and the host-load
+// contract the closure authority will be given.
+function beginSeedScenario({nodeId, nodeAddress, wsPort, hostLoad, observer}) {
+  installDeterministicOwnerGuard();
+  resetNondeterministicOwnerSeamLedger();
+  const generation = `${nodeId}-seed-phase-one`;
+  if (observer) observer.begin(generation);
+  const scenario = createProductionSimScenario();
+  const environment = createProductionSimNodeEnvironment({
+    nodeId, nodeAddress, wsPort, scenario,
+  });
+  return {
+    generation,
+    scenario,
+    environment,
+    host: createProductionSeedSimHost(environment),
+    owners: hostLoadOwners(hostLoad),
+  };
 }
 
 async function runSeedScenario({
@@ -452,24 +558,18 @@ async function runSeedScenario({
   observer = null,
   throughMessageGroups = false,
   throughPartitions = false,
+  throughHandoff = false,
 } = {}) {
-  installDeterministicOwnerGuard();
-  resetNondeterministicOwnerSeamLedger();
-  const generation = `${nodeId}-seed-phase-one`;
-  if (observer) observer.begin(generation);
-  const scenario = createProductionSimScenario();
-  const environment = createProductionSimNodeEnvironment({
-    nodeId, nodeAddress, wsPort, scenario,
+  const {generation, scenario, host, owners} = beginSeedScenario({
+    nodeId, nodeAddress, wsPort, hostLoad, observer,
   });
-  const host = createProductionSeedSimHost(environment);
-  const owners = hostLoadOwners(hostLoad);
   await runOnSimulationGenerationRoot(generation, () =>
     runOnExecutionNode(nodeId, () => host.phaseInfrastructure()));
   const afterPhaseReturned = host.transcript().serialize();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   const afterCausalClosure = host.transcript().serialize();
   for (const [startPhase, horizonMs] of scenarioPhases(host, {
-    throughMessageGroups, throughPartitions,
+    throughMessageGroups, throughPartitions, throughHandoff,
   })) {
     const running = runOnSimulationGenerationRoot(generation, () =>
       runOnExecutionNode(nodeId, startPhase));
@@ -513,8 +613,15 @@ const runSeedPartitionsScenario = (options = {}) =>
   runSeedScenario({...options, throughMessageGroups: true,
     throughPartitions: true});
 
+// And on through registration, hydration and the write-authority handoff:
+// D's chain.
+const runSeedHandoffScenario = (options = {}) =>
+  runSeedScenario({...options, throughMessageGroups: true,
+    throughPartitions: true, throughHandoff: true});
+
 export {
   createProductionSeedSimHost,
+  runSeedHandoffScenario,
   runSeedMessageGroupsScenario,
   runSeedPartitionsScenario,
   runSeedPhaseOneScenario,

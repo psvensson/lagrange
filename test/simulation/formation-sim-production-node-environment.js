@@ -13,6 +13,7 @@
 // merge two production owners that are genuinely distinct, and the simulator
 // would stop being able to tell which one it was measuring.
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
 import {
@@ -108,6 +109,13 @@ function createProductionSimScenario({startMs = 0, linkDelayMs = 1} = {}) {
   // ambient clock. The registry is process-wide, which is why the scenario
   // rather than a node owns this.
   configureSharedSyncSectionClock(() => network.now());
+  // Log stamps are measurement too, and pino reads a clock to make them. The
+  // logging service is process-wide, which is why the scenario rather than a
+  // node points it at virtual time.
+  const logging = LoggingService.getInstance();
+  if (logging.isInitialized()) {
+    logging.now = () => network.now();
+  }
   const transcript = createHostTranscript({network});
   const connectionEnvironment = createVirtualConnectionEnvironment({
     network, linkDelayMs, observe: physicalTranscriptObserver(transcript),

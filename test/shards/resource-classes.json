@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2084,
+    "ordinary": 2085,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2101,
-  "digest": "fnv1a32-d1b02a5a",
+  "censusSize": 2102,
+  "digest": "fnv1a32-5ccd5cec",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1915,6 +1915,7 @@
     "test/simulation/formation-sim-instant-closure.test.js": "ordinary",
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": "ordinary",
     "test/simulation/formation-sim-production-five-node-composition.test.js": "ordinary",
+    "test/simulation/formation-sim-production-handoff.test.js": "ordinary",
     "test/simulation/formation-sim-production-message-groups.test.js": "ordinary",
     "test/simulation/formation-sim-production-partitions.test.js": "ordinary",
     "test/simulation/formation-sim-production-time-authority.test.js": "ordinary",

@@ -68,6 +68,8 @@ const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const CLUSTER_ID_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const CLUSTER_ID_CONFIG_DESCRIPTION =
   'Authoritative durable cluster identity (minted once at first seed bootstrap)';
+import {resolveHostedNodeClock} from
+  '../shared/hosted-replica-authorities.js';
 const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
   SYSTEM_TABLE_NAME.PARTITIONS,
   SYSTEM_TABLE_NAME.SERVICES,
@@ -104,7 +106,7 @@ class SeedRegistrationPhase {
   async phaseRegistration() {
     const d = this.delegates;
     const logger = d.getLogger();
-    const timestamp = Date.now();
+    const timestamp = resolveHostedNodeClock(this.delegates)();
 
     await d.waitForPartitionLeadership({
       partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
@@ -296,6 +298,7 @@ class SeedRegistrationPhase {
     const systemTableWriter = this.ensureSystemTableWriter();
     const metaServices =
       await registerBuiltInMetaServiceDefinitions({
+        nowMs: resolveHostedNodeClock(d)(),
         upsertRow: async (tableName, row) => {
           await systemTableWriter.upsertSystemTableRow(
             tableName, row,
@@ -314,6 +317,7 @@ class SeedRegistrationPhase {
         nodeAddress: d.getNodeAddress(),
         advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
         wsPort: d.getWsPort(),
+        nowMs: resolveHostedNodeClock(d)(),
       });
 
     logger.debug(BOOTSTRAP_LOG_MSG.SERVICES_REGISTERED, {
@@ -455,7 +459,7 @@ class SeedRegistrationPhase {
         await systemTableWriter.updateSystemTableRow(
           SYSTEM_TABLE_NAME.PARTITIONS,
           {partition_id: partitionId},
-          {size_bytes: sizeBytes, updated_at: Date.now()},
+          {size_bytes: sizeBytes, updated_at: resolveHostedNodeClock(this.delegates)()},
         );
 
         updatedPartitions.add(partitionId);
@@ -523,6 +527,7 @@ class SeedRegistrationPhase {
       cdcIntegrationService,
       systemTableCache,
       nodeId: d.getNodeId(),
+      now: resolveHostedNodeClock(d),
     });
     await dynamicConfigService.initialize();
 
@@ -532,6 +537,7 @@ class SeedRegistrationPhase {
         {
           skipExistingCheck: true,
           useDirectCdcMutations: true,
+          nowMs: resolveHostedNodeClock(d)(),
         },
       );
       logger.info(BOOTSTRAP_LOG_MSG.CONFIG_SEEDED, {
@@ -575,7 +581,7 @@ class SeedRegistrationPhase {
 
     const epoch = epochManager.getCurrentEpoch();
     const serializedEpoch = epoch.toJSON();
-    const now = Date.now();
+    const now = resolveHostedNodeClock(this.delegates)();
     const systemTableWriter = this.ensureSystemTableWriter();
 
     await systemTableWriter.upsertSystemTableRow(
@@ -618,7 +624,7 @@ class SeedRegistrationPhase {
     }
 
     const clusterId = randomUUID();
-    const now = Date.now();
+    const now = resolveHostedNodeClock(this.delegates)();
     const systemTableWriter = this.ensureSystemTableWriter();
 
     await systemTableWriter.upsertSystemTableRow(

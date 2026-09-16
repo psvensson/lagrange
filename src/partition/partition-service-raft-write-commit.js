@@ -32,7 +32,7 @@ async function executePartitionRaftWriteCommit(service, options) {
     return buildPartitionWriteFailureResult(error, service.partitionId);
   }
   commitPromise.catch(() => {});
-  const raftCommandDispatchStartMs = Date.now();
+  const raftCommandDispatchStartMs = service.timeSource.now();
   try {
     await service.raftProvider.propose(service.raft, entry);
   } catch (error) {
@@ -52,7 +52,7 @@ async function executePartitionRaftWriteCommit(service, options) {
     const acknowledgedResult = {
       ...result,
       acceptingNodeId: service.nodeId,
-      acknowledgedAtMs: Date.now(),
+      acknowledgedAtMs: service.timeSource.now(),
     };
     const sideEffectPlan = buildPartitionWriteSideEffectPlan(
       entry,

@@ -17,6 +17,8 @@ import {
 import {
   CDC_PROPAGATED_TABLES,
 } from '../../cache/cache-constants.js';
+import {resolveHostedNodeClock} from
+  '../shared/hosted-replica-authorities.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -89,6 +91,7 @@ class SeedRuntimeBridgeOwner {
     }
 
     cdcIntegrationService = CDCIntegrationSetup.createForBootstrap({
+      timeSource: d.getTimeSource?.(),
       nodeId: d.getNodeId(),
       messageRouter: d.getMessageRouter(),
     });
@@ -119,6 +122,7 @@ class SeedRuntimeBridgeOwner {
 
     latencyTopology = LatencyTopologySetup.create({
       nodeId: d.getNodeId(),
+      nowFn: resolveHostedNodeClock(d),
       systemTableCache: d.getSystemTableCache(),
       cdcIntegrationService: d.getCdcIntegrationService(),
       messageRouter: d.getMessageRouter(),
@@ -184,7 +188,8 @@ class SeedRuntimeBridgeOwner {
     return new CDCPipelineReadinessGate({
       systemTableCache,
       cdcPropagatedTables: CDC_PROPAGATED_TABLES,
-      now: () => Date.now(),
+      // A wait this node takes, on this node's clock.
+      now: resolveHostedNodeClock(d),
       sleep: (delayMs) => d.sleep(delayMs),
     });
   }

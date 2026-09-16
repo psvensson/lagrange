@@ -87,6 +87,7 @@ class LatencyTopologySetup {
     const latencyTreeService = new LatencyTreeService({
       nodeId,
       systemTableCache,
+      nowFn: options.nowFn,
     });
     latencyTreeService.initialize({
       nodeId,
@@ -95,6 +96,7 @@ class LatencyTopologySetup {
 
     const cdcGroupPropagationService = new CDCGroupPropagationService({
       nodeId,
+      nowFn: options.nowFn,
       systemTableCache,
       messageRouter,
       latencyTreeService,

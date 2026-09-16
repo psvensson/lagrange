@@ -42,7 +42,12 @@ class QueryExecutorBase {
       options.defaultRoutingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
-    this.hlcClock = new HLCClockService(this.nodeId);
+    // The executor orders on the node it runs for, so its HLC reads that
+    // node's clock. Unsupplied, it is the host clock exactly as before.
+    this.nowFn = typeof options.nowFn === 'function' ? options.nowFn : null;
+    this.hlcClock = new HLCClockService(this.nodeId, {
+      timeSource: this.nowFn ? {now: this.nowFn} : undefined,
+    });
     this.mergeEngine = options.mergeEngine || new DistributedMergeEngine();
     this.parallelQueryCoordinator =
       options.parallelQueryCoordinator ||

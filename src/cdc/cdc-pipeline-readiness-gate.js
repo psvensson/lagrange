@@ -153,6 +153,8 @@ class CDCPipelineReadinessGate extends EventEmitter {
       if (result.ready) {
         emitInvariant(this, {
           invariantId: INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+          // The record is stamped by the node observing the invariant.
+          timestampMs: this._now(),
           passed: true,
           entityId: CDC_PIPELINE_READINESS_GATE.ENTITY_ID,
           owningSubsystem: CDC_PIPELINE_READINESS_GATE.SUBSYSTEM,
@@ -186,6 +188,8 @@ class CDCPipelineReadinessGate extends EventEmitter {
         );
         emitInvariant(this, {
           invariantId: INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+          // The record is stamped by the node observing the invariant.
+          timestampMs: this._now(),
           passed: false,
           entityId: CDC_PIPELINE_READINESS_GATE.ENTITY_ID,
           owningSubsystem: CDC_PIPELINE_READINESS_GATE.SUBSYSTEM,

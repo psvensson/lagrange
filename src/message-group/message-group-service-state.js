@@ -207,6 +207,8 @@ class MessageGroupService extends EventEmitter {
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
       createControlPlaneRuntimeBundle({
+        // The gateway stamps and times for the node hosting this replica.
+        now: () => this.timeSource.now(),
         nodeId: this.nodeId,
         getSqlQueryEngine: () =>
           this.cdcIntegrationService?.sqlQueryEngine || null,
@@ -236,7 +238,9 @@ class MessageGroupService extends EventEmitter {
       timeSource: this.timeSource,
     });
     // Single-owner CDC handler for subscriptions and cache application.
-    this.cdcHandler = new CDCHandler(this.systemTableCache);
+    this.cdcHandler = new CDCHandler(this.systemTableCache, {
+      timeSource: this.timeSource,
+    });
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME);

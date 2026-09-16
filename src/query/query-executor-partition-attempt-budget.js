@@ -31,6 +31,11 @@ function resolvePartitionExecutionTimeoutMs(executor, forRead, options) {
   return null;
 }
 
+// The executing node's clock, when it was given one.
+function executorNow(executor) {
+  return typeof executor?.nowFn === 'function' ? executor.nowFn() : Date.now();
+}
+
 function createPartitionAttemptBudget({
   executor,
   partitionId,
@@ -49,7 +54,7 @@ function createPartitionAttemptBudget({
       Math.floor(executionOptions.timeoutBudget.deadlineMs) :
       null;
   const localDeadlineMs =
-    executionTimeoutMs === null ? null : Date.now() + executionTimeoutMs;
+    executionTimeoutMs === null ? null : executorNow(executor) + executionTimeoutMs;
   const executionDeadlineMs =
     parentDeadlineMs === null ?
       localDeadlineMs :
@@ -60,7 +65,7 @@ function createPartitionAttemptBudget({
     if (executionDeadlineMs === null) {
       return null;
     }
-    return Math.max(0, executionDeadlineMs - Date.now());
+    return Math.max(0, executionDeadlineMs - executorNow(executor));
   };
   const resolveRecoveryCandidateConnectionState = (candidate) => {
     const candidateNodeId =

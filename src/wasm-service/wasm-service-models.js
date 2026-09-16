@@ -144,10 +144,11 @@ function deserializeResourceBudget(json) {
  * @param {Object} definition - ServiceDefinition object.
  * @return {Object} Table row with snake_case keys.
  */
-function serializeServiceDefinition(definition) {
+function serializeServiceDefinition(definition, nowMs) {
   const runtimeAware = applyRuntimeDefaults(definition);
   const compat = applyLegacyDefaults(runtimeAware);
-  const now = Date.now();
+  // The row is stamped by the node registering it.
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   return {
     [SD_COL.SERVICE_ID]: compat.serviceId,
     [SD_COL.SERVICE_NAME]: compat.serviceName,

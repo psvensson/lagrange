@@ -59,7 +59,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         preparePartitionReadStatement(this.db, sql) :
         this.db.prepare(sql);
       if (isSelect) {
-        const sqliteStartMs = Date.now();
+        const sqliteStartMs = this.timeSource.now();
         const rows = collectBoundedSqliteRows(stmt, params, {
           cancellationToken: options.cancellationToken || null,
           deadlineMs: options.resultDeadlineMs,
@@ -72,7 +72,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         const visibleRows = transaction ?
           this.applySnapshotReadFilter(rows, transaction.state) :
           rows;
-        const durationMs = Date.now() - sqliteStartMs;
+        const durationMs = this.timeSource.now() - sqliteStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
             partitionId: this.partitionId,
@@ -198,7 +198,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       {
         timestamp,
         proposedBy: this.replicaId,
-        proposedAt: Date.now(),
+        proposedAt: this.timeSource.now(),
       },
     );
     try {
@@ -368,7 +368,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         ':' +
         this.replicaId +
         ':' +
-        String(entry?.proposedAt || Date.now());
+        String(entry?.proposedAt || this.timeSource.now());
     return {
       operationId,
       requestId,
@@ -399,7 +399,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     if (!phaseTimings || !Number.isFinite(startedAtMs)) {
       return;
     }
-    const durationMs = Math.max(0, Date.now() - startedAtMs);
+    const durationMs = Math.max(0, this.timeSource.now() - startedAtMs);
     phaseTimings[field] = durationMs;
   }
   /**
@@ -433,21 +433,21 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
    * @private
    */
   async proposeWrite(operation, options) {
-    const proposeStartMs = Date.now();
+    const proposeStartMs = this.timeSource.now();
     const timestamp = this.hlcClock.now();
-    const entryBuildStartMs = Date.now();
+    const entryBuildStartMs = this.timeSource.now();
     const entry = buildPartitionWriteEntry(operation, {
       timestamp,
       proposedBy: this.replicaId,
-      proposedAt: Date.now(),
+      proposedAt: this.timeSource.now(),
     });
-    const entryBuildMs = Math.max(0, Date.now() - entryBuildStartMs);
+    const entryBuildMs = Math.max(0, this.timeSource.now() - entryBuildStartMs);
     const correlation = this.resolveWriteMetricCorrelation(entry);
     const isLeader = this.role === RaftRole.LEADER;
     if (isLeader) {
       const phaseTimings = {};
       const result = await this.applyWrite(entry, phaseTimings);
-      const durationMs = Date.now() - proposeStartMs;
+      const durationMs = this.timeSource.now() - proposeStartMs;
       try {
         this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
           partitionId: this.partitionId,
@@ -473,7 +473,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     if (this.leaderId && this.transport) {
       const phaseTimings = {};
-      const forwardDeliverStartMs = Date.now();
+      const forwardDeliverStartMs = this.timeSource.now();
       try {
         const leaderAddress = this.resolveLeaderAddress();
         if (!leaderAddress) {
@@ -491,7 +491,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
           forwardDeliverStartMs,
         );
-        const durationMs = Date.now() - proposeStartMs;
+        const durationMs = this.timeSource.now() - proposeStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
             partitionId: this.partitionId,
@@ -520,7 +520,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
           forwardDeliverStartMs,
         );
-        const durationMs = Date.now() - proposeStartMs;
+        const durationMs = this.timeSource.now() - proposeStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
             partitionId: this.partitionId,
@@ -629,7 +629,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       idempotentReplay: true,
       durableCommitWitness,
       acceptingNodeId: this.nodeId,
-      acknowledgedAtMs: Date.now(),
+      acknowledgedAtMs: this.timeSource.now(),
     };
   }
   /**
@@ -640,7 +640,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
    * @private
    */
   async applyWrite(entry, phaseTimings = null) {
-    const applyStartMs = Date.now();
+    const applyStartMs = this.timeSource.now();
     entry = buildPartitionWriteEntry(entry, {
       timestamp: entry?.timestamp,
       proposedBy: entry?.proposedBy || this.replicaId,
@@ -688,7 +688,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         partitionId: this.partitionId,
       };
     }
-    const logAppendStartMs = Date.now();
+    const logAppendStartMs = this.timeSource.now();
     const logEntry = this.storage.appendEntry(entry);
     const durableCommitWitness = buildDurableCommitWitness({
       partitionId: this.partitionId,
@@ -712,7 +712,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       });
     }
     let result;
-    const sqliteRunStartMs = Date.now();
+    const sqliteRunStartMs = this.timeSource.now();
     try {
       if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
         this.registerMigrationDefaultFromAlterSql(entry.sql);
@@ -764,7 +764,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       return result;
     }
     result.acceptingNodeId = this.nodeId;
-    result.acknowledgedAtMs = Date.now();
+    result.acknowledgedAtMs = this.timeSource.now();
     this.recordWritePhaseDuration(
       phaseTimings,
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,

@@ -317,6 +317,8 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             {
               maxAttempts: configuredRetryBudget,
               proposeTimeoutMs,
+              // Proposal deadlines are this node's.
+              timeSource: this.providedTimeSource || undefined,
               shouldProposeLocally: () => this.isCurrentRaftLeader(),
               forwardToLeader: async (command, routeContext = {}) => {
                 const relayDepth =

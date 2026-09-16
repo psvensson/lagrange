@@ -48,6 +48,15 @@ const ConfigValueType = CONFIG_VALUE_TYPE;
  * DynamicConfigService manages configuration through the config system table.
  * Provides watchers for configuration changes and supports hot reload.
  */
+// The instant a config row is stamped with: an explicit reading, then the
+// node's clock, then the host's.
+function resolveConfigStampMs(nowMs, nodeClock) {
+  if (Number.isFinite(nowMs)) {
+    return nowMs;
+  }
+  return typeof nodeClock === 'function' ? nodeClock() : Date.now();
+}
+
 class DynamicConfigService extends EventEmitter {
   /**
    * Create a new DynamicConfigService.
@@ -64,6 +73,9 @@ class DynamicConfigService extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    // This service stamps config rows for one node, so it reads that node's
+    // clock. Unsupplied, it is the host clock exactly as before.
+    this.now = typeof options.now === 'function' ? options.now : null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
 
     // Local cache of configuration values
@@ -132,7 +144,8 @@ class DynamicConfigService extends EventEmitter {
   ) {
     const seeded = [];
     const skipped = [];
-    const now = Date.now();
+    // The rows are stamped by the node seeding them.
+    const now = resolveConfigStampMs(_options.nowMs, this.now);
 
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
       // Check for environment variable override
@@ -246,7 +259,7 @@ class DynamicConfigService extends EventEmitter {
 
     const definition = CONFIG_DEFINITIONS[key];
     const valueType = definition ? definition.type : this.inferType(value);
-    const now = Date.now();
+    const now = resolveConfigStampMs(null, this.now);
 
     // Check if key exists
     const existing = await this.getConfigFromTable(key);
@@ -726,6 +739,8 @@ class DynamicConfigService extends EventEmitter {
       getCdcIntegrationService: () => this.cdcIntegrationService,
       getSqlQueryEngine: () => this.sqlQueryEngine,
       getSystemTableCache: () => this.systemTableCache,
+      // The gateway stamps mutations for THIS node.
+      now: this.now,
     }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }

@@ -99,6 +99,8 @@ class CDCIntegrationServiceLifecycleMethods {
       this.cdcEventHandler = new CDCEventHandler({
         nodeId: this.nodeId,
         eventContext: this.createEventHandlerContext(),
+        // The handler belongs to this service, on this node.
+        timeSource: this.timeSource,
       });
     }
     return this.cdcEventHandler;

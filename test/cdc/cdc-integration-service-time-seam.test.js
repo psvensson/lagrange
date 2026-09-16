@@ -331,19 +331,25 @@ test('MUTATION: mixing ambient time into a duration breaks its end-to-end claim'
         if (tag === METRICS_LOG_TAG.CDC_WRITE) metrics.push(payload);
       },
     };
+    // One end of the duration on ambient time. Poisoned RELATIVE TO THE
+    // WRITE rather than by read index: the owner takes other readings on the
+    // way in (a row stamp, for one), and counting them would make this
+    // witness a statement about how many times the clock is read instead of
+    // about which clock closes the duration.
+    const virtualNow = timeSource.now.bind(timeSource);
+    let poisonNextRead = false;
     service.executeSQL = async () => {
       timeSource.advance(ELAPSED_MS);
+      poisonNextRead = true;
       return {success: true, changes: 1};
     };
     service.waitForCacheUpdate = async () => undefined;
-    // One end of the duration on ambient time.
-    const virtualNow = timeSource.now.bind(timeSource);
-    let reads = 0;
     service.timeSource = {
       ...timeSource,
       now: () => {
-        reads += 1;
-        return reads === 1 ? Date.now() : virtualNow();
+        if (!poisonNextRead) return virtualNow();
+        poisonNextRead = false;
+        return Date.now();
       },
     };
     await service.insertSystemTableRow(TABLES.SERVICES,

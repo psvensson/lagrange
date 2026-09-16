@@ -18,6 +18,13 @@ function normalizeInteger(value, fallback = null) {
   return Number.isFinite(value) ? Math.floor(value) : fallback;
 }
 
+// The write's proposal instant: the caller's when it has one, the host's only
+// when it does not.
+function resolveProposedAt(value) {
+  const supplied = normalizeInteger(value);
+  return supplied === null ? Date.now() : supplied;
+}
+
 function normalizeWriteParams(params) {
   return Array.isArray(params) ? params : [];
 }
@@ -41,8 +48,10 @@ function buildPartitionWriteEntry(operation, options = {}) {
       typeof options.proposedBy === 'string' ?
         options.proposedBy :
         PARTITION_WRITE_KERNEL_LITERAL.EMPTY_STRING,
-    proposedAt:
-      normalizeInteger(options.proposedAt, Date.now()),
+    // Lazily, not as a default argument: JavaScript evaluates the fallback
+    // whether or not it is used, so a caller that supplied its own node's
+    // reading still read the host clock here.
+    proposedAt: resolveProposedAt(options.proposedAt),
   };
 }
 

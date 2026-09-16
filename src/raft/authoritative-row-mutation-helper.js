@@ -734,6 +734,9 @@ class AuthoritativeRowMutationHelper {
       nodeId: this.nodeId,
       getCdcIntegrationService: () => this.cdcIntegrationService,
       getMessageRouter: () => this.messageRouter,
+      // The gateway this helper falls back to stamps on the same clock the
+      // helper itself was given.
+      now: this.now,
     }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
