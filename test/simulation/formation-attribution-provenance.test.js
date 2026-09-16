@@ -11,28 +11,26 @@ import {readFileSync} from 'node:fs';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  OUTSIDE_DOMAIN_REASON, OUTSIDE_DOMAIN_SITE,
+  CLASSIFICATION, OUTSIDE_DOMAIN_REASON, OUTSIDE_DOMAIN_SHAPE,
+  classifyUnownedTurn,
 } from './formation-attribution-provenance-classify.js';
+import {
+  createRecorder, provenanceCallbacks,
+} from './formation-attribution-provenance.js';
+import {
+  FormationTurnAttribution,
+} from '../../src/diagnostics/formation-turn-attribution.js';
+import {FORMATION_OWNER} from
+  '../../src/diagnostics/formation-diagnostics-contract.js';
 import {
   runFormationAttributionCensus,
 } from './formation-attribution-census.js';
 
 const ZERO = 0;
+const ONE_AMBIGUITY = 1;
 const OWNER_RUNTIME_COUNT = 138;
 const PEER_OBJECT_COUNT = 276;
 const REPO_ROOT = new URL('../../', import.meta.url);
-
-// The shape each reason claims, as it appears in the source at the site.
-const REASON_SHAPE = Object.freeze({
-  [OUTSIDE_DOMAIN_REASON.SCENARIO_SCHEDULER_TURN]:
-    'new Promise((resolve) => setImmediate(resolve))',
-  [OUTSIDE_DOMAIN_REASON.CLOSURE_OWNER_IDLE_AWAIT]:
-    'for (const owner of owners) await owner();',
-  [OUTSIDE_DOMAIN_REASON.DRIVE_LOOP_AWAIT]: 'await ',
-  [OUTSIDE_DOMAIN_REASON.OWNER_BOUNDARY_RETURN]:
-    'await runBootstrapActivity(',
-  [OUTSIDE_DOMAIN_REASON.PRE_WINDOW_RESOURCE]: null,
-});
 
 test('the formation census closes on its own terms, and its reasons are real',
   async (t) => {
@@ -52,17 +50,15 @@ test('the formation census closes on its own terms, and its reasons are real',
     t.equal(packet.overlapDurationUs, ZERO, 'the partition has no overlap');
     t.equal(packet.partitionDeltaUs, ZERO, 'the partition has no missing time');
 
-    // Every site the census recorded carries a reason, and the reason's shape
-    // is actually at that site.
+    // Every site the census recorded is classified by the SOURCE LINE at
+    // that line number, and the classifier is re-run here against the live
+    // source so a moved line cannot inherit an old verdict.
     for (const site of Object.keys(packet.unattributed.bySite)) {
-      const reason = OUTSIDE_DOMAIN_SITE[site];
-      t.ok(reason,
-        `${site} is classified by a recorded reason, not by where it lives`);
-      const shape = REASON_SHAPE[reason];
-      if (shape === null) continue;
-      const source = readFileSync(new URL(site, REPO_ROOT), 'utf8');
-      t.ok(source.includes(shape),
-        `${site} really has the ${reason} shape the census claims for it`);
+      const verdict = classifyUnownedTurn(site);
+      t.equal(verdict.classification, CLASSIFICATION.OUTSIDE_DOMAIN,
+        `${site} is classified outside-domain by its own line`);
+      t.ok(verdict.line && verdict.line.trim().length > ZERO,
+        `${site} has a source line to be the proof`);
     }
 
     // The window is production's window, and the boundary is D's.
@@ -98,5 +94,73 @@ test('the formation census closes on its own terms, and its reasons are real',
       'and nothing is enqueued after it');
     t.ok(packet.afterTeardown.teardownSegments > ZERO,
       'teardown did happen - it is measured, just not in the formation census');
+    t.end();
+  });
+
+// The shape table is the proof surface, so it is checked against the source
+// rather than trusted: a shape that no longer exists in the file it names
+// would silently stop classifying anything.
+test('every classification shape is present in the file it names',
+  (t) => {
+    const reasons = new Set(Object.values(OUTSIDE_DOMAIN_REASON));
+    for (const candidate of OUTSIDE_DOMAIN_SHAPE) {
+      const source = readFileSync(new URL(candidate.file, REPO_ROOT), 'utf8');
+      t.ok(source.includes(candidate.shape),
+        `${candidate.file} still contains the ${candidate.reason} shape`);
+      t.ok(reasons.has(candidate.reason),
+        `${candidate.reason} is one of the recorded reasons`);
+    }
+    t.end();
+  });
+
+// A metric that cannot be non-zero proves nothing. Ambiguity is the one
+// counter the formation cone never exercises, so it is demonstrated directly:
+// a resource that inherited owner A, dispatched while a DIFFERENT owner's
+// segment is open, is two semantic owners in flight at once.
+test('the ambiguity counter fires on two owners in flight, and not on nesting',
+  (t) => {
+    const ZERO_US = 0;
+    const CONFLICTING_ID = 11;
+    const SAME_OWNER_ID = 12;
+    const recorder = createRecorder();
+    const held = {attribution: null};
+    let inner = null;
+    const attribution = new FormationTurnAttribution({
+      clock: () => ZERO_US,
+      hookFactory: (callbacks) => {
+        inner = provenanceCallbacks(recorder, held, callbacks);
+        return {enable() {}, disable() {}};
+      },
+    });
+    held.attribution = attribution;
+    attribution.start();
+
+    // Two resources, one owned by bootstrap and one by readiness.
+    attribution.asyncOwners.set(CONFLICTING_ID, FORMATION_OWNER.BOOTSTRAP);
+    attribution.asyncOwners.set(SAME_OWNER_ID, FORMATION_OWNER.READINESS);
+
+    // Dispatched with nothing open: ordinary.
+    inner.before(CONFLICTING_ID);
+    inner.after(CONFLICTING_ID);
+    t.equal(recorder.ambiguous, ZERO,
+      'a dispatch with no segment open is not ambiguous');
+
+    // Dispatched inside an open segment of the SAME owner: nesting, ordinary.
+    attribution.run(FORMATION_OWNER.READINESS, () => {
+      inner.before(SAME_OWNER_ID);
+      inner.after(SAME_OWNER_ID);
+    });
+    t.equal(recorder.ambiguous, ZERO,
+      'a dispatch nested inside its own owner is not ambiguous either');
+
+    // Dispatched inside an open segment of a DIFFERENT owner: ambiguous.
+    attribution.run(FORMATION_OWNER.READINESS, () => {
+      inner.before(CONFLICTING_ID);
+      inner.after(CONFLICTING_ID);
+    });
+    t.equal(recorder.ambiguous, ONE_AMBIGUITY,
+      'a bootstrap resource dispatched inside an open readiness segment is ' +
+        'counted: two semantic owners were in flight at once');
+    attribution.stop();
     t.end();
   });

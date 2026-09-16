@@ -117,6 +117,9 @@ function buildPacket({census, mark, recorder, run, snapshot}) {
       durationUs: snapshot.unattributedDurationUs,
       outsideDomainByReason: unowned.outsideDomainByReason,
       bySite: unowned.bySite,
+      // The source line of anything still unowned, so a red census says which
+      // line to go and look at rather than only how many there were.
+      unownedLines: unowned.unownedLines,
     },
     productionSemanticUnowned: unowned.productionSemanticUnowned,
     unknownSegments: unowned.unknownSegments,

@@ -65,6 +65,11 @@ const PEER_REPRESENTATION_PREFIX = 'src/raft/remote-peer-representation';
 // standing in front of the code that created the resource, never that code.
 const INTERCEPTOR_PREFIX = Object.freeze([
   'src/diagnostics/formation-turn-attribution',
+  // The owner-entry helpers own the MAPPING and nothing else. Recording one
+  // of them as the frame would hide which caller named the owner, and which
+  // caller named it is the entire question.
+  'src/diagnostics/formation-owner-attribution',
+  'src/diagnostics/raft-formation-attribution',
   'test/simulation/formation-sim-guard',
   'test/simulation/formation-attribution-provenance',
 ]);
@@ -152,7 +157,14 @@ function createRecorder() {
 // The attribution instance calls its hook factory from its own constructor,
 // so the reference is read lazily through a holder rather than captured.
 function installHook(recorder, held) {
-  return (callbacks) => createHook({
+  return (callbacks) => createHook(provenanceCallbacks(recorder, held,
+    callbacks));
+}
+
+// Split out so the accounting can be driven directly by a witness: these are
+// the same callbacks the real hook runs, with no hook in the way.
+function provenanceCallbacks(recorder, held, callbacks) {
+  return {
     init(asyncId, type, triggerAsyncId, resource) {
       callbacks.init(asyncId, type, triggerAsyncId, resource);
       recorder.trigger.set(asyncId, triggerAsyncId);
@@ -197,7 +209,7 @@ function installHook(recorder, held) {
     destroy(asyncId) {
       callbacks.destroy?.(asyncId);
     },
-  });
+  };
 }
 
 function installOwnerCallObserver(recorder) {
@@ -246,19 +258,20 @@ function summarizeOwners(snapshot, ownerCalls) {
 function summarizeUnowned(segments) {
   const byReason = {};
   const bySite = {};
+  const unownedLines = {};
   let productionSemanticUnowned = ZERO;
   let unknownSegments = ZERO;
   let total = ZERO;
   for (const segment of segments) {
     if (segment.phase !== FORMATION || segment.owner !== UNATTRIBUTED) continue;
     total += ONE;
-    const file = fileOf(segment.root ?? NATIVE);
-    const verdict = classifyUnownedTurn(file, segment.createdInWindow);
+    const site = segment.root ?? NATIVE;
+    const verdict = classifyUnownedTurn(site, segment.createdInWindow);
     // A resource that predates the window has no creation site inside it, so
     // it is counted by its reason and never keyed to a file it did not come
     // from.
     if (segment.createdInWindow !== false) {
-      bySite[file] = (bySite[file] ?? ZERO) + ONE;
+      bySite[site] = (bySite[site] ?? ZERO) + ONE;
     }
     if (verdict.classification === CLASSIFICATION.OUTSIDE_DOMAIN) {
       byReason[verdict.reason] = (byReason[verdict.reason] ?? ZERO) + ONE;
@@ -266,11 +279,13 @@ function summarizeUnowned(segments) {
       unknownSegments += ONE;
     } else {
       productionSemanticUnowned += ONE;
+      unownedLines[site] = verdict.line;
     }
   }
   return {
     bySite,
     outsideDomainByReason: byReason,
+    unownedLines,
     productionSemanticUnowned,
     segments: total,
     unknownSegments,
@@ -296,6 +311,7 @@ export {
   fileOf,
   installHook,
   installOwnerCallObserver,
+  provenanceCallbacks,
   readStrict,
   summarizeOwners,
   summarizeUnowned,

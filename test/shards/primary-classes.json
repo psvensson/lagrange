@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1843,
+    "unit": 1844,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2106,
-  "digest": "fnv1a32-5d17611b",
+  "censusSize": 2107,
+  "digest": "fnv1a32-f9eef57b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1370,6 +1370,7 @@
     "test/raft/liferaft-deterministic-construction.test.js": "unit",
     "test/raft/liferaft-follower-match-index.test.js": "unit",
     "test/raft/liferaft-formation-attribution-interaction.test.js": "unit",
+    "test/raft/liferaft-protocol-task-lineage.test.js": "unit",
     "test/raft/log-truncation-correctness.property.test.js": "unit",
     "test/raft/message-group-readiness-delivery-priority.test.js": "unit",
     "test/raft/peer-address-resolver.property.test.js": "unit",
