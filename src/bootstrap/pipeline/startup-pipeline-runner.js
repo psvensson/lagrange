@@ -86,10 +86,18 @@ class StartupPipelineRunner {
       });
 
       try {
-        await runBootstrapActivity(() => phase.run());
-        completedPhases.push(phase.name);
-        this.emit(STARTUP_PIPELINE_EVENT.PHASE_COMPLETE, {
-          phase: phase.name,
+        // The completion record and its notification are the bootstrap
+        // owner's own work, so they stay inside the owner's region. Doing
+        // them in the await continuation instead left the phase's own
+        // completion unowned, and left what remains after this call - the
+        // loop's next step - as the only thing outside, which is exactly
+        // what an entry boundary cannot put inside the owner it enters.
+        await runBootstrapActivity(async () => {
+          await phase.run();
+          completedPhases.push(phase.name);
+          this.emit(STARTUP_PIPELINE_EVENT.PHASE_COMPLETE, {
+            phase: phase.name,
+          });
         });
       } catch (error) {
         this.emit(STARTUP_PIPELINE_EVENT.PHASE_FAILED, {
