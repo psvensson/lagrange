@@ -21,31 +21,10 @@ import {OwnerKeyReconcileQueue} from
   '../../src/workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
   '../../src/workflow/reconcile-queue-constants.js';
+import {heldPromise, isPending} from '../helpers/promise-settlement.js';
 
 const OWNER_A = 'partition/a';
 const OWNER_B = 'partition/b';
-
-function heldPromise() {
-  let release = null;
-  let fail = null;
-  const promise = new Promise((resolve, reject) => {
-    release = resolve;
-    fail = reject;
-  });
-  return {promise, release, fail};
-}
-
-// Pending without counting host turns: a genuinely held promise never
-// settles, and the sentinel is deferred past an async function's own
-// continuation so a resolved-but-chained promise is not misread as pending.
-async function isPending(promise) {
-  const sentinel = Symbol('pending');
-  let deferred = Promise.resolve(sentinel);
-  for (let turn = 0; turn < 8; turn += 1) deferred = deferred.then((v) => v);
-  const winner = await Promise.race([
-    promise.then(() => 'settled', () => 'settled'), deferred]);
-  return winner === sentinel;
-}
 
 test('Q1. an in-flight reconcile keeps the queue busy until it finishes',
   async (t) => {

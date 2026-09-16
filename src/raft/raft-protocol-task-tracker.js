@@ -77,4 +77,4 @@ class RaftProtocolTaskTracker {
   }
 }
 
-export {MAX_DRAIN_ROUNDS, NOT_IDLE_ERROR, RaftProtocolTaskTracker};
+export {RaftProtocolTaskTracker};

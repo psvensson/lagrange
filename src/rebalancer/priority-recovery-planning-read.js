@@ -19,13 +19,9 @@
 // policy authoritative then silently converted every narration consumer to
 // authoritative-or-nothing and collapsed recovery narration wholesale.
 //
-// Callers name the mode they want. Each family keeps its own partition
+// The two modes are two named functions, so a caller cannot reach the wrong
+// one by passing the wrong argument. Each family keeps its own partition
 // classification and clock; only the read policy is owned here.
-
-const PRIORITY_RECOVERY_PLANNING_READ_MODE = Object.freeze({
-  AVAILABLE: 'available',
-  AUTHORITATIVE_REMOVE_SAFETY: 'authoritative-remove-safety',
-});
 
 // Which AVAILABLE surfaces a family accepts, in precedence order. The two
 // families have never accepted the same set, and that difference is real
@@ -199,7 +195,6 @@ export {
   AVAILABLE_PLANNING_SURFACE_ORDER,
   createRemoveSafetyPlanningSnapshotReader,
   resolveRemoveSafetyPlanningSnapshotReader,
-  PRIORITY_RECOVERY_PLANNING_READ_MODE,
   hasAuthoritativeRemoveSafetyPlanningProvider,
   hasAvailablePriorityRecoveryPlanningProvider,
   readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety,

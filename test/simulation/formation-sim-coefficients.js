@@ -116,7 +116,6 @@ function loadCalibration(root, relativePath = CALIBRATION_FILE) {
 }
 
 export {
-  CALIBRATION_FILE,
   CalibrationRefusal,
   REFUSAL,
   REQUIRED_OWNERS,

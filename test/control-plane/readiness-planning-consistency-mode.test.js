@@ -18,28 +18,10 @@ import {test} from 'node:test';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {heldPromise, isPending} from '../helpers/promise-settlement.js';
 
 const NODE_ID = 'node-a';
 const OBSERVED_AT = 1000;
-
-function heldPromise() {
-  let release = null;
-  let fail = null;
-  const promise = new Promise((resolve, reject) => {
-    release = resolve;
-    fail = reject;
-  });
-  return {promise, release, fail};
-}
-
-async function isPending(promise) {
-  const sentinel = Symbol('pending');
-  let deferred = Promise.resolve(sentinel);
-  for (let turn = 0; turn < 8; turn += 1) deferred = deferred.then((v) => v);
-  const winner = await Promise.race([
-    promise.then(() => 'settled', () => 'settled'), deferred]);
-  return winner === sentinel;
-}
 
 // A readiness service stub whose two evidence sources deliberately disagree,
 // so which one a caller consumed is observable in the answer itself.

@@ -14,30 +14,9 @@ import {test} from 'node:test';
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {heldPromise, isPending} from '../helpers/promise-settlement.js';
 
 const REQUEST_KEY = 'nodes:node-a';
-
-function heldPromise() {
-  let release = null;
-  let fail = null;
-  const promise = new Promise((resolve, reject) => {
-    release = resolve;
-    fail = reject;
-  });
-  return {promise, release, fail};
-}
-
-// Pending without counting host turns: a genuinely held promise never
-// settles, and the sentinel is deferred past an async function's own
-// continuation so a resolved-but-chained promise is not misread as pending.
-async function isPending(promise) {
-  const sentinel = Symbol('pending');
-  let deferred = Promise.resolve(sentinel);
-  for (let turn = 0; turn < 8; turn += 1) deferred = deferred.then((v) => v);
-  const winner = await Promise.race([
-    promise.then(() => 'settled', () => 'settled'), deferred]);
-  return winner === sentinel;
-}
 
 function createGateway() {
   return new ControlPlaneSystemTableGateway({

@@ -165,4 +165,4 @@ class ChargeAccumulator {
   }
 }
 
-export {ChargeAccumulator, GAP_THRESHOLD_MS};
+export {ChargeAccumulator};

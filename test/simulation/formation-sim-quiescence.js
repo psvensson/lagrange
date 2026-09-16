@@ -266,7 +266,6 @@ async function advanceToNextInstant({network, owners = [], horizonMs}) {
 }
 
 export {
-  NOT_REACHED_ERROR,
   advanceToNextInstant,
   closeCurrentInstant,
   ScenarioHostObserver,

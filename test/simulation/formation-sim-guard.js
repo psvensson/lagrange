@@ -279,21 +279,9 @@ function guardedDispatch(owner, body) {
   return guardedOwnerContext.run(owner, body);
 }
 
-/**
- * Run a body OUTSIDE tagged production execution, for harness work that
- * legitimately reads the wall clock while nested inside a dispatch (driving
- * virtual time, measuring, reporting).
- * @param {Function} body
- * @returns {*} the body's return value
- */
-function unguardedHarnessWork(body) {
-  return guardedOwnerContext.run(undefined, body);
-}
-
 export {
   AMBIENT_SEAM_MODE,
   NONDETERMINISTIC_OWNER_SEAM,
-  NondeterministicOwnerSeam,
   assertNoNondeterministicOwnerSeam,
   beginAmbientSeamDiscovery,
   deterministicProofEligibility,
@@ -302,5 +290,4 @@ export {
   installDeterministicOwnerGuard,
   nondeterministicOwnerSeamLedger,
   resetNondeterministicOwnerSeamLedger,
-  unguardedHarnessWork,
 };

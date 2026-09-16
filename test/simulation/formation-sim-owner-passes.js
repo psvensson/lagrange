@@ -25,7 +25,6 @@ import {guardedDispatch} from './formation-sim-guard.js';
 const ZERO = 0;
 const OWN_SEGMENT = 1;
 const NODE_OWNER_SEPARATOR = '\u0000';
-const OBSERVATION_KIND = Object.freeze({GATE: 'planning_gate', READINESS: 'readiness'});
 
 /**
  * Real turn counting for the simulator: one seam instance per run, its
@@ -132,25 +131,6 @@ class OwnerTurnMeter {
 }
 
 /**
- * One planning-gate pass of a priority rebalancer: the decision the owner
- * would log, read before it logs.
- * @param {UnifiedRebalancer} rebalancer
- * @returns {Promise<object|null>} {blockerReason, unreadyNodeIds, delayMs, planningState}
- */
-async function planningGateObservation(rebalancer) {
-  const blocker = await rebalancer.getCheckRebalanceBlocker();
-  const context = blocker?.decision?.logContext || null;
-  if (!context) return null;
-  return {
-    kind: OBSERVATION_KIND.GATE,
-    planningState: context.planningState ?? null,
-    blockerReason: context.blockerReason ?? null,
-    unreadyNodeIds: [...(context.unreadyNodeIds || [])].sort(),
-    backoffMs: Number.isFinite(context.delayMs) ? context.delayMs : null,
-  };
-}
-
-/**
  * The census owner over the node's own rows.
  * @param {object} hosts
  * @param {string[]} eligibleNodeIds
@@ -174,6 +154,4 @@ function spreadObservation(hosts, eligibleNodeIds) {
   };
 }
 
-export {
-  FORMATION_OWNER, OBSERVATION_KIND, OwnerTurnMeter, planningGateObservation, spreadObservation,
-};
+export {OwnerTurnMeter, spreadObservation};
