@@ -94,8 +94,16 @@ class VirtualLinkSocket extends EventEmitter {
  * @param {Object} options - {network, linkDelayMs}.
  * @return {Object} {environment, handleMessage, endpoints, linkCount, frameCount}.
  */
-function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
+function createVirtualConnectionEnvironment({
+  network, linkDelayMs = 0, observe = null,
+} = {}) {
   if (!network) throw new Error('a virtual connection environment needs a network');
+  // Capture only, and in LINK vocabulary: an endpoint bound, a socket opened,
+  // a frame moved between two nodes. What a frame means is the router's to
+  // decide, so nothing here reads a payload. The observer may not schedule,
+  // await or advance anything, and the environment does not check whether one
+  // is present before doing its work.
+  const report = typeof observe === 'function' ? observe : () => undefined;
   const endpoints = new Map();
   const links = new Map();
   const socketsByEndId = new Map();
@@ -116,6 +124,10 @@ function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
       transmit(endId, data) {
         const end = ends[endId];
         frameCount += 1;
+        report({
+          kind: 'frame_enqueued', frameKind: 'data',
+          fromNodeId: end.nodeId, toNodeId: ends[end.peer].nodeId,
+        });
         network.send({
           from: end.nodeId,
           to: ends[end.peer].nodeId,
@@ -126,6 +138,10 @@ function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
       },
       transmitClose(endId) {
         const end = ends[endId];
+        report({
+          kind: 'frame_enqueued', frameKind: 'close',
+          fromNodeId: end.nodeId, toNodeId: ends[end.peer].nodeId,
+        });
         network.send({
           from: end.nodeId,
           to: ends[end.peer].nodeId,
@@ -142,6 +158,10 @@ function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
     socketsByEndId.set(`${linkId}:server`, serverSocket);
     clientSocket._open();
     serverSocket._open();
+    report({
+      kind: 'physical_socket_open',
+      fromNodeId: clientNodeId, toNodeId: serverNodeId,
+    });
     return {clientSocket, serverSocket};
   }
 
@@ -151,9 +171,14 @@ function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
     },
     registerEndpoint(portKey, endpoint) {
       endpoints.set(portKey, endpoint);
+      report({kind: 'virtual_endpoint_registered', nodeId: endpoint.nodeId});
     },
     releaseEndpoint(portKey) {
+      const endpoint = endpoints.get(portKey);
       endpoints.delete(portKey);
+      report({
+        kind: 'virtual_endpoint_released', nodeId: endpoint?.nodeId ?? null,
+      });
     },
     lookupEndpoint(portKey) {
       return endpoints.get(portKey);
@@ -161,19 +186,30 @@ function createVirtualConnectionEnvironment({network, linkDelayMs = 0} = {}) {
     createConnectionPair({localNodeId, remoteNodeId} = {}) {
       // No same-node shortcut: a link between two runtimes co-hosted on one
       // node is still a link, and its frames still cross the network.
+      report({
+        kind: 'dial_started', fromNodeId: localNodeId, toNodeId: remoteNodeId,
+      });
       return makeLink({clientNodeId: localNodeId, serverNodeId: remoteNodeId});
     },
   };
 
   // Claim the environment's own frames out of the scenario's node handler
   // chain, exactly as a cohort does.
-  function handleMessage(_nodeId, message) {
+  function handleMessage(nodeId, message) {
     if (message.type === VIRTUAL_LINK_FRAME_TYPE) {
+      report({
+        kind: 'frame_delivered', frameKind: 'data',
+        fromNodeId: message.from ?? null, toNodeId: nodeId,
+      });
       socketsByEndId.get(message.payload.targetEndId)
         ?._deliver(message.payload.data);
       return true;
     }
     if (message.type === VIRTUAL_LINK_CLOSE_TYPE) {
+      report({
+        kind: 'frame_delivered', frameKind: 'close',
+        fromNodeId: message.from ?? null, toNodeId: nodeId,
+      });
       socketsByEndId.get(message.payload.targetEndId)?._remoteClosed();
       return true;
     }
