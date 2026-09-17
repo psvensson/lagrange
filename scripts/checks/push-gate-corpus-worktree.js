@@ -300,35 +300,45 @@ function gateMaterializedTree(root, ref) {
   }
 }
 
-function main(argv) {
-  const args = argv.slice(2);
-  let ref = null;
-  let inPlace = false;
-  let gateSha = null;
-  let refLinesFile = null;
-  let command = null;
+// The command line, read once: each flag names what it selects, and an
+// unknown argument is the usage refusal.
+function parseGateArguments(args) {
+  const parsed = {ref: null, inPlace: false, gateSha: null, refLinesFile: null, command: null};
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === REF_FLAG && index + 1 < args.length) {
-      ref = args[index + 1];
+    const hasValue = index + 1 < args.length;
+    if (args[index] === REF_FLAG && hasValue) {
+      parsed.ref = args[index + 1];
       index += 1;
     } else if (args[index] === IN_PLACE_FLAG) {
-      inPlace = true;
-    } else if (args[index] === GATE_FLAG && index + 1 < args.length) {
-      gateSha = args[index + 1];
+      parsed.inPlace = true;
+    } else if (args[index] === GATE_FLAG && hasValue) {
+      parsed.gateSha = args[index + 1];
       index += 1;
-    } else if (args[index] === REF_LINES_FLAG && index + 1 < args.length) {
-      refLinesFile = args[index + 1];
+    } else if (args[index] === REF_LINES_FLAG && hasValue) {
+      parsed.refLinesFile = args[index + 1];
       index += 1;
-    } else if (args[index] === RUN_FLAG && index + 1 < args.length) {
-      command = args.slice(index + 1);
+    } else if (args[index] === RUN_FLAG && hasValue) {
+      parsed.command = args.slice(index + 1);
       break;
     } else {
       usage();
     }
   }
+  return parsed;
+}
+
+// The three modes exclude each other, and the exact-sha extras belong to
+// the exact-sha mode only.
+function validateGateArguments({ref, inPlace, gateSha, refLinesFile, command}) {
   if (inPlace && ref !== null) usage();
   if (gateSha !== null && (inPlace || ref !== null)) usage();
   if (gateSha === null && (refLinesFile !== null || command !== null)) usage();
+}
+
+function main(argv) {
+  const parsed = parseGateArguments(argv.slice(2));
+  validateGateArguments(parsed);
+  const {ref, inPlace, gateSha, refLinesFile, command} = parsed;
 
   const root = repoRoot();
   if (gateSha !== null) {
