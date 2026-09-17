@@ -41,7 +41,7 @@ const TARGET_THRESHOLD = 12;
 // split retired both generic getPriorityRecoveryPlanningSnapshot methods and
 // the gateway queue-metadata, attribution execution-node assertion and
 // superseded host-fixpoint settler were extracted or removed.
-const BASELINE_COUNT = 1820;
+const BASELINE_COUNT = 1819;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
