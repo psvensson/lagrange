@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2103,
+    "ordinary": 2104,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2120,
-  "digest": "fnv1a32-f349cecd",
+  "censusSize": 2121,
+  "digest": "fnv1a32-fb509c11",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -436,6 +436,7 @@
     "test/config/control-plane-gateway-registry-guardrails.test.js": "ordinary",
     "test/config/dynamic-config-service.test.js": "ordinary",
     "test/config/dynamic-config-startup-wiring.test.js": "ordinary",
+    "test/config/full-corpus-canary-workflow.test.js": "ordinary",
     "test/config/latency-topology-ownership-guardrails.test.js": "ordinary",
     "test/config/raft-adaptive-timing-controller.test.js": "ordinary",
     "test/config/system-cache-write-callsite-guardrails.test.js": "ordinary",

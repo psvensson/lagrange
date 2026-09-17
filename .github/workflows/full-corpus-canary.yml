@@ -139,6 +139,15 @@ jobs:
       - name: Whole behavioural corpus
         run: npm run test:all -- --keep-going
 
+      # The convergence-probe class (test/shards/convergence-probes.txt) is
+      # bounded-time convergence: statistical and hardware-relative, never a
+      # per-run gate (decision 6fcb63299). The change-proof planner leaves it
+      # out by name; this step is where it is observed, and only observed.
+      - name: Convergence probes (observed, never gating)
+        if: always()
+        continue-on-error: true
+        run: npm run test:convergence-probes
+
       - name: Upload corpus evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

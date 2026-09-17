@@ -83,6 +83,10 @@ import {
   PROOF_SCOPE_PATH,
 } from './checks/change-selection-constants.js';
 import {runClassifiedTestFiles} from './run-classified-test-files.js';
+import {derivePrimaryClasses} from './checks/test-primary-classification.js';
+import {
+  PRIMARY_CLASS_CONVERGENCE_PROBE,
+} from './checks/test-primary-classification-constants.js';
 
 const UTF8 = 'utf8';
 const BASE_FLAG = '--base';
@@ -101,6 +105,14 @@ const LABEL_REASON = 'reason:';
 const LABEL_TOTAL = 'total:';
 const REFUSED_LABEL = 'REFUSED';
 const TESTS_SUFFIX = ' test(s)';
+// Bounded-time convergence is a statistical, hardware-relative property
+// (decision 6fcb63299; docs/convergence-donewhen-metric.md): the class is
+// observed by the canary's non-gating step and is never part of a change
+// proof. The plan names what it left out, so the omission is never silent.
+const OBSERVED_ELSEWHERE_CLASS = PRIMARY_CLASS_CONVERGENCE_PROBE;
+const LABEL_OBSERVED_ELSEWHERE =
+  `observed elsewhere (${OBSERVED_ELSEWHERE_CLASS}, the canary's non-gating step):`;
+const OBSERVED_ELSEWHERE_SUFFIX = ` ${OBSERVED_ELSEWHERE_CLASS} left to the canary`;
 const UNIQUE_TESTS_SUFFIX = ' unique test(s)';
 const USAGE =
   'usage: node scripts/select-change-tests.js [--base <sha>] [--head <sha>] ' +
@@ -395,13 +407,17 @@ export function buildExecutionPlan(options) {
     addPlanReasons(merged, entry.path, entry.reasons);
   }
   const tests = [];
+  const observedElsewhere = [];
+  const primaryClasses = derivePrimaryClasses(planRoot).classes;
   const testPaths = sortStrings(orderedStringMapKeys(merged));
   for (let index = 0; index < testPaths.length; index += 1) {
     const testPath = testPaths[index];
-    appendArrayValue(tests, {
-      path: testPath,
-      reasons: orderedStringSetValues(orderedStringMapGet(merged, testPath)),
-    });
+    const reasons = orderedStringSetValues(orderedStringMapGet(merged, testPath));
+    // A spine test is never left out, whatever its class: the spine is the
+    // orchestrator's unconditional authority.
+    const leftOut = primaryClasses[testPath] === OBSERVED_ELSEWHERE_CLASS &&
+      !arrayIncludes(reasons, REASON_SAFETY_SPINE);
+    appendArrayValue(leftOut ? observedElsewhere : tests, {path: testPath, reasons});
   }
   return {
     kind: selection.kind,
@@ -411,6 +427,7 @@ export function buildExecutionPlan(options) {
     changedPaths,
     spineCount: spineTests.length,
     selectedCount: selected.length,
+    observedElsewhere,
     tests,
   };
 }
@@ -528,6 +545,13 @@ function renderExplain(plan) {
     appendArrayValue(lines, `${INDENT}${reason}: ` +
       `${orderedStringMapGet(byReason, reason).length}${TESTS_SUFFIX}`);
   }
+  if (plan.observedElsewhere.length > 0) {
+    appendArrayValue(lines, BLANK);
+    appendArrayValue(lines, LABEL_OBSERVED_ELSEWHERE);
+    for (let index = 0; index < plan.observedElsewhere.length; index += 1) {
+      appendArrayValue(lines, INDENT + plan.observedElsewhere[index].path);
+    }
+  }
   appendArrayValue(lines, BLANK);
   appendArrayValue(lines, LABEL_SELECTION);
   appendArrayValue(lines, `${INDENT}${plan.kind}`);
@@ -591,7 +615,8 @@ function main() {
   }
   process.stdout.write(
     `${plan.kind}: ${plan.tests.length}${TESTS_SUFFIX} ` +
-    `(${plan.spineCount} spine, ${plan.selectedCount} selected)${NEWLINE}`);
+    `(${plan.spineCount} spine, ${plan.selectedCount} selected, ` +
+    `${plan.observedElsewhere.length}${OBSERVED_ELSEWHERE_SUFFIX})${NEWLINE}`);
   // This path never runs the whole corpus; the push gate's proof owns that
   // decision and records it itself.
   writeProofScope({head: headSha(), fullCorpus: false, plan});

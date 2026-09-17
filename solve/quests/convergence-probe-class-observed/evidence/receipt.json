@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "convergence-probe-class-observed",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/select-change-tests.test.js": "1839821ca25430b242a7c6b85f6f3d93e5e0931c64f28c899fe10176190f3681",
+    "test/config/full-corpus-canary-workflow.test.js": "6758a024ad7f10ef1082d811eff352778425c0ca9d7676e90b8b23bba753771b"
+  },
+  "generatedAt": "2026-09-17T15:16:08.953Z",
+  "receipts": [
+    {
+      "id": "planner-leaves-the-class-out-by-name",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the convergence-probe class is observed elsewhere, never part of a change proof$\" test/scripts/select-change-tests.test.js",
+      "detail": "a selector wanting every curated probe gets a plan that runs the whole spine, none of the probes, and names each probe as observed elsewhere",
+      "testFile": "test/scripts/select-change-tests.test.js"
+    },
+    {
+      "id": "canary-observes-the-class-non-gating",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the canary observes the convergence-probe class in a non-gating step$\" test/config/full-corpus-canary-workflow.test.js",
+      "detail": "full-corpus-canary.yml runs npm run test:convergence-probes with continue-on-error and if: always(), after the corpus",
+      "testFile": "test/config/full-corpus-canary-workflow.test.js"
+    }
+  ]
+}

@@ -33,6 +33,9 @@ import {
   SUBSYSTEM_MANIFEST_PATH,
 } from '../../scripts/checks/test-subsystem-classification-constants.js';
 import {
+  CONVERGENCE_PROBES_SHARD_PATH,
+} from '../../scripts/checks/test-primary-classification-constants.js';
+import {
   buildExecutionPlan,
   loadSafetySpine,
 } from '../../scripts/select-change-tests.js';
@@ -406,4 +409,32 @@ test('the plan reports spine and selected counts separately', () => {
   const result = plan(['src/query/sql-query-engine.js']);
   assert.equal(result.spineCount, spine.length);
   assert.ok(result.selectedCount > 0);
+});
+
+test('the convergence-probe class is observed elsewhere, never part of a change proof', () => {
+  // Bounded-time convergence is statistical and hardware-relative (decision
+  // 6fcb63299): the class lives in the curated shard, the canary observes it
+  // in a non-gating step, and a change proof leaves it out BY NAME - the plan
+  // records what it left out, so the omission is never silent under-selection.
+  const probes = fs.readFileSync(path.join(root, CONVERGENCE_PROBES_SHARD_PATH), UTF8)
+    .split('\n').map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#')).sort();
+  assert.ok(probes.length > 0, 'the curated shard names at least one probe');
+  for (const spineTest of spine) {
+    assert.ok(!probes.includes(spineTest),
+      `${spineTest}: a spine test can never be a convergence probe`);
+  }
+  const result = plan(['src/query/sql-query-engine.js'], {
+    selector: () => ({kind: SELECTION_PRECISE,
+      tests: probes.map((probe) => ({path: probe, reasons: ['observer: directories']}))}),
+  });
+  const planned = new Set(result.tests.map((entry) => entry.path));
+  for (const probe of probes) {
+    assert.ok(!planned.has(probe), `${probe} is not part of the proof`);
+  }
+  assert.equal(result.tests.length, spine.length, 'the spine still runs whole');
+  assert.deepEqual(result.observedElsewhere.map((entry) => entry.path), probes,
+    'every probe the selector wanted is named as observed elsewhere');
+  assert.deepEqual(result.observedElsewhere[0].reasons, ['observer: directories'],
+    'with the reason it would have run for');
 });

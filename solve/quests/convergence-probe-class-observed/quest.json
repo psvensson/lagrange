@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "convergence-probe-class-observed",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The convergence-probe class (test/shards/convergence-probes.txt, 3 files) is bounded-time convergence: statistical and hardware-relative, never a per-run gate (decision 6fcb63299). That decision was half implemented: test:all excluded the class, but the change-proof planner still selected its files by observation, so every land touching transport-messaging, bootstrap-membership or cdc-metadata ran them (346 s red per run on 2026-09-17) while no CI corpus ever did. Now the planner leaves the class out by name and records what it left out (plan.observedElsewhere, the explain section and the summary line), a spine test is never left out whatever its class, and the full-corpus canary gains a non-gating step that runs npm run test:convergence-probes so the probes are finally observed. The multi-join probe was already re-expressed for the runtime-owned endpoint contract (2c4f26d36).",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/convergence-probe-class-observed/evidence/receipt.json",
+      "requiredReceipts": [
+        "planner-leaves-the-class-out-by-name",
+        "canary-observes-the-class-non-gating"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "never-silent",
+      "statement": "Every probe the selector wanted is named in the plan as observed elsewhere with the reason it would have run for; the summary line and --explain print the count and the paths."
+    },
+    {
+      "id": "spine-never-dropped",
+      "statement": "A safety-spine test is never left out of a proof whatever its class."
+    },
+    {
+      "id": "observed-not-gating",
+      "statement": "The canary step runs the class with continue-on-error and if: always(); it never fails the workflow and never becomes a push-gate lane."
+    },
+    {
+      "id": "no-new-script-or-workflow",
+      "statement": "Only existing files are edited: the planner, its test, the canary workflow."
+    }
+  ],
+  "sealedAt": "2face3dc2f689334b7d6f965b5e09fab0bdafe52"
+}

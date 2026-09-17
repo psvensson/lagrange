@@ -7,7 +7,7 @@
     "bootstrap-membership": 251,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 189,
+    "control-plane": 190,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2120,
-  "digest": "fnv1a32-90d40de6",
+  "censusSize": 2121,
+  "digest": "fnv1a32-8a4f201c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a766951b",
+  "observationDigest": "fnv1a32-9705a996",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -456,6 +456,7 @@
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
     "test/config/dynamic-config-service.test.js": "control-plane",
     "test/config/dynamic-config-startup-wiring.test.js": "control-plane",
+    "test/config/full-corpus-canary-workflow.test.js": "control-plane",
     "test/config/latency-topology-ownership-guardrails.test.js": "architecture-governance",
     "test/config/raft-adaptive-timing-controller.test.js": "control-plane",
     "test/config/system-cache-write-callsite-guardrails.test.js": "architecture-governance",
@@ -2929,6 +2930,11 @@
     "test/config/dynamic-config-startup-wiring.test.js": {
       "files": [
         "src/config/dynamic-config-startup-wiring.js"
+      ]
+    },
+    "test/config/full-corpus-canary-workflow.test.js": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml"
       ]
     },
     "test/config/latency-topology-ownership-guardrails.test.js": {
