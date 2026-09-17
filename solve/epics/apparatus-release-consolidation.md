@@ -443,6 +443,59 @@ public-repo self-hosted rule), once `scripts/lab.js` is on this line.
 Post-push corpus ~75 min to ~30 min; it is what makes the delta-only land
 comfortable.
 
+### Measured 2026-09-17 (lane-parallelism-measurement, first half)
+
+Bootstrap class, 181 files, `TAP_TIMEOUT_FLOOR=120`, no retry policy, on
+three hosts (dev = this machine, tv-dator and lenovo-laptop = lab nodes
+provisioned that day):
+
+| Host | jobs=1 | jobs=2 | jobs=4 |
+| --- | --- | --- | --- |
+| dev, 20 threads | 279 s, 264 s (2/2 green) | 139 s, 139 s, 194 s (2/3) | - |
+| tv-dator, 12 threads | 300, 291, 291 s (3/3) | 182, 183, 181 s (3/3) | - |
+| lenovo, 8 threads | - | 245, 244, 251, 253, 248, 250, 250 s (7/7) | 169, 168, 168 s (3/3) |
+
+jobs=2 halves the lane on the dev box and takes 1.6x off the lab nodes;
+13 jobs=2 runs, 12 green. The one red was
+`test/bootstrap/fresh-join-via-non-seed-node.integration.test.js` hitting
+its 120 s timeout after 22 s and 21 s in the sibling runs; the repository
+already records it as "pre-existing flaky at 1 in 6 on HEAD"
+(`formation-sim-production-replica-composition` log) and 8/8 standalone
+repeats passed, so the observation matches the recorded base rate, not
+contention. jobs=4 held 3/3 on 8 threads. No default is changed here; the
+serial primary classes still decide the lane.
+
+The overlap half is NOT answered: tv-dator's serial arm was 978 s ordinary
+plus 1774 s exclusive (2752 s total), and the overlapped arm aborted - see
+the runner defect below - so its 1895 s is not comparable. A lab node needs
+the canary's own prerequisites (helm, wasm-tools, a psql client, the pinned
+MovieLens dataset) or five files red for setup reasons.
+
+### Found while measuring (2026-09-17), each its own owner
+
+**runner-output-bound** - `finalizeTestRun` in `scripts/run-test-files.js`
+(line ~301) reads a test's whole stdout AND stderr into strings. Under lane
+overlap on tv-dator,
+`test/integration/message-group-multi-join-formation.integration.test.js`
+wrote a 608,651,868-byte `.tap` file, past V8's string cap, so the runner
+died with `ERR_STRING_TOO_LONG` and took the whole exclusive lane (220 of
+262 files) with it. A pathological output must not be able to destroy a
+lane's results: read bounded (the analysis and the time tail only need the
+head and tail) and report the file instead of throwing. The same test's
+output is 89 KB on the dev box, so the storm is contention-dependent and
+its diagnostic loop is a second, separate defect.
+
+**canary-proof-reuse** - the canary's `decide` job skips the corpus only
+when the ci run uploaded a `proof-scope` artifact carrying the same sha with
+`fullCorpus:true`. On 0f93df70c the ci gate refused early
+(RELEASE_PROOF_REQUIRED for the lockfile) and uploaded nothing, so the
+canary re-proved a corpus the local push gate had already proved on that
+exact sha: 74 min of duplicate work. Two parts: `decide` consults the
+sha-keyed proof authority (`scripts/proof-authority.js`, today one contract
+`release-full-v1` read only by the release path) rather than a CI artifact
+alone, and a refusing gate still publishes its scope so "unproved" is
+distinguishable from "never ran".
+
 Out of this epic, recorded so it is not lost: the 196 s
 `test/simulation/formation-sim-charged-seed-host.test.js` (three charged
 simulator runs) belongs to `formation-seed-decoupling`.
