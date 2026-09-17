@@ -465,11 +465,32 @@ repeats passed, so the observation matches the recorded base rate, not
 contention. jobs=4 held 3/3 on 8 threads. No default is changed here; the
 serial primary classes still decide the lane.
 
-The overlap half is NOT answered: tv-dator's serial arm was 978 s ordinary
-plus 1774 s exclusive (2752 s total), and the overlapped arm aborted - see
-the runner defect below - so its 1895 s is not comparable. A lab node needs
-the canary's own prerequisites (helm, wasm-tools, a psql client, the pinned
-MovieLens dataset) or five files red for setup reasons.
+The overlap half is answered, and the answer is no. On lenovo, the two lanes
+run back to back cost 3839 s (1391 s ordinary at jobs=4, then 2448 s
+exclusive at jobs=1) with the exclusive lane 262/262 GREEN. Overlapped, the
+same work took 2969 s - 23% less wall, 870 s saved - but the exclusive lane
+fell to 257/262 and the ordinary lane lost one more file. The five are
+contention-sensitive, not flaky-by-nature: `membership-consistency`
+(102.7 s overlapped against ~61 s serial), `node-join-convergence-slo`
+(70.6 s), `artifact-payload-durability` (50.5 s),
+`seed-node-bootstrap` (59.2 s) and `move-replica-assignment-token`, plus
+`sql-query-engine-managed-split-children` in the ordinary lane. Those
+classes are serial precisely because their budgets are wall-clock
+literals, so 15 minutes is not worth five false reds per corpus; revisit
+only behind budgets that scale with observed contention.
+
+tv-dator's arm cannot be compared: its serial half was 978 s ordinary plus
+1774 s exclusive (2752 s), and its overlapped half aborted on the runner
+defect below, so the 1895 s it printed covers 220 of 262 exclusive files. A
+lab node also needs the canary's own prerequisites (helm, wasm-tools, a psql
+client, the pinned MovieLens dataset) or five files red for setup reasons.
+
+What the measurement does support: the bootstrap primary class at jobs=2.
+It is forced into the exclusive lane by `SERIAL_PRIMARY_CLASSES` today, and
+13 jobs=2 runs over three hosts found no contention failure, so a bootstrap
+lane at jobs=2 is the one default change this evidence earns (~2.5 min per
+full corpus locally, ~2 min on a lab node). It needs its own quest: the
+primary-class lane assignment is a contract several callers read.
 
 ### Found while measuring (2026-09-17), each its own owner
 
