@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "status": "current_live_calibration",
+  "basis": "segment",
+  "statement": "Virtual microseconds charged per owner turn segment (one dispatched turn or one explicit owner handoff) on the seed, from the single authorized calibration run; rate = segments per second of formation window.",
+  "source": {
+    "quest": "formation-calibration-run-2026-09-17",
+    "head": "73e8f8446f903ede1fc7bead158df5ad1760681e",
+    "bootedSrcFingerprint": "283c3683a7e7e760",
+    "evidence": "test/simulation/calibration/2026-09-17/seed-owner-costs.evidence.json",
+    "report": {
+      "path": "test/simulation/calibration/2026-09-17/seed-owner-costs.report.json",
+      "originalPath": "test-output/reports/movielens-lagrange-formation-only-live-2026-09-17T05-59-33-898Z.report.json",
+      "sha256": "eeaa9b0f75697f38c364561c36ace0e106e058097dc5d7049e8965c3c1eb2e43"
+    },
+    "table": "test/simulation/calibration/2026-09-17/seed-owner-costs.md",
+    "profileArchive": {
+      "sha256": "030c710091dd57793f3f9a5733d1d58f87f611457105d55c460d8564142f657e",
+      "bytes": 36182528
+    }
+  },
+  "window": {
+    "windowDurationUs": 137590719,
+    "source": "snapshot",
+    "observedAtMs": 1789624442907,
+    "unattributedPercent": 3.2479777941999126
+  },
+  "extraction": "usPerSegment = durationUs / (dispatchCount + handoffCount) from harvested.owners; segmentsPerSecond = segments / windowDurationUs * 1e6",
+  "owners": {
+    "admin": {
+      "usPerSegment": 145.86,
+      "segments": 37075,
+      "durationUs": 5407783,
+      "segmentsPerSecond": 269.46
+    },
+    "bootstrap": {
+      "usPerSegment": 42.25,
+      "segments": 225370,
+      "durationUs": 9522054,
+      "segmentsPerSecond": 1637.97
+    },
+    "membership_publication": {
+      "usPerSegment": 50.29,
+      "segments": 384118,
+      "durationUs": 19317738,
+      "segmentsPerSecond": 2791.74
+    },
+    "raft_apply": {
+      "usPerSegment": 318.71,
+      "segments": 22662,
+      "durationUs": 7222528,
+      "segmentsPerSecond": 164.71
+    },
+    "raft_protocol": {
+      "usPerSegment": 11.16,
+      "segments": 4692201,
+      "durationUs": 52344337,
+      "segmentsPerSecond": 34102.6
+    },
+    "readiness": {
+      "usPerSegment": 2772.31,
+      "segments": 503,
+      "durationUs": 1394474,
+      "segmentsPerSecond": 3.66
+    },
+    "rebalancer": {
+      "usPerSegment": 145.75,
+      "segments": 145775,
+      "durationUs": 21246343,
+      "segmentsPerSecond": 1059.48
+    },
+    "transport": {
+      "usPerSegment": 20.69,
+      "segments": 137667,
+      "durationUs": 2847860,
+      "segmentsPerSecond": 1000.55
+    },
+    "worker_dispatch": {
+      "usPerSegment": 0,
+      "segments": 0,
+      "durationUs": 0,
+      "segmentsPerSecond": 0
+    }
+  }
+}

@@ -316,13 +316,7 @@ async function simulate(seed, options = {}) {
 
 async function runSimulationGeneration(seed, options = {}) {
   initializeTestEnvironment();
-  // The 2026-09-13 table is superseded for correspondence. The metered
-  // oracle still needs SOME per-segment cost to make virtual time move, and
-  // it compares a run against itself rather than against the live process, so
-  // it may read it - by saying so here, where a reviewer can see it.
-  const calibration = loadCalibration(REPO_ROOT, undefined,
-    'metered oracle only: within-run determinism, never sim/live ' +
-    'correspondence, owner-rate ratios or coefficient selection');
+  const calibration = loadCalibration(REPO_ROOT);
   const ids = nodeIds();
   const seedId = ids[SEED_INDEX];
   const network = createVirtualNetwork({

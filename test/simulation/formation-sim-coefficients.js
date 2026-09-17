@@ -10,7 +10,7 @@ import path from 'node:path';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {createCostTable} from '../distributed/harness/cost-table.js';
 
-const CALIBRATION_FILE = 'test/simulation/calibration/formation-seed-2026-09-13.json';
+const CALIBRATION_FILE = 'test/simulation/calibration/formation-seed-2026-09-17.json';
 const OWNER_KEY_PREFIX = 'owner:';
 const MICROSECONDS_PER_MILLISECOND = 1000;
 const TEXT_ENCODING = 'utf8';

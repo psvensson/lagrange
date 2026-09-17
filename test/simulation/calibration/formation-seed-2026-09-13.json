@@ -4,7 +4,7 @@
   "supersession": {
     "quantitativeCorrespondence": "superseded",
     "reason": "production formation-attribution semantics changed after this run: the protocol task tracker and the seed pipeline phase completion now keep their lineage, so work this run measured as unattributed is measured as its owner now",
-    "replacement": "pending fresh live calibration",
+    "replacement": "test/simulation/calibration/formation-seed-2026-09-17.json (run 2026-09-17 on head 73e8f8446, same scenario, repaired attribution semantics)",
     "preserved": "the run itself remains valid historical evidence: formation behaviour, watchdog gaps, readiness and spread observations, formed timing, raw logs and the CPU profile digest are unchanged and are not to be rewritten",
     "inadmissibleFor": [
       "sim/live owner-rate ratios",

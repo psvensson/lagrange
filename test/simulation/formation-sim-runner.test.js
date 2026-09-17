@@ -47,6 +47,7 @@ const OTHER_SEED = 8;
 const NODE_COUNT = 5;
 const LIVE_REPORT = 'test/simulation/calibration/seed-owner-costs.report.json';
 const ACKNOWLEDGEMENT = 'witness: reads the superseded table deliberately';
+const SUPERSEDED_FILE = 'test/simulation/calibration/formation-seed-2026-09-13.json';
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'formation-sim-test-'));
@@ -55,7 +56,7 @@ function tempDir() {
 function calibrationFixture(mutate) {
   const dir = tempDir();
   const parsed = JSON.parse(fs.readFileSync(
-    path.join(REPO_ROOT, 'test/simulation/calibration/formation-seed-2026-09-13.json'), 'utf8'));
+    path.join(REPO_ROOT, 'test/simulation/calibration/formation-seed-2026-09-17.json'), 'utf8'));
   mutate(parsed);
   const relative = 'calibration.json';
   fs.writeFileSync(path.join(dir, relative), JSON.stringify(parsed));
@@ -109,24 +110,24 @@ test('the report carries the live shape and every node charged per owner', async
 });
 
 test('the runner refuses an uncalibrated owner set before it starts', () => {
-  assert.throws(() => loadCalibration(REPO_ROOT, 'test/simulation/absent.json', ACKNOWLEDGEMENT),
+  assert.throws(() => loadCalibration(REPO_ROOT, 'test/simulation/absent.json'),
     (error) => error instanceof CalibrationRefusal && error.code === REFUSAL.MISSING);
   const negative = calibrationFixture((parsed) => {
     parsed.owners[FORMATION_OWNER.REBALANCER].usPerSegment = -1;
   });
-  assert.throws(() => loadCalibration(negative.root, negative.relative, ACKNOWLEDGEMENT),
+  assert.throws(() => loadCalibration(negative.root, negative.relative),
     (error) => error.code === REFUSAL.INVALID);
   const absentOwner = calibrationFixture((parsed) => {
     delete parsed.owners[FORMATION_OWNER.READINESS];
   });
-  assert.throws(() => loadCalibration(absentOwner.root, absentOwner.relative, ACKNOWLEDGEMENT),
+  assert.throws(() => loadCalibration(absentOwner.root, absentOwner.relative),
     (error) => error.code === REFUSAL.INVALID, 'a missing owner never costs zero silently');
   const unbound = calibrationFixture((parsed) => {
     delete parsed.source.report;
   });
-  assert.throws(() => loadCalibration(unbound.root, unbound.relative, ACKNOWLEDGEMENT),
+  assert.throws(() => loadCalibration(unbound.root, unbound.relative),
     (error) => error.code === REFUSAL.SOURCE_UNBOUND);
-  const table = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const table = loadCalibration(REPO_ROOT);
   assert.ok(table.costTable.cost(`owner:${FORMATION_OWNER.RAFT_APPLY}`, 4) > 0,
     'four apply segments cost whole virtual milliseconds');
 });
@@ -135,23 +136,24 @@ test('the runner refuses an uncalibrated owner set before it starts', () => {
 // calibration for these ones. It may still be read, but only deliberately.
 test('a superseded calibration is refused unless the caller says what it is for',
   () => {
-    assert.throws(() => loadCalibration(REPO_ROOT),
+    assert.throws(() => loadCalibration(REPO_ROOT, SUPERSEDED_FILE),
       (error) => error instanceof CalibrationRefusal &&
         error.code === REFUSAL.SUPERSEDED,
-      'the committed table is not consumed as current coefficients by default');
-    const acknowledged = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+      'the 2026-09-13 table is not consumed as coefficients by default');
+    const acknowledged = loadCalibration(REPO_ROOT, SUPERSEDED_FILE,
+      ACKNOWLEDGEMENT);
     assert.equal(acknowledged.supersession.quantitativeCorrespondence,
       'superseded',
       'and what it is is carried on the loaded object, not hidden');
-    const current = calibrationFixture((parsed) => {
-      delete parsed.supersession;
-    });
-    assert.equal(loadCalibration(current.root, current.relative).supersession,
-      null, 'a calibration with no supersession record loads without one');
+    const current = loadCalibration(REPO_ROOT);
+    assert.equal(current.supersession, null,
+      'the current lineage loads without any acknowledgement');
+    assert.equal(current.status, 'current_live_calibration',
+      'and says what it is');
   });
 
 test('busy stretches never overlap: gap time is bounded by charged time', () => {
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   const network = createVirtualNetwork({costTable: calibration.costTable, startMs: 0});
   network.registerNode('n', () => {});
   const charges = new ChargeAccumulator({network, calibration});
@@ -206,16 +208,24 @@ test('deterministic mode refuses ambient time and timers while executing as a no
 // blocks. Each clause below is a separate way a scheduler can look right and
 // be wrong, so each is asserted on its own.
 test('scheduler causality: per-node availability, deferral, order and delivery', () => {
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   const network = createVirtualNetwork({costTable: calibration.costTable, startMs: 0});
   const fired = [];
   network.registerNode('a', () => {});
   network.registerNode('b', (message) => fired.push({at: network.now(), ...message}));
   const charges = new ChargeAccumulator({network, calibration});
-  // Clause 1: busyUntil is per node. Charging a leaves b available.
-  charges.segment('a', FORMATION_OWNER.READINESS, 1200);
+  // Clause 1: busyUntil is per node. Charging a leaves b available. The
+  // expected advance is DERIVED from the loaded calibration - segments times
+  // the owner's mean, floored to whole ms as the accumulator charges - so the
+  // witness asserts what charging means and not a number from one lineage.
+  const readinessSegments = 1200;
+  const expectedBusyUntil = Math.floor(readinessSegments *
+    calibration.owners[FORMATION_OWNER.READINESS].usPerSegment / 1000);
+  charges.segment('a', FORMATION_OWNER.READINESS, readinessSegments);
   const busyUntil = network.nodeBusyUntil('a');
-  assert.equal(busyUntil, 2255, 'clause 2: the segment advanced this node by its charged time');
+  assert.ok(expectedBusyUntil > 0, 'readiness is a calibrated, non-zero owner');
+  assert.equal(busyUntil, expectedBusyUntil,
+    'clause 2: the segment advanced this node by its charged time');
   assert.equal(network.nodeBusyUntil('b'), 0,
     'clause 1: charging one node does not make the other busy');
   // Clauses 3 to 5. Both become logically due at 5 ms, while a is busy: the
@@ -238,7 +248,7 @@ test('scheduler causality: per-node availability, deferral, order and delivery',
 });
 
 test('every exclusive segment is charged once: the pass\'s own turn and each handoff', async () => {
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   const network = createVirtualNetwork({costTable: calibration.costTable, startMs: 0});
   network.registerNode('n', () => {});
   const charges = new ChargeAccumulator({network, calibration});
@@ -292,7 +302,7 @@ test('every exclusive segment is charged once: the pass\'s own turn and each han
 });
 
 test('an owner the calibration never observed fails closed instead of costing zero', () => {
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   assert.equal(calibration.owners[FORMATION_OWNER.WORKER_DISPATCH].calibrated, false,
     'worker_dispatch was measured at 0 turns, so it has no mean');
   assert.equal(calibration.owners[FORMATION_OWNER.WORKER_DISPATCH].usPerSegment, null,
@@ -308,13 +318,12 @@ test('an owner the calibration never observed fails closed instead of costing ze
   const zeroMean = calibrationFixture((parsed) => {
     parsed.owners[FORMATION_OWNER.TRANSPORT].usPerSegment = 0;
   });
-  assert.throws(() => loadCalibration(zeroMean.root, zeroMean.relative,
-    ACKNOWLEDGEMENT),
-  (error) => error.code === REFUSAL.INVALID);
+  assert.throws(() => loadCalibration(zeroMean.root, zeroMean.relative),
+    (error) => error.code === REFUSAL.INVALID);
 });
 
 test('the unattributed residual is carried as a band and never priced', async () => {
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   assert.ok(calibration.residualPercent > 0,
     'the calibration window records the share no owner claimed');
   const report = await simulate(SEED);
@@ -357,7 +366,7 @@ test('the gap observer is the production heartbeat rule, not charged work', () =
   });
   assert.equal(punctual.exceeded, false, 'a 10 ms late beat is not a gap');
 
-  const calibration = loadCalibration(REPO_ROOT, undefined, ACKNOWLEDGEMENT);
+  const calibration = loadCalibration(REPO_ROOT);
   const network = createVirtualNetwork({costTable: calibration.costTable, startMs: 0});
   network.registerNode('busy', () => {});
   network.registerNode('blocked', () => {});

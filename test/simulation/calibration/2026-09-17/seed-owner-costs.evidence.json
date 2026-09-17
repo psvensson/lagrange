@@ -1,0 +1,1857 @@
+{
+  "schemaVersion": 1,
+  "quest": "formation-calibration-run-2026-09-17",
+  "recordedAt": "2026-09-17T06:00:38.831Z",
+  "head": "73e8f8446f903ede1fc7bead158df5ad1760681e",
+  "seedVersion": "0.2.5",
+  "bootedSrcFingerprint": "283c3683a7e7e760",
+  "trendRecord": "{\"schemaVersion\":1,\"at\":\"2026-09-17T05:59:33.898Z\",\"head\":\"73e8f8446\",\"scenario\":\"movielens-lagrange-formation-only-live\",\"passed\":true,\"verdict\":\"PASS\",\"reason\":\"schema_admitted\",\"seedStarved\":false,\"seedBlockedMs\":22145,\"seedMaxGapMs\":5214,\"windowMs\":299550,\"leaseWaits\":681,\"spreadGap\":0,\"admissionState\":\"admitted\",\"reportPath\":\"test-output/reports/movielens-lagrange-formation-only-live-2026-09-17T05-59-33-898Z.report.json\"}",
+  "artifacts": {
+    "liveReport": {
+      "path": "test/simulation/calibration/2026-09-17/seed-owner-costs.report.json",
+      "originalPath": "test-output/reports/movielens-lagrange-formation-only-live-2026-09-17T05-59-33-898Z.report.json",
+      "sha256": "eeaa9b0f75697f38c364561c36ace0e106e058097dc5d7049e8965c3c1eb2e43"
+    },
+    "seedProfileArchive": {
+      "sha256": "030c710091dd57793f3f9a5733d1d58f87f611457105d55c460d8564142f657e",
+      "bytes": 36182528
+    }
+  },
+  "formationWindow": {
+    "startMs": 1789624137677,
+    "endMs": 1789624437227,
+    "source": "demo_phase_timing",
+    "windowMs": 299550
+  },
+  "seedGaps": {
+    "gapCount": 19,
+    "totalGapMs": 35449,
+    "unexplainedMs": 22145,
+    "maxGapMs": 5214,
+    "blockedPercentOfWindow": 7.392755800367218,
+    "topSites": [
+      {
+        "site": "storage_reservation_reconcile",
+        "totalMs": 16129,
+        "count": 30
+      },
+      {
+        "site": "raft_follower_commit_apply_slice",
+        "totalMs": 6720,
+        "count": 21430
+      },
+      {
+        "site": "publication_recovery_gate_snapshot_build",
+        "totalMs": 2173,
+        "count": 22219
+      },
+      {
+        "site": "priority_recovery_planning_projection_build",
+        "totalMs": 1171,
+        "count": 10229
+      },
+      {
+        "site": "projection_readiness_owner_build",
+        "totalMs": 1074,
+        "count": 699
+      }
+    ]
+  },
+  "windowStarted": {
+    "time": "2026-09-17T05:51:45.441Z",
+    "deadlineMs": 210000,
+    "snapshotIntervalMs": 10000
+  },
+  "harvested": {
+    "source": "snapshot",
+    "observedAtMs": 1789624442907,
+    "schemaVersion": 1,
+    "windowComplete": false,
+    "windowStartedAtUs": 88622434,
+    "windowEndedAtUs": 226213153,
+    "windowDurationUs": 137590719,
+    "windowDurationMs": 137590.719,
+    "busyDurationUs": 123772033,
+    "idleDurationUs": 13818686,
+    "unattributedDurationUs": 4468916,
+    "unattributedDispatchCount": 82438,
+    "unattributedPercent": 3.2479777941999126,
+    "accountedDurationUs": 137590719,
+    "partitionDeltaUs": 0,
+    "overlapDurationUs": 0,
+    "turnCount": 5339193,
+    "owners": [
+      {
+        "owner": "admin",
+        "durationUs": 5407783,
+        "durationMs": 5407.783,
+        "dispatchCount": 36877,
+        "handoffCount": 198,
+        "turnSegmentCount": 37075
+      },
+      {
+        "owner": "bootstrap",
+        "durationUs": 9522054,
+        "durationMs": 9522.054,
+        "dispatchCount": 225357,
+        "handoffCount": 13,
+        "turnSegmentCount": 225370
+      },
+      {
+        "owner": "membership_publication",
+        "durationUs": 19317738,
+        "durationMs": 19317.738,
+        "dispatchCount": 383491,
+        "handoffCount": 627,
+        "turnSegmentCount": 384118
+      },
+      {
+        "owner": "raft_apply",
+        "durationUs": 7222528,
+        "durationMs": 7222.528,
+        "dispatchCount": 0,
+        "handoffCount": 22662,
+        "turnSegmentCount": 22662
+      },
+      {
+        "owner": "raft_protocol",
+        "durationUs": 52344337,
+        "durationMs": 52344.337,
+        "dispatchCount": 4362293,
+        "handoffCount": 329908,
+        "turnSegmentCount": 4692201
+      },
+      {
+        "owner": "readiness",
+        "durationUs": 1394474,
+        "durationMs": 1394.474,
+        "dispatchCount": 150,
+        "handoffCount": 353,
+        "turnSegmentCount": 503
+      },
+      {
+        "owner": "rebalancer",
+        "durationUs": 21246343,
+        "durationMs": 21246.343,
+        "dispatchCount": 142385,
+        "handoffCount": 3390,
+        "turnSegmentCount": 145775
+      },
+      {
+        "owner": "transport",
+        "durationUs": 2847860,
+        "durationMs": 2847.86,
+        "dispatchCount": 106210,
+        "handoffCount": 31457,
+        "turnSegmentCount": 137667
+      },
+      {
+        "owner": "worker_dispatch",
+        "durationUs": 0,
+        "durationMs": 0,
+        "dispatchCount": 0,
+        "handoffCount": 0,
+        "turnSegmentCount": 0
+      }
+    ],
+    "byExecutionNode": []
+  },
+  "completeWindow": {
+    "time": "2026-09-17T05:55:15.531Z",
+    "reason": "deadline",
+    "attribution": {
+      "schemaVersion": 1,
+      "windowComplete": true,
+      "windowStartedAtUs": 88622434,
+      "windowEndedAtUs": 298836849,
+      "windowDurationUs": 210214415,
+      "windowDurationMs": 210214.415,
+      "busyDurationUs": 192755877,
+      "idleDurationUs": 17458538,
+      "unattributedDurationUs": 6059466,
+      "unattributedDispatchCount": 89977,
+      "unattributedPercent": 2.882516881632499,
+      "accountedDurationUs": 210214415,
+      "partitionDeltaUs": 0,
+      "overlapDurationUs": 0,
+      "turnCount": 8200047,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 8206292,
+          "durationMs": 8206.292,
+          "dispatchCount": 52074,
+          "handoffCount": 274,
+          "turnSegmentCount": 52348
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 12631345,
+          "durationMs": 12631.345,
+          "dispatchCount": 286260,
+          "handoffCount": 13,
+          "turnSegmentCount": 286273
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 30530776,
+          "durationMs": 30530.776,
+          "dispatchCount": 595289,
+          "handoffCount": 905,
+          "turnSegmentCount": 596194
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 12599806,
+          "durationMs": 12599.806,
+          "dispatchCount": 0,
+          "handoffCount": 38456,
+          "turnSegmentCount": 38456
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 82954204,
+          "durationMs": 82954.204,
+          "dispatchCount": 6784831,
+          "handoffCount": 509989,
+          "turnSegmentCount": 7294820
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 2059750,
+          "durationMs": 2059.75,
+          "dispatchCount": 223,
+          "handoffCount": 576,
+          "turnSegmentCount": 799
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 32709163,
+          "durationMs": 32709.163,
+          "dispatchCount": 203097,
+          "handoffCount": 4594,
+          "turnSegmentCount": 207691
+        },
+        {
+          "owner": "transport",
+          "durationUs": 5005075,
+          "durationMs": 5005.075,
+          "dispatchCount": 188304,
+          "handoffCount": 52379,
+          "turnSegmentCount": 240683
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ],
+      "byExecutionNode": []
+    }
+  },
+  "snapshots": [
+    {
+      "time": "2026-09-17T05:51:58.994Z",
+      "windowDurationMs": 13677.699,
+      "unattributedPercent": 4.863354574479231,
+      "idleDurationUs": 5904611,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 2097418,
+          "durationMs": 2097.418,
+          "dispatchCount": 38011,
+          "handoffCount": 8,
+          "turnSegmentCount": 38019
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 912053,
+          "durationMs": 912.053,
+          "dispatchCount": 0,
+          "handoffCount": 3144,
+          "turnSegmentCount": 3144
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 4096872,
+          "durationMs": 4096.872,
+          "dispatchCount": 351243,
+          "handoffCount": 27451,
+          "turnSegmentCount": 378694
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        },
+        {
+          "owner": "transport",
+          "durationUs": 1550,
+          "durationMs": 1.55,
+          "dispatchCount": 0,
+          "handoffCount": 1,
+          "turnSegmentCount": 1
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:52:08.994Z",
+      "windowDurationMs": 23677.518,
+      "unattributedPercent": 4.138102650793043,
+      "idleDurationUs": 8164721,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 47235,
+          "durationMs": 47.235,
+          "dispatchCount": 36,
+          "handoffCount": 2,
+          "turnSegmentCount": 38
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 3389877,
+          "durationMs": 3389.877,
+          "dispatchCount": 109256,
+          "handoffCount": 13,
+          "turnSegmentCount": 109269
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 577237,
+          "durationMs": 577.237,
+          "dispatchCount": 10585,
+          "handoffCount": 94,
+          "turnSegmentCount": 10679
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 963547,
+          "durationMs": 963.547,
+          "dispatchCount": 0,
+          "handoffCount": 3262,
+          "turnSegmentCount": 3262
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 9074039,
+          "durationMs": 9074.039,
+          "dispatchCount": 981301,
+          "handoffCount": 81566,
+          "turnSegmentCount": 1062867
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 54022,
+          "durationMs": 54.022,
+          "dispatchCount": 8,
+          "handoffCount": 15,
+          "turnSegmentCount": 23
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 425490,
+          "durationMs": 425.49,
+          "dispatchCount": 2558,
+          "handoffCount": 188,
+          "turnSegmentCount": 2746
+        },
+        {
+          "owner": "transport",
+          "durationUs": 1550,
+          "durationMs": 1.55,
+          "dispatchCount": 0,
+          "handoffCount": 1,
+          "turnSegmentCount": 1
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:52:21.320Z",
+      "windowDurationMs": 36003.296,
+      "unattributedPercent": 3.3981805443590494,
+      "idleDurationUs": 8728144,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 132880,
+          "durationMs": 132.88,
+          "dispatchCount": 122,
+          "handoffCount": 5,
+          "turnSegmentCount": 127
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 3723109,
+          "durationMs": 3723.109,
+          "dispatchCount": 116522,
+          "handoffCount": 13,
+          "turnSegmentCount": 116535
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 5324017,
+          "durationMs": 5324.017,
+          "dispatchCount": 124077,
+          "handoffCount": 361,
+          "turnSegmentCount": 124438
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 1100008,
+          "durationMs": 1100.008,
+          "dispatchCount": 0,
+          "handoffCount": 3732,
+          "turnSegmentCount": 3732
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 12619256,
+          "durationMs": 12619.256,
+          "dispatchCount": 1174264,
+          "handoffCount": 94728,
+          "turnSegmentCount": 1268992
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 86319,
+          "durationMs": 86.319,
+          "dispatchCount": 14,
+          "handoffCount": 33,
+          "turnSegmentCount": 47
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 2911412,
+          "durationMs": 2911.412,
+          "dispatchCount": 23281,
+          "handoffCount": 944,
+          "turnSegmentCount": 24225
+        },
+        {
+          "owner": "transport",
+          "durationUs": 154694,
+          "durationMs": 154.694,
+          "dispatchCount": 3267,
+          "handoffCount": 1098,
+          "turnSegmentCount": 4365
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:52:31.883Z",
+      "windowDurationMs": 46566.458,
+      "unattributedPercent": 2.9662230268834278,
+      "idleDurationUs": 9180584,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 374297,
+          "durationMs": 374.297,
+          "dispatchCount": 1292,
+          "handoffCount": 7,
+          "turnSegmentCount": 1299
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 4130995,
+          "durationMs": 4130.995,
+          "dispatchCount": 124499,
+          "handoffCount": 13,
+          "turnSegmentCount": 124512
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 7390258,
+          "durationMs": 7390.258,
+          "dispatchCount": 159779,
+          "handoffCount": 409,
+          "turnSegmentCount": 160188
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 1570695,
+          "durationMs": 1570.695,
+          "dispatchCount": 0,
+          "handoffCount": 5306,
+          "turnSegmentCount": 5306
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 16516576,
+          "durationMs": 16516.576,
+          "dispatchCount": 1451492,
+          "handoffCount": 111248,
+          "turnSegmentCount": 1562740
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 89709,
+          "durationMs": 89.709,
+          "dispatchCount": 14,
+          "handoffCount": 48,
+          "turnSegmentCount": 62
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 5535055,
+          "durationMs": 5535.055,
+          "dispatchCount": 49001,
+          "handoffCount": 1270,
+          "turnSegmentCount": 50271
+        },
+        {
+          "owner": "transport",
+          "durationUs": 397024,
+          "durationMs": 397.024,
+          "dispatchCount": 14102,
+          "handoffCount": 4772,
+          "turnSegmentCount": 18874
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:52:41.960Z",
+      "windowDurationMs": 56643.809,
+      "unattributedPercent": 2.706558805040812,
+      "idleDurationUs": 9614041,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 760916,
+          "durationMs": 760.916,
+          "dispatchCount": 3853,
+          "handoffCount": 15,
+          "turnSegmentCount": 3868
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 4675402,
+          "durationMs": 4675.402,
+          "dispatchCount": 134495,
+          "handoffCount": 13,
+          "turnSegmentCount": 134508
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 9395398,
+          "durationMs": 9395.398,
+          "dispatchCount": 193550,
+          "handoffCount": 448,
+          "turnSegmentCount": 193998
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 2120296,
+          "durationMs": 2120.296,
+          "dispatchCount": 0,
+          "handoffCount": 7064,
+          "turnSegmentCount": 7064
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 20019725,
+          "durationMs": 20019.725,
+          "dispatchCount": 1726758,
+          "handoffCount": 128809,
+          "turnSegmentCount": 1855567
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 126757,
+          "durationMs": 126.757,
+          "dispatchCount": 16,
+          "handoffCount": 65,
+          "turnSegmentCount": 81
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 7869265,
+          "durationMs": 7869.265,
+          "dispatchCount": 72214,
+          "handoffCount": 1503,
+          "turnSegmentCount": 73717
+        },
+        {
+          "owner": "transport",
+          "durationUs": 528911,
+          "durationMs": 528.911,
+          "dispatchCount": 19879,
+          "handoffCount": 7493,
+          "turnSegmentCount": 27372
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:52:52.066Z",
+      "windowDurationMs": 66749.274,
+      "unattributedPercent": 3.7670731819495145,
+      "idleDurationUs": 9974050,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 997917,
+          "durationMs": 997.917,
+          "dispatchCount": 4988,
+          "handoffCount": 29,
+          "turnSegmentCount": 5017
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 5203235,
+          "durationMs": 5203.235,
+          "dispatchCount": 146092,
+          "handoffCount": 13,
+          "turnSegmentCount": 146105
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 11112311,
+          "durationMs": 11112.311,
+          "dispatchCount": 226251,
+          "handoffCount": 497,
+          "turnSegmentCount": 226748
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 2603203,
+          "durationMs": 2603.203,
+          "dispatchCount": 0,
+          "handoffCount": 8659,
+          "turnSegmentCount": 8659
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 23092208,
+          "durationMs": 23092.208,
+          "dispatchCount": 1954702,
+          "handoffCount": 144990,
+          "turnSegmentCount": 2099692
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 162496,
+          "durationMs": 162.496,
+          "dispatchCount": 20,
+          "handoffCount": 79,
+          "turnSegmentCount": 99
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 10365983,
+          "durationMs": 10365.983,
+          "dispatchCount": 87635,
+          "handoffCount": 1627,
+          "turnSegmentCount": 89262
+        },
+        {
+          "owner": "transport",
+          "durationUs": 723377,
+          "durationMs": 723.377,
+          "dispatchCount": 27310,
+          "handoffCount": 10162,
+          "turnSegmentCount": 37472
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:02.126Z",
+      "windowDurationMs": 76809.251,
+      "unattributedPercent": 3.52553626645832,
+      "idleDurationUs": 10467183,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 1173058,
+          "durationMs": 1173.058,
+          "dispatchCount": 6224,
+          "handoffCount": 52,
+          "turnSegmentCount": 6276
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 5629645,
+          "durationMs": 5629.645,
+          "dispatchCount": 154637,
+          "handoffCount": 13,
+          "turnSegmentCount": 154650
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 12105798,
+          "durationMs": 12105.798,
+          "dispatchCount": 245500,
+          "handoffCount": 513,
+          "turnSegmentCount": 246013
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 3264060,
+          "durationMs": 3264.06,
+          "dispatchCount": 0,
+          "handoffCount": 10482,
+          "turnSegmentCount": 10482
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 27176398,
+          "durationMs": 27176.398,
+          "dispatchCount": 2280809,
+          "handoffCount": 169600,
+          "turnSegmentCount": 2450409
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 283819,
+          "durationMs": 283.819,
+          "dispatchCount": 34,
+          "handoffCount": 114,
+          "turnSegmentCount": 148
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 13054264,
+          "durationMs": 13054.264,
+          "dispatchCount": 106327,
+          "handoffCount": 1746,
+          "turnSegmentCount": 108073
+        },
+        {
+          "owner": "transport",
+          "durationUs": 947088,
+          "durationMs": 947.088,
+          "dispatchCount": 33998,
+          "handoffCount": 13515,
+          "turnSegmentCount": 47513
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:12.203Z",
+      "windowDurationMs": 86887.161,
+      "unattributedPercent": 3.314409133473702,
+      "idleDurationUs": 11014362,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 1833684,
+          "durationMs": 1833.684,
+          "dispatchCount": 12092,
+          "handoffCount": 80,
+          "turnSegmentCount": 12172
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 6123806,
+          "durationMs": 6123.806,
+          "dispatchCount": 164095,
+          "handoffCount": 13,
+          "turnSegmentCount": 164108
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 13152496,
+          "durationMs": 13152.496,
+          "dispatchCount": 265479,
+          "handoffCount": 531,
+          "turnSegmentCount": 266010
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 3910577,
+          "durationMs": 3910.577,
+          "dispatchCount": 0,
+          "handoffCount": 12339,
+          "turnSegmentCount": 12339
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 31890521,
+          "durationMs": 31890.521,
+          "dispatchCount": 2654480,
+          "handoffCount": 198632,
+          "turnSegmentCount": 2853112
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 434582,
+          "durationMs": 434.582,
+          "dispatchCount": 52,
+          "handoffCount": 166,
+          "turnSegmentCount": 218
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 14378035,
+          "durationMs": 14378.035,
+          "dispatchCount": 115663,
+          "handoffCount": 2100,
+          "turnSegmentCount": 117763
+        },
+        {
+          "owner": "transport",
+          "durationUs": 1269302,
+          "durationMs": 1269.302,
+          "dispatchCount": 46370,
+          "handoffCount": 17370,
+          "turnSegmentCount": 63740
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:22.296Z",
+      "windowDurationMs": 96979.929,
+      "unattributedPercent": 3.105079608792042,
+      "idleDurationUs": 11535801,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 2651274,
+          "durationMs": 2651.274,
+          "dispatchCount": 16779,
+          "handoffCount": 101,
+          "turnSegmentCount": 16880
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 6914872,
+          "durationMs": 6914.872,
+          "dispatchCount": 177193,
+          "handoffCount": 13,
+          "turnSegmentCount": 177206
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 14434183,
+          "durationMs": 14434.183,
+          "dispatchCount": 290926,
+          "handoffCount": 553,
+          "turnSegmentCount": 291479
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 4554838,
+          "durationMs": 4554.838,
+          "dispatchCount": 0,
+          "handoffCount": 14395,
+          "turnSegmentCount": 14395
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 35874193,
+          "durationMs": 35874.193,
+          "dispatchCount": 2994336,
+          "handoffCount": 224633,
+          "turnSegmentCount": 3218969
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 597095,
+          "durationMs": 597.095,
+          "dispatchCount": 70,
+          "handoffCount": 202,
+          "turnSegmentCount": 272
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 15839115,
+          "durationMs": 15839.115,
+          "dispatchCount": 121961,
+          "handoffCount": 2375,
+          "turnSegmentCount": 124336
+        },
+        {
+          "owner": "transport",
+          "durationUs": 1567254,
+          "durationMs": 1567.254,
+          "dispatchCount": 58523,
+          "handoffCount": 20005,
+          "turnSegmentCount": 78528
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:32.472Z",
+      "windowDurationMs": 107155.718,
+      "unattributedPercent": 2.9460509050949573,
+      "idleDurationUs": 12150186,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 3095317,
+          "durationMs": 3095.317,
+          "dispatchCount": 19917,
+          "handoffCount": 129,
+          "turnSegmentCount": 20046
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 7392894,
+          "durationMs": 7392.894,
+          "dispatchCount": 186459,
+          "handoffCount": 13,
+          "turnSegmentCount": 186472
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 15869530,
+          "durationMs": 15869.53,
+          "dispatchCount": 317650,
+          "handoffCount": 574,
+          "turnSegmentCount": 318224
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 5253794,
+          "durationMs": 5253.794,
+          "dispatchCount": 0,
+          "handoffCount": 16501,
+          "turnSegmentCount": 16501
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 40085786,
+          "durationMs": 40085.786,
+          "dispatchCount": 3351570,
+          "handoffCount": 252466,
+          "turnSegmentCount": 3604036
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 767587,
+          "durationMs": 767.587,
+          "dispatchCount": 92,
+          "handoffCount": 243,
+          "turnSegmentCount": 335
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 17511077,
+          "durationMs": 17511.077,
+          "dispatchCount": 129396,
+          "handoffCount": 2632,
+          "turnSegmentCount": 132028
+        },
+        {
+          "owner": "transport",
+          "durationUs": 1872685,
+          "durationMs": 1872.685,
+          "dispatchCount": 70751,
+          "handoffCount": 22949,
+          "turnSegmentCount": 93700
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:42.599Z",
+      "windowDurationMs": 117283.078,
+      "unattributedPercent": 2.8195866414761044,
+      "idleDurationUs": 12709035,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 3570565,
+          "durationMs": 3570.565,
+          "dispatchCount": 24118,
+          "handoffCount": 155,
+          "turnSegmentCount": 24273
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 8092680,
+          "durationMs": 8092.68,
+          "dispatchCount": 199460,
+          "handoffCount": 13,
+          "turnSegmentCount": 199473
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 16841005,
+          "durationMs": 16841.005,
+          "dispatchCount": 335466,
+          "handoffCount": 588,
+          "turnSegmentCount": 336054
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 5954089,
+          "durationMs": 5954.089,
+          "dispatchCount": 0,
+          "handoffCount": 18635,
+          "turnSegmentCount": 18635
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 44385844,
+          "durationMs": 44385.844,
+          "dispatchCount": 3703682,
+          "handoffCount": 279464,
+          "turnSegmentCount": 3983146
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1060650,
+          "durationMs": 1060.65,
+          "dispatchCount": 116,
+          "handoffCount": 282,
+          "turnSegmentCount": 398
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 19113384,
+          "durationMs": 19113.384,
+          "dispatchCount": 135417,
+          "handoffCount": 2883,
+          "turnSegmentCount": 138300
+        },
+        {
+          "owner": "transport",
+          "durationUs": 2248928,
+          "durationMs": 2248.928,
+          "dispatchCount": 83550,
+          "handoffCount": 26124,
+          "turnSegmentCount": 109674
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:53:52.690Z",
+      "windowDurationMs": 127373.631,
+      "unattributedPercent": 3.4088052337928563,
+      "idleDurationUs": 13254987,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 4689000,
+          "durationMs": 4689,
+          "dispatchCount": 30653,
+          "handoffCount": 177,
+          "turnSegmentCount": 30830
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 8825154,
+          "durationMs": 8825.154,
+          "dispatchCount": 212683,
+          "handoffCount": 13,
+          "turnSegmentCount": 212696
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 18018534,
+          "durationMs": 18018.534,
+          "dispatchCount": 358840,
+          "handoffCount": 608,
+          "turnSegmentCount": 359448
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 6468213,
+          "durationMs": 6468.213,
+          "dispatchCount": 0,
+          "handoffCount": 20404,
+          "turnSegmentCount": 20404
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 47971108,
+          "durationMs": 47971.108,
+          "dispatchCount": 3992122,
+          "handoffCount": 301239,
+          "turnSegmentCount": 4293361
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1114125,
+          "durationMs": 1114.125,
+          "dispatchCount": 124,
+          "handoffCount": 312,
+          "turnSegmentCount": 436
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 20141932,
+          "durationMs": 20141.932,
+          "dispatchCount": 138635,
+          "handoffCount": 3173,
+          "turnSegmentCount": 141808
+        },
+        {
+          "owner": "transport",
+          "durationUs": 2548659,
+          "durationMs": 2548.659,
+          "dispatchCount": 93990,
+          "handoffCount": 28584,
+          "turnSegmentCount": 122574
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:02.907Z",
+      "windowDurationMs": 137590.719,
+      "unattributedPercent": 3.2479777941999126,
+      "idleDurationUs": 13818686,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 5407783,
+          "durationMs": 5407.783,
+          "dispatchCount": 36877,
+          "handoffCount": 198,
+          "turnSegmentCount": 37075
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 9522054,
+          "durationMs": 9522.054,
+          "dispatchCount": 225357,
+          "handoffCount": 13,
+          "turnSegmentCount": 225370
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 19317738,
+          "durationMs": 19317.738,
+          "dispatchCount": 383491,
+          "handoffCount": 627,
+          "turnSegmentCount": 384118
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 7222528,
+          "durationMs": 7222.528,
+          "dispatchCount": 0,
+          "handoffCount": 22662,
+          "turnSegmentCount": 22662
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 52344337,
+          "durationMs": 52344.337,
+          "dispatchCount": 4362293,
+          "handoffCount": 329908,
+          "turnSegmentCount": 4692201
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1394474,
+          "durationMs": 1394.474,
+          "dispatchCount": 150,
+          "handoffCount": 353,
+          "turnSegmentCount": 503
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 21246343,
+          "durationMs": 21246.343,
+          "dispatchCount": 142385,
+          "handoffCount": 3390,
+          "turnSegmentCount": 145775
+        },
+        {
+          "owner": "transport",
+          "durationUs": 2847860,
+          "durationMs": 2847.86,
+          "dispatchCount": 106210,
+          "handoffCount": 31457,
+          "turnSegmentCount": 137667
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:13.240Z",
+      "windowDurationMs": 147923.279,
+      "unattributedPercent": 3.0727394840943187,
+      "idleDurationUs": 14239167,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 5810021,
+          "durationMs": 5810.021,
+          "dispatchCount": 38996,
+          "handoffCount": 208,
+          "turnSegmentCount": 39204
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 9962406,
+          "durationMs": 9962.406,
+          "dispatchCount": 234190,
+          "handoffCount": 13,
+          "turnSegmentCount": 234203
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 21676771,
+          "durationMs": 21676.771,
+          "dispatchCount": 427043,
+          "handoffCount": 690,
+          "turnSegmentCount": 427733
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 7774254,
+          "durationMs": 7774.254,
+          "dispatchCount": 0,
+          "handoffCount": 24498,
+          "turnSegmentCount": 24498
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 56017801,
+          "durationMs": 56017.801,
+          "dispatchCount": 4624840,
+          "handoffCount": 348605,
+          "turnSegmentCount": 4973445
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1400283,
+          "durationMs": 1400.283,
+          "dispatchCount": 150,
+          "handoffCount": 369,
+          "turnSegmentCount": 519
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 23392581,
+          "durationMs": 23392.581,
+          "dispatchCount": 154396,
+          "handoffCount": 3559,
+          "turnSegmentCount": 157955
+        },
+        {
+          "owner": "transport",
+          "durationUs": 3104698,
+          "durationMs": 3104.698,
+          "dispatchCount": 115362,
+          "handoffCount": 34108,
+          "turnSegmentCount": 149470
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:23.404Z",
+      "windowDurationMs": 158088.085,
+      "unattributedPercent": 2.9259890142890908,
+      "idleDurationUs": 14691665,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 6136829,
+          "durationMs": 6136.829,
+          "dispatchCount": 40607,
+          "handoffCount": 219,
+          "turnSegmentCount": 40826
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 10459930,
+          "durationMs": 10459.93,
+          "dispatchCount": 243474,
+          "handoffCount": 13,
+          "turnSegmentCount": 243487
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 23497649,
+          "durationMs": 23497.649,
+          "dispatchCount": 462068,
+          "handoffCount": 736,
+          "turnSegmentCount": 462804
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 8492659,
+          "durationMs": 8492.659,
+          "dispatchCount": 0,
+          "handoffCount": 26652,
+          "turnSegmentCount": 26652
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 60002681,
+          "durationMs": 60002.681,
+          "dispatchCount": 4933797,
+          "handoffCount": 370704,
+          "turnSegmentCount": 5304501
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1406165,
+          "durationMs": 1406.165,
+          "dispatchCount": 150,
+          "handoffCount": 390,
+          "turnSegmentCount": 540
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 25345802,
+          "durationMs": 25345.802,
+          "dispatchCount": 167299,
+          "handoffCount": 3728,
+          "turnSegmentCount": 171027
+        },
+        {
+          "owner": "transport",
+          "durationUs": 3429065,
+          "durationMs": 3429.065,
+          "dispatchCount": 126574,
+          "handoffCount": 37214,
+          "turnSegmentCount": 163788
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:33.826Z",
+      "windowDurationMs": 168509.297,
+      "unattributedPercent": 2.7922667079905983,
+      "idleDurationUs": 15191330,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 6476813,
+          "durationMs": 6476.813,
+          "dispatchCount": 41717,
+          "handoffCount": 228,
+          "turnSegmentCount": 41945
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 10871888,
+          "durationMs": 10871.888,
+          "dispatchCount": 252197,
+          "handoffCount": 13,
+          "turnSegmentCount": 252210
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 25163427,
+          "durationMs": 25163.427,
+          "dispatchCount": 494840,
+          "handoffCount": 779,
+          "turnSegmentCount": 495619
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 9360460,
+          "durationMs": 9360.46,
+          "dispatchCount": 0,
+          "handoffCount": 28827,
+          "turnSegmentCount": 28827
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 64145304,
+          "durationMs": 64145.304,
+          "dispatchCount": 5261522,
+          "handoffCount": 394879,
+          "turnSegmentCount": 5656401
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1449995,
+          "durationMs": 1449.995,
+          "dispatchCount": 159,
+          "handoffCount": 418,
+          "turnSegmentCount": 577
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 27452669,
+          "durationMs": 27452.669,
+          "dispatchCount": 180924,
+          "handoffCount": 3877,
+          "turnSegmentCount": 184801
+        },
+        {
+          "owner": "transport",
+          "durationUs": 3692182,
+          "durationMs": 3692.182,
+          "dispatchCount": 137334,
+          "handoffCount": 40035,
+          "turnSegmentCount": 177369
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:44.094Z",
+      "windowDurationMs": 178777.548,
+      "unattributedPercent": 2.6930288807854104,
+      "idleDurationUs": 15726814,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 6810202,
+          "durationMs": 6810.202,
+          "dispatchCount": 43663,
+          "handoffCount": 238,
+          "turnSegmentCount": 43901
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 11227881,
+          "durationMs": 11227.881,
+          "dispatchCount": 259784,
+          "handoffCount": 13,
+          "turnSegmentCount": 259797
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 26736449,
+          "durationMs": 26736.449,
+          "dispatchCount": 523841,
+          "handoffCount": 824,
+          "turnSegmentCount": 524665
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 10139709,
+          "durationMs": 10139.709,
+          "dispatchCount": 0,
+          "handoffCount": 31129,
+          "turnSegmentCount": 31129
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 68914012,
+          "durationMs": 68914.012,
+          "dispatchCount": 5623828,
+          "handoffCount": 421830,
+          "turnSegmentCount": 6045658
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1459328,
+          "durationMs": 1459.328,
+          "dispatchCount": 159,
+          "handoffCount": 452,
+          "turnSegmentCount": 611
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 28927929,
+          "durationMs": 28927.929,
+          "dispatchCount": 190168,
+          "handoffCount": 4025,
+          "turnSegmentCount": 194193
+        },
+        {
+          "owner": "transport",
+          "durationUs": 4020693,
+          "durationMs": 4020.693,
+          "dispatchCount": 149980,
+          "handoffCount": 43486,
+          "turnSegmentCount": 193466
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:54:54.527Z",
+      "windowDurationMs": 189211.177,
+      "unattributedPercent": 3.081864450322615,
+      "idleDurationUs": 16161757,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 7065910,
+          "durationMs": 7065.91,
+          "dispatchCount": 44370,
+          "handoffCount": 248,
+          "turnSegmentCount": 44618
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 11701063,
+          "durationMs": 11701.063,
+          "dispatchCount": 268810,
+          "handoffCount": 13,
+          "turnSegmentCount": 268823
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 28420899,
+          "durationMs": 28420.899,
+          "dispatchCount": 554670,
+          "handoffCount": 869,
+          "turnSegmentCount": 555539
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 10767504,
+          "durationMs": 10767.504,
+          "dispatchCount": 0,
+          "handoffCount": 33119,
+          "turnSegmentCount": 33119
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 72727299,
+          "durationMs": 72727.299,
+          "dispatchCount": 5919023,
+          "handoffCount": 443690,
+          "turnSegmentCount": 6362713
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1560481,
+          "durationMs": 1560.481,
+          "dispatchCount": 167,
+          "handoffCount": 478,
+          "turnSegmentCount": 645
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 30696102,
+          "durationMs": 30696.102,
+          "dispatchCount": 199727,
+          "handoffCount": 4199,
+          "turnSegmentCount": 203926
+        },
+        {
+          "owner": "transport",
+          "durationUs": 4278930,
+          "durationMs": 4278.93,
+          "dispatchCount": 159964,
+          "handoffCount": 45950,
+          "turnSegmentCount": 205914
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:55:04.689Z",
+      "windowDurationMs": 199372.298,
+      "unattributedPercent": 2.983191275650542,
+      "idleDurationUs": 16838425,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 7712155,
+          "durationMs": 7712.155,
+          "dispatchCount": 48717,
+          "handoffCount": 261,
+          "turnSegmentCount": 48978
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 12093597,
+          "durationMs": 12093.597,
+          "dispatchCount": 276454,
+          "handoffCount": 13,
+          "turnSegmentCount": 276467
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 29407323,
+          "durationMs": 29407.323,
+          "dispatchCount": 574033,
+          "handoffCount": 888,
+          "turnSegmentCount": 574921
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 11664540,
+          "durationMs": 11664.54,
+          "dispatchCount": 0,
+          "handoffCount": 35676,
+          "turnSegmentCount": 35676
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 77637216,
+          "durationMs": 77637.216,
+          "dispatchCount": 6339085,
+          "handoffCount": 476086,
+          "turnSegmentCount": 6815171
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 1893293,
+          "durationMs": 1893.293,
+          "dispatchCount": 199,
+          "handoffCount": 527,
+          "turnSegmentCount": 726
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 31549418,
+          "durationMs": 31549.418,
+          "dispatchCount": 201004,
+          "handoffCount": 4397,
+          "turnSegmentCount": 205401
+        },
+        {
+          "owner": "transport",
+          "durationUs": 4628674,
+          "durationMs": 4628.674,
+          "dispatchCount": 174024,
+          "handoffCount": 49214,
+          "turnSegmentCount": 223238
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    },
+    {
+      "time": "2026-09-17T05:55:15.511Z",
+      "windowDurationMs": 210194.646,
+      "unattributedPercent": 2.882541546752813,
+      "idleDurationUs": 17458452,
+      "owners": [
+        {
+          "owner": "admin",
+          "durationUs": 8206292,
+          "durationMs": 8206.292,
+          "dispatchCount": 52074,
+          "handoffCount": 274,
+          "turnSegmentCount": 52348
+        },
+        {
+          "owner": "bootstrap",
+          "durationUs": 12631345,
+          "durationMs": 12631.345,
+          "dispatchCount": 286260,
+          "handoffCount": 13,
+          "turnSegmentCount": 286273
+        },
+        {
+          "owner": "membership_publication",
+          "durationUs": 30530776,
+          "durationMs": 30530.776,
+          "dispatchCount": 595289,
+          "handoffCount": 905,
+          "turnSegmentCount": 596194
+        },
+        {
+          "owner": "raft_apply",
+          "durationUs": 12599806,
+          "durationMs": 12599.806,
+          "dispatchCount": 0,
+          "handoffCount": 38456,
+          "turnSegmentCount": 38456
+        },
+        {
+          "owner": "raft_protocol",
+          "durationUs": 82953494,
+          "durationMs": 82953.494,
+          "dispatchCount": 6784825,
+          "handoffCount": 509989,
+          "turnSegmentCount": 7294814
+        },
+        {
+          "owner": "readiness",
+          "durationUs": 2059750,
+          "durationMs": 2059.75,
+          "dispatchCount": 223,
+          "handoffCount": 576,
+          "turnSegmentCount": 799
+        },
+        {
+          "owner": "rebalancer",
+          "durationUs": 32690708,
+          "durationMs": 32690.708,
+          "dispatchCount": 203079,
+          "handoffCount": 4592,
+          "turnSegmentCount": 207671
+        },
+        {
+          "owner": "transport",
+          "durationUs": 5005075,
+          "durationMs": 5005.075,
+          "dispatchCount": 188304,
+          "handoffCount": 52379,
+          "turnSegmentCount": 240683
+        },
+        {
+          "owner": "worker_dispatch",
+          "durationUs": 0,
+          "durationMs": 0,
+          "dispatchCount": 0,
+          "handoffCount": 0,
+          "turnSegmentCount": 0
+        }
+      ]
+    }
+  ]
+}

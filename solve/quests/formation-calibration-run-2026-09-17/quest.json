@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-calibration-run-2026-09-17",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The replacement live attribution calibration exists as a committed per-owner cost table under test/simulation/calibration/2026-09-17/, each figure citing its immutable artifact, produced by one fresh-container five-node formation on GCP under the repaired formation-attribution semantics (F: protocol task-tracker lineage, seed pipeline phase-completion lineage) on the same external scenario as the 2026-09-13 run: same machine class and documented machine factor, same formation verdict, same owner vocabulary, same formed-mark harvesting rule, same watchdog and profile evidence. Both the formed-window snapshot and the complete deadline window are recorded. The run counts only if the unattributed bucket is under 10 percent of the window. No 2026-09-13 number is a target, and no number from that lineage is edited.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-health.js --calibration test/simulation/calibration/2026-09-17/seed-owner-costs.md",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "new-lineage-old-untouched",
+      "statement": "The 2026-09-13 lineage (seed-owner-costs.md, .evidence.json, .report.json and formation-seed-2026-09-13.json) keeps every number it has. Its supersession record may name its replacement; nothing else in it changes."
+    },
+    {
+      "id": "outputs-not-targets",
+      "statement": "Owner durations, dispatch and handoff counts, turn segments, mean microseconds per segment, unattributed and idle are recomputed from the measured data of this run. No old number is a target and no arithmetic adjustment is admissible."
+    },
+    {
+      "id": "same-semantics-both-sides",
+      "statement": "The table becomes the simulator's coefficient source only because live and simulator now share the repaired attribution semantics; the simulator is repointed at this lineage and the old lineage stays refused for correspondence."
+    }
+  ],
+  "sealedAt": "73e8f8446f903ede1fc7bead158df5ad1760681e"
+}

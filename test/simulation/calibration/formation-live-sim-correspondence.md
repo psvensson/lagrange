@@ -231,7 +231,7 @@ status:                     historical_live_calibration
 quantitativeCorrespondence: superseded
 reason:                     production formation-attribution semantics
                             changed after calibration
-replacement:                pending fresh live calibration
+replacement:                formation-seed-2026-09-17.json (see below)
 ```
 
 The run itself remains valid historical evidence and none of its evidence
@@ -284,3 +284,89 @@ microseconds per segment, unattributed and idle are recomputed from the
 measured data. No old number is a target. It should be run after the
 AddressManager frontier is sealed, so a second live calibration is not needed
 if that frontier changes a production formation path.
+
+
+## Remeasured 2026-09-17, under shared attribution semantics
+
+The replacement calibration ran on head `73e8f8446` (booted fingerprint
+`283c3683a7e7e760`, matched), same scenario and machine class as the
+2026-09-13 run, with the repaired attribution: PASS, schema admitted,
+unattributed 3.25 % of a 137.6 s formation window, partition delta 0. It is
+now the simulator's coefficient source
+(`formation-seed-2026-09-17.json`, `status: current_live_calibration`); the
+2026-09-13 manifest stays refused for correspondence and names this file as
+its replacement. Figures below are outputs of measurement, never targets, and
+no 2026-09-13 number is compared with them.
+
+### Live per-owner rate (seed, per second of the formation window)
+
+| owner | seg/s | mean us/seg | share |
+| --- | ---: | ---: | ---: |
+| raft_protocol | 34 102.6 | 11.2 | 38.0 % |
+| membership_publication | 2 791.7 | 50.3 | 14.0 % |
+| bootstrap | 1 638.0 | 42.3 | 6.9 % |
+| rebalancer | 1 059.5 | 145.7 | 15.4 % |
+| transport | 1 000.5 | 20.7 | 2.1 % |
+| admin | 269.5 | 145.9 | 3.9 % |
+| raft_apply | 164.7 | 318.7 | 5.2 % |
+| readiness | 3.7 | 2 772.3 | 1.0 % |
+| worker_dispatch | 0.0 | - | 0.0 % |
+
+### The metered runner (legacy hosted-owner composition, seed 7)
+
+Like-for-like continuation of the audit above, now against the current table.
+Virtual window 20.05 s; unattributed 0 %.
+
+| owner | live seg/s | sim seg/s | sim / live |
+| --- | ---: | ---: | ---: |
+| raft_protocol | 34 102.6 | 877.5 | 0.026 |
+| rebalancer | 1 059.5 | 155.2 | 0.147 |
+| readiness | 3.7 | 2.0 | 0.545 |
+| membership_publication, bootstrap, transport, admin, raft_apply | - | 0.0 | 0 (never hosted here) |
+
+This composition hosts six synthetic groups on five nodes. Its under-rate is a
+property of that composition and is no longer the correspondence question.
+Its metered oracle (`formation-sim-metered-oracle.json`) remains bound to the
+2026-09-13 calibration digest and stays `substrate_regression_only`; it is not
+a correspondence artifact.
+
+### The production-composed seed host (E/F composition, F4 packet)
+
+138 production owner runtimes on node-0 - the same population the live seed
+hosts: the seed log registers 135 existing replicas plus 3 message-group
+services at 05:52:03 and shuts down only 4 before the harvested snapshot, so
+the live window carries 134-138 Raft runtimes throughout. Formation window
+4.451 virtual s. This host charges NO cost: virtual time advances by link
+delays and timer cadences only.
+
+Normalised per hosted Raft runtime per second (segments = dispatches plus
+handoffs, the same unit on both sides):
+
+| owner | live, per runtime-s | sim, per runtime-virtual-s | sim / live |
+| --- | ---: | ---: | ---: |
+| raft_protocol | 249 to 284 | 1 071 | 3.8 to 4.3 |
+| raft_apply | 1.19 to 1.36 | 5.05 | 3.7 to 4.2 |
+
+(The live range spans whether the 18 s before the 138 runtimes existed is
+counted in the window or not.)
+
+### Q1b decision
+
+The old finding - raft_protocol 70x UNDER rate - measured the legacy six-group
+composition and is superseded. Under shared attribution semantics and the
+correct 138-runtime composition the discrepancy is in the OTHER direction and
+is consistent across both Raft owners: the simulator realises roughly 4x the
+live Raft segment rate per runtime. That is material, so Q1b is open - but
+its leading explanation is not a missing protocol trigger. It is that the
+production-composed host is uncharged: on the live seed the event loop is
+90 % busy and timer- and message-driven work waits behind other owners' turns,
+while the uncharged host runs every cadence on time. The same ~4x on
+raft_protocol and raft_apply is what a global time-scale effect looks like and
+what a missing trigger does not.
+
+So Q1b opens as a CHARGING question first: charge the production-composed
+host with this lineage's coefficients (the positive scenario's own closure
+matrix and metered oracle, already the planned next step), remeasure the
+per-runtime rates, and only if a material discrepancy survives charging does
+the trigger question follow. No simulator repair is opened on the rate
+difference alone.
