@@ -2,17 +2,18 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1844,
+    "unit": 1845,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2107,
-  "digest": "fnv1a32-f9eef57b",
+  "censusSize": 2108,
+  "digest": "fnv1a32-072ee1ed",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
+    "test/address/address-manager-peer-location-authority.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
     "test/address/address-round-trip.property.test.js": "unit",
     "test/address/address-uniqueness.property.test.js": "unit",

@@ -22,14 +22,15 @@
     "storage-raft": 80,
     "test-infrastructure": 122,
     "transactions": 14,
-    "transport-messaging": 89,
+    "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2107,
-  "digest": "fnv1a32-b3977451",
+  "censusSize": 2108,
+  "digest": "fnv1a32-9bb73cbb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+    "test/address/address-manager-peer-location-authority.test.js": "transport-messaging",
     "test/address/address-manager.test.js": "transport-messaging",
     "test/address/address-round-trip.property.test.js": "transport-messaging",
     "test/address/address-uniqueness.property.test.js": "transport-messaging",

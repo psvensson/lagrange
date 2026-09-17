@@ -2,16 +2,17 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2090,
+    "ordinary": 2091,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2107,
-  "digest": "fnv1a32-60438cd5",
+  "censusSize": 2108,
+  "digest": "fnv1a32-3883a0c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+    "test/address/address-manager-peer-location-authority.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
     "test/address/address-round-trip.property.test.js": "ordinary",
     "test/address/address-uniqueness.property.test.js": "ordinary",

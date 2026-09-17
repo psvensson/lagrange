@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-address-manager-peer-location-authority",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "A node-local production peer-location decision is made from that node's own authoritative state - an explicit unified address, or its system-table cache - and the process-global AddressManager registry cannot change it. AddressManager contributes parsing, validation and formatting; where authoritative location is absent the production paths refuse rather than promoting registry membership into discovery authority. The frontier is adversarial: it opens by trying to make the global state win, and it repairs only a demonstrated semantic leak.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/address-manager-peer-location-authority.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "adversarial-before-seam",
+      "statement": "No AddressManager seam, injection or call-site sweep is added before a semantic leak is demonstrated. A global-looking implementation is not a defect, and a singleton is not evidence of one. If the poisoned global state cannot alter any semantic result, the frontier is sealed without refactoring."
+    },
+    {
+      "id": "effects-not-strings",
+      "statement": "The terminal witness is the destination a real production write actually reached, not the string a resolver returned. A resolver that answers correctly while a later write consults the global registry would still be a leak."
+    },
+    {
+      "id": "no-harness-routing-table",
+      "statement": "No harness-created routing table stands in for AddressManager, and no second cache path is created to make a witness convenient. The witnesses use real PartitionService and MessageGroupService runtimes on their real write surfaces."
+    },
+    {
+      "id": "bounded-claim",
+      "statement": "The claim is bounded to the measured formation paths. It is never that AddressManager is harmless globally, nor that it never affects semantics."
+    },
+    {
+      "id": "sealed-invariants",
+      "statement": "138 owner runtimes, 276 peer representations over 138 addresses, no runtime in a peer slot, no authority breach, unchanged peer write destinations and count, pending 0, F probe 0, strict violations=0 substitutions=0 eligible=true, and the same three unmet reproduction predicates."
+    }
+  ]
+}
