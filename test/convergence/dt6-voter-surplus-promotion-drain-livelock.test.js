@@ -712,10 +712,14 @@ async function runVoterSurplusScenario({lossMode}) {
     nodeId: COORDINATOR_NODE_ID,
   });
   const {coordinator, trackedOperations} = fixture;
-  // Keep the (real) post-commit visibility confirmation loop fast: its deadline
-  // rides the platform clock, not the virtual clock.
-  coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 100;
-  coordinator.repository.replicaOperationAuthoritativeVisibilityRetryDelayMs = 5;
+  // The post-commit visibility confirmation polls on the owner's clock - the
+  // same virtual clock this drive advances one tick at a time, and holds
+  // still while it awaits an owner operation inline. So the confirmation
+  // observes once and answers without waiting: a deadline of zero is the
+  // honest shape for a drive that owns the clock, and a wait on it would
+  // never be released (the drive is what advances it).
+  coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
+  coordinator.repository.replicaOperationAuthoritativeVisibilityRetryDelayMs = 0;
   const virtualTimers = armVirtualOwnerTimers({coordinator, timeSource});
 
   const events = [];

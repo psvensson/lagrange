@@ -450,8 +450,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       return baseDelayMs + jitterMs;
     }
 
+    // The persist-retry budgets above are measured on this repository's
+    // TimeSource; the wait between attempts sleeps on the same clock, or the
+    // budget is never spent under a virtual one.
     async waitForOperationPersistRetry(delayMs) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => this.timeSource.setTimeout(resolve, delayMs));
     }
 
     resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {

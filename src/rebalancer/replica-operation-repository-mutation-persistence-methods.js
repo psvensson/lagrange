@@ -488,8 +488,11 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       return true;
     }
 
+    // The confirmation deadline above is read from this repository's
+    // TimeSource; the wait between polls sleeps on the same clock, or the
+    // deadline is never approached under a virtual one.
     async waitForReplicaOperationVisibilityRetry(delayMs) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => this.timeSource.setTimeout(resolve, delayMs));
     }
 
     emitReplicaOperationPersistenceDivergence(authoritativeOperation) {

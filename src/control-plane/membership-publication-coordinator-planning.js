@@ -133,20 +133,25 @@ class MembershipPublicationCoordinatorPlanning extends
       options,
       nodeRows,
     );
-    // The candidate this path derives can be persisted, advanced, closed or
-    // widened as the canonical membership publication, so its planning
-    // evidence is AUTHORITATIVE: an owner read, explicitly requested, never
-    // whichever answer arrived first. The nested case keeps its existing
-    // recursion-breaking contract and derives no planning evidence at all,
-    // which is what deferNestedPriorityRecoveryPlanning already means.
+    // The candidate this path derives carries the PLANNER's recovery
+    // evidence - the AVAILABLE planning answer - not the owner read. The
+    // owner read composes the durable publication row, which can report a
+    // steady, satisfied publication while the planner still holds the
+    // priority partitions unspread; a candidate built on it told readiness
+    // that priority recovery was inactive, and under degraded publication
+    // the source quorum lost its transport-backed recovery grace and its
+    // routability. The AVAILABLE surface is synchronous now, so nothing here
+    // depends on which answer arrived first. The nested case keeps its
+    // existing recursion-breaking contract and derives no planning evidence
+    // at all, which is what deferNestedPriorityRecoveryPlanning already means.
     const priorityRecoveryPlanningSnapshot =
       options.deferNestedPriorityRecoveryPlanning === true ?
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getPriorityRecoveryPlanningAnswerForOwnerRead === 'function' ?
+              .getMembershipPublicationPlanningSnapshotBestEffort === 'function' ?
           await this.controlPlaneReadinessService
-            .getPriorityRecoveryPlanningAnswerForOwnerRead(
+            .getMembershipPublicationPlanningSnapshotBestEffort(
               options.publisherNodeId || this.nodeId,
               normalizePositiveInteger(options.nowMs, this.now()),
             ) :

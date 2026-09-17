@@ -351,3 +351,105 @@ test('recent completed REPLACE target visibility guard', async (t) => {
       }
     });
 });
+
+// The recent-self-move lease holds EXACT placement off a ledger whose
+// formation episode is still settling. It must not hold that episode's own
+// cure: while the ledger is still concentrated with an actionable spread, the
+// REPLACE that moves a voter off the hottest node is the quorum-spread cure
+// the QUORUM_SPREAD hold orders first, and leasing it re-opens the run-22 gap
+// between the first and second spread moves. The exemption is decided by the
+// hold's own relation over ACTUAL placement rows, never by the move's
+// declared source node.
+const TEST_HOT_NODE_ID = 'node-hot';
+const TEST_FREE_NODE_IDS = Object.freeze(['node-free-a', 'node-free-b']);
+const TEST_LEDGER_VOTER_ROLE = 'follower';
+
+function buildLedgerVoterRow(replicaId, nodeId) {
+  return {
+    ...buildServiceRow(
+      TEST_LEDGER_PARTITION_ID,
+      replicaId,
+      nodeId,
+      ReplicaStatus.ACTIVE,
+    ),
+    raft_role: TEST_LEDGER_VOTER_ROLE,
+  };
+}
+
+function createConcentratedLedgerCoordinator({sourceNodeIdOfR2}) {
+  return createTestCoordinator({
+    cacheData: {
+      nodes: [TEST_HOT_NODE_ID, ...TEST_FREE_NODE_IDS].map((nodeId) => ({
+        node_id: nodeId,
+      })),
+      services: [
+        buildLedgerVoterRow(TEST_LEDGER_PARTITION_ID + '-r2', sourceNodeIdOfR2),
+        buildLedgerVoterRow(TEST_LEDGER_PARTITION_ID + '-r3', TEST_HOT_NODE_ID),
+        buildLedgerVoterRow(TEST_LEDGER_PARTITION_ID + '-r4', TEST_HOT_NODE_ID),
+      ],
+      replicaOperations: [
+        buildCompletedReplaceRow(
+          TEST_LEDGER_PARTITION_ID,
+          TEST_RECENT_COMPLETION_AGE_MS,
+        ),
+      ],
+    },
+  });
+}
+
+function buildLedgerCureMove(sourceReplicaId, sourceNodeId, targetNodeId) {
+  return {
+    ...buildReplaceMove(TEST_LEDGER_PARTITION_ID, sourceReplicaId, sourceNodeId),
+    nodeId: targetNodeId,
+  };
+}
+
+test('the ledger self-move lease exempts the engaged quorum-spread cure', async (t) => {
+  await t.test(
+    'admits the cure REPLACE off the hottest node of a concentrated ledger ' +
+      'right after a completed self-move',
+    async (t) => {
+      const coordinator = createConcentratedLedgerCoordinator({
+        sourceNodeIdOfR2: TEST_HOT_NODE_ID,
+      });
+      try {
+        const operation = await coordinator.createOperation(
+          buildLedgerCureMove(
+            TEST_LEDGER_PARTITION_ID + '-r2',
+            TEST_HOT_NODE_ID,
+            TEST_FREE_NODE_IDS[0],
+          ),
+        );
+        t.equal(operation?.type, OperationType.REPLACE,
+          'the cure is admitted, not leased');
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'still leases a REPLACE whose source is NOT on the hottest node - the ' +
+      'declared source node does not decide it',
+    async (t) => {
+      // r2 actually sits on a free node; the move still DECLARES the hot node
+      // as its source. Actuals say this is not the cure.
+      const coordinator = createConcentratedLedgerCoordinator({
+        sourceNodeIdOfR2: TEST_FREE_NODE_IDS[1],
+      });
+      try {
+        const error = await captureCreateError(
+          coordinator,
+          buildLedgerCureMove(
+            TEST_LEDGER_PARTITION_ID + '-r2',
+            TEST_HOT_NODE_ID,
+            TEST_FREE_NODE_IDS[0],
+          ),
+        );
+        t.equal(error?.message, TEST_LEDGER_LEASE_ERROR);
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+});

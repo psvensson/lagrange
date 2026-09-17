@@ -1,5 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  isEngagedLedgerQuorumSpreadCureMove,
   shouldLeaseRecentCompletedLedgerSelfMove,
 } from './operation-ledger-hold-policy.js';
 
@@ -10,6 +11,7 @@ const {
   REPLICA_ID_SEPARATOR,
   REPLICA_ID_START_INDEX,
   SERVICE_TYPE,
+  SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
   classifySystemPartition,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -295,7 +297,39 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       entityId:
         context.entityId || move?.entityId || move?.partitionId ||
         '',
+      targetNodeId: String(move?.nodeId || '').trim(),
     };
+  }
+
+  // The recent-self-move lease holds EXACT placement off a ledger whose
+  // formation episode is still settling; it does not hold that episode's
+  // own cure. A REPLACE that moves a voter off the hottest node of a ledger
+  // that is still concentrated with an actionable spread is the quorum-spread
+  // cure the hold orders first, and the relation that exempts it from the
+  // QUORUM_SPREAD hold exempts it from the lease - otherwise the lease
+  // re-opens the run-22 gap between the first and second spread moves.
+  // The source replica's ACTUAL node, read from the same placement rows the
+  // concentration evaluation reads - never the move's declared source node.
+  isEngagedLedgerQuorumSpreadCureReplace(evidence) {
+    const cache = this.systemTableCache;
+    const placementRows = cache && typeof cache.filter === LOCAL_STR_FUNCTION ?
+      cache.filter(SYSTEM_TABLE_NAME.SERVICES, (row) =>
+        row?.service_type === SERVICE_TYPE.PARTITION &&
+        row?.partition_id === evidence.entityId &&
+        row?.replica_id === evidence.sourceReplicaId) || [] :
+      [];
+    const sourceRow = placementRows[0] || null;
+    return isEngagedLedgerQuorumSpreadCureMove({
+      systemTableCache: cache,
+      moveType: OperationType.REPLACE,
+      partitionId: evidence.entityId,
+      placementEligibleNodeIds:
+        this.getTopologyGuardStartupAuthorityPlacementEligibleNodeIds(),
+      sourceReplicaNodeId: sourceRow ?
+        String(sourceRow.node_id || '').trim() :
+        null,
+      targetNodeId: evidence.targetNodeId,
+    });
   }
 
   resolveReplaceSourceRetirementSafetyState(
@@ -324,7 +358,8 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       shouldLeaseRecentCompletedLedgerSelfMove({
         partitionId: evidence.entityId,
         recentCompletedReplaceCount: recentCompletedTargetReplicaIds.size,
-      })
+      }) &&
+      !this.isEngagedLedgerQuorumSpreadCureReplace(evidence)
     ) {
       return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE
         .SOURCE_RECENT_LEDGER_SELF_MOVE_LEASED;

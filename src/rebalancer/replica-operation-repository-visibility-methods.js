@@ -67,12 +67,15 @@ function assignReplicaOperationRepositoryVisibilityMethods(
       return REPLICA_OPERATION_READ_RETRY_DELAY_MS;
     }
     /**
-   * Wait before retrying one authoritative replica_operations read.
+   * Wait before retrying one authoritative replica_operations read. The
+   * retry deadline is read from this repository's TimeSource, so the wait
+   * sleeps on the same clock: a deadline on one clock and a sleep on another
+   * is a loop that never approaches its deadline under a virtual clock.
    * @param {number} delayMs
    * @return {Promise<void>}
    */
     async waitForReplicaOperationReadRetry(delayMs) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => this.timeSource.setTimeout(resolve, delayMs));
     }
     getLastIncompleteOperationReadOutcome() {
       return this.lastIncompleteOperationReadOutcome ?

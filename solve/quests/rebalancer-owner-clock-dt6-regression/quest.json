@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rebalancer-owner-clock-dt6-regression",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The two DT6 formation falsifiers (dt6-formation-ledger-quorum-spread-first, dt6-voter-surplus-promotion-drain-livelock) are green on the owner clock. They went red on this branch when RebalanceCoordinator.nowFn and the replica-operation repository stopped reading ambient time (22420f874): both scenarios had passed only because their virtual rows were compared against wall-clock now. Two production defects that the dual clock had hidden are repaired at their owner: (A) the repository's visibility-confirmation and read-retry loops read their deadline from the repository's TimeSource but slept on the platform clock, so under a virtual clock the deadline was never approached - both waits now sleep on the same clock their deadline reads (live: RealTimeSource, byte-identical); (B) the recent-completed-self-move lease on the operation ledger held the ledger's own quorum-spread cure REPLACE - the move the QUORUM_SPREAD hold orders first - re-opening the run-22 gap between the first and second spread moves; the lease now exempts the engaged cure through the same actuals relation that exempts it from the hold, with the source replica's node read from the placement rows the concentration evaluation reads. No timeout or budget is raised, no falsifier is weakened, and the voter drive's visibility confirmation is made clock-honest (a deadline of zero on a clock the drive holds still) rather than riding the platform clock.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/rebalancer-owner-clock-dt6.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-clock-per-owner",
+      "statement": "An owner's deadlines and its waits read one clock. A repository wait that sleeps on the platform clock against a TimeSource deadline is the defect, not a test convenience; production defaults (RealTimeSource) stay byte-identical."
+    },
+    {
+      "id": "cure-exempt-by-actuals",
+      "statement": "The lease exemption engages only through the QUORUM_SPREAD hold's own relation over ACTUAL placement rows (concentrated, spread actionable, source on the hottest node); the move's declared source node never decides it, and an already-spread ledger stays leased."
+    },
+    {
+      "id": "no-falsifier-weakening",
+      "statement": "Neither DT6 falsifier loses an assertion, a timeout is never raised and no budget grows (TEST-0021); the only drive change is the voter test's visibility confirmation reading zero on the clock it holds, with the reason recorded in the file."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each production repair has its own unit witness that is red when the repair is reverted: the owner-clock waits (a virtual drive settles the confirmation and the read retry) and the cure exemption (a concentrated ledger's cure REPLACE admits after a recent self-move while a spread ledger's exact-placement REPLACE stays leased)."
+    }
+  ],
+  "sealedAt": "9a39af51b2aac8ed666b43f91406f54c4c33618e"
+}
