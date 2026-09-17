@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2069,
+    "ordinary": 2070,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2086,
-  "digest": "fnv1a32-5885c94c",
+  "censusSize": 2087,
+  "digest": "fnv1a32-6c846547",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1811,6 +1811,7 @@
     "test/scripts/gen-solve-commands-index.test.js": "ordinary",
     "test/scripts/helper-import-closure.test.js": "ordinary",
     "test/scripts/historical-record-exemptions.test.js": "ordinary",
+    "test/scripts/home-lab-cli-guidelines.test.js": "ordinary",
     "test/scripts/impact-contract-registry.test.js": "ordinary",
     "test/scripts/impact-proof-cone-consumers.test.js": "ordinary",
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "ordinary",

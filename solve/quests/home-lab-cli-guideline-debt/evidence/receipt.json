@@ -1,0 +1,39 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "home-lab-cli-guideline-debt",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/home-lab-cli-guidelines.test.js": "ac9fed115ea1dc0a3fe13d6506fe4af3ae8958e152a8b8038df27a73820de77f"
+  },
+  "generatedAt": "2026-09-17T13:26:40.154Z",
+  "receipts": [
+    {
+      "id": "lab-cli-literal-guideline-clean",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the lab CLI carries no raw literal outside a named constant owner$\" test/scripts/home-lab-cli-guidelines.test.js",
+      "detail": "check-guideline-literals reports zero new violations over scripts/lab",
+      "testFile": "test/scripts/home-lab-cli-guidelines.test.js"
+    },
+    {
+      "id": "lab-cli-decision-boundaries-clean",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the lab CLI decides each outcome at one boundary$\" test/scripts/home-lab-cli-guidelines.test.js",
+      "detail": "check-guideline-decision-boundaries reports zero new violations over scripts/lab",
+      "testFile": "test/scripts/home-lab-cli-guidelines.test.js"
+    },
+    {
+      "id": "lab-cli-command-surface-intact",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the lab CLI still states its command surface and refuses an unknown command$\" test/scripts/home-lab-cli-guidelines.test.js",
+      "detail": "usage and the unknown-command refusal are unchanged by the constant owners",
+      "testFile": "test/scripts/home-lab-cli-guidelines.test.js"
+    },
+    {
+      "id": "postpush-static-audits-green",
+      "passed": true,
+      "command": "node scripts/checks/run-static-audits.js",
+      "detail": "every post-push static audit passes, audit:guidelines included",
+      "testFile": null
+    }
+  ]
+}

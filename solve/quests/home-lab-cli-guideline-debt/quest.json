@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "home-lab-cli-guideline-debt",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The home-lab CLI (scripts/lab/*) meets the repository's script guidelines: every scalar, state and name has a named constant owner (R06) and each outcome is decided at one boundary, so audit:guidelines - and the post-push static audits it belongs to - are green on main again. The CLI's command surface, its remote scripts and its inventory format are unchanged: this is a naming repair, not a behaviour change, and the witnesses prove both halves.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/home-lab-cli-guideline-debt/evidence/receipt.json",
+      "requiredReceipts": [
+        "lab-cli-literal-guideline-clean",
+        "lab-cli-decision-boundaries-clean",
+        "lab-cli-command-surface-intact",
+        "postpush-static-audits-green"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-baseline-growth",
+      "statement": "The guideline baselines are not extended for scripts/lab; the literals get owners (one-way ratchet rule)."
+    },
+    {
+      "id": "behaviour-preserved",
+      "statement": "Every command, flag, remote shell/PowerShell script, label derivation and inventory path is byte-for-byte what it was; only where a value lives changes."
+    },
+    {
+      "id": "no-new-loose-script",
+      "statement": "The only new file under scripts/ is the quest's evidence harness in scripts/quest-evidence/, the sanctioned home for receipts (epic rule 2026-09-13)."
+    }
+  ],
+  "sealedAt": "1c9f62017cfc513648478152e7ab8c5fa4f1d482"
+}

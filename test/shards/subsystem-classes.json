@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 143,
     "storage-raft": 76,
-    "test-infrastructure": 127,
+    "test-infrastructure": 128,
     "transactions": 12,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2086,
-  "digest": "fnv1a32-63894c57",
+  "censusSize": 2087,
+  "digest": "fnv1a32-cf414dc4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5a5ec163",
+  "observationDigest": "fnv1a32-fff00669",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1831,6 +1831,7 @@
     "test/scripts/gen-solve-commands-index.test.js": "test-infrastructure",
     "test/scripts/helper-import-closure.test.js": "test-infrastructure",
     "test/scripts/historical-record-exemptions.test.js": "test-infrastructure",
+    "test/scripts/home-lab-cli-guidelines.test.js": "test-infrastructure",
     "test/scripts/impact-contract-registry.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone-consumers.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "test-infrastructure",
@@ -7891,6 +7892,19 @@
         "solve/report",
         "solve/specs/raft-logic-migration/reports",
         "src/cli"
+      ]
+    },
+    "test/scripts/home-lab-cli-guidelines.test.js": {
+      "files": [
+        "scripts/check-guideline-decision-boundaries-baseline.json",
+        "scripts/check-guideline-literals-baseline.json",
+        "scripts/lab.js"
+      ],
+      "directories": [
+        "scripts",
+        "scripts/lab",
+        "src",
+        "test"
       ]
     },
     "test/scripts/impact-contract-registry.test.js": {
