@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
+import {CHECK_BASE_ENV} from '../checks/change-selection-constants.js';
+
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
   FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, TERMINAL_STATUSES,
@@ -34,6 +36,16 @@ const LANDING_MARKER_ENV = 'LAGRANGE_SOLVER_LANDING';
 const LANDING_MARKER_VALUE = '1';
 const NPM = 'npm';
 const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
+// The change proof's base. Landing proves the tree that will be committed,
+// and that tree differs from HEAD by exactly the staged quest scope, so HEAD
+// is the base that names the quest delta. The publication merge-base is the
+// PUSH gate's range (a branch with several landed quests proves them all
+// again at every land otherwise - 1927 tests for a one-file repair, measured
+// 2026-09-17); the base is announced so the narrower proof is never silent.
+const LAND_PROOF_BASE = 'HEAD';
+const LAND_PROOF_BASE_ANNOUNCEMENT =
+  'land: change proof base HEAD (the quest delta the index holds); ' +
+  'the branch range is the push gate\'s proof\n';
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';
@@ -305,10 +317,19 @@ function refreshInventories(root) {
   if (priority.status !== 0) refuse(`priority inventory failed: ${priority.stderr}`);
 }
 
-function runChangeProof(root, log) {
-  const result = spawnSync(NPM, [...NPM_TEST_ARGUMENTS], {cwd: root,
+// The environment the landing proof runs under: the caller's, with the
+// change-proof base pinned to the quest delta.
+function landChangeProofEnvironment(env = process.env) {
+  return {...env, [CHECK_BASE_ENV]: LAND_PROOF_BASE};
+}
+
+// `spawn` is the process seam: the witness observes the environment the
+// proof is actually spawned with, not only the helper that builds it.
+function runChangeProof(root, log, spawn = spawnSync) {
+  log(LAND_PROOF_BASE_ANNOUNCEMENT);
+  const result = spawn(NPM, [...NPM_TEST_ARGUMENTS], {cwd: root,
     encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER, timeout: TEST_TIMEOUT_MS,
-    stdio: ['ignore', 'pipe', 'pipe']});
+    env: landChangeProofEnvironment(), stdio: ['ignore', 'pipe', 'pipe']});
   log(`${result.stdout || ''}${result.stderr || ''}`);
   if (result.status !== 0) refuse(`npm test failed (exit ${result.status})`);
 }
@@ -529,5 +550,6 @@ function board(root) {
 
 export {
   ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, land, landChangeProofEnvironment,
+  note, probe, runChangeProof, start,
 };

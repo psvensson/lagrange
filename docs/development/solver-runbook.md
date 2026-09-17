@@ -174,6 +174,14 @@ stage prints which it chose and why. The whole corpus then runs on main after
 the push in the non-gating `full-corpus-canary` workflow. Fix one-way ratchets
 rather than raising their baselines.
 
+`solve land` proves the quest delta, not the branch: its `npm test` runs with
+the change-proof base pinned to `HEAD` (the index it is about to commit
+differs from HEAD by exactly the staged quest scope), and it announces that
+base in its log. The branch-vs-remote range is the push gate's proof above,
+which is where two landed quests' interaction is proved. Before this
+(2026-09-17) a land on a branch carrying earlier quests proved them all
+again every time - 1927 tests for a one-file repair.
+
 ## Partial clones (solve-v2 phase 1)
 
 Binary evidence (run-state and log tarballs, raw evidence bundles) lives in

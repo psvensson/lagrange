@@ -15,8 +15,13 @@ import {
 } from '../../scripts/solve/schema.js';
 import {readLog, readQuest} from '../../scripts/solve/store.js';
 import {
-  ALTITUDE_BUDGET, SolveError, board, land, note, probe, start,
+  ALTITUDE_BUDGET, SolveError, board, land, landChangeProofEnvironment, note,
+  probe, runChangeProof, start,
 } from '../../scripts/solve/commands.js';
+import {
+  CHECK_BASE_ENV, RANGE_SOURCE,
+} from '../../scripts/checks/change-selection-constants.js';
+import {resolvedCheckRange} from '../../scripts/checks/changed-paths.js';
 
 const QUEST_ID = 'demo';
 const EPIC_ID = 'demo-epic';
@@ -291,4 +296,37 @@ test('a large change set is recorded by size and a bounded sample', (t) => {
   assert.equal(terminal.paths.length, 50);
   // The log stays small; the commit holds the exact set.
   assert.ok(fs.statSync(path.join(root, `solve/quests/${QUEST_ID}/log.ndjson`)).size < 16384);
+});
+
+test('the change proof is spawned against the quest delta, HEAD, and says so', () => {
+  // The index land proves differs from HEAD by exactly the staged scope, so
+  // HEAD names the quest delta; a branch carrying earlier landed quests would
+  // otherwise prove them all again at every land (1927 tests for a one-file
+  // repair, 2026-09-17). The spawn seam observes the environment the proof
+  // really runs under, not only the helper that builds it.
+  const spawned = [];
+  const lines = [];
+  const spawn = (command, args, options) => {
+    spawned.push({command, args, options});
+    return {status: 0, stdout: '', stderr: ''};
+  };
+  runChangeProof('/repo', (line) => lines.push(line), spawn);
+  assert.equal(spawned.length, 1);
+  assert.deepEqual([spawned[0].command, spawned[0].args], ['npm', ['test']]);
+  assert.equal(spawned[0].options.cwd, '/repo');
+  assert.equal(spawned[0].options.env[CHECK_BASE_ENV], 'HEAD',
+    'the proof process carries the pinned base');
+  assert.equal(spawned[0].options.env.PATH, process.env.PATH,
+    'the rest of the environment is the caller\'s');
+  assert.match(lines[0], /change proof base HEAD/u, 'the base is announced before the proof');
+  // Through the one ladder the static layer and the selector share, that
+  // environment resolves to HEAD as an ENVIRONMENT range, never a silent
+  // publication default; an unqualified proof - the push gate's - keeps
+  // the publication merge-base rung (decision 0538db5c7).
+  assert.deepEqual(resolvedCheckRange(null, landChangeProofEnvironment({}), '/repo'),
+    {base: 'HEAD', source: RANGE_SOURCE.ENVIRONMENT});
+  const caller = {KEEP: 'me'};
+  const landing = landChangeProofEnvironment(caller);
+  assert.equal(landing.KEEP, 'me');
+  assert.equal(caller[CHECK_BASE_ENV], undefined, 'the caller environment is not mutated');
 });

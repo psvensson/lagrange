@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "land-proves-the-quest-delta",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "solve land proves the quest delta plus the spine: its change proof runs with the base pinned to HEAD, because the index it commits differs from HEAD by exactly the staged quest scope, and it announces that base in its log. The branch-vs-remote range stays the push gate's and the canary's proof, and npm run check keeps its publication merge-base default (decision 0538db5c7, which closed a hole land cannot have). Measured before: a land on a branch carrying earlier quests planned 1926 of 2109 tests for a one-file repair; the same tree with the HEAD base plans 568.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/land-proves-the-quest-delta/evidence/receipt.json",
+      "requiredReceipts": [
+        "land-proves-the-quest-delta",
+        "publication-range-stays-the-push-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-environment-authority",
+      "statement": "The base reaches the selector through the one environment authority the static layer and the change proof already share; no second path to the selector is added."
+    },
+    {
+      "id": "push-gate-unchanged",
+      "statement": "The pre-push gate, npm run check and the canary keep the publication merge-base default; only the landing proof narrows."
+    },
+    {
+      "id": "announced-never-silent",
+      "statement": "The landing log states the base it proves against before the proof runs."
+    }
+  ],
+  "sealedAt": "01a760b5721d7e2de095f0082d86195a4663528e"
+}

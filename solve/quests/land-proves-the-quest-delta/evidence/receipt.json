@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "land-proves-the-quest-delta",
+  "status": "pass",
+  "testFileDigests": {
+    "test/solve/commands.test.js": "c8a932066ce5ce4f965caac4d9364946f5e51a0c312ec1af57dcfa2fa244b204",
+    "test/scripts/check-base-range.test.js": "dbb49531069cfee6dd1e586e8fa4d529a8e9357e0f4e454120deea57dacd704e"
+  },
+  "generatedAt": "2026-09-17T15:02:36.931Z",
+  "receipts": [
+    {
+      "id": "land-proves-the-quest-delta",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the change proof is spawned against the quest delta, HEAD, and says so$\" test/solve/commands.test.js",
+      "detail": "the spawned proof carries the pinned base through the one environment authority, announces it, and leaves the caller environment untouched",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "publication-range-stays-the-push-gates",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^with no declaration the base is the publication merge-base$\" test/scripts/check-base-range.test.js",
+      "detail": "the push gate and npm run check keep the merge-base default (decision 0538db5c7)",
+      "testFile": "test/scripts/check-base-range.test.js"
+    }
+  ]
+}
