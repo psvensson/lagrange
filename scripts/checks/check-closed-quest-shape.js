@@ -115,8 +115,7 @@ function isClosed(root, id) {
 // quest closing today would otherwise make every earlier edit to its evidence
 // look like a post-closure rewrite, including the edits that produced the
 // evidence it closed on.
-function closedAt(root, rev, file) {
-  const log = readBlobs(root, [{key: file, rev: `${rev}:${file}`}]).get(file);
+function closedFromLog(log) {
   if (!log) return null;
   const entries = [];
   for (const line of stringSplit(String(log), LINE_SEPARATOR)) {
@@ -130,8 +129,7 @@ function closedAt(root, rev, file) {
   return questState(entries).terminal;
 }
 
-function questRecordAt(root, rev, file) {
-  const record = readBlobs(root, [{key: file, rev: `${rev}:${file}`}]).get(file);
+function questRecordFromBlob(record) {
   if (!record) return null;
   try {
     return JSON.parse(String(record));
@@ -183,22 +181,36 @@ function mutationOffences(root, edge, closedRequirements) {
 
 // Every artifact required by a quest that is already closed at `rev`, mapped
 // to the quest that requires it.
+// The reads are batched per revision - every quest's log in one cat-file
+// batch, then the closed quests' records in one more - because this runs
+// once per admitted edge, and a branch carrying many unpublished commits
+// used to pay two git spawns per quest per edge (tens of thousands of
+// spawns; minutes) for the same answer.
 function closedRequirementsAt(root, rev) {
   const requirements = new Map();
   const questFiles = trackedAt(root, rev, (file) =>
     stringStartsWith(file, `${QUESTS_DIR}${PATH_SEPARATOR}`) &&
     stringEndsWith(file, `${PATH_SEPARATOR}${QUEST_FILE}`));
+  const quests = [];
   for (const file of questFiles) {
     const id = stringSlice(file, `${QUESTS_DIR}${PATH_SEPARATOR}`.length,
       file.length - `${PATH_SEPARATOR}${QUEST_FILE}`.length);
     if (stringIncludes(id, PATH_SEPARATOR)) continue;
     const logFile = `${QUESTS_DIR}${PATH_SEPARATOR}${id}` +
       `${PATH_SEPARATOR}${LOG_FILE}`;
-    if (!closedAt(root, rev, logFile)) continue;
-    const record = questRecordAt(root, rev, file);
+    quests.push({id, file, logFile});
+  }
+  const logs = readBlobs(root, arrayMap(quests,
+    (quest) => ({key: quest.logFile, rev: `${rev}:${quest.logFile}`})));
+  const closed = arrayFilter(quests,
+    (quest) => closedFromLog(logs.get(quest.logFile)));
+  const records = readBlobs(root, arrayMap(closed,
+    (quest) => ({key: quest.file, rev: `${rev}:${quest.file}`})));
+  for (const quest of closed) {
+    const record = questRecordFromBlob(records.get(quest.file));
     if (!record) continue;
     for (const artifact of requiredProofArtifacts(record.doneWhen)) {
-      requirements.set(artifact, id);
+      requirements.set(artifact, quest.id);
     }
   }
   return requirements;
