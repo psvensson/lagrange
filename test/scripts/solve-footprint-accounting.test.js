@@ -18,8 +18,12 @@ import {isQuestLogPath} from '../../scripts/solve/store.js';
 
 const MEGABYTE = 1024 * 1024;
 
+// One measurement serves every scenario: each walks all of solve/, and the
+// tree does not change between them.
+let measuredRows = null;
 function rows() {
-  return new Map(measureSolveV2Budget().map((row) => [row.id, row]));
+  measuredRows ??= new Map(measureSolveV2Budget().map((row) => [row.id, row]));
+  return measuredRows;
 }
 
 test('the accounting reports total, append-only history and active bytes', () => {

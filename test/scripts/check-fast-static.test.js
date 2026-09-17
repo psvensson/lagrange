@@ -55,10 +55,21 @@ function worktreeFingerprint() {
   return {digest: hash.digest('hex'), count: paths.length};
 }
 
+// One fingerprinted run serves every contract below: fast static is read-only
+// over an unchanged tree, so repeating it (it spawns the whole cheap layer)
+// would only re-measure the same outcome.
+let fingerprintedRun = null;
+function fingerprintedFastStatic() {
+  if (fingerprintedRun === null) {
+    const before = worktreeFingerprint();
+    const outcome = runFastStatic({});
+    fingerprintedRun = {after: worktreeFingerprint(), before, outcome};
+  }
+  return fingerprintedRun;
+}
+
 test('fast static is READ-ONLY: it never writes to the worktree', () => {
-  const before = worktreeFingerprint();
-  runFastStatic({});
-  const after = worktreeFingerprint();
+  const {after, before} = fingerprintedFastStatic();
   assert.equal(after.count, before.count,
     'fast static added or removed a file');
   assert.equal(after.digest, before.digest,
@@ -68,7 +79,7 @@ test('fast static is READ-ONLY: it never writes to the worktree', () => {
 
 test('fast static reports its own duration and per-check timings', () => {
   // So a later slowdown can be attributed rather than guessed at.
-  const outcome = runFastStatic({});
+  const {outcome} = fingerprintedFastStatic();
   assert.ok(outcome.totalMs > 0);
   assert.ok(outcome.results.length > 0);
   for (const result of outcome.results) {
@@ -82,7 +93,7 @@ test('changed-path derivation is one shared definition', () => {
   // check can silently examine nothing while reporting success.
   const changed = changedCandidatePaths({root});
   assert.ok(Array.isArray(changed));
-  const outcome = runFastStatic({});
+  const {outcome} = fingerprintedFastStatic();
   assert.deepEqual(outcome.changed, changed);
   assert.deepEqual(outcome.changedJs, javaScriptPaths(changed));
 });
@@ -133,7 +144,7 @@ test('the range is printed with its source and an empty one is warned about', ()
   assert.equal(summaryLine({failures: [{}], warnings: [], totalMs: 7}),
     'fast-static: FAIL in 7ms');
 
-  const outcome = runFastStatic({});
+  const {outcome} = fingerprintedFastStatic();
   assert.deepEqual(outcome.range, {base: null, source: RANGE_SOURCE.WORKTREE},
     'a library call with no base proves the working tree and says so');
   assert.deepEqual(outcome.warnings,
