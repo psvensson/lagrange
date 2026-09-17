@@ -42,14 +42,22 @@ import {
   orderedStringMapGet,
   orderedStringMapSet,
   orderedStringSetValues,
+  sortByStringProjection,
   sortStrings,
   stringCollectionHas,
 } from './checks/change-proof-string-collections.js';
 
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arraySlice = Function.call.bind(Array.prototype.slice);
+const mathRound = Math.round;
+const numberParseFloat = Number.parseFloat;
 const objectHasOwn = Object.hasOwn;
+const regExpExec = Function.call.bind(RegExp.prototype.exec);
+const stringLastIndexOf = Function.call.bind(String.prototype.lastIndexOf);
+const stringPadStart = Function.call.bind(String.prototype.padStart);
+const stringSlice = Function.call.bind(String.prototype.slice);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,6 +74,25 @@ const KEEP_GOING_FLAG = '--keep-going';
 const MAX_FILES_PER_RUN = 100;
 const EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS = '120';
 const NEWLINE = '\n';
+const UTF8 = 'utf8';
+const LAST_RESULTS_DIRECTORY = '.tap/test-results';
+const LAST_RESULT_EXTENSION = '.tap';
+const LAST_RESULT_TIME_MARKER = '\n# time=';
+const LAST_RESULT_TIME_PATTERN = /^# time=(\d+(?:\.\d+)?)ms$/mu;
+const LAST_RESULT_RED_PATTERN = /^not ok /mu;
+const LAST_RESULT_GREEN_PATTERN = /^ok /mu;
+const GIT_FILE = '.git';
+const GIT_DIR_PREFIX = 'gitdir: ';
+const GIT_COMMON_DIR_FILE = 'commondir';
+const DISPATCH_RANK_RED_OR_UNKNOWN = '0';
+const DISPATCH_RANK_MEASURED = '1';
+const DISPATCH_KEY_SEPARATOR = '\u0000';
+const DISPATCH_DURATION_WIDTH = 12;
+const DISPATCH_DURATION_CEILING = 999999999999;
+const DISPATCH_DURATION_PAD = '0';
+const SERIAL_JOBS = 1;
+const INVALID_RESULTS_ROOTS_PROBLEM =
+  'classified test plan requires an own-data string array of results roots';
 const DUPLICATE_FILES_PROBLEM =
   'classified test plan contains duplicate files';
 const NO_FILES_PROBLEM =
@@ -116,9 +143,83 @@ function chunks(values, size) {
   return result;
 }
 
-export function planClassifiedTestFiles(root, inputFiles) {
+// The last results decide dispatch order, never membership. The runner leaves
+// .tap/test-results/<file>.tap with a top-level `# time=<ms>ms` line: tap's
+// own, or the wall time it appends when there is none. A file with no result,
+// no time, a top-level `not ok`, or no top-level `ok` at all (a crash at
+// import leaves only the appended time) is red or unknown and dispatches
+// first, so a persisting red refuses a gate in minutes. The rest
+// dispatch longest-first on a parallel lane, so the long files share the
+// first batch instead of trailing every batch, and shortest-first on a serial
+// lane, where packing gains nothing and the earliest red is what order buys.
+export function lastResultsRoots(root) {
+  const roots = [root];
+  // A fresh linked worktree (a quest, the push gate's corpus checkout) has no
+  // results of its own; the main checkout's are the last ones this machine
+  // measured. A plain checkout's .git is a directory and reads throw.
+  try {
+    const gitFile = fs.readFileSync(path.join(root, GIT_FILE), UTF8);
+    if (!stringStartsWith(gitFile, GIT_DIR_PREFIX)) return roots;
+    const gitDir = path.resolve(root,
+      stringTrim(stringSlice(gitFile, GIT_DIR_PREFIX.length)));
+    const commonDir = path.resolve(gitDir, stringTrim(
+      fs.readFileSync(path.join(gitDir, GIT_COMMON_DIR_FILE), UTF8)));
+    const mainRoot = path.dirname(commonDir);
+    if (path.basename(commonDir) === GIT_FILE && mainRoot !== root) {
+      appendArrayValue(roots, mainRoot);
+    }
+  } catch {
+    return roots;
+  }
+  return roots;
+}
+
+function readLastResult(resultsRoots, file) {
+  for (let index = 0; index < resultsRoots.length; index += 1) {
+    let output;
+    try {
+      output = fs.readFileSync(path.join(resultsRoots[index],
+        LAST_RESULTS_DIRECTORY, file + LAST_RESULT_EXTENSION), UTF8);
+    } catch {
+      continue;
+    }
+    const tail = regExpExec(LAST_RESULT_TIME_PATTERN, stringSlice(output,
+      stringLastIndexOf(output, LAST_RESULT_TIME_MARKER) + NEWLINE.length));
+    if (!tail || regExpExec(LAST_RESULT_RED_PATTERN, output) ||
+        !regExpExec(LAST_RESULT_GREEN_PATTERN, output)) {
+      return null;
+    }
+    const milliseconds = mathRound(numberParseFloat(tail[1]));
+    return milliseconds < DISPATCH_DURATION_CEILING ?
+      milliseconds : DISPATCH_DURATION_CEILING;
+  }
+  return null;
+}
+
+export function orderLaneFiles(files, resultsRoots, jobs) {
+  const keys = createOrderedStringMap();
+  for (let index = 0; index < files.length; index += 1) {
+    const milliseconds = readLastResult(resultsRoots, files[index]);
+    const rank = milliseconds === null ?
+      DISPATCH_RANK_RED_OR_UNKNOWN : DISPATCH_RANK_MEASURED;
+    const duration = milliseconds === null ? 0 :
+      jobs === SERIAL_JOBS ? milliseconds :
+        DISPATCH_DURATION_CEILING - milliseconds;
+    orderedStringMapSet(keys, files[index], rank + DISPATCH_KEY_SEPARATOR +
+      stringPadStart(`${duration}`, DISPATCH_DURATION_WIDTH,
+        DISPATCH_DURATION_PAD) +
+      DISPATCH_KEY_SEPARATOR + files[index]);
+  }
+  return sortByStringProjection(files,
+    (file) => orderedStringMapGet(keys, file));
+}
+
+export function planClassifiedTestFiles(
+  root, inputFiles, resultsRoots = lastResultsRoots(root)) {
   const copiedInput = copyOwnStringArray(inputFiles);
   if (!copiedInput) throw new Error(INVALID_FILES_PROBLEM);
+  const copiedResultsRoots = copyOwnStringArray(resultsRoots);
+  if (!copiedResultsRoots) throw new Error(INVALID_RESULTS_ROOTS_PROBLEM);
   if (copiedInput.length === 0) throw new Error(NO_FILES_PROBLEM);
   const primary = derivePrimaryClasses(root);
   const resource = deriveResourceClasses(root);
@@ -156,9 +257,10 @@ export function planClassifiedTestFiles(root, inputFiles) {
     const laneFiles = orderedStringMapGet(lanes, resourceClass);
     if (laneFiles.length === 0) continue;
     plannedFiles += laneFiles.length;
+    const jobs = RESOURCE_CLASS_JOBS[resourceClass];
     appendArrayValue(plan, {
-      files: laneFiles,
-      jobs: RESOURCE_CLASS_JOBS[resourceClass],
+      files: orderLaneFiles(laneFiles, copiedResultsRoots, jobs),
+      jobs,
       resourceClass,
     });
   }

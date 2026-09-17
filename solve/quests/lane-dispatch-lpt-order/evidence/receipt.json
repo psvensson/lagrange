@@ -1,0 +1,39 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "lane-dispatch-lpt-order",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/run-classified-test-files.test.js": "3c67b2b90debf41bcba08144c7806f27bd763be5cb8bcf4928237021b52e84ee"
+  },
+  "generatedAt": "2026-09-17T16:03:30.632Z",
+  "receipts": [
+    {
+      "id": "parallel-lane-longest-first",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a parallel lane dispatches red and unknown files first, then longest-first$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "red, untimed and missing results lead; measured files follow longest-first on a jobs>1 lane",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    },
+    {
+      "id": "serial-lane-shortest-first",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a serial lane dispatches red and unknown files first, then shortest-first$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "a jobs=1 lane keeps red first and runs measured files shortest-first",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    },
+    {
+      "id": "linked-worktree-reads-main-results",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a fresh linked worktree reads the main checkout last results$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "a linked worktree falls back to the main checkout results; its own result wins",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    },
+    {
+      "id": "plan-keeps-sets-orders-lanes",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the classified plan keeps every lane set and orders it from the last results$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "planClassifiedTestFiles orders each lane from the last results and keeps the lane sets",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    }
+  ]
+}

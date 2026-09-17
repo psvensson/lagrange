@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lane-dispatch-lpt-order",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "scripts/run-classified-test-files.js dispatched every lane alphabetically in 100-file batches, so the long files of a parallel lane trailed a different batch each time and a previously red file waited its alphabetical turn. Each lane is now ordered from the last results (.tap/test-results/<file>.tap, the runner's top-level `# time=<ms>ms` tail): red, untimed or missing results first, then longest-first on a parallel lane and shortest-first on a serial lane (same total, earliest red). A fresh linked worktree (a quest, the push gate's corpus checkout) has no results and reads the main checkout's. Simulated on today's results with the runner's pull-queue: ordinary lane 418 s -> 312 s; serial lanes unchanged in total. Planning reads ~58 MB of results in ~200 ms warm. The set of every lane is unchanged; only order and batch composition change. test/shards/timings.json, which nothing reads, is retired. This also carries land-retry-parity's deferred 'previously red first'.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lane-dispatch-lpt-order/evidence/receipt.json",
+      "requiredReceipts": [
+        "parallel-lane-longest-first",
+        "serial-lane-shortest-first",
+        "linked-worktree-reads-main-results",
+        "plan-keeps-sets-orders-lanes"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "same-set",
+      "statement": "Every lane holds exactly the files it held before; the plan's completeness and duplicate refusals are unchanged."
+    },
+    {
+      "id": "fail-open-order",
+      "statement": "No readable result (CI, a plain fresh checkout) leaves every file unknown and the lane alphabetical, as before; a result never admits or drops a file."
+    },
+    {
+      "id": "hardened-intrinsics",
+      "statement": "The reader and ordering use captured intrinsics and the change-proof string collections, so the post-import collection replacement witness keeps delivering."
+    }
+  ],
+  "sealedAt": "e70b2c49ce2ff3703c15b5c39c00c85fdac0f7b2"
+}

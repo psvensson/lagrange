@@ -6,6 +6,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
+  lastResultsRoots,
+  orderLaneFiles,
   planClassifiedTestFiles,
   runClassifiedTestFiles,
 } from '../../scripts/run-classified-test-files.js';
@@ -26,7 +28,7 @@ const UTF8 = 'utf8';
 
 test('one classified plan owns concurrency for every test source', () => {
   const plan = planClassifiedTestFiles(root,
-    [SHARED_OUTPUT, INTEGRATION, TOOLCHAIN, ORDINARY]);
+    [SHARED_OUTPUT, INTEGRATION, TOOLCHAIN, ORDINARY], []);
   const byClass = Object.fromEntries(plan.map((lane) =>
     [lane.resourceClass, lane]));
 
@@ -251,4 +253,96 @@ test('the library refuses an empty explicit test set', () => {
       throw new Error('an empty plan must fail before spawn');
     },
   }), /no test files/u);
+});
+
+// Dispatch order comes from the last results: red or unknown first, then
+// longest-first on a parallel lane and shortest-first on a serial one. The
+// set never changes; only the order and so the batch composition does.
+function writeLastResult(resultsRoot, file, output) {
+  const target = path.join(resultsRoot, '.tap/test-results', `${file}.tap`);
+  fs.mkdirSync(path.dirname(target), {recursive: true});
+  fs.writeFileSync(target, output);
+}
+
+function withResultsRoot(run) {
+  const resultsRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lagrange-last-results-'));
+  try {
+    return run(resultsRoot);
+  } finally {
+    fs.rmSync(resultsRoot, {recursive: true, force: true});
+  }
+}
+
+function writeMixedResults(resultsRoot) {
+  writeLastResult(resultsRoot, 'test/a.test.js', 'ok 1 - a\n# time=100ms\n');
+  writeLastResult(resultsRoot, 'test/b.test.js',
+    'ok 1 - b # time=5.2ms\n# time=900.4ms\n');
+  writeLastResult(resultsRoot, 'test/c.test.js',
+    'not ok 1 - c # time=3ms\n# time=50ms\n');
+  writeLastResult(resultsRoot, 'test/e.test.js', 'ok 1 - e # time=7ms\n');
+  // A crash at import writes no TAP; the runner still appends its time.
+  writeLastResult(resultsRoot, 'test/f.test.js', '# time=20ms\n');
+}
+
+const MIXED_FILES = Object.freeze(['test/a.test.js', 'test/b.test.js',
+  'test/c.test.js', 'test/d.test.js', 'test/e.test.js', 'test/f.test.js']);
+
+test('a parallel lane dispatches red and unknown files first, then longest-first', () => {
+  withResultsRoot((resultsRoot) => {
+    writeMixedResults(resultsRoot);
+    assert.deepEqual(orderLaneFiles(MIXED_FILES, [resultsRoot], 4), [
+      'test/c.test.js', 'test/d.test.js', 'test/e.test.js', 'test/f.test.js',
+      'test/b.test.js', 'test/a.test.js',
+    ]);
+  });
+});
+
+test('a serial lane dispatches red and unknown files first, then shortest-first', () => {
+  withResultsRoot((resultsRoot) => {
+    writeMixedResults(resultsRoot);
+    assert.deepEqual(orderLaneFiles(MIXED_FILES, [resultsRoot], 1), [
+      'test/c.test.js', 'test/d.test.js', 'test/e.test.js', 'test/f.test.js',
+      'test/a.test.js', 'test/b.test.js',
+    ]);
+  });
+});
+
+test('a fresh linked worktree reads the main checkout last results', () => {
+  withResultsRoot((scratch) => {
+    const main = path.join(scratch, 'main');
+    const linked = path.join(scratch, 'linked');
+    const gitDir = path.join(main, '.git', 'worktrees', 'linked');
+    fs.mkdirSync(gitDir, {recursive: true});
+    fs.mkdirSync(linked, {recursive: true});
+    fs.writeFileSync(path.join(gitDir, 'commondir'), '../..\n');
+    fs.writeFileSync(path.join(linked, '.git'), `gitdir: ${gitDir}\n`);
+    assert.deepEqual(lastResultsRoots(linked), [linked, main]);
+    assert.deepEqual(lastResultsRoots(main), [main],
+      'a plain checkout reads only its own results');
+
+    writeLastResult(main, 'test/a.test.js', 'ok 1 - a\n# time=100ms\n');
+    writeLastResult(main, 'test/b.test.js', 'ok 1 - b\n# time=900ms\n');
+    writeLastResult(linked, 'test/a.test.js', 'ok 1 - a\n# time=2000ms\n');
+    assert.deepEqual(orderLaneFiles(['test/a.test.js', 'test/b.test.js'],
+      lastResultsRoots(linked), 4), ['test/a.test.js', 'test/b.test.js'],
+    'the worktree own result wins; the main checkout fills the gap');
+  });
+});
+
+test('the classified plan keeps every lane set and orders it from the last results', () => {
+  withResultsRoot((resultsRoot) => {
+    writeLastResult(resultsRoot, INTEGRATION, 'ok 1 - i\n# time=100ms\n');
+    writeLastResult(resultsRoot, SHARED_OUTPUT,
+      'not ok 1 - s\n# time=10ms\n');
+    const plan = planClassifiedTestFiles(root,
+      [INTEGRATION, SHARED_OUTPUT, ORDINARY], [resultsRoot]);
+    const byClass = Object.fromEntries(plan.map((lane) =>
+      [lane.resourceClass, lane]));
+    assert.deepEqual(byClass[RESOURCE_CLASS_EXCLUSIVE].files,
+      [SHARED_OUTPUT, INTEGRATION], 'the previously red file dispatches first');
+    assert.deepEqual(byClass[RESOURCE_CLASS_ORDINARY].files, [ORDINARY]);
+    assert.throws(() => planClassifiedTestFiles(root, [ORDINARY], 'x'),
+      /results roots/u);
+  });
 });
