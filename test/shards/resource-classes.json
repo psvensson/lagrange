@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2092,
+    "ordinary": 2094,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2109,
-  "digest": "fnv1a32-dd8a9484",
+  "censusSize": 2111,
+  "digest": "fnv1a32-d05964e7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -517,6 +517,7 @@
     "test/control-plane/membership-lifecycle-controller.test.js": "ordinary",
     "test/control-plane/membership-owner-shadow.test.js": "ordinary",
     "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js": "ordinary",
+    "test/control-plane/membership-publication-candidate-planning-surface.test.js": "ordinary",
     "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "ordinary",
     "test/control-plane/membership-publication-coordinator.test.js": "ordinary",
     "test/control-plane/membership-publication-deferred-catchup.test.js": "ordinary",
@@ -1584,6 +1585,7 @@
     "test/rebalancer/replica-operation-liveness.test.js": "ordinary",
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "ordinary",
     "test/rebalancer/replica-operation-observation-contract.test.js": "ordinary",
+    "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": "ordinary",
     "test/rebalancer/replica-operation-repository-time-authority.test.js": "ordinary",
     "test/rebalancer/replica-operation-repository.test.js": "ordinary",
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": "ordinary",

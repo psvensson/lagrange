@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1846,
+    "unit": 1848,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2109,
-  "digest": "fnv1a32-adab037e",
+  "censusSize": 2111,
+  "digest": "fnv1a32-429c0fa5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -518,6 +518,7 @@
     "test/control-plane/membership-lifecycle-controller.test.js": "unit",
     "test/control-plane/membership-owner-shadow.test.js": "unit",
     "test/control-plane/membership-publication-active-gate-reconcile-owner-recovery.test.js": "unit",
+    "test/control-plane/membership-publication-candidate-planning-surface.test.js": "unit",
     "test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js": "unit",
     "test/control-plane/membership-publication-coordinator.test.js": "unit",
     "test/control-plane/membership-publication-deferred-catchup.test.js": "unit",
@@ -1585,6 +1586,7 @@
     "test/rebalancer/replica-operation-liveness.test.js": "unit",
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "unit",
     "test/rebalancer/replica-operation-observation-contract.test.js": "unit",
+    "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": "unit",
     "test/rebalancer/replica-operation-repository-time-authority.test.js": "unit",
     "test/rebalancer/replica-operation-repository.test.js": "unit",
     "test/rebalancer/replica-operation-retained-owner-turn.test.js": "unit",

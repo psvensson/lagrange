@@ -20,6 +20,15 @@ quests:
   - ratchet-realignment
   - test-file-content-receipts
   - raft-ownership
+  - land-proves-the-quest-delta
+  - convergence-probe-class-observed
+  - test-runner-loader-diet
+  - lane-dispatch-lpt-order
+  - land-retry-parity
+  - wait-definite-negative
+  - static-test-hygiene
+  - lane-parallelism-measurement
+  - canary-on-lab-node
 authorizes:
   - scripts
   - test
@@ -258,6 +267,114 @@ no new GCP proof; any shipped byte still does. `release:preflight` requires
 the tagged SHA to be proven and on `origin/main` history, no longer the
 remote tip, so landings publish behind a running proof. Both are the lean
 answer to a day spent re-proving identical bytes.
+
+## Testing time (2026-09-17)
+
+**Decision (owner, 2026-09-17).** Test time is a budget of this epic. The
+measurement that opened it: three `solve land` proofs in one day, ~50 min
+each, for two one-file repairs. Where the minutes went, measured on the
+shared machine (load ~3), from `.tap/test-results` of the day (1963 results,
+2809 s of test bodies):
+
+- The plan was 1926 of 2109 tests for a change in `src/rebalancer`. Not
+  because of impact selection: `npm test` resolves its base to the
+  MERGE-BASE WITH `origin/main` (`scripts/checks/changed-paths.js`,
+  decision 0538db5c7 for `npm run check`), and `solve land` runs plain
+  `npm test`, so every land proves the whole branch since main. The same
+  tree with `LAGRANGE_CHECK_BASE=HEAD` - the quest delta, which is exactly
+  land's change set - plans 568 tests: ~9 min modelled against ~46.
+- Unit files: 1727 files, median body 140 ms, 1481 of 1963 under 500 ms; the
+  lane took 24 min at `--jobs=4`, ~2.5 s of overhead per file under load.
+  Idle start-up per process is ~470 ms, of which `@tapjs/typescript` +245 ms
+  and `@tapjs/processinfo` +135 ms serve nothing: no `.ts` file exists,
+  coverage is off, nothing reads `.tap/processinfo`. Module graphs add
+  200-400 ms (`src/rebalancer/index.js`, `bootstrap-service.js`).
+- Integration: 55 files, 1037 s serial, median 13.7 s; lanes run one after
+  another by primary class, and only 4 integration files scale their budgets
+  by `LAGRANGE_TEST_MACHINE_FACTOR` - the rest are literals.
+- Reds are the expensive files: the seven-node convergence probe burned
+  346 s per run waiting for placed `sys-postgres-wire` replicas that meta
+  services (shipped at `replica_count 0`) never place; the solve footprint
+  test hit its 600 s file timeout because a checker spawned git twice per
+  closed quest per unpublished commit (114 s; batched to 10 s, 6b305a2fa)
+  and the test computes the budget four times.
+- Land runs without `LAGRANGE_RETRY_FAILED_ONCE`, CI with it; a flake costs
+  a whole re-land.
+
+Rejected on the record: reviving `test-file-content-receipts` (the 2026-09-13
+rule above stands, and its eligibility excludes the slow files anyway - the
+140 ms files cost start-up, not body); in-process batching of tap files (tap
+21 is one process per file by design and the tests assume process-global
+state); a new epic (the board must shrink, and nothing here moves another
+epic's budget). Every quest below edits existing files: no new script, no
+new workflow.
+
+**land-proves-the-quest-delta** - `solve land` proves the quest delta
+(index vs HEAD) plus the spine; the branch-vs-remote range stays the push
+gate's and the canary's proof. The chosen base is printed as an explicit
+range source, never silent. Owner: `scripts/solve/commands.js`,
+`scripts/checks/changed-paths.js`; witness `test/scripts/check-base-range.test.js`;
+runbook. Saving: ~35 min per land on a multi-quest branch; 0 on a branch
+fresh off main. First in order: it is the largest cause and the smallest
+change.
+
+**convergence-probe-class-observed** - the `convergence-probe` class
+(`test/shards/convergence-probes.txt`, 3 files) is excluded by the planner
+and the classified runner, not only by `test:all` (decision 6fcb63299 was
+half-implemented: land ran them, no CI corpus ever did), it gets a
+non-gating home as a canary step, and the multi-join probe is re-expressed
+for `replica_count 0` (the runtime-owned endpoint contract of PR #30/#42)
+or retired. Saving: 346 s on every land touching transport-messaging,
+bootstrap-membership or cdc-metadata; the probes finally get observed.
+
+**test-runner-loader-diet** - `scripts/run-test-files.js` drops the
+typescript and processinfo loaders (mock stays: two files use
+`t.mockImport`); `NODE_COMPILE_CACHE` is evaluated on the canary first,
+because `--no-compilation-cache` was added for a V8 crash class (3bac105f1).
+Saving: 3 min idle, 5-8 min under load on a full plan. A runner edit trips
+the full-corpus trigger once.
+
+**lane-dispatch-lpt-order** - lanes dispatch longest-first from the last
+results instead of alphabetical 100-file chunks (simulated on today's
+timings: 911 s to 746 s on the ordinary lane); `test/shards/timings.json`,
+which nothing reads, is retired. Same set, order only.
+
+**land-retry-parity** - land's proof runs with the recorded retry policy
+(`LAGRANGE_RETRY_FAILED_ONCE=1`, reported and capped, as CI does) and
+dispatches previously red files first, so a persisting red refuses in
+minutes and a flake does not cost a re-land. Local becomes equal to CI,
+not weaker.
+
+**wait-definite-negative** - `waitFor` in the cluster test helpers accepts a
+definite-negative predicate, and the integration waits that keep polling
+after a structural fact has decided the outcome use it (the multi-join
+probe polled 5 x 30 s per node, then the next node). Restricted to catalog
+facts: a wrong "definite" predicate would red a slow but correct
+convergence.
+
+**static-test-hygiene** - the solve footprint test measures the budget once;
+`check-fast-static.test.js` fingerprints the tree once; the complexity
+ratchet closure test stops re-running both whole-repo sweeps that
+pre-commit already runs. ~1.5 min of worker time.
+
+**lane-parallelism-measurement** - measure-first, on the lab node, against
+serial pass rates: the bootstrap class (181 files, median 128 ms, ~6 min
+serial) at jobs=2, and the exclusive lane overlapped with the ordinary
+lane. `.taprc` records the 2026-08-01 jobs=8 crash and the harness
+guideline says lower jobs first; SLO budgets are literals and thermal
+discipline forbids two heavy runs, so nothing becomes a local default
+without the measurement. Potential: 3 min (bootstrap) to 12-20 min
+(overlap) on branch plans.
+
+**canary-on-lab-node** - the full-corpus canary runs on the home-lab runner
+(`runs-on` edit, push-to-main only; `ci.yml` already reasons the
+public-repo self-hosted rule), once `scripts/lab.js` is on this line.
+Post-push corpus ~75 min to ~30 min; it is what makes the delta-only land
+comfortable.
+
+Out of this epic, recorded so it is not lost: the 196 s
+`test/simulation/formation-sim-charged-seed-host.test.js` (three charged
+simulator runs) belongs to `formation-seed-decoupling`.
 
 ## Fixes, no quest
 
