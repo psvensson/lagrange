@@ -3,6 +3,16 @@
  *
  * Verifies message-group creation and availability for each joining node
  * across a larger topology than seed + 2 nodes.
+ *
+ * The admin-discovery leg follows the runtime-owned endpoint contract
+ * (PR #30, witnessed for the preflight hops in 3120bb196): the
+ * sys-postgres-wire endpoint is published by the runtime lifecycle only
+ * after the runtime-service rebalancer places a replica, and the built-in
+ * meta services ship at replica_count 0, so a formed cluster that has scaled
+ * nothing advertises NO postgres-wire replica. What every node must advertise
+ * is the boot-owned admin-meta service, route- and schema-ready on every
+ * node. Placement itself is proved by the runtime-service rebalancer
+ * witnesses, not by this probe.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -14,8 +24,11 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {COLUMN, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES}
-  from '../../src/constants/index.js';
+import {
+  COLUMN, META_SERVICE_ID, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE,
+  TABLES,
+} from '../../src/constants/index.js';
+import {WASM_SERVICE_PROTOCOL} from '../../src/wasm-service/wasm-service-constants.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -52,8 +65,11 @@ const ADMIN_SMOKE_QUERY_SQL = 'SELECT node_id FROM nodes LIMIT 1';
 const ADMIN_DISCOVERY_TABLE_NAME = 'nodes';
 const ADMIN_DISCOVERY_SQL =
   'SELECT * FROM service_discovery_local(\'' + ADMIN_DISCOVERY_TABLE_NAME + '\')';
-const ADMIN_DISCOVERY_SERVICE_ID = 'sys-postgres-wire';
-const ADMIN_DISCOVERY_PROTOCOL = 'postgresql';
+// Boot-owned on every node; the runtime-owned sys-postgres-wire never appears
+// before a runtime is placed, and this probe places none.
+const ADMIN_DISCOVERY_SERVICE_ID = META_SERVICE_ID.ADMIN_META;
+const ADMIN_DISCOVERY_PROTOCOL = WASM_SERVICE_PROTOCOL.WEBSOCKET;
+const RUNTIME_OWNED_SERVICE_ID = META_SERVICE_ID.POSTGRES_WIRE;
 const ADMIN_DISCOVERY_HEALTHY_STATUS = 'healthy';
 
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440600';
@@ -260,7 +276,16 @@ async function queryAdminWebSocket(port, sql) {
   });
 }
 
-function extractPostgresWireReplicas(discoveryRows) {
+function discoveryAdvertisesRuntimeOwnedService(discoveryRows) {
+  const snapshot = discoveryRows[0];
+  const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+  return services.some((entry) => {
+    const serviceIds = Array.isArray(entry?.serviceIds) ? entry.serviceIds : [];
+    return serviceIds.includes(RUNTIME_OWNED_SERVICE_ID);
+  });
+}
+
+function extractBootOwnedMetaReplicas(discoveryRows) {
   const snapshot = discoveryRows[0];
   const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
   const service = services.find((entry) => {
@@ -581,7 +606,11 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
             adminPort,
             ADMIN_DISCOVERY_SQL,
           );
-          const replicas = extractPostgresWireReplicas(discoveryRows)
+          if (discoveryAdvertisesRuntimeOwnedService(discoveryRows)) {
+            // Runtime-owned: never advertised before a runtime is placed.
+            return false;
+          }
+          const replicas = extractBootOwnedMetaReplicas(discoveryRows)
             .filter((replica) => {
               if (!replica || typeof replica !== 'object') {
                 return false;
@@ -613,8 +642,9 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       t.equal(
         allReplicaReadinessReady,
         true,
-        `${adminNodeId} table-scoped discovery should keep ` +
-          'postgres-wire replicas route/schema ready',
+        `${adminNodeId} table-scoped discovery should keep the boot-owned ` +
+          'admin-meta replicas route/schema ready and advertise no ' +
+          'postgres-wire replica before a runtime is placed',
       );
       if (!allReplicaReadinessReady) {
         t.comment(
