@@ -114,8 +114,12 @@ test('Ownership guardrails: setup creation sites are constrained', async (t) => 
       ]),
     },
     {
-      name: 'HeartbeatService constructor',
-      regex: /new\s+HeartbeatService\s*\(/,
+      // The heartbeat service is constructed once, inside its own assembly
+      // (assembleHeartbeatService in control-plane/heartbeat-service.js, the
+      // one way production and the simulator compose it); what bootstrap
+      // owns is the call to that assembly.
+      name: 'HeartbeatService assembly',
+      regex: /assembleHeartbeatService\s*\(/,
       allowedFiles: new Set([
         'bootstrap/shared/control-plane-setup.js',
       ]),
