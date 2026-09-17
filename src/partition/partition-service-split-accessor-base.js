@@ -1,6 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
+  partitionSizeRetryOptions,
+} from './partition-service-write-path-helpers.js';
+import {
   buildReplayCursorCheckpoint,
 } from './partition-mirror-replay-cursor.js';
 import {
@@ -99,7 +102,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
             operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
             tableName: TABLES.PARTITIONS,
             whereClause: {partition_id: this.partitionId},
-            data: {size_bytes: sizeBytes, updated_at: Date.now()},
+            data: {size_bytes: sizeBytes, updated_at: this.timeSource.now()},
           },
           {
             workClass: PRESSURE_WORK_CLASS.BACKGROUND,
@@ -107,12 +110,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
             coalescingKey: `partitions:size:${this.partitionId}`,
           },
         ),
-      {
-        timeoutMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS,
-        baseDelayMs:
-          PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_BASE_DELAY_MS,
-        maxDelayMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_MAX_DELAY_MS,
-      },
+      partitionSizeRetryOptions(this.timeSource),
     );
     if (result?.success === false) {
       throw new Error(

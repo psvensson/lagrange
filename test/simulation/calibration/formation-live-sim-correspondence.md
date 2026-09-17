@@ -370,3 +370,54 @@ matrix and metered oracle, already the planned next step), remeasure the
 per-runtime rates, and only if a material discrepancy survives charging does
 the trigger question follow. No simulator repair is opened on the rate
 difference alone.
+
+### Q1b remeasured CHARGED (2026-09-17, `formation-sim-charged-production-seed-host`)
+
+The same production-composed host, charged with this lineage's coefficients
+through the simulator's one metering authority: every owner segment the
+production attribution seam counts costs its calibrated microseconds on
+node-0's single core, a busy node's events wait for it, and the schedule
+moves. Uncharged the host reaches its "Cluster formed" counterpart at
+4.451 virtual s; charged it reaches the same mark at 15.990 virtual s and
+then rest (pending 0, strict violations=0 substitutions=0 eligible=true),
+with an identical provenance snapshot - charging moved WHEN production ran,
+not WHO owned it. Two charged runs in one process produce byte-identical
+artifacts and charge ledgers.
+
+Normalised per hosted Raft runtime per second, the same unit as above
+(segments over the whole charged run, over the mark's virtual time, over
+138 runtimes; teardown's share of Raft entries is under 1 % - uncharged, 138
+of 46 967 Raft owner entries fall after the mark):
+
+| owner | live, per runtime-s | sim uncharged | sim CHARGED | charged / live |
+| --- | ---: | ---: | ---: | ---: |
+| raft_protocol | 249 to 284 | 1 071 | 301 | 1.06 to 1.21 |
+| raft_apply | 1.19 to 1.36 | 5.05 | 1.41 | 1.04 to 1.19 |
+
+Node-0 occupancy, charged: 12.78 s of the run's 17.40 virtual s
+(raft_protocol 7.42 s, bootstrap 4.37 s, raft_apply 0.99 s; 553 busy
+stretches, 11.64 s of them in stretches of 1 s or longer). The live seed's
+window is 90 % busy.
+
+So the ~4x was the uncharged time-scale effect the Q1b decision named: with
+the node's own occupancy in the schedule, the per-runtime Raft rates agree
+with the live seed to within roughly 20 % on both Raft owners, and the
+remaining difference is inside the live range's own width of composition
+(whether the 18 s before the 138 runtimes existed is counted). No material
+normalised Raft-rate discrepancy survives charging, so no trigger question
+follows and no simulator repair is opened on Q1b. The residual differences
+the correspondence still carries are the three unmet reproduction predicates
+(rebalancer, membership publication and readiness never run in the seed
+scenario), which are composition questions, not rate questions.
+
+Two production seams were reached only on the charged timeline, because it
+is long enough to pass the partition size-update debounce that 4.451 s never
+reaches; both are repaired at their owner with the codebase's own idiom (a
+node that owns a clock takes its next turn and its retry deadline from that
+clock; otherwise `setImmediate` and `Date.now` stay): the debounced
+`scheduleSizeUpdate` hop and the size-persist retry deadline and sleeps in
+`submitPartitionSizeMutation`. Precisely: a hosted production replica owns a
+real-time clock, so its size-update hop is now that clock's zero-delay timer
+rather than `setImmediate` - the same substrate the peer-reconciliation hop
+and the commit scheduler already run on - and its retry deadline reads the
+same real clock it read before; without an owned clock nothing changes.

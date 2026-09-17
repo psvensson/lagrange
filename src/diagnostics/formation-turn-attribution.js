@@ -545,10 +545,14 @@ class FormationTurnAttribution {
     }
     // The captured node wins over whatever the scheduler ran most recently:
     // this resumption is the CPU of the node that scheduled it, even if the
-    // scheduler ran another node's work in between.
+    // scheduler ran another node's work in between. A resource that captured
+    // no node defers to the live frame rather than shadowing it with null.
+    const capturedNode = mapGet(this.asyncExecutionNodes, asyncId);
     this.enterSegment(
       mapGet(this.asyncOwners, asyncId) || FORMATION_OWNER.UNATTRIBUTED,
-      true, false, currentExecutionNodeId(),
+      true, false,
+      capturedNode === undefined || capturedNode === null ?
+        currentExecutionNodeId() : capturedNode,
     );
   }
 

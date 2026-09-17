@@ -3,6 +3,9 @@ import {PartitionServiceWriteMetricsBase} from './partition-service-write-metric
 import {
   startPartitionSizeCadence, stopPartitionSizeCadence,
 } from './partition-service-size-cadence.js';
+import {
+  buildPendingProposal, cdcSqlPreview, classifyQuerySqlMutation,
+} from './partition-service-write-path-helpers.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -28,6 +31,47 @@ const {
 
 class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
+   * With no subscriber attached, an event for a bufferable table is held
+   * for the first subscriber and any other event is dropped; both outcomes
+   * are counted and logged.
+   * @param {Object} cdcEvent
+   * @param {string} tableName
+   * @return {void}
+   * @private
+   */
+  bufferCDCEventWithoutSubscribers(cdcEvent, tableName) {
+    if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
+      return;
+    }
+    const buffered = this.cdcEventBuffer.buffer(cdcEvent);
+    if (buffered) {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_BUFFERED);
+      this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_BUFFERED, {
+        tableName,
+        operation: cdcEvent.operation,
+        partitionId: this.partitionId,
+      });
+    } else {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DROPPED);
+      this.logger.warn(CDC_LIFECYCLE_LOG_MSG.NO_SUBSCRIBERS_NO_BUFFER, {
+        tableName,
+        operation: cdcEvent.operation,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+  /**
+   * Whether an event for this table has nobody to go to: no subscriber, and
+   * not a table whose events are held for the first one.
+   * @param {string} tableName
+   * @return {boolean}
+   * @private
+   */
+  cdcEventHasNoAudience(tableName) {
+    return this.cdcSubscribers.size === 0 &&
+      !this.shouldBufferCdcWithoutSubscribers(tableName);
+  }
+  /**
    * Generate a CDC event for a write operation.
    * @param {Object} entry - Write entry.
    * @return {Promise<void>}
@@ -46,9 +90,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
       partitionId: this.partitionId,
       entryType: entry.type,
-      sql: entry.sql ?
-        entry.sql.substring(0, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
-        null,
+      sql: cdcSqlPreview(entry),
       subscriberCount: this.cdcSubscribers.size,
     });
     const cdcGenerator = this.syncCDCGeneratorDependencies();
@@ -59,10 +101,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return;
     }
     const tableName = envelopeResult.cdcEventEnvelope.tableName;
-    if (
-      this.cdcSubscribers.size === 0 &&
-      !this.shouldBufferCdcWithoutSubscribers(tableName)
-    ) {
+    if (this.cdcEventHasNoAudience(tableName)) {
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
         partitionId: this.partitionId,
         tableName,
@@ -84,25 +123,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return;
     }
     if (this.cdcSubscribers.size === 0) {
-      if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
-        return;
-      }
-      const buffered = this.cdcEventBuffer.buffer(cdcEvent);
-      if (buffered) {
-        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_BUFFERED);
-        this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_BUFFERED, {
-          tableName,
-          operation: cdcEvent.operation,
-          partitionId: this.partitionId,
-        });
-      } else {
-        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DROPPED);
-        this.logger.warn(CDC_LIFECYCLE_LOG_MSG.NO_SUBSCRIBERS_NO_BUFFER, {
-          tableName,
-          operation: cdcEvent.operation,
-          partitionId: this.partitionId,
-        });
-      }
+      this.bufferCDCEventWithoutSubscribers(cdcEvent, tableName);
       return;
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
@@ -176,16 +197,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       entryType === PARTITION_SERVICE_OPERATION.QUERY &&
       typeof entry?.sql === 'string'
     ) {
-      const sqlUpper = entry.sql.trim().toUpperCase();
-      if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase())) {
-        entryType = PARTITION_SERVICE_OPERATION.UPSERT;
-      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
-        entryType = PARTITION_SERVICE_OPERATION.INSERT;
-      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.UPDATE)) {
-        entryType = PARTITION_SERVICE_OPERATION.UPDATE;
-      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.DELETE)) {
-        entryType = PARTITION_SERVICE_OPERATION.DELETE;
-      }
+      entryType = classifyQuerySqlMutation(entry.sql) || entryType;
     }
     switch (entryType) {
     case PARTITION_SERVICE_OPERATION.INSERT:
@@ -269,16 +281,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       );
     }, timeoutMs);
     try {
-      this.proposalQueue.enqueue(entryId, {
-        resolve: resolvePending,
-        reject: rejectPending,
-        timeoutId,
-        logIndex: Number.isFinite(options?.logIndex) ? options.logIndex : null,
-        result:
-          options?.result && typeof options.result === 'object' ?
-            {...options.result} :
-            null,
-      });
+      this.proposalQueue.enqueue(entryId, buildPendingProposal({
+        options, resolve: resolvePending, reject: rejectPending, timeoutId,
+      }));
     } catch (error) {
       this.timeSource.clearTimeout(timeoutId);
       throw error;
@@ -754,13 +759,24 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return;
     }
     this.sizeUpdatePending = true;
-    setImmediate(async () => {
+    // The debounced update is this replica's next turn. A replica that owns
+    // a clock takes it from there - hosted replicas do, exactly as the peer
+    // reconciliation hop and the commit scheduler already do; otherwise
+    // setImmediate stays, because a zero-delay timer is a DIFFERENT
+    // event-loop phase and swapping one for the other would change
+    // production's ordering, not just its substrate.
+    const hop = async () => {
       try {
         await this.updatePartitionSize();
       } finally {
         this.sizeUpdatePending = false;
       }
-    });
+    };
+    if (this.providedTimeSource) {
+      this.providedTimeSource.setTimeout(hop, 0);
+      return;
+    }
+    setImmediate(hop);
   }
   /**
    * Start periodic size updates.

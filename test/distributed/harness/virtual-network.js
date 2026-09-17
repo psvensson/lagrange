@@ -358,7 +358,16 @@ function createVirtualNetwork(options = {}) {
       adapterTimers.delete(record.timerId);
     }
     if (record.fn) {
-      record.resource.runInAsyncScope(record.fn, undefined, ...record.args);
+      // The resource restores the ARMING context - owner lineage included -
+      // and in doing so replaces every async-local store, the execution node
+      // among them. The node is the scheduler's decision, not the arming
+      // context's: a timer executes on the node that owns it. So the node is
+      // bound again inside the resource scope, exactly as fireTimer bound it
+      // one frame up, and the owner the arming context carried is kept.
+      record.resource.runInAsyncScope(() => runOnExecutionNode(record.nodeId,
+        () => record.fn(...record.args),
+        {id: record.timerId, kind: VIRTUAL_NETWORK_ADAPTER_TIMER_TYPE,
+          nodeId: record.nodeId}));
     }
     if (!record.repeating) {
       record.resource.emitDestroy();

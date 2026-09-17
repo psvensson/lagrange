@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429513,
-        "sha256": "fb18cb18d9122c014eb48f46a73d1ecbab208de7442509459a28268239cc3334"
+        "bytes": 429084,
+        "sha256": "420afc6fe4adeef956639dab898eafb59de41054ae5de50b7abf0ea30511ee3c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2418040,
-        "sha256": "f4666c0851dc3b3f096dfb5dbaac4e8fcb0530436138b51fdb0a5107f7f0fac5"
+        "bytes": 2419471,
+        "sha256": "fd59f0d3f625b2947d416d567b00bcab9239e2d6cd505578babc82046c88a2af"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "b9b56638bd351def5c2d002d9d9935707b1d38c8ac1f50784332f9d0e87e32cd"
+        "sha256": "baf4b6cfac7224793441657584916aaeb798ef1748f4d1ab69acea2411f61e30"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "f3742f8490224cd42a1bace6683ffa141c9afdd93ca3d2729e70bb5b29a2d1fe"
+        "sha256": "3c80d60878b52c5618188a27f0bd0b845281857f37c2959942611f86ce899a70"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "edd4f4c79df9271ad01ddf5d871a0f856126aba40f0161866f1f4f33a3abb981"
+    "inputDigest": "be3f225a77d62d11b368962fc469ea6db13b71bf6918550984107595bb7708a6"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 429513,
-        "sha256": "fb18cb18d9122c014eb48f46a73d1ecbab208de7442509459a28268239cc3334"
+        "bytes": 429084,
+        "sha256": "420afc6fe4adeef956639dab898eafb59de41054ae5de50b7abf0ea30511ee3c"
       },
-      "declaredCount": 1820,
-      "observedCount": 1820,
-      "assignedCount": 1820
+      "declaredCount": 1818,
+      "observedCount": 1818,
+      "assignedCount": 1818
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "b9b56638bd351def5c2d002d9d9935707b1d38c8ac1f50784332f9d0e87e32cd"
+          "sha256": "baf4b6cfac7224793441657584916aaeb798ef1748f4d1ab69acea2411f61e30"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "f3742f8490224cd42a1bace6683ffa141c9afdd93ca3d2729e70bb5b29a2d1fe"
+          "sha256": "3c80d60878b52c5618188a27f0bd0b845281857f37c2959942611f86ce899a70"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,29 +166,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2418040,
-        "sha256": "f4666c0851dc3b3f096dfb5dbaac4e8fcb0530436138b51fdb0a5107f7f0fac5"
+        "bytes": 2419471,
+        "sha256": "fd59f0d3f625b2947d416d567b00bcab9239e2d6cd505578babc82046c88a2af"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "81c896030f1d0830740e7d673ef759aea70f266c35a6dba9be8a61c18be5071f",
-      "moduleCount": 4757,
-      "edgeCount": 21954,
+      "sourceDigest": "e8ffc2b86c08a21aa6b299d362ab2e44676084b676284c0bf699fb1bf4e0db2d",
+      "moduleCount": 4760,
+      "edgeCount": 21968,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2638,
-    "assignedSignalCount": 2638,
-    "uniqueAssignmentCount": 2638,
-    "digest": "8943ac4a2787c829e12c016e9c298967607225163e71e3d96c8e3362aba3c725"
+    "sourceSignalCount": 2636,
+    "assignedSignalCount": 2636,
+    "uniqueAssignmentCount": 2636,
+    "digest": "06654ab53ddd2cc63fa6cd4b6efa32757ef7be06eaec9cb081b2677f644c6756"
   },
   "signalCounts": {
     "cognitive": 160,
-    "complexity": 1820,
+    "complexity": 1818,
     "duplication": 571,
     "fileSize": 48,
     "lintExclusion": 39
@@ -734,34 +734,6 @@
       ]
     },
     {
-      "key": "semantic:partition_service_owner/partition_service_workflow",
-      "owner": "partition_service_owner",
-      "boundary": "partition_service_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/partition"
-      ],
-      "fileCount": 10,
-      "signalCount": 34,
-      "complexity": 25,
-      "cognitive": 3,
-      "oversizedFiles": 4,
-      "duplicatedLines": 162,
-      "cloneTouches": 4,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 17,
-      "importOut": 46,
-      "score": 188.2,
-      "topPaths": [
-        "src/partition/partition-service-entry-apply-base.js",
-        "src/partition/partition-service-transaction-base.js",
-        "src/partition/partition-service-core-base.js",
-        "src/partition/partition-service-write-metrics-base.js",
-        "src/partition/partition-service-raft-init-base.js"
-      ]
-    },
-    {
       "key": "area:test/partition",
       "owner": null,
       "boundary": "test/partition",
@@ -815,6 +787,34 @@
         "src/admin/admin-websocket-local-observation-methods.js",
         "src/admin/admin-preflight-snapshot.js",
         "src/admin/admin-service-discovery-repair-cache-methods.js"
+      ]
+    },
+    {
+      "key": "semantic:partition_service_owner/partition_service_workflow",
+      "owner": "partition_service_owner",
+      "boundary": "partition_service_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/partition"
+      ],
+      "fileCount": 9,
+      "signalCount": 31,
+      "complexity": 22,
+      "cognitive": 3,
+      "oversizedFiles": 4,
+      "duplicatedLines": 162,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 16,
+      "importOut": 43,
+      "score": 176.2,
+      "topPaths": [
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/partition/partition-service-raft-init-base.js"
       ]
     },
     {
@@ -1309,7 +1309,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 573,
+      "importIn": 574,
       "importOut": 43,
       "score": 56,
       "topPaths": [
@@ -2636,6 +2636,31 @@
       ]
     },
     {
+      "key": "area:test/simulation",
+      "owner": null,
+      "boundary": "test/simulation",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/simulation"
+      ],
+      "fileCount": 2,
+      "signalCount": 2,
+      "complexity": 2,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 12,
+      "importOut": 33,
+      "score": 8,
+      "topPaths": [
+        "test/simulation/formation-sim-production-seed-host.js",
+        "test/simulation/formation-sim-runner.js"
+      ]
+    },
+    {
       "key": "semantic:admin_websocket_api_owner/admin_websocket_routing",
       "owner": "admin_websocket_api_owner",
       "boundary": "admin_websocket_routing",
@@ -3045,30 +3070,6 @@
       "score": 4,
       "topPaths": [
         "test/distributed/run-phase-event-helpers.js"
-      ]
-    },
-    {
-      "key": "area:test/simulation",
-      "owner": null,
-      "boundary": "test/simulation",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/simulation"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 1,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 21,
-      "score": 4,
-      "topPaths": [
-        "test/simulation/formation-sim-runner.js"
       ]
     },
     {

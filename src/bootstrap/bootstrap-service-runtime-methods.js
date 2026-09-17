@@ -357,6 +357,16 @@ function createBootstrapServiceRuntimeMethods() {
       const timeSource = this.nodeService.getTimeSource();
       return new Promise((resolve) => timeSource.setTimeout(resolve, ms));
     },
+    yieldEventLoopTurn() {
+      const ownedClock = this.nodeService?.providedTimeSource || null;
+      if (ownedClock) {
+        return new Promise((resolve) => ownedClock.setTimeout(resolve, 0));
+      }
+      if (typeof setImmediate !== TYPEOF_FUNCTION) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => setImmediate(resolve));
+    },
 
     /**
      * Shutdown the bootstrap service and all managed services.
@@ -382,9 +392,13 @@ function createBootstrapServiceRuntimeMethods() {
           this.deferredLatencyTopologyStartKind = null;
         }
 
-        if (typeof setImmediate === TYPEOF_FUNCTION) {
-          await new Promise((resolve) => setImmediate(resolve));
-        }
+        // One event-loop turn before teardown, so anything the cleared
+        // deferred start had already queued runs first. The turn belongs to
+        // the node shutting down: a node that owns a clock takes it there;
+        // otherwise setImmediate stays, because a zero-delay timer is a
+        // different event-loop phase and swapping one for the other would
+        // change production's ordering rather than its substrate.
+        await this.yieldEventLoopTurn();
 
         this.logger.info(BootstrapLog.SHUTDOWN, {
           nodeId: this.nodeId,

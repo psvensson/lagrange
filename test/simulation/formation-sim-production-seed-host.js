@@ -34,6 +34,8 @@ import {
 import {
   advanceToNextInstant, closeCurrentInstant,
 } from './formation-sim-quiescence.js';
+import {ChargeAccumulator} from './formation-sim-charge.js';
+import {OwnerTurnMeter} from './formation-sim-owner-passes.js';
 import {
   HARNESS_COMPOSITION_REFUSAL,
   HarnessCompositionError,
@@ -331,24 +333,151 @@ function createProductionSeedSimHost(environment, options = {}) {
   // a macrotask between rounds, because closeCurrentInstant awaits only the
   // owners it is given. It decides nothing about closure: the authority still
   // does, and a turn that enqueues nothing ends the fixpoint.
-  const hostTurn = () => new Promise((resolve) => setImmediate(resolve));
+  // Charging, when the scenario carries a metering authority: the same
+  // OwnerTurnMeter and ChargeAccumulator the metered runner uses, so there is
+  // one charging authority in the simulator. Every delivered event and every
+  // host turn charges the segment deltas the attribution seam recorded since
+  // the last charge - counts times the calibrated mean, whole milliseconds to
+  // the node's busyUntil. Nothing here names an owner; the seam reports them.
+  const meter = environment.metering || null;
+  const chargeDelta = () => {
+    if (meter) meter.chargeDelta();
+  };
+  const scheduler = meter ? chargingScheduler(network, chargeDelta) : network;
+  const hostTurn = () => new Promise((resolve) => setImmediate(() => {
+    chargeDelta();
+    resolve();
+  }));
   const closeInstant = (owners = []) =>
-    closeCurrentInstant({network, owners: [hostTurn, ...owners]});
+    closeCurrentInstant({network: scheduler, owners: [hostTurn, ...owners]});
   // The horizon is how much FURTHER the scenario may run, not an instant to
   // stop at: a phase that has already consumed virtual time still gets the
   // same room for its consequences as one that has not.
+  // The room a phase's consequences get is a BUDGET of further virtual time,
+  // fixed when the settle begins and measured from when the node is
+  // available: a charged node's next event is deferred to its busyUntil, and
+  // a budget counted from now would be spent before occupied work ran.
+  // Uncharged, busyUntil never exceeds now and this is exactly the old rule.
+  // It is never "so much quiet time": a node whose cadences run continuously
+  // would never be quiet, charged or not, and the horizon is not a stopping
+  // predicate on silence.
+  const roomUntil = (horizonMs) =>
+    Math.max(network.now(), network.nodeBusyUntil(nodeId)) + horizonMs;
   async function settleCausalConsequences(
     horizonMs = SETTLE_HORIZON_MS, owners = [],
   ) {
     await closeInstant(owners);
-    const until = network.now() + horizonMs;
-    for (let guard = 0; guard < 10000; guard += 1) {
+    const until = roomUntil(horizonMs);
+    const startedAtMs = network.now();
+    const trail = [];
+    let lastAt = null;
+    let sameInstantRounds = 0;
+    // The non-convergence ceiling is counted in instants when nothing is
+    // charged - instants are sparse - and in VIRTUAL TIME when the node is
+    // charged: a busy node re-times each overdue event forward one step at a
+    // time and then services them a millisecond apart, so ten thousand steps
+    // is no time at all there.
+    const withinCeiling = (round) => meter ?
+      network.now() - startedAtMs < PARTITION_PHASE_HORIZON_MS : round < 10000;
+    for (let guard = 0; withinCeiling(guard); guard += 1) {
       const at = await advanceToNextInstant({
-        network, owners: [hostTurn, ...owners], horizonMs: until,
+        network: scheduler, owners: [hostTurn, ...owners], horizonMs: until,
+      });
+      if (at === null) return;
+      if (at === lastAt) sameInstantRounds += 1;
+      lastAt = at;
+      if (guard < 8 || guard % 2000 === 0) {
+        const next = network.pendingEvents()[0] || null;
+        trail.push({round: guard, at, busyUntil: network.nodeBusyUntil(nodeId),
+          pending: network.pendingEventCount(),
+          next: next ? `${next.kind}:${next.type}@${next.dueAt}` : null,
+          segments: environment.charges ? environment.charges.ownerSegments(
+            nodeId, Object.keys(environment.charges.calibration.owners)) : null});
+      }
+    }
+    // Diagnostic detail travels with the refusal: a scenario that does not
+    // come to rest says where it was and what kept arriving.
+    const pendingByKind = {};
+    for (const event of network.pendingEvents()) {
+      const key = `${event.kind}:${event.type}`;
+      pendingByKind[key] = (pendingByKind[key] || 0) + 1;
+    }
+    throw new Error('the composed node did not reach causal closure ' +
+      JSON.stringify({startedAtMs, until, nowMs: network.now(), charged: Boolean(meter),
+        sameInstantRounds, pendingByKind,
+        lastTranscriptEvent: transcript.entries().at(-1)?.event ?? null,
+        transcriptLength: transcript.length(),
+        busyUntil: network.nodeBusyUntil(nodeId), pending: network.pendingEventCount(),
+        trail}));
+  }
+  // After teardown nothing regenerates - production cleared its cadences - so
+  // the queue is finite and the scenario ends at REST: every remaining event
+  // runs, however far a charged node's occupancy defers it. A queue that does
+  // not drain inside the ceiling is a leak, reported with what was left.
+  async function drainToRest(owners = []) {
+    await closeInstant(owners);
+    const startedAtMs = network.now();
+    while (network.pendingEventCount() > 0) {
+      if (network.now() - startedAtMs > PARTITION_PHASE_HORIZON_MS) {
+        const left = {};
+        for (const event of network.pendingEvents()) {
+          const key = `${event.kind}:${event.type}`;
+          left[key] = (left[key] || 0) + 1;
+        }
+        throw new Error('the composed node did not drain after teardown ' +
+          JSON.stringify({startedAtMs, nowMs: network.now(),
+            busyUntil: network.nodeBusyUntil(nodeId), left}));
+      }
+      const at = await advanceToNextInstant({
+        network: scheduler, owners: [hostTurn, ...owners],
+        horizonMs: roomUntil(PARTITION_PHASE_HORIZON_MS),
       });
       if (at === null) return;
     }
-    throw new Error('the composed node did not reach causal closure');
+  }
+
+  // A production phase may itself BLOCK on virtual time - phase two paces
+  // replica creation on the node's own clock - so the scheduler has to run
+  // while the phase is in flight. Advancing only until the phase settles
+  // keeps "the phase returned" and "its consequences settled" apart, which
+  // is the distinction phase one established.
+  async function driveUntilSettled(promise, horizonMs = PHASE_HORIZON_MS) {
+    let settled = false;
+    const watched = promise.then(
+      (value) => {
+        settled = true;
+        return value;
+      },
+      (error) => {
+        settled = true;
+        throw error;
+      },
+    );
+    watched.catch(() => undefined);
+    await closeInstant();
+    const until = roomUntil(horizonMs);
+    while (!settled) {
+      const at = await advanceToNextInstant({
+        network: scheduler, owners: [hostTurn], horizonMs: until,
+      });
+      if (at === null) break;
+    }
+    return watched;
+  }
+  // Production's own teardown: what stops the RUNTIMES. With 135 partition
+  // replicas alive, stopping only the lifecycle owners and the router leaves
+  // every replica's cadence armed on the node's clock, and the scenario is
+  // not at rest afterwards. Owner order: production first, then the
+  // lifecycle owners the phase started, then the router the setup owner
+  // created, then the runtime that owns both.
+  async function stopProduction() {
+    transcript.record('TEARDOWN_STARTED', {nodeId});
+    await bootstrap.shutdown();
+    bootstrap.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
+    if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
+    await environment.stop();
+    compositionRegistry.release(nodeId);
+    transcript.record('TEARDOWN_COMPLETED', {nodeId});
   }
 
   return {
@@ -361,6 +490,7 @@ function createProductionSeedSimHost(environment, options = {}) {
     // knows how to wait.
     closeCurrentInstant: closeInstant,
     settleCausalConsequences,
+    drainToRest,
     // Sealing records nothing. It states that the scenario is over, so any
     // later semantic entry is a failure rather than a late arrival.
     seal: () => transcript.seal(),
@@ -382,29 +512,7 @@ function createProductionSeedSimHost(environment, options = {}) {
     // while the phase is in flight. Advancing only until the phase settles
     // keeps "the phase returned" and "its consequences settled" apart, which
     // is the distinction phase one established.
-    async driveUntilSettled(promise, horizonMs = PHASE_HORIZON_MS) {
-      let settled = false;
-      const watched = promise.then(
-        (value) => {
-          settled = true;
-          return value;
-        },
-        (error) => {
-          settled = true;
-          throw error;
-        },
-      );
-      watched.catch(() => undefined);
-      await closeInstant();
-      const until = network.now() + horizonMs;
-      while (!settled) {
-        const at = await advanceToNextInstant({
-          network, owners: [hostTurn], horizonMs: until,
-        });
-        if (at === null) break;
-      }
-      return watched;
-    },
+    driveUntilSettled,
     startPhaseMessageGroups: async () => {
       transcript.record('PHASE_MESSAGE_GROUPS_STARTED', {
         nodeId, phase: PHASE_MESSAGE_GROUPS,
@@ -466,20 +574,19 @@ function createProductionSeedSimHost(environment, options = {}) {
       serviceLifecycleManager: {owner: 'StartupServiceLifecycleOwner'},
       serviceReconciler: {owner: 'StartupServiceLifecycleOwner'},
     }),
-    // Owner order: the lifecycle owners the phase started, then the router
-    // the setup owner created, then the runtime that owns both.
-    async stop() {
-      transcript.record('TEARDOWN_STARTED', {nodeId});
-      // Production's own teardown first, because it is what stops the
-      // RUNTIMES: with 135 partition replicas alive, stopping only the
-      // lifecycle owners and the router leaves every replica's cadence armed
-      // on the node's clock, and the scenario is not at rest afterwards.
-      await bootstrap.shutdown();
-      bootstrap.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
-      if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
-      await environment.stop();
-      compositionRegistry.release(nodeId);
-      transcript.record('TEARDOWN_COMPLETED', {nodeId});
+    // Teardown is production's work and the node's CPU: 135 replica
+    // runtimes shutting down, each ending its Raft. It runs inside the
+    // node's frame like a phase, or a charging meter finds owner work with
+    // no node to charge it to - exactly the seam it exists to refuse. And it
+    // BLOCKS on virtual time - the shutdown yield is a node timer - so the
+    // scheduler is driven while it is in flight and the queue then drained
+    // to rest: a caller that awaits stop() gets a node at rest, never a
+    // promise parked on a timer nobody fires.
+    async stop(owners = []) {
+      await driveUntilSettled(
+        runOnExecutionNode(nodeId, () => stopProduction()),
+        PARTITION_PHASE_HORIZON_MS);
+      await drainToRest(owners);
     },
     // Read-only physical facts the witnesses assert on.
     endpoints: connectionEnvironment.environment,
@@ -555,15 +662,24 @@ function scenarioPhases(host, reach) {
 // armed and its ledger cleared, one generation named, the scenario's
 // surroundings, one node environment, the seed host on it, and the host-load
 // contract the closure authority will be given.
-function beginSeedScenario({nodeId, nodeAddress, wsPort, hostLoad, observer}) {
+function beginSeedScenario({
+  nodeId, nodeAddress, wsPort, hostLoad, observer, charging = null, generation,
+}) {
   installDeterministicOwnerGuard();
   resetNondeterministicOwnerSeamLedger();
-  const generation = `${nodeId}-seed-phase-one`;
   if (observer) observer.begin(generation);
-  const scenario = createProductionSimScenario();
+  const scenario = createProductionSimScenario(
+    charging ? {costTable: charging.costTable} : {});
   const environment = createProductionSimNodeEnvironment({
     nodeId, nodeAddress, wsPort, scenario,
   });
+  if (charging) {
+    const charges = new ChargeAccumulator({network: scenario.network,
+      calibration: charging});
+    environment.metering = new OwnerTurnMeter({network: scenario.network,
+      charges});
+    environment.charges = charges;
+  }
   return {
     generation,
     scenario,
@@ -571,6 +687,38 @@ function beginSeedScenario({nodeId, nodeAddress, wsPort, hostLoad, observer}) {
     host: createProductionSeedSimHost(environment),
     owners: hostLoadOwners(hostLoad),
   };
+}
+
+// What charging did, read from the metering authority after the meter has
+// closed: nothing here is computed from a coefficient.
+function chargedSummary(environment, nodeId, mark) {
+  const snapshot = environment.metering.stop();
+  const owners = Object.keys(environment.charges.calibration.owners);
+  return {
+    calibration: environment.charges.calibration.file,
+    formationCompleteAtMs: mark.atMs,
+    segments: environment.charges.ownerSegments(nodeId, owners),
+    chargedMs: environment.charges.ownerChargedMs(nodeId, owners),
+    stretches: environment.charges.stretchesFor(nodeId),
+    gapMs: environment.charges.gapMsFor(nodeId),
+    attribution: snapshot,
+  };
+}
+
+// The scheduler the closure authority drives when the scenario charges:
+// the network itself, with each delivered event followed by a charge of the
+// segments it caused. Scheduling decisions are untouched - selection, order
+// and delivery are the network's - only the busyUntil the next selection
+// sees has moved.
+function chargingScheduler(network, chargeDelta) {
+  return Object.freeze({
+    ...network,
+    runStep(options) {
+      const step = network.runStep(options);
+      chargeDelta();
+      return step;
+    },
+  });
 }
 
 // The simulator's counterpart of production's "Cluster formed." mark: the
@@ -602,29 +750,51 @@ async function runSeedScenario({
   // authority has already changed hands, and nothing has yet been torn down.
   // Nothing production does depends on whether anyone is listening.
   onFormationComplete,
+  // A loadCalibration() result. Present, the scenario charges every owner
+  // segment at that calibration through the simulator's one metering
+  // authority; absent, virtual time is link delays and cadences only.
+  charging = null,
   throughMessageGroups = false,
   throughPartitions = false,
   throughHandoff = false,
 } = {}) {
-  const {generation, scenario, host, owners} = beginSeedScenario({
-    nodeId, nodeAddress, wsPort, hostLoad, observer,
+  // ONE generation root around the whole scenario - scenario construction,
+  // every phase, every settle and drive loop, teardown and the seal - not one
+  // per phase call. A production continuation resumed by the scheduler while
+  // the host was settling used to find no generation active, and was read as
+  // another generation's ambient ancestry: correct for a leftover from a
+  // finished simulation, wrong for this one's own work between its phases.
+  const generation = `${nodeId}-seed-phase-one`;
+  return runOnSimulationGenerationRoot(generation, () => runSeedScenarioInRoot({
+    nodeId, nodeAddress, wsPort, hostLoad, observer, onFormationComplete,
+    charging, throughMessageGroups, throughPartitions, throughHandoff,
+    generation,
+  }));
+}
+
+async function runSeedScenarioInRoot({
+  nodeId, nodeAddress, wsPort, hostLoad, observer, onFormationComplete,
+  charging, throughMessageGroups, throughPartitions, throughHandoff,
+  generation,
+}) {
+  const {scenario, host, owners, environment} = beginSeedScenario({
+    nodeId, nodeAddress, wsPort, hostLoad, observer, charging, generation,
   });
-  await runOnSimulationGenerationRoot(generation, () =>
-    runOnExecutionNode(nodeId, () => host.phaseInfrastructure()));
+  await runOnExecutionNode(nodeId, () => host.phaseInfrastructure());
   const afterPhaseReturned = host.transcript().serialize();
   await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   const afterCausalClosure = host.transcript().serialize();
   for (const [startPhase, horizonMs] of scenarioPhases(host, {
     throughMessageGroups, throughPartitions, throughHandoff,
   })) {
-    const running = runOnSimulationGenerationRoot(generation, () =>
-      runOnExecutionNode(nodeId, startPhase));
+    const running = runOnExecutionNode(nodeId, startPhase);
     await host.driveUntilSettled(running, horizonMs);
     await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
   }
   const mark = markFormationComplete(scenario, host, onFormationComplete);
-  await host.stop();
-  await host.settleCausalConsequences(SETTLE_HORIZON_MS, owners);
+  await host.stop(owners);
+  const charged = environment.metering ? chargedSummary(environment, nodeId,
+    mark) : null;
   host.seal();
   if (observer) observer.seal();
   const strictReport = serializeStrictReport();
@@ -642,6 +812,9 @@ async function runSeedScenario({
     nowMs: scenario.network.now(),
     formationCompleteAtMs: mark.atMs,
     formationEnqueueEpoch: mark.enqueueEpoch,
+    // Null unless the scenario charged; then per-owner segments, charged ms
+    // and busy stretches for the node, read from the metering authority.
+    charged,
     enqueueEpoch: scenario.network.enqueueEpoch(),
     pendingEventCount: scenario.network.pendingEventCount(),
     // Held so a caller can prove the seal holds without re-running anything.

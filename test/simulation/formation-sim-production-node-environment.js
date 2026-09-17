@@ -98,11 +98,18 @@ function physicalTranscriptObserver(transcript) {
  * Create the scenario-level surroundings several node environments share: one
  * deterministic scheduler, one physical transport with a scenario-local
  * endpoint registry, and one transcript.
- * @param {Object} [options] - {startMs, linkDelayMs}.
+ * @param {Object} [options] - {startMs, linkDelayMs, costTable}.
  * @return {Object} the scenario surroundings.
  */
-function createProductionSimScenario({startMs = 0, linkDelayMs = 1} = {}) {
-  const network = createVirtualNetwork({startMs});
+function createProductionSimScenario({
+  startMs = 0, linkDelayMs = 1, costTable = null,
+} = {}) {
+  // Without a cost table virtual time advances by link delays and cadences
+  // only - the composition proofs' substrate. With one, the metering
+  // authority charges each owner segment to the node's single core, and the
+  // node's own timers and messages defer behind it exactly as any other
+  // charged node's do.
+  const network = createVirtualNetwork(costTable ? {startMs, costTable} : {startMs});
   // The watchdog's sync-section stamps are MEASUREMENT, not decisions, and
   // the seam for them already exists: point the shared registry's clock at
   // this scenario's virtual time so tagging inside a dispatch reads no

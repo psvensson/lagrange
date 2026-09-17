@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-sim-charged-production-seed-host",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The production-composed seed host runs CHARGED under the current live calibration lineage (formation-seed-2026-09-17): every owner segment the production attribution seam counts is charged to the node's single core at its calibrated cost, a busy node defers its own events, and the scenario still reaches the simulator's 'Cluster formed' counterpart and then rest. Closure under occupancy is semantic: a phase's consequences get a fixed budget of virtual time measured from when the node is available, never 'so much quiet time'; after teardown the finite queue drains to rest however far occupancy defers it. Charging is off by default and changes WHEN production runs, never WHO owns it: the uncharged path keeps the E/F artifacts and the charged run's provenance snapshot is identical to the uncharged one. Every ambient seam the charged timeline reaches that the uncharged one never did is repaired at its owner through the clock the owner already holds.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/formation-sim-charged-seed-host.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "harness-adapts-substrate-never-decides-owners",
+      "statement": "The harness may adapt scheduling substrate (a charging scheduler, a budget from availability, a drain to rest) but never decides who owns a segment: owners come from the production attribution seam and the calibration only prices them."
+    },
+    {
+      "id": "no-metered-count-is-a-target",
+      "statement": "No segment count, charged millisecond, gap or rate is asserted as a target. The witnesses assert strict cleanliness, rest, repeatability and ownership invariance; the remeasured per-runtime Raft rates are recorded as findings for the correspondence document, not enforced."
+    },
+    {
+      "id": "one-macrotask-idiom",
+      "statement": "A production seam reached only under charging is repaired at its owner with the idiom already in the codebase: a node that owns a clock takes its next turn and its retry deadline from that clock; otherwise setImmediate and Date.now stay. Production defaults are unchanged."
+    },
+    {
+      "id": "sealed-invariants",
+      "statement": "138 owner runtimes, 276 peer representations over 138 addresses, no runtime in a peer slot, no authority breach, pending 0, F probe 0, strict violations=0 substitutions=0 eligible=true on both the uncharged and the charged run, and the same three unmet reproduction predicates."
+    },
+    {
+      "id": "no-simulator-repair-on-rate-difference-alone",
+      "statement": "Q1b opens a trigger question only if a material normalized Raft-rate discrepancy survives charging under shared semantics and correct composition. A rate difference by itself opens no simulator repair."
+    }
+  ],
+  "sealedAt": "889572cdaeefce60ec0d8f356302048dcffbbd13"
+}

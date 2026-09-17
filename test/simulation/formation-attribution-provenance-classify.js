@@ -45,7 +45,7 @@ const PIPELINE_RUNNER = 'src/bootstrap/pipeline/startup-pipeline-runner.js';
 const REASON = OUTSIDE_DOMAIN_REASON;
 const OUTSIDE_DOMAIN_SHAPE = Object.freeze([
   // One macrotask offered to the closure authority.
-  ['new Promise((resolve) => setImmediate(resolve))', SEED_HOST,
+  ['new Promise((resolve) => setImmediate(() => {', SEED_HOST,
     REASON.SCENARIO_SCHEDULER_TURN],
   // The closure authority awaiting each owner-idle contract.
   ['for (const owner of owners) await owner();', QUIESCENCE,
@@ -54,6 +54,8 @@ const OUTSIDE_DOMAIN_SHAPE = Object.freeze([
   // entry, and the host awaiting that entry.
   ['await runBootstrapActivity(', PIPELINE_RUNNER, REASON.OWNER_BOUNDARY_RETURN],
   ['await runSeedPhase(', SEED_HOST, REASON.OWNER_BOUNDARY_RETURN],
+  ['await runOnExecutionNode(nodeId, () => host.phaseInfrastructure());',
+    SEED_HOST, REASON.OWNER_BOUNDARY_RETURN],
   // The scenario drive loop resuming itself between instants, and the
   // settlement watcher that tells it when a phase has finished.
   ['await closeInstant(', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
@@ -62,7 +64,12 @@ const OUTSIDE_DOMAIN_SHAPE = Object.freeze([
   ['await host.driveUntilSettled(', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
   ['runOnSimulationGenerationRoot(generation, () =>', SEED_HOST,
     REASON.DRIVE_LOOP_AWAIT],
-  ['async driveUntilSettled(promise,', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
+  // The scenario's own return from its generation root.
+  ['async function runSeedScenario({', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
+  ['await host.stop(owners);', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
+  ['await drainToRest(owners);', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
+  ['async function driveUntilSettled(promise,', SEED_HOST,
+    REASON.DRIVE_LOOP_AWAIT],
   ['const watched = promise.then(', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
   ['watched.catch(() => undefined);', SEED_HOST, REASON.DRIVE_LOOP_AWAIT],
   ['await closeCurrentInstant({network, owners});', QUIESCENCE,
