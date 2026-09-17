@@ -180,7 +180,11 @@ differs from HEAD by exactly the staged quest scope), and it announces that
 base in its log. The branch-vs-remote range is the push gate's proof above,
 which is where two landed quests' interaction is proved. Before this
 (2026-09-17) a land on a branch carrying earlier quests proved them all
-again every time - 1927 tests for a one-file repair.
+again every time - 1927 tests for a one-file repair. The same proof runs
+under the retry policy CI records (`LAGRANGE_RETRY_FAILED_ONCE=1`): a failed
+file is rerun once standalone, the rerun is reported and capped at five
+files, a standalone failure stays red. A flake no longer costs a re-land,
+and a persisting red still refuses.
 
 ## Partial clones (solve-v2 phase 1)
 

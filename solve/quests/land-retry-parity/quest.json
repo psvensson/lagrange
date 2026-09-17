@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "land-retry-parity",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "solve land's change proof runs under the retry policy CI records (LAGRANGE_RETRY_FAILED_ONCE=1, owner decision 2026-08-23): a failed file is rerun once standalone, the rerun is reported and capped at five files, a standalone failure stays red. Local becomes equal to CI, not weaker: a flake no longer costs a whole re-land and a persisting red still refuses. The policy itself, which had no witness, is held as one exported unit of scripts/run-test-files.js with a witness for the four branches (no environment, reported pass, standalone fail, cap). Dispatching previously red files first is the last-results reader's job and moves to lane-dispatch-lpt-order, which owns that reader.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/land-retry-parity/evidence/receipt.json",
+      "requiredReceipts": [
+        "land-runs-under-the-recorded-retry-policy",
+        "retry-policy-reported-and-capped",
+        "retry-policy-capped-and-red-stays-red"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "reported-never-hidden",
+      "statement": "Every rerun is written to the proof output with its outcome; the cap and the standalone-failure rule are unchanged."
+    },
+    {
+      "id": "one-environment-authority",
+      "statement": "The policy variable's name and value are owned by scripts/run-test-files.js and imported; no second spelling appears in scripts/solve."
+    },
+    {
+      "id": "push-gate-unchanged",
+      "statement": "CI workflows, the pre-push gate and npm test outside land are untouched."
+    }
+  ],
+  "sealedAt": "2face3dc2f689334b7d6f965b5e09fab0bdafe52"
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "land-retry-parity",
+  "status": "pass",
+  "testFileDigests": {
+    "test/solve/commands.test.js": "75ae9ec1f1be5b5532baa22c4b04fc59048396f65f7a10704568a8cb41048873",
+    "test/scripts/run-test-files.test.js": "411d6a583bd2c4e0965d7251d2cc287552fd3a0456c4588f9be8f42be845e379"
+  },
+  "generatedAt": "2026-09-17T15:10:00.489Z",
+  "receipts": [
+    {
+      "id": "land-runs-under-the-recorded-retry-policy",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the change proof runs under the recorded retry policy, as CI does$\" test/solve/commands.test.js",
+      "detail": "the spawned landing proof carries LAGRANGE_RETRY_FAILED_ONCE=1 next to the quest-delta base, announced, without mutating the caller environment",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "retry-policy-reported-and-capped",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^reruns each failed file once, reports it, and a standalone pass is green$\" test/scripts/run-test-files.test.js",
+      "detail": "the runner policy land now shares: the rerun is announced and its outcome reported, never hidden",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "retry-policy-capped-and-red-stays-red",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^is capped: a run with many failed files is breakage and never reruns$\" test/scripts/run-test-files.test.js",
+      "detail": "six failed files is over the cap of five: no rerun, the run stays red",
+      "testFile": "test/scripts/run-test-files.test.js"
+    }
+  ]
+}

@@ -4,9 +4,12 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
 import {
+  RETRY_FAILED_ONCE_ENABLED,
+  RETRY_FAILED_ONCE_ENV,
   analyzeTapOutput,
   filterTestFiles,
   parseOptions,
+  retryFailedOnce,
   runTestFiles,
 } from '../../scripts/run-test-files.js';
 
@@ -128,5 +131,67 @@ describe('run-test-files', () => {
     assert.equal(analysis.parserOk, true);
     assert.equal(analysis.assertions, 0);
     assert.match(analysis.reasons.join(' '), /no assertions executed/);
+  });
+});
+
+// The lane-scoped retry-failed-once policy (owner decision 2026-08-23), held
+// as a witness now that `solve land` runs under it as CI does: a rerun
+// happens only under the declared environment and under the cap, every
+// rerun is REPORTED, a standalone pass classifies an intermittent, a
+// standalone failure stays red.
+describe('retry-failed-once policy', () => {
+  const FAILED = 'test/a-red.test.js';
+  const GREEN = 'test/b-green.test.js';
+  const RETRY_ENV = {[RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED};
+  const summaryWith = (failedFiles) => ({
+    failed: failedFiles.length,
+    ok: false,
+    results: [
+      {file: GREEN, ok: true},
+      ...failedFiles.map((file) => ({file, ok: false})),
+    ],
+  });
+  const harness = (rerunOk) => {
+    const lines = [];
+    const reruns = [];
+    const runFile = (file) => {
+      reruns.push(file);
+      return Promise.resolve({file, ok: rerunOk});
+    };
+    return {lines, reruns, seams: {env: RETRY_ENV, runFile, write: (l) => lines.push(l)}};
+  };
+
+  it('does not rerun without the declared environment: a red stays red', async () => {
+    const {reruns, seams} = harness(true);
+    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {},
+      {...seams, env: {}});
+    assert.equal(exitCode, 1);
+    assert.deepEqual(reruns, [], 'nothing reran');
+  });
+
+  it('reruns each failed file once, reports it, and a standalone pass is green', async () => {
+    const {lines, reruns, seams} = harness(true);
+    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {}, seams);
+    assert.equal(exitCode, 0);
+    assert.deepEqual(reruns, [FAILED], 'only the failed file reran, once');
+    assert.match(lines[0], /^# retry-failed-once: rerunning 1 failed file/u,
+      'the rerun is announced');
+    assert.equal(lines[1], `# retried-once pass ${FAILED}\n`,
+      'the outcome is reported, never hidden');
+  });
+
+  it('a standalone failure stays red and is reported as such', async () => {
+    const {lines, seams} = harness(false);
+    const exitCode = await retryFailedOnce(summaryWith([FAILED]), {}, seams);
+    assert.equal(exitCode, 1);
+    assert.equal(lines[1], `# retried-once fail ${FAILED}\n`);
+  });
+
+  it('is capped: a run with many failed files is breakage and never reruns', async () => {
+    const {reruns, seams} = harness(true);
+    const many = Array.from({length: 6}, (_, index) => `test/red-${index}.test.js`);
+    const exitCode = await retryFailedOnce(summaryWith(many), {}, seams);
+    assert.equal(exitCode, 1);
+    assert.deepEqual(reruns, [], 'six failed files is over the cap of five');
   });
 });

@@ -22,6 +22,9 @@ import {
   CHECK_BASE_ENV, RANGE_SOURCE,
 } from '../../scripts/checks/change-selection-constants.js';
 import {resolvedCheckRange} from '../../scripts/checks/changed-paths.js';
+import {
+  RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
+} from '../../scripts/run-test-files.js';
 
 const QUEST_ID = 'demo';
 const EPIC_ID = 'demo-epic';
@@ -329,4 +332,26 @@ test('the change proof is spawned against the quest delta, HEAD, and says so', (
   const landing = landChangeProofEnvironment(caller);
   assert.equal(landing.KEEP, 'me');
   assert.equal(caller[CHECK_BASE_ENV], undefined, 'the caller environment is not mutated');
+});
+
+test('the change proof runs under the recorded retry policy, as CI does', () => {
+  // ci.yml, full-gate.yml and the canary export LAGRANGE_RETRY_FAILED_ONCE=1;
+  // land ran without it, so a flake cost a whole re-land where CI would have
+  // rerun the file once standalone, reported and capped (never hidden).
+  // Local is now equal to CI, not weaker.
+  const spawned = [];
+  const lines = [];
+  const spawn = (command, args, options) => {
+    spawned.push(options);
+    return {status: 0, stdout: '', stderr: ''};
+  };
+  runChangeProof('/repo', (line) => lines.push(line), spawn);
+  assert.equal(spawned[0].env[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED,
+    'the proof process carries the retry-once policy');
+  assert.equal(spawned[0].env[CHECK_BASE_ENV], 'HEAD', 'and still the quest-delta base');
+  assert.match(lines[0], /rerun once/u, 'the policy is announced with the base');
+  const caller = {};
+  const landing = landChangeProofEnvironment(caller);
+  assert.equal(landing[RETRY_FAILED_ONCE_ENV], RETRY_FAILED_ONCE_ENABLED);
+  assert.equal(caller[RETRY_FAILED_ONCE_ENV], undefined, 'the caller environment is not mutated');
 });

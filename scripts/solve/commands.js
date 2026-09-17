@@ -8,6 +8,9 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 import {CHECK_BASE_ENV} from '../checks/change-selection-constants.js';
+import {
+  RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
+} from '../run-test-files.js';
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
@@ -45,7 +48,8 @@ const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
 const LAND_PROOF_BASE = 'HEAD';
 const LAND_PROOF_BASE_ANNOUNCEMENT =
   'land: change proof base HEAD (the quest delta the index holds); ' +
-  'the branch range is the push gate\'s proof\n';
+  'the branch range is the push gate\'s proof; failed files rerun once ' +
+  'standalone, reported and capped, as CI does\n';
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';
@@ -318,9 +322,17 @@ function refreshInventories(root) {
 }
 
 // The environment the landing proof runs under: the caller's, with the
-// change-proof base pinned to the quest delta.
+// change-proof base pinned to the quest delta and the recorded retry policy
+// CI lanes run under (owner decision 2026-08-23: a failed file reruns once
+// standalone, the rerun is REPORTED and capped, never hidden). Without it a
+// land was weaker than CI in exactly the wrong direction: an intrinsic
+// intermittent cost a whole re-land while CI would have classified it.
 function landChangeProofEnvironment(env = process.env) {
-  return {...env, [CHECK_BASE_ENV]: LAND_PROOF_BASE};
+  return {
+    ...env,
+    [CHECK_BASE_ENV]: LAND_PROOF_BASE,
+    [RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED,
+  };
 }
 
 // `spawn` is the process seam: the witness observes the environment the

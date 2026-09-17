@@ -482,8 +482,19 @@ async function main() {
     `fail=${summary.failed} assertions=${summary.assertions}\n`,
   );
   if (summary.ok) return SUCCESS_EXIT_CODE;
+  return retryFailedOnce(summary, options);
+}
+
+// The policy above, as one exported unit so a witness can hold it: the
+// rerun happens only under the declared environment and the cap, every
+// rerun is written to `write`, and a standalone failure stays red.
+async function retryFailedOnce(summary, options = {}, {
+  env = process.env,
+  runFile = runTestFile,
+  write = (line) => process.stdout.write(line),
+} = {}) {
   const retryOnce =
-    process.env[RETRY_FAILED_ONCE_ENV] === RETRY_FAILED_ONCE_ENABLED &&
+    env[RETRY_FAILED_ONCE_ENV] === RETRY_FAILED_ONCE_ENABLED &&
     summary.failed > 0 &&
     summary.failed <= RETRY_FAILED_ONCE_MAX_FILES &&
     summary.results.length > 0;
@@ -491,17 +502,17 @@ async function main() {
   const failedFiles = summary.results
     .filter((result) => !result.ok)
     .map((result) => result.file);
-  process.stdout.write(
+  write(
     `# retry-failed-once: rerunning ${failedFiles.length}` +
     RETRY_FAILED_ONCE_BANNER_SUFFIX,
   );
   let retriedAllGreen = true;
   for (const file of failedFiles) {
-    const retried = await runTestFile(file, options);
+    const retried = await runFile(file, options);
     const retriedOutcome = retried.ok ?
       RETRY_FAILED_ONCE_OUTCOME.PASS :
       RETRY_FAILED_ONCE_OUTCOME.FAIL;
-    process.stdout.write(`# retried-once ${retriedOutcome} ${file}\n`);
+    write(`# retried-once ${retriedOutcome} ${file}\n`);
     if (!retried.ok) retriedAllGreen = false;
   }
   return retriedAllGreen ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
@@ -511,9 +522,12 @@ const IS_MAIN = path.resolve(process.argv[1] || '') === fileURLToPath(import.met
 if (IS_MAIN) process.exitCode = await main();
 
 export {
+  RETRY_FAILED_ONCE_ENABLED,
+  RETRY_FAILED_ONCE_ENV,
   analyzeTapOutput,
   filterTestFiles,
   parseOptions,
+  retryFailedOnce,
   runTestFile,
   runTestFileSync,
   runTestFiles,
