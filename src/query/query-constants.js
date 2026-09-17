@@ -51,15 +51,10 @@ const QUERY_OPERATION = Object.freeze({
 const QUERY_ERROR_CODE = Object.freeze({
   TABLE_NOT_FOUND: 'TABLE_NOT_FOUND',
   PARTITION_NOT_FOUND: 'PARTITION_NOT_FOUND',
-  CROSS_PARTITION_TRANSACTION: 'CROSS_PARTITION_TRANSACTION',
   TRANSACTION_ACTIVE: 'TRANSACTION_ACTIVE',
   NO_TRANSACTION: 'NO_TRANSACTION',
   COMMIT_FAILED: 'COMMIT_FAILED',
   ROLLBACK_FAILED: 'ROLLBACK_FAILED',
-  PREPARE_FAILED: 'PREPARE_FAILED',
-  WRITE_CONFLICT: 'WRITE_CONFLICT',
-  SNAPSHOT_EXPIRED: 'SNAPSHOT_EXPIRED',
-  PREPARE_LOST: 'PREPARE_LOST',
   TRANSACTION_PARTICIPANTS_FROZEN: 'TRANSACTION_PARTICIPANTS_FROZEN',
   TRANSACTION_RECOVERY_INCOMPLETE: 'TRANSACTION_RECOVERY_INCOMPLETE',
   TRANSACTION_STATE_PERSIST_FAILED: 'TRANSACTION_STATE_PERSIST_FAILED',
@@ -85,22 +80,14 @@ const QUERY_ERROR_CODE = Object.freeze({
 const QUERY_ERROR_MSG = Object.freeze({
   UNSUPPORTED_STATEMENT_PREFIX: 'Unsupported statement type: ',
   TABLE_NOT_FOUND_PREFIX: 'Table not found: ',
-  PARTITION_FOR_KEY_PREFIX: 'No partition found for key: ',
   QUERY_TIMEOUT: 'Query timeout',
   QUERY_TIMED_OUT: 'Query timed out',
   MESSAGE_ROUTER_UNAVAILABLE: 'Message router not available',
-  NO_SERVICE_FOR_PARTITION: 'No service found for partition',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
-  PARTITION_SERVICE_NOT_FOUND_PREFIX: 'Partition service not found: ',
   QUERY_ROUTING_FAILED: 'Query routing failed',
-  READ_CANDIDATES_EXHAUSTED:
-    'All read candidates exhausted with transient errors',
   SYSTEM_CACHE_NOT_AVAILABLE: 'System cache not available for table',
-  SYSTEM_CACHE_FILTER_UNSUPPORTED: 'System cache does not support filter',
   SYSTEM_CACHE_UNSUPPORTED: 'System cache does not support filter or getAll',
   NO_ACTIVE_SERVICE_FOR_PARTITION: 'No active service found for partition',
-  NO_LEADER_SERVICE_FOR_PARTITION: 'No leader service found for partition',
-  NO_SUCCESSFUL_PARTITION_RESPONSE: 'No successful responses from partitions',
   TRANSACTION_ACTIVE: 'Transaction already active for this session',
   NO_TRANSACTION_COMMIT: 'No active transaction to commit',
   NO_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
@@ -114,22 +101,7 @@ const QUERY_ERROR_MSG = Object.freeze({
   COMMIT_FAILED: 'Commit failed',
   ROLLBACK_FAILED: 'Rollback failed',
   PREPARE_FAILED: 'Prepare failed',
-  WRITE_CONFLICT: 'Write conflict detected',
-  SNAPSHOT_EXPIRED: 'Snapshot expired',
-  PREPARE_LOST: 'Prepared state lost',
   BEGIN_FAILED: 'Failed to begin transaction',
-  CROSS_PARTITION_INSERT:
-    'Cross-partition transactions are not supported. INSERT affects multiple partitions.',
-  CROSS_PARTITION_UPDATE:
-    'Cross-partition transactions are not supported. UPDATE affects multiple partitions.',
-  CROSS_PARTITION_DELETE:
-    'Cross-partition transactions are not supported. DELETE affects multiple partitions.',
-  TX_BOUND_PREFIX:
-    'Cross-partition transactions are not supported. Transaction bound to partition ',
-  TX_BOUND_INSERT_SUFFIX: ', but INSERT targets partition ',
-  TX_BOUND_UPDATE_SUFFIX: ', but UPDATE targets different partition(s)',
-  TX_BOUND_DELETE_SUFFIX: ', but DELETE targets different partition(s)',
-  TX_BOUND_OPERATION_SUFFIX: ', but operation targets partition ',
   QUERY_TIMEOUT_AFTER_PREFIX: 'Query timeout after ',
   QUERY_TIMEOUT_AFTER_SUFFIX: 'ms',
   PARTITION_NOT_FOUND: 'Partition not found',
@@ -189,10 +161,6 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Managed partition split must be initiated by the source partition leader',
   TABLE_SPLIT_TRANSACTION_COORDINATOR_REQUIRED:
     'Managed partition split requires DistributedTransactionCoordinator for atomic partition metadata insertion',
-  TABLE_SPLIT_BOOTSTRAP_TARGETS_REQUIRED_PREFIX:
-    'Managed partition split requires at least ',
-  TABLE_SPLIT_SOURCE_QUORUM_REQUIRED_PREFIX:
-    'Managed partition split requires at least ',
   TABLE_SPLIT_START_FAILED:
     'Failed to start partition split replication on source partition',
   TABLE_SPLIT_INVALID_PHASE_TRANSITION:
@@ -223,12 +191,9 @@ const QUERY_LOG_MSG = Object.freeze({
   BEGIN_TRANSACTION: 'BEGIN TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
-  SYSTEM_CACHE_UNSUPPORTED: 'System cache does not support filter or getAll',
   ROUTING_QUERY_TO_PARTITION: 'Routing query to partition service',
-  QUERY_TIMED_OUT: 'Query timed out',
   MESSAGE_ROUTER_UNAVAILABLE: 'Message router not available',
   NO_SERVICE_FOR_PARTITION: 'No service found for partition',
-  PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   QUERY_ROUTING_FAILED: 'Query routing failed',
   NO_HANDLER_FOR_PARTITION: 'No handler registered for partition service',
   READ_CANDIDATE_TRANSIENT_FAILURE:
@@ -248,7 +213,6 @@ const QUERY_LOG_MSG = Object.freeze({
   NO_PARTITION_FOR_KEY: 'No partition found for key',
   PARALLEL_QUERY_START: 'Starting parallel query execution',
   PARALLEL_QUERY_FAILED: 'Parallel query execution failed',
-  PARTITION_LIMIT_TRUNCATE: 'Partition count exceeds limit, truncating',
   STRAGGLER_DETECTED: 'Slow partition detected (straggler)',
   NO_ALTERNATIVE_REPLICAS: 'No alternative replicas for speculative execution',
   SPECULATIVE_EXEC_START: 'Starting speculative execution for straggler',
@@ -287,7 +251,6 @@ const QUERY_LOG_MSG = Object.freeze({
     'Partition size update triggered split/merge evaluation',
   TABLE_SPLIT_START: 'Starting managed partition split',
   TABLE_SPLIT_PREPARED: 'Prepared managed partition split',
-  TABLE_SPLIT_START_FAILED: 'Managed partition split start failed',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
   WRITE_OP_PERSIST_FAILED:
     'Non-transactional write operation persistence failed',
@@ -377,22 +340,11 @@ const QUERY_AGGREGATE = Object.freeze({
 });
 
 const QUERY_SQL_FRAGMENT = Object.freeze({
-  SELECT_PREFIX: 'SELECT ',
-  DISTINCT_PREFIX: 'DISTINCT ',
   STAR: '*',
-  GROUP_BY_PREFIX: ' GROUP BY ',
-  ORDER_BY_PREFIX: ' ORDER BY ',
-  IN: ' IN ',
-  BETWEEN: ' BETWEEN ',
-  LIKE: ' LIKE ',
-  NULL: 'NULL',
-  PARAMETER: '?',
-  COMMA_SPACE: ', ',
   PIPE: '|',
 });
 
 const QUERY_SORT_DIRECTION = Object.freeze({
-  ASC: 'ASC',
   DESC: 'DESC',
 });
 
@@ -421,7 +373,6 @@ const WRITE_TRACKING_EXCLUDED_TABLES = Object.freeze(new Set([
 // Canonical config keys used by query subsystem components.
 const QUERY_CONFIG_KEY = Object.freeze({
   QUERY_TIMEOUT_MS: CONFIG_KEY.QUERY_TIMEOUT_MS,
-  MAX_PARALLEL_PARTITIONS: CONFIG_KEY.QUERY_MAX_PARALLEL_PARTITIONS,
   LEADER_RETRY_DELAY_MS: CONFIG_KEY.QUERY_LEADER_RETRY_DELAY_MS,
   READ_RETRY_ATTEMPTS: CONFIG_KEY.QUERY_READ_RETRY_ATTEMPTS,
 
@@ -445,7 +396,6 @@ const QUERY_CONFIG_KEY = Object.freeze({
 
 const QUERY_DEFAULTS = Object.freeze({
   QUERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
-  MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
   READ_RETRY_ATTEMPTS: NUM.THREE,
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,

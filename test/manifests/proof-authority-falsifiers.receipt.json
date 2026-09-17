@@ -1,0 +1,54 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "proof-authority-integrity",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/proof-authority-falsifiers.test.js": "7c88b7ab4b1c88f56be5aae4fdd6f402fcac23a3aa3a3dac4bd62ac8e4315855",
+    "test/scripts/pre-push-hook-control-flow.test.js": "08fd51a0d6aebda2880dc392bb4117796a1a15c92a148f7a7cb12113213a0b27"
+  },
+  "generatedAt": "2026-09-14T15:24:02.934Z",
+  "receipts": [
+    {
+      "id": "observed-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^observed-file: a defect in a fixture a test reads through fs is detected$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a changed fixture file selects the test that reads it through fs and that test goes red",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "observed-directory",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^observed-directory: a defect in a directory a test lists is detected$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a file added under a directory a test lists selects that test and it goes red",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "spawned-script",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^spawned-script: a defect in a script a test spawns by name is detected$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a changed script a test names as a string literal selects that test and it goes red",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "behavioural-source",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^behavioural-source: a defect in product source is detected$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a mutated product module selects its subsystem witness and it goes red",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "working-tree-not-proof",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^working-tree-not-proof: a defect that exists only in the working tree is invisible to the gate, and a committed one is not$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "the gate materialises the pushed sha: an uncommitted red is invisible, a committed red fails",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "hook-materialises-pushed-sha",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the hook hands the pushed commit to the materializer and runs no content stage itself$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook, with its stages stubbed, materialises exactly the pushed commit (peeled from a tag), forwards the ref lines, propagates the inner status, and inside a checkout refuses a HEAD that is not the push",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    }
+  ]
+}

@@ -23,6 +23,15 @@
 //     (gate THIS tree where it stands: for a caller that already runs
 //     inside an exact-HEAD worktree, such as `npm run publish`, a second
 //     materialization would only copy the same bytes again)
+//   node scripts/checks/push-gate-corpus-worktree.js --gate <sha>
+//       [--ref-lines <file>] [--run <command> [args...]]
+//     (proof-authority-integrity: materialize the pushed sha ONCE into an
+//     immutable throwaway checkout with the workspace injections declared,
+//     then run the WHOLE pre-push hook there - or the given command - with
+//     the pushed ref lines on stdin; refuse if the run left the checkout
+//     dirty. The pre-push hook calls this for itself when it is not already
+//     inside such a checkout, so every stage proves the pushed bytes and the
+//     working tree is never a proof input.)
 //
 // Exit 0 when every corpus gate passes on the snapshot; exit 1 on the first
 // failing gate; exit 2 on usage error. The throwaway worktree is always
@@ -31,14 +40,48 @@
 import process from 'node:process';
 import {execFileSync, spawnSync} from 'node:child_process';
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   createSnapshotWorktree,
   removeWorktree,
 } from '../session-worktree.js';
+import {
+  GATE_WORKSPACE_DIRECTORIES,
+  assertWorkspaceDependencyLinks,
+  linkWorkspaceDependencies,
+} from '../publish-head.js';
+import {
+  WORKSPACE_INJECTION_ENV,
+} from './change-selection-constants.js';
 
 const TEXT_ENCODING = 'utf8';
 const REF_FLAG = '--ref';
 const IN_PLACE_FLAG = '--in-place';
+const GATE_FLAG = '--gate';
+const REF_LINES_FLAG = '--ref-lines';
+const RUN_FLAG = '--run';
+const GATE_HOOK_COMMAND = Object.freeze(['bash', '.githooks/pre-push']);
+const GATE_PUSHED_SHA_ENV = 'LAGRANGE_GATE_PUSHED_SHA';
+const GATE_RED_MAIN_CHECKED_ENV = 'LAGRANGE_GATE_RED_MAIN_CHECKED';
+const ENABLED_ENV_VALUE = '1';
+const INJECTION_SEPARATOR = ',';
+const GIT_STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
+const GIT_PEEL_ARGUMENTS = Object.freeze(['rev-parse', '--verify', '--quiet']);
+const COMMIT_PEEL_SUFFIX = '^{commit}';
+const GIT_WORKTREE_ADD_ARGUMENTS = Object.freeze(
+  ['worktree', 'add', '--detach', '--quiet']);
+const CLEANUP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
+const SIGNAL_EXIT_BASE = 128;
+// The gate checkout lives under the repository (gitignored), as the
+// publisher's does: a checkout under the system temp dir fails the tests that
+// resolve their fixtures against os.tmpdir(). The parent keeps the session
+// worktree prefix so its cleanup removes it.
+const GATE_WORKTREE_PARENT = Object.freeze(['test-output', 'push-gate-worktrees']);
+const GATE_WORKTREE_PREFIX = 'session-worktree-';
+const GATE_WORKTREE_LEAF = 'tree';
+const EMPTY_INPUT = '';
 const EXIT_USAGE = 2;
 const EXIT_GATE_FAILURE = 1;
 const GIT_BINARY = 'git';
@@ -52,7 +95,12 @@ const LOCAL_TEXT = Object.freeze({
   ARGUMENT_SEPARATOR: ' ',
   CORPUS_PASSED:
     '[push-gate-corpus] corpus gates passed on the pushed tree\n',
-  USAGE: 'usage: push-gate-corpus-worktree.js [--ref <sha> | --in-place]\n',
+  USAGE: 'usage: push-gate-corpus-worktree.js [--ref <sha> | --in-place | ' +
+    '--gate <sha> [--ref-lines <file>] [--run <command> [args...]]]\n',
+  GATE_MATERIALIZED: '[push-gate] proving ',
+  GATE_IN: ' in ',
+  GATE_DIRTY: '[push-gate] the gate mutated the exact checkout of the pushed sha:\n',
+  GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -86,8 +134,15 @@ function repoRoot() {
 // exact pushed tree; otherwise gate the live working-tree state (committed
 // HEAD plus uncommitted tracked and untracked-non-ignored files), which is
 // what a pre-push hook is about to ship.
-function materializeTreeUnderTest(root, ref) {
-  const snapshot = createSnapshotWorktree(root);
+function gateWorktreePath(root) {
+  const parent = path.join(root, ...GATE_WORKTREE_PARENT);
+  fs.mkdirSync(parent, {recursive: true});
+  return path.join(fs.mkdtempSync(path.join(parent, GATE_WORKTREE_PREFIX)),
+    GATE_WORKTREE_LEAF);
+}
+
+function materializeTreeUnderTest(root, ref, worktreePath = undefined) {
+  const snapshot = createSnapshotWorktree(root, worktreePath);
   if (!ref) {
     return snapshot;
   }
@@ -142,6 +197,100 @@ function runCorpusGates(worktreePath) {
   return 0;
 }
 
+// proof-authority-integrity: the pushed sha, materialized once, is the only
+// tree the whole gate reads. The injections (node_modules, data) are declared
+// to the inner run through the same variable the publisher uses, so the inner
+// hook runs its stages in place; the run's stdin carries the pushed ref lines
+// so the inner hook sees the same push. Any tracked mutation left behind, or
+// a replaced injection link, refuses the push.
+// The commit a pushed sha names: an annotated tag peels to the commit it
+// points at, and a symbolic name (HEAD) resolves to its sha, so the exported
+// identity is always the checkout's HEAD.
+function peelToCommit(root, sha) {
+  return stringTrim(execFileSync(GIT_BINARY,
+    [GIT_WORKING_TREE_FLAG, root, ...GIT_PEEL_ARGUMENTS,
+      `${sha}${COMMIT_PEEL_SUFFIX}`],
+    {encoding: TEXT_ENCODING}));
+}
+
+// A fresh detached checkout of exactly the commit: nothing from the working
+// tree is copied, so a file the pushed .gitignore ignores cannot leak in.
+function checkoutExactCommit(root, commit) {
+  const worktreePath = gateWorktreePath(root);
+  execFileSync(GIT_BINARY,
+    [GIT_WORKING_TREE_FLAG, root, ...GIT_WORKTREE_ADD_ARGUMENTS,
+      worktreePath, commit],
+    {encoding: TEXT_ENCODING});
+  return worktreePath;
+}
+
+// An interrupted gate must not strand its checkout: the signal removes the
+// worktree, then re-raises through the conventional exit code.
+function removeWorktreeOnSignal(root, worktreePath) {
+  const handlers = [];
+  for (const signal of CLEANUP_SIGNALS) {
+    const handler = () => {
+      removeWorktree(root, worktreePath);
+      process.exit(SIGNAL_EXIT_BASE + (os.constants.signals[signal] || 0));
+    };
+    process.on(signal, handler);
+    handlers.push([signal, handler]);
+  }
+  return () => {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  };
+}
+
+function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
+  const sha = peelToCommit(root, requestedSha);
+  const worktreePath = checkoutExactCommit(root, sha);
+  const releaseSignals = removeWorktreeOnSignal(root, worktreePath);
+  try {
+    const links = linkWorkspaceDependencies(root, worktreePath);
+    const env = {
+      ...process.env,
+      [WORKSPACE_INJECTION_ENV]:
+        GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR),
+      [GATE_PUSHED_SHA_ENV]: sha,
+      [GATE_RED_MAIN_CHECKED_ENV]: ENABLED_ENV_VALUE,
+    };
+    const input = refLinesFile ?
+      fs.readFileSync(refLinesFile, TEXT_ENCODING) : EMPTY_INPUT;
+    process.stdout.write(
+      `${LOCAL_TEXT.GATE_MATERIALIZED}${sha}${LOCAL_TEXT.GATE_IN}` +
+      `${worktreePath}: ${command.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}\n`);
+    const result = spawnSync(command[0], command.slice(1), {
+      cwd: worktreePath,
+      env,
+      input,
+      stdio: ['pipe', 'inherit', 'inherit'],
+    });
+    if (result.error) {
+      process.stderr.write(`[push-gate] could not run ${command[0]}: ` +
+        `${result.error.message}\n`);
+      return EXIT_GATE_FAILURE;
+    }
+    try {
+      assertWorkspaceDependencyLinks(links);
+    } catch {
+      process.stderr.write(LOCAL_TEXT.GATE_LINKS_BROKEN);
+      return EXIT_GATE_FAILURE;
+    }
+    for (const link of links) fs.unlinkSync(link.link);
+    const status = stringTrim(execFileSync(GIT_BINARY,
+      [GIT_WORKING_TREE_FLAG, worktreePath, ...GIT_STATUS_ARGUMENTS],
+      {encoding: TEXT_ENCODING}));
+    if (status.length > 0) {
+      process.stderr.write(`${LOCAL_TEXT.GATE_DIRTY}${status}\n`);
+      return EXIT_GATE_FAILURE;
+    }
+    return result.status ?? EXIT_GATE_FAILURE;
+  } finally {
+    releaseSignals();
+    removeWorktree(root, worktreePath);
+  }
+}
+
 function gateMaterializedTree(root, ref) {
   const worktreePath = materializeTreeUnderTest(root, ref);
   try {
@@ -155,19 +304,40 @@ function main(argv) {
   const args = argv.slice(2);
   let ref = null;
   let inPlace = false;
+  let gateSha = null;
+  let refLinesFile = null;
+  let command = null;
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === REF_FLAG && index + 1 < args.length) {
       ref = args[index + 1];
       index += 1;
     } else if (args[index] === IN_PLACE_FLAG) {
       inPlace = true;
+    } else if (args[index] === GATE_FLAG && index + 1 < args.length) {
+      gateSha = args[index + 1];
+      index += 1;
+    } else if (args[index] === REF_LINES_FLAG && index + 1 < args.length) {
+      refLinesFile = args[index + 1];
+      index += 1;
+    } else if (args[index] === RUN_FLAG && index + 1 < args.length) {
+      command = args.slice(index + 1);
+      break;
     } else {
       usage();
     }
   }
   if (inPlace && ref !== null) usage();
+  if (gateSha !== null && (inPlace || ref !== null)) usage();
+  if (gateSha === null && (refLinesFile !== null || command !== null)) usage();
 
   const root = repoRoot();
+  if (gateSha !== null) {
+    return gateExactSha(root, {
+      sha: gateSha,
+      refLinesFile,
+      command: command || [...GATE_HOOK_COMMAND],
+    });
+  }
   const gateStatus = inPlace ?
     runCorpusGates(root) :
     gateMaterializedTree(root, ref);

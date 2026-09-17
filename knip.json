@@ -11,6 +11,7 @@
     "test/**/*.test-part-*.js",
     "test/**/*test-cases.js",
     "test/distributed/validate-node-join-under-load.js",
+    "test/storage-load/run-storage-load.js",
     "test/integration/cdc-debug-test.js",
     "test/distributed/scenarios/*.js",
     "test/runtime/pgwire-test-matrix.js",

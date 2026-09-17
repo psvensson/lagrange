@@ -5,6 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 import {
   KEY_RANGE_ERROR_MSG,
   KEY_RANGE_LOG_MSG,
@@ -58,21 +59,9 @@ class KeyRange {
    * @return {number} Negative if a < b, positive if a > b, 0 if equal.
    */
   compareKeys(a, b) {
-    if (a === null && b === null) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
-
-    if (typeof a === 'string' && typeof b === 'string') {
-      return a.localeCompare(b);
-    }
-
-    if (typeof a === 'number' && typeof b === 'number') {
-      return a - b;
-    }
-
-    // Convert to string for comparison
-    return String(a).localeCompare(String(b));
+    return compareRoutingKeys(a, b);
   }
+
 
   /**
    * Check if this range is adjacent to another (this.end === other.start).

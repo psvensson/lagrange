@@ -117,6 +117,7 @@
     "release:notes": "node scripts/release-notes.js",
     "release:preflight": "node scripts/release-preflight.js",
     "health:formation": "node scripts/checks/formation-health.js",
+    "soak:storage": "node test/storage-load/run-storage-load.js",
     "check:formation": "node scripts/checks/run-formation-seed-budget.js",
     "spike:raft-logic": "node scripts/run-raft-logic-investigation-spike.js",
     "migration:raft:benchmarks": "node scripts/run-raft-migration-benchmarks.js",

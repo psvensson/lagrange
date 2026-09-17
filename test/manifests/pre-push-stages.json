@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "pre-push-stages",
+  "hook": ".githooks/pre-push",
+  "contract": "Every stage that reads repository content runs inside an immutable checkout of the pushed SHA (tree: pushed-sha). A stage with tree none reads only the pushed ref lines or a remote signal. The working tree is never a proof input; a manual invocation gates HEAD. The identity the gate proves is exported to every stage under the environment names below and printed once by the identity line.",
+  "identity": {
+    "pushedSha": "LAGRANGE_GATE_PUSHED_SHA",
+    "pushedRef": "LAGRANGE_GATE_PUSHED_REF",
+    "remoteBase": "LAGRANGE_CHECK_BASE"
+  },
+  "materializer": "scripts/checks/push-gate-corpus-worktree.js --gate",
+  "stages": [
+    {"id": "pushed-refs", "tree": "none", "proves": "the pushed ref lines are read; the first local sha is the tree under proof"},
+    {"id": "tag-only-fast-path", "tree": "none", "proves": "a tag-only push of commits already on origin/main introduces no tree"},
+    {"id": "red-main-guard", "tree": "none", "proves": "the latest completed ci run on main is green or exempted at its exact head"},
+    {"id": "materialize-pushed-tree", "tree": "none", "proves": "the pushed sha is checked out once into a throwaway worktree with the workspace injections declared; every later stage runs there"},
+    {"id": "identity", "tree": "pushed-sha", "proves": "the checkout's HEAD is the pushed sha and the remote base is the change proof's base"},
+    {"id": "unused-files", "tree": "pushed-sha", "proves": "no tracked file is unreachable"},
+    {"id": "lint", "tree": "pushed-sha", "proves": "eslint over the JavaScript the pushed range adds or changes, or over every tracked file when there is no range or the lint contract itself changed"},
+    {"id": "corpus-ratchets", "tree": "pushed-sha", "proves": "duplication and file-size ratchets over the whole pushed tree"},
+    {"id": "circular-dependencies", "tree": "pushed-sha", "proves": "no import cycle"},
+    {"id": "unused-exports", "tree": "pushed-sha", "proves": "the unused-exports ratchet holds"},
+    {"id": "cleanliness", "tree": "pushed-sha", "proves": "no short stage mutated tracked content"},
+    {"id": "thermal-headroom", "tree": "none", "proves": "the machine has headroom before the long stage"},
+    {"id": "test-stage", "tree": "pushed-sha", "proves": "the focused contracts, the audits and the change proof (or the whole corpus) against the remote base"}
+  ]
+}

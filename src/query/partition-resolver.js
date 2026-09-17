@@ -5,6 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {compareRoutingKeys} from '../partition/split-key-comparator.js';
 import {TABLES} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
@@ -715,21 +716,9 @@ class PartitionResolver {
    * @private
    */
   compareValues(a, b) {
-    if (a === b) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
-
-    if (typeof a === 'string' && typeof b === 'string') {
-      return a.localeCompare(b);
-    }
-
-    if (typeof a === 'number' && typeof b === 'number') {
-      return a - b;
-    }
-
-    // Convert to strings for comparison
-    return String(a).localeCompare(String(b));
+    return compareRoutingKeys(a, b);
   }
+
 
   /**
    * Resolve partition for a single key value (for INSERT/UPDATE/DELETE).

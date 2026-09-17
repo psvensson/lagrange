@@ -30,7 +30,11 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
 import {runClassifiedTestFiles} from '../run-classified-test-files.js';
-import {planChangeProof, planTestPaths} from '../select-change-tests.js';
+import {
+  planChangeProof,
+  planTestPaths,
+  writeProofScope,
+} from '../select-change-tests.js';
 import {
   appendArrayValue,
   appendArrayValues,
@@ -71,6 +75,10 @@ const CANNOT_DIFF_PROBLEM = 'cannot diff the proof range';
 const LABEL_RANGE = 'proof range:';
 const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
+const stringTrim = Function.call.bind(String.prototype.trim);
+const GIT_BINARY = 'git';
+const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
+const TEXT_ENCODING = 'utf8';
 const LABEL_BECAUSE = 'because:';
 const TESTS_SUFFIX = ' test(s)';
 
@@ -166,9 +174,23 @@ function runFullCorpus() {
 }
 
 function runDecision(plan, decision) {
+  // The run that made the decision records what it proves, so a consumer
+  // (the behavioural canary) never has to infer the scope from log text.
+  writeProofScope({
+    head: headRevision(),
+    fullCorpus: decision.mode === PROOF_MODE.FULL_CORPUS,
+    plan,
+  });
   return decision.mode === PROOF_MODE.FULL_CORPUS ?
     runFullCorpus() :
     runClassifiedTestFiles(planTestPaths(plan), {root});
+}
+
+function headRevision() {
+  const result = spawnSync(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+    {cwd: root, encoding: TEXT_ENCODING});
+  const sha = stringTrim(String(result.stdout || ''));
+  return sha.length > 0 ? sha : null;
 }
 
 function main() {

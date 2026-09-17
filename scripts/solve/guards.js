@@ -3,6 +3,7 @@
 // registry are not reimplemented here: the guards only call them.
 
 import crypto from 'node:crypto';
+import {sealBindsGraph} from '../checks/helper-import-closure.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -295,7 +296,9 @@ function canonicalReceiptProblem(root, stdout) {
       receipt.graphByteDigest !== sha256(graphBytes) ||
       receipt.sealByteDigest !== sha256(sealBytes) ||
       graph.snapshotDigest !== receipt.snapshotDigest ||
-      seal.snapshotDigest !== receipt.snapshotDigest;
+      seal.snapshotDigest !== receipt.snapshotDigest ||
+      // Whether the seal binds the graph is not this module's opinion.
+      !sealBindsGraph(seal, graph);
     if (invalidBytes) {
       return `${IMPORT_GRAPH_PROBLEM_PREFIX}verified bytes changed before use`;
     }

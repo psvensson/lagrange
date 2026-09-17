@@ -20,6 +20,9 @@ quests:
   - ratchet-realignment
   - test-file-content-receipts
   - raft-ownership
+  - proof-authority-integrity
+  - gate-work-consolidation
+  - single-metric-production
   - land-proves-the-quest-delta
   - convergence-probe-class-observed
   - test-runner-loader-diet
@@ -82,6 +85,18 @@ formation trend) read compact text files that their quests commit.
 | `solve/epics/` total lines | 39,181 | ≤ 6,000 |
 | `liferaft` in `package.json` dependencies | yes | absent |
 | `CLAUDE.md` is a pointer to `AGENTS.md` | 75-line copy | ≤ 3 lines |
+| Gate stages reading anything but the pushed sha | 0 (2026-09-14) | 0 |
+| Tests whose observation census has drifted | 0 (2026-09-14) | 0 |
+| Falsifier classes without a receipt bound to its witness | 0 (2026-09-14) | 0 |
+| Whole-tree metric productions beyond the first, per metric | 12 (owned by `single-metric-production`) | 0 |
+| Tests in both fixed lists (spine and focused contracts) | 0 (2026-09-14) | 0 |
+| Import-graph seal readers beyond one | 0 (2026-09-14) | 0 |
+| Whole-tree checks with no declared input trigger | 0 (2026-09-14) | 0 |
+| ESLint runs off the pushed range | 0 (2026-09-14) | 0 |
+| `repository-health.yml` still separate from the exact-sha run | 0 (2026-09-14) | 0 |
+| Workflows without a concurrency group | 0 (2026-09-14) | 0 |
+| Workflow jobs whose runner or timeout is not plan-driven | 0 (2026-09-14) | 0 |
+| Canary running after a run that already proved the corpus | 0 (2026-09-14) | 0 |
 
 Adjust a number in the script and here together; never in one place.
 
@@ -244,6 +259,62 @@ least one quest or is `done`/`superseded`; `solve-v2` goes `done` (its budget
 reads 0); the migration JSON under `solve/epics/solve-v2/` moves to the
 evidence store; each of the 19 quest-less legacy epics is dispositioned
 (below). Probe: script.
+
+**proof-authority-integrity** — the correctness prerequisite for every
+further narrowing or caching of the gate (owner brief, 2026-09-14). Today only
+the corpus ratchets run against the pushed SHA (`push-gate-corpus-worktree.js
+--ref`); unused-files, eslint, cycles, unused-exports and the whole test stage
+read the working tree (`.githooks/pre-push:150-235`), so a direct push proves
+whatever is on disk, and the selection's only authorities are the source
+taxonomy, the impact-contract registry and the import graph
+(`change-selection.js:18-23`), which by its own admission
+(`helper-import-closure.js:21-24`) cannot see a fixture read through fs, a
+globbed directory (`test/contract/callback-axis-accretion.test.js` reads all
+of `src/` and is classified architecture-governance), a spawned script named
+as a string literal, or an environment variable; 123 test files read files,
+20 read directories, 56 spawn, 21 read env. Nothing plants a defect and
+proves the gate selects a test that goes red. The quest owns: exact
+pushed-SHA/ref identity for every gate stage (the hook materialises the
+pushed SHA once and runs every stage in that immutable checkout, naming the
+pushed ref and the remote base in the receipt); non-import observation
+dependencies as a declared, censused selection authority (fixtures,
+directories, spawned scripts, env) so a change to an observed surface selects
+its observers or escalates when undeclared; an observation-surface census
+whose undeclared count is a budget row; observation-aware selection consuming
+the census; and adversarial falsifiers that plant defects in an observed
+surface and in behavioural source and prove detection end to end. It adds no
+script and no workflow: the census lives in the selection owner, the falsifiers
+are tests, the rows are on the budget script, and the falsifier receipt lives
+beside the other gate manifests (`test/manifests/`) because a closed quest
+keeps only its record and log (R20). Probe: budget rows
+`gate_stages_off_pushed_sha`, `undeclared_observation_surfaces`,
+`falsifier_classes_unproven`, target 0. Until they read zero no further
+narrowing or caching enters the gate.
+
+**gate-work-consolidation** — the efficiency work, sealed only after
+`proof-authority-integrity` lands (owner brief, 2026-09-14). It owns: single
+production of every repository-health metric (complexity, cognitive
+complexity, cycles, duplication, file-size, unused exports are each computed
+twice in `repository-health.yml` - once by the owner-debt refresh, once by
+`test:static` - and up to four times per push cycle across the hook, the
+gate and CI); elimination of the duplicate fixed-test lists (three of the
+nine focused contracts are also safety-spine members and run twice in one
+gate) and duplicate file-size executions; canonical import-graph inputs
+(four resolvers - dependency-cruiser twice, knip, madge - over four file
+universes, and two independent `sealBindsGraph` readers); input-triggered
+whole-tree checks in the shape of `FULL_CORPUS_TRIGGER_RULES`; ESLint over the
+pushed range at the pushed SHA (nothing lints pushed blobs today); coalescing
+`repository-health.yml` into the exact-SHA ci run or removing it; a
+proof-obligation registry extending `test/shards/impact-contracts.json` as the
+one place an obligation is declared; plan-driven CI resources
+(`scripts/plan-test-lane.js` lanes, timings, runner size) instead of fixed
+per-workflow values; and safe behavioural-canary activation and concurrency
+(`ci.yml` and `repository-health.yml` have no concurrency group; the canary
+runs only when the cone did not already run the corpus). No new script, no
+new workflow; the workflow-line and step budgets above follow. Probe: budget
+rows for duplicate metric productions, duplicate fixed-test runs, import-graph
+readers, unconditional whole-tree checks, eslint off the pushed range and
+workflows without concurrency, target 0.
 
 **raft-ownership** — vendor `@markwylde/liferaft` into `src/raft/vendor/`
 with a conformance suite (the etcd/raft scenarios translate directly) and

@@ -52,8 +52,11 @@ function serialize(manifest) {
     counts: manifest.counts,
     censusSize: manifest.censusSize,
     digest: manifest.digest,
+    observationSchemaVersion: manifest.observationSchemaVersion,
+    observationDigest: manifest.observationDigest,
     classes: Object.fromEntries(
       sortedKeys.map((key) => [key, manifest.classes[key]])),
+    observations: manifest.observations,
   };
   return `${JSON.stringify(sorted, null, 2)}\n`;
 }

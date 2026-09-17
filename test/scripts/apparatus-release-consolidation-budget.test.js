@@ -19,6 +19,7 @@
 
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -45,9 +46,9 @@ const SEALED_TABLE = Object.freeze([
   ['README offences', 0, 0, 1],
   ['release receipt: npm next lags latest', 0, 0, 1],
   ['scripts/ loose top-level files', 80, 1, 0],
-  ['scripts/ total lines', 90000, 2, 0],
-  ['scripts/checks files', 190, 1, 0],
-  ['.github/workflows total lines', 500, 2, 0],
+  ['scripts/ total lines', 90000, 6, 7],
+  ['scripts/checks files', 190, 3, 4],
+  ['.github/workflows total lines', 500, 10, 15],
   ['release.yml named steps', 12, 1, 0],
   ['gate chains reference literals checker', 0, 0, 1],
   ['gate chains reference file-length audit', 0, 0, 1],
@@ -58,7 +59,39 @@ const SEALED_TABLE = Object.freeze([
   ['solve/epics total lines', 6000, 6, 8],
   ['liferaft dependency present', 0, 0, 1],
   ['CLAUDE.md is a pointer', 0, 0, 1],
+  // proof-authority-integrity: the gate's declared stage trees, the drift of
+  // the committed observation census, and the falsifier receipt bound to its
+  // witness bytes (six classes, so an absent receipt reads six).
+  ['gate stages off pushed sha', 0, 0, 1],
+  ['undeclared observation surfaces', 0, 0, 1],
+  ['falsifier classes unproven', 0, 0, 6],
+  // gate-work-consolidation: every proof produced once per push cycle.
+  ['duplicate metric productions', 0, 0, 2],
+  ['duplicate fixed test runs', 0, 0, 1],
+  ['import graph seal readers beyond one', 0, 0, 1],
+  ['whole tree checks without input trigger', 0, 0, 1],
+  ['eslint off pushed range', 0, 0, 1],
+  ['repository health not coalesced', 0, 0, 1],
+  ['workflows without concurrency', 0, 0, 1],
+  ['ci resources not plan driven', 0, 0, 1],
+  ['canary after full corpus', 0, 0, 1],
 ]);
+
+const FALSIFIER_CLASSES = Object.freeze([
+  'observed-file', 'observed-directory', 'spawned-script',
+  'behavioural-source', 'working-tree-not-proof',
+  'hook-materialises-pushed-sha',
+]);
+const FALSIFIER_WITNESS = 'test/scripts/falsifier-witness.test.js';
+const FALSIFIER_RECEIPT = 'test/manifests/proof-authority-falsifiers.receipt.json';
+// One test that reads README.md, so its observation census is one file.
+const OBSERVER_TEST = 'test/observer.test.js';
+const OBSERVER_SOURCE =
+  'import fs from \'node:fs\';\nconst readme = fs.readFileSync(\'README.md\');\n';
+
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
 
 function write(root, relative, text) {
   const file = path.join(root, relative);
@@ -94,6 +127,65 @@ function metFixture() {
   write(root, 'src/one-methods.js', '\n');
   write(root, 'solve/epics/kept.md',
     '---\nstatus: open\ndoneWhen: probe\n---\n\n# Kept\n');
+  write(root, 'test/manifests/pre-push-stages.json', `${JSON.stringify({
+    stages: [{id: 'refs', tree: 'none'}, {id: 'lint', tree: 'pushed-sha'}],
+  })}\n`);
+  write(root, OBSERVER_TEST, OBSERVER_SOURCE);
+  write(root, 'test/shards/subsystem-classes.json', `${JSON.stringify({
+    classes: {[OBSERVER_TEST]: 'query-sql'},
+    observations: {[OBSERVER_TEST]: {files: ['README.md']}},
+  })}\n`);
+  const witness = 'export const witness = true;\n';
+  write(root, FALSIFIER_WITNESS, witness);
+  write(root, FALSIFIER_RECEIPT, `${JSON.stringify({
+    status: 'pass',
+    testFileDigests: {[FALSIFIER_WITNESS]: sha256(witness)},
+    receipts: FALSIFIER_CLASSES.map((id) =>
+      ({id, passed: true, testFile: FALSIFIER_WITNESS})),
+  })}\n`);
+  // Consolidated gate: one production of the complexity metric (the static
+  // audits), a spine and a focused list that do not overlap, one seal
+  // reader, every whole-tree command registered with inputs, a push hook
+  // linting the pushed range, no repository-health workflow, a concurrency
+  // group on the one workflow, whose one job matches the resource plan, and
+  // a canary triggered by the ci run's whole-corpus signal.
+  write(root, 'package.json', `${JSON.stringify({
+    scripts: {
+      'check': 'node scripts/check-fast-static.js',
+      'test:complexity': 'node scripts/check-complexity.js',
+    },
+    dependencies: {},
+  })}\n`);
+  write(root, '.githooks/pre-commit', '#!/usr/bin/env bash\n');
+  write(root, '.githooks/pre-push',
+    '#!/usr/bin/env bash\nstage "lint" "pushed-range lint"\n' +
+    'git diff --name-only "$BASE" HEAD | xargs npx eslint\n' +
+    'stage "corpus-ratchets" "ratchets"\n');
+  write(root, 'scripts/checks/run-static-audits.js',
+    'const STATIC_AUDIT_SCRIPTS = Object.freeze([\n  \'test:complexity\',\n]);\n');
+  write(root, 'scripts/checks/helper-import-closure.js',
+    'IMPORT_GRAPH_SEAL_PATH snapshotDigest sealBindsGraph\n');
+  write(root, 'test/shards/safety-spine.json',
+    `${JSON.stringify({tests: ['test/a.test.js']})}\n`);
+  write(root, 'test/manifests/project-hardening-proof-postpush-manifest.json',
+    `${JSON.stringify({commands: [
+      {id: 'focused-contracts', executable: 'node',
+        argv: ['scripts/run-test-files.js', 'test/b.test.js']},
+      {id: 'model-contracts', executable: 'npm', argv: ['run', 'model:contracts']},
+    ]})}\n`);
+  write(root, 'test/manifests/proof-obligations.json', `${JSON.stringify({
+    obligations: [
+      {id: 'complexity', command: 'npm run test:complexity', inputs: ['src/**']},
+      {id: 'model', command: 'npm run model:contracts', inputs: ['architecture/**']},
+    ],
+  })}\n`);
+  write(root, '.github/workflows/release.yml',
+    'on: push\nconcurrency:\n  group: release\njobs:\n  publish:\n' +
+    '    runs-on: ubuntu-24.04\n    timeout-minutes: 60\n    steps:\n' +
+    '      - name: publish\n        run: true\n');
+  write(root, 'test/manifests/ci-resource-plan.json', `${JSON.stringify({
+    jobs: {'release.yml/publish': {runsOn: 'ubuntu-24.04', timeoutMinutes: 60}},
+  })}\n`);
   return root;
 }
 
@@ -105,7 +197,8 @@ function offendingFixture() {
   const root = makeRoot();
   write(root, 'package.json', `${JSON.stringify({
     scripts: {
-      check: 'npm run audit:guideline:literals && npm run audit:file-size',
+      'check': 'npm run audit:guideline:literals && npm run audit:file-size',
+      'test:complexity': 'node scripts/check-complexity.js',
     },
     dependencies: {liferaft: '1.0.0'},
   })}\n`);
@@ -121,6 +214,57 @@ function offendingFixture() {
     '---\nstatus: open\nlegacy: true\n---\n');
   write(root, 'solve/epics/legacy-two.md',
     '---\nstatus: open\nlegacy: true\n---\n');
+  // A stage that reads the working tree, a census that omits the observer's
+  // file, and no falsifier receipt at all.
+  write(root, 'test/manifests/pre-push-stages.json', `${JSON.stringify({
+    stages: [{id: 'lint', tree: 'working-tree'}],
+  })}\n`);
+  write(root, OBSERVER_TEST, OBSERVER_SOURCE);
+  write(root, 'test/shards/subsystem-classes.json', `${JSON.stringify({
+    classes: {[OBSERVER_TEST]: 'query-sql'}, observations: {},
+  })}\n`);
+  // The unconsolidated gate: the complexity checker produced by the
+  // pre-commit hook, the static audits and a workflow (two beyond the first);
+  // one test in both fixed lists; two seal readers; the model-contracts
+  // command with no registered inputs (the audit is registered, the
+  // manifest command is not); a push hook linting every tracked file; a
+  // repository-health workflow without a concurrency group whose one job is
+  // absent from the plan; and a canary with no ci signal.
+  write(root, '.githooks/pre-commit',
+    '#!/usr/bin/env bash\nnode scripts/check-complexity.js\n');
+  write(root, '.githooks/pre-push',
+    '#!/usr/bin/env bash\nstage "lint" "tracked-files lint"\n' +
+    'git ls-files -z | xargs -0 npx eslint\n' +
+    'stage "corpus-ratchets" "ratchets"\n');
+  write(root, 'scripts/checks/run-static-audits.js',
+    'const STATIC_AUDIT_SCRIPTS = Object.freeze([\n  \'test:complexity\',\n]);\n');
+  write(root, 'scripts/checks/helper-import-closure.js',
+    'IMPORT_GRAPH_SEAL_PATH snapshotDigest\n');
+  write(root, 'scripts/checks/impact-proof-cone-inputs.js',
+    'IMPORT_GRAPH_SEAL_PATH snapshotDigest\n');
+  write(root, 'scripts/checks/two.js', '\n\n');
+  write(root, 'test/shards/safety-spine.json',
+    `${JSON.stringify({tests: ['test/a.test.js']})}\n`);
+  write(root, 'test/manifests/project-hardening-proof-postpush-manifest.json',
+    `${JSON.stringify({commands: [
+      {id: 'focused-contracts', executable: 'node',
+        argv: ['scripts/run-test-files.js', 'test/a.test.js']},
+      {id: 'model-contracts', executable: 'npm', argv: ['run', 'model:contracts']},
+    ]})}\n`);
+  write(root, 'test/manifests/proof-obligations.json', `${JSON.stringify({
+    obligations: [
+      {id: 'complexity', command: 'npm run test:complexity', inputs: ['src/**']},
+    ],
+  })}\n`);
+  write(root, '.github/workflows/repository-health.yml',
+    'on: push\njobs:\n  health:\n    runs-on: ubuntu-24.04\n' +
+    '    timeout-minutes: 90\n    steps:\n      - run: npm run test:complexity\n');
+  write(root, '.github/workflows/full-corpus-canary.yml',
+    'on: push\nconcurrency:\n  group: canary\njobs:\n  corpus:\n' +
+    '    runs-on: ubuntu-24.04\n    timeout-minutes: 300\n    steps: []\n');
+  write(root, 'test/manifests/ci-resource-plan.json', `${JSON.stringify({
+    jobs: {'full-corpus-canary.yml/corpus': {runsOn: 'ubuntu-24.04', timeoutMinutes: 300}},
+  })}\n`);
   return root;
 }
 

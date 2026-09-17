@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "numeric-key-routing",
+  "class": "fix",
+  "epic": "measured-storage-path",
+  "statement": "An integer primary key routes by numeric order against the text boundary the partitions system table hands back after a split: one comparator, compareRoutingKeys in src/partition/split-key-comparator.js (the typed split-key owner), decides routing order for KeyRange.compareKeys, PartitionResolver.compareValues and LiveQueryGroup.compareValues, compares a number against a text-encoded number numerically, keeps string-against-string and number-against-number order unchanged, and refuses any other mixed key space with the typed split-key mismatch outcome instead of String coercion; and every entry of every vocabulary in src/query/query-constants.js has a consumer, the dead entries being removed rather than exported for documentation.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/numeric-key-routing/evidence/receipt.json",
+      "requiredReceipts": [
+        "integer-key-routes-numerically-against-text-boundary",
+        "one-comparator-owns-routing-order",
+        "mixed-key-space-refused",
+        "dead-query-vocabulary-removed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded",
+      "statement": "One red test file for routing, one census test for the vocabulary, the three call sites delegating to the one owner, and the dead entries deleted; no log adapter, no message group, no split workflow behaviour beyond the comparator, so the quest is safe alongside the running soak."
+    },
+    {
+      "id": "typed-refusal-not-coercion",
+      "statement": "A mixed key space that is not a number against a text-encoded number is a typed outcome (the split-key mismatch the owner already raises), never a String comparison; the text-encoded number case exists only because partition_key_start/end are TEXT columns, and it is named as such in the owner."
+    },
+    {
+      "id": "string-order-unchanged",
+      "statement": "String-against-string order stays localeCompare and number-against-number stays numeric, so no string-keyed table changes partition."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The src/ change lands only behind an independent verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "60a5a0d0813a77b62635ce7a5a498672d64e8a9b"
+}

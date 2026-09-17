@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "single-metric-production",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Each whole-tree metric (complexity, cognitive complexity, import cycles, duplication, file size, unused exports) is computed once per push cycle by one producing command, and every other consumer reads that production's report instead of recomputing it: each report records the source digest of the tree it was produced from, a consumer verifies that digest against the live tree and refuses rather than trusting a stale report, the gate orders the producer before its consumers, and a consuming run is distinguishable from a producing one so the budget can tell them apart; the budget row duplicate_metric_productions reads zero, and the reduction cites the measurement it is compared against.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/apparatus-release-consolidation-budget.js --metric --rows duplicate_metric_productions",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "report-is-not-authority-unless-bound",
+      "statement": "A consumer reads a report only when the report records the source digest of the tree it was produced from and that digest matches the live tree; otherwise the consumer refuses (R05). A report without a digest is not a proof input."
+    },
+    {
+      "id": "producer-before-consumer",
+      "statement": "The gate's command order puts the producing command before every consumer, and the gate's own refresh produces the metric reports rather than the import graph alone; a consumer that runs first is a refusal, never a skip."
+    },
+    {
+      "id": "design-note-first",
+      "statement": "A design note precedes the first source attempt: which command produces each metric, where its report lives, what binds it to the tree, and what every consumer does when the binding fails."
+    },
+    {
+      "id": "no-weakened-ratchet",
+      "statement": "A consuming run applies exactly the ratchet the producing run would have applied; a report-reading mode that cannot fail is not a check."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "The checker and gate changes land only behind an independent verification newer than the last attempt."
+    }
+  ],
+  "sealedAt": "a2b5c32459e9f929a1a8f61d8523c732f407aa76"
+}

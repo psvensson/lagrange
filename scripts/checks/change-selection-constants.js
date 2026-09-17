@@ -38,6 +38,12 @@ export const REASON_COUPLED_WITNESS = 'coupled-pair-witness';
 // A test whose import closure reaches changed test support code (a fixture
 // or helper the taxonomy can only route to test-infrastructure).
 export const REASON_HELPER_IMPORTER = 'helper-importer';
+// A test that observes the changed path without importing it: a file it
+// reads, a directory it lists, a script it spawns (proof-authority-integrity).
+export const REASON_OBSERVER = 'observer';
+export const OBSERVATION_DRIFT_HINT =
+  'regenerate with node scripts/generate-test-subsystem-classes.js';
+export const OBSERVATION_DRIFT_LIMIT = 5;
 export const REASON_SAFETY_SPINE = 'safety-spine';
 
 // How the layer that ASSEMBLES a worktree declares what it injected into it.
@@ -75,6 +81,9 @@ export const RANGE_SOURCE = Object.freeze({
   WORKTREE: 'worktree only',
 });
 
+// What a proof run actually proved, written by the run itself so no consumer
+// has to infer it from log text (gate-work-consolidation).
+export const PROOF_SCOPE_PATH = 'test-output/proof-scope.json';
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 export const SAFETY_SPINE_TESTS_FIELD = 'tests';
 export const INVALID_SAFETY_SPINE_PROBLEM =
@@ -219,7 +228,7 @@ export const FULL_CORPUS_SHARE = 0.5;
 export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   {id: 'selection-state', pattern: /^test\/(shards\/(safety-spine|impact-contracts)\.json|manifests\/)/u},
   {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|plan-test-lane|select-change-tests|check-subsystem)\.js$/u},
-  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
+  {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
   {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},

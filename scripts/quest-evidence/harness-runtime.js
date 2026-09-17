@@ -8,10 +8,30 @@
 // because this loop re-executes the commands rather than trusting claims.
 
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const RECEIPT_SCHEMA = 'test-receipt/1';
+const DIGEST_ALGORITHM = 'sha256';
+const DIGEST_ENCODING = 'hex';
+// Every receipt names the witness file it ran; the receipt records that
+// file's content digest so a consumer can tell a receipt of these bytes
+// from a receipt of older ones (proof-authority-integrity).
+function testFileDigests(receipts) {
+  const digests = {};
+  for (const receipt of receipts) {
+    const file = receipt.testFile;
+    if (!file || Object.hasOwn(digests, file)) continue;
+    try {
+      digests[file] = createHash(DIGEST_ALGORITHM)
+        .update(fs.readFileSync(file)).digest(DIGEST_ENCODING);
+    } catch {
+      digests[file] = null;
+    }
+  }
+  return digests;
+}
 const TEST_RUNNER = Object.freeze(['run', 'test:file', '--']);
 const NPM_EXECUTABLE = 'npm';
 const CHILD_STDIO_PIPE = 'pipe';
@@ -214,11 +234,14 @@ function runQuestEvidenceHarness(options) {
     process.argv.slice(ARGV_COMMAND_OFFSET),
   );
   const receipts = options.receipts.map((receipt) => {
-    if (typeof receipt.command === 'string') return runShellReceipt(receipt);
-    if (typeof receipt.testNamePattern === 'string') {
-      return runSubtestReceipt(receipt);
-    }
-    return runReceipt(receipt);
+    const run = typeof receipt.command === 'string' ?
+      runShellReceipt(receipt) :
+      typeof receipt.testNamePattern === 'string' ?
+        runSubtestReceipt(receipt) :
+        runReceipt(receipt);
+    // The witness file the receipt speaks for, so a consumer can bind the
+    // receipt to that file's digest above.
+    return {...run, testFile: receipt.testFile ?? null};
   });
   const status = receipts.every((r) => r.passed) ?
     STATUS_PASS :
@@ -227,6 +250,7 @@ function runQuestEvidenceHarness(options) {
     schema: RECEIPT_SCHEMA,
     quest: options.questId,
     status,
+    testFileDigests: testFileDigests(options.receipts),
     generatedAt: new Date().toISOString(),
     receipts,
   };

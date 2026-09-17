@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "gate-work-consolidation",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Every proof the gate and continuous integration perform is produced once per push cycle and read everywhere else: the fixed test lists (the safety spine and the focused contracts) are one list run once; the sealed import graph has one producer and one reader that binds the seal; every whole-tree check declares the inputs that trigger it and runs only when they changed, in the shape of the existing full-corpus triggers; ESLint covers exactly the files of the pushed range at the pushed sha; repository-health's work is coalesced into the exact-sha ci run or removed; a proof-obligation registry extending the impact-contract registry is the one place an obligation (a fixed test, a whole-tree check, a witness) is declared with its inputs; the runner size, lane parallelism and timeouts of every workflow job follow a committed execution plan rather than per-workflow literals; and the behavioural canary is activated only when the gated run did not already run the whole corpus, with ci and repository-health under concurrency groups; the budget rows duplicate_fixed_test_runs, import_graph_seal_readers_beyond_one, whole_tree_checks_without_input_trigger, eslint_off_pushed_range, repository_health_not_coalesced, workflows_without_concurrency, ci_resources_not_plan_driven and canary_after_full_corpus read zero, and every reduction cites the measurement it is compared against.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/apparatus-release-consolidation-budget.js --metric --rows duplicate_fixed_test_runs,import_graph_seal_readers_beyond_one,whole_tree_checks_without_input_trigger,eslint_off_pushed_range,repository_health_not_coalesced,workflows_without_concurrency,ci_resources_not_plan_driven,canary_after_full_corpus",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "after-integrity",
+      "statement": "Sealed only after proof-authority-integrity landed (d9819d43e); no consolidation weakens a proof that quest established: the pushed-sha identity, the observation-aware selection and the falsifiers stay green at every attempt."
+    },
+    {
+      "id": "no-new-script-no-new-workflow",
+      "statement": "No file is added under scripts/ outside scripts/quest-evidence and no workflow is added; the workflow-line and release-step budgets move down, never up."
+    },
+    {
+      "id": "measure-before-removing",
+      "statement": "A duplicate is removed only after the row that counts it reads the duplicate on the tree, and the removal cites that reading; a consumer never re-derives a metric its producer already wrote."
+    },
+    {
+      "id": "input-triggered-not-scheduled",
+      "statement": "A whole-tree check runs when its declared inputs changed or on an explicit operator trigger, never on a schedule (the standing veto on timers holds)."
+    },
+    {
+      "id": "canary-stays-non-gating",
+      "statement": "The full-corpus canary gates nothing, keeps cancel-in-progress, and is skipped only when the gated run itself ran the whole corpus for the same sha."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Gate, selection and workflow changes land only behind an independent verification newer than the last attempt."
+    },
+    {
+      "id": "single-production-superseded",
+      "statement": "The single-production clause is superseded into the quest single-metric-production (owner decision 2026-09-14, recorded on this log); no reduction here removes a metric computation without that quest's digest-bound report contract."
+    }
+  ],
+  "sealedAt": "d9819d43e3287291ffc9da98bd815149bc9dccea"
+}

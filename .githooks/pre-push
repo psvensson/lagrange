@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Push gate, fast-fail ordered: cheap static checks first (unused-code ~7s,
-# cached whole-repo lint ~30s cold / seconds warm, corpus ratchets:
+# cached lint of the pushed range (whole repo only without a range),
 # duplication + file-size ~40s, circular-deps ~10s, unused-exports ~60s),
 # then - only once everything static is green - the test stage
 # (test:gate:postpush): the focused contracts, the post-push static audits,
@@ -19,6 +19,14 @@
 # workflow (workflow_dispatch; there is no scheduled full gate) re-runs them
 # remotely, so drift must be caught BEFORE it lands on the remote (core.md
 # Must-Not #20).
+# proof-authority-integrity (2026-09-14): the gate proves the PUSHED SHA and
+# nothing else. Unless this hook already runs inside an exact checkout (the
+# publisher's worktree, or the checkout this hook makes for itself below),
+# it materializes the first pushed local-sha ONCE into a throwaway worktree
+# with the workspace injections declared and re-runs itself there; every
+# stage below then reads the pushed bytes, never the working tree. A manual
+# invocation gates HEAD. The stages and the tree each one reads are declared
+# in test/manifests/pre-push-stages.json.
 # Bypass with git push --no-verify (emergencies only; skips EVERYTHING).
 # Skip only the test stage with LAGRANGE_PUSH_SKIP_TESTS=1 git push - for
 # when the exact working tree was already gated green this session.
@@ -34,10 +42,10 @@ GATE_STARTED_AT=$(date +%s)
 CURRENT_STAGE="preflight"
 stage() {
   CURRENT_STAGE="$1"
-  echo "[pre-push +$(( $(date +%s) - GATE_STARTED_AT ))s] >> ${CURRENT_STAGE}"
+  echo "[pre-push +$(( $(date +%s) - GATE_STARTED_AT ))s] >> ${CURRENT_STAGE}: ${2:-}"
 }
 report_gate_exit() {
-  status=$?
+  status="${1:-$?}"
   elapsed=$(( $(date +%s) - GATE_STARTED_AT ))
   if [ "${status}" -ne 0 ]; then
     echo "" >&2
@@ -56,20 +64,26 @@ trap report_gate_exit EXIT
 # sessions). Git feeds pre-push one "<local-ref> <local-sha> <remote-ref>
 # <remote-sha>" line per pushed ref on stdin; with no stdin lines (manual
 # hook invocation) the guard fail-closes to checking. The local-sha of the
-stage "reading pushed refs"
+stage "pushed-refs" "reading pushed refs"
 # first pushed ref is also captured so the corpus gates below measure the
 # tree being pushed rather than the working tree (epic item 6), and the
 # remote sha of main is the base the change proof proves against.
 PUSHING_MAIN=0
 SAW_REF=0
 PUSHED_SHA=""
+PUSHED_REF=""
 MAIN_REMOTE_SHA=""
 ALL_PROVEN_TAG_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
+# The ref lines are kept so the exact-checkout re-run below sees the same push.
+REF_LINES_FILE="$(mktemp)"
+trap 'report_gate_exit $?; rm -f "${REF_LINES_FILE}"' EXIT
 while read -r _local_ref local_sha remote_ref remote_sha; do
   SAW_REF=1
+  printf '%s %s %s %s\n' "${_local_ref}" "${local_sha}" "${remote_ref}" "${remote_sha}" >> "${REF_LINES_FILE}"
   if [ -z "${PUSHED_SHA}" ]; then
     PUSHED_SHA="${local_sha}"
+    PUSHED_REF="${_local_ref}"
   fi
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
@@ -98,7 +112,7 @@ fi
 
 # A push consisting only of tags whose target commits already sit on
 # origin/main (or tag deletions) introduces NO new tree: everything a tag
-stage "tag-only fast path check"
+stage "tag-only-fast-path" "tag-only fast path check"
 # points at was proven when its commit was pushed. Re-running the corpus
 # for the release-tag push added ~15 min and two terminal timeouts on
 # 2026-08-23; skip the gauntlet entirely for that case.
@@ -113,8 +127,9 @@ fi
 # the guard targets ignoring a known-red signal, not offline work. Bypass
 # with LAGRANGE_PUSH_ON_RED=1 git push (NOT --no-verify, which would also
 # skip every check below); use it only for a push that fixes CI itself.
-if [ "${PUSHING_MAIN}" = "1" ] && [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
-stage "red-main CI guard (queries GitHub)"
+if [ "${PUSHING_MAIN}" = "1" ] && [ -z "${LAGRANGE_PUSH_ON_RED:-}" ] \
+  && [ -z "${LAGRANGE_GATE_RED_MAIN_CHECKED:-}" ]; then
+stage "red-main-guard" "red-main CI guard (queries GitHub)"
   if command -v gh >/dev/null 2>&1; then
     ci_json="$(timeout 15 gh run list --workflow ci.yml --branch main \
       --status completed --limit 1 --json conclusion,headSha \
@@ -146,20 +161,108 @@ stage "red-main CI guard (queries GitHub)"
   fi
 fi
 
-stage "unused-files check"
+# Everything from here on reads repository content, so it must read the
+# pushed sha. Outside an exact checkout: materialize it once and re-run this
+# hook there (the inner run sees LAGRANGE_WORKSPACE_INJECTIONS and gates in
+# place). A push that deletes refs only carries no tree to prove.
+if [ -z "${LAGRANGE_WORKSPACE_INJECTIONS:-}" ]; then
+  GATE_SHA="${PUSHED_SHA}"
+  if [ -z "${GATE_SHA}" ] || [ "${GATE_SHA}" = "${ZERO_SHA}" ]; then
+    if [ "${SAW_REF}" = "1" ]; then
+      echo "pre-push: the push carries no tree (ref deletion only) - nothing to prove"
+      exit 0
+    fi
+    GATE_SHA="$(git rev-parse HEAD)"
+    echo "pre-push: no pushed ref on stdin (manual invocation) - gating HEAD ${GATE_SHA}, never the working tree"
+  fi
+  # An annotated tag as the first pushed ref names a tag object; the tree
+  # under proof is the commit it points at.
+  GATE_SHA="$(git rev-parse --verify --quiet "${GATE_SHA}^{commit}" || echo "${GATE_SHA}")"
+  stage "materialize-pushed-tree" "materializing ${GATE_SHA} into an immutable checkout; every stage below runs there"
+  export LAGRANGE_GATE_PUSHED_REF="${PUSHED_REF}"
+  GATE_STATUS=0
+  node scripts/checks/push-gate-corpus-worktree.js --gate "${GATE_SHA}" --ref-lines "${REF_LINES_FILE}" || GATE_STATUS=$?
+  if [ "${GATE_STATUS}" -ne 0 ]; then
+    CURRENT_STAGE="exact-checkout gate (the failed stage is named above)"
+  fi
+  exit "${GATE_STATUS}"
+fi
+
+# Inside an exact checkout. The checkout's HEAD must be the pushed sha: the
+# one the materializer exported, or the one on the pushed ref line - so an
+# ambient LAGRANGE_WORKSPACE_INJECTIONS in some shell can never make this
+# hook prove a working tree that is not the push.
+stage "identity" "the checkout under proof"
+GATE_HEAD="$(git rev-parse HEAD)"
+if [ -n "${LAGRANGE_GATE_PUSHED_SHA:-}" ] && [ "${LAGRANGE_GATE_PUSHED_SHA}" != "${GATE_HEAD}" ]; then
+  echo "pre-push: the checkout's HEAD ${GATE_HEAD} is not the pushed sha ${LAGRANGE_GATE_PUSHED_SHA}" >&2
+  exit 1
+fi
+if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "${ZERO_SHA}" ]; then
+  PUSHED_COMMIT="$(git rev-parse --verify --quiet "${PUSHED_SHA}^{commit}" || echo "${PUSHED_SHA}")"
+  if [ "${PUSHED_COMMIT}" != "${GATE_HEAD}" ]; then
+    echo "pre-push: this checkout's HEAD ${GATE_HEAD} is not the pushed commit ${PUSHED_COMMIT}; the gate proves the push, never a working tree" >&2
+    exit 1
+  fi
+fi
+echo "pre-push: proving ${GATE_HEAD} (ref ${PUSHED_REF:-${LAGRANGE_GATE_PUSHED_REF:-HEAD}}) against main base ${MAIN_REMOTE_SHA:-<publication merge-base>}"
+
+stage "unused-files" "unused-files check"
 npm run -s test:unused:push
-# Lint TRACKED files only, honoring the same principle as the unused-files
-# check above: untracked files are never part of a push, so a concurrent
-# session's in-flight new files must not gate this one (measured 2026-07-29:
-# a push was blocked twice by another session's mid-refactor untracked file).
-# Tracked-but-modified files still gate — their committed versions ship.
+# Lint the pushed range, TRACKED files only, honoring the same principle as
+# the unused-files check above: untracked files are never part of a push, so a
+# concurrent session's in-flight new files must not gate this one (measured
+# 2026-07-29: a push was blocked twice by another session's mid-refactor
+# untracked file). Tracked-but-modified files still gate — their committed
+# versions ship.
 # Cache in this worktree's private git dir, not the (possibly symlink-shared)
 # node_modules/.cache — see the matching note in pre-commit.
-stage "tracked-files lint (eslint, cached; ~30s cold)"
+stage "lint" "pushed-range lint (eslint, cached)"
+# Lint what the push adds or changes, not the whole tree: eslint's verdict is
+# per file, so a file the range does not touch was linted by the push that
+# introduced it (gate-work-consolidation). That induction had no base case for
+# the 171 files directly under src/, test/ and scripts/: until the pathspecs
+# below gained :(glob) magic no push ever linted them. They were linted once by
+# hand at the commit that fixed the pathspec, clean, and the range covers them
+# from there on. The range is the remote base of the
+# pushed ref; with no base to diff against - a manual invocation, or a first
+# push of a branch the remote does not have - every tracked file is linted,
+# because then no earlier push proved any of them here.
 ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
-git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
-  'test/**/*.js' 'test/**/*.mjs' 'test/**/*.cjs' \
-  'scripts/**/*.js' 'scripts/**/*.mjs' 'scripts/**/*.cjs' |
+# :(glob) magic, because a bare `src/**/*.js` pathspec uses git's default
+# wildmatch, where `**` must consume at least one path component: the gate has
+# never linted the 152 tracked scripts/*.js, nor src/*.js or test/*.js, since
+# the stage was written. Under :(glob) `**/` matches zero components too, and
+# the set is what `npm run lint` and `npm run lint:scripts` already cover.
+LINT_PATHSPEC=(':(glob)src/**/*.js' ':(glob)src/**/*.mjs' ':(glob)src/**/*.cjs'
+  ':(glob)test/**/*.js' ':(glob)test/**/*.mjs' ':(glob)test/**/*.cjs'
+  ':(glob)scripts/**/*.js' ':(glob)scripts/**/*.mjs' ':(glob)scripts/**/*.cjs')
+# The pushed ref's remote sha is the base, exactly as it is for the test
+# stage below: an ambient LAGRANGE_CHECK_BASE from the caller's shell must
+# never decide what this push proves (a stale LAGRANGE_CHECK_BASE=HEAD would
+# make the range empty and lint nothing at all).
+LINT_BASE=""
+if [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ] \
+  && git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
+  LINT_BASE="${MAIN_REMOTE_SHA}"
+fi
+# A per-file verdict holds only while the contract producing it is fixed, so
+# a change to the lint configuration or to the dependency set relints the
+# whole tree rather than the range.
+if [ -n "${LINT_BASE}" ] && [ -n "$(git diff --name-only "${LINT_BASE}" HEAD \
+  -- eslint.config.js package.json package-lock.json)" ]; then
+  echo "pre-push: the lint contract changed - linting every tracked file"
+  LINT_BASE=""
+fi
+# The branch's stdout IS the file list, so every human-readable line goes to
+# stderr; an echo on stdout would arrive at eslint as a filename.
+if [ -n "${LINT_BASE}" ]; then
+  echo "pre-push: linting the pushed range ${LINT_BASE}..HEAD" >&2
+  git diff --name-only --diff-filter=ACMR -z "${LINT_BASE}" HEAD -- "${LINT_PATHSPEC[@]}"
+else
+  echo "pre-push: no pushed range to diff against - linting every tracked file" >&2
+  git ls-files -z -- "${LINT_PATHSPEC[@]}"
+fi |
   xargs -0 -r npx eslint --cache \
     --cache-location "${ESLINT_CACHE_DIR}" \
     --no-warn-ignored --ignore-pattern 'test/.gitkeep'
@@ -172,20 +275,14 @@ git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
 # Inside the publisher's exact-HEAD worktree (it declares its injections)
 # this tree IS the pushed tree, so the ratchets run in place: a second
 # materialization would copy the same bytes again for minutes.
-if [ -n "${LAGRANGE_WORKSPACE_INJECTIONS:-}" ]; then
-  stage "corpus ratchets in place (duplication/file-size; exact-HEAD worktree)"
-  node scripts/checks/push-gate-corpus-worktree.js --in-place
-elif [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "0000000000000000000000000000000000000000" ]; then
-  stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
-  node scripts/checks/push-gate-corpus-worktree.js --ref "${PUSHED_SHA}"
-else
-  stage "corpus ratchets in throwaway worktree (duplication/file-size; minutes)"
-  node scripts/checks/push-gate-corpus-worktree.js
-fi
+# This point is only reached inside an exact checkout (the branch above
+# re-runs the hook there otherwise), so the ratchets run in place.
+stage "corpus-ratchets" "corpus ratchets in place (duplication/file-size; exact checkout)"
+node scripts/checks/push-gate-corpus-worktree.js --in-place
 # Fast-fail ordering: circular-deps (~10s) before unused-exports (~60s).
-stage "circular-dependency check (~10s)"
+stage "circular-dependencies" "circular-dependency check (~10s)"
 node scripts/check-circular-dependencies.js
-stage "unused-exports ratchet (~60s)"
+stage "unused-exports" "unused-exports ratchet (~60s)"
 node scripts/check-unused-exports.js
 
 # Final stage - the test stage. Everything cheap has already passed, so a
@@ -215,22 +312,20 @@ else
   # them mutated tracked content - inside the publisher's exact-HEAD worktree
   # a mutation is a hard failure NOW, not after 30 more minutes (operator
   # ordering principle 2026-09-02: short checks up front, long runs last).
-  if [ -n "${LAGRANGE_WORKSPACE_INJECTIONS:-}" ]; then
-    stage "worktree cleanliness after the short stages"
-    GATE_DIRTY="$(git status --porcelain)"
-    if [ -n "${GATE_DIRTY}" ]; then
-      echo "pre-push: a short stage mutated tracked content:" >&2
-      echo "${GATE_DIRTY}" >&2
-      exit 1
-    fi
+  stage "cleanliness" "worktree cleanliness after the short stages"
+  GATE_DIRTY="$(git status --porcelain)"
+  if [ -n "${GATE_DIRTY}" ]; then
+    echo "pre-push: a short stage mutated tracked content:" >&2
+    echo "${GATE_DIRTY}" >&2
+    exit 1
   fi
-  stage "thermal headroom gate"
+  stage "thermal-headroom" "thermal headroom gate"
   node scripts/checks/wait-for-thermal-headroom.js
   echo "pre-push: static checks green - running the test stage (change proof against ${LAGRANGE_CHECK_BASE:-the publication merge-base}, or the whole corpus when the proof cannot stand for it)"
   # Retry-failed-once (same owner policy as the CI lanes, 2026-08-24): a
   # single intermittent must not block a push; a failed file reruns
   # standalone once, reported never hidden, and a standalone failure stays
   # red (run-test-files.js owns the mechanics and the 5-file breakage cap).
-  stage "test stage - contracts, audits, then the change proof or the whole corpus (per-file results stream below)"
+  stage "test-stage" "contracts, audits, then the change proof or the whole corpus (per-file results stream below)"
   LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi

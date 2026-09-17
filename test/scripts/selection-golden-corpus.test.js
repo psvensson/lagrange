@@ -85,9 +85,19 @@ function obligationFailures(fixture, plan) {
       failures.push(`${fixture.id}: MISSING OBLIGATION ${testPath}`);
     }
   }
-  if (fixture.expectSpineOnly && plan.tests.length !== spine.length) {
-    failures.push(
-      `${fixture.id}: expected spine-only, got ${plan.tests.length}`);
+  // Spine-only means no behavioural widening: beyond the spine, only a
+  // test that OBSERVES a changed path (reads the document, lists its
+  // directory) may run, and only for that reason (proof-authority-integrity).
+  if (fixture.expectSpineOnly) {
+    for (const entry of plan.tests) {
+      if (spine.includes(entry.path)) continue;
+      if (entry.reasons.every((reason) => reason.startsWith('observer:'))) {
+        continue;
+      }
+      failures.push(
+        `${fixture.id}: expected spine-only, got ${entry.path} for ` +
+        `${entry.reasons.join(', ')}`);
+    }
   }
   return failures;
 }

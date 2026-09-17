@@ -5,6 +5,7 @@
 // the full-census escalation constructor.
 
 import crypto from 'node:crypto';
+import {sealBindsGraph} from './helper-import-closure.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -537,10 +538,9 @@ function graphSealProblem(seal, value) {
     typeof digest !== 'string' || !regExpTest(DIGEST_PATTERN, digest))) {
     return `${IMPORT_GRAPH_INPUT_NAME} seal contains a noncanonical digest`;
   }
-  if (seal.sourceDigest !== value.sourceDigest ||
-      seal.producerInputDigest !== value.producerInputDigest ||
-      seal.resolverStateDigest !== value.resolverStateDigest ||
-      seal.snapshotDigest !== value.snapshotDigest) {
+  // The seal-binds-graph predicate has one owner; this module keeps the
+  // typed problem text its callers read, not a second opinion about binding.
+  if (!sealBindsGraph(seal, value)) {
     return `${IMPORT_GRAPH_INPUT_NAME} does not match its producer seal`;
   }
   return null;

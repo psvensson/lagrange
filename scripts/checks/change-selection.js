@@ -43,6 +43,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {testsForSubsystem} from '../check-subsystem.js';
+import {
+  OBSERVATION_DRIFT_PROBLEM,
+  observationDrift,
+  observersOf,
+} from './test-subsystem-classification.js';
 import {withoutWorkspaceInjections} from './changed-paths.js';
 import {
   helperImportClosure,
@@ -94,6 +99,9 @@ import {
   SELECTION_REFUSED,
   SELECTION_WIDENED,
   SOURCE_SUBSYSTEM_RULES,
+  OBSERVATION_DRIFT_HINT,
+  OBSERVATION_DRIFT_LIMIT,
+  REASON_OBSERVER,
 } from './change-selection-constants.js';
 import {
   SUBSYSTEM_MANIFEST_PATH,
@@ -109,6 +117,8 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIsArray = Array.isArray;
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const DRIFT_ELLIPSIS = ', ...';
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayReduce = Function.call.bind(Array.prototype.reduce);
 const arraySome = Function.call.bind(Array.prototype.some);
@@ -484,10 +494,23 @@ export function packageDevToolingSubsystem(changedPackageFields) {
 
 // One pass over the changed paths, gathering what they oblige. It decides
 // nothing: the outcome is chosen once, by the caller, from this evidence.
+// A test that observes the changed path without importing it is selected
+// whatever else the path is - an inert document a test reads is still that
+// test's input. Observation only ever adds proof.
+function admitObservers(evidence, changedPath, observations, classes) {
+  const observers = observersOf(observations, changedPath, classes);
+  for (let index = 0; index < observers.length; index += 1) {
+    addReason(evidence.plan, observers[index].test,
+      `${REASON_OBSERVER}${REASON_SEPARATOR}${observers[index].kind}` +
+        `${REASON_SEPARATOR}${changedPath}`);
+  }
+}
+
 function collectChangeEvidence({
   root,
   changedPaths,
   classes,
+  observations,
   contracts,
   vanished,
   packageSubsystem,
@@ -502,6 +525,7 @@ function collectChangeEvidence({
   };
   for (let index = 0; index < changedPaths.length; index += 1) {
     const changedPath = changedPaths[index];
+    admitObservers(evidence, changedPath, observations, classes);
     if (isInertPath(changedPath)) continue;
     if (stringEndsWith(changedPath, TEST_SUFFIX)) {
       admitChangedTest(evidence, changedPath, classes, vanished);
@@ -542,10 +566,29 @@ export function selectChangedTests({
 
   const manifest = readJson(root, SUBSYSTEM_MANIFEST_PATH);
   const classes = manifest?.classes || {};
+  // The committed observation census is an authority only while it is the
+  // live one: a test whose surfaces changed without the manifest following
+  // could be silently unselected, so drift refuses (the gate then runs the
+  // whole corpus) and names the regeneration.
+  const changedTests = Object.create(null);
+  for (let index = 0; index < changedPaths.length; index += 1) {
+    changedTests[changedPaths[index]] = true;
+  }
+  const drifted = observationDrift(root, manifest, {ignore: changedTests});
+  if (drifted.length > 0) {
+    return refusedSelection(REFUSAL_UNKNOWN_SCOPE, [
+      `${OBSERVATION_DRIFT_PROBLEM}: ` +
+        arrayJoin(arraySlice(drifted, 0, OBSERVATION_DRIFT_LIMIT),
+          AMBIGUITY_SEPARATOR) +
+        (drifted.length > OBSERVATION_DRIFT_LIMIT ? DRIFT_ELLIPSIS : '') +
+        `${REASON_SEPARATOR} ${OBSERVATION_DRIFT_HINT}`,
+    ], []);
+  }
   const evidence = collectChangeEvidence({
     root,
     changedPaths,
     classes,
+    observations: manifest?.observations || {},
     contracts: readJson(root, IMPACT_CONTRACTS_PATH),
     vanished: vanishedPaths,
     packageSubsystem: packageDevToolingSubsystem(changedPackageFields),

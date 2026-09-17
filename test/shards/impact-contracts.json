@@ -406,7 +406,7 @@
       ]
     },
     "architecture-model-chain": {
-      "description": "Executable architecture models are checks: an Alloy assertion, a decision-table rule or an owner-trace violation named by an invariant is validated and run by the model:contracts chain (repository-health on every push) and by these tests locally, so a model or registry edit selects the chain.",
+      "description": "Executable architecture models are checks: an Alloy assertion, a decision-table rule or an owner-trace violation named by an invariant is validated and run by the model:contracts chain (the ci run's health steps on every main push) and by these tests locally, so a model or registry edit selects the chain.",
       "owners": [
         "architecture/models/",
         "architecture/contracts/invariants.json"

@@ -143,6 +143,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'file-sql-engine', pattern: /^test\/sql-engine-/, subsystem: SUBSYSTEM_QUERY_SQL},
   {id: 'directory-partition', pattern: new RegExp(`^test\\/(partition|storage|cache)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'directory-raft', pattern: new RegExp(`^test\\/raft\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_RAFT},
+  {id: 'directory-storage-load', pattern: new RegExp(`^test\\/storage-load\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_STORAGE_PARTITION},
   {id: 'directory-services', pattern: new RegExp(`^test\\/(runtime|service|function|worker|threading)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_SERVICES_RUNTIME},
   {id: 'directory-wasm', pattern: new RegExp(`^test\\/wasm-service\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_WASM_TOOLCHAIN},
   {id: 'directory-cli', pattern: new RegExp(`^test\\/cli\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CLI_TOOLING},
@@ -194,3 +195,84 @@ export const SUBSYSTEM_OVERRIDES = Object.freeze({
     reason: 'service install lifecycle; CLI and pgwire are the surfaces it drives',
   },
 });
+
+// --- Observation surfaces ----------------------------------------------------
+// What a test OBSERVES beyond what it imports: a file it reads through fs, a
+// directory it lists or walks, a script it spawns by name, an environment
+// variable it reads. The import graph cannot see any of these, so on
+// 2026-09-13 a whole-tree guard that reads all of src/ was never selected by
+// a src/ change (proof-authority-integrity). The census below is derived from
+// each test's source text and published in the subsystem manifest as its
+// `observations`, so the selector can widen to observers and the gate can
+// refuse when the committed census drifted from the live one.
+export const OBSERVATION_SCHEMA_VERSION = 2;
+export const OBSERVATION_KIND_FILE = 'files';
+export const OBSERVATION_KIND_DIRECTORY = 'directories';
+export const OBSERVATION_KIND_ENV = 'env';
+// A literal that names nothing in the tree is this state, never null.
+export const OBSERVATION_KIND_NONE = 'none';
+export const OBSERVATION_DRIFT_PROBLEM =
+  'observation census drifted from the committed manifest';
+// A string literal that names a path inside the repository, by root prefix.
+export const OBSERVATION_REPOSITORY_ROOTS = Object.freeze([
+  'src', 'test', 'scripts', 'docs', 'architecture', 'examples', 'data',
+  'solve', 'wit', '.github', '.githooks',
+]);
+export const OBSERVATION_REPOSITORY_FILES = Object.freeze([
+  'package.json', 'package-lock.json', 'knip.json', 'README.md',
+  'CHANGELOG.md', 'RELEASE.md', 'CLAUDE.md', 'AGENTS.md', '.gitignore',
+  '.taprc', 'Dockerfile', 'dependency-cruiser.config.cjs',
+]);
+// Quoted literals (single, double or template quotes); the body excludes the
+// quote, backslashes, whitespace and newlines and must look like a path.
+export const OBSERVATION_LITERAL_PATTERN = /(['"`])([^'"`\\\s\n]{1,240})\1/gu;
+export const OBSERVATION_RELATIVE_PATTERN = /^\.\.?\//u;
+export const OBSERVATION_TEMPLATE_HOLE = '${';
+// process.env.NAME, process.env['NAME'], and const {NAME, OTHER} = process.env.
+export const OBSERVATION_ENV_PATTERNS = Object.freeze([
+  /process\.env\.([A-Z][A-Z0-9_]{1,80})/gu,
+  /process\.env\[['"]([A-Z][A-Z0-9_]{1,80})['"]\]/gu,
+]);
+export const OBSERVATION_ENV_DESTRUCTURING_PATTERN =
+  /\{([^}]*)\}\s*=\s*process\.env\b/gu;
+export const OBSERVATION_ENV_NAME_PATTERN = /\b([A-Z][A-Z0-9_]{1,80})\b/gu;
+// Literals inside these statements are import specifiers the sealed graph
+// already knows; they are not observation surfaces.
+export const OBSERVATION_IMPORT_LINE_PATTERN =
+  /^\s*(?:import\b|export\b.*\bfrom\b|\}\s*from\b)|\bimport\(/u;
+export const OBSERVATION_IGNORED_SEGMENT = 'node_modules';
+// Calls whose literal arguments form ONE path: join(root, 'test', 'shards')
+// observes test/shards, not the whole test tree; new URL('x', import.meta.url)
+// and a leading __dirname / import.meta / dirname(...) anchor the path at the
+// test's own directory. The call is scanned with balanced parentheses over
+// the whole source, so nested calls and multi-line argument lists are read.
+export const OBSERVATION_CALL_OPENER_PATTERN =
+  /\b(?:join|resolve|new\s+URL)\(/gu;
+export const OBSERVATION_URL_CALL_PREFIX = 'new';
+export const OBSERVATION_TEST_DIRECTORY_ANCHOR_PATTERN =
+  /__dirname|import\.meta|dirname\(/u;
+// A bare root name ('src', 'test') is ambiguous with an ordinary word
+// (new Error('test'), getComputed('test')); it is a surface only as the
+// argument of a call whose name reads the file system or walks a tree
+// (readdirSync('src'), collectSourceFiles('src'), walk('scripts')), or as
+// one of several root names in one array literal (['src', 'test']).
+export const OBSERVATION_BARE_ROOT_CALL_PATTERN =
+  /([A-Za-z_$][\w$]*)\s*\(\s*$/u;
+export const OBSERVATION_FILESYSTEM_CALL_NAME_PATTERN =
+  /read|list|walk|collect|scan|glob|opendir|stat|exists|access|files|dir|tree|source|crawl|traverse|enumerate|find/iu;
+export const OBSERVATION_BARE_ROOT_ARRAY_PATTERN = /[[,]\s*$/u;
+export const OBSERVATION_ARRAY_MINIMUM_ROOTS = 2;
+// A test also observes what the helpers it imports observe: a checker under
+// scripts/ that walks src/, a fixture loader under test/ that reads a
+// fixture directory. The helper closure follows relative import specifiers
+// into non-test modules under these roots (product code is not a helper).
+export const OBSERVATION_IMPORT_SPECIFIER_PATTERN =
+  /\b(?:import|export)\b[^;]*?\bfrom\s*(['"])([^'"]+)\1|\bimport\(\s*(['"])([^'"]+)\3\s*\)/gu;
+// src/test-helpers is the hub nearly every test imports; what it reaches is
+// runtime plumbing, not observation of repository content, and following it
+// would make every test an observer of whatever one deep import names. A
+// *-constants.js module is a vocabulary table and reads nothing.
+export const OBSERVATION_HELPER_ROOTS = Object.freeze(['test/', 'scripts/']);
+export const OBSERVATION_VOCABULARY_MODULE_SUFFIX = '-constants.js';
+export const OBSERVATION_HELPER_SUFFIXES = Object.freeze(['.js', '.mjs', '.cjs']);
+export const OBSERVATION_TEST_SUFFIX = '.test.js';
