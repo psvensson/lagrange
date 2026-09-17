@@ -81,11 +81,16 @@ const FAILURE_REASON = Object.freeze({
   TIMED_OUT: 'test process timed out',
 });
 
+// The loaders every test process starts with. Only the mock plugin serves
+// anything (t.mockImport, two files); @tapjs/typescript (+245 ms) and
+// @tapjs/processinfo (+135 ms) were loaded into ~1700 processes per corpus
+// for no .ts file, no coverage and no reader of .tap/processinfo - measured
+// 2026-09-17: 530 ms -> 207 ms idle start-up per process without them.
+// --no-compilation-cache stays: it was added for a V8 crash class
+// (3bac105f1); NODE_COMPILE_CACHE is evaluated on the canary first.
 const TEST_NODE_ARGS = Object.freeze([
-  `--import=${import.meta.resolve('@tapjs/typescript/import')}`,
   `--import=${import.meta.resolve('@tapjs/mock/import')}`,
   '--enable-source-maps',
-  `--import=${import.meta.resolve('@tapjs/processinfo/import')}`,
   '--no-compilation-cache',
   '--max-old-space-size=512',
 ]);
@@ -524,6 +529,7 @@ if (IS_MAIN) process.exitCode = await main();
 export {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
+  TEST_NODE_ARGS,
   analyzeTapOutput,
   filterTestFiles,
   parseOptions,

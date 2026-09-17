@@ -1,0 +1,33 @@
+{
+  "schema": "solve-quest/2",
+  "id": "test-runner-loader-diet",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Every test process scripts/run-test-files.js spawns paid for three loaders at start-up, ~1700 times per corpus. Only @tapjs/mock serves anything (t.mockImport, two files); @tapjs/typescript and @tapjs/processinfo served no .ts file, no coverage and no reader of .tap/processinfo. The runner now loads the mock plugin alone. Measured 2026-09-17 on the pass fixture, five runs each: 530 ms -> 207 ms idle start-up per process; ~9 min of process time per full corpus, 2-3 min wall at jobs=4, more under load. --no-compilation-cache stays (V8 crash class, 3bac105f1); NODE_COMPILE_CACHE is evaluated on the canary first, in canary-on-lab-node. The devDependency entries for the two loaders are a packaging change with its own proof and are left in place.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/test-runner-loader-diet/evidence/receipt.json",
+      "requiredReceipts": [
+        "only-the-mock-loader",
+        "compilation-cache-stays-off",
+        "mock-plugin-still-serves"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "mock-stays",
+      "statement": "t.mockImport keeps working: the runner test's fixture proves the mock plugin surface is loaded through the runner."
+    },
+    {
+      "id": "compilation-cache-untouched",
+      "statement": "--no-compilation-cache and the heap bound are unchanged; a compile-cache decision needs the canary measurement first."
+    },
+    {
+      "id": "no-dependency-change",
+      "statement": "package.json and the lockfile are untouched in this quest."
+    }
+  ],
+  "sealedAt": "c2ca6d62346e707534b671a12a71f8d5d908af3b"
+}

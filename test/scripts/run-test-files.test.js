@@ -6,6 +6,7 @@ import {afterEach, describe, it} from 'node:test';
 import {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
+  TEST_NODE_ARGS,
   analyzeTapOutput,
   filterTestFiles,
   parseOptions,
@@ -193,5 +194,27 @@ describe('retry-failed-once policy', () => {
     const exitCode = await retryFailedOnce(summaryWith(many), {}, seams);
     assert.equal(exitCode, 1);
     assert.deepEqual(reruns, [], 'six failed files is over the cap of five');
+  });
+});
+
+// Every test process pays the loaders at start-up, ~1700 times per corpus.
+// Only the mock plugin serves anything; the typescript and processinfo
+// loaders served no .ts file, no coverage and no reader (2026-09-17: 530 ms
+// -> 207 ms idle start-up per process without them).
+describe('test process loaders', () => {
+  const loaders = TEST_NODE_ARGS.filter((argument) => argument.startsWith('--import='));
+
+  it('loads the mock plugin and nothing that serves no file', () => {
+    assert.equal(loaders.length, 1, 'exactly one loader');
+    assert.match(loaders[0], /@tapjs\/mock\//u);
+    for (const argument of TEST_NODE_ARGS) {
+      assert.doesNotMatch(argument, /@tapjs\/(typescript|processinfo)\//u,
+        `${argument}: a loader that serves nothing is not paid for`);
+    }
+  });
+
+  it('keeps the V8 compilation cache off (3bac105f1) and the heap bound', () => {
+    assert.ok(TEST_NODE_ARGS.includes('--no-compilation-cache'));
+    assert.ok(TEST_NODE_ARGS.some((argument) => argument.startsWith('--max-old-space-size=')));
   });
 });

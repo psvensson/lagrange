@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "test-runner-loader-diet",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/run-test-files.test.js": "ca1b3801c4f37cdecbafe322beb83da70e79060390cf914ec7106f6f42e2e7f3"
+  },
+  "generatedAt": "2026-09-17T15:22:48.870Z",
+  "receipts": [
+    {
+      "id": "only-the-mock-loader",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^loads the mock plugin and nothing that serves no file$\" test/scripts/run-test-files.test.js",
+      "detail": "the runner spawns exactly one --import loader, @tapjs/mock; typescript and processinfo are gone",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "compilation-cache-stays-off",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps the V8 compilation cache off \\\\(3bac105f1\\\\) and the heap bound$\" test/scripts/run-test-files.test.js",
+      "detail": "--no-compilation-cache and --max-old-space-size are unchanged",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "mock-plugin-still-serves",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^runs Tap and node:test files with assertions and Tap plugins intact$\" test/scripts/run-test-files.test.js",
+      "detail": "the tap fixture asserts the mock plugin surface through the runner",
+      "testFile": "test/scripts/run-test-files.test.js"
+    }
+  ]
+}
