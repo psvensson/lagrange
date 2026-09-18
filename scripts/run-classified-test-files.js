@@ -32,6 +32,7 @@ import {
   RESOURCE_CLASS_ORDINARY,
 } from './checks/test-resource-classification-constants.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
+import {placementDeps, runPlacedTestFiles} from './lab/probe.js';
 import {
   appendArrayValue,
   appendArrayValues,
@@ -48,6 +49,7 @@ import {
 } from './checks/change-proof-string-collections.js';
 
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySort = Function.call.bind(Array.prototype.sort);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const mathRound = Math.round;
 const numberParseFloat = Number.parseFloat;
@@ -91,6 +93,10 @@ const DISPATCH_DURATION_WIDTH = 12;
 const DISPATCH_DURATION_CEILING = 999999999999;
 const DISPATCH_DURATION_PAD = '0';
 const SERIAL_JOBS = 1;
+// A file this machine has never timed: what placement assumes it costs when
+// its lane has no timed file either.
+const UNTIMED_FILE_MS = 10000;
+const MEDIAN_DIVISOR = 2;
 const INVALID_RESULTS_ROOTS_PROBLEM =
   'classified test plan requires an own-data string array of results roots';
 const DUPLICATE_FILES_PROBLEM =
@@ -254,6 +260,37 @@ export function orderLaneFiles(files, resultsRoots, jobs) {
     (file) => orderedStringMapGet(keys, file));
 }
 
+function medianOf(values) {
+  const sorted = arraySort([...values], (left, right) => left - right);
+  return sorted[mathRound((sorted.length - 1) / MEDIAN_DIVISOR)];
+}
+
+// What each planned file is expected to cost, for placement: its last green
+// duration here, else the median of its lane's timed files, else a default.
+// A red or unknown file is priced like its lane, never as free.
+export function estimateFileCosts(plan, resultsRoots) {
+  const costs = [];
+  for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
+    const lane = plan[laneIndex];
+    const timed = [];
+    const measured = [];
+    for (let index = 0; index < lane.files.length; index += 1) {
+      const milliseconds = readLastResult(resultsRoots, lane.files[index]);
+      appendArrayValue(measured, milliseconds);
+      if (milliseconds !== null) appendArrayValue(timed, milliseconds);
+    }
+    const fallback = timed.length > 0 ? medianOf(timed) : UNTIMED_FILE_MS;
+    for (let index = 0; index < lane.files.length; index += 1) {
+      appendArrayValue(costs, {
+        file: lane.files[index],
+        jobs: lane.jobs,
+        ms: measured[index] === null ? fallback : measured[index],
+      });
+    }
+  }
+  return costs;
+}
+
 export function planClassifiedTestFiles(
   root, inputFiles, resultsRoots = lastResultsRoots(root)) {
   const copiedInput = copyOwnStringArray(inputFiles);
@@ -400,6 +437,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.stderr.write(NO_FILES_PROBLEM + NEWLINE);
     process.exitCode = 1;
   } else {
-    process.exitCode = runClassifiedTestFiles(files, {keepGoing});
+    // Placement decides whether lab machines can shorten this run; when they
+    // cannot, or may not, it is exactly the local run it always was.
+    process.exitCode = await runPlacedTestFiles(files, placementDeps({
+      root: ROOT,
+      keepGoing,
+      planCosts: (planned) => estimateFileCosts(
+        planClassifiedTestFiles(ROOT, planned), lastResultsRoots(ROOT)),
+      runLocal: (planned, options) => runClassifiedTestFiles(planned, options),
+      lastGreen: (file) => readLastResult([ROOT], file) !== null,
+    }));
   }
 }

@@ -29,7 +29,6 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
-import {runClassifiedTestFiles} from '../run-classified-test-files.js';
 import {
   planChangeProof,
   planTestPaths,
@@ -68,6 +67,12 @@ const LOG_PREFIX = '[push-gate-change-proof]';
 const NPM = 'npm';
 const NPM_RUN_SILENT = Object.freeze(['run', '-s']);
 const FULL_CORPUS_SCRIPT = 'test:all';
+// The cone runs through the classified runner's own entry point, as the
+// whole corpus does through test:all, so both may be placed across the lab
+// machines when that shortens them (test-placement).
+const CLASSIFIED_RUNNER = 'scripts/run-classified-test-files.js';
+const STDIN_FLAG = '--stdin';
+const STDIO_INPUT_THEN_INHERIT = Object.freeze(['pipe', 'inherit', 'inherit']);
 const WORKTREE_RANGE_LABEL = 'working tree';
 const PERCENT = 100;
 const EXIT_FAILURE = 1;
@@ -193,6 +198,15 @@ function renderDecision(range, plan, decision) {
   return arrayJoin(lines, NEWLINE) + NEWLINE;
 }
 
+function runClassifiedCone(tests) {
+  const result = spawnSync(process.execPath, [CLASSIFIED_RUNNER, STDIN_FLAG], {
+    cwd: root,
+    input: arrayJoin(tests, NEWLINE) + NEWLINE,
+    stdio: [...STDIO_INPUT_THEN_INHERIT],
+  });
+  return result.status ?? EXIT_FAILURE;
+}
+
 function runFullCorpus() {
   const result = spawnSync(NPM, [...NPM_RUN_SILENT, FULL_CORPUS_SCRIPT],
     {cwd: root, stdio: 'inherit'});
@@ -279,7 +293,7 @@ function treeIsCommit(sha, options = {}) {
 export function runDecision(plan, decision, runners = {}) {
   const {
     runFull = runFullCorpus,
-    runCone = (tests) => runClassifiedTestFiles(tests, {root}),
+    runCone = runClassifiedCone,
     record = recordCorpusProof,
     head = headRevision,
     writeScope = writeProofScope,

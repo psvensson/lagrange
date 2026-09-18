@@ -50,6 +50,11 @@ export const CORE_METADATA_PREFIXES = Object.freeze([
 export const SELECTOR_SELF_PATHS = Object.freeze([
   'scripts/run-test-files.js',
   'scripts/run-classified-test-files.js',
+  // Placement: the runner can hand files to lab machines, so the modules that
+  // choose, send and run them execute the proof too (test-placement).
+  'scripts/lab/probe.js',
+  'scripts/lab/process.js',
+  'scripts/lab/state.js',
   'scripts/check-curated-test-shards.js',
   'scripts/generate-test-primary-classes.js',
   'scripts/select-proof-cone.js',

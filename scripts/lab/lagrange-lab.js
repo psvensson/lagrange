@@ -14,12 +14,11 @@ import {doctorHarnessNodes, runHarness} from './harness.js';
 import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
-  WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, formatFleet, probeRemoteNode,
-  recordFleet, workerCloneUrl, workerSetupScript,
+  WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
+  probeRemoteNode, recordFleet, workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {capture} from './process.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
-import {createHash} from 'node:crypto';
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
 import {dirname, join as joinPath} from 'node:path';
@@ -67,13 +66,10 @@ const COMMAND = Object.freeze({
 // The repository this command runs from: its lockfile and engines floor are
 // what a fleet machine must match to run this checkout's corpus.
 const FLEET_REPO_ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const FLEET_LOCKFILE = 'package-lock.json';
 const FLEET_PACKAGE = 'package.json';
+const FLEET_TEXT = 'utf8';
 const FLEET_JSON_FLAG = 'json';
 const FLEET_LINE_BREAK = '\n';
-const FLEET_HASH = 'sha256';
-const FLEET_HEX = 'hex';
-const FLEET_TEXT = 'utf8';
 const ACTION = Object.freeze({
   ADD: 'add',
   PROBE: 'probe',
@@ -273,14 +269,10 @@ async function doctorProblems() {
 // decides from these records at run time.
 async function commandFleet(args) {
   const state = await loadState();
-  const manifest = JSON.parse(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_PACKAGE), FLEET_TEXT));
-  const lockSha256 = createHash(FLEET_HASH)
-    .update(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_LOCKFILE))).digest(FLEET_HEX);
   const fleet = await discoverFleet({
     nodes: Object.values(state.nodes || {}),
     controllerRepoPath: FLEET_REPO_ROOT,
-    lockSha256,
-    nodeMinimum: String(manifest.engines?.node || '').replace(/^>=\s*/u, ''),
+    ...fleetRequirement(FLEET_REPO_ROOT),
   });
   await saveState(recordFleet(state, fleet));
   const lines = args.flags[FLEET_JSON_FLAG] ?

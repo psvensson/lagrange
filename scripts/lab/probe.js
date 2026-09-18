@@ -1,4 +1,11 @@
-import {capture, run} from './process.js';
+import {spawn, spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {capture, killGroup, run} from './process.js';
+import {loadState, saveState} from './state.js';
 
 const OS = Object.freeze({LINUX: 'linux', MACOS: 'macos', WINDOWS: 'windows', UNKNOWN: 'unknown'});
 const OS_REPORT = Object.freeze({LINUX: 'linux', DARWIN: 'darwin', WINDOWS: 'windows'});
@@ -810,3 +817,800 @@ function fleetGaps(entry) {
     `${FLEET_TEXT.GAPS_OPEN}${entry.readiness.gaps.join(FLEET_TEXT.LIST)}` +
     `${FLEET_TEXT.GAPS_CLOSE}` : EMPTY;
 }
+
+// ---------------------------------------------------------------------------
+// Placement: run one classified plan across the machines discovery finds
+// ready, choosing at test time. The owner's rule (2026-09-18): an ordinary
+// push proves itself locally and in parallel, and no host is written into any
+// setup, so every choice below comes from facts measured on this run - the
+// fleet is probed again (about a second) and each file's last duration
+// decides the split. A machine receives a FILE SET and runs its own serial
+// lanes: overlapping the exclusive and ordinary lanes on one host reds five
+// contention-sensitive SLOs (measured 2026-09-17), sharding across hosts adds
+// no contention. A lab machine can only make a green faster: a file red there
+// is decided again on the controller, and one that then passes is recorded
+// against that machine and routed elsewhere next time.
+
+const PLACEMENT_ENV = 'LAGRANGE_PLACEMENT';
+const PLACEMENT_LOCAL = 'local';
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+// Below this the whole plan costs less on the controller than waiting for a
+// lab machine's setup is worth: the common small cone never probes at all.
+const PLACEMENT_MIN_PLAN_MS = 5 * MS_PER_MINUTE;
+// Bundle, fetch, worktree and nvm on a lab machine, charged before its files.
+const PLACEMENT_REMOTE_SETUP_MS = 30 * MS_PER_SECOND;
+// A file goes to a lab machine only if its duration there - measured here,
+// scaled by the machine's speed - is at most half the runner's default
+// per-file timeout. The first placed run gave an 8-thread machine at speed
+// x2.13 a 4-minute simulation file, which timed out at 600 s there and then
+// ran again here (measured 2026-09-18).
+const PLACEMENT_FILE_FIT_MS = 5 * MS_PER_MINUTE;
+// More remote reds than this is breakage, not a routing miss: they are
+// reported red rather than run a second time on the controller.
+const PLACEMENT_RERUN_CAP = 20;
+// A shard gets three times its estimate, never under half an hour.
+const PLACEMENT_DEADLINE_FACTOR = 3;
+const PLACEMENT_DEADLINE_FLOOR_MS = 30 * MS_PER_MINUTE;
+const PLACEMENT_EXIT = Object.freeze({
+  SETUP: 97, BUSY: 98, INTERRUPTED: 130, TERMINATED: 143, SSH: 255,
+});
+const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
+// A stopped shard's shell gets this long to clean up before its connection
+// is cut.
+const PLACEMENT_STOP_GRACE_MS = 10 * MS_PER_SECOND;
+const PLACEMENT_RED_LINE = /^not ok (\S+) \(\d+ assertions, \d+ms\)$/u;
+const PLACEMENT_GREEN_LINE = /^ok (\S+) \(\d+ assertions, \d+ms\)$/u;
+const PLACEMENT_RETRIED_PASS_LINE = /^# retried-once pass (\S+)$/u;
+// A bundle upload that has not finished by this is a stalled machine.
+const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
+// What the controller's own run policy hands a lab machine's runner.
+const PLACEMENT_FORWARDED_ENV = Object.freeze({
+  RETRY: 'LAGRANGE_RETRY_FAILED_ONCE',
+  TAP_TIMEOUT: 'TAP_TIMEOUT',
+});
+const PLACEMENT_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM']);
+const PLACEMENT_WORD_SEPARATOR = ' ';
+const PLACEMENT_RUNNER = 'scripts/run-classified-test-files.js';
+const PLACEMENT_RUNNER_STDIN = '--stdin';
+const PLACEMENT_STDIO_PIPE = 'pipe';
+const PLACEMENT_STDIO_INHERIT = 'inherit';
+const PLACEMENT_WRAPPER_HEAD = Object.freeze([
+  'set -u',
+  'status=0',
+  'if command -v timeout >/dev/null 2>&1; then ' +
+    // --foreground keeps timeout, and so the upload, in the wrapper's group.
+    `bound="timeout --foreground ${PLACEMENT_UPLOAD_DEADLINE_SECONDS}"; else bound=; fi`,
+]);
+const PLACEMENT_WRAPPER_UPLOAD_FAILED = 'echo "placement: the bundle upload failed" >&2;';
+const PLACEMENT_WRAPPER_EXIT = 'exit "$status";';
+const PLACEMENT_PARENT = 'test-output/placement-worktrees';
+const PLACEMENT_LOG_PARENT = 'test-output/placement';
+const PLACEMENT_FILES_MARK = 'LAGRANGE_PLACEMENT_FILES';
+const PLACEMENT_KEEP_GOING = '--keep-going';
+const PLACEMENT_MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
+const PLACEMENT_FACTOR_STEPS = 10;
+const PLACEMENT_MINUTE_DIGITS = 1;
+const PLACEMENT_LINE = /\r?\n/u;
+// Keepalive for a long run: a dead connection is noticed within a minute.
+const SSH_RUN_OPTIONS = Object.freeze([
+  SSH_OPTION, 'ConnectTimeout=5',
+  SSH_OPTION, 'ServerAliveInterval=15',
+  SSH_OPTION, 'ServerAliveCountMax=4',
+]);
+const TEXT_UTF8 = 'utf8';
+const PLACEMENT_SHELL = 'sh';
+const PLACEMENT_SHELL_STDIN = Object.freeze(['-s', '--']);
+const PLACEMENT_SHELL_COMMAND = '-c';
+const PLACEMENT_GIT = 'git';
+const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
+const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
+const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
+const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit'});
+const PLACEMENT_STDIO_IGNORE = 'ignore';
+const PLACEMENT_NEWLINE = '\n';
+const PLACEMENT_VERSION_SEPARATOR = '.';
+const PLACEMENT_SAFE_CHARACTER = '_';
+const PLACEMENT_RUN_SHA_CHARACTERS = 12;
+const PLACEMENT_RUN_RADIX = 36;
+const REQUIREMENT_FILE = Object.freeze({PACKAGE: 'package.json', LOCK: 'package-lock.json'});
+const REQUIREMENT_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
+const PLACEMENT_UPLOAD_SCRIPT = 'mkdir -p "${1%/*}" && cat > "$1"';
+const PLACEMENT_KILL_SCRIPT = 'kill -TERM "$1" 2>/dev/null';
+const PLACEMENT_TEXT = Object.freeze({
+  PREFIX: 'placement: ',
+  LOCAL: 'placement: local - ',
+  NOT_A_COMMIT: 'the tree is not exactly a commit, and only a commit is sent',
+  NO_MACHINE: 'no lab machine is ready',
+  NO_GAIN: 'no lab machine would shorten this run',
+  NO_HISTORY: 'shares no history with this commit',
+  UNREPORTED: ' file(s) with no result from there run on the controller: ',
+  NO_INVENTORY: 'the lab inventory could not be read: ',
+  RED_THERE: ' file(s) red there are decided on the controller',
+  OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
+  MISS: ' passed on the controller: routed away from ',
+  DEADLINE: 'deadline',
+  INTERRUPTED: 'interrupted',
+});
+
+/**
+ * Split files over machines by measured cost. Longest first, each file goes to
+ * the machine that would finish it soonest: its duration over its lane's
+ * workers, scaled by the machine's measured speed, after the machine's setup.
+ * A lab machine left with less work than its setup is dropped and the split
+ * redone, so a machine is used only when it shortens the run. The controller
+ * is always a machine and never avoids a file.
+ * @param {Array<{file: string, ms: number, jobs: number}>} costs
+ * @param {Array<{name: string, controller: boolean, speed: number,
+ *   avoid?: string[]}>} machines
+ * @param {{setupMs?: number}} [options]
+ * @return {Array<{machine: Object, files: string[], loadMs: number}>}
+ */
+export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETUP_MS} = {}) {
+  let candidates = machines;
+  for (;;) {
+    const shards = assignByCost(costs, candidates, setupMs);
+    const idle = shards
+      .filter((shard) => !shard.machine.controller && shard.loadMs < 2 * setupMs)
+      .sort((left, right) => left.loadMs - right.loadMs)[0];
+    if (!idle) return shards.filter((shard) => shard.files.length > 0);
+    candidates = candidates.filter((machine) => machine !== idle.machine);
+  }
+}
+
+function assignByCost(costs, machines, setupMs) {
+  const shards = machines.map((machine) => ({
+    machine, files: [], loadMs: machine.controller ? 0 : setupMs,
+  }));
+  const ordered = [...costs].sort((left, right) =>
+    (right.ms / right.jobs) - (left.ms / left.jobs) ||
+    (left.file < right.file ? -1 : 1));
+  for (const cost of ordered) {
+    let best = null;
+    let bestFinish = Infinity;
+    for (const shard of shards) {
+      if (!fits(shard.machine, cost)) continue;
+      const finish = shard.loadMs + (cost.ms / cost.jobs) * shard.machine.speed;
+      if (finish < bestFinish) {
+        best = shard;
+        bestFinish = finish;
+      }
+    }
+    best.files.push(cost.file);
+    best.loadMs = bestFinish;
+  }
+  return shards;
+}
+
+// Whether a file may go to a machine: the controller takes anything; a lab
+// machine not a file it is known to fail, nor one it could not finish well
+// inside the per-file timeout.
+function fits(machine, cost) {
+  if (machine.controller) return true;
+  return !machine.avoid?.includes(cost.file) &&
+    cost.ms * machine.speed <= PLACEMENT_FILE_FIT_MS;
+}
+
+// What a routing miss is remembered against: the machine's gaps and node.
+// Install a tool or change node and its misses are forgotten, since they may
+// have been exactly that.
+function placementGapsKey(entry) {
+  return [...(entry.readiness?.gaps || []), entry.capability?.nodeVersion || EMPTY]
+    .join(FLEET_TEXT.LIST);
+}
+
+/**
+ * The lab machines a placed run may use, from one discovery pass: ready, not
+ * the controller reached a second time, answering, with the checkout path,
+ * the commit it holds and a speed sample recorded. Speed is relative to the
+ * controller; the machine factor the tests scale their wall-clock budgets by
+ * is that speed times the controller's own factor, never below 1.
+ * @param {Array<Object>} fleet discoverFleet's result
+ * @param {Object} state the lab inventory
+ * @param {{controllerFactor?: number}} [options]
+ * @return {Array<Object>}
+ */
+export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
+  const reference = fleet.find((entry) => entry.controller)?.capability?.cpuSampleMs;
+  const machines = [];
+  for (const entry of fleet) {
+    const cap = entry.capability;
+    const node = state.nodes?.[entry.name];
+    if (!(reference > 0) || !isPlaceable(entry, node)) continue;
+    const speed = cap.cpuSampleMs / reference;
+    const gapsKey = placementGapsKey(entry);
+    machines.push({
+      name: entry.name,
+      controller: false,
+      speed,
+      factor: Math.max(1, Math.ceil(speed * controllerFactor * PLACEMENT_FACTOR_STEPS) /
+        PLACEMENT_FACTOR_STEPS),
+      sshTarget: node.ssh,
+      repoPath: cap.repoPath,
+      repoHead: cap.repo.head,
+      nodeMajor: String(cap.nodeVersion || EMPTY).replace(/^v/u, EMPTY)
+        .split(PLACEMENT_VERSION_SEPARATOR)[0],
+      gapsKey,
+      avoid: node.placement?.gapsKey === gapsKey ? [...node.placement.avoid] : [],
+    });
+  }
+  return machines;
+}
+
+// A lab machine a shard can go to: discovered ready this run, answering, not
+// the controller reached a second time, with an ssh target, the checkout
+// path, the commit that checkout is at and a speed sample.
+function isPlaceable(entry, node) {
+  const cap = entry.capability;
+  const distinct = !entry.controller && !entry.error && !entry.sameMachineAs;
+  const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true;
+  return distinct && reachable && Boolean(cap?.repoPath) && Boolean(cap.repo?.head) &&
+    cap.cpuSampleMs > 0;
+}
+
+/**
+ * Remember files that were red on a machine and green on the controller, so
+ * the next placed run sends them elsewhere.
+ * @param {Object} state
+ * @param {string} name
+ * @param {string} gapsKey
+ * @param {string[]} files
+ * @return {Object} the same state
+ */
+export function recordPlacementMisses(state, name, gapsKey, files) {
+  const node = state.nodes?.[name];
+  if (!node || files.length === 0) return state;
+  const kept = node.placement?.gapsKey === gapsKey ? node.placement.avoid : [];
+  node.placement = {gapsKey, avoid: [...new Set([...kept, ...files])].sort()};
+  return state;
+}
+
+const CONTROLLER_MACHINE = Object.freeze({
+  name: FLEET_CONTROLLER_NAME, controller: true, speed: 1,
+});
+
+function minutes(ms) {
+  return (ms / MS_PER_MINUTE).toFixed(PLACEMENT_MINUTE_DIGITS);
+}
+
+function deadlineFor(shard) {
+  return Math.max(PLACEMENT_DEADLINE_FLOOR_MS, PLACEMENT_DEADLINE_FACTOR * shard.loadMs);
+}
+
+// The files a finished shard reports red, among the files it was given.
+// What a lab machine proved, file by file, from its runner's own verdict
+// lines on stdout - never from its exit status. A file with an `ok` line (or
+// a retried-once pass, the controller's own policy) and no unretried `not ok`
+// line is proved there; one with a `not ok` line is decided again on the
+// controller; one with neither never reported, and the controller runs it. A
+// runner killed mid-batch, a truncated script or a lost connection can leave
+// any number of files unreported whatever the exit status (verifier round 1).
+function shardVerdicts(shard, outcome) {
+  const given = new Set(shard.files);
+  const green = new Set();
+  const red = new Set();
+  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
+    const passed = PLACEMENT_GREEN_LINE.exec(line) || PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    if (passed && given.has(passed[1])) green.add(passed[1]);
+    const failed = PLACEMENT_RED_LINE.exec(line);
+    if (failed && given.has(failed[1])) red.add(failed[1]);
+  }
+  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
+    const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    if (retried) red.delete(retried[1]);
+  }
+  return {
+    red: [...red],
+    fallback: shard.files.filter((file) => !green.has(file) && !red.has(file)),
+  };
+}
+
+/**
+ * Run test files placed across the fleet when that can shorten the run, and
+ * on the controller alone otherwise. Every choice is reported on one line.
+ * @param {string[]} files
+ * @param {Object} deps
+ * @param {Function} deps.planCosts files -> [{file, ms, jobs}]
+ * @param {Function} deps.runLocal (files, {keepGoing}) -> exit status
+ * @param {Function} deps.lastGreen file -> whether its controller result is green
+ * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
+ * @param {Function} deps.discover async () -> {machines, record(name, key, files)}
+ * @param {Function} deps.runRemote (shard, {sha, deadlineMs, forward}) -> {done, stop, abort}
+ * @param {Function} [deps.runLocalChild] files -> {done, abort}: the controller's
+ *   files while lab shards run, without blocking this process
+ * @param {Object} [deps.signals] where SIGINT and SIGTERM arrive (process)
+ * @param {Function} [deps.exit] process.exit
+ * @param {boolean} [deps.keepGoing]
+ * @param {Object} [deps.env]
+ * @param {Function} [deps.write]
+ * @return {Promise<number>} exit status
+ */
+export async function runPlacedTestFiles(files, deps) {
+  const {env = process.env, keepGoing = false,
+    write = (line) => process.stdout.write(`${line}\n`)} = deps;
+  const local = (reason) => {
+    if (reason) write(`${PLACEMENT_TEXT.LOCAL}${reason}`);
+    return deps.runLocal(files, {keepGoing});
+  };
+  if (env[PLACEMENT_ENV] === PLACEMENT_LOCAL) return local(null);
+  const costs = deps.planCosts(files);
+  const aloneMs = costs.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0);
+  if (aloneMs < PLACEMENT_MIN_PLAN_MS) return local(null);
+  const sha = deps.commitAt();
+  if (!sha) return local(PLACEMENT_TEXT.NOT_A_COMMIT);
+  let fleet;
+  try {
+    fleet = await deps.discover();
+  } catch (error) {
+    // Placement can only shorten a run: an unreadable inventory is no fleet.
+    return local(`${PLACEMENT_TEXT.NO_INVENTORY}${error.message}`);
+  }
+  if (fleet.machines.length === 0) return local(PLACEMENT_TEXT.NO_MACHINE);
+  const shards = placeTestFiles(costs, [CONTROLLER_MACHINE, ...fleet.machines]);
+  const remote = shards.filter((shard) => !shard.machine.controller);
+  if (remote.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
+  write(`${PLACEMENT_TEXT.PREFIX}${files.length} files over ${shards.length} machines, ` +
+    `~${minutes(Math.max(...shards.map((shard) => shard.loadMs)))} min ` +
+    `(controller alone ~${minutes(aloneMs)} min)`);
+  for (const shard of shards) {
+    write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${shard.files.length} files, ` +
+      `~${minutes(shard.loadMs)} min`);
+  }
+  // Every lab shard is on its way before the controller's own files start.
+  const forward = {
+    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
+    tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
+  };
+  const runs = await Promise.all(remote.map((shard) =>
+    deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward})));
+  // While lab shards run, the controller's own files run in a child process
+  // of their own group, never in this process's blocking lanes: a signal
+  // handler here could not run until those lanes finished, so a Ctrl-C or a
+  // SIGTERM would be held for the whole shard (verifier round 2). Interrupted,
+  // every lab shard and the local child are aborted at once, synchronously.
+  let here = null;
+  const runHere = (planned) => {
+    here = deps.runLocalChild ? deps.runLocalChild(planned) :
+      {done: Promise.resolve(deps.runLocal(planned, {keepGoing: true}))};
+    return here.done;
+  };
+  const interrupted = () => {
+    for (const run of runs) run.abort?.();
+    here?.abort?.();
+    (deps.exit || process.exit)(PLACEMENT_EXIT.INTERRUPTED);
+  };
+  const signals = deps.signals || process;
+  for (const signal of PLACEMENT_SIGNALS) signals.once(signal, interrupted);
+  try {
+    const controllerShard = shards.find((shard) => shard.machine.controller);
+    const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
+    return await settleRemoteShards(remote, await Promise.all(runs.map((run) => run.done)),
+      {deps, fleet, statuses, write, runHere});
+  } finally {
+    for (const signal of PLACEMENT_SIGNALS) signals.removeListener(signal, interrupted);
+  }
+}
+
+async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, write, runHere}) {
+  const reruns = [];
+  const fallback = [];
+  remote.forEach((shard, index) => {
+    const outcome = outcomes[index];
+    for (const stream of [outcome.log, outcome.errors]) {
+      for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
+        if (line) write(`[${shard.machine.name}] ${line}`);
+      }
+    }
+    const {red, fallback: back} = shardVerdicts(shard, outcome);
+    if (back.length > 0) {
+      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${back.length}` +
+        `${PLACEMENT_TEXT.UNREPORTED}${outcome.reason || `exit ${outcome.status}`}`);
+      fallback.push(...back);
+    }
+    if (red.length > 0) {
+      write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${red.length}${PLACEMENT_TEXT.RED_THERE}`);
+      reruns.push({shard, red});
+    }
+  });
+  const redCount = reruns.reduce((sum, rerun) => sum + rerun.red.length, 0);
+  if (redCount > PLACEMENT_RERUN_CAP) {
+    write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.OVER_CAP}`);
+    statuses.push(1);
+  } else if (redCount > 0) {
+    statuses.push(await runHere(reruns.flatMap((rerun) => rerun.red)));
+    for (const {shard, red} of reruns) {
+      const misses = red.filter((file) => deps.lastGreen(file));
+      if (misses.length === 0) continue;
+      write(`${PLACEMENT_TEXT.PREFIX}${misses.length}${PLACEMENT_TEXT.MISS}${shard.machine.name}`);
+      await fleet.record(shard.machine.name, shard.machine.gapsKey, misses);
+    }
+  }
+  if (fallback.length > 0) statuses.push(await runHere(fallback));
+  return statuses.find((status) => status !== 0) ?? 0;
+}
+
+// The lab machine's half: take the commit from the bundle (when one was
+// needed), prove it in a throwaway worktree with the workspace links the
+// publisher's gate checkout gets, run the controller-chosen files through the
+// same classified runner, and remove the worktree, ref, bundle and file list
+// on every exit. One placed run per machine at a time (flock where present).
+// Exit 97 is a setup failure and 98 a busy machine: the controller then runs
+// the shard itself. The runner leads its own process group, so the
+// controller's deadline can stop everything it started.
+const PLACEMENT_SCRIPT_HEAD = [
+  'set -u',
+  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"; keep="$7"',
+  'retry="$8"; tap_timeout="$9"',
+  // Before nvm, which reads its arguments (see the capability script).
+  'set --',
+  'pid=""',
+  // The controller stops a shard by signalling this shell, whose trap stops
+  // the runner's group and whose exit removes everything below.
+  'echo "placement-shell=$$"',
+  `cd "$repo" || exit ${PLACEMENT_EXIT.SETUP}`,
+  `parent="$repo/${PLACEMENT_PARENT}"`,
+  'wt="$parent/$run"; list="$parent/$run.files"; ref="refs/lagrange-placement/$run"',
+  // Installed before anything that can fail or be interrupted, so every exit
+  // - busy, a failed fetch, a signal - removes what this run was given.
+  'cleanup() { cd "$repo" || return; git worktree remove --force "$wt" >/dev/null 2>&1; ' +
+    'rm -rf "$wt"; git worktree prune >/dev/null 2>&1; git update-ref -d "$ref" >/dev/null 2>&1; ' +
+    'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; }',
+  'trap cleanup EXIT',
+  // Stop the runner's whole group and wait for the runner, so cleanup never
+  // races a dying test writing into the worktree. The runner and its tests
+  // install no TERM handler, so the wait ends with them.
+  'stop() {',
+  '  if [ -n "$pid" ]; then',
+  '    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null',
+  '    wait "$pid"',
+  '  fi',
+  `  exit ${PLACEMENT_EXIT.TERMINATED}`,
+  '}',
+  'trap stop HUP INT TERM',
+  // One run per machine and a stoppable runner group are what this relies
+  // on: a machine without flock or setsid runs nothing placed.
+  'if ! command -v flock >/dev/null 2>&1 || ! command -v setsid >/dev/null 2>&1; then',
+  '  echo "placement needs flock and setsid on this machine" >&2',
+  `  exit ${PLACEMENT_EXIT.SETUP}`,
+  'fi',
+  'NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+  '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 && ' +
+    '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
+  `common="$(git rev-parse --git-common-dir 2>/dev/null)" || exit ${PLACEMENT_EXIT.SETUP}`,
+  'case "$common" in /*) ;; *) common="$repo/$common";; esac',
+  'exec 9>"$common/lagrange-placement.lock"',
+  `flock -n 9 || exit ${PLACEMENT_EXIT.BUSY}`,
+  `mkdir -p "$parent" || exit ${PLACEMENT_EXIT.SETUP}`,
+  // Under the lock nothing else is placed here, so anything left by an
+  // earlier run - a connection lost after its upload, an interrupted one -
+  // is stale and goes (verifier round 1).
+  'for stale in "$parent"/* "$parent"/.[!.]*; do',
+  '  [ -e "$stale" ] || continue',
+  '  [ "$stale" = "$bundle" ] || rm -rf "$stale"',
+  'done',
+  'git worktree prune >/dev/null 2>&1',
+  'for stale in $(git for-each-ref --format="%(refname)" refs/lagrange-placement/); do',
+  '  [ "$stale" = "$ref" ] || git update-ref -d "$stale" >/dev/null 2>&1',
+  'done',
+  'if [ -n "$bundle" ]; then git fetch --quiet "$bundle" "HEAD:$ref" >/dev/null 2>&1 || ' +
+    `exit ${PLACEMENT_EXIT.SETUP}; fi`,
+  `git worktree add --detach --quiet "$wt" "$sha" >/dev/null 2>&1 || exit ${PLACEMENT_EXIT.SETUP}`,
+  `[ "$(git -C "$wt" rev-parse HEAD)" = "$sha" ] || exit ${PLACEMENT_EXIT.SETUP}`,
+  // What the worktree actually is, for the controller's log.
+  'echo "placement-head=$(git -C "$wt" rev-parse HEAD)"',
+  // The workspace links the publisher's gate checkout gets - but only for
+  // what this checkout ignores: an older checkout's copy of a tracked path
+  // the placed commit deleted must not reappear in it (verifier round 1).
+  'for dir in node_modules data; do',
+  '  [ -e "$repo/$dir" ] || continue',
+  '  if [ ! -e "$wt/$dir" ]; then',
+  '    git -C "$repo" check-ignore -q "$dir" && ln -s "$repo/$dir" "$wt/$dir" && ' +
+    'echo "placement-link=$dir"',
+  '    continue',
+  '  fi',
+  '  for entry in "$repo/$dir"/* "$repo/$dir"/.[!.]*; do',
+  '    [ -e "$entry" ] || continue',
+  '    name="$dir/${entry##*/}"',
+  '    [ -e "$wt/$name" ] && continue',
+  '    git -C "$repo" check-ignore -q "$name" || continue',
+  '    ln -s "$entry" "$wt/$name" && echo "placement-link=$name"',
+  '  done',
+  'done',
+  `cat > "$list" <<'${PLACEMENT_FILES_MARK}'`,
+];
+const PLACEMENT_SCRIPT_TAIL = [
+  PLACEMENT_FILES_MARK,
+  `cd "$wt" || exit ${PLACEMENT_EXIT.SETUP}`,
+  // Its own budgets scaled by its measured speed, the controller's retry and
+  // timeout policy, and never placed again.
+  `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL}`,
+  `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
+  `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
+  `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
+    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-}"`,
+  // The machine lock (fd 9) stays with this shell: a test process that
+  // outlived its run must not hold the machine busy after it.
+  'setsid node scripts/run-classified-test-files.js $keep --stdin < "$list" 9>&- &',
+  'pid=$!',
+  'echo "placement-pid=$pid"',
+  'wait "$pid"; status=$?',
+  'exit "$status"',
+];
+
+function placementScript(files) {
+  return [...PLACEMENT_SCRIPT_HEAD, ...files, ...PLACEMENT_SCRIPT_TAIL]
+    .join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE;
+}
+
+// The command that runs a POSIX script on a machine: over ssh for a lab
+// machine, here for none (the controller, and the witnesses).
+function remoteCommand(machine, script, args, {fromStdin = false} = {}) {
+  const quoted = args.map(shellQuote).join(' ');
+  if (!machine.sshTarget) {
+    return fromStdin ? [PLACEMENT_SHELL, [...PLACEMENT_SHELL_STDIN, ...args]] :
+      [PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, script, PLACEMENT_SHELL, ...args]];
+  }
+  if (String(machine.sshTarget).startsWith(SSH_OPTION_PREFIX)) {
+    throw new Error(`${ERROR_TEXT_CAPABILITY.BAD_TARGET}${machine.sshTarget}`);
+  }
+  const command = fromStdin ? `sh -s -- ${quoted}` :
+    `sh -c ${shellQuote(script)} sh ${quoted}`;
+  return [SSH, [SSH_OPTION, SSH_BATCH_MODE, ...SSH_RUN_OPTIONS, machine.sshTarget, command]];
+}
+
+// The same command as one line for a local shell.
+function commandLine([command, args]) {
+  return [command, ...args].map(shellQuote).join(PLACEMENT_WORD_SEPARATOR);
+}
+
+function exitOf(child) {
+  return new Promise((resolve) => {
+    child.on(PLACEMENT_CHILD_EVENT.ERROR, () => resolve(null));
+    child.on(PLACEMENT_CHILD_EVENT.EXIT, (code) => resolve(code));
+  });
+}
+
+// Git here addresses the checkout it is given, never a repository pointer
+// inherited from a hook (the push gate runs this inside pre-push).
+function gitAt(root, args) {
+  return spawnSync(PLACEMENT_GIT, args,
+    {cwd: root, env: gitProcessEnvironment(), encoding: TEXT_UTF8});
+}
+
+function gitSucceeds(root, args) {
+  return gitAt(root, args).status === 0;
+}
+
+function safeName(name) {
+  return String(name).replace(/[^\w.-]/gu, PLACEMENT_SAFE_CHARACTER);
+}
+
+// The bundle of what lies between the commit the machine's checkout is at and
+// the one being placed, or nothing when the machine already holds it. A `git
+// push` would run this repository's pre-push gate against the lab machine; a
+// bundle runs nothing.
+function bundleFor(machine, {root, sha, local}) {
+  if (!gitSucceeds(root, [...PLACEMENT_GIT_HAS_COMMIT, `${machine.repoHead}^{commit}`])) {
+    throw new Error(PLACEMENT_TEXT.NO_HISTORY);
+  }
+  if (gitSucceeds(root, [...PLACEMENT_GIT_IS_ANCESTOR, sha, machine.repoHead])) return null;
+  // A bundle names refs, not bare shas, so it carries HEAD - which must be
+  // the commit being placed.
+  if (gitAt(root, PLACEMENT_GIT_HEAD).stdout?.trim() !== sha) {
+    throw new Error(`HEAD is not ${sha}`);
+  }
+  const bundleFile = `${local}.bundle`;
+  const made = gitAt(root, ['bundle', 'create', bundleFile, 'HEAD', '--not', machine.repoHead]);
+  if (made.status !== 0) throw new Error(`git bundle create exited ${made.status}`);
+  return bundleFile;
+}
+
+// The local half of one shard, as one shell: upload the bundle (bounded, so a
+// machine that accepts the connection and then stalls cannot hold anything),
+// then run the lab-side script. Its own process group, its output in files:
+// nothing about it needs this process's event loop.
+function shardWrapper({upload, bundleFile, run, scriptFile}) {
+  const script = shellQuote(scriptFile);
+  const lines = [...PLACEMENT_WRAPPER_HEAD];
+  if (upload) {
+    const bundle = shellQuote(bundleFile);
+    lines.push(`$bound ${upload} < ${bundle} || status=${PLACEMENT_EXIT.SETUP}`,
+      `rm -f ${bundle}`,
+      `if [ "$status" != 0 ]; then ${PLACEMENT_WRAPPER_UPLOAD_FAILED} rm -f ${script}; ` +
+        `${PLACEMENT_WRAPPER_EXIT} fi`);
+  }
+  lines.push(`${run} < ${script} || status=$?`, `rm -f ${script}`, PLACEMENT_WRAPPER_EXIT);
+  return lines.join(PLACEMENT_NEWLINE);
+}
+
+// Stop a started shard: signal its shell on the machine, whose trap stops
+// the runner's process group and whose exit removes the worktree, ref and
+// bundle; cut the local side only if it has not ended by the grace.
+function signalLabShell(machine, logFile) {
+  const shell = PLACEMENT_SHELL_LINE.exec(fs.readFileSync(logFile, TEXT_UTF8))?.[1];
+  if (shell) {
+    const [command, args] = remoteCommand(machine, PLACEMENT_KILL_SCRIPT, [shell]);
+    spawnSync(command, args, {stdio: PLACEMENT_STDIO_IGNORE, timeout: PLACEMENT_STOP_GRACE_MS});
+  }
+  return shell;
+}
+
+function stopShard(machine, child, logFile) {
+  const shell = signalLabShell(machine, logFile);
+  const cut = setTimeout(() => killGroup(child), shell ? PLACEMENT_STOP_GRACE_MS : 0);
+  child.once(PLACEMENT_CHILD_EVENT.EXIT, () => clearTimeout(cut));
+}
+
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+/**
+ * Start one shard on its machine. Returns at once: the upload and the run
+ * go on in a process group of their own, reading from and writing to files,
+ * so the controller's own blocking lanes cannot stall them. `done` settles
+ * with the exit status, the stdout log (the runner's verdict lines) and the
+ * stderr log, or a reason when the shard never ran or its deadline stopped
+ * it; `stop` stops it now.
+ * @param {{machine: Object, files: string[]}} shard
+ * @param {{sha: string, deadlineMs: number, root: string, keepGoing?: boolean,
+ *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string}}} options
+ * @return {{done: Promise<Object>, stop: Function}}
+ */
+export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true,
+  env = gitProcessEnvironment(), forward = {},
+  runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
+    `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
+  const {machine} = shard;
+  const logDir = path.join(root, PLACEMENT_LOG_PARENT);
+  fs.mkdirSync(logDir, {recursive: true});
+  const local = path.join(logDir, `${runId}-${safeName(machine.name)}`);
+  const logFile = `${local}.log`;
+  const errorFile = `${local}.err`;
+  const scriptFile = `${local}.sh`;
+  let bundleFile;
+  try {
+    bundleFile = bundleFor(machine, {root, sha, local});
+  } catch (error) {
+    return {done: Promise.resolve({status: PLACEMENT_EXIT.SETUP, log: EMPTY,
+      reason: error.message}), stop: () => {}, abort: () => {}};
+  }
+  const remoteBundle = bundleFile ?
+    `${machine.repoPath}/${PLACEMENT_PARENT}/${runId}.bundle` : EMPTY;
+  fs.writeFileSync(scriptFile, placementScript(shard.files));
+  const wrapper = shardWrapper({
+    upload: bundleFile ?
+      commandLine(remoteCommand(machine, PLACEMENT_UPLOAD_SCRIPT, [remoteBundle])) : null,
+    bundleFile,
+    run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
+      machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
+      keepGoing ? PLACEMENT_KEEP_GOING : EMPTY, forward.retry || EMPTY,
+      forward.tapTimeout || EMPTY], {fromStdin: true})),
+    scriptFile,
+  });
+  const output = fs.openSync(logFile, 'w');
+  const errors = fs.openSync(errorFile, 'w');
+  const child = spawn(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, wrapper],
+    {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
+  fs.closeSync(output);
+  fs.closeSync(errors);
+  let stopped = null;
+  const stop = (reason) => {
+    if (stopped || hasExited(child)) return;
+    stopped = reason;
+    stopShard(machine, child, logFile);
+  };
+  // A deadline that expired while this process was blocked is looked at
+  // again after its pending events: a shard that finished meanwhile is not
+  // stopped, and its gone shell's pid is never signalled (verifier round 1).
+  const deadline = setTimeout(() => setImmediate(() => stop(PLACEMENT_TEXT.DEADLINE)),
+    deadlineMs);
+  const done = exitOf(child).then((status) => {
+    clearTimeout(deadline);
+    // A wrapper stopped mid-upload never reached its own removals.
+    fs.rmSync(scriptFile, {force: true});
+    if (bundleFile) fs.rmSync(bundleFile, {force: true});
+    const outcome = {
+      status: stopped ? null : status,
+      log: fs.readFileSync(logFile, TEXT_UTF8),
+      errors: fs.readFileSync(errorFile, TEXT_UTF8),
+    };
+    return stopped ? {...outcome, reason: stopped} : outcome;
+  });
+  // Interrupted: stop the lab shell, and cut the local side now rather than
+  // after a grace this process will not live to see.
+  const abort = () => {
+    if (hasExited(child)) return;
+    stopped = PLACEMENT_TEXT.INTERRUPTED;
+    signalLabShell(machine, logFile);
+    killGroup(child);
+  };
+  return {done, stop: () => stop(PLACEMENT_TEXT.INTERRUPTED), abort};
+}
+
+/**
+ * The requirement a machine must meet to run a checkout's corpus: its
+ * lockfile digest and its engines floor.
+ * @param {string} root
+ * @return {{lockSha256: string, nodeMinimum: string}}
+ */
+export function fleetRequirement(root) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, REQUIREMENT_FILE.PACKAGE),
+    TEXT_UTF8));
+  return {
+    lockSha256: createHash(REQUIREMENT_DIGEST.ALGORITHM)
+      .update(fs.readFileSync(path.join(root, REQUIREMENT_FILE.LOCK)))
+      .digest(REQUIREMENT_DIGEST.ENCODING),
+    nodeMinimum: String(manifest.engines?.node || EMPTY).replace(/^>=\s*/u, EMPTY),
+  };
+}
+
+// The sha the tree at root exactly is - nothing modified, nothing untracked -
+// or null: a working tree is never sent anywhere.
+function commitAt(root) {
+  const status = gitAt(root, ['status', '--porcelain']);
+  if (status.status !== 0 || status.stdout.trim().length > 0) return null;
+  const head = gitAt(root, PLACEMENT_GIT_HEAD);
+  return head.status === 0 ? head.stdout.trim() : null;
+}
+
+async function discoverPlacement(root, env) {
+  const state = await loadState();
+  const fleet = await discoverFleet({
+    nodes: Object.values(state.nodes || {}),
+    controllerRepoPath: root,
+    ...fleetRequirement(root),
+  });
+  await saveState(recordFleet(state, fleet));
+  const controllerFactor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
+  return {
+    machines: placementMachines(fleet, state, {
+      controllerFactor: controllerFactor >= 1 ? controllerFactor : 1,
+    }),
+    record: async (name, gapsKey, files) => {
+      await saveState(recordPlacementMisses(await loadState(), name, gapsKey, files));
+    },
+  };
+}
+
+// The controller's own files while lab shards run: the classified runner's
+// entry point as a child in a group of its own, told never to place again.
+// `abort` ends the whole group.
+function runClassifiedChild(root, files, env) {
+  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
+    PLACEMENT_RUNNER_STDIN], {
+    cwd: root,
+    env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
+    stdio: [PLACEMENT_STDIO_PIPE, PLACEMENT_STDIO_INHERIT, PLACEMENT_STDIO_INHERIT],
+    detached: true,
+  });
+  child.stdin.end(files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+  return {
+    done: exitOf(child).then((status) => status ?? 1),
+    abort: () => {
+      if (!hasExited(child)) killGroup(child);
+    },
+    // Its process group, for a caller that must know exactly what it started.
+    group: child.pid,
+  };
+}
+
+/**
+ * The real collaborators of runPlacedTestFiles, given the classified runner's
+ * own planning and execution.
+ * @param {{root: string, keepGoing?: boolean, env?: Object, planCosts: Function,
+ *   runLocal: Function, lastGreen: Function}} input
+ * @return {Object}
+ */
+export function placementDeps({root, keepGoing = false, env = process.env,
+  planCosts, runLocal, lastGreen}) {
+  return {
+    keepGoing, env, planCosts, runLocal, lastGreen,
+    runLocalChild: (files) => runClassifiedChild(root, files, env),
+    commitAt: () => commitAt(root),
+    discover: () => discoverPlacement(root, env),
+    runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
+  };
+}
+
+export {PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};

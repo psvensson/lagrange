@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "test-placement",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The owner's direction (2026-09-18): the hosted canary is for releases, an ordinary push proves itself locally and in parallel across the lab machines, and no host belongs in any setup - discover what exists, then choose where to run what at test time. fleet-capability-discovery records what each machine can do; nothing yet used it, so a whole-corpus proof still ran ~36 minutes on the controller alone while two ready lab machines sat idle. Placement now runs one classified plan across the machines discovery finds ready on this run. Each machine receives a file set, longest first to whichever would finish it soonest by its measured speed, and runs its own serial lanes, so lanes never overlap on one host. The exact commit travels as a git bundle and is proved in a throwaway worktree on the lab machine, which is always removed. A lab machine can only make a green faster: a file red there is decided again on the controller, and one that then passes is recorded against that machine and routed elsewhere next time. A file that would take a lab machine more than half the per-file timeout stays on the controller. Measured 2026-09-18 on a clean commit of this change, the whole corpus (2121 files) on the controller plus two lab machines discovered ready: first run 1426 s, all green, of which 600 s was one simulation file timing out on the slower machine (hence the fit rule) and four setup misses (psql and the MovieLens dataset) decided green on the controller; second run 900 s, all green, three new misses learned - against about 36 minutes (2148 s) for the same corpus on the controller alone. Nothing was left on either lab machine: no worktree, ref, bundle or file list.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/test-placement/evidence/receipt.json",
+      "requiredReceipts": [
+        "spread-by-measured-cost",
+        "only-ready-distinct-machines",
+        "local-when-placement-cannot-help",
+        "remote-red-decided-on-controller",
+        "unrunnable-shard-falls-back",
+        "exact-commit-nothing-left-behind",
+        "deadline-kills-process-group"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-host-in-setup",
+      "statement": "No machine name, address or path is written into the repository: machines come from the out-of-repo inventory and a fresh probe on every placed run."
+    },
+    {
+      "id": "lab-red-never-decides",
+      "statement": "A file red on a lab machine is decided on the controller; a lab machine can only make a green faster, and a routing miss is reported, never hidden."
+    },
+    {
+      "id": "exact-commit-only",
+      "statement": "Only a tree that is exactly a commit is placed, and the lab machine verifies it runs that commit; a working tree is never sent anywhere."
+    },
+    {
+      "id": "one-run-per-machine",
+      "statement": "A lab machine runs one placed shard at a time; a busy or unreachable machine's shard runs on the controller."
+    },
+    {
+      "id": "nothing-left-behind",
+      "statement": "What a run places on a lab machine - worktree, ref, bundle, file list - is removed by that run on every exit its shell sees, and anything a lost connection or an interrupted upload leaves is swept by the next placed run there, under the machine lock, before it fetches; the controller removes its own local copies."
+    }
+  ],
+  "sealedAt": "7e4f223ff8d6dca0f459db2a42e180d906040a61"
+}

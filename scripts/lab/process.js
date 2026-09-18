@@ -44,17 +44,22 @@ export function run(command, args, options = {}) {
 
 export function capture(command, args, options = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
+    const bounded = options.timeoutMs > 0;
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env || process.env,
       stdio: [...STDIO_CAPTURE],
       shell: false,
+      // Its own process group, so the deadline reaches everything it started.
+      detached: bounded,
     });
     let stdout = EMPTY;
     let stderr = EMPTY;
-    // An optional deadline: past it the child is killed and the capture fails.
-    const deadline = options.timeoutMs > 0 ? setTimeout(() => {
-      child.kill(KILL_SIGNAL);
+    // An optional deadline: past it the child's whole process group is killed
+    // - a shell's hung grandchild would otherwise outlive it and hold the
+    // pipes open (verifier round 3) - and the capture fails.
+    const deadline = bounded ? setTimeout(() => {
+      killGroup(child);
       rejectPromise(new Error(`${command} ${TIMED_OUT_TEXT} ${options.timeoutMs} ms`));
     }, options.timeoutMs) : null;
     child.stdout.on(CHILD_EVENT.DATA, (chunk) => {
@@ -72,6 +77,21 @@ export function capture(command, args, options = {}) {
     if (options.stdin !== undefined) child.stdin.end(options.stdin);
     else child.stdin.end();
   });
+}
+
+/**
+ * Kill a child started in its own process group, and everything in that
+ * group; the child alone when it has no group of its own.
+ * @param {import('node:child_process').ChildProcess} child
+ */
+export function killGroup(child) {
+  try {
+    process.kill(-child.pid, KILL_SIGNAL);
+  } catch {
+    child.kill(KILL_SIGNAL);
+  }
+  child.stdout?.destroy();
+  child.stderr?.destroy();
 }
 
 export async function commandExists(command) {

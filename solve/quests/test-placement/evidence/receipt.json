@@ -1,0 +1,61 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "test-placement",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/test-placement.test.js": "68ffc60c265a3678fafa35513b58f286643f0e0d4930ed614cf9b5744719ae5b",
+    "test/scripts/lab-fleet-discovery.test.js": "4d2aa03fdd070e2c616f34d40781eadd9281cdc63a07cd2b6f34afd963686c4a"
+  },
+  "generatedAt": "2026-09-18T14:40:26.170Z",
+  "receipts": [
+    {
+      "id": "spread-by-measured-cost",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^placement spreads files by measured duration and machine speed$\" test/scripts/test-placement.test.js",
+      "detail": "longest file first to the machine that finishes it soonest; a machine that would not repay its setup is left out",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "only-ready-distinct-machines",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^only a ready, distinct, reachable machine receives files$\" test/scripts/test-placement.test.js",
+      "detail": "not ready, unreachable, the controller reached twice and a machine without a checkout path or shared history receive nothing",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "local-when-placement-cannot-help",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a small plan, a tree that is not a commit or an empty fleet runs locally$\" test/scripts/test-placement.test.js",
+      "detail": "placement never probes for a plan cheaper than a setup and never sends a working tree",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "remote-red-decided-on-controller",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a file red on a lab machine is decided on the controller and routed away after$\" test/scripts/test-placement.test.js",
+      "detail": "a lab machine only makes greens faster; a miss is reported and remembered",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "unrunnable-shard-falls-back",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a shard its machine could not run is run on the controller$\" test/scripts/test-placement.test.js",
+      "detail": "setup failure, a busy machine, a lost connection and the deadline all fall back to the controller",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "exact-commit-nothing-left-behind",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind$\" test/scripts/test-placement.test.js",
+      "detail": "the bundle brings the commit, the worktree is verified at it, and the worktree, ref and bundle are gone afterwards",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "deadline-kills-process-group",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a capture deadline kills the whole process group$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "a hung grandchild does not outlive the deadline",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    }
+  ]
+}

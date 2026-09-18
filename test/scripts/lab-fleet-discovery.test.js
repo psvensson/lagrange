@@ -257,23 +257,6 @@ test('the controller is probed by the same script it sends to a lab node', async
   assert.ok(calls[0].args.includes('ConnectTimeout=5'),
     'an address that answers nothing cannot hold discovery');
   assert.ok(calls[0].timeoutMs > 0, 'nor can a machine that answers and then hangs');
-  const pidFile = path.join(os.tmpdir(), `fleet-deadline-${process.pid}`);
-  const started = Date.now();
-  await assert.rejects(capture('sh', ['-c', `echo $$ > '${pidFile}'; sleep 5`],
-    {timeoutMs: 200}), /timed out after 200 ms/u);
-  assert.ok(Date.now() - started < 2000, 'the deadline answers on time');
-  const hung = Number(fs.readFileSync(pidFile, 'utf8'));
-  fs.rmSync(pidFile, {force: true});
-  let alive = true;
-  for (let poll = 0; poll < 50 && alive; poll += 1) {
-    try {
-      process.kill(hung, 0);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    } catch {
-      alive = false;
-    }
-  }
-  assert.equal(alive, false, 'and the hung child is killed, not left running');
   assert.match(calls[0].stdin, /repo_present yes/u, 'the same script travels to the node');
   await assert.rejects(probeTestCapability({sshTarget: '-oProxyCommand=x', repoPath: '/r',
     captureCommand: async () => assert.fail('never run')}), /begins with "-"/u,
@@ -350,4 +333,27 @@ test('the probe observes a checkout and never acts on it', async (t) => {
   const evaluated = await probeWith(null, evalPath);
   assert.equal(evaluated.repo.present, true);
   assert.equal(fs.existsSync(`${nvmDir}-pwned`), false, 'the probe ran nothing it was handed');
+});
+
+test('a capture deadline kills the whole process group', async (t) => {
+  // A shell that backgrounds its real work: killing the shell alone leaves
+  // the grandchild running and holding the pipes (verifier round 3).
+  const pidFile = path.join(os.tmpdir(), `fleet-deadline-${process.pid}`);
+  t.after(() => fs.rmSync(pidFile, {force: true}));
+  const started = Date.now();
+  await assert.rejects(capture('sh', ['-c', `sleep 5 & echo $! > '${pidFile}'; wait`],
+    {timeoutMs: 300}), /timed out after 300 ms/u);
+  assert.ok(Date.now() - started < 2000, 'the deadline answers on time');
+  const grandchild = Number(fs.readFileSync(pidFile, 'utf8'));
+  assert.ok(grandchild > 0);
+  let alive = true;
+  for (let poll = 0; poll < 50 && alive; poll += 1) {
+    try {
+      process.kill(grandchild, 0);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } catch {
+      alive = false;
+    }
+  }
+  assert.equal(alive, false, 'the hung grandchild is killed, not left running');
 });

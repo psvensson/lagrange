@@ -230,6 +230,9 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|plan-test-lane|select-change-tests|check-subsystem)\.js$/u},
   {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
   {id: 'classification-generator', pattern: /^scripts\/generate-test-(?:primary|resource|subsystem)-classes\.js$/u},
+  // Placement hands the runner's files to lab machines, so the modules that
+  // choose, send and run them execute the proof (test-placement).
+  {id: 'test-placement', pattern: /^scripts\/lab\/(probe|process|state)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
   {id: 'push-gate', pattern: /^\.githooks\//u},
