@@ -28,7 +28,7 @@
   "censusSize": 2125,
   "digest": "fnv1a32-f64b874c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-10874680",
+  "observationDigest": "fnv1a32-882cc9da",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8953,8 +8953,8 @@
         "package.json",
         "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
-        "test/scripts/check-operation-dispatch-completion-owner.test.js",
-        "test/scripts/closed-quest-shape.test.js"
+        "test/query/distributed-merge-engine.test.js",
+        "test/scripts/check-operation-dispatch-completion-owner.test.js"
       ],
       "directories": [
         "data/storage-load"

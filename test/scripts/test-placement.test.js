@@ -20,7 +20,10 @@ import {
 
 const MINUTE = 60000;
 const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1});
-const FAST_TEST = 'test/scripts/closed-quest-shape.test.js';
+// A pure unit file of about 50 ms: the witnesses below wait on events, not on
+// wall-clock budgets, because the hosted runner is several times slower
+// (2026-09-18: a repository-scanning file took over a minute there).
+const FAST_TEST = 'test/query/distributed-merge-engine.test.js';
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
 
 function lab(name, speed, extra = {}) {
@@ -404,7 +407,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   child.stdout.on('data', (chunk) => {
     out += chunk;
   });
-  for (let poll = 0; poll < 100 && !out.includes('local-started'); poll += 1) {
+  for (let poll = 0; poll < 600 && !out.includes('local-started'); poll += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -417,7 +420,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   child.kill('SIGTERM');
   const code = await new Promise((resolve) => child.once('exit', resolve));
   assert.equal(code, 130, out);
-  assert.ok(Date.now() - signalledAt < 3000, 'at once, not after the controller\'s files');
+  assert.ok(Date.now() - signalledAt < 5000, 'at once, not after the controller\'s files');
   const lab = Number(/^group=(\d+)$/mu.exec(out)[1]);
   assert.throws(() => process.kill(-lab, 0), 'the lab shard is stopped');
   // Exactly the group this run started: the same file may be running in
@@ -464,11 +467,12 @@ function exitOf(child) {
 // the log: the machine lock must not be one of them.
 async function assertRunnerFreeOfLock(logFile) {
   let runnerPid = null;
-  for (let poll = 0; poll < 60 && !runnerPid; poll += 1) {
+  for (let poll = 0; poll < 1200 && !runnerPid; poll += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
     runnerPid = /^placement-pid=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))?.[1];
   }
-  if (!runnerPid || !fs.existsSync(`/proc/${runnerPid}/fd`)) return;
+  assert.ok(runnerPid, 'the runner started');
+  if (!fs.existsSync(`/proc/${runnerPid}/fd`)) return;
   const held = fs.readdirSync(`/proc/${runnerPid}/fd`).map((fd) => {
     try {
       return fs.readlinkSync(`/proc/${runnerPid}/fd/${fd}`);
@@ -525,7 +529,7 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     const env = gitProcessEnvironment();
     delete env.NODE_TEST_CONTEXT;
     const start = (files, options = {}) => startRemoteShard({machine, files},
-      {sha, deadlineMs: MINUTE, root: controller, env, ...options});
+      {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
 
     const started = start([FAST_TEST], {forward: {retry: '1', tapTimeout: '900'}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
@@ -545,8 +549,13 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
 
     // A shard that finished while this process was blocked past its deadline
     // is green, not stopped (verifier round 1).
-    const blocked = start([FAST_TEST], {deadlineMs: 1000});
-    spawnSync('sleep', ['8']);
+    const blocked = start([FAST_TEST], {runId: 'blocked', deadlineMs: 1000});
+    // Block until the shard has finished - its file reported and its lab
+    // shell gone - however long that takes on this machine.
+    const blockedLog = path.join(controller, 'test-output', 'placement', 'blocked-lab.log');
+    spawnSync('sh', ['-c', `until grep -q '^placement-shell=' '${blockedLog}'; do sleep 0.1; done; ` +
+      `shell=$(sed -n 's/^placement-shell=//p' '${blockedLog}'); ` +
+      'while kill -0 "$shell" 2>/dev/null; do sleep 0.1; done; sleep 1'], {timeout: 10 * MINUTE});
     const finished = await blocked.done;
     assert.equal(finished.reason, undefined, finished.log);
     assert.equal(finished.status, 0);
@@ -574,15 +583,18 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
 
     // Stopped mid-run by the deadline: the runner's group dies and the shell
     // still cleans up.
-    const running = start([SLOW_TEST], {runId: 'deadline-run', deadlineMs: 4000});
+    // Stopped once its runner is running - the same stop a deadline makes,
+    // which the stalled upload above already exercised on its timer.
+    const running = start([SLOW_TEST], {runId: 'deadline-run'});
     // While it runs, the machine lock is held by the shell alone: the runner
     // and its tests do not carry it (Linux, where /proc shows descriptors).
     await assertRunnerFreeOfLock(
       path.join(controller, 'test-output', 'placement', 'deadline-run-lab.log'));
+    running.stop();
     const stopped = await running.done;
-    assert.equal(stopped.reason, 'deadline');
+    assert.equal(stopped.reason, 'interrupted');
     const runner = /^placement-pid=(\d+)$/mu.exec(stopped.log)?.[1];
-    assert.ok(runner, 'the deadline fell while the runner ran');
+    assert.ok(runner, 'the stop fell while the runner ran');
     assert.throws(() => process.kill(Number(runner), 0),
       'the shell waited for its runner before cleaning up');
     assert.doesNotMatch(stopped.log, new RegExp(`^ok ${SLOW_TEST} `, 'mu'),
@@ -614,8 +626,10 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
         }
       };
       t.after(release);
-      for (let poll = 0; poll < 50 && !fs.existsSync(lock); poll += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      // Held, not merely created: flock makes the file before it locks it.
+      for (let poll = 0; poll < 600 && spawnSync('flock', ['-n', lock, 'true']).status === 0;
+        poll += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
       const busy = await (await start([FAST_TEST])).done;
       assert.equal(busy.status, PLACEMENT_EXIT.BUSY);
