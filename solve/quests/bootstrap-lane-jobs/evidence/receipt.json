@@ -1,0 +1,25 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "bootstrap-lane-jobs",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/run-classified-test-files.test.js": "61dde6ae91d1b93e7decb797501a659e7c6e051c6ef801e5204e0495edaab5d5"
+  },
+  "generatedAt": "2026-09-18T09:33:15.993Z",
+  "receipts": [
+    {
+      "id": "bootstrap-owns-a-two-worker-lane",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the bootstrap class owns a two-worker lane, and the serial classes keep theirs$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "bootstrap leaves the exclusive lane and runs two-up, before it; integration and the convergence probes stay serial",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    },
+    {
+      "id": "bootstrap-keeps-the-cluster-floor",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the bootstrap lane advises the cluster timeout floor, as the serial lane does$\" test/scripts/run-classified-test-files.test.js",
+      "detail": "a bootstrap file keeps its wall-clock budget floor at two workers, and the ordinary lane is untouched",
+      "testFile": "test/scripts/run-classified-test-files.test.js"
+    }
+  ]
+}

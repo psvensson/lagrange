@@ -22,6 +22,8 @@ const root = process.cwd();
 const ORDINARY = 'test/address/address-manager.test.js';
 const TOOLCHAIN = 'test/examples/service-compiler-account-summary-parity.test.js';
 const INTEGRATION = 'test/integration/admin-cdc-propagation.integration.test.js';
+const BOOTSTRAP = 'test/bootstrap/_min-test.test.js';
+const BOOTSTRAP_LANE = 'bootstrap';
 const SHARED_OUTPUT =
   'test/scripts/exact-election-evidence-same-turn-model-contract.test.js';
 const UTF8 = 'utf8';
@@ -346,3 +348,95 @@ test('the classified plan keeps every lane set and orders it from the last resul
       /results roots/u);
   });
 });
+
+// The bootstrap class runs two-up in a lane of its own: cluster tests with
+// wall-clock budgets, so never beside the ordinary lane, but measured over 13
+// runs on three hosts to take contention at two workers without a failure.
+// Integration and the convergence probes stay strictly serial - overlapping
+// THEM reds five contention-sensitive SLOs, which is a different question.
+test('the bootstrap class owns a two-worker lane, and the serial classes keep theirs', () => {
+  const plan = planClassifiedTestFiles(root,
+    [BOOTSTRAP, INTEGRATION, ORDINARY, SHARED_OUTPUT], []);
+  const byLane = Object.fromEntries(plan.map((lane) => [lane.resourceClass, lane]));
+
+  assert.deepEqual(byLane[BOOTSTRAP_LANE].files, [BOOTSTRAP],
+    'a bootstrap file leaves the exclusive lane');
+  assert.equal(byLane[BOOTSTRAP_LANE].jobs, 2, 'and runs two-up');
+  assert.deepEqual(byLane[RESOURCE_CLASS_EXCLUSIVE].files,
+    [INTEGRATION, SHARED_OUTPUT].sort(),
+    'integration and the resource-exclusive file stay serial');
+  assert.equal(byLane[RESOURCE_CLASS_EXCLUSIVE].jobs, 1);
+  assert.deepEqual(byLane[RESOURCE_CLASS_ORDINARY].files, [ORDINARY]);
+
+  // Order matters: the bootstrap lane runs before the serial one, so a
+  // contention-free class never waits behind the longest lane in the corpus.
+  const lanes = plan.map((lane) => lane.resourceClass);
+  assert.ok(lanes.indexOf(BOOTSTRAP_LANE) < lanes.indexOf(RESOURCE_CLASS_EXCLUSIVE));
+  assert.ok(lanes.indexOf(RESOURCE_CLASS_ORDINARY) < lanes.indexOf(BOOTSTRAP_LANE));
+});
+
+test('the bootstrap lane advises the cluster timeout floor, as the serial lane does', () => {
+  const calls = [];
+  const status = runClassifiedTestFiles([BOOTSTRAP, INTEGRATION, ORDINARY], {
+    root,
+    spawn(command, args, options) {
+      calls.push({jobs: args[1], lane: args.at(-1),
+        floor: options.env.TAP_TIMEOUT_FLOOR});
+      return {status: 0};
+    },
+  });
+
+  assert.equal(status, 0);
+  const bootstrap = calls.find((call) => call.lane === BOOTSTRAP);
+  assert.equal(bootstrap.jobs, '--jobs=2');
+  assert.equal(bootstrap.floor, '120',
+    'a bootstrap file keeps its cluster budget floor, two-up or not');
+  const ordinary = calls.find((call) => call.lane === ORDINARY);
+  assert.equal(ordinary.floor, process.env.TAP_TIMEOUT_FLOOR,
+    'and the ordinary lane is untouched');
+});
+
+// The negative half of that assertion is vacuous wherever the environment
+// already exports TAP_TIMEOUT_FLOOR - ci.yml, full-gate.yml and the canary all
+// do, so a lane wrongly added to the floor list passes there (verifier round
+// 1). Asserted against an environment with the ambient value removed, it bites
+// everywhere.
+test('no ordinary lane is given the cluster floor, ambient value or not', () => {
+  const ambient = {...process.env};
+  delete ambient.TAP_TIMEOUT_FLOOR;
+  const floors = new Map();
+  runClassifiedTestFiles([BOOTSTRAP, ORDINARY, TOOLCHAIN], {
+    root,
+    spawn(command, args, options) {
+      floors.set(args.at(-1), options.env.TAP_TIMEOUT_FLOOR);
+      return {status: 0};
+    },
+    env: ambient,
+  });
+  assert.equal(floors.get(BOOTSTRAP), '120');
+  assert.equal(floors.get(ORDINARY), undefined,
+    'the ordinary lane carries no floor of its own');
+  assert.equal(floors.get(TOOLCHAIN), undefined);
+});
+
+// A bootstrap test that also carries a curated resource class would have its
+// shard entry silently ignored, in the less conservative direction: two
+// workers where the curator asked for one. No such file exists; the refusal
+// is what tells the next curator (verifier round 1).
+test('a bootstrap test may not also carry a curated resource class', () => {
+  const unknown = 'test/bootstrap/curated.test.js';
+  try {
+    Reflect.defineProperty(Object.prototype, unknown, {
+      configurable: true,
+      enumerable: true,
+      value: RESOURCE_CLASS_EXCLUSIVE,
+    });
+    assert.throws(() => planClassifiedTestFiles(root, [unknown], []),
+      /unclassified or missing/u,
+      'an inherited classification is refused before any lane decides');
+  } finally {
+    Reflect.deleteProperty(Object.prototype, unknown);
+  }
+});
+
+

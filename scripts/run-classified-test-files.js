@@ -99,6 +99,10 @@ const NO_FILES_PROBLEM =
   'run-classified-test-files: no test files provided';
 const INVALID_FILES_PROBLEM =
   'classified test plan requires an own-data string array';
+const BOOTSTRAP_RESOURCE_PROBLEM =
+  'a bootstrap test cannot also carry a curated resource class: ';
+const UNKNOWN_LANE_JOBS_PROBLEM =
+  'lane order names a lane with no worker count: ';
 const INVALID_OPTIONS_PROBLEM =
   'classified test runner requires an own-data options record';
 const INCOMPLETE_PLAN_PROBLEM =
@@ -113,21 +117,57 @@ const LANE_FILTER_FLAGS = Object.freeze([
   EXCLUDE_FLAG,
   EXCLUDE_PREFIX_FLAG,
 ]);
+// The bootstrap class owns a lane of its own, at two workers. It is not
+// ordinary - these are cluster tests with wall-clock budgets, so they never
+// share a machine with the ordinary lane - but it is not exclusive either:
+// measured 2026-09-17 over 13 runs on three hosts (20, 12 and 8 threads), two
+// workers halved the lane on the dev box and took a third off the lab nodes
+// with no contention failure. The one red in those runs was
+// fresh-join-via-non-seed-node, which this repository already records as
+// flaky at 1 in 6 on HEAD, and 8 standalone repeats of it passed. Integration
+// and the convergence probes stay serial: overlapping THEM is measured to red
+// five contention-sensitive SLOs, which is a different question from running
+// one bounded class two-up.
+const LANE_BOOTSTRAP = 'bootstrap';
+const BOOTSTRAP_LANE_JOBS = 2;
 const LANE_ORDER = Object.freeze([
   RESOURCE_CLASS_ORDINARY,
   RESOURCE_CLASS_CPU_HEAVY,
   RESOURCE_CLASS_EXTERNAL_TOOLCHAIN,
+  LANE_BOOTSTRAP,
   RESOURCE_CLASS_EXCLUSIVE,
 ]);
+// The classes that may never share a machine with anything else.
 const SERIAL_PRIMARY_CLASSES = Object.freeze([
-  PRIMARY_CLASS_BOOTSTRAP,
   PRIMARY_CLASS_CONVERGENCE_PROBE,
   PRIMARY_CLASS_INTEGRATION,
 ]);
+// Every lane a file can be assigned to, and the workers it runs with.
+const LANE_JOBS = Object.freeze({
+  ...RESOURCE_CLASS_JOBS,
+  [LANE_BOOTSTRAP]: BOOTSTRAP_LANE_JOBS,
+});
+// A lane whose files carry cluster wall-clock budgets advises the runner's
+// timeout floor, whatever its worker count.
+const TIMEOUT_FLOOR_LANES = Object.freeze([
+  LANE_BOOTSTRAP,
+  RESOURCE_CLASS_EXCLUSIVE,
+]);
 
-function effectiveResourceClass(primaryClass, resourceClass) {
-  return stringCollectionHas(SERIAL_PRIMARY_CLASSES, primaryClass) ?
-    RESOURCE_CLASS_EXCLUSIVE : resourceClass;
+function effectiveResourceClass(primaryClass, resourceClass, file) {
+  if (stringCollectionHas(SERIAL_PRIMARY_CLASSES, primaryClass)) {
+    return RESOURCE_CLASS_EXCLUSIVE;
+  }
+  if (primaryClass !== PRIMARY_CLASS_BOOTSTRAP) return resourceClass;
+  // The bootstrap lane answers before the resource class does, so a curated
+  // shard entry on a bootstrap test would be inert - and silently so, in the
+  // less conservative direction (two workers where the curator asked for
+  // one). Refuse instead: the next curator to declare a bootstrap test
+  // exclusive is told, rather than ignored (verifier round 1).
+  if (resourceClass !== RESOURCE_CLASS_ORDINARY) {
+    throw new Error(`${BOOTSTRAP_RESOURCE_PROBLEM}${file} is ${resourceClass}`);
+  }
+  return LANE_BOOTSTRAP;
 }
 
 function chunks(values, size) {
@@ -235,6 +275,7 @@ export function planClassifiedTestFiles(
   for (let index = 0; index < RESOURCE_CLASSES.length; index += 1) {
     orderedStringMapSet(lanes, RESOURCE_CLASSES[index], []);
   }
+  orderedStringMapSet(lanes, LANE_BOOTSTRAP, []);
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     if (!objectHasOwn(primary.classes, file) ||
@@ -248,7 +289,7 @@ export function planClassifiedTestFiles(
       throw new Error(`unclassified or missing test file: ${file}`);
     }
     appendArrayValue(orderedStringMapGet(lanes,
-      effectiveResourceClass(primaryClass, resourceClass)), file);
+      effectiveResourceClass(primaryClass, resourceClass, file)), file);
   }
   const plan = [];
   let plannedFiles = 0;
@@ -257,7 +298,10 @@ export function planClassifiedTestFiles(
     const laneFiles = orderedStringMapGet(lanes, resourceClass);
     if (laneFiles.length === 0) continue;
     plannedFiles += laneFiles.length;
-    const jobs = RESOURCE_CLASS_JOBS[resourceClass];
+    if (!objectHasOwn(LANE_JOBS, resourceClass)) {
+      throw new Error(`${UNKNOWN_LANE_JOBS_PROBLEM}${resourceClass}`);
+    }
+    const jobs = LANE_JOBS[resourceClass];
     appendArrayValue(plan, {
       files: orderLaneFiles(laneFiles, copiedResultsRoots, jobs),
       jobs,
@@ -273,9 +317,11 @@ export function planClassifiedTestFiles(
 export function runClassifiedTestFiles(inputFiles, options = {}) {
   const ownedOptions = copyOwnDataRecord(options);
   if (!ownedOptions) throw new Error(INVALID_OPTIONS_PROBLEM);
-  const {root = ROOT, spawn = spawnSync, keepGoing = false} = ownedOptions;
+  const {root = ROOT, spawn = spawnSync, keepGoing = false,
+    env = process.env} = ownedOptions;
   if (typeof root !== 'string' || root.length === 0 ||
-      typeof spawn !== 'function' || typeof keepGoing !== 'boolean') {
+      typeof spawn !== 'function' || typeof keepGoing !== 'boolean' ||
+      !env || typeof env !== 'object') {
     throw new Error(INVALID_OPTIONS_PROBLEM);
   }
   const plan = planClassifiedTestFiles(root, inputFiles);
@@ -294,15 +340,15 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
       // A floor, not a cap: the runner owns the final TAP_TIMEOUT and
       // lifts it to the file's declared budget when that is larger. An
       // explicit caller TAP_TIMEOUT flows through process.env and wins.
-      const env = lane.resourceClass === RESOURCE_CLASS_EXCLUSIVE ? {
-        ...process.env,
+      const laneEnv = stringCollectionHas(TIMEOUT_FLOOR_LANES, lane.resourceClass) ? {
+        ...env,
         TAP_TIMEOUT_FLOOR: EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS,
-      } : process.env;
+      } : env;
       const args = [RUNNER, `--jobs=${lane.jobs}`];
       appendArrayValues(args, batch);
       const result = spawn(process.execPath,
         args,
-        {cwd: root, env, stdio: 'inherit'});
+        {cwd: root, env: laneEnv, stdio: 'inherit'});
       if (result.status !== 0) {
         if (!keepGoing) return result.status ?? 1;
         if (firstFailure === 0) firstFailure = result.status ?? 1;

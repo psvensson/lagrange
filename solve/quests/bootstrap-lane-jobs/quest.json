@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "bootstrap-lane-jobs",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The bootstrap primary class was forced into the exclusive lane, so 181 cluster tests ran one at a time behind - and beside - the integration files, purely because both classes are 'not ordinary'. lane-parallelism-measurement measured the difference on 2026-09-17: 13 runs of the bootstrap class at two workers across three hosts (20, 12 and 8 threads) against 5 serial runs. Two workers halved the lane on the dev box (271 s to 139 s) and took a third off the lab nodes (294 s to 182 s, 8 threads 245 s), with no contention failure in any of them; the single red was fresh-join-via-non-seed-node, which this repository already records as pre-existing flaky at 1 in 6 on HEAD, and 8 standalone repeats of it passed. The class now owns a lane of its own at two workers, ordered after the ordinary lane and before the serial one, and keeps the cluster timeout floor it had as an exclusive file. Integration and the convergence probes stay strictly serial: overlapping THOSE with the ordinary lane was measured to red five contention-sensitive SLOs (membership-consistency 102.7 s against 61 s serial), which is a different question from running one bounded class two-up. Saving: 1.9-2.2 minutes per whole corpus (dev 271.5 s to 139 s counting green runs only, 1.9 min including the 194 s red one; tv-dator 294 s to 182 s). The class also moves from the serial lane's shortest-first dispatch to the parallel lane's longest-first packing, which is lane-dispatch-lpt-order's own policy for a jobs>1 lane: red and unknown files still rank first, but a persisting red can now be found later within the lane. Two refusals were added with the lane: a bootstrap test that also carries a curated resource class is refused rather than silently run two-up with its shard entry inert, and a lane named in the order with no worker count is refused when the plan is built rather than reaching the runner as --jobs=undefined.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/bootstrap-lane-jobs/evidence/receipt.json",
+      "requiredReceipts": [
+        "bootstrap-owns-a-two-worker-lane",
+        "bootstrap-keeps-the-cluster-floor"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "serial-classes-untouched",
+      "statement": "Integration and convergence-probe files still land in the exclusive lane at one worker; only the bootstrap class moves."
+    },
+    {
+      "id": "same-set-same-floor",
+      "statement": "Every file is still planned exactly once, and a bootstrap file keeps the cluster wall-clock timeout floor it had as an exclusive file."
+    },
+    {
+      "id": "lane-order-holds",
+      "statement": "Lanes stay serial with respect to each other: ordinary, then the bootstrap lane, then the exclusive one, so no two lanes share the machine."
+    }
+  ],
+  "sealedAt": "71424a5f4bd2718978c71173acb9bd45c59afc9f"
+}

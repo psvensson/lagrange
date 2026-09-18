@@ -28,7 +28,7 @@
   "censusSize": 2122,
   "digest": "fnv1a32-dee3a0b4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7b83cf74",
+  "observationDigest": "fnv1a32-458fa169",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8589,6 +8589,7 @@
       "files": [
         "scripts/run-test-files.js",
         "test/address/address-manager.test.js",
+        "test/bootstrap/_min-test.test.js",
         "test/examples/service-compiler-account-summary-parity.test.js",
         "test/integration/admin-cdc-propagation.integration.test.js",
         "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
