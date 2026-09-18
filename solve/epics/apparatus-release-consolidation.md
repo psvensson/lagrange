@@ -544,6 +544,69 @@ Out of this epic, recorded so it is not lost: the 196 s
 `test/simulation/formation-sim-charged-seed-host.test.js` (three charged
 simulator runs) belongs to `formation-seed-decoupling`.
 
+### Placement, the local corpus, and what was closed (2026-09-18)
+
+Owner direction, in order: the hosted canary is for releases and an ordinary
+push proves itself locally and in parallel, with no host written into any
+setup (morning); then the corpus is never run on a GitHub-hosted runner while
+a local alternative exists, releases included (evening). What landed:
+
+- **fleet-capability-discovery** - `lab fleet` probes every inventory machine
+  and the controller with one POSIX script and records facts (boot identity,
+  cores, node, checkout and lockfile, installed dependencies by content, the
+  canary's tools, the pinned dataset, a speed sample) in the out-of-repo
+  inventory.
+- **test-placement** - a run of at least five minutes from a clean commit is
+  split across the ready machines by measured duration and speed; a lab
+  machine only ever makes a green faster (a file counts there only by its own
+  `ok` line; red or unreported files run on the controller) and learns its
+  misses. Whole corpus 900-950 s against about 2148 s on the controller alone;
+  the gate for b9f156c80 ran its whole corpus this way.
+- **lab-worker-provisioning** - `lab provision [--output FILE | --copy NAME]`
+  writes the one setup script a new worker runs, built from the canary's own
+  install steps.
+- **local-corpus-canary** - after a cone publish the publisher proves the rest
+  of the corpus for the pushed commit locally, detached from the main checkout
+  after a thermal wait, and records the whole-corpus receipt only when green;
+  the next publish reports a red or lost one first, and only a newer head on
+  main supersedes a running one. The hosted canary is hand-dispatched only; a
+  release proves its exact commit locally (RELEASE.md step 4).
+- **placement-fixture-followups** - the test runner strips inherited git
+  repository pointers from every test process (the 2026-09-13 incident class,
+  twelve fixtures at once), and the gate's re-run hook no longer reads the
+  pusher's linked worktree; SIGHUP stops a placed run, and a second hang-up
+  or Ctrl-C cannot cut the abort short; the lab shells share one bounded
+  grace to clean up before they are cut.
+
+Known limits, left as they are:
+
+- The local corpus runs its wrapper scripts (thermal wait, exact-checkout
+  materializer, proof-authority) from the main checkout on disk, which can lag
+  origin/main; the tests themselves run from the pushed commit.
+- A pull request merged on GitHub bypasses the publisher and so gets no local
+  corpus; neither does a publish with `LAGRANGE_PUSH_SKIP_TESTS`. The hosted
+  canary can still be dispatched by hand for such a commit.
+- The convergence probes run after every local corpus, about three minutes,
+  observed only; their result lives in the run's log.
+
+Closed without a change, each with its reason:
+
+- *Proof scope written before the verdict* - harmless as wired: CI always
+  writes `fullCorpus:false`, a receipt is recorded only after a green gate,
+  and the publisher reads the scope only after the gate passed.
+- *The gate's deferral reads an unfetched origin/main* - affects only a manual
+  push; the publisher records the receipt after the push it verified.
+- *No pruning owner for `refs/lagrange-proofs`* - one ref per proved commit,
+  a few a day; revisit at thousands.
+- *`readLastResult` reads whole result files* - all of `.tap/test-results` is
+  about 100 MB and planning reads it in a fraction of a second.
+- *Stale children under the gate and publish worktree parents* - none exist;
+  both owners remove their worktree in `finally`, and retention reserves the
+  parents.
+- *The gate proves only the first pushed ref* - the publisher pushes exactly
+  one ref.
+- *wait-definite-negative* - deferred by the owner (red-path payoff only).
+
 ## Fixes, no quest
 
 - `CLAUDE.md` becomes one line: `See AGENTS.md.`
