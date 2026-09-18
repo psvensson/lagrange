@@ -1,0 +1,90 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "canary-proof-reuse",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/canary-corpus-needed.test.js": "0a49560d62bcceb6ce4a8e04e13034afaf9bbcf9df38a790772bd36a95bcaf25",
+    "test/scripts/push-gate-change-proof.test.js": "ced40a9b2a31d427954c4f6fa0a7bcc728c40ffe6c6f9d8493a29709042fcfaf",
+    "test/config/full-corpus-canary-workflow.test.js": "01552f9efc708030897cde4af1e48f22a07b1cfee8427e755e54ced3f19c787c"
+  },
+  "generatedAt": "2026-09-18T04:47:16.601Z",
+  "receipts": [
+    {
+      "id": "receipt-skips-the-corpus",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a durable receipt for this sha skips the corpus when no scope exists$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "a whole-corpus receipt for the sha answers the canary even with no gate scope artifact",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "recorded-receipt-reads-back",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a recorded whole-corpus receipt is what the canary reads back$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "a receipt the authority really recorded flips the decision, and only for its own commit",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "unproved-stays-owed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the corpus stays owed without a proof, and when the lookup cannot answer$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "no proof, a throwing lookup or a non-boolean answer leaves the corpus owed",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "gate-records-through-the-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a green whole-corpus run records a receipt through the authority CLI$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "the gate records the authority-owned contract for the proved sha",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "recording-is-best-effort",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^recording is best effort: the gate never fails on bookkeeping$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "a refused or impossible recording never changes the gate verdict",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "no-sibling-lends-a-corpus-receipt",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a whole-corpus receipt never answers for a sibling commit$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "a changelog-only commit does not inherit its parent receipt: the contract is exact-sha and publishes no identity ref",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "no-identity-rung-for-the-corpus",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the corpus lookup never probes release-content identity$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "the exactness is per contract: the corpus asks only its own ref, the release contract still reaches for identity",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "hand-dispatch-reproves",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a hand dispatch re-proves the corpus whatever the proofs say$\" test/scripts/canary-corpus-needed.test.js",
+      "detail": "an operator dispatching the canary is never answered with a receipt",
+      "testFile": "test/scripts/canary-corpus-needed.test.js"
+    },
+    {
+      "id": "only-a-green-corpus-records",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^only a green whole-corpus run records, never a cone and never a red run$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "the recording seam itself is witnessed: a cone proof and a red corpus record nothing",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "tree-must-be-the-commit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^only a tree that is the commit may mint its receipt$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "a modified tree, another checkout or an unavailable git records nothing",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "workflow-asks-the-owner",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the canary asks the decision owner and runs the corpus only when it is owed$\" test/config/full-corpus-canary-workflow.test.js",
+      "detail": "the workflow calls the witnessed owner and gates the corpus job on it",
+      "testFile": "test/config/full-corpus-canary-workflow.test.js"
+    }
+  ]
+}

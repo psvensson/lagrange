@@ -71,7 +71,28 @@ const FULL_CORPUS_SCRIPT = 'test:all';
 const WORKTREE_RANGE_LABEL = 'working tree';
 const PERCENT = 100;
 const EXIT_FAILURE = 1;
+const EXIT_SUCCESS = 0;
 const CANNOT_DIFF_PROBLEM = 'cannot diff the proof range';
+const LABEL_CORPUS_RECEIPT = 'whole-corpus receipt for';
+const LABEL_CORPUS_RECEIPT_SKIPPED = 'whole-corpus receipt not recorded:';
+// The proof authority owns this contract (scripts/proof-authority.js exports
+// it as CORPUS_FULL_PROOF); it is spawned rather than imported so the gate's
+// own import closure keeps proving itself - every module in it trips a
+// full-corpus trigger, and the authority is not selection machinery. A
+// witness pins this literal to the authority's exported id.
+const CORPUS_PROOF_ID = 'corpus-full-v1';
+const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
+const PROOF_RECORD_COMMAND = 'record';
+const EMPTY_REASON = 'the authority gave no reason';
+const RECORD_TIMEOUT_MS = 60000;
+const EMPTY_TEXT = '';
+const LABEL_CORPUS_RECEIPT_UNPROVED_TREE =
+  'whole-corpus receipt not recorded: this tree is not that commit';
+// Untracked files count: a committed test whose fixture exists only in the
+// tree passes locally while HEAD's own corpus would be red. Ignored build
+// artifacts are not listed by --porcelain, so the gate's own materialised
+// checkout stays clean (verifier round 2).
+const STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
 const LABEL_RANGE = 'proof range:';
 const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
@@ -173,17 +194,84 @@ function runFullCorpus() {
   return result.status ?? EXIT_FAILURE;
 }
 
-function runDecision(plan, decision) {
+// A green whole-corpus run is a fact about this commit, so it is recorded
+// where it happened: a receipt in the proof authority, which the post-push
+// canary consults instead of re-proving the same sha (74 min on 0f93df70c).
+// Best effort by design - the gate's verdict is the tests, never the
+// bookkeeping - and never reached by a cone proof, which proves no corpus.
+export function recordCorpusProof(sha, options = {}) {
+  const {spawn = spawnSync,
+    write = (value) => process.stdout.write(value)} = options;
+  if (typeof sha !== 'string' || sha.length === 0) return null;
+  // Only a tree that IS that commit may mint its receipt. The gate's own run
+  // is an immutable checkout of the pushed sha, but a manual invocation gates
+  // HEAD plus whatever is in the tree, and a receipt minted there would let a
+  // red commit's canary skip (verifier round 1, working-tree-not-proof).
+  if (!treeIsCommit(sha, options)) {
+    write(`${LOG_PREFIX} ${LABEL_CORPUS_RECEIPT_UNPROVED_TREE}${NEWLINE}`);
+    return null;
+  }
+  const result = spawn(process.execPath,
+    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, sha],
+    {cwd: root, encoding: TEXT_ENCODING, timeout: RECORD_TIMEOUT_MS});
+  const recorded = result?.status === EXIT_SUCCESS;
+  write(`${LOG_PREFIX} ${recorded ?
+    `${LABEL_CORPUS_RECEIPT} ${sha}` :
+    `${LABEL_CORPUS_RECEIPT_SKIPPED} ${stringTrim(
+      String(result?.stderr || result?.stdout || EMPTY_REASON))}`}${NEWLINE}`);
+  return recorded;
+}
+
+// HEAD is this sha and nothing is modified: the tree the corpus ran against
+// is the commit the receipt would speak for.
+function treeIsCommit(sha, options = {}) {
+  const {git = spawnSync} = options;
+  const head = git(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+    {cwd: root, encoding: TEXT_ENCODING});
+  if (head?.status !== EXIT_SUCCESS ||
+      stringTrim(String(head.stdout || EMPTY_TEXT)) !== sha) {
+    return false;
+  }
+  const status = git(GIT_BINARY, [...STATUS_ARGUMENTS],
+    {cwd: root, encoding: TEXT_ENCODING});
+  return status?.status === EXIT_SUCCESS &&
+    stringTrim(String(status.stdout || EMPTY_TEXT)) === EMPTY_TEXT;
+}
+
+/**
+ * Run what the decision chose, and record a whole-corpus receipt only when
+ * the whole corpus actually ran and passed. Every effect is injectable so the
+ * seam itself has a witness: a cone proof must never mint a corpus receipt.
+ * The scope WRITER is injectable too, and deliberately so - this file's own
+ * witness is in the safety spine, so a witness that called the real writer
+ * would stamp fullCorpus:true into the artifact ci uploads on every push, and
+ * the canary would then skip the corpus for ever (verifier round 2).
+ * @param {Object} plan
+ * @param {{mode: string}} decision
+ * @param {Object} [runners]
+ * @return {number} the exit status
+ */
+export function runDecision(plan, decision, runners = {}) {
+  const {
+    runFull = runFullCorpus,
+    runCone = (tests) => runClassifiedTestFiles(tests, {root}),
+    record = recordCorpusProof,
+    head = headRevision,
+    writeScope = writeProofScope,
+  } = runners;
   // The run that made the decision records what it proves, so a consumer
   // (the behavioural canary) never has to infer the scope from log text.
-  writeProofScope({
-    head: headRevision(),
+  writeScope({
+    head: head(),
     fullCorpus: decision.mode === PROOF_MODE.FULL_CORPUS,
     plan,
   });
-  return decision.mode === PROOF_MODE.FULL_CORPUS ?
-    runFullCorpus() :
-    runClassifiedTestFiles(planTestPaths(plan), {root});
+  if (decision.mode !== PROOF_MODE.FULL_CORPUS) {
+    return runCone(planTestPaths(plan));
+  }
+  const status = runFull();
+  if (status === EXIT_SUCCESS) record(head());
+  return status;
 }
 
 function headRevision() {

@@ -628,6 +628,12 @@ function main() {
  * Record what this run proves, for a consumer that must not re-prove it. The
  * run that made the decision writes it: a reader grepping another process's
  * log for a phrase is a sensor pointed at prose.
+ *
+ * ci uploads the file this writes as the `proof-scope` artifact, and the
+ * full-corpus canary skips the corpus when it names the pushed sha with
+ * fullCorpus true. So a TEST must never call this against the real root: one
+ * that did would turn the canary off for every push (verifier round 2 of
+ * canary-proof-reuse). Pass `scopeRoot`, or inject the writer.
  * @param {Object} options
  * @param {string} options.head the sha under proof
  * @param {boolean} options.fullCorpus whether the whole corpus ran

@@ -23,7 +23,10 @@ import {
 import {
   decidePushProof,
   fullCorpusTriggers,
+  recordCorpusProof,
+  runDecision,
 } from '../../scripts/checks/push-gate-change-proof.js';
+import {CORPUS_FULL_PROOF} from '../../scripts/proof-authority.js';
 
 const UTF8 = 'utf8';
 const CORPUS_SIZE = 2000;
@@ -237,4 +240,133 @@ test('every module in the gate\'s own import closure trips a full-corpus trigger
     fullCorpusTriggers([file]).length === 0);
   assert.deepEqual(untriggered, [],
     'a change here would select, schedule or execute its own proof');
+});
+
+// A green whole-corpus run is a durable fact about that commit: the gate
+// records it so the post-push canary can skip a corpus already proved for the
+// same sha (before this, a gate that refused early cost a 74-minute re-proof).
+// The authority is spawned, never imported, so the gate's import closure keeps
+// tripping its own triggers.
+const PROVED_SHA = 'c'.repeat(40);
+const STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
+// A tree that IS the commit: HEAD equals the sha, nothing modified. The spy
+// records what it was asked, because the question matters: dropping
+// --untracked-files=no is what makes a smuggled fixture block the receipt,
+// and an unpinned flag list could regress silently (verifier round 3).
+const provingTree = (sha, asked = []) => (command, args) => {
+  asked.push(args);
+  return args[0] === 'rev-parse' ? {status: 0, stdout: `${sha}\n`} :
+    {status: 0, stdout: ''};
+};
+
+test('a green whole-corpus run records a receipt through the authority CLI', () => {
+  const calls = [];
+  const lines = [];
+  const asked = [];
+  const recorded = recordCorpusProof(PROVED_SHA, {
+    git: provingTree(PROVED_SHA, asked),
+    spawn: (command, args, options) => {
+      calls.push({args, command, cwd: options.cwd});
+      return {status: 0};
+    },
+    write: (value) => lines.push(value),
+  });
+  assert.equal(recorded, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, process.execPath);
+  assert.deepEqual(calls[0].args, ['scripts/proof-authority.js', 'record',
+    CORPUS_FULL_PROOF, PROVED_SHA],
+  'the gate records the contract the authority owns, for this sha');
+  assert.match(lines.join(''), /whole-corpus receipt for c{40}/u);
+  // Untracked files are counted: a committed test whose fixture exists only in
+  // the tree must not be able to mint a receipt for HEAD.
+  assert.deepEqual(asked, [['rev-parse', 'HEAD'], [...STATUS_ARGUMENTS]],
+    'the tree is judged by HEAD and a porcelain status that counts untracked files');
+});
+
+// A manual invocation gates HEAD plus whatever is in the tree. A receipt
+// minted there would let the canary skip a corpus that never ran on that
+// commit, so the tree must BE the commit (verifier round 1).
+test('only a tree that is the commit may mint its receipt', () => {
+  for (const [label, git] of [
+    ['a modified tree', (command, args) => args[0] === 'rev-parse' ?
+      {status: 0, stdout: `${PROVED_SHA}\n`} :
+      {status: 0, stdout: ' M src/raft/log.js\n'}],
+    ['another commit checked out', () => ({status: 0, stdout: `${'e'.repeat(40)}\n`})],
+    ['git unavailable', () => ({status: 128, stdout: ''})],
+  ]) {
+    const lines = [];
+    assert.equal(recordCorpusProof(PROVED_SHA, {
+      git,
+      spawn: () => {
+        throw new Error(`${label}: the authority must not be called`);
+      },
+      write: (value) => lines.push(value),
+    }), null, label);
+    assert.match(lines.join(''), /this tree is not that commit/u, label);
+  }
+});
+
+// The seam the whole reuse rests on: a cone proof proves no corpus, so it must
+// never mint a corpus receipt, and neither may a red full-corpus run.
+test('only a green whole-corpus run records, never a cone and never a red run', () => {
+  const plan = {tests: [{path: 'test/a.test.js'}]};
+  const recordedFor = [];
+  const scopes = [];
+  // The scope writer is injected: this file is in the safety spine, so a
+  // witness that called the real writer would stamp fullCorpus:true into the
+  // artifact ci uploads on every push, and the canary would skip the corpus
+  // for ever (verifier round 2). The guard below proves it stays untouched.
+  const realScopeFile = path.join(process.cwd(), 'test-output/proof-scope.json');
+  const scopeBefore = fs.existsSync(realScopeFile) ?
+    fs.readFileSync(realScopeFile, UTF8) : null;
+  const runners = (mode, status) => ({
+    head: () => PROVED_SHA,
+    record: (sha) => recordedFor.push([mode, sha]),
+    runCone: () => status,
+    runFull: () => status,
+    writeScope: (scope) => scopes.push(scope),
+  });
+
+  assert.equal(runDecision(plan, {mode: PROOF_MODE.CHANGE_PROOF},
+    runners('cone', 0)), 0);
+  assert.deepEqual(recordedFor, [],
+    'a cone proof proves no corpus and records nothing');
+
+  assert.equal(runDecision(plan, {mode: PROOF_MODE.FULL_CORPUS},
+    runners('full-red', 3)), 3);
+  assert.deepEqual(recordedFor, [], 'a red corpus records nothing');
+
+  assert.equal(runDecision(plan, {mode: PROOF_MODE.FULL_CORPUS},
+    runners('full-green', 0)), 0);
+  assert.deepEqual(recordedFor, [['full-green', PROVED_SHA]],
+    'the green whole-corpus run records exactly one receipt, for its own head');
+
+  // Every run still reports its scope, and to the injected writer only.
+  assert.deepEqual(scopes.map((scope) => scope.fullCorpus),
+    [false, true, true]);
+  assert.deepEqual(scopes.map((scope) => scope.head),
+    [PROVED_SHA, PROVED_SHA, PROVED_SHA]);
+  const scopeAfter = fs.existsSync(realScopeFile) ?
+    fs.readFileSync(realScopeFile, UTF8) : null;
+  assert.equal(scopeAfter, scopeBefore,
+    'the witness must never write the proof scope ci uploads');
+});
+
+test('recording is best effort: the gate never fails on bookkeeping', () => {
+  const lines = [];
+  assert.equal(recordCorpusProof('d'.repeat(40), {
+    git: provingTree('d'.repeat(40)),
+    spawn: () => ({status: 1, stderr: 'proof store unavailable\n'}),
+    write: (value) => lines.push(value),
+  }), false);
+  assert.match(lines.join(''),
+    /whole-corpus receipt not recorded: proof store unavailable/u);
+
+  const unspawned = [];
+  assert.equal(recordCorpusProof(null,
+    {git: provingTree(PROVED_SHA), spawn: () => {
+      throw new Error('no sha means nothing to record');
+    }, write: (value) => unspawned.push(value)}), null);
+  assert.deepEqual(unspawned, [], 'no sha, no receipt, no noise');
 });

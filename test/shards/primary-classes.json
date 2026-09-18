@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1858,
+    "unit": 1859,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2121,
-  "digest": "fnv1a32-fb652c61",
+  "censusSize": 2122,
+  "digest": "fnv1a32-2077095b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1779,6 +1779,7 @@
     "test/scripts/analyze-soft-warning-strikes.test.js": "unit",
     "test/scripts/analyze-topology-convergence.test.js": "unit",
     "test/scripts/apparatus-release-consolidation-budget.test.js": "unit",
+    "test/scripts/canary-corpus-needed.test.js": "unit",
     "test/scripts/certification-verdict.test.js": "unit",
     "test/scripts/change-proof-boundary.test.js": "unit",
     "test/scripts/change-proof-collection-safety.test.js": "unit",

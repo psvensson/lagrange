@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 145,
     "storage-raft": 80,
-    "test-infrastructure": 128,
+    "test-infrastructure": 129,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2121,
-  "digest": "fnv1a32-8a4f201c",
+  "censusSize": 2122,
+  "digest": "fnv1a32-dee3a0b4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-908683df",
+  "observationDigest": "fnv1a32-e6071f48",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1798,6 +1798,7 @@
     "test/scripts/analyze-soft-warning-strikes.test.js": "test-infrastructure",
     "test/scripts/analyze-topology-convergence.test.js": "test-infrastructure",
     "test/scripts/apparatus-release-consolidation-budget.test.js": "test-infrastructure",
+    "test/scripts/canary-corpus-needed.test.js": "test-infrastructure",
     "test/scripts/certification-verdict.test.js": "test-infrastructure",
     "test/scripts/change-proof-boundary.test.js": "test-infrastructure",
     "test/scripts/change-proof-collection-safety.test.js": "test-infrastructure",
@@ -2934,7 +2935,8 @@
     },
     "test/config/full-corpus-canary-workflow.test.js": {
       "files": [
-        ".github/workflows/full-corpus-canary.yml"
+        ".github/workflows/full-corpus-canary.yml",
+        "scripts/checks/canary-corpus-needed.js"
       ]
     },
     "test/config/latency-topology-ownership-guardrails.test.js": {
@@ -7366,6 +7368,19 @@
         "test"
       ]
     },
+    "test/scripts/canary-corpus-needed.test.js": {
+      "files": [
+        "CHANGELOG.md",
+        "package-lock.json",
+        "package.json",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js"
+      ],
+      "directories": [
+        "data/releases",
+        "solve"
+      ]
+    },
     "test/scripts/certification-verdict.test.js": {
       "files": [
         "test/distributed/config/convergence-sealed-bars.json"
@@ -8409,6 +8424,7 @@
       "files": [
         ".githooks/pre-push",
         ".taprc",
+        "CHANGELOG.md",
         "docs/development/solver-runbook.md",
         "package-lock.json",
         "package.json",
@@ -8427,11 +8443,14 @@
         "scripts/generate-test-resource-classes.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/plan-test-lane.js",
+        "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-project-hardening-acceptance.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/manifests/project-hardening-proof-postpush-manifest.json",
         "test/shards/impact-contracts.json",
         "test/shards/impact-coverage.json",
@@ -8443,6 +8462,8 @@
       ],
       "directories": [
         "data",
+        "data/releases",
+        "solve",
         "solve/quests",
         "src/test-helpers",
         "test"

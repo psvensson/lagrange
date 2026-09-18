@@ -105,12 +105,32 @@ const IDENTITY_NEEDS_CHECKOUT =
 
 const PROOF = Object.freeze({
   RELEASE_FULL: 'release-full-v1',
+  CORPUS_FULL: 'corpus-full-v1',
 });
 
 const CONTRACTS = Object.freeze({
   [PROOF.RELEASE_FULL]: Object.freeze({
     reuse: REUSE.IMMUTABLE_SHA,
+    // The shipped logic is what a release proves, so a commit that differs
+    // only in the version authorities and the records the identity masks is
+    // proven by its sibling's receipt.
+    identityReuse: true,
     description: 'complete release proof for one immutable repository commit',
+  }),
+  // The whole behavioural corpus, green for one immutable commit. The local
+  // push gate records it when its own full-corpus run passes, so the post-push
+  // canary can tell a corpus already proved for this sha from one never run.
+  //
+  // No identity reuse: the corpus proves more than the shipped logic. Tests
+  // read the bytes the release identity excludes or masks - release-notes
+  // asserts a CHANGELOG section for package.json's version - and neither file
+  // is a full-corpus trigger, so a changelog-only or version-bump commit would
+  // otherwise inherit its parent's corpus receipt and skip a corpus that can
+  // be red (verifier round 1).
+  [PROOF.CORPUS_FULL]: Object.freeze({
+    reuse: REUSE.IMMUTABLE_SHA,
+    identityReuse: false,
+    description: 'whole behavioural corpus green for one immutable commit',
   }),
 });
 
@@ -314,6 +334,9 @@ function resolveProof({proofId, sha, remote = DEFAULT_REMOTE, cwd = process.cwd(
   }
   const exact = cataloguedProof({proofId, sha, remote, cwd, git});
   if (exact.outcome !== OUTCOME.UNPROVEN) return exact;
+  // A contract that is not identity-reusable is answered by its own commit's
+  // receipt alone: no sibling may lend it.
+  if (contractFor(proofId).identityReuse !== true) return exact;
   return identityCataloguedProof({proofId, sha, remote, cwd, git});
 }
 
@@ -537,7 +560,7 @@ function recordProof({
   if (recorded.outcome !== OUTCOME.PROVEN) {
     throw new Error(`persisted proof did not verify: ${recorded.because || recorded.outcome}`);
   }
-  if (identity) {
+  if (identity && contract.identityReuse === true) {
     publishIdentityRef({proofId, identity, objectSha, remote, cwd, git, now});
   }
   return {...recorded, reused: false};
@@ -644,8 +667,21 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   process.exitCode = runCli();
 }
 
+// The canary's question, narrowed to a boolean: does a whole-corpus receipt
+// exist for this exact commit? A lookup, never a recorder. The contract is not
+// identity-reusable, so this resolves through the remote's exact ref alone and
+// no sibling commit's receipt can answer for another.
+function resolveCorpusProof({sha, remote = DEFAULT_REMOTE, cwd = process.cwd(),
+  git = runGit}) {
+  return resolveProof({proofId: PROOF.CORPUS_FULL, sha, remote, cwd, git})
+    .outcome === OUTCOME.PROVEN;
+}
+
+const CORPUS_FULL_PROOF = PROOF.CORPUS_FULL;
+
 export {
   CONTRACTS,
+  CORPUS_FULL_PROOF,
   OUTCOME,
   PROOF,
   RECEIPT_REF_ROOT,
@@ -660,6 +696,7 @@ export {
   proofRef,
   recordProof,
   registeredProofs,
+  resolveCorpusProof,
   resolveProof,
   runCli,
 };

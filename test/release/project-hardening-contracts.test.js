@@ -191,8 +191,19 @@ describe('project hardening contracts', () => {
     assert.equal(canary.on.schedule, undefined,
       'an unchanged tree cannot grow new behavioural debt');
     assert.equal(canary.jobs.corpus.needs, 'decide');
-    assert.equal(canary.jobs.corpus.if, 'needs.decide.outputs.needed == \'true\'',
-      'the corpus runs only when the gate run left it something to prove');
+    // The corpus runs when the decision leaves it something to prove, and an
+    // ABSENT answer counts as owed: a decide job that fails or times out must
+    // not silently skip the corpus, while a cancelled run must not launch a
+    // 300-minute job on a superseded head (canary-proof-reuse, verifier
+    // rounds 1-2). The decision itself lives in
+    // scripts/checks/canary-corpus-needed.js.
+    const corpusCondition = String(canary.jobs.corpus.if);
+    assert.match(corpusCondition, /needs\.decide\.outputs\.needed != 'false'/u,
+      'only an explicit false leaves the corpus unproved-but-skipped');
+    assert.match(corpusCondition, /!cancelled\(\)/u,
+      'a failed decision still reaches the corpus; a cancelled one does not');
+    assert.match(corpusCondition, /needs\.decide\.result != 'skipped'/u,
+      'a skipped decision never starts the corpus');
     assert.ok(!JSON.stringify(canary.jobs.decide.if).includes('conclusion'),
       'a red gate can be an unrelated intermittent: the corpus still runs');
     const canaryCheckout = canary.jobs.corpus.steps.find(

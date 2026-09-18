@@ -41,6 +41,18 @@ jobs:
     outputs:
       needed: ${{ steps.decide.outputs.needed }}
     steps:
+      # The checkout comes FIRST: actions/checkout deletes the contents of a
+      # destination that is not already a git repository, so a scope artifact
+      # downloaded into the workspace before it would be wiped unread
+      # (verifier round 1). The artifact therefore lands under runner.temp,
+      # outside anything the checkout touches.
+      - name: Checkout the decision owner
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Read the gate run's proof scope
         id: scope
         if: github.event_name == 'workflow_run'
@@ -48,32 +60,44 @@ jobs:
         continue-on-error: true
         with:
           name: proof-scope
-          path: gate-proof-scope
+          path: ${{ runner.temp }}/gate-proof-scope
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Anything but a proven corpus for this sha - a missing artifact
-      # included - leaves the corpus worth running.
+      # The decision has one owner with a witness
+      # (scripts/checks/canary-corpus-needed.js): the gate run's scope OR a
+      # durable whole-corpus receipt for this sha. Anything unknown leaves the
+      # corpus owed. Only the script is needed here, so no dependencies are
+      # installed - it reads the scope file and the remote's proof refs. A hand
+      # dispatch always re-proves: --force, because the operator asking for a
+      # canary is asking for the corpus, receipt or not.
       - name: Decide whether the corpus is still unproved
         id: decide
         shell: bash
         run: |
           set -euo pipefail
-          scope=gate-proof-scope/proof-scope.json
-          head='${{ github.event.workflow_run.head_sha }}'
-          if [ -f "$scope" ] && grep -q '"fullCorpus":true' "$scope" \
-            && grep -q "\"sha\":\"${head}\"" "$scope"; then
-            echo "the gate run already proved the whole corpus for ${head}"
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "needed=true" >> "$GITHUB_OUTPUT"
-          fi
-
+          node scripts/checks/canary-corpus-needed.js \
+            --sha '${{ github.event.workflow_run.head_sha || github.sha }}' \
+            --scope '${{ runner.temp }}/gate-proof-scope/proof-scope.json' \
+            --remote '${{ github.server_url }}/${{ github.repository }}' \
+            ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }} \
+            >> "$GITHUB_OUTPUT"
 
   corpus:
     name: corpus
     needs: decide
-    if: needs.decide.outputs.needed == 'true'
+    # != 'false' and not == 'true': a decide job that fails or times out leaves
+    # the output empty, and an empty answer must leave the corpus owed exactly
+    # as the owner's own fail-open does (verifier round 1).
+    # !cancelled() and not always(): always() runs even on cancellation, so a
+    # superseded run would still launch the 300-minute corpus on an old sha
+    # against this workflow's own coalescing (verifier round 2). A failed or
+    # timed-out decide still reaches the corpus: an empty answer leaves it
+    # owed, exactly as the owner's fail-open does. A SKIPPED decide (not main,
+    # not a dispatch) never starts it.
+    if: >-
+      !cancelled() && needs.decide.result != 'skipped' &&
+      needs.decide.outputs.needed != 'false'
     runs-on: ubuntu-24.04
     # A hosted runner is roughly three times slower than the box where the
     # ordinary lane alone took 17 minutes, and the exclusive lane is serial:

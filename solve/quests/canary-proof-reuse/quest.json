@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canary-proof-reuse",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The whole corpus is a fact about an immutable commit, but the post-push canary could only learn it from one place: a proof-scope artifact uploaded by the ci gate run. On 0f93df70c the ci gate refused before writing one (RELEASE_PROOF_REQUIRED for a package-lock devDependency removal), so the canary re-proved all 2127 files - 74 minutes - for a corpus the local push gate had already proved green on that exact sha. The proof authority already keys durable receipts by commit (refs/lagrange-proofs/<contract>/<sha>) but held one contract, read only by the release path. This quest registers corpus-full-v1, has the push gate record it when its own whole-corpus run passes, and gives the canary's decision one witnessed owner (scripts/checks/canary-corpus-needed.js) that accepts either proof: the gate run's scope for this sha, or a durable receipt for this sha. Anything unknown, unreadable or non-boolean leaves the corpus owed, because a canary that runs needlessly costs time while one that skips wrongly costs the proof. The authority is spawned rather than imported so the gate's import closure keeps tripping its own full-corpus triggers.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canary-proof-reuse/evidence/receipt.json",
+      "requiredReceipts": [
+        "receipt-skips-the-corpus",
+        "recorded-receipt-reads-back",
+        "unproved-stays-owed",
+        "gate-records-through-the-authority",
+        "recording-is-best-effort",
+        "workflow-asks-the-owner"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "fail-open-to-owed",
+      "statement": "Every unknown leaves the corpus owed: no sha, no scope file, an unparsable scope, a throwing or non-boolean lookup. Skipping is only ever on a positive proof for this exact sha."
+    },
+    {
+      "id": "recording-never-gates",
+      "statement": "Recording a receipt is best effort and cannot change the gate's verdict; the tests decide, the bookkeeping does not."
+    },
+    {
+      "id": "gate-closure-intact",
+      "statement": "The gate's import closure still trips a full-corpus trigger for every module in it: the authority is spawned, not imported."
+    },
+    {
+      "id": "exact-sha-only",
+      "statement": "A whole-corpus receipt answers for its own commit alone: the contract is not identity-reusable, publishes no identity ref, and the lookup never takes the identity rung."
+    },
+    {
+      "id": "tree-is-the-commit",
+      "statement": "A receipt is minted only from a tree that IS the commit: HEAD equals the sha and nothing is modified, so a manual run over a dirty tree cannot mint one."
+    }
+  ],
+  "sealedAt": "07b0e2de5444eff0898ce05def31767ccea5c268"
+}
