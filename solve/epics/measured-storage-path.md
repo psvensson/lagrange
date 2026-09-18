@@ -117,6 +117,44 @@ the message-group in-memory Raft logs; its shape (entries, bytes, or time)
 follows from the soak's growth figure, so it is not sealed before the soak
 report exists.
 
+## The soak before the bound (2026-09-14 to 09-15)
+
+The 24-hour soak ran to completion (`endReason: completed`, 86,400 s) on
+head 86f84824b: string keys, 4 single-partition tables, 20 ops/s target
+(half reads), 5-minute snapshots. Its full report, all 288 snapshots, is
+committed as `data/storage-load/soak-baseline.json`. It is the "before"
+figure: `data/storage-load/soak.json`, which `doneWhen` requires to name the
+landed bound, must come from a new soak run with the bound in place and be
+compared against this baseline. Adding a `bound` field to the baseline would
+satisfy the check without proving anything. The run's log (11,386
+error-level lines, 162 KB gzipped) and a copy of the report are kept outside
+the repository, where test-output retention cannot reach them:
+`~/.local/share/lagrange/evidence/storage-load/soak-2026-09-14/` on the
+controller.
+
+What it measured (fitted over the day, then the end state):
+
+| figure | per hour | after 24 h |
+| --- | --- | --- |
+| message-group in-memory log | +18.6 k entries | 468 k entries, ~361 MB |
+| SQLite Raft log | +100 k entries, +89 MB command bytes | 2.41 M entries, 2.19 GB |
+| bytes on disk | +144 MB | 3.68 GB (seed 0.82, joiners 1.31 and 1.56) |
+| RSS | +1.3 MB | 2.34 GB (heap used 0.78 GB) |
+
+Writes ran at 9.2/s against a 10/s target: 792,870 of 794,160 succeeded,
+p50 11 ms, p99 855 ms, max 89 s, with 1,290 failures ("participant
+failures"). RSS is nearly flat once warm. The +687 MB/h read at the first
+hour was warm-up, not a leak. Two things grow without a bound: the
+message-group log, which sets the shape of `message-group-log-bound` (about
+19 k entries and 15 MB an hour at this rate), and the uncompacted per-entry
+Raft log, which is most of the disk.
+
+Found in the log, for an owner outside this epic: 10,678 "Refused raft log
+truncation into the committed prefix" (about 7 a minute, all day), 4 "Raft
+committed-prefix term divergence detected", and 401 failed parallel query
+executions. `raft-committed-prefix-conflict-livelock` was marked solved on
+2026-08-09, yet the refusal still recurs under steady load.
+
 ## Budget note (2026-09-14)
 
 With this epic open the open-epics budget (12) is exactly met: the next epic
