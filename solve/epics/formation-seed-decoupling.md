@@ -58,6 +58,105 @@ authorizes:
 
 # Formation without seed starvation
 
+## Amendment (2026-09-18): the causal hypothesis is falsified
+
+The goal and `doneWhen` stand unchanged: three consecutive cold five-node
+formations, certified live. What this amendment withdraws is the causal
+claim in the title and in the text below. That text stays as written, as the
+record of what the epic set out to prove.
+
+**Correction to the evidence.** Earlier summaries described the nightly seed
+figure as "seed busy time under the 10 % budget in 7 of 7 runs". That
+statement is wrong and is withdrawn:
+
+- **The nightly metric is unexplained event-loop blocking.** It counts
+  event-loop gap time not explained by tagged work. It is not total seed busy
+  time: the seed is busy for most of the window (90.0 % over the attribution
+  window of the 2026-09-17 calibration run).
+- **The implemented starvation criterion** (`formationVerdict`, `isSeedStarved`)
+  is unexplained blocking over 10 s x machine factor (30 s on the GCP runs) or
+  over 25 % of the observed window.
+- **The budget below is not enforced.** "Seed event-loop gap total < 10 % of
+  the formation window" is stated under Binding constraints, but it is not
+  implemented: `scripts/checks/formation-budget.js` does not exist.
+- **2026-09-13:** the calibration run on 8a6275a4d was classified starved
+  (63,127 ms unexplained, 18.5 %) and nevertheless PASSED.
+- **The failures happened without starvation.** Three of the six nightlies
+  from 2026-09-13 to 2026-09-18 FAILED with no starved seed (09-13, 09-16,
+  09-18). None of the six nightlies, and not the 2026-09-17 calibration run
+  either, was classified starved.
+
+The supported conclusion: **under the measured runs, seed starvation is
+neither necessary nor sufficient for the observed formation failure.**
+
+**What the investigation found instead**
+([causal-packet-2026-09-18.md](formation-seed-decoupling/causal-packet-2026-09-18.md)):
+a deterministic authority disagreement during a critical spread cure. The
+placement planner authorizes an ADD that requires temporary voter overflow.
+The receiving partition independently re-derives whether that overflow is
+admissible, and it may refuse the same transition. The operation can then
+end only by its 60 s voter-ready timeout and a re-plan. In the three failures
+that stall overlapped the schema-admission wait. The failure labels
+`node_ready_lease_incomplete` and `control_plane_pressure` are observers of
+it: they also appear in passing runs.
+
+**Ownership decision (owner, 2026-09-18).**
+
+- **Policy owner.** `src/rebalancer/replica-placement-cure-policy.js` is the
+  single authority for whether a spread cure may temporarily exceed the
+  replica target.
+- **It authorizes an exact transition, not a rule.** It authorizes one
+  specific membership transition from the membership it observed: here, 4
+  voters on 2 distinct nodes with RF 3, plus exactly one voter on the missing
+  node, for 5 temporarily. Cleanup then returns membership to RF 3 with the
+  required spread. It does not grant a blanket "target + 2" or "overflow while
+  spread is open".
+- **The decision travels with the operation.** The operation carries that
+  decision to the learner. The receiving partition consumes it instead of
+  re-deriving placement policy from its local state.
+- **What the partition keeps.** It stays authoritative for mechanical and
+  local safety: a malformed or unauthorized operation, a stale membership
+  generation, a destination or state that no longer matches, a conflicting
+  transition, a Raft safety invariant, and a resulting voter count above the
+  exact bound the operation authorized.
+- **Remove-before-add is not the primary fix.** It stays a falsifier and a
+  design alternative. Add-before-remove keeps redundancy while the missing
+  failure domain gains its voter; the defect is the second veto, not the
+  ordering.
+
+**The work, in order.** No behaviour changes before the first three items
+are done:
+
+1. **Verify what is already on main.** Independent verification of the
+   source changes that quests on this epic put on main without one:
+   `formation-sim-production-replica-composition` (E),
+   `formation-sim-live-correspondence` and
+   `formation-sim-production-time-authority-closure`. Each is judged against
+   its own claimed invariant at current main, and recorded GREEN or RED on its
+   own log.
+2. **Reproduce and trace.** Reproduce the 2026-09-16 disagreement locally,
+   with 2026-09-15 and 2026-09-17 as controls, and resolve the packet's first
+   gap. That means every input to the learner-side guard, each classified as
+   placement policy, local or Raft safety, observation or projection, or
+   obsolete duplicate authority.
+3. **Propose the smallest operation contract** that carries the planner's
+   decision across the boundary.
+4. **The behaviour-changing successor quest** (working name
+   `critical-spread-transition-authority`). Its proof chain:
+   - the failing scenario reproduced;
+   - one operation-specific placement decision flowing from planner to
+     receiver;
+   - local falsifiers: the 09-16 scenario fails before and converges after;
+     09-15 stays convergent; a stale authorization is rejected; a concurrent
+     membership change invalidates it or re-plans; an ordinary ADD cannot use
+     the overflow authority; desired RF stays 3; the surplus is cleaned up;
+     three distinct eligible holders result; no second placement-policy
+     authority remains on the path;
+   - only then live certification: three consecutive passes, with every
+     intermediate failure retained as evidence.
+5. **`seed-formation-decoupling`** (the planned starvation fix, never started)
+   is withdrawn. Its place in the chain is taken by the successor quest.
+
 Five-node cold formation completes without starving the seed, proven first in
 a deterministic in-process simulator and only then certified live. This is the
 altitude the 2026-09-05 finding asked for: every system-table replica lives on
