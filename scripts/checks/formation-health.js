@@ -366,6 +366,20 @@ function gitOutput(root, args, encoding = TEXT_ENCODING) {
     env: {...process.env, ...TREND_PUSH_GIT_ENV}, maxBuffer: TREND_PUSH_MAX_BLOB_BYTES});
 }
 
+// Canonical: exactly the bytes JSON.stringify writes for this object, so a
+// duplicate key, a padded verdict or stray whitespace is not a record.
+function isCanonicalRecord(record, line) {
+  return record !== null && typeof record === 'object' && !Array.isArray(record) &&
+    JSON.stringify(record) === line;
+}
+
+// Anchored: the writer's ISO time stamp and a named head.
+function isAnchoredRecord(record) {
+  return typeof record?.at === 'string' && TREND_PUSH_ISO_TIME.test(record.at) &&
+    Number.isFinite(Date.parse(record.at)) &&
+    typeof record?.head === 'string' && record.head.length > 0;
+}
+
 // The first problem one appended line has, or null for a whole measuring
 // record.
 function appendedRecordProblem(line) {
@@ -375,15 +389,10 @@ function appendedRecordProblem(line) {
   } catch (_error) {
     return TREND_PUSH_PROBLEM.UNREADABLE + line;
   }
-  // Canonical: exactly the bytes JSON.stringify writes for this object, so a
-  // duplicate key, a padded verdict or stray whitespace is not a record.
   const checks = [
-    [record !== null && typeof record === 'object' && !Array.isArray(record) &&
-      JSON.stringify(record) === line, TREND_PUSH_PROBLEM.UNREADABLE],
+    [isCanonicalRecord(record, line), TREND_PUSH_PROBLEM.UNREADABLE],
     [record?.schemaVersion === RECORD_SCHEMA_VERSION, TREND_PUSH_PROBLEM.SCHEMA],
-    [typeof record?.at === 'string' && TREND_PUSH_ISO_TIME.test(record.at) &&
-      Number.isFinite(Date.parse(record.at)) &&
-      typeof record?.head === 'string' && record.head.length > 0, TREND_PUSH_PROBLEM.UNANCHORED],
+    [isAnchoredRecord(record), TREND_PUSH_PROBLEM.UNANCHORED],
     [isMeasuringVerdict(record?.verdict), TREND_PUSH_PROBLEM.NON_VERDICT],
   ];
   const failed = arrayFilter(checks, ([holds]) => !holds)[0];
