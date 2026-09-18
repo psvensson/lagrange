@@ -1,0 +1,46 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "fleet-capability-discovery",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/lab-fleet-discovery.test.js": "a575db5fdd723dbe6d564070e50f1a9d0db43032a9f7e0869390425ddbacc7b9"
+  },
+  "generatedAt": "2026-09-18T11:19:21.735Z",
+  "receipts": [
+    {
+      "id": "transcript-to-capability",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a probe transcript becomes a capability record$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "one probe transcript per machine becomes a typed capability record",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "unknown-is-not-capable",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unreported fact is unknown, never a capability the machine was not shown to have$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "a missing fact reads as unknown, never as present or absent",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "readiness-names-every-reason",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^readiness names every reason a machine cannot run the corpus$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "node floor, repository, lockfile and dependencies disqualify; partial tools and the dataset are gaps for placement",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "one-machine-reached-twice",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^discovery probes every machine and recognises one reached twice$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "the controller listed in the inventory is one machine, and an unreachable one is reported, never assumed ready",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "controller-probed-like-a-node",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the controller is probed by the same script it sends to a lab node$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "one script for every machine, with the remote path quoted for the remote shell",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    }
+  ]
+}

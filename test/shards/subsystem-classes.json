@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 145,
     "storage-raft": 80,
-    "test-infrastructure": 129,
+    "test-infrastructure": 130,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2122,
-  "digest": "fnv1a32-dee3a0b4",
+  "censusSize": 2123,
+  "digest": "fnv1a32-8ae87e0c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-14e10e90",
+  "observationDigest": "fnv1a32-c4a69bf8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1858,6 +1858,7 @@
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
+    "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
     "test/scripts/list-commands.test.js": "test-infrastructure",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "test-infrastructure",
     "test/scripts/model-contract-tools.test.js": "test-infrastructure",
@@ -8201,6 +8202,16 @@
     "test/scripts/inventory-ordinal-segments.test.js": {
       "files": [
         "src/query/partition-resolver.js"
+      ]
+    },
+    "test/scripts/lab-fleet-discovery.test.js": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "package-lock.json"
+      ],
+      "env": [
+        "NVM_DIR",
+        "PATH"
       ]
     },
     "test/scripts/list-commands.test.js": {

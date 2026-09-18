@@ -19,6 +19,8 @@ const DOCKER_PING_POLL_MS = 150;
 const DOCKER_PING_OK = 'OK';
 const DOCKER_PING_TIMEOUT_TEXT = 'timeout';
 const EMPTY = '';
+const KILL_SIGNAL = 'SIGKILL';
+const TIMED_OUT_TEXT = 'timed out after';
 
 export function run(command, args, options = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -50,6 +52,11 @@ export function capture(command, args, options = {}) {
     });
     let stdout = EMPTY;
     let stderr = EMPTY;
+    // An optional deadline: past it the child is killed and the capture fails.
+    const deadline = options.timeoutMs > 0 ? setTimeout(() => {
+      child.kill(KILL_SIGNAL);
+      rejectPromise(new Error(`${command} ${TIMED_OUT_TEXT} ${options.timeoutMs} ms`));
+    }, options.timeoutMs) : null;
     child.stdout.on(CHILD_EVENT.DATA, (chunk) => {
       stdout += chunk;
     });
@@ -58,6 +65,7 @@ export function capture(command, args, options = {}) {
     });
     child.on(CHILD_EVENT.ERROR, rejectPromise);
     child.on(CHILD_EVENT.EXIT, (code) => {
+      if (deadline) clearTimeout(deadline);
       if (code === 0) return resolvePromise(stdout.trim());
       rejectPromise(new Error(`${command} failed (${code}): ${stderr.trim()}`));
     });

@@ -13,7 +13,13 @@ import {commandExists, run} from './process.js';
 import {doctorHarnessNodes, runHarness} from './harness.js';
 import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
-import {probeRemoteNode} from './probe.js';
+import {
+  discoverFleet, formatFleet, probeRemoteNode, recordFleet,
+} from './probe.js';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {dirname, join as joinPath} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const USAGE = [
   'Lagrange home lab\n\n',
@@ -37,6 +43,7 @@ const USAGE = [
   '  lab k3s cordon|uncordon NAME --server SERVER\n',
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
+  '  lab fleet [--json]\n',
 ].join('');
 const COMMAND = Object.freeze({
   HELP: 'help',
@@ -48,7 +55,18 @@ const COMMAND = Object.freeze({
   HARNESS: 'harness',
   K3S: 'k3s',
   TEST: 'test',
+  FLEET: 'fleet',
 });
+// The repository this command runs from: its lockfile and engines floor are
+// what a fleet machine must match to run this checkout's corpus.
+const FLEET_REPO_ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const FLEET_LOCKFILE = 'package-lock.json';
+const FLEET_PACKAGE = 'package.json';
+const FLEET_JSON_FLAG = 'json';
+const FLEET_LINE_BREAK = '\n';
+const FLEET_HASH = 'sha256';
+const FLEET_HEX = 'hex';
+const FLEET_TEXT = 'utf8';
 const ACTION = Object.freeze({
   ADD: 'add',
   PROBE: 'probe',
@@ -242,6 +260,27 @@ async function doctorProblems() {
   return problems;
 }
 
+// Discover and measure the fleet, record each machine's facts in the
+// out-of-repo inventory, and report what each can run for THIS checkout. No
+// host is named in code: the machines come from the inventory, and placement
+// decides from these records at run time.
+async function commandFleet(args) {
+  const state = await loadState();
+  const manifest = JSON.parse(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_PACKAGE), FLEET_TEXT));
+  const lockSha256 = createHash(FLEET_HASH)
+    .update(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_LOCKFILE))).digest(FLEET_HEX);
+  const fleet = await discoverFleet({
+    nodes: Object.values(state.nodes || {}),
+    controllerRepoPath: FLEET_REPO_ROOT,
+    lockSha256,
+    nodeMinimum: String(manifest.engines?.node || '').replace(/^>=\s*/u, ''),
+  });
+  await saveState(recordFleet(state, fleet));
+  const lines = args.flags[FLEET_JSON_FLAG] ?
+    [JSON.stringify(fleet, null, JSON_INDENT)] : formatFleet(fleet);
+  process.stdout.write(`${lines.join(FLEET_LINE_BREAK)}${FLEET_LINE_BREAK}`);
+}
+
 async function commandDoctor() {
   const problems = await doctorProblems();
   if (problems.length > 0) throw new Error(`Lab doctor found ${problems.length} problem(s)`);
@@ -323,6 +362,7 @@ const COMMAND_HANDLERS = Object.freeze({
   [COMMAND.HARNESS]: (action, args) => commandHarness(action, args),
   [COMMAND.K3S]: (action, args) => commandK3s(action, args),
   [COMMAND.TEST]: (action) => commandTest(action),
+  [COMMAND.FLEET]: (action, args) => commandFleet(args),
 });
 
 async function main() {

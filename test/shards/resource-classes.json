@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2105,
+    "ordinary": 2106,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2122,
-  "digest": "fnv1a32-3428fc3f",
+  "censusSize": 2123,
+  "digest": "fnv1a32-079c7c07",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1838,6 +1838,7 @@
     "test/scripts/impact-proof-cone.test.js": "ordinary",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "ordinary",
     "test/scripts/inventory-ordinal-segments.test.js": "ordinary",
+    "test/scripts/lab-fleet-discovery.test.js": "ordinary",
     "test/scripts/list-commands.test.js": "ordinary",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "exclusive",
     "test/scripts/model-contract-tools.test.js": "ordinary",

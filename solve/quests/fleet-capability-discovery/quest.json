@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "fleet-capability-discovery",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The owner's direction (2026-09-18) is that the hosted canary is for releases, an ordinary push should prove itself locally and in parallel across the lab machines, and no host belongs in any setup because the machines change: discover and measure what exists, then choose where to run what at test time. The lab tooling knew only each machine's OS and architecture. `lab fleet` now probes the controller and every inventory machine in parallel with ONE POSIX script - piped to sh locally, sent over ssh to a node, so the controller is never a special case - and records per machine: a boot identity, cores, memory, the absolute node a run must use and its version (activated through nvm at the engines-floor major), whether a checkout of this repository exists, whether its lockfile is the controller's and whether every package that lockfile requires is installed at the version it names (compared by content, not by timestamp), the digest-pinned MovieLens dataset the canary checks, docker, helm, wasm-tools, psql and a C++ compiler, and a fixed single-thread speed sample. Facts go into the out-of-repo inventory; readiness separates what disqualifies a machine from the corpus (node below the engines floor, no repository, a different lockfile, installed packages that differ from it, no lockfile to compare against) from gaps that placement can route around (tools and the dataset only some files need). Real run: controller 20 cores at speed x1.00 and ready; one lab node 12 cores x1.34 ready with gaps for the dataset, helm, wasm-tools and psql - exactly the five files that red there for setup reasons on 2026-09-17 - and another 8 cores x2.22 ready; the whole pass takes about a second. The probe only observes: it sources nvm with no arguments, bounds ssh and docker, refuses an ssh target ssh would read as an option, and a machine that does not answer keeps its last facts beside a recorded failure rather than having them read as current. Identity is the kernel's per-boot id, not /etc/machine-id: two machines in this lab share a machine-id because one was installed from the other's image, and the first version of this probe reported them as one machine. Nothing here decides placement; test-placement consumes these records.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/fleet-capability-discovery/evidence/receipt.json",
+      "requiredReceipts": [
+        "transcript-to-capability",
+        "unknown-is-not-capable",
+        "readiness-names-every-reason",
+        "one-machine-reached-twice",
+        "controller-probed-like-a-node"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-host-in-setup",
+      "statement": "No machine name, address or path is written into the repository: machines come from the out-of-repo inventory, and the only default is the conventional checkout path for a node that records none."
+    },
+    {
+      "id": "unknown-is-unknown",
+      "statement": "A fact a machine did not report is recorded as unknown, never as a capability, and an unreachable machine is reported rather than assumed ready."
+    },
+    {
+      "id": "one-script-every-machine",
+      "statement": "The controller is probed by the same script it sends to a lab node, so the two can never drift apart."
+    }
+  ],
+  "sealedAt": "1965782a750187ddf0aaf9db42386333fd75b408"
+}
