@@ -130,6 +130,30 @@ node scripts/lab.js doctor
 node scripts/lab.js harness doctor
 ```
 
+## Provision a test worker
+
+A worker that runs test files needs the toolchain the full-corpus canary
+installs (helm, wasm-tools, psql, java, ripgrep, jq), node at the engines floor,
+a checkout whose dependencies match its lockfile, and the pinned MovieLens
+dataset. One generated script installs all of it. It is generated from this
+checkout, so its toolchain is the canary workflow's own install step and cannot
+drift from CI. Copy it to a registered worker, then run it there yourself; it
+asks for sudo once:
+
+```bash
+node scripts/lab.js provision --copy small-linux
+ssh -t USER@HOST bash lagrange-lab-worker-setup.sh
+```
+
+Or write it to a file and copy it yourself:
+`node scripts/lab.js provision --output lagrange-lab-worker-setup.sh`. It is
+safe to run again: rerun it when `lab fleet` reports that a worker's lockfile or
+dependencies differ. Then check what every machine can run:
+
+```bash
+node scripts/lab.js fleet
+```
+
 ## Native GitHub runners
 
 Use native runners for portability and hardware-specific work. Labels are

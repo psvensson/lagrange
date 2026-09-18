@@ -28,7 +28,7 @@ const FULL = [
   'node_path=/opt/node/bin/node',
   'node_version=v22.22.3',
   'tool_git=yes', 'tool_docker=yes', 'tool_helm=no', 'tool_wasm-tools=no',
-  'tool_psql=no', 'tool_g++=yes',
+  'tool_psql=no', 'tool_g++=yes', 'tool_java=yes', 'tool_rg=no', 'tool_jq=yes',
   'docker_reachable=yes',
   'repo_present=yes',
   'repo_head=' + 'c'.repeat(40),
@@ -57,7 +57,7 @@ test('a probe transcript becomes a capability record', () => {
   assert.equal(capability.cores, 12);
   assert.equal(capability.nodeVersion, 'v22.22.3');
   assert.deepEqual(capability.tools, {'git': true, 'docker': true, 'helm': false,
-    'wasm-tools': false, 'psql': false, 'g++': true});
+    'wasm-tools': false, 'psql': false, 'g++': true, 'java': true, 'rg': false, 'jq': true});
   assert.equal(capability.repo.present, true);
   assert.equal(capability.repo.lockSha256, LOCK);
   assert.equal(capability.repo.dependenciesCurrent, true);
@@ -90,7 +90,7 @@ test('readiness names every reason a machine cannot run the corpus', () => {
   assert.deepEqual(readiness(FULL), {
     ready: true,
     missing: [],
-    gaps: ['no-helm', 'no-wasm-tools', 'no-psql'],
+    gaps: ['no-helm', 'no-wasm-tools', 'no-psql', 'no-rg'],
   }, 'tools only some files need are gaps, not disqualifications');
   assert.deepEqual(corpusReadiness(null, REQUIREMENT),
     {ready: false, missing: [READINESS.NOT_PROBED], gaps: []});

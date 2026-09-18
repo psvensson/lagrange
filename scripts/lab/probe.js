@@ -1,4 +1,4 @@
-import {capture} from './process.js';
+import {capture, run} from './process.js';
 
 const OS = Object.freeze({LINUX: 'linux', MACOS: 'macos', WINDOWS: 'windows', UNKNOWN: 'unknown'});
 const OS_REPORT = Object.freeze({LINUX: 'linux', DARWIN: 'darwin', WINDOWS: 'windows'});
@@ -115,14 +115,16 @@ const STRICT_VERSION = /^v?(\d+)\.(\d+)\.(\d+)$/u;
 const PROBE_DEADLINE_MS = 60000;
 const HEX_SHA256 = /^[0-9a-f]{64}$/u;
 
-const CAPABILITY_TOOLS = Object.freeze(['git', 'docker', 'helm', 'wasm-tools', 'psql', 'g++']);
+const CAPABILITY_TOOLS = Object.freeze([
+  'git', 'docker', 'helm', 'wasm-tools', 'psql', 'g++', 'java', 'rg', 'jq',
+]);
 const CAPABILITY_YES = 'yes';
 const CAPABILITY_NO = 'no';
 const CAPABILITY_SEPARATOR = '=';
 const CAPABILITY_TOOL_PREFIX = 'tool_';
 // Tools only some files need: their absence is a gap for placement to route
 // around, not a disqualification of the machine.
-const PARTIAL_TOOLS = Object.freeze(['helm', 'wasm-tools', 'psql']);
+const PARTIAL_TOOLS = Object.freeze(['helm', 'wasm-tools', 'psql', 'java', 'rg', 'jq']);
 const PARTIAL_TOOL_GAP_PREFIX = 'no-';
 const SHELL_SINGLE_QUOTE = '\'';
 const SHELL_ESCAPED_SINGLE_QUOTE = '\'\\\'\'';
@@ -337,7 +339,7 @@ function nodeAtLeast(version, minimum) {
 /**
  * Whether a probed machine can run the whole corpus for a given lockfile, and
  * if not, every reason. A tool that only some files need (helm, wasm-tools,
- * psql) is reported as a gap rather than a disqualification, because
+ * psql, java, rg, jq) is reported as a gap rather than a disqualification, because
  * placement may still give the machine the files that do not need it.
  * @param {Object|null} capability
  * @param {{lockSha256: string, nodeMinimum: string}} requirement
@@ -390,6 +392,295 @@ function repositoryProblems(repo, lockSha256) {
 }
 
 export {CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS};
+
+// ---------------------------------------------------------------------------
+// Worker provisioning: the one script a newly registered lab worker runs, by
+// hand and as the user the controller connects as, to install everything
+// discovery checks for (owner request, 2026-09-18). Its toolchain is not
+// written down here: the full-corpus canary's own install steps are read from
+// the workflow when the script is generated and embedded line for line, so a
+// worker and CI cannot drift apart. Around them is what a worker needs beyond
+// a hosted runner: the system packages such a runner already has, node through
+// nvm (as discovery activates it), the checkout and its dependencies, and the
+// controller's public key.
+
+const WORKER_CANARY_STEPS = Object.freeze({
+  TOOLCHAIN: 'Install gate CLI tools',
+  DATASET: 'Fetch MovieLens dataset (digest-pinned)',
+});
+// What a hosted runner has and a fresh worker may not: git, curl and
+// certificates, a C++ toolchain and python for native modules at npm ci, unzip.
+const WORKER_SYSTEM_PACKAGES = Object.freeze(
+  ['git', 'ca-certificates', 'curl', 'build-essential', 'python3', 'unzip']);
+// Only when docker is absent: a machine with Docker's own packages keeps them.
+const WORKER_DOCKER_PACKAGE = 'docker.io';
+const WORKER_SOURCE = Object.freeze({SYSTEM: 'system', CANARY: 'canary'});
+// Where each tool the fleet probe checks comes from on a worker, and the text
+// that installs it there.
+const WORKER_TOOL_SOURCES = Object.freeze({
+  'git': Object.freeze({from: WORKER_SOURCE.SYSTEM, token: 'git', version: 'git --version'}),
+  'docker': Object.freeze({from: WORKER_SOURCE.SYSTEM, token: WORKER_DOCKER_PACKAGE,
+    version: 'docker --version'}),
+  'g++': Object.freeze({from: WORKER_SOURCE.SYSTEM, token: 'build-essential',
+    version: 'g++ --version'}),
+  'helm': Object.freeze({from: WORKER_SOURCE.CANARY, token: '/usr/local/bin/helm',
+    version: 'helm version --short'}),
+  'wasm-tools': Object.freeze({from: WORKER_SOURCE.CANARY, token: '/usr/local/bin/wasm-tools',
+    version: 'wasm-tools --version'}),
+  'psql': Object.freeze({from: WORKER_SOURCE.CANARY, token: 'postgresql-client',
+    version: 'psql --version'}),
+  'java': Object.freeze({from: WORKER_SOURCE.CANARY, token: 'default-jre-headless',
+    version: 'java -version'}),
+  'rg': Object.freeze({from: WORKER_SOURCE.CANARY, token: 'ripgrep', version: 'rg --version'}),
+  'jq': Object.freeze({from: WORKER_SOURCE.CANARY, token: ' jq ', version: 'jq --version'}),
+});
+// What a canary step may not use, because a worker has no runner to provide
+// it: GitHub expressions and runner variables beyond the temporary directory
+// the setup defines, a step environment, another shell or working directory.
+// Generation refuses rather than writing a script that fails on the worker
+// after sudo (verifier round 1).
+const WORKER_UNREPRODUCIBLE_TEXT = /\$\{\{|\bGITHUB_[A-Z_]+|\bRUNNER_(?!TEMP\b)[A-Z_]+/u;
+const WORKER_UNREPRODUCIBLE_KEYS = Object.freeze(['env', 'shell', 'working-directory']);
+const WORKER_NVM_VERSION = 'v0.40.3';
+const WORKER_NVM_INSTALL_SHA256 =
+  '2d8359a64a3cb07c02389ad88ceecd43f2fa469c06104f92f98df5b6f315275f';
+const WORKER_SETUP_FILE = 'lagrange-lab-worker-setup.sh';
+const WORKER_GITHUB_SSH_ORIGIN = /^git@github\.com:(.+)$/u;
+const WORKER_PUBLIC_KEY = /^(?:ssh-|ecdsa-|sk-)\S+ [A-Za-z0-9+/=]+(?: [^\n]*)?$/u;
+const WORKER_TEXT = Object.freeze({
+  NO_STEP: 'the full-corpus canary has no step named ',
+  NO_FLOOR: 'worker setup needs a MAJOR.MINOR.PATCH engines floor, not ',
+  NO_REPO: 'worker setup needs a clone URL',
+  BAD_KEY: 'not an ssh public key: ',
+  UNREPRODUCIBLE: 'a worker cannot reproduce the canary step ',
+});
+
+const WORKER_NEWLINE = '\n';
+const WORKER_VERSION_SEPARATOR = '.';
+const WORKER_SUBSHELL = Object.freeze({OPEN: '(', CLOSE: ')'});
+const WORKER_SCRIPT_HEADER = Object.freeze([
+  '#!/usr/bin/env bash',
+  '# Lagrange lab worker setup, generated by `node scripts/lab.js provision`.',
+  '# Run it on the new worker as the user the controller connects as; it asks',
+  '# for sudo once, for system packages:',
+  `#     bash ${WORKER_SETUP_FILE}`,
+  '# Safe to run again: it installs what is missing, re-applies the canary\'s',
+  '# pinned toolchain, moves the checkout to main only when nothing is lost, and',
+  '# ends by printing what the worker has. Then, on the controller:',
+  '#     node scripts/lab.js fleet',
+  'set -euo pipefail',
+]);
+const WORKER_SCRIPT_GUARDS = Object.freeze([
+  'REPO_PATH="${LAGRANGE_REPO_PATH:-$HOME/projects/lagrange}"',
+  `NVM_VERSION=${shellQuote(WORKER_NVM_VERSION)}`,
+  `NVM_INSTALL_SHA256=${shellQuote(WORKER_NVM_INSTALL_SHA256)}`,
+  `MOVIELENS_FILE=${shellQuote(MOVIELENS_FILE)}`,
+  `MOVIELENS_SHA256=${shellQuote(MOVIELENS_SHA256)}`,
+  'relogin=""',
+  'USER="${USER:-$(id -un)}"',
+  'step() { printf \'\\n== %s\\n\' "$*"; }',
+  'fail() { printf \'lagrange lab worker setup: %s\\n\' "$*" >&2; exit 1; }',
+  // Everything it cannot provision is refused before anything is asked.
+  '[ "$(uname -s)" = Linux ] || fail "this setup is for Linux, not $(uname -s)"',
+  '[ "$(uname -m)" = x86_64 ] || fail "the canary pins x86_64 helm and wasm-tools ' +
+    'archives, not $(uname -m)"',
+  'command -v apt-get >/dev/null 2>&1 || fail "this setup needs apt-get ' +
+    '(Debian or Ubuntu family)"',
+  '[ "$(id -u)" != 0 ] || fail "run it as the lab user the controller connects as, ' +
+    'not as root"',
+  'step "sudo, asked once for system packages"',
+  'sudo -v',
+  'workdir="$(mktemp -d)"',
+  'trap \'rm -rf "$workdir"\' EXIT',
+  // The canary's step installs into the runner's temporary directory.
+  'RUNNER_TEMP="$workdir"',
+]);
+const WORKER_SCRIPT_SYSTEM = Object.freeze([
+  'step "System packages a hosted runner already has"',
+  'missing=""',
+  `for package in ${WORKER_SYSTEM_PACKAGES.join(' ')}; do`,
+  '  dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"',
+  'done',
+  `command -v docker >/dev/null 2>&1 || missing="$missing ${WORKER_DOCKER_PACKAGE}"`,
+  'if [ -n "$missing" ]; then',
+  '  sudo apt-get update',
+  '  # One word per package.',
+  '  sudo apt-get install -y --no-install-recommends $missing',
+  'fi',
+  'if ! id -nG | tr " " "\\n" | grep -qx docker; then',
+  '  sudo usermod -aG docker "$USER"',
+  '  relogin=yes',
+  'fi',
+  'step "The full-corpus canary\'s toolchain, as the canary installs it"',
+]);
+const WORKER_SCRIPT_NODE = Object.freeze([
+  'step "Node $NODE_MAJOR through nvm, as discovery activates it"',
+  'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+  'if [ ! -s "$NVM_DIR/nvm.sh" ]; then',
+  '  curl -fsSL --connect-timeout 20 --max-time 120 -o "$workdir/nvm-install.sh" ' +
+    '"https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh"',
+  '  echo "$NVM_INSTALL_SHA256  $workdir/nvm-install.sh" | sha256sum --check --quiet',
+  '  bash "$workdir/nvm-install.sh"',
+  'fi',
+  // nvm reads unset variables.
+  'set +u',
+  '. "$NVM_DIR/nvm.sh"',
+  'nvm install "$NODE_MAJOR"',
+  'set -u',
+  'node -e \'const v=(t)=>t.split(".").map(Number);const [a,b,c]=v(process.versions.node);' +
+    'const [x,y,z]=v(process.argv[1]);process.exit(a!==x?(a>x?0:1):b!==y?(b>y?0:1):' +
+    '(c>=z?0:1))\' "$NODE_MINIMUM" || fail "node $(node -v) is below $NODE_MINIMUM"',
+  'step "The checkout at $REPO_PATH"',
+  'if [ ! -e "$REPO_PATH/.git" ]; then',
+  '  mkdir -p "$(dirname "$REPO_PATH")"',
+  '  git clone -- "$REPO_URL" "$REPO_PATH"',
+  'elif [ -z "$(git -C "$REPO_PATH" status --porcelain)" ]; then',
+  '  git -C "$REPO_PATH" fetch --quiet -- "$REPO_URL" main',
+  // Moved only when nothing is lost: main fast-forwards, a detached HEAD
+  // that main already contains follows it, anything else stays as it is.
+  '  branch="$(git -C "$REPO_PATH" symbolic-ref --quiet --short HEAD || true)"',
+  '  if [ "$branch" = main ]; then',
+  '    git -C "$REPO_PATH" merge --quiet --ff-only FETCH_HEAD || ' +
+    'echo "left main as it is: it has commits lagrange main does not"',
+  '  elif [ -z "$branch" ] && git -C "$REPO_PATH" merge-base --is-ancestor HEAD FETCH_HEAD; then',
+  '    git -C "$REPO_PATH" checkout --quiet --detach FETCH_HEAD',
+  '  else',
+  '    echo "left as it is: $REPO_PATH is ${branch:+on }${branch:-detached with commits ' +
+    'lagrange main does not have}"',
+  '  fi',
+  'else',
+  '  echo "left as it is: $REPO_PATH has local changes"',
+  'fi',
+  'step "Dependencies that match the lockfile"',
+  `if [ "$(node -e '${DEPENDENCIES_MATCH_SCRIPT}' -- "$REPO_PATH" 2>/dev/null)" != yes ]; then`,
+  '  (cd "$REPO_PATH" && npm ci)',
+  'fi',
+  'step "The pinned MovieLens dataset, as the canary fetches it"',
+  'if [ "$({ sha256sum < "$REPO_PATH/$MOVIELENS_FILE"; } 2>/dev/null | cut -d" " -f1)" != ' +
+    '"$MOVIELENS_SHA256" ]; then',
+  '  (',
+  '    cd "$REPO_PATH"',
+]);
+const WORKER_SCRIPT_DATASET_CLOSE = Object.freeze(['  )', 'fi']);
+const WORKER_SCRIPT_KEYS = Object.freeze([
+  'step "The controller\'s ssh key"',
+  'mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"',
+  'touch "$HOME/.ssh/authorized_keys" && chmod 600 "$HOME/.ssh/authorized_keys"',
+]);
+const WORKER_SCRIPT_REPORT = Object.freeze([
+  'step "What this worker now has"',
+  'report() {',
+  '  if command -v "$1" >/dev/null 2>&1; then',
+  '    printf "  %-11s %s\\n" "$1" "$("$@" 2>&1 | head -n 1)"',
+  '  else',
+  '    printf "  %-11s MISSING\\n" "$1"',
+  '  fi',
+  '}',
+  'report node -v',
+  // Every tool discovery checks, from the one list that says where it comes from.
+  ...Object.values(WORKER_TOOL_SOURCES).map((source) => `report ${source.version}`),
+  'if docker info >/dev/null 2>&1; then echo "  docker daemon reachable"; ' +
+    'else echo "  docker daemon NOT reachable yet for $USER"; fi',
+  'if [ "$({ sha256sum < "$REPO_PATH/$MOVIELENS_FILE"; } 2>/dev/null | cut -d" " -f1)" = ' +
+    '"$MOVIELENS_SHA256" ]; then echo "  MovieLens dataset pinned digest ok"; ' +
+    'else echo "  MovieLens dataset digest MISMATCH"; fi',
+  'if [ -n "$relogin" ]; then',
+  '  echo',
+  '  echo "$USER was added to the docker group: log out and in again (or reboot)."',
+  'fi',
+  'echo',
+  'echo "Done. On the controller: node scripts/lab.js fleet"',
+]);
+const WORKER_SCP = 'scp';
+const WORKER_SCP_BOUND = Object.freeze([SSH_OPTION, SSH_BATCH_MODE, ...SSH_BOUNDED_OPTIONS]);
+
+// A variable the job or workflow defines, which a worker's shell would not.
+function inheritedVariable(workflow, job, run) {
+  const names = [...Object.keys(workflow?.env || {}), ...Object.keys(job?.env || {})];
+  // A prefix match only refuses more, never less.
+  return names.find((variable) => run.includes(`$${variable}`) || run.includes(`\${${variable}`));
+}
+
+function canaryStepRun(workflow, name) {
+  for (const job of Object.values(workflow?.jobs || {})) {
+    for (const step of job?.steps || []) {
+      if (step?.name !== name || typeof step.run !== 'string') continue;
+      const unreproducible = WORKER_UNREPRODUCIBLE_KEYS.find((key) => Object.hasOwn(step, key)) ||
+        WORKER_UNREPRODUCIBLE_TEXT.exec(step.run)?.[0] ||
+        inheritedVariable(workflow, job, step.run);
+      if (unreproducible) {
+        throw new Error(`${WORKER_TEXT.UNREPRODUCIBLE}"${name}" uses ${unreproducible}`);
+      }
+      return step.run.trimEnd();
+    }
+  }
+  throw new Error(`${WORKER_TEXT.NO_STEP}"${name}": worker setup follows its install steps`);
+}
+
+/**
+ * The URL a worker clones from: an ssh GitHub origin becomes its https form,
+ * because a lab worker has no GitHub key; anything else is used as it is.
+ * @param {string} origin the controller's origin URL
+ * @return {string}
+ */
+export function workerCloneUrl(origin) {
+  const text = String(origin || EMPTY).trim();
+  const ssh = WORKER_GITHUB_SSH_ORIGIN.exec(text);
+  return ssh ? `https://github.com/${ssh[1]}` : text;
+}
+
+/**
+ * The worker setup script: bash, run once on a new lab worker, safe to run
+ * again. Built only from what it is given - the canary workflow, the engines
+ * floor, the clone URL and the controller's public keys - so no host is
+ * written anywhere.
+ * @param {{workflow: Object, nodeMinimum: string, repoUrl: string,
+ *   authorizedKeys?: string[], generatedFrom?: string}} input
+ * @return {string}
+ */
+export function workerSetupScript({workflow, nodeMinimum, repoUrl, authorizedKeys = [],
+  generatedFrom = EMPTY}) {
+  if (!parseVersion(nodeMinimum)) throw new Error(`${WORKER_TEXT.NO_FLOOR}${nodeMinimum}`);
+  if (!repoUrl) throw new Error(WORKER_TEXT.NO_REPO);
+  for (const key of authorizedKeys) {
+    if (!WORKER_PUBLIC_KEY.test(key)) throw new Error(`${WORKER_TEXT.BAD_KEY}${key}`);
+  }
+  return [
+    ...WORKER_SCRIPT_HEADER,
+    ...(generatedFrom ? [`# Generated from ${generatedFrom}.`] : []),
+    `REPO_URL=${shellQuote(repoUrl)}`,
+    `NODE_MINIMUM=${shellQuote(nodeMinimum)}`,
+    `NODE_MAJOR=${shellQuote(nodeMinimum.split(WORKER_VERSION_SEPARATOR)[0])}`,
+    ...WORKER_SCRIPT_GUARDS,
+    ...WORKER_SCRIPT_SYSTEM,
+    WORKER_SUBSHELL.OPEN,
+    canaryStepRun(workflow, WORKER_CANARY_STEPS.TOOLCHAIN),
+    WORKER_SUBSHELL.CLOSE,
+    ...WORKER_SCRIPT_NODE,
+    canaryStepRun(workflow, WORKER_CANARY_STEPS.DATASET),
+    ...WORKER_SCRIPT_DATASET_CLOSE,
+    ...(authorizedKeys.length > 0 ? WORKER_SCRIPT_KEYS : []),
+    ...authorizedKeys.map((key) => `grep -qxF ${shellQuote(key)} ` +
+      `"$HOME/.ssh/authorized_keys" || echo ${shellQuote(key)} >> "$HOME/.ssh/authorized_keys"`),
+    ...WORKER_SCRIPT_REPORT,
+  ].join(WORKER_NEWLINE) + WORKER_NEWLINE;
+}
+
+/**
+ * Copy the setup to a registered worker's home directory with bounded scp,
+ * and return the one command the owner runs there. It is never run from here.
+ * @param {{sshTarget: string, file: string, runCommand?: Function}} input
+ * @return {Promise<string>}
+ */
+export async function copyWorkerSetup({sshTarget, file, runCommand = run}) {
+  if (!sshTarget || String(sshTarget).startsWith(SSH_OPTION_PREFIX)) {
+    throw new Error(`${ERROR_TEXT_CAPABILITY.BAD_TARGET}${sshTarget}`);
+  }
+  await runCommand(WORKER_SCP, [...WORKER_SCP_BOUND, file, `${sshTarget}:${WORKER_SETUP_FILE}`]);
+  return `ssh -t ${sshTarget} bash ${WORKER_SETUP_FILE}`;
+}
+
+export {WORKER_CANARY_STEPS, WORKER_SETUP_FILE, WORKER_SYSTEM_PACKAGES, WORKER_TOOL_SOURCES};
 
 const FLEET_CONTROLLER_NAME = '(controller)';
 const FLEET_DEFAULT_REPO_PATH = '~/projects/lagrange';

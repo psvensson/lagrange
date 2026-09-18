@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lab-worker-provisioning",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The owner asked (2026-09-18) for a proper installation package for a newly registered lab worker, so everything it needs is installed in one go by one script that can be copied to the worker and run there. Fleet discovery reports what a worker lacks, but nothing installed it: both current workers still miss helm and wasm-tools, one also psql and the pinned MovieLens dataset, and each gap turns into files that red there and are run again on the controller. `node scripts/lab.js provision` now writes that script, and `--copy NODE` puts it in a registered worker's home directory and prints the one command to run. The toolchain it installs is not written down a second time: it is the full-corpus canary's own install steps, taken from the workflow when the script is generated, so a worker and CI cannot drift apart. Around them the script checks the machine can be provisioned before asking for anything, installs the system packages a worker needs (git, a C++ toolchain for native modules, docker), node at the engines floor through a digest-pinned nvm, the checkout (cloned, or brought to main when clean) with dependencies that match its lockfile, the controller's public key for ssh, and ends by printing what the worker now has. Discovery now also checks java, ripgrep and jq, which the canary installs and some files need.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lab-worker-provisioning/evidence/receipt.json",
+      "requiredReceipts": [
+        "canary-toolchain-verbatim",
+        "every-checked-tool-provisioned",
+        "refuses-before-asking",
+        "valid-bash-no-host",
+        "provision-writes-and-copies"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-host-in-setup",
+      "statement": "No machine name, address or key is written into the repository: the clone URL, the controller key and the target come from the controller at generation time."
+    },
+    {
+      "id": "one-toolchain",
+      "statement": "The worker's toolchain is the canary's install step itself, read from the workflow, never a copy that can drift."
+    },
+    {
+      "id": "runs-by-hand",
+      "statement": "The script is run by the owner on the worker; the controller only writes or copies it and never executes it remotely."
+    }
+  ],
+  "sealedAt": "7e4f223ff8d6dca0f459db2a42e180d906040a61"
+}

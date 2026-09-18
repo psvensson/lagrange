@@ -43,6 +43,7 @@ const USAGE = [
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
   '  lab fleet [--json]\n',
+  '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
 // Commands a plain-object dispatch table would answer from its prototype.
 const PROTOTYPE_NAMED_COMMANDS = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];

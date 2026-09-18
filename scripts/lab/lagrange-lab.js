@@ -14,12 +14,17 @@ import {doctorHarnessNodes, runHarness} from './harness.js';
 import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
-  discoverFleet, formatFleet, probeRemoteNode, recordFleet,
+  WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, formatFleet, probeRemoteNode,
+  recordFleet, workerCloneUrl, workerSetupScript,
 } from './probe.js';
+import {capture} from './process.js';
+import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {homedir, tmpdir} from 'node:os';
 import {dirname, join as joinPath} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {parse as parseYaml} from 'yaml';
 
 const USAGE = [
   'Lagrange home lab\n\n',
@@ -44,6 +49,7 @@ const USAGE = [
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
   '  lab fleet [--json]\n',
+  '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
 const COMMAND = Object.freeze({
   HELP: 'help',
@@ -56,6 +62,7 @@ const COMMAND = Object.freeze({
   K3S: 'k3s',
   TEST: 'test',
   FLEET: 'fleet',
+  PROVISION: 'provision',
 });
 // The repository this command runs from: its lockfile and engines floor are
 // what a fleet machine must match to run this checkout's corpus.
@@ -281,6 +288,77 @@ async function commandFleet(args) {
   process.stdout.write(`${lines.join(FLEET_LINE_BREAK)}${FLEET_LINE_BREAK}`);
 }
 
+// The worker setup script, generated from this checkout: the canary's own
+// install steps, the engines floor, origin as an https clone URL and the
+// public halves of the identities ssh offers from here. Written to a file,
+// printed, or copied to a registered worker - never run from here.
+const PROVISION_WORKFLOW = '.github/workflows/full-corpus-canary.yml';
+const PROVISION_FILE_MODE = 0o755;
+const PROVISION_KEY_TARGET = 'localhost';
+const PROVISION_SSH_CONFIG = Object.freeze(['ssh', '-G']);
+const PROVISION_IDENTITY_LINE = /^identityfile (.+)$/gmu;
+const PROVISION_HOME_PREFIX = '~/';
+const PROVISION_PUBLIC_SUFFIX = '.pub';
+const PROVISION_ONE_TARGET = 'provision takes --copy NAME or --output FILE, not both';
+
+async function controllerPublicKeys(sshTarget) {
+  let config;
+  try {
+    config = await capture(PROVISION_SSH_CONFIG[0],
+      [...PROVISION_SSH_CONFIG.slice(1), sshTarget || PROVISION_KEY_TARGET]);
+  } catch {
+    // No ssh client here: the setup simply leaves the worker's keys alone.
+    return [];
+  }
+  const keys = [];
+  for (const [, identity] of config.matchAll(PROVISION_IDENTITY_LINE)) {
+    const file = (identity.startsWith(PROVISION_HOME_PREFIX) ?
+      joinPath(homedir(), identity.slice(PROVISION_HOME_PREFIX.length)) : identity) +
+      PROVISION_PUBLIC_SUFFIX;
+    if (existsSync(file)) keys.push(readFileSync(file, FLEET_TEXT).trim());
+  }
+  return keys;
+}
+
+async function commandProvision(args) {
+  if (args.flags.copy && args.flags.output) throw new Error(PROVISION_ONE_TARGET);
+  const state = await loadState();
+  const node = args.flags.copy ? requireNode(state, args.flags.copy) : null;
+  const manifest = JSON.parse(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_PACKAGE), FLEET_TEXT));
+  // Git asks this checkout, never a repository a hook exported GIT_DIR for.
+  const gitEnv = {env: gitProcessEnvironment()};
+  const head = await capture('git', ['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD'],
+    gitEnv);
+  const script = workerSetupScript({
+    workflow: parseYaml(readFileSync(joinPath(FLEET_REPO_ROOT, PROVISION_WORKFLOW), FLEET_TEXT)),
+    nodeMinimum: String(manifest.engines?.node || '').replace(/^>=\s*/u, ''),
+    repoUrl: workerCloneUrl(
+      await capture('git', ['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'], gitEnv)),
+    authorizedKeys: await controllerPublicKeys(node?.ssh),
+    generatedFrom: `${manifest.name} ${head}`,
+  });
+  if (node) {
+    const scratch = mkdtempSync(joinPath(tmpdir(), 'lab-provision-'));
+    try {
+      const file = joinPath(scratch, WORKER_SETUP_FILE);
+      writeFileSync(file, script, {mode: PROVISION_FILE_MODE});
+      const command = await copyWorkerSetup({sshTarget: node.ssh, file});
+      process.stdout.write(`copied ${WORKER_SETUP_FILE} to ${node.name}; run it there:\n` +
+        `  ${command}\n`);
+    } finally {
+      rmSync(scratch, {recursive: true, force: true});
+    }
+    return;
+  }
+  if (args.flags.output) {
+    writeFileSync(args.flags.output, script, {mode: PROVISION_FILE_MODE});
+    process.stdout.write(`wrote ${args.flags.output}; copy it to the worker and run: ` +
+      `bash ${WORKER_SETUP_FILE}\n`);
+    return;
+  }
+  process.stdout.write(script);
+}
+
 async function commandDoctor() {
   const problems = await doctorProblems();
   if (problems.length > 0) throw new Error(`Lab doctor found ${problems.length} problem(s)`);
@@ -363,6 +441,7 @@ const COMMAND_HANDLERS = Object.freeze({
   [COMMAND.K3S]: (action, args) => commandK3s(action, args),
   [COMMAND.TEST]: (action) => commandTest(action),
   [COMMAND.FLEET]: (action, args) => commandFleet(args),
+  [COMMAND.PROVISION]: (action, args) => commandProvision(args),
 });
 
 async function main() {

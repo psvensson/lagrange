@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 145,
     "storage-raft": 80,
-    "test-infrastructure": 130,
+    "test-infrastructure": 131,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2123,
-  "digest": "fnv1a32-8ae87e0c",
+  "censusSize": 2124,
+  "digest": "fnv1a32-fe6268cb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c4a69bf8",
+  "observationDigest": "fnv1a32-74567707",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1859,6 +1859,7 @@
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
+    "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
     "test/scripts/list-commands.test.js": "test-infrastructure",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "test-infrastructure",
     "test/scripts/model-contract-tools.test.js": "test-infrastructure",
@@ -8212,6 +8213,15 @@
       "env": [
         "NVM_DIR",
         "PATH"
+      ]
+    },
+    "test/scripts/lab-worker-provisioning.test.js": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "scripts/lab.js"
+      ],
+      "env": [
+        "GIT_DIR"
       ]
     },
     "test/scripts/list-commands.test.js": {
