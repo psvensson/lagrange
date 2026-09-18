@@ -20,7 +20,8 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | Push to `main` | `.github/workflows/ci.yml` (health steps) | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
 | Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
 | Push of `release-publishability/**` | `.github/workflows/release.yml` | Fast GitHub-hosted, non-publishing preflight. It checks current npm package/version state, GitHub OIDC claims for npm trusted publishing, and the current Docker Hub pull+push credential scope. These are freshness-bound external facts and are deliberately **not** permanent proof receipts. |
-| Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | First asks the durable proof authority whether `release-full-v1` already proves this exact SHA. If yes, GCP is not woken and the proof is reused. If not, the controlled GCP runner executes the complete release proof once; after success a separate GitHub-hosted recorder persists the proof receipt. |
+| Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | The fallback when no local machine can prove the release (step 4 proves it locally first). It asks the durable proof authority whether `release-full-v1` already proves this exact SHA. If yes, GCP is not woken and the proof is reused. If not, the controlled GCP runner executes the complete release proof once; after success a separate GitHub-hosted recorder persists the proof receipt. |
+| Manual only | `.github/workflows/full-corpus-canary.yml` | The whole corpus on a hosted runner, by hand only. After every publish whose gate proved a cone, the publisher proves the rest of the corpus locally (placed across the lab machines) and records the whole-corpus receipt; the next publish reports a red one first. |
 | Push of a `v*` tag | `.github/workflows/release.yml` | Rechecks freshness-bound publication prerequisites → requires the durable `release-full-v1` receipt for the tagged SHA → builds and publishes the npm package **first** → builds SEA/Helm/Docker artifacts and smoke-tests the image → pushes Docker tags → updates the Docker Hub overview (best-effort) → publishes release assets and notes. The application proof is never rerun by the tag workflow. |
 
 The durable proof design is specified in
@@ -74,11 +75,22 @@ instead of frozen. A patch release for one fix follows the same steps.
 3. **Land it through the ordinary publish gate** (`npm run publish`). Then
    point `release-publishability/<version>` at that exact main SHA. This fast
    hosted check must be green before the expensive release proof is attempted.
-4. **Establish or reuse the release proof.** Run `full-gate` for that exact SHA
-   (manual dispatch or a `release-proof/**` ref). `full-gate` asks
-   `ProofAuthority` first. If `release-full-v1` is already recorded, it exits
-   without waking GCP. Otherwise GCP runs the proof once and the hosted recorder
-   stores the receipt after success.
+4. **Establish or reuse the release proof - locally.** The corpus is never
+   run remotely while a local alternative exists (owner rule, 2026-09-18).
+   Prove the exact SHA on the local machines, where the corpus is placed across
+   the lab, and record the receipt. Let a local corpus a publish started finish
+   first (its log is named on the publish's `local corpus started` line), so
+   two heavy runs never share the machine:
+   ```sh
+   node scripts/checks/wait-for-thermal-headroom.js \
+     && node scripts/checks/push-gate-corpus-worktree.js --gate <sha> --run npm run check:release \
+     && node scripts/proof-authority.js record release-full-v1 <sha>
+   ```
+   The `&&` is the point: a red proof must never be recorded.
+   `full-gate` then finds `release-full-v1` recorded and exits without waking
+   GCP. Only when no local machine can run the proof, run `full-gate` for that
+   exact SHA (manual dispatch or a `release-proof/**` ref): GCP runs the proof
+   once and the hosted recorder stores the receipt after success.
 5. **Preflight, then tag:**
    ```sh
    npm run release:preflight

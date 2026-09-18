@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 145,
     "storage-raft": 80,
-    "test-infrastructure": 132,
+    "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2125,
-  "digest": "fnv1a32-f64b874c",
+  "censusSize": 2126,
+  "digest": "fnv1a32-3b40788f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-882cc9da",
+  "observationDigest": "fnv1a32-7029f808",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1861,6 +1861,7 @@
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
     "test/scripts/list-commands.test.js": "test-infrastructure",
+    "test/scripts/local-corpus.test.js": "test-infrastructure",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "test-infrastructure",
     "test/scripts/model-contract-tools.test.js": "test-infrastructure",
     "test/scripts/model-invariants.test.js": "test-infrastructure",
@@ -7276,19 +7277,24 @@
         "package-lock.json",
         "package.json",
         "scripts/action-authority.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/publish-head.js",
+        "scripts/run-classified-test-files.js",
         "scripts/solve/red-main-exemption.js",
         "src/admin/static/playback-viewer.html",
         "src/public-api.js",
-        "test/distributed/config/local.json"
+        "test/distributed/config/local.json",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data",
         "scripts",
         "solve",
-        "src"
+        "src",
+        "test"
       ]
     },
     "test/scripts/analyze-formation-release-phases.test.js": {
@@ -8256,6 +8262,36 @@
         "package.json"
       ]
     },
+    "test/scripts/local-corpus.test.js": {
+      "files": [
+        ".githooks/pre-push",
+        ".github/workflows/full-corpus-canary.yml",
+        ".gitignore",
+        "data/formation-health/trend.ndjson",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/local-leader-row-visibility-model-contract.test.js": {
       "files": [
         "scripts/model-tlc.js"
@@ -8453,12 +8489,18 @@
       "files": [
         ".githooks/pre-push",
         "data/formation-health/trend.ndjson",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
-        "scripts/prune-test-output.js"
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data",
-        "data/releases"
+        "data/releases",
+        "test"
       ]
     },
     "test/scripts/publish-head.test.js": {
@@ -8466,13 +8508,19 @@
         ".githooks/pre-push",
         ".gitignore",
         "data/formation-health/trend.ndjson",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
-        "scripts/prune-test-output.js"
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         ".githooks",
         "data",
-        "data/formation-health"
+        "data/formation-health",
+        "test"
       ]
     },
     "test/scripts/push-gate-change-proof.test.js": {

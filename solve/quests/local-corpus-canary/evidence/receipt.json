@@ -1,0 +1,53 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "local-corpus-canary",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/local-corpus.test.js": "da806a50a8999bdef8f68d779f69fa4c1e6b7894f9fb0d5d39471c4c495fc43b"
+  },
+  "generatedAt": "2026-09-18T16:32:59.466Z",
+  "receipts": [
+    {
+      "id": "cone-publish-starts-the-rest",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a cone publish starts exactly the rest of the corpus for the pushed commit$\" test/scripts/local-corpus.test.js",
+      "detail": "the whole corpus test:all runs, minus what the cone proved, detached",
+      "testFile": "test/scripts/local-corpus.test.js"
+    },
+    {
+      "id": "whole-corpus-publish-starts-nothing",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a publish that proved the whole corpus, or whose scope is unknown, starts nothing$\" test/scripts/local-corpus.test.js",
+      "detail": "no second corpus for a proved commit, and no guess without a scope",
+      "testFile": "test/scripts/local-corpus.test.js"
+    },
+    {
+      "id": "newer-publish-supersedes",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a newer publish supersedes a running local corpus$\" test/scripts/local-corpus.test.js",
+      "detail": "the running group is stopped and named superseded; a dead one is named lost",
+      "testFile": "test/scripts/local-corpus.test.js"
+    },
+    {
+      "id": "next-publish-reports-the-result",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the next publish reports the last local corpus result first$\" test/scripts/local-corpus.test.js",
+      "detail": "green, red, running, superseded and lost are all said, red loudest",
+      "testFile": "test/scripts/local-corpus.test.js"
+    },
+    {
+      "id": "receipt-only-when-green",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the local corpus records the whole-corpus receipt only when green$\" test/scripts/local-corpus.test.js",
+      "detail": "the exact-checkout run decides; a red run records nothing",
+      "testFile": "test/scripts/local-corpus.test.js"
+    },
+    {
+      "id": "hosted-canary-only-by-hand",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the hosted canary runs only when dispatched by hand$\" test/scripts/local-corpus.test.js",
+      "detail": "the workflow has no automatic trigger",
+      "testFile": "test/scripts/local-corpus.test.js"
+    }
+  ]
+}

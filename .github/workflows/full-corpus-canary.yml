@@ -1,25 +1,19 @@
-# The whole behavioural corpus on main, AFTER the gate proved the change,
-# gating nothing.
+# The whole behavioural corpus on a GitHub-hosted runner - by hand only.
 #
-# The pre-push gate stopped running the full corpus before every push
-# (lean-push-gate, 2026-09-12): a push proves its change cone plus the safety
-# spine, locally and again in ci.yml. Both are the same selection, so a red
-# the cone cannot see - a cross-subsystem regression no contract names, a
-# fixture consumer the import graph does not reach - would otherwise surface
-# only at the next release proof. This lane finds it within the hour instead.
-#
-# What it is NOT: a gate. Not a required check, the red-main guard reads only
-# ci.yml, and a red here never blocks a push. It follows the gate run for a
-# main sha, so the corpus proves the tree that run proved and never re-proves
-# a corpus that run already ran. No schedule: an unchanged tree cannot grow
-# behavioural debt. Concurrent runs coalesce; only the newest head matters.
+# The owner's rule (2026-09-18): the corpus is never run on a hosted runner
+# while a local alternative exists, releases included. A push proves its
+# change cone plus the safety spine in the local gate (lean-push-gate,
+# 2026-09-12); the publisher then proves the rest of the corpus for that
+# commit locally, detached, placed across the lab machines, and records the
+# whole-corpus receipt when it is green (scripts/publish-head.js, the local
+# corpus). A red local corpus is reported by the next publish. This workflow
+# therefore has no automatic trigger any more: dispatch it by hand only when
+# no lab machine and no controller can run the corpus. A hand dispatch always
+# re-proves (--force), receipt or not.
 name: full-corpus-canary
 run-name: "full-corpus: ${{ github.event.head_commit.message || github.ref_name }}"
 
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
   workflow_dispatch: {}
 
 permissions:

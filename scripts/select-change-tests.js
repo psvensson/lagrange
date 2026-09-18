@@ -649,6 +649,8 @@ export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
     fullCorpus,
     kind: plan?.kind ?? null,
     tests: Array.isArray(plan?.tests) ? plan.tests.length : null,
+    // The files a cone proved, so the local corpus runs only the rest.
+    testPaths: fullCorpus === false && Array.isArray(plan?.tests) ? planTestPaths(plan) : null,
   })}\n`, UTF8);
   return file;
 }

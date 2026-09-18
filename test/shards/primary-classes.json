@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1862,
+    "unit": 1863,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2125,
-  "digest": "fnv1a32-0a495dc3",
+  "censusSize": 2126,
+  "digest": "fnv1a32-6da4e76a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1842,6 +1842,7 @@
     "test/scripts/lab-fleet-discovery.test.js": "unit",
     "test/scripts/lab-worker-provisioning.test.js": "unit",
     "test/scripts/list-commands.test.js": "unit",
+    "test/scripts/local-corpus.test.js": "unit",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "unit",
     "test/scripts/model-contract-tools.test.js": "unit",
     "test/scripts/model-invariants.test.js": "unit",

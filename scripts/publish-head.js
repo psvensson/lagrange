@@ -2,7 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {fileURLToPath} from 'node:url';
@@ -14,6 +14,7 @@ import {
   PROOF_SCOPE_PATH,
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
+import {parseLaneArgs, planLane} from './plan-test-lane.js';
 
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
@@ -576,6 +577,372 @@ function buildPublishReceipt(observed, args) {
   };
 }
 
+// --- The local corpus (owner rule, 2026-09-18) ------------------------------
+// The whole corpus is proved on local machines, never on a GitHub-hosted
+// runner while a local alternative exists. A publish whose gate proved a cone
+// starts, after its push, a detached run of exactly the rest of the corpus for
+// the pushed commit - what the cone did not prove at that commit - in a fresh
+// exact checkout, where placement spreads it over the lab machines. Green, it
+// records the whole-corpus receipt; red or lost, the next publish says so
+// first. Only a newer head that reached main supersedes a running one, after
+// its push is verified - as the hosted canary's cancel-in-progress did - so a
+// publish that fails leaves the proof of what is on main running. It runs
+// from the main checkout, never from a quest worktree that may be removed
+// while it runs, and waits for thermal headroom before it starts. None of
+// this can fail a publish.
+const LOCAL_CORPUS_ARGUMENT = '--local-corpus';
+const LOCAL_CORPUS_DIRECTORY = 'lagrange-local-corpus';
+const LOCAL_CORPUS_KEEP = 20;
+const LOCAL_CORPUS_COMMON_DIR = Object.freeze(['rev-parse', '--git-common-dir']);
+const LOCAL_CORPUS_GIT_DIR_NAME = '.git';
+const LOCAL_CORPUS_STATE = Object.freeze({
+  RUNNING: 'running', GREEN: 'green', RED: 'red', SUPERSEDED: 'superseded', LOST: 'lost',
+});
+const LOCAL_CORPUS_SCRIPT = 'test:all';
+const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
+const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
+const LOCAL_CORPUS_THERMAL = 'scripts/checks/wait-for-thermal-headroom.js';
+const LOCAL_CORPUS_GATE_FLAG = '--gate';
+const LOCAL_CORPUS_RUN_FLAG = '--run';
+const LOCAL_CORPUS_SHELL = 'sh';
+const LOCAL_CORPUS_SHELL_COMMAND = '-c';
+// $1 the file list, $2 this node. The convergence probes follow, observed as
+// the hosted canary observed them: their result never decides the verdict.
+const LOCAL_CORPUS_RUN_SCRIPT =
+  `"$2" ${LOCAL_CORPUS_RUNNER} --keep-going --stdin < "$1"; status=$?; ` +
+  'npm run -s test:convergence-probes || ' +
+  'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
+  'exit "$status"';
+const LOCAL_CORPUS_RETRY_ENV = 'LAGRANGE_RETRY_FAILED_ONCE';
+const LOCAL_CORPUS_FIELD_TESTS = 'testPaths';
+const LOCAL_CORPUS_WORD = /\s+/u;
+const LOCAL_CORPUS_SIGNAL = 'SIGTERM';
+const LOCAL_CORPUS_SUFFIX = Object.freeze({STATE: '.json', LOG: '.log', FILES: '.files'});
+const LOCAL_CORPUS_PROC = Object.freeze({DIRECTORY: '/proc', COMMAND: 'cmdline'});
+const LOCAL_CORPUS_PS = Object.freeze(['ps', '-o', 'command=', '-p']);
+const LOCAL_CORPUS_OWED = Object.freeze({
+  REST: 'the rest of the corpus',
+  NOTHING: 'nothing: the gate proved the whole corpus',
+});
+const LOCAL_CORPUS_ERROR_EVENT = 'error';
+const LOCAL_CORPUS_TEXT = Object.freeze({
+  PREFIX: 'publish: local corpus ',
+  STARTED: 'started for ',
+  NOT_STARTED: 'not started: ',
+  NO_SCOPE: 'the gate left no proof scope for this commit',
+  OTHER_COMMIT: 'the proof scope names another commit',
+  NO_CONE: 'the proof scope lists no cone',
+  FILES: ' file(s), log ',
+  RED_BANNER: 'publish: !!! the local corpus was RED for ',
+  LOST_BANNER: 'publish: !!! the local corpus was LOST for ',
+  SUPERSEDED_BY: 'superseded by ',
+  NEWER_HEAD: ', a newer head on main',
+  LOST: 'its process ended without a verdict',
+  HOT: 'the machine stayed too hot to start it',
+  UNRECORDED: 'receipt not recorded: ',
+  BOOKKEEPING: 'bookkeeping failed: ',
+  NO_RUNNER: ' does not run ',
+  ALREADY: 'already ',
+  FOR_THIS_COMMIT: ' for this commit',
+});
+// A run of the very head being published that still counts: one that is
+// alive, or one that already proved it.
+const LOCAL_CORPUS_COVERING = new Set([LOCAL_CORPUS_STATE.RUNNING, LOCAL_CORPUS_STATE.GREEN]);
+
+// Where the local corpus keeps its records (the git common dir, shared by
+// every worktree) and where it runs from (the main checkout that holds it).
+function localCorpusPlaces(run, root) {
+  const common = path.resolve(root, git(run, root, [...LOCAL_CORPUS_COMMON_DIR]));
+  return {
+    stateDir: path.join(common, LOCAL_CORPUS_DIRECTORY),
+    mainRoot: path.basename(common) === LOCAL_CORPUS_GIT_DIR_NAME ?
+      path.dirname(common) : root,
+  };
+}
+
+// Every record in the directory, newest first; a directory that cannot be read
+// holds none.
+function readLocalCorpusRecords(recordDir) {
+  let names = [];
+  try {
+    names = fs.readdirSync(recordDir);
+  } catch {
+    names = [];
+  }
+  const records = [];
+  for (const name of names) {
+    if (!name.endsWith(LOCAL_CORPUS_SUFFIX.STATE)) continue;
+    try {
+      records.push(JSON.parse(fs.readFileSync(path.join(recordDir, name), UTF8)));
+    } catch {
+      // A record half written or damaged is not a result.
+    }
+  }
+  return records.sort((left, right) => (right.startedAt || 0) - (left.startedAt || 0));
+}
+
+function writeLocalCorpusState(stateDir, state) {
+  fs.mkdirSync(stateDir, {recursive: true});
+  const file = path.join(stateDir, `${state.sha}${LOCAL_CORPUS_SUFFIX.STATE}`);
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(state)}\n`);
+  fs.renameSync(`${file}.tmp`, file);
+}
+
+/**
+ * The files `npm run test:all` runs in a checkout: the classified runner's own
+ * filter, read from package.json so the two cannot differ.
+ * @param {string} checkout
+ * @return {string[]}
+ */
+export function wholeCorpusFiles(checkout) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), UTF8));
+  const words = String(manifest.scripts?.[LOCAL_CORPUS_SCRIPT] || '').trim()
+    .split(LOCAL_CORPUS_WORD);
+  const at = words.indexOf(LOCAL_CORPUS_RUNNER);
+  if (at < 0) {
+    throw new Error(`${LOCAL_CORPUS_SCRIPT}${LOCAL_CORPUS_TEXT.NO_RUNNER}${LOCAL_CORPUS_RUNNER}`);
+  }
+  return planLane(checkout, parseLaneArgs(words.slice(at + 1)));
+}
+
+// What a pushed commit is owed after its gate: the rest of the corpus,
+// nothing (the gate proved the whole corpus), or - named - why it cannot know.
+function localCorpusOwed(scope, head) {
+  if (!scope || typeof scope !== 'object') return LOCAL_CORPUS_TEXT.NO_SCOPE;
+  if (scope[FIELD_SHA] !== head) return LOCAL_CORPUS_TEXT.OTHER_COMMIT;
+  if (scope[FIELD_FULL_CORPUS] === true) return LOCAL_CORPUS_OWED.NOTHING;
+  const listsCone = scope[FIELD_FULL_CORPUS] === false &&
+    Array.isArray(scope[LOCAL_CORPUS_FIELD_TESTS]);
+  return listsCone ? LOCAL_CORPUS_OWED.REST : LOCAL_CORPUS_TEXT.NO_CONE;
+}
+
+/**
+ * What the gate's scope leaves owed at this commit, and when it is the rest of
+ * the corpus, those files: what test:all runs minus what the cone proved.
+ * @param {string} checkout the exact checkout the gate ran in
+ * @param {string} head
+ * @param {{scopeFile?: string, wholeCorpus?: Function}} [options]
+ * @return {{owed: string, files: string[]}}
+ */
+export function localCorpusPlan(checkout, head,
+  {scopeFile = path.join(checkout, PROOF_SCOPE_PATH), wholeCorpus = wholeCorpusFiles} = {}) {
+  let scope;
+  try {
+    scope = JSON.parse(fs.readFileSync(scopeFile, UTF8));
+  } catch {
+    scope = undefined;
+  }
+  const owed = localCorpusOwed(scope, head);
+  const proved = new Set(owed === LOCAL_CORPUS_OWED.REST ? scope[LOCAL_CORPUS_FIELD_TESTS] : []);
+  const files = owed === LOCAL_CORPUS_OWED.REST ?
+    wholeCorpus(checkout).filter((file) => !proved.has(file)) : [];
+  return {owed, files};
+}
+
+/**
+ * Start the local corpus for a pushed commit, detached; returns its pid.
+ * @param {{root: string, stateDir: string, head: string, files: string[],
+ *   spawnProcess?: Function, env?: Object, now?: number}} input
+ * @return {number}
+ */
+export function startLocalCorpus({root, stateDir, head, files, spawnProcess = spawn,
+  env = process.env, now = Date.now()}) {
+  fs.mkdirSync(stateDir, {recursive: true});
+  const base = path.join(stateDir, head);
+  fs.writeFileSync(`${base}${LOCAL_CORPUS_SUFFIX.FILES}`, files.join(NEWLINE) + NEWLINE);
+  const log = fs.openSync(`${base}${LOCAL_CORPUS_SUFFIX.LOG}`, 'w');
+  const record = {sha: head, state: LOCAL_CORPUS_STATE.RUNNING, pid: null,
+    files: files.length, startedAt: now, log: `${base}${LOCAL_CORPUS_SUFFIX.LOG}`};
+  const child = spawnProcess(process.execPath,
+    [fileURLToPath(import.meta.url), LOCAL_CORPUS_ARGUMENT, head], {
+      cwd: root,
+      // The gate's own retry policy, and a group of its own to supersede.
+      env: {...env, [LOCAL_CORPUS_RETRY_ENV]: ENABLED_ENV_VALUE},
+      detached: true,
+      stdio: ['ignore', log, log],
+    });
+  fs.closeSync(log);
+  // A child that could not start is lost, not an exception after the publish.
+  child.on?.(LOCAL_CORPUS_ERROR_EVENT, (error) => writeLocalCorpusState(stateDir,
+    {...record, state: LOCAL_CORPUS_STATE.LOST, reason: error.message}));
+  child.unref?.();
+  writeLocalCorpusState(stateDir, {...record, pid: child.pid});
+  return child.pid;
+}
+
+/**
+ * The detached half: after thermal headroom, prove the rest of the corpus for
+ * one commit in a fresh exact checkout, and record the whole-corpus receipt
+ * only when it is green.
+ * @param {string} root the main checkout
+ * @param {string} head
+ * @param {{stateDir: string, run?: Function, now?: Function}} options
+ * @return {number} exit status
+ */
+export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Date.now}) {
+  const current = () => readLocalCorpusRecords(stateDir).find((entry) => entry.sha === head);
+  const cooled = run(process.execPath, [LOCAL_CORPUS_THERMAL], {cwd: root, stdio: INHERIT_STDIO});
+  if (cooled.status !== 0 && current()?.state === LOCAL_CORPUS_STATE.RUNNING) {
+    writeLocalCorpusState(stateDir, {...current(), state: LOCAL_CORPUS_STATE.LOST,
+      reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
+    return cooled.status ?? 1;
+  }
+  const files = path.join(stateDir, `${head}${LOCAL_CORPUS_SUFFIX.FILES}`);
+  const gated = run(process.execPath, [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
+    LOCAL_CORPUS_RUN_FLAG, LOCAL_CORPUS_SHELL, LOCAL_CORPUS_SHELL_COMMAND,
+    LOCAL_CORPUS_RUN_SCRIPT, LOCAL_CORPUS_SHELL, files, process.execPath],
+  {cwd: root, stdio: INHERIT_STDIO});
+  const state = current();
+  // Superseded meanwhile: a newer head on main owns the verdict now.
+  if (state?.state !== LOCAL_CORPUS_STATE.RUNNING) return gated.status ?? 1;
+  if (gated.status !== 0) {
+    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.RED,
+      status: gated.status, finishedAt: now()});
+    return gated.status ?? 1;
+  }
+  const recorded = run(process.execPath,
+    [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head],
+    {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.GREEN,
+    finishedAt: now(), receipt: recorded?.status === 0 ? CORPUS_PROOF_ID :
+      String(recorded?.stderr || recorded?.stdout || RECEIPT_NO_REASON).trim()});
+  return 0;
+}
+
+// Whether a pid is a live local corpus of ours. Fails closed: a pid it cannot
+// identify is not signalled - a reused pid leading some other group would be.
+function isLocalCorpusProcess(pid) {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  let command = '';
+  try {
+    command = fs.readFileSync(path.join(LOCAL_CORPUS_PROC.DIRECTORY, String(pid),
+      LOCAL_CORPUS_PROC.COMMAND), UTF8);
+  } catch {
+    const listed = spawnSync(LOCAL_CORPUS_PS[0], [...LOCAL_CORPUS_PS.slice(1), String(pid)],
+      {encoding: UTF8});
+    command = listed.status === 0 ? String(listed.stdout) : '';
+  }
+  return command.includes(LOCAL_CORPUS_ARGUMENT);
+}
+
+/**
+ * Name every running local corpus whose process is gone lost. Signals
+ * nothing: done at the start of every publish, before anything is known about
+ * whether this publish will reach main.
+ * @param {string} stateDir
+ */
+export function reconcileLocalCorpus(stateDir) {
+  for (const state of readLocalCorpusRecords(stateDir)) {
+    if (state.state === LOCAL_CORPUS_STATE.RUNNING && !isLocalCorpusProcess(state.pid)) {
+      writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST});
+    }
+  }
+}
+
+/**
+ * Stop every running local corpus for another commit - a newer head reached
+ * main - and say so. Called only after this publish's push is verified.
+ * @param {string} stateDir
+ * @param {string} head the commit now on main
+ * @param {Function} write
+ */
+export function supersedeLocalCorpus(stateDir, head, write) {
+  reconcileLocalCorpus(stateDir);
+  for (const state of readLocalCorpusRecords(stateDir)) {
+    if (state.state !== LOCAL_CORPUS_STATE.RUNNING || state.sha === head) continue;
+    const superseded = {...state, state: LOCAL_CORPUS_STATE.SUPERSEDED, supersededBy: head};
+    writeLocalCorpusState(stateDir, superseded);
+    try {
+      process.kill(-state.pid, LOCAL_CORPUS_SIGNAL);
+    } catch {
+      // Ended between the check and the signal.
+    }
+    write(`${localCorpusLine(superseded)}${LOCAL_CORPUS_TEXT.NEWER_HEAD}`);
+  }
+}
+
+function localCorpusDetail(state) {
+  if (state.state === LOCAL_CORPUS_STATE.SUPERSEDED) {
+    return `${LOCAL_CORPUS_TEXT.SUPERSEDED_BY}${state.supersededBy}`;
+  }
+  if (state.state === LOCAL_CORPUS_STATE.LOST) return state.reason || LOCAL_CORPUS_TEXT.LOST;
+  if (state.state === LOCAL_CORPUS_STATE.GREEN && state.receipt &&
+      state.receipt !== CORPUS_PROOF_ID) {
+    return `${LOCAL_CORPUS_TEXT.UNRECORDED}${state.receipt}`;
+  }
+  return `${state.files}${LOCAL_CORPUS_TEXT.FILES}${state.log}`;
+}
+
+function localCorpusLine(state) {
+  return `${LOCAL_CORPUS_TEXT.PREFIX}${state.sha}: ${state.state} (${localCorpusDetail(state)})`;
+}
+
+/**
+ * What the local corpus last said, before anything else a publish does: every
+ * red or lost run since the last green, loudest, then the newest record.
+ * @param {string} stateDir
+ * @param {Function} write
+ */
+export function reportLocalCorpus(stateDir, write) {
+  const states = readLocalCorpusRecords(stateDir);
+  const lastGreen = states.findIndex((state) => state.state === LOCAL_CORPUS_STATE.GREEN);
+  const unanswered = lastGreen < 0 ? states : states.slice(0, lastGreen);
+  for (const state of unanswered) {
+    if (state.state === LOCAL_CORPUS_STATE.RED) {
+      write(`${LOCAL_CORPUS_TEXT.RED_BANNER}${state.sha}: ${state.log}`);
+    } else if (state.state === LOCAL_CORPUS_STATE.LOST) {
+      write(`${LOCAL_CORPUS_TEXT.LOST_BANNER}${state.sha}: ${localCorpusDetail(state)}`);
+    }
+  }
+  if (states.length > 0) write(localCorpusLine(states[0]));
+  for (const state of states.slice(LOCAL_CORPUS_KEEP)) {
+    for (const suffix of Object.values(LOCAL_CORPUS_SUFFIX)) {
+      fs.rmSync(path.join(stateDir, `${state.sha}${suffix}`), {force: true});
+    }
+  }
+}
+
+// After the verified push: supersede what the new head replaces, then start
+// the rest of the corpus when the gate proved a cone.
+function localCorpusAfterPush(worktree, head, localCorpus) {
+  const {stateDir, mainRoot, write, spawnProcess, wholeCorpus} = localCorpus;
+  supersedeLocalCorpus(stateDir, head, write);
+  // The same head published again - a publish that died after its push, run
+  // once more - owes nothing a live or green run of it covers: a second run
+  // would share the first's record and log, and leave the first running
+  // untracked (verifier, round 2). A lost, red or superseded one is run again.
+  const covering = readLocalCorpusRecords(stateDir).find((record) =>
+    record.sha === head && LOCAL_CORPUS_COVERING.has(record.state));
+  if (covering) {
+    write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.NOT_STARTED}` +
+      `${LOCAL_CORPUS_TEXT.ALREADY}${covering.state}${LOCAL_CORPUS_TEXT.FOR_THIS_COMMIT}`);
+    return;
+  }
+  const {owed, files} = localCorpusPlan(worktree, head, {wholeCorpus});
+  if (owed !== LOCAL_CORPUS_OWED.REST) {
+    if (owed !== LOCAL_CORPUS_OWED.NOTHING) {
+      write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.NOT_STARTED}${owed}`);
+    }
+    return;
+  }
+  startLocalCorpus({root: mainRoot, stateDir, head, files, spawnProcess});
+  write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.STARTED}${head}: ${files.length}` +
+    `${LOCAL_CORPUS_TEXT.FILES}${path.join(stateDir, head)}${LOCAL_CORPUS_SUFFIX.LOG}`);
+}
+
+// Bookkeeping never fails a publish: the push is verified, or not yet begun.
+function localCorpusBookkeeping(write, action) {
+  try {
+    action();
+  } catch (error) {
+    write(`${LOCAL_CORPUS_TEXT.PREFIX}${LOCAL_CORPUS_TEXT.BOOKKEEPING}${error.message}`);
+  }
+}
+
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
@@ -598,6 +965,16 @@ export function publishExactHead(root, args = {}, options = {}) {
     run, root, remoteBefore, head));
   assertWorkspaceDependencySources(root, args,
     options.log || ((line) => process.stdout.write(line)));
+  const writeLine = options.write || ((line) => process.stdout.write(`${line}${NEWLINE}`));
+  const localCorpus = {write: writeLine, spawnProcess: options.spawnProcess || spawn,
+    wholeCorpus: options.wholeCorpus || wholeCorpusFiles, stateDir: null, mainRoot: root};
+  localCorpusBookkeeping(writeLine, () => {
+    const places = localCorpusPlaces(run, root);
+    localCorpus.stateDir = options.localCorpusDir || places.stateDir;
+    localCorpus.mainRoot = places.mainRoot;
+    reconcileLocalCorpus(localCorpus.stateDir);
+    reportLocalCorpus(localCorpus.stateDir, writeLine);
+  });
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);
 
   const parent = path.join(root, 'test-output', 'publish-worktrees');
@@ -617,6 +994,9 @@ export function publishExactHead(root, args = {}, options = {}) {
     publishStage(PUBLISH_STAGE_LABEL.PUSH);
     const {ciUrl, remoteAfter} = pushGatedHead(
       run, root, worktree, head, gateEnv, options.queryCi);
+    if (localCorpus.stateDir) {
+      localCorpusBookkeeping(writeLine, () => localCorpusAfterPush(worktree, head, localCorpus));
+    }
     publishStage(PUBLISH_STAGE_LABEL.RECEIPT +
       remoteAfter.slice(0, PUBLISH_SHORT_SHA_LENGTH));
     retained = null;
@@ -667,6 +1047,13 @@ export function parsePublishArgs(argv) {
 }
 
 function main() {
+  const argv = process.argv.slice(2);
+  if (argv[0] === LOCAL_CORPUS_ARGUMENT && argv.length === 2) {
+    const root = process.cwd();
+    process.exitCode = runLocalCorpus(root, argv[1],
+      {stateDir: localCorpusPlaces(spawnSync, root).stateDir});
+    return;
+  }
   try {
     const args = parseArgs(process.argv.slice(2));
     const receipt = publishExactHead(process.cwd(), args);
@@ -689,6 +1076,7 @@ if (process.argv[1] &&
 }
 
 export {
+  LOCAL_CORPUS_OWED,
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,

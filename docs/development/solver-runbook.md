@@ -170,9 +170,12 @@ the focused contracts and audits, and last the change proof - the same
 whole corpus when that proof cannot stand for it (a refused selection, a change
 to the selection machinery, runner, hook or package manifests, a cone above
 half the corpus, no committed range, or `LAGRANGE_PUSH_FULL_CORPUS=1`). The
-stage prints which it chose and why. The whole corpus then runs on main after
-the push in the non-gating `full-corpus-canary` workflow. Fix one-way ratchets
-rather than raising their baselines.
+stage prints which it chose and why. When the gate proved a cone, the
+publisher then proves the rest of the corpus for that commit locally, detached
+and placed across the lab machines, and records the whole-corpus receipt when it
+is green; the next publish reports a red one first (`publish: !!! the local
+corpus was RED`). The hosted `full-corpus-canary` runs only by hand. Fix one-way
+ratchets rather than raising their baselines.
 
 `solve land` proves the quest delta, not the branch: its `npm test` runs with
 the change-proof base pinned to `HEAD` (the index it is about to commit

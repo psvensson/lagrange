@@ -178,18 +178,15 @@ describe('project hardening contracts', () => {
       'repository health must not become a behavioural gate under another name');
   }
 
-  function assertCanaryFollowsTheGate(canary) {
-    // Triggered BY the gate run, so the corpus follows the proof of one sha
-  // instead of racing it, and the checkout is pinned to that run's head:
-  // the default-branch tip at event time is a different tree.
-    assert.deepEqual(canary.on.workflow_run.workflows, ['ci'],
-      'the canary follows the change gate');
-    assert.equal(canary.on.push, undefined,
-      'the canary no longer races the gate it follows');
-    assert.equal(canary.on.pull_request, undefined,
-      'the canary must not gate pull requests');
-    assert.equal(canary.on.schedule, undefined,
-      'an unchanged tree cannot grow new behavioural debt');
+  function assertCanaryRunsOnlyByHand(canary) {
+    // The owner's rule (2026-09-18): the corpus never runs on a hosted runner
+    // while a local alternative exists, releases included. The publisher
+    // proves the rest of the corpus locally after every cone publish
+    // (scripts/publish-head.js, the local corpus); this workflow is the
+    // fallback, dispatched by hand - no gate run, push, pull request or
+    // schedule wakes it.
+    assert.deepEqual(Object.keys(canary.on), ['workflow_dispatch'],
+      'the hosted canary runs only when dispatched by hand');
     assert.equal(canary.jobs.corpus.needs, 'decide');
     // The corpus runs when the decision leaves it something to prove, and an
     // ABSENT answer counts as owed: a decide job that fails or times out must
@@ -209,8 +206,8 @@ describe('project hardening contracts', () => {
     const canaryCheckout = canary.jobs.corpus.steps.find(
       (step) => step.name === 'Checkout');
     assert.match(String(canaryCheckout?.with?.ref),
-      /workflow_run\.head_sha/u,
-      'the corpus proves the sha the gate proved, not the branch tip');
+      /github\.sha/u,
+      'the corpus proves the sha it was dispatched for');
     assert.equal(canary.concurrency['cancel-in-progress'], true,
       'only the newest head is worth proving');
   }
@@ -274,7 +271,7 @@ describe('project hardening contracts', () => {
     const canaryText = await readFile(
       '.github/workflows/full-corpus-canary.yml', UTF8);
     const canary = parse(canaryText);
-    assertCanaryFollowsTheGate(canary);
+    assertCanaryRunsOnlyByHand(canary);
     const canaryRuns = canary.jobs.corpus.steps
       .filter((step) => typeof step.run === 'string' &&
         /npm run /u.test(step.run))

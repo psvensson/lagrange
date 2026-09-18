@@ -1,0 +1,40 @@
+{
+  "schema": "solve-quest/2",
+  "id": "local-corpus-canary",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The owner's rule (2026-09-18): the whole corpus is never run on GitHub-hosted runners when a local alternative exists, releases included. Until now every push whose gate proved only a cone owed a 74-minute corpus run on a hosted runner in the full-corpus canary. The canary now moves local. After a verified push whose gate proved a cone, the publisher starts, detached, a run of exactly the rest of the corpus for the pushed commit - the files the cone did not already prove at that commit, so nothing it just proved runs again - in a fresh exact checkout, where placement spreads it over the lab machines. Green, it records the whole-corpus receipt for that commit; red, the next publish says so before anything else. A newer publish supersedes a running one, as the hosted canary's cancel-in-progress did, because only the newest head matters. The hosted canary runs only when dispatched by hand, and a release proves its exact commit locally and records release-full-v1, so full-gate reuses it rather than waking a remote runner.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/local-corpus-canary/evidence/receipt.json",
+      "requiredReceipts": [
+        "cone-publish-starts-the-rest",
+        "whole-corpus-publish-starts-nothing",
+        "newer-publish-supersedes",
+        "next-publish-reports-the-result",
+        "receipt-only-when-green",
+        "hosted-canary-only-by-hand"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "never-repeat-the-cone",
+      "statement": "The local corpus runs only what the gate's cone did not prove at the same commit; together they are the whole corpus once."
+    },
+    {
+      "id": "nothing-hosted-by-default",
+      "statement": "No workflow runs the corpus on a GitHub-hosted runner unless someone dispatches it by hand."
+    },
+    {
+      "id": "red-is-reported",
+      "statement": "A red local corpus is shown by the next publish, never silently lost; a lost or superseded run is named as such, not as green."
+    },
+    {
+      "id": "publish-never-waits",
+      "statement": "The publish does not wait for the local corpus, and bookkeeping about it never fails a finished publish."
+    }
+  ],
+  "sealedAt": "1db6bf6899e1c8674a426bc872c9037dc4440ff5"
+}

@@ -11,9 +11,11 @@
 # cannot stand for it: scripts/checks/push-gate-change-proof.js names the
 # triggers and prints its decision. Until 2026-09-12 the last stage was the
 # whole corpus on every push; identical bytes were re-proved for 17 minutes
-# a push. The whole corpus now runs on main AFTER the push, gating nothing,
-# in the full-corpus canary workflow, and a release proves its tag's tree in
-# full-gate.yml. LAGRANGE_PUSH_FULL_CORPUS=1 asks for the whole corpus here.
+# a push. The rest of the corpus now runs AFTER the push, gating nothing,
+# locally: the publisher proves what the cone did not, for the pushed commit
+# (scripts/publish-head.js, the local corpus), and a release proves its exact
+# commit locally too (RELEASE.md). LAGRANGE_PUSH_FULL_CORPUS=1 asks for the
+# whole corpus here.
 # This hook is the only per-push run of the static checks: the remote
 # per-push CI gate deliberately skips them and only the on-demand full-gate
 # workflow (workflow_dispatch; there is no scheduled full gate) re-runs them
