@@ -11,6 +11,7 @@ import {
   ACCEPTANCE_PROOF,
 } from './checks/acceptance-proof-manifest-constants.js';
 import {
+  PROOF_SCOPE_PATH,
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
 
@@ -92,6 +93,23 @@ const RED_REPAIR_REFUSED_PREFIX = 'publish: repairing a red shared branch is ';
 const ROUTING_REFUSED_PREFIX = 'publish: routing this push to ';
 const ROUTING_REFUSED_SUFFIX = '. It requires ';
 const PUSH_REFUSED_PREFIX = 'publish: pushing the gated head is ';
+// The whole corpus is a fact about the commit, so a gate run that proved it
+// leaves a durable receipt - but only AFTER the push, when the commit is on
+// origin/main and the receipt's own push is exempt from the gate. Recording
+// inside the gate re-entered it and always timed out
+// (proof-ref-push-fast-path). The gate's scope file is the fact: the run that
+// decided writes it, and it names the sha it proved.
+const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
+const PROOF_RECORD_COMMAND = 'record';
+const CORPUS_PROOF_ID = 'corpus-full-v1';
+const RECORD_TIMEOUT_MS = 60000;
+const FIELD_FULL_CORPUS = 'fullCorpus';
+const FIELD_SHA = 'sha';
+const RECEIPT_RECORDED_PREFIX = 'publish: whole-corpus receipt recorded for ';
+const RECEIPT_SKIPPED_PREFIX =
+  'publish: no whole-corpus receipt (the gate proved a cone, not the corpus)';
+const RECEIPT_FAILED_PREFIX = 'publish: whole-corpus receipt not recorded: ';
+const RECEIPT_NO_REASON = 'the authority gave no reason';
 const RED_REPAIR_REFUSED_SUFFIX = '. It requires ';
 const REASON_ARGUMENT = '--reason';
 const STATUS_COMMAND = 'status';
@@ -433,8 +451,58 @@ function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
       `publish: remote verification failed (expected ${head}, got ${remoteAfter})`,
     );
   }
+  recordProvedCorpus(run, root, worktree, head);
   const ciUrl = queryCi === false ? '' : ciRunUrl(run, root, head);
   return {ciUrl, remoteAfter};
+}
+
+/**
+ * Record the gate's whole-corpus proof for the commit just published, when
+ * that is what the gate actually ran. Best effort: the publish already
+ * succeeded and the receipt is bookkeeping, so a failure is reported and
+ * never raised. Reads the gate run's own scope file rather than inferring.
+ * @param {Function} run
+ * @param {string} root
+ * @param {string} worktree the exact-HEAD gate worktree
+ * @param {string} head the sha now on origin/main
+ * @param {Function} [write]
+ * @return {boolean} whether a receipt is now held
+ */
+export function recordProvedCorpus(run, root, worktree, head,
+  write = (value) => process.stdout.write(`${value}\n`)) {
+  let scope = null;
+  try {
+    scope = JSON.parse(fs.readFileSync(
+      path.join(worktree, PROOF_SCOPE_PATH), UTF8));
+  } catch {
+    scope = null;
+  }
+  if (!scope || typeof scope !== 'object' ||
+      !Object.hasOwn(scope, FIELD_FULL_CORPUS) ||
+      !Object.hasOwn(scope, FIELD_SHA) ||
+      scope[FIELD_FULL_CORPUS] !== true || scope[FIELD_SHA] !== head) {
+    write(RECEIPT_SKIPPED_PREFIX);
+    return false;
+  }
+  // Reported, never raised, structurally: the push is already verified by
+  // now, so a throwing runner must not fail a finished publish or skip the
+  // publication receipt (verifier round 2).
+  let recorded = null;
+  try {
+    recorded = run(process.execPath,
+      [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, head],
+      {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  } catch (error) {
+    write(`${RECEIPT_FAILED_PREFIX}${error.message}`);
+    return false;
+  }
+  if (recorded?.status === 0) {
+    write(`${RECEIPT_RECORDED_PREFIX}${head}`);
+    return true;
+  }
+  write(`${RECEIPT_FAILED_PREFIX}${String(
+    recorded?.stderr || recorded?.stdout || RECEIPT_NO_REASON).trim()}`);
+  return false;
 }
 
 function buildPublishReceipt(observed, args) {

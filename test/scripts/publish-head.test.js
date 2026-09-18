@@ -114,17 +114,45 @@ tap.test('the gate reads the remote sha this publish observed as its base', (t) 
   // LAGRANGE_PUSH_SKIP_TESTS, the gate call does not. Without the tag the two
   // lines are indistinguishable - git's carries the correct sha whatever this
   // function computed - and a witness reading the wrong one passes blind.
+  // The gate invocation also writes the proof scope the real gate writes, so
+  // the publisher's own recording of the whole-corpus receipt is observable:
+  // it must happen AFTER the push it verified, which is the whole reason the
+  // gate itself defers (proof-ref-push-fast-path).
   const {parent, root, remote} = fixture(
-    '{ printf "%s " "${LAGRANGE_PUSH_SKIP_TESTS:-GATE}"; cat; } ' +
-    '>> "$(git rev-parse --git-common-dir)/gate-ref-lines.txt"\nexit 0');
+    '{ printf "%s " "${LAGRANGE_PUSH_SKIP_TESTS:-GATE}"; cat -; } ' +
+    '>> "$(git rev-parse --git-common-dir)/gate-ref-lines.txt"\n' +
+    'if [ -z "${LAGRANGE_PUSH_SKIP_TESTS:-}" ]; then\n' +
+    '  SHA="$(git rev-parse HEAD)"\n' +
+    '  mkdir -p test-output\n' +
+    '  printf \'{"sha":"%s","fullCorpus":true}\\n\' "$SHA" ' +
+    '> test-output/proof-scope.json\n' +
+    'fi\nexit 0');
   const recorded = path.join(root, '.git', 'gate-ref-lines.txt');
+  // A stub authority: the publisher spawns `scripts/proof-authority.js record`
+  // from the repository root, so this records the argv it was given, in order
+  // with the hook lines above.
+  const authority = path.join(root, 'scripts', 'proof-authority.js');
+  fs.mkdirSync(path.dirname(authority), {recursive: true});
+  fs.writeFileSync(authority,
+    'import fs from \'node:fs\';\n' +
+    'fs.appendFileSync(\'.git/gate-ref-lines.txt\',\n' +
+    '  `RECORD ${process.argv.slice(2).join(\' \')}\\n`);\n', 'utf8');
+  // The real repository ignores test-output/, so the gate writing its scope
+  // there is not a mutation of the checkout; the fixture must say the same or
+  // the publisher's own mutation guard fires first.
+  fs.writeFileSync(path.join(root, '.gitignore'), 'test-output/\n', 'utf8');
+  git(root, ['add', 'scripts/proof-authority.js', '.gitignore']);
+  git(root, ['commit', '--quiet', '-m', 'stub authority']);
   fs.rmSync(recorded, {force: true});
   const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
   const head = git(root, ['rev-parse', 'HEAD']);
   const receipt = publishExactHead(root, {}, {queryCi: false});
   const lines = fs.readFileSync(recorded, 'utf8').trim().split('\n');
-  t.equal(lines.length, 2, 'the gate ran the hook, and so did the push');
-  const [gateLine, pushLine] = lines;
+  t.equal(lines.length, 3,
+    'the gate ran the hook, so did the push, and then the receipt was recorded');
+  const [gateLine, pushLine, recordLine] = lines;
+  t.equal(recordLine, `RECORD record corpus-full-v1 ${head}`,
+    'the publisher records the corpus the gate proved, for the published sha');
   t.equal(gateLine, `GATE HEAD ${head} refs/heads/main ${remoteBefore}`,
     'the gate is handed the pushed head and the remote sha it will advance');
   t.match(pushLine, /^1 /u, 'the second invocation is git\'s own push');

@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2434086,
-        "sha256": "24a3364df2ccdc31528eb695a977b695abd5ea39ecd407b10d27a988608b11d6"
+        "bytes": 2434329,
+        "sha256": "89d6ff4e4253dcc463be4302de5252c2daa06afbcb2a6369474eee7580a40e6b"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "64ed83273752b660f7ff07a2620f75764101eeecd7331046ad7d2ee4781aa9f0"
+        "sha256": "f3f2f7db197ec747b7a1a23e27852fde66aac3fc64099643f08f1244c260b1e0"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "cf15de0c5e1e65a9f534d553e975c267fd42c4e8f3788f278154990fd8cf4ece"
+        "sha256": "a5e524b483479e61e0473a8fd2dc7dd0577fd3b2db405a6bf708341dffdfa87c"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "372c99300f77287b6313bce845201d0657344bbb6d698a948d74477eb7bfc68c"
+    "inputDigest": "243863881350249819646b5e6f0f4883806d2b5faad4606f5632d862ab243474"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "64ed83273752b660f7ff07a2620f75764101eeecd7331046ad7d2ee4781aa9f0"
+          "sha256": "f3f2f7db197ec747b7a1a23e27852fde66aac3fc64099643f08f1244c260b1e0"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "cf15de0c5e1e65a9f534d553e975c267fd42c4e8f3788f278154990fd8cf4ece"
+          "sha256": "a5e524b483479e61e0473a8fd2dc7dd0577fd3b2db405a6bf708341dffdfa87c"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2434086,
-        "sha256": "24a3364df2ccdc31528eb695a977b695abd5ea39ecd407b10d27a988608b11d6"
+        "bytes": 2434329,
+        "sha256": "89d6ff4e4253dcc463be4302de5252c2daa06afbcb2a6369474eee7580a40e6b"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "8ddfdddadb27d91e7d260ab4a88be8a7f455397d19f85892d6fde531c2479781",
-      "moduleCount": 4798,
-      "edgeCount": 22137,
+      "sourceDigest": "74ea71afa21c1169361538bdf6462dd40de68631482247d215524657c300b68f",
+      "moduleCount": 4799,
+      "edgeCount": 22138,
       "unresolvedCount": 34
     }
   },

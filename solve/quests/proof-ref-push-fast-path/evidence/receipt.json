@@ -1,0 +1,48 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "proof-ref-push-fast-path",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/pre-push-hook-control-flow.test.js": "8728bfa09a5657f898bf0bf711ae52b5e24753c13a1c4c130cba7a7175d96fc8",
+    "test/scripts/push-gate-change-proof.test.js": "82e099d690a8187be25629eb938d0c790474bda6b41179ab195fe66b43ae4344",
+    "test/scripts/publish-head-workspace-links.test.js": "fe05a0f644ccf71c1b6c23288fc9e66e4ec7e29f98297ca07f06a1ad1e1f56f6"
+  },
+  "generatedAt": "2026-09-18T06:22:49.954Z",
+  "receipts": [
+    {
+      "id": "receipt-push-skips-the-gate",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a proof-receipt push of a commit already on main skips the gate entirely$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "a receipt ref for a commit already on origin/main materializes no tree and runs no content stage, so recording cannot re-enter the gate",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "unproven-commit-still-gates",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a receipt for a commit that is NOT on main still gates$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the exemption is the ancestor test, not the ref name",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "receipt-cannot-exempt-a-branch",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a receipt pushed alongside a branch gates on the branch$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "one receipt among the ref lines cannot carry a source push past the gate",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "gate-defers-an-unpublished-commit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unpublished commit defers its receipt to the publisher$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "inside the gate the sha is not on origin/main yet, so the gate defers instead of pushing a receipt that would re-enter the gate",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "publisher-records-what-the-gate-proved",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the publisher records the corpus receipt the gate proved$\" test/scripts/publish-head-workspace-links.test.js",
+      "detail": "after the verified push the publisher records the gate run's own whole-corpus scope, bounded, and never for a cone or another sha",
+      "testFile": "test/scripts/publish-head-workspace-links.test.js"
+    }
+  ]
+}

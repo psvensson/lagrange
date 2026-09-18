@@ -11,7 +11,7 @@
   "materializer": "scripts/checks/push-gate-corpus-worktree.js --gate",
   "stages": [
     {"id": "pushed-refs", "tree": "none", "proves": "the pushed ref lines are read; the first local sha is the tree under proof"},
-    {"id": "tag-only-fast-path", "tree": "none", "proves": "a tag-only push of commits already on origin/main introduces no tree"},
+    {"id": "tag-only-fast-path", "tree": "none", "proves": "a push of only tags or proof receipts for commits already on origin/main introduces no tree, and a receipt must not re-enter the gate that records it"},
     {"id": "red-main-guard", "tree": "none", "proves": "the latest completed ci run on main is green or exempted at its exact head"},
     {"id": "materialize-pushed-tree", "tree": "none", "proves": "the pushed sha is checked out once into a throwaway worktree with the workspace injections declared; every later stage runs there"},
     {"id": "identity", "tree": "pushed-sha", "proves": "the checkout's HEAD is the pushed sha and the remote base is the change proof's base"},

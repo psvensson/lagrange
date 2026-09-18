@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "proof-ref-push-fast-path",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "canary-proof-reuse landed a recording path that could never run: writing a whole-corpus receipt pushes refs/lagrange-proofs/<contract>/<sha>, and git push runs the pre-push hook, which began linting every tracked file and would have re-run the whole corpus for a ref that carries no source at all. Measured 2026-09-18 on the published head b96b41f5b: the authority hung until the gate's own 60 s bound killed it, so no receipt was ever written and the canary kept re-proving (the fail-safe held, but the feature was inert). Two parts, because the hook arm alone does not reach the path that records. (1) The hook's tag-only fast path now admits refs/lagrange-proofs/* under the SAME origin/main ancestor test, so a receipt for a commit that is not on origin/main still gates and a receipt among the ref lines of a source push cannot exempt it. (2) The recording moves to where the commit IS published: the gate defers (inside it the pushed sha is by construction not yet an ancestor of origin/main, which is exactly why recording there re-entered the gate), and scripts/publish-head.js records after the push it already verified, reading the gate run's own proof-scope file so a cone proof or another sha can never mint a receipt. Measured with the arm in place: recording a published sha takes 7.5 s against a hang past 120 s, and the canary's decision for that sha flips to needed=false while an unproven sha stays needed=true. Verifier round 1 rejected the first version for claiming end-to-end where only the manual after-the-fact recording worked.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/proof-ref-push-fast-path/evidence/receipt.json",
+      "requiredReceipts": [
+        "receipt-push-skips-the-gate",
+        "unproven-commit-still-gates",
+        "receipt-cannot-exempt-a-branch"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "ancestor-test-not-ref-name",
+      "statement": "The exemption rests on the commit already being on origin/main, never on the ref's name: a receipt-shaped ref for an unproven commit is gated exactly as a branch is."
+    },
+    {
+      "id": "no-source-rides-along",
+      "statement": "A push that carries any ref other than a proven tag or receipt is gated in full; one receipt in the ref lines cannot carry a source push past the gate."
+    },
+    {
+      "id": "hook-contract-recorded",
+      "statement": "test/manifests/pre-push-stages.json states what the fast path now proves, so the hook's stage contract and its behaviour agree."
+    },
+    {
+      "id": "recorded-only-when-published",
+      "statement": "A receipt is minted only for a commit already on origin/main: the gate defers, and the publisher records after it has verified the push. A cone proof, a scope for another sha, or a missing scope mints nothing."
+    }
+  ],
+  "sealedAt": "b96b41f5b96c7071da217f8bb5d76ce2ca262816"
+}

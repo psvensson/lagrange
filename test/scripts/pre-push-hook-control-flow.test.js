@@ -100,8 +100,18 @@ function buildFixture() {
   git(['add', '.']);
   git(['commit', '--quiet', '-m', 'lint contract']);
   git(['tag', '-a', 'v-fixture', '-m', 'annotated']);
+  // A remote whose main is the FIRST commit: the fast path asks whether the
+  // pushed ref's commit is already on origin/main, so this fixture can show
+  // both answers - a receipt over `base` is proven there, while the tag over
+  // HEAD is not (which is what the tag test above relies on).
+  const remote = path.join(workspace, 'remote.git');
+  git(['init', '--bare', '--quiet', remote]);
+  git(['remote', 'add', 'origin', remote]);
+  git(['push', '--quiet', 'origin', `${base}:refs/heads/main`]);
+  git(['tag', '-a', 'receipt-fixture', '-m', 'receipt', base]);
   return {base, second, head: git(['rev-parse', 'HEAD']),
     branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    receiptTagObject: git(['rev-parse', 'receipt-fixture']),
     tagObject: git(['rev-parse', 'v-fixture'])};
 }
 
@@ -273,4 +283,42 @@ test('inside a checkout of the pushed commit the content stages run in place, in
     'unused-files precedes the ratchets');
   assert.match(run.output, /proving .* \(ref refs\/heads\/main\)/u,
     'the identity line names the checkout and the pushed ref');
+});
+
+// Recording a proof receipt pushes refs/lagrange-proofs/<contract>/<sha>, an
+// annotated tag over a commit that is already proven and on origin/main. It
+// introduces no tree, so it must not re-enter the gate: before this arm, a
+// whole-corpus receipt push started linting every tracked file and would have
+// re-run the corpus, so the recording timed out and no receipt was ever
+// written (canary-proof-reuse, 2026-09-18).
+test('a proof-receipt push of a commit already on main skips the gate entirely', () => {
+  const ref = `refs/lagrange-proofs/corpus-full-v1/${shas.base}`;
+  const run = runHook(
+    `${ref} ${shas.receiptTagObject} ${ref} ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(materializerCalls(run.recorded), [],
+    'no tree is materialized for a receipt');
+  assert.deepEqual(contentStageCalls(run.recorded), [],
+    'and no content stage runs: the gate must not re-enter itself');
+  assert.match(run.output, /skipping gate/u);
+});
+
+test('a receipt for a commit that is NOT on main still gates', () => {
+  const ref = `refs/lagrange-proofs/corpus-full-v1/${shas.head}`;
+  const run = runHook(`${ref} ${shas.tagObject} ${ref} ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  const [call] = materializerCalls(run.recorded);
+  assert.equal(call?.argv[1], shas.head,
+    'an unproven commit is proved, receipt-shaped ref or not');
+});
+
+test('a receipt pushed alongside a branch gates on the branch', () => {
+  const receipt = `refs/lagrange-proofs/corpus-full-v1/${shas.base}`;
+  const run = runHook(
+    `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n` +
+    `${receipt} ${shas.receiptTagObject} ${receipt} ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  const [call] = materializerCalls(run.recorded);
+  assert.equal(call?.argv[1], shas.head,
+    'one receipt in the ref lines cannot exempt the source push beside it');
 });

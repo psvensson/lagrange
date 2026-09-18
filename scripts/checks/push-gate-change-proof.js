@@ -93,6 +93,11 @@ const LABEL_CORPUS_RECEIPT_UNPROVED_TREE =
 // artifacts are not listed by --porcelain, so the gate's own materialised
 // checkout stays clean (verifier round 2).
 const STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
+const MAIN_REMOTE_REF = 'origin/main';
+const ANCESTOR_ARGUMENTS = Object.freeze(['merge-base', '--is-ancestor']);
+const LABEL_CORPUS_RECEIPT_UNPUBLISHED =
+  'whole-corpus receipt deferred to the publisher: this commit is not on ' +
+  'origin/main yet';
 const LABEL_RANGE = 'proof range:';
 const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
@@ -211,6 +216,16 @@ export function recordCorpusProof(sha, options = {}) {
     write(`${LOG_PREFIX} ${LABEL_CORPUS_RECEIPT_UNPROVED_TREE}${NEWLINE}`);
     return null;
   }
+  // A receipt is pushed as refs/lagrange-proofs/<contract>/<sha>, and the
+  // pre-push fast path exempts that ref only for a commit ALREADY on
+  // origin/main. Inside the gate the pushed sha is by construction not there
+  // yet, so recording here would re-enter the gate and hang until the bound
+  // below kills it (verifier round 1 of proof-ref-push-fast-path). The
+  // publisher records instead, straight after the push it verified.
+  if (!commitIsPublished(sha, options)) {
+    write(`${LOG_PREFIX} ${LABEL_CORPUS_RECEIPT_UNPUBLISHED}${NEWLINE}`);
+    return null;
+  }
   const result = spawn(process.execPath,
     [PROOF_AUTHORITY_SCRIPT, PROOF_RECORD_COMMAND, CORPUS_PROOF_ID, sha],
     {cwd: root, encoding: TEXT_ENCODING, timeout: RECORD_TIMEOUT_MS});
@@ -220,6 +235,16 @@ export function recordCorpusProof(sha, options = {}) {
     `${LABEL_CORPUS_RECEIPT_SKIPPED} ${stringTrim(
       String(result?.stderr || result?.stdout || EMPTY_REASON))}`}${NEWLINE}`);
   return recorded;
+}
+
+// Already an ancestor of origin/main: the receipt's own push is then exempt
+// from the gate, so recording cannot re-enter it.
+function commitIsPublished(sha, options = {}) {
+  const {git = spawnSync} = options;
+  const ancestor = git(GIT_BINARY,
+    [...ANCESTOR_ARGUMENTS, sha, MAIN_REMOTE_REF],
+    {cwd: root, encoding: TEXT_ENCODING});
+  return ancestor?.status === EXIT_SUCCESS;
 }
 
 // HEAD is this sha and nothing is modified: the tree the corpus ran against

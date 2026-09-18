@@ -28,7 +28,7 @@
   "censusSize": 2122,
   "digest": "fnv1a32-dee3a0b4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e6071f48",
+  "observationDigest": "fnv1a32-7b83cf74",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7273,6 +7273,7 @@
         "package-lock.json",
         "package.json",
         "scripts/action-authority.js",
+        "scripts/proof-authority.js",
         "scripts/publish-head.js",
         "scripts/solve/red-main-exemption.js",
         "src/admin/static/playback-viewer.html",
@@ -8402,7 +8403,8 @@
     "test/scripts/publish-head-workspace-links.test.js": {
       "files": [
         ".githooks/pre-push",
-        "data/formation-health/trend.ndjson"
+        "data/formation-health/trend.ndjson",
+        "scripts/proof-authority.js"
       ],
       "directories": [
         "data",
@@ -8412,7 +8414,9 @@
     "test/scripts/publish-head.test.js": {
       "files": [
         ".githooks/pre-push",
-        "data/formation-health/trend.ndjson"
+        ".gitignore",
+        "data/formation-health/trend.ndjson",
+        "scripts/proof-authority.js"
       ],
       "directories": [
         ".githooks",

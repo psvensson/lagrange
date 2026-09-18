@@ -249,6 +249,7 @@ test('every module in the gate\'s own import closure trips a full-corpus trigger
 // tripping its own triggers.
 const PROVED_SHA = 'c'.repeat(40);
 const STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
+const ANCESTOR_ARGUMENTS = Object.freeze(['merge-base', '--is-ancestor']);
 // A tree that IS the commit: HEAD equals the sha, nothing modified. The spy
 // records what it was asked, because the question matters: dropping
 // --untracked-files=no is what makes a smuggled fixture block the receipt,
@@ -279,9 +280,38 @@ test('a green whole-corpus run records a receipt through the authority CLI', () 
   'the gate records the contract the authority owns, for this sha');
   assert.match(lines.join(''), /whole-corpus receipt for c{40}/u);
   // Untracked files are counted: a committed test whose fixture exists only in
-  // the tree must not be able to mint a receipt for HEAD.
-  assert.deepEqual(asked, [['rev-parse', 'HEAD'], [...STATUS_ARGUMENTS]],
-    'the tree is judged by HEAD and a porcelain status that counts untracked files');
+  // the tree must not be able to mint a receipt for HEAD. And the commit must
+  // already be on origin/main, or the receipt's own push would re-enter the
+  // gate (proof-ref-push-fast-path).
+  assert.deepEqual(asked, [
+    ['rev-parse', 'HEAD'],
+    [...STATUS_ARGUMENTS],
+    [...ANCESTOR_ARGUMENTS, PROVED_SHA, 'origin/main'],
+  ], 'HEAD, a porcelain status counting untracked files, then published-ness');
+});
+
+// Inside the gate the pushed sha is not on origin/main yet, so recording
+// there would push a receipt ref that the fast path cannot exempt: it would
+// re-enter the gate and hang until the 60 s bound killed it, which is why no
+// receipt was ever written before this quest. The gate defers; the publisher
+// records after the push it verified.
+test('an unpublished commit defers its receipt to the publisher', () => {
+  const lines = [];
+  const asked = [];
+  assert.equal(recordCorpusProof(PROVED_SHA, {
+    git: (command, args) => {
+      asked.push(args);
+      if (args[0] === 'rev-parse') return {status: 0, stdout: `${PROVED_SHA}\n`};
+      if (args[0] === 'merge-base') return {status: 1, stdout: ''};
+      return {status: 0, stdout: ''};
+    },
+    spawn: () => {
+      throw new Error('the authority must not be called for an unpublished commit');
+    },
+    write: (value) => lines.push(value),
+  }), null);
+  assert.match(lines.join(''), /not on origin\/main yet/u);
+  assert.deepEqual(asked.at(-1), [...ANCESTOR_ARGUMENTS, PROVED_SHA, 'origin/main']);
 });
 
 // A manual invocation gates HEAD plus whatever is in the tree. A receipt

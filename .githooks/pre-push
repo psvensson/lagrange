@@ -90,7 +90,15 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
     MAIN_REMOTE_SHA="${remote_sha}"
   fi
   case "${remote_ref}" in
-    refs/tags/*)
+    # A proof receipt (refs/lagrange-proofs/<contract>/<sha>) is an annotated
+    # tag over a commit that is ALREADY proven and pushed; it adds no tree and
+    # no source. Without this arm the gate re-entered itself: recording a
+    # whole-corpus receipt ran `git push`, which ran this hook, which began
+    # linting every tracked file and would have re-run the corpus - so the
+    # recording always timed out and no receipt was ever written
+    # (canary-proof-reuse, observed 2026-09-18). Same ancestor test as a tag:
+    # a receipt for a commit that is NOT on origin/main still gates.
+    refs/tags/*|refs/lagrange-proofs/*)
       if [ "${local_sha}" != "${ZERO_SHA}" ]; then
         # Resolve annotated tags to the commit they point at.
         tag_commit="$(git rev-parse --verify --quiet "${local_sha}^{commit}"           || echo "${local_sha}")"
@@ -117,7 +125,7 @@ stage "tag-only-fast-path" "tag-only fast path check"
 # for the release-tag push added ~15 min and two terminal timeouts on
 # 2026-08-23; skip the gauntlet entirely for that case.
 if [ "${ALL_PROVEN_TAG_REFS}" = "1" ]; then
-  echo "pre-push: tag-only push of commits already on origin/main - skipping gate"
+  echo "pre-push: tag-or-receipt-only push of commits already on origin/main - skipping gate"
   exit 0
 fi
 
