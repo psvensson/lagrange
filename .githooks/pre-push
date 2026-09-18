@@ -120,6 +120,44 @@ if [ "${SAW_REF}" = "0" ]; then
   ALL_PROVEN_TAG_REFS=0
 fi
 
+# A data-only push of the nightly formation-health trend record. The workflow
+# asks for it by name (LAGRANGE_PUSH_DATA_ONLY=formation-trend); the trend's
+# owner then proves that the one ref, a fast-forward of main, only appends
+# measuring records to data/formation-health/trend.ndjson. Any other shape -
+# source, tests, seals, manifests, a tag, a rewritten line, a merge, a
+# non-verdict - REFUSES the push: the request never falls back to the code
+# gate or to a fast path, so it cannot carry anything past them. Admission
+# needs the owner's exit 0 AND its "verified" line, so a script that ran
+# nothing cannot admit a push. Without the request a push takes the gate.
+# (The nightly's record was lost 2026-09-15..18: its push took the whole gate
+# on the provisioning runner, which failed on a red main and on a seal the
+# gate rewrote over a dependency tree re-resolved away from the lockfile.)
+if [ -n "${LAGRANGE_PUSH_DATA_ONLY:-}" ]; then
+  stage "data-only-trend" "data-only trend append (proved; refused on any other change)"
+  if [ "${LAGRANGE_PUSH_DATA_ONLY}" != "formation-trend" ]; then
+    echo "pre-push: unknown data-only request '${LAGRANGE_PUSH_DATA_ONLY}' - refusing the push"
+    exit 1
+  fi
+  if [ "$(wc -l < "${REF_LINES_FILE}")" -ne 1 ] || [ "${PUSHING_MAIN}" != "1" ] \
+    || [ -z "${MAIN_REMOTE_SHA}" ] || [ "${MAIN_REMOTE_SHA}" = "${ZERO_SHA}" ]; then
+    echo "pre-push: a data-only trend push is exactly one ref, fast-forwarding an existing main - refusing"
+    exit 1
+  fi
+  TREND_PUSH_STATUS=0
+  TREND_PUSH_OUTPUT="$(node scripts/checks/formation-health.js --verify-trend-push \
+    "${MAIN_REMOTE_SHA}" "${PUSHED_SHA}" 2>&1)" || TREND_PUSH_STATUS=$?
+  printf '%s\n' "${TREND_PUSH_OUTPUT}"
+  case "${TREND_PUSH_OUTPUT}" in
+    *"formation health: trend push verified - "*) ;;
+    *) TREND_PUSH_STATUS=1 ;;
+  esac
+  if [ "${TREND_PUSH_STATUS}" -ne 0 ]; then
+    echo "pre-push: the data-only trend push is not proved to append trend records only - refusing"
+    exit 1
+  fi
+  exit 0
+fi
+
 # A push consisting only of tags whose target commits already sit on
 # origin/main (or tag deletions) introduces NO new tree: everything a tag
 stage "tag-only-fast-path" "tag-only fast path check"

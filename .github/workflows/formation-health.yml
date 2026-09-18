@@ -95,10 +95,11 @@ jobs:
         run: |
           npm install --global npm@11.7.0
           npm ci
-          # The GCP harness deliberately keeps Pulumi out of the ordinary
-          # package manifest. Install its exact optional boundary here, where
-          # provision() is actually exercised, without rewriting the lockfile.
-          npm install --no-save --package-lock=false @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
+          # The GCP harness keeps Pulumi out of the package manifest; install
+          # its pinned optional boundary here. --no-save leaves the lockfile
+          # governing every other package (switching it off re-resolved the
+          # whole tree, and the push gate then rewrote the seal, 09-18).
+          npm install --no-save @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
 
       - name: Fetch MovieLens dataset (digest-pinned)
         run: |
@@ -117,6 +118,10 @@ jobs:
       # appends a record; a red measurement is committed like a green one.
       - name: Commit the trend record to main
         if: always()
+        # The push asks for the data-only path: the pre-push hook has the
+        # trend's owner prove it only appends records, or refuses it.
+        env:
+          LAGRANGE_PUSH_DATA_ONLY: formation-trend
         run: |
           set -euo pipefail
           git add data/formation-health/trend.ndjson

@@ -19,6 +19,7 @@ const root = process.cwd();
 const UTF8 = 'utf8';
 const HOOK = '.githooks/pre-push';
 const MATERIALIZER = 'scripts/checks/push-gate-corpus-worktree.js';
+const TREND_OWNER = 'scripts/checks/formation-health.js';
 const STUBBED_SCRIPTS = Object.freeze([
   'scripts/check-circular-dependencies.js',
   'scripts/check-unused-exports.js',
@@ -60,6 +61,13 @@ function buildFixture() {
   fs.mkdirSync(stubBin, {recursive: true});
   write(HOOK, fs.readFileSync(path.join(root, HOOK), UTF8), 0o755);
   write(MATERIALIZER, recorderSource('materializer'));
+  // The trend owner's stub also says what the real owner says when it
+  // approves: the hook needs its exit 0 AND its verified line.
+  write(TREND_OWNER, recorderSource('trend').replace('process.exit(',
+    'if (process.env.PRE_PUSH_FLOW_TREND_SAYS !== undefined) ' +
+    'console.log(process.env.PRE_PUSH_FLOW_TREND_SAYS);\n' +
+    'else if (!(Number(process.env.PRE_PUSH_FLOW_STATUS_TREND) > 0)) ' +
+    'console.log(\'formation health: trend push verified - stub\');\nprocess.exit('));
   for (const script of STUBBED_SCRIPTS) write(script, recorderSource('script'));
   write('package.json', '{"name": "pre-push-flow-fixture", "type": "module"}\n');
   write('README.md', 'fixture\n');
@@ -80,7 +88,12 @@ function buildFixture() {
       'const fs = require(\'node:fs\');\n' +
       'fs.appendFileSync(process.env.PRE_PUSH_FLOW_CALLS, JSON.stringify({\n' +
       `  name: ${JSON.stringify(name)}, argv: process.argv.slice(2)}) + '\\n');\n` +
-      `process.exit(${name === 'gh' ? 1 : 0});\n`, {mode: 0o755});
+      (name === 'gh' ?
+        // gh answers the red-main guard only when a test asks it to.
+        'if (process.env.PRE_PUSH_FLOW_GH_SAYS) {\n' +
+        '  console.log(process.env.PRE_PUSH_FLOW_GH_SAYS); process.exit(0);\n}\n' +
+        'process.exit(1);\n' :
+        'process.exit(0);\n'), {mode: 0o755});
   }
   git(['init', '--quiet']);
   git(['config', 'user.email', 'fixture@example.invalid']);
@@ -147,7 +160,11 @@ function materializerCalls(recorded) {
 
 function contentStageCalls(recorded) {
   return recorded.filter((entry) => entry.name !== 'materializer' &&
-    entry.name !== 'gh');
+    entry.name !== 'gh' && entry.name !== 'trend');
+}
+
+function trendCalls(recorded) {
+  return recorded.filter((entry) => entry.name === 'trend');
 }
 
 test('the hook hands the pushed commit to the materializer and runs no content stage itself', () => {
@@ -321,4 +338,71 @@ test('a receipt pushed alongside a branch gates on the branch', () => {
   const [call] = materializerCalls(run.recorded);
   assert.equal(call?.argv[1], shas.head,
     'one receipt in the ref lines cannot exempt the source push beside it');
+});
+
+// The nightly's trend record asks for the data-only path by name. The trend's
+// owner proves the push; its answer is the hook's answer, and a refusal never
+// falls back to the code gate, so the request cannot carry code past it.
+const DATA_ONLY = {LAGRANGE_PUSH_DATA_ONLY: 'formation-trend'};
+
+test('a data-only trend push is proved by the trend owner and never reaches the gate', () => {
+  const run = runHook(`refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`, DATA_ONLY);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(trendCalls(run.recorded).map((entry) => entry.argv),
+    [['--verify-trend-push', shas.base, shas.second]], 'the owner proves exactly the pushed range');
+  assert.deepEqual(materializerCalls(run.recorded), []);
+  assert.deepEqual(contentStageCalls(run.recorded), []);
+});
+
+test('a data-only trend push the owner refuses is refused, never gated instead', () => {
+  const run = runHook(`refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...DATA_ONLY, PRE_PUSH_FLOW_STATUS_TREND: '1'});
+  assert.equal(run.status, 1, run.output);
+  assert.equal(trendCalls(run.recorded).length, 1);
+  assert.deepEqual(materializerCalls(run.recorded), [], 'no fallback to the code gate');
+  assert.deepEqual(contentStageCalls(run.recorded), []);
+});
+
+test('a malformed data-only request is refused before anything is proved', () => {
+  const cases = [
+    ['an unknown request', `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+      {LAGRANGE_PUSH_DATA_ONLY: 'anything'}],
+    ['a second ref', `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n` +
+      `refs/heads/side ${shas.head} refs/heads/side ${ZERO_SHA}\n`, DATA_ONLY],
+    ['a ref other than main', `refs/heads/side ${shas.second} refs/heads/side ${shas.base}\n`,
+      DATA_ONLY],
+    ['a main the remote does not have yet', `refs/heads/main ${shas.second} refs/heads/main ` +
+      `${ZERO_SHA}\n`, DATA_ONLY],
+    ['a manual invocation', '', DATA_ONLY],
+  ];
+  for (const [label, lines, env] of cases) {
+    const run = runHook(lines, env);
+    assert.equal(run.status, 1, `${label}: ${run.output}`);
+    assert.deepEqual(trendCalls(run.recorded), [], `${label}: nothing is proved`);
+    assert.deepEqual(materializerCalls(run.recorded), [], `${label}: nothing is gated`);
+  }
+});
+
+test('a data-only trend push is admitted only on the owner\'s verified line', () => {
+  const run = runHook(`refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...DATA_ONLY, PRE_PUSH_FLOW_TREND_SAYS: 'nothing ran'});
+  assert.equal(run.status, 1, 'an exit 0 without the verified line is not a proof: ' + run.output);
+  assert.deepEqual(materializerCalls(run.recorded), []);
+  const failing = runHook(`refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...DATA_ONLY, PRE_PUSH_FLOW_STATUS_TREND: '1',
+      PRE_PUSH_FLOW_TREND_SAYS: 'formation health: trend push verified - forged'});
+  assert.equal(failing.status, 1, 'nor is the verified line without exit 0: ' + failing.output);
+});
+
+test('a data-only trend push is proved before any fast path or the red-main guard', () => {
+  // A red main must not cost the nightly its record (2026-09-15..17), and a
+  // request cannot ride the tag fast path past the owner.
+  const red = runHook(`refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`,
+    {...DATA_ONLY, PRE_PUSH_FLOW_GH_SAYS: `failure ${shas.base}`});
+  assert.equal(red.status, 0, red.output);
+  assert.equal(trendCalls(red.recorded).length, 1);
+  const ref = `refs/lagrange-proofs/corpus-full-v1/${shas.base}`;
+  const tag = runHook(`${ref} ${shas.receiptTagObject} ${ref} ${ZERO_SHA}\n`, DATA_ONLY);
+  assert.equal(tag.status, 1, 'a receipt push with the request is refused: ' + tag.output);
+  assert.deepEqual(trendCalls(tag.recorded), []);
 });

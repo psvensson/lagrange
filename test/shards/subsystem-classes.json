@@ -28,7 +28,7 @@
   "censusSize": 2126,
   "digest": "fnv1a32-3b40788f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7029f808",
+  "observationDigest": "fnv1a32-be06516a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8007,12 +8007,21 @@
     },
     "test/scripts/formation-health.test.js": {
       "files": [
+        ".githooks/pre-push",
         ".github/workflows/formation-health.yml",
         "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/formation-verdict.js",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package.json",
+        "scripts/checks/formation-health.js",
         "scripts/checks/wait-for-thermal-headroom.js",
-        "test/distributed/harness/gcp-provisioner.js"
+        "src/diagnostics/formation-diagnostics-contract.js",
+        "src/test-helpers/probe-guard.js",
+        "test/distributed/harness/gcp-provisioner.js",
+        "test/shards/impact-graph-seal.json"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": {
@@ -8392,6 +8401,7 @@
         "package.json",
         "scripts/check-circular-dependencies.js",
         "scripts/check-unused-exports.js",
+        "scripts/checks/formation-health.js",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js"
@@ -8399,7 +8409,10 @@
       "env": [
         "LAGRANGE_GATE_PUSHED_REF",
         "LAGRANGE_WORKSPACE_INJECTIONS",
-        "PRE_PUSH_FLOW_CALLS"
+        "PRE_PUSH_FLOW_CALLS",
+        "PRE_PUSH_FLOW_GH_SAYS",
+        "PRE_PUSH_FLOW_STATUS_TREND",
+        "PRE_PUSH_FLOW_TREND_SAYS"
       ]
     },
     "test/scripts/pre-push-stage-manifest.test.js": {

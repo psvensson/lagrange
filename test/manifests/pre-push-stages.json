@@ -11,6 +11,7 @@
   "materializer": "scripts/checks/push-gate-corpus-worktree.js --gate",
   "stages": [
     {"id": "pushed-refs", "tree": "none", "proves": "the pushed ref lines are read; the first local sha is the tree under proof"},
+    {"id": "data-only-trend", "tree": "none", "proves": "a push that requests the data-only path is exactly one fast-forward of main that only appends measuring records to data/formation-health/trend.ndjson, proved by that trend's owner (the working tree's scripts/checks/formation-health.js: its exit status and its verified line); any other shape is refused, never gated or fast-pathed instead"},
     {"id": "tag-only-fast-path", "tree": "none", "proves": "a push of only tags or proof receipts for commits already on origin/main introduces no tree, and a receipt must not re-enter the gate that records it"},
     {"id": "red-main-guard", "tree": "none", "proves": "the latest completed ci run on main is green or exempted at its exact head"},
     {"id": "materialize-pushed-tree", "tree": "none", "proves": "the pushed sha is checked out once into a throwaway worktree with the workspace injections declared; every later stage runs there"},

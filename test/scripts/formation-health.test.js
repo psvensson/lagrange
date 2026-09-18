@@ -3,7 +3,7 @@
  * summarized with a pass rate; a run without a report records nothing.
  */
 
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,7 +14,9 @@ import {
   readTrend,
   renderTrendSummary,
   runFormationHealth,
+  verifyTrendPush,
 } from '../../scripts/checks/formation-health.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
   FORMATION_OWNER,
 } from '../../src/diagnostics/formation-diagnostics-contract.js';
@@ -23,8 +25,7 @@ const FORMATION_HEALTH_WORKFLOW_PATH = '.github/workflows/formation-health.yml';
 const DEPENDENCY_POLICY_PATH = 'dependency-policy.json';
 const PULUMI_PACKAGE_NAMES = ['@pulumi/pulumi', '@pulumi/gcp'];
 const PINNED_PULUMI_INSTALL =
-  'npm install --no-save --package-lock=false ' +
-  '@pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1';
+  'npm install --no-save @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1';
 
 function liveReport({passed, verdict, reason, seedStarved, blockedMs}) {
   return {
@@ -66,6 +67,7 @@ test('buildTrendRecord reduces a report to the trend fields', (t) => {
     spreadGap: 6,
     admissionState: 'denied',
     reportPath: 'test-output/reports/x.report.json',
+    run: null,
   });
   const bare = buildTrendRecord({}, {head: 'h'});
   t.equal(bare.verdict, null);
@@ -120,6 +122,11 @@ test('scheduled GCP health installs only its pinned optional boundary', (t) => {
     'the optional boundary is restored after npm ci removes ambient packages');
   t.ok(healthRunIndex > optionalInstallIndex,
     'the provisioner cannot run before its optional boundary is installed');
+  // --package-lock=false re-resolved the whole tree from the semver ranges:
+  // the driver ran on 262 locked packages at other versions, and the push
+  // gate's import-graph refresh rewrote the committed seal (2026-09-18).
+  t.notMatch(workflow, /--package-lock=false/u,
+    'the optional install leaves every locked package where the lockfile put it');
 
   // The Pulumi JS SDK drives the `pulumi` CLI binary, which npm ci cannot
   // provide: the scheduled runner must install it itself, pinned to the same
@@ -326,5 +333,287 @@ test('--bot-commits flags a formation-health commit that touches anything but th
   commit('formation-health', 'formation-health@users.noreply.github.com', 'src/b.js', 'bot touches source');
   t.equal(check(), 1, 'anything else by the bot is flagged');
   fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// A record names the workflow run that measured it, so a late record can never
+// pass for a new run; a local run names none.
+test('a trend record carries the workflow run that measured it', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-run-'));
+  const reportPath = path.join(root, 'test-output/reports/r.report.json');
+  fs.mkdirSync(path.dirname(reportPath), {recursive: true});
+  fs.writeFileSync(reportPath, JSON.stringify(liveReport({
+    passed: true, verdict: 'PASS', reason: 'schema_admitted', seedStarved: false, blockedMs: 1,
+  })));
+  const record = (env) => runFormationHealth({
+    root, report: 'test-output/reports/r.report.json', env, log: () => {},
+    run: () => t.fail('never runs the demo'),
+  }).record;
+  t.same(record({GITHUB_RUN_ID: '35303538995', GITHUB_RUN_ATTEMPT: '1'}).run,
+    {id: '35303538995', attempt: '1'});
+  t.equal(record({}).run, null);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+const TREND = 'data/formation-health/trend.ndjson';
+const measured = (verdict, at = '2026-09-15T03:59:00.000Z') =>
+  `${JSON.stringify({schemaVersion: 1, at, head: '3b1fd7877', verdict})}\n`;
+
+// A scratch repository whose main already holds the trend and some source.
+function trendRepo(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-trend-push-'));
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    ...args], {cwd: root, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
+  const write = (file, text, mode = 0o644) => {
+    fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});
+    fs.writeFileSync(path.join(root, file), text, {mode});
+  };
+  const commit = (message) => {
+    git('add', '-A');
+    git('commit', '-q', '-m', message);
+    return git('rev-parse', 'HEAD');
+  };
+  git('init', '-q', '-b', 'main');
+  git('config', 'commit.gpgsign', 'false');
+  write(TREND, measured('PASS', '2026-09-14T03:46:58.215Z'));
+  write('src/a.js', 'export const a = 1;\n');
+  write('test/shards/impact-graph-seal.json', '{"snapshotDigest": "a"}\n');
+  const base = commit('base');
+  const append = (text) => fs.appendFileSync(path.join(root, TREND), text);
+  const reset = () => git('checkout', '-q', '--detach', base);
+  return {root, git, write, commit, base, append, reset};
+}
+
+const problemsOf = (repo, head, base = repo.base) =>
+  verifyTrendPush(repo.root, base, head).problems;
+
+test('a data-only trend push is admitted when it only appends measuring records', (t) => {
+  const repo = trendRepo(t);
+  repo.append(measured('PASS'));
+  const one = repo.commit('trend 09-15');
+  t.same(verifyTrendPush(repo.root, repo.base, one), {problems: [], records: 1, commits: 1});
+  repo.append(measured('FAIL', '2026-09-16T03:59:00.000Z') +
+    measured('PASS', '2026-09-17T03:59:00.000Z'));
+  const two = repo.commit('trend 09-16 and 09-17');
+  t.same(verifyTrendPush(repo.root, repo.base, two), {problems: [], records: 3, commits: 2},
+    'a red measurement is a record like a green one');
+  t.end();
+});
+
+test('a data-only trend push that changes anything else is refused', (t) => {
+  const repo = trendRepo(t);
+  const refused = (label, build, pattern) => {
+    repo.reset();
+    const head = build();
+    const problems = problemsOf(repo, head);
+    t.ok(problems.length > 0, `${label} is refused`);
+    t.match(problems.join('; '), pattern, label);
+  };
+  refused('source beside the record', () => {
+    repo.append(measured('PASS'));
+    repo.write('src/a.js', 'export const a = 2;\n');
+    return repo.commit('smuggled');
+  }, /more than the trend file/u);
+  refused('the seal alone', () => {
+    repo.write('test/shards/impact-graph-seal.json', '{"snapshotDigest": "b"}\n');
+    return repo.commit('seal');
+  }, /more than the trend file/u);
+  refused('a source change reverted later in the push', () => {
+    repo.write('src/a.js', 'export const a = 3;\n');
+    repo.commit('change');
+    repo.write('src/a.js', 'export const a = 1;\n');
+    repo.append(measured('PASS'));
+    return repo.commit('revert and append');
+  }, /more than the trend file/u);
+  refused('a rewritten record', () => {
+    repo.write(TREND, measured('FAIL', '2026-09-14T03:46:58.215Z') + measured('PASS'));
+    return repo.commit('rewrite');
+  }, /rewrites the trend/u);
+  refused('a mode change', () => {
+    repo.append(measured('PASS'));
+    fs.chmodSync(path.join(repo.root, TREND), 0o755);
+    return repo.commit('mode');
+  }, /more than the trend file/u);
+  refused('an UNKNOWN verdict', () => {
+    repo.append(measured('UNKNOWN'));
+    return repo.commit('non-verdict');
+  }, /no measuring verdict/u);
+  refused('another schema version', () => {
+    repo.append(`${JSON.stringify({schemaVersion: 2, at: '2026-09-15T03:59:00.000Z',
+      head: 'h', verdict: 'PASS'})}\n`);
+    return repo.commit('schema');
+  }, /another schema version/u);
+  refused('a record with no time or head', () => {
+    repo.append(`${JSON.stringify({schemaVersion: 1, verdict: 'PASS'})}\n`);
+    return repo.commit('unanchored');
+  }, /names no time or head/u);
+  refused('a record whose time is not a time', () => {
+    repo.append(`${JSON.stringify({schemaVersion: 1, at: 'last night', head: 'h',
+      verdict: 'PASS'})}\n`);
+    return repo.commit('bad time');
+  }, /names no time or head/u);
+  refused('a padded verdict', () => {
+    repo.append(measured('UNKNOWN ').replace('"UNKNOWN "', '"UNKNOWN "'));
+    return repo.commit('padded');
+  }, /no measuring verdict/u);
+  refused('an empty verdict', () => {
+    repo.append(measured(''));
+    return repo.commit('empty verdict');
+  }, /no measuring verdict/u);
+  refused('an invented verdict', () => {
+    repo.append(measured('banana'));
+    return repo.commit('banana');
+  }, /no measuring verdict/u);
+  refused('a duplicate key hiding a non-verdict', () => {
+    repo.append('{"schemaVersion":1,"at":"2026-09-15T03:59:00.000Z","head":"h",' +
+      '"verdict":"UNKNOWN","verdict":"PASS"}\n');
+    return repo.commit('duplicate key');
+  }, /not a record as the writer writes one/u);
+  refused('a time that is not the writer\'s ISO stamp', () => {
+    repo.append(`${JSON.stringify({schemaVersion: 1, at: '0', head: 'h', verdict: 'PASS'})}\n`);
+    return repo.commit('loose time');
+  }, /names no time or head/u);
+  refused('a blank line', () => {
+    repo.append('\n');
+    return repo.commit('blank');
+  }, /not a record as the writer writes one/u);
+  refused('a CRLF record', () => {
+    repo.append(measured('PASS').replace('\n', '\r\n'));
+    return repo.commit('crlf');
+  }, /not a record as the writer writes one/u);
+  refused('a gitlink that .gitmodules says to ignore', () => {
+    repo.append(measured('PASS'));
+    repo.git('update-index', '--add', '--cacheinfo', `160000,${repo.base},vendor/sub`);
+    fs.writeFileSync(path.join(repo.root, '.gitmodules'),
+      '[submodule "sub"]\n\tpath = vendor/sub\n\turl = ./sub\n\tignore = all\n');
+    repo.git('add', TREND);
+    repo.git('commit', '-q', '-m', 'hidden gitlink');
+    // .gitmodules stays in the working tree while the push is judged: git
+    // would honour its ignore=all even untracked.
+    return repo.git('rev-parse', 'HEAD');
+  }, /more than the trend file/u);
+  refused('a replace ref standing in for the pushed commit', () => {
+    fs.rmSync(path.join(repo.root, '.gitmodules'), {force: true});
+    repo.append(measured('PASS'));
+    repo.write('src/a.js', 'export const a = 4;\n');
+    const smuggled = repo.commit('smuggled');
+    repo.reset();
+    repo.append(measured('PASS'));
+    const innocent = repo.commit('innocent');
+    repo.git('replace', smuggled, innocent);
+    return smuggled;
+  }, /more than the trend file/u);
+  refused('a line that is not JSON', () => {
+    repo.append('not json\n');
+    return repo.commit('garbage');
+  }, /not a record as the writer writes one/u);
+  refused('a partial line', () => {
+    repo.append(measured('PASS').trimEnd());
+    return repo.commit('torn');
+  }, /partial line/u);
+  refused('a merge, even of a pure append', () => {
+    repo.append(measured('PASS'));
+    const side = repo.commit('side');
+    repo.reset();
+    repo.git('merge', '-q', '--no-ff', '--no-edit', side);
+    return repo.git('rev-parse', 'HEAD');
+  }, /exactly one parent/u);
+  refused('an unrelated history', () => {
+    repo.git('checkout', '-q', '--orphan', 'elsewhere');
+    repo.append(measured('PASS'));
+    return repo.commit('orphan');
+  }, /does not descend/u);
+  repo.reset();
+  // The base itself must end on a line boundary, or the first appended line
+  // is glued to the last old one.
+  repo.write(TREND, measured('PASS', '2026-09-14T03:46:58.215Z').trimEnd());
+  const tornBase = repo.commit('torn base');
+  repo.append(`\n${measured('PASS')}`);
+  t.match(problemsOf(repo, repo.commit('after a torn base'), tornBase).join('; '), /partial line/u,
+    'a torn base is refused');
+  // A git failure is a refusal, never an empty problem list.
+  repo.reset();
+  repo.append(measured('PASS'));
+  const unreadable = repo.commit('unreadable');
+  const blob = repo.git('rev-parse', `${unreadable}:${TREND}`);
+  fs.rmSync(path.join(repo.root, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
+  t.match(problemsOf(repo, unreadable).join('; '), /^git: /u, 'a git error refuses');
+  repo.reset();
+  t.match(problemsOf(repo, repo.base, '0'.repeat(40))[0], /not a commit/u,
+    'a new main (no remote sha) is not a data-only push');
+  t.match(problemsOf(repo, repo.base)[0], /no commit/u, 'an empty push proves nothing');
+  t.end();
+});
+
+test('only PASS and FAIL count as measuring for --metric', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-metric-'));
+  const trend = path.join(root, TREND);
+  fs.mkdirSync(path.dirname(trend), {recursive: true});
+  const metric = () => {
+    const lines = [];
+    runFormationHealth({root, metric: true, log: (line) => lines.push(line)});
+    return Number(lines[0]);
+  };
+  fs.writeFileSync(trend, measured('PASS') + measured('FAIL') + measured('PASS'));
+  t.equal(metric(), 0);
+  fs.writeFileSync(trend, measured('PASS') + measured('') + measured('banana'));
+  t.equal(metric(), 2, 'an empty or invented verdict is not a measurement');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+// The pre-push hook admits a data-only push only on this script's word, so
+// the script must run wherever the checkout lives: a path holding '#' made
+// the old main-module guard skip everything and exit 0, and the hook then
+// admitted a smuggled source change (verifier, round 1). The real hook and
+// the real script, copied into scratch checkouts.
+const HOOK_CLOSURE = Object.freeze([
+  '.githooks/pre-push',
+  'scripts/checks/formation-health.js',
+  'examples/service-data-affinity/formation-verdict.js',
+  'src/diagnostics/formation-diagnostics-contract.js',
+  'src/test-helpers/probe-guard.js',
+]);
+
+test('the real hook admits a trend append and refuses a smuggled change, at any checkout path', (t) => {
+  for (const parent of ['plain', 'runner#1']) {
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-hook-'));
+    t.teardown(() => fs.rmSync(top, {recursive: true, force: true}));
+    const root = path.join(top, parent, 'lagrange');
+    fs.mkdirSync(root, {recursive: true});
+    const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+      ...args], {cwd: root, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
+    for (const file of HOOK_CLOSURE) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});
+      fs.copyFileSync(file, path.join(root, file));
+    }
+    fs.writeFileSync(path.join(root, 'package.json'), '{"type": "module"}\n');
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'src/a.js'), 'export const a = 1;\n');
+    fs.mkdirSync(path.dirname(path.join(root, TREND)), {recursive: true});
+    fs.writeFileSync(path.join(root, TREND), measured('PASS', '2026-09-14T03:46:58.215Z'));
+    git('init', '-q', '-b', 'main');
+    git('config', 'commit.gpgsign', 'false');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    const base = git('rev-parse', 'HEAD');
+    const push = (head) => spawnSync('bash', ['.githooks/pre-push'], {cwd: root, encoding: 'utf8',
+      input: `refs/heads/main ${head} refs/heads/main ${base}\n`,
+      env: {...gitProcessEnvironment(), LAGRANGE_PUSH_DATA_ONLY: 'formation-trend'}});
+    fs.appendFileSync(path.join(root, TREND), measured('PASS'));
+    git('commit', '-q', '-am', 'trend');
+    const good = push(git('rev-parse', 'HEAD'));
+    t.equal(good.status, 0, `${parent}: a trend append is admitted: ${good.stdout}${good.stderr}`);
+    t.match(good.stdout, /trend push verified - 1 appended record/u, `${parent}: on the owner's word`);
+    git('reset', '-q', '--hard', base);
+    fs.appendFileSync(path.join(root, TREND), measured('PASS'));
+    fs.writeFileSync(path.join(root, 'src/a.js'), 'export const a = 2;\n');
+    git('commit', '-q', '-am', 'smuggled');
+    const evil = push(git('rev-parse', 'HEAD'));
+    t.equal(evil.status, 1, `${parent}: a smuggled source change is refused: ${evil.stdout}`);
+    t.match(evil.stdout, /more than the trend file/u, `${parent}: by the owner, not by accident`);
+  }
   t.end();
 });
