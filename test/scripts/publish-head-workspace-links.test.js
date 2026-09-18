@@ -12,7 +12,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  linkWorkspaceDependencies, recordProvedCorpus,
+  linkWorkspaceDependencies, pruneTestOutput, recordProvedCorpus,
 } from '../../scripts/publish-head.js';
 
 function tree(base, relativeFiles) {
@@ -135,4 +135,45 @@ test('the publisher records the corpus receipt the gate proved', () => {
   } finally {
     fs.rmSync(workspace, {recursive: true, force: true});
   }
+});
+
+// Retention is bookkeeping that runs after a publish has already succeeded, so
+// it is bounded and never raised - a failed prune must not turn a finished
+// publish into a failed one (artifact-retention-routine).
+test('retention is bounded and never fails a finished publish', () => {
+  const said = [];
+  const say = (value) => said.push(value);
+  const calls = [];
+  assert.equal(pruneTestOutput((command, args, options) => {
+    calls.push({args, cwd: options.cwd, timeout: options.timeout});
+    return {status: 0, stdout: 'Deleted 12 artifact entries (3MB).\nPolicy: ...\n'};
+  }, '/repo', say), true);
+  assert.deepEqual(calls[0].args, ['scripts/prune-test-output.js', '--apply',
+    '--keep-days', '7', '--keep-reports', '24', '--keep-report-playbacks', '24']);
+  assert.equal(calls[0].cwd, '/repo', 'the checkout the publish came from');
+  assert.ok(calls[0].timeout > 0, 'bounded');
+  assert.match(said.join(''), /retention: Deleted 12 artifact entries/u);
+
+  said.length = 0;
+  assert.equal(pruneTestOutput(() => ({status: 2, stderr: 'EACCES\n'}),
+    '/repo', say), false);
+  assert.match(said.join(''), /retention skipped: EACCES/u);
+
+  said.length = 0;
+  assert.equal(pruneTestOutput(() => {
+    throw new Error('spawn exploded');
+  }, '/repo', say), false, 'a throwing runner is reported, not raised');
+  assert.match(said.join(''), /retention skipped: spawn exploded/u);
+
+  // A timeout returns no status and no output: the error and the signal are
+  // the only reason there is, and a bare "no reason" would hide it.
+  said.length = 0;
+  assert.equal(pruneTestOutput(() => ({status: null, signal: 'SIGTERM',
+    error: new Error('spawnSync node ETIMEDOUT'), stdout: '', stderr: ''}),
+  '/repo', say), false);
+  assert.match(said.join(''), /retention skipped: spawnSync node ETIMEDOUT/u);
+  said.length = 0;
+  assert.equal(pruneTestOutput(() => ({status: null, signal: 'SIGKILL',
+    stdout: '', stderr: ''}), '/repo', say), false);
+  assert.match(said.join(''), /retention skipped: the pruner was stopped by SIGKILL/u);
 });

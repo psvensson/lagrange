@@ -28,7 +28,7 @@
   "censusSize": 2122,
   "digest": "fnv1a32-dee3a0b4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-458fa169",
+  "observationDigest": "fnv1a32-14e10e90",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7274,6 +7274,7 @@
         "package.json",
         "scripts/action-authority.js",
         "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
         "scripts/publish-head.js",
         "scripts/solve/red-main-exemption.js",
         "src/admin/static/playback-viewer.html",
@@ -8404,7 +8405,8 @@
       "files": [
         ".githooks/pre-push",
         "data/formation-health/trend.ndjson",
-        "scripts/proof-authority.js"
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js"
       ],
       "directories": [
         "data",
@@ -8416,7 +8418,8 @@
         ".githooks/pre-push",
         ".gitignore",
         "data/formation-health/trend.ndjson",
-        "scripts/proof-authority.js"
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js"
       ],
       "directories": [
         ".githooks",

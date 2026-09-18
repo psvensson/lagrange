@@ -110,6 +110,23 @@ const RECEIPT_SKIPPED_PREFIX =
   'publish: no whole-corpus receipt (the gate proved a cone, not the corpus)';
 const RECEIPT_FAILED_PREFIX = 'publish: whole-corpus receipt not recorded: ';
 const RECEIPT_NO_REASON = 'the authority gave no reason';
+// Retention, on the routine path. test-output/ reached 6.7 GB in July because
+// the pruner existed but was never invoked; the fix wired it into the
+// rolling-restart stat-gate only, so it grew to 40 GB by September the same
+// way. Every publish now runs it, with the stat-gate's own history-safe
+// policy: 7 days, and floors of 24 reports and playbacks - deliberately above
+// the harness's 20-report comparison window, so retention can never degrade a
+// baseline comparison.
+const PRUNE_SCRIPT = 'scripts/prune-test-output.js';
+const PRUNE_ARGUMENTS = Object.freeze([
+  '--apply', '--keep-days', '7',
+  '--keep-reports', '24', '--keep-report-playbacks', '24',
+]);
+const PRUNE_TIMEOUT_MS = 300000;
+const PRUNE_DONE_PREFIX = 'publish: test-output retention: ';
+const PRUNE_FAILED_PREFIX = 'publish: test-output retention skipped: ';
+const PRUNE_SIGNAL_PREFIX = 'the pruner was stopped by ';
+const PRUNE_NO_REASON = 'the pruner gave no reason';
 const RED_REPAIR_REFUSED_SUFFIX = '. It requires ';
 const REASON_ARGUMENT = '--reason';
 const STATUS_COMMAND = 'status';
@@ -452,8 +469,45 @@ function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
     );
   }
   recordProvedCorpus(run, root, worktree, head);
+  pruneTestOutput(run, root);
   const ciUrl = queryCi === false ? '' : ciRunUrl(run, root, head);
   return {ciUrl, remoteAfter};
+}
+
+/**
+ * Apply the retention policy to this checkout's test-output/ and .tap/, after
+ * the publish succeeded. Bookkeeping, so bounded and never raised: a failed
+ * prune is reported and the publish stands.
+ * @param {Function} run
+ * @param {string} root
+ * @param {Function} [write]
+ * @return {boolean} whether the prune completed
+ */
+export function pruneTestOutput(run, root,
+  write = (value) => process.stdout.write(`${value}\n`)) {
+  let pruned = null;
+  try {
+    pruned = run(process.execPath, [PRUNE_SCRIPT, ...PRUNE_ARGUMENTS],
+      {cwd: root, encoding: UTF8, timeout: PRUNE_TIMEOUT_MS});
+  } catch (error) {
+    write(`${PRUNE_FAILED_PREFIX}${error.message}`);
+    return false;
+  }
+  if (pruned?.status === 0) {
+    const summary = String(pruned.stdout || '').trim().split('\n').at(0) || '';
+    write(`${PRUNE_DONE_PREFIX}${summary}`);
+    return true;
+  }
+  write(`${PRUNE_FAILED_PREFIX}${pruneFailureReason(pruned)}`);
+  return false;
+}
+
+// A spawn timeout returns no status and no output: its error and signal are
+// the only reason there is (verifier round 1).
+function pruneFailureReason(pruned) {
+  if (pruned?.error?.message) return pruned.error.message;
+  if (pruned?.signal) return `${PRUNE_SIGNAL_PREFIX}${pruned.signal}`;
+  return String(pruned?.stderr || pruned?.stdout || '').trim() || PRUNE_NO_REASON;
 }
 
 /**

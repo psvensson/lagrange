@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "artifact-retention-routine",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "test-output/ reached 40 GB by 2026-09-17, with single files up to 2.1 GB, although scripts/prune-test-output.js has existed since March with a careful twelve-category policy. The same thing happened in July - that commit reads 'test-output/ reached 6.7GB because the pruner existed but was never invoked' - and its fix wired the pruner into the rolling-restart stat-gate only, which is not the routine path, so the accumulation simply resumed. Retention now runs on the routine path: every publish applies the stat-gate's own history-safe policy (7 days, floors of 24 reports and playbacks, above the harness's 20-report comparison window) after the push and the receipt, bounded and never raised. Making it routine exposed a flaw that the occasional manual run had hidden: a top-level directory's age was its own inode mtime, which moves only when an entry is added or removed, so a directory whose files are rewritten in place looked old while its contents were fresh. Measured against the real checkout on 2026-09-18: six directories the old rule would have deleted on the first routine run held files written in the last four days (tlc on 09-14, five harness fixture directories on 09-17), and test-output/analysis - the generated import graph npm test reads - survived only because its inode happened to be recent. Age is now the newest content, measured in the walk that already sizes each entry. The parents of registered git worktrees (push-gate-worktrees, publish-worktrees) are reserved, because an rm -rf there leaves a worktree registered with its directory gone. Verifier round 1 found the policy's central claim false on this checkout: its 24-report floor, meant to stay above the harness's 20-report history window, was spent entirely on model reports - fixed-name TLC/Alloy files rewritten in place on every corpus run - so the first routine run would have deleted all 213 harness reports. The newest harness reports (*.report.json carrying a scenarios array, exactly what test/distributed/run.js reads) are now pinned by what they are. The same round moved four other things: a directory's own date anywhere in the tree counts as activity; a date more than a day in the future no longer counts as freshness (clamping it to now would have kept its tree forever) - judged against the clock when each date is read, because round 2 showed that one clock reading for the whole walk made a file written during the walk look future-dated and its live tree abandoned - and the rule applies equally to top-level entries and reports; an entry that cannot be measured is kept rather than aborting the whole prune, which had made retention silently stop, and is named on the summary line the publisher prints; a delete that fails is reported while every other delete still happens; a test result whose test file cannot be checked is kept; and a .tap result whose test file still exists is kept, because it is one file per test rewritten in place and is the duration the lane planner dispatches longest-first by - only results of deleted tests accumulate. The first routine run on this checkout now removes about 229 MB: 2848 report files, 15 stale directories and 4 files at the top level, 37 .tmp entries, and 526 results of tests that no longer exist; 24 harness reports survive and none of the current 20-report window is deleted.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/artifact-retention-routine/evidence/receipt.json",
+      "requiredReceipts": [
+        "age-is-newest-content",
+        "worktree-parents-never-pruned",
+        "retention-never-fails-a-publish"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "live-output-kept",
+      "statement": "No directory with content newer than the policy window is deleted, whatever its own inode mtime says."
+    },
+    {
+      "id": "registered-worktrees-untouched",
+      "statement": "The parents of registered git worktrees are never age-pruned; their owners remove their own children with git worktree remove."
+    },
+    {
+      "id": "publish-never-fails-for-retention",
+      "statement": "Retention runs after the publish has succeeded, bounded in time, and a failed or throwing prune is reported, never raised."
+    },
+    {
+      "id": "history-window-preserved",
+      "statement": "The newest harness reports - the *.report.json files with a scenarios array that the harness history reads - are pinned by kind, so the report floor cannot be spent on other report families; with the stat-gate's 24, the 20-report window is always kept."
+    },
+    {
+      "id": "retention-never-silently-stops",
+      "statement": "An entry that cannot be measured is kept and the rest of the prune proceeds, so one dangling link or unreadable directory cannot turn retention off."
+    },
+    {
+      "id": "dispatch-history-kept",
+      "statement": "A .tap result whose test file still exists is never age-pruned; only results of deleted tests are."
+    }
+  ],
+  "sealedAt": "1965782a750187ddf0aaf9db42386333fd75b408"
+}

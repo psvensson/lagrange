@@ -137,22 +137,32 @@ tap.test('the gate reads the remote sha this publish observed as its base', (t) 
     'import fs from \'node:fs\';\n' +
     'fs.appendFileSync(\'.git/gate-ref-lines.txt\',\n' +
     '  `RECORD ${process.argv.slice(2).join(\' \')}\\n`);\n', 'utf8');
+  // And a stub pruner: retention runs on the routine path now, after the
+  // push and the receipt, so it is observable in the same ordered record.
+  fs.writeFileSync(path.join(root, 'scripts', 'prune-test-output.js'),
+    'import fs from \'node:fs\';\n' +
+    'fs.appendFileSync(\'.git/gate-ref-lines.txt\',\n' +
+    '  `PRUNE ${process.argv.slice(2).join(\' \')}\\n`);\n', 'utf8');
   // The real repository ignores test-output/, so the gate writing its scope
   // there is not a mutation of the checkout; the fixture must say the same or
   // the publisher's own mutation guard fires first.
   fs.writeFileSync(path.join(root, '.gitignore'), 'test-output/\n', 'utf8');
-  git(root, ['add', 'scripts/proof-authority.js', '.gitignore']);
+  git(root, ['add', 'scripts/proof-authority.js', 'scripts/prune-test-output.js',
+    '.gitignore']);
   git(root, ['commit', '--quiet', '-m', 'stub authority']);
   fs.rmSync(recorded, {force: true});
   const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
   const head = git(root, ['rev-parse', 'HEAD']);
   const receipt = publishExactHead(root, {}, {queryCi: false});
   const lines = fs.readFileSync(recorded, 'utf8').trim().split('\n');
-  t.equal(lines.length, 3,
-    'the gate ran the hook, so did the push, and then the receipt was recorded');
-  const [gateLine, pushLine, recordLine] = lines;
+  t.equal(lines.length, 4,
+    'the gate ran the hook, so did the push, then the receipt, then retention');
+  const [gateLine, pushLine, recordLine, pruneLine] = lines;
   t.equal(recordLine, `RECORD record corpus-full-v1 ${head}`,
     'the publisher records the corpus the gate proved, for the published sha');
+  t.equal(pruneLine,
+    'PRUNE --apply --keep-days 7 --keep-reports 24 --keep-report-playbacks 24',
+    'and applies the history-safe retention policy last, after the publish stood');
   t.equal(gateLine, `GATE HEAD ${head} refs/heads/main ${remoteBefore}`,
     'the gate is handed the pushed head and the remote sha it will advance');
   t.match(pushLine, /^1 /u, 'the second invocation is git\'s own push');

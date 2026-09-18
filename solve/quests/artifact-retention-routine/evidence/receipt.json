@@ -1,0 +1,110 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "artifact-retention-routine",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/prune-test-output.test.js": "ec3cb79bee918d99c80ca38179e79903374bdf3bc1fb9b6199428eafb2e35030",
+    "test/scripts/publish-head-workspace-links.test.js": "ab0d58855fefe30a7b76c7c07439c7f5f4b23049c87cdf796a9cabcde2d98494"
+  },
+  "generatedAt": "2026-09-18T11:06:43.342Z",
+  "receipts": [
+    {
+      "id": "age-is-newest-content",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps a directory whose own mtime is old when its contents are fresh$\" test/scripts/prune-test-output.test.js",
+      "detail": "a directory rewritten in place is judged by what it contains, while a directory old inside and out is still pruned",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "worktree-parents-never-pruned",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^never age-prunes the parent of a registered git worktree$\" test/scripts/prune-test-output.test.js",
+      "detail": "rm -rf on a registered worktree would leave a registration pointing at nothing, so those parents are reserved",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "harness-history-survives",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps the newest harness reports even when newer model reports exist$\" test/scripts/prune-test-output.test.js",
+      "detail": "the report floor is spent on the reports the harness history reads, not on model reports rewritten in place",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "deep-activity-counts",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps a tree whose only recent activity is a directory deep inside it$\" test/scripts/prune-test-output.test.js",
+      "detail": "a directory date anywhere in the tree counts as activity",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "future-dates-do-not-pin",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^does not let a future-dated file pin a stale tree$\" test/scripts/prune-test-output.test.js",
+      "detail": "a timestamp in the future is not freshness",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "bad-entry-never-stops-retention",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one entry it cannot measure never stops the rest of the prune$\" test/scripts/prune-test-output.test.js",
+      "detail": "an unmeasurable entry is kept and the prune proceeds",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "live-test-results-kept",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps an old result for a test that exists and drops one for a test that does not$\" test/scripts/prune-test-output.test.js",
+      "detail": "the dispatch history survives; only results of deleted tests age out",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "written-during-the-walk-counts",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps a tree written a moment ahead of the clock$\" test/scripts/prune-test-output.test.js",
+      "detail": "each date is judged against the clock when it is read, with a tolerance, so a live tree is never mistaken for an abandoned one",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "far-future-is-no-freshness",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a far-future date is no freshness for any entry$\" test/scripts/prune-test-output.test.js",
+      "detail": "top-level files, directory dates and reports obey the same rule",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "playback-folders-by-content",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^judges a playback folder by its newest content$\" test/scripts/prune-test-output.test.js",
+      "detail": "playback folders are aged by what they contain",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "unreadable-kept-and-named",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^keeps and names what it cannot read, and prunes the rest$\" test/scripts/prune-test-output.test.js",
+      "detail": "what cannot be read is kept, named on the line the publisher prints, and the prune goes on",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "failed-delete-does-not-stop",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a delete that fails is reported and the others still happen$\" test/scripts/prune-test-output.test.js",
+      "detail": "a delete that fails is reported and every later category still prunes",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "unknown-test-file-kept",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^drops a result whose path runs through a file and keeps one it may not check$\" test/scripts/prune-test-output.test.js",
+      "detail": "only a definite absence ages a test result out",
+      "testFile": "test/scripts/prune-test-output.test.js"
+    },
+    {
+      "id": "retention-never-fails-a-publish",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retention is bounded and never fails a finished publish$\" test/scripts/publish-head-workspace-links.test.js",
+      "detail": "a failed or throwing prune is reported and the publish stands",
+      "testFile": "test/scripts/publish-head-workspace-links.test.js"
+    }
+  ]
+}

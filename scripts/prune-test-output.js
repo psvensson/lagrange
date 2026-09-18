@@ -39,6 +39,21 @@ import {
 
 const TEST_OUTPUT_PRUNE_GATE_AGGREGATE_PATTERN =
   /^stat-gate-\d{8}T\d{6}Z(-runs\.ndjson|\.json)$/;
+const HARNESS_REPORT_SUFFIX = '.report.json';
+// Longest first: a stderr companion must not be read as a result for a
+// test file literally named `<file>.tap`.
+const TAP_RESULT_SUFFIXES = Object.freeze(['.tap.stderr', '.tap']);
+const HARNESS_REPORT_ENCODING = 'utf8';
+const HARNESS_REPORT_SCENARIOS = 'scenarios';
+// How far past the clock a modification time may be and still count as use.
+// Read per stat, not once per run: a file written while the walk is running
+// is already "after" a clock read when the walk began, and treating it as
+// future-dated made a live tree look abandoned (verifier round 2). Past this
+// tolerance a date is clock skew or a copied fixture, and counts for nothing.
+const FUTURE_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+// A path component that is a file: the path cannot exist either.
+const ERRNO_NOT_A_DIRECTORY = 'ENOTDIR';
+const REPORT_LIST_LIMIT = 10;
 const PRUNE_TARGET_SUMMARY_TEXT =
   'reports/report playbacks/legacy playbacks/run-like categories.';
 
@@ -70,6 +85,18 @@ const TEST_OUTPUT_PRUNE_TMP_RESERVED_TOP_LEVEL = Object.freeze([
 ]);
 const TEST_OUTPUT_PRUNE_PLAYBACK_RESERVED_TOP_LEVEL = Object.freeze([
   TEST_OUTPUT_PATH.PLAYBACK_DIR,
+]);
+// Parents of REGISTERED git worktrees: the push gate and the publisher each
+// add one per run under these and remove it with `git worktree remove`. An
+// rm -rf here would leave the worktree registered with its directory gone,
+// so these are never age-pruned; their owners clean their own children.
+const TEST_OUTPUT_PRUNE_WORKTREE_PARENTS = Object.freeze([
+  'push-gate-worktrees',
+  'publish-worktrees',
+]);
+const TEST_OUTPUT_PRUNE_ROOT_RESERVED_TOP_LEVEL = Object.freeze([
+  ...TEST_OUTPUT_PRUNE_RESERVED_TOP_LEVEL,
+  ...TEST_OUTPUT_PRUNE_WORKTREE_PARENTS,
 ]);
 const TEST_OUTPUT_PRUNE_PARTITION_LOG_SUFFIXES = Object.freeze([
   '.db-wal',
@@ -182,28 +209,47 @@ function getEntryKeepKey(entry) {
   return entry.keepKey || entry.name;
 }
 
-async function pathExists(candidatePath) {
+// A modification time as evidence of use: itself, or nothing when it lies
+// beyond the future tolerance.
+function evidenceOfUse(mtimeMs) {
+  return mtimeMs > Date.now() + FUTURE_TOLERANCE_MS ? 0 : mtimeMs;
+}
+
+function isAbsence(error) {
+  return error?.code === ERRNO.ENOENT || error?.code === ERRNO_NOT_A_DIRECTORY;
+}
+
+// Whether a path may exist: only a definite absence says no, so a path that
+// cannot be checked - a directory we may not read - is kept, never deleted
+// and never allowed to stop the prune (verifier round 2).
+async function mayExist(candidatePath) {
   try {
     await fs.access(candidatePath);
     return true;
   } catch (error) {
-    if (error?.code === ERRNO.ENOENT) {
-      return false;
-    }
-    throw error;
+    return !isAbsence(error);
+  }
+}
+
+// A directory's entries, or none when it cannot be read: listing nothing
+// deletes nothing there. An absent directory is simply empty; any other
+// failure is recorded, so what is kept for it is never kept silently.
+async function readdirOrNothing(run, directoryPath) {
+  try {
+    return await fs.readdir(directoryPath, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
+  } catch (error) {
+    if (!isAbsence(error)) run.unmeasured.add(directoryPath);
+    return [];
   }
 }
 
 async function listDirectoryEntries(
+  run,
   directoryPath,
   entryType,
   keepKeySelector = (name) => name,
 ) {
-  if (!(await pathExists(directoryPath))) {
-    return [];
-  }
-
-  const dirents = await fs.readdir(directoryPath, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
+  const dirents = await readdirOrNothing(run, directoryPath);
   const entries = [];
   for (const dirent of dirents) {
     const isMatch =
@@ -213,13 +259,14 @@ async function listDirectoryEntries(
       continue;
     }
     const fullPath = path.join(directoryPath, dirent.name);
-    const stats = await fs.stat(fullPath);
+    const stats = await statOrFresh(run, fullPath);
+    const measured = await measureEntry(run, fullPath, dirent.isDirectory());
     entries.push({
       name: dirent.name,
       keepKey: keepKeySelector(dirent.name),
       path: fullPath,
-      mtimeMs: stats.mtimeMs,
-      sizeBytes: await measureEntryBytes(fullPath, dirent.isDirectory()),
+      mtimeMs: Math.max(stats.mtimeMs, measured.newestMtimeMs),
+      sizeBytes: measured.sizeBytes,
       entryType,
     });
   }
@@ -228,18 +275,16 @@ async function listDirectoryEntries(
 }
 
 async function listRecursiveFileEntries(
+  run,
   directoryPath,
   keepKeySelector = (relativePath) => relativePath,
 ) {
-  if (!(await pathExists(directoryPath))) {
-    return [];
-  }
-
   const entries = [];
   const stack = [directoryPath];
   while (stack.length > 0) {
     const current = stack.pop();
-    const dirents = await fs.readdir(current, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
+    // Unreadable: nothing under it is listed, so nothing under it is deleted.
+    const dirents = await readdirOrNothing(run, current);
     for (const dirent of dirents) {
       const fullPath = path.join(current, dirent.name);
       if (dirent.isDirectory()) {
@@ -249,7 +294,7 @@ async function listRecursiveFileEntries(
       if (!dirent.isFile()) {
         continue;
       }
-      const stats = await fs.stat(fullPath);
+      const stats = await statOrFresh(run, fullPath);
       const relativePath = path.relative(directoryPath, fullPath);
       entries.push({
         name: relativePath,
@@ -265,31 +310,54 @@ async function listRecursiveFileEntries(
   return entries;
 }
 
-async function measureEntryBytes(targetPath, isDirectory) {
-  if (!isDirectory) {
-    const stats = await fs.stat(targetPath);
-    return stats.size;
-  }
-
-  let total = 0;
-  const stack = [targetPath];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    const dirents = await fs.readdir(current, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
-    for (const dirent of dirents) {
-      const fullPath = path.join(current, dirent.name);
-      if (dirent.isDirectory()) {
-        stack.push(fullPath);
-        continue;
-      }
-      if (!dirent.isFile()) {
-        continue;
-      }
-      const stats = await fs.stat(fullPath);
-      total += stats.size;
+// An entry's size and the newest modification time of anything inside it.
+// A directory's own mtime moves only when an entry is added, removed or
+// renamed, so a directory whose files are rewritten in place looks old while
+// its contents are fresh - test-output/analysis holds the generated import
+// graph that npm test reads, and survived the first routine prune only because
+// its inode mtime happened to be recent. Age is therefore the newest content,
+// measured in the walk that already stats every file for its size.
+// Directories count too: a new empty subdirectory, or a delete inside one, is
+// activity, and counting it can only ever keep more. A timestamp beyond the
+// future tolerance says nothing about when the entry was last used, so it
+// counts for nothing (evidenceOfUse); clamping it to "now" instead would read
+// as fresh on every run and keep the tree forever. And an entry that cannot
+// be measured - a dangling link, an unreadable directory, a file deleted
+// mid-walk - reads as fresh rather than aborting the whole prune: before, one
+// such entry made every run exit before deleting anything (verifier round 1).
+// It is recorded, so the summary names what was kept without being measured.
+async function measureEntry(run, targetPath, isDirectory) {
+  try {
+    if (!isDirectory) {
+      const stats = await fs.stat(targetPath);
+      return {sizeBytes: stats.size, newestMtimeMs: evidenceOfUse(stats.mtimeMs)};
     }
+    let total = 0;
+    let newest = 0;
+    const stack = [targetPath];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const dirents = await fs.readdir(current, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
+      for (const dirent of dirents) {
+        const fullPath = path.join(current, dirent.name);
+        if (!dirent.isDirectory() && !dirent.isFile()) {
+          continue;
+        }
+        const stats = await fs.stat(fullPath);
+        const mtimeMs = evidenceOfUse(stats.mtimeMs);
+        if (mtimeMs > newest) newest = mtimeMs;
+        if (dirent.isDirectory()) {
+          stack.push(fullPath);
+          continue;
+        }
+        total += stats.size;
+      }
+    }
+    return {sizeBytes: total, newestMtimeMs: newest};
+  } catch {
+    run.unmeasured.add(targetPath);
+    return {sizeBytes: 0, newestMtimeMs: Date.now()};
   }
-  return total;
 }
 
 function isPinnedName(name) {
@@ -378,27 +446,25 @@ function buildCategoryPlan(entries, keepCount, cutoffMs, pinnedNames = new Set()
 }
 
 async function listTopLevelEntries(
+  run,
   rootPath,
-  reservedTopLevel = TEST_OUTPUT_PRUNE_RESERVED_TOP_LEVEL,
+  reservedTopLevel = TEST_OUTPUT_PRUNE_ROOT_RESERVED_TOP_LEVEL,
 ) {
-  if (!(await pathExists(rootPath))) {
-    return [];
-  }
-
-  const dirents = await fs.readdir(rootPath, TEST_OUTPUT_PRUNE_READDIR_OPTIONS);
+  const dirents = await readdirOrNothing(run, rootPath);
   const entries = [];
   for (const dirent of dirents) {
     if (reservedTopLevel.includes(dirent.name)) {
       continue;
     }
     const fullPath = path.join(rootPath, dirent.name);
-    const stats = await fs.stat(fullPath);
+    const stats = await statOrFresh(run, fullPath);
+    const measured = await measureEntry(run, fullPath, dirent.isDirectory());
     entries.push({
       name: dirent.name,
       keepKey: dirent.name,
       path: fullPath,
-      mtimeMs: stats.mtimeMs,
-      sizeBytes: await measureEntryBytes(fullPath, dirent.isDirectory()),
+      mtimeMs: Math.max(stats.mtimeMs, measured.newestMtimeMs),
+      sizeBytes: measured.sizeBytes,
       entryType: dirent.isDirectory() ?
         TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR :
         TEST_OUTPUT_PRUNE_ENTRY_TYPE.FILE,
@@ -408,10 +474,60 @@ async function listTopLevelEntries(
   return entries;
 }
 
-async function deleteEntries(entries) {
-  for (const entry of entries) {
-    await fs.rm(entry.path, TEST_OUTPUT_PRUNE_DELETE_OPTIONS);
+// An entry that has vanished or cannot be read is treated as fresh - kept -
+// rather than failing the whole plan: retention must degrade to keeping more,
+// never to deleting nothing forever (verifier round 1). Its own date obeys the
+// same future tolerance as everything inside it (verifier round 2).
+async function statOrFresh(run, fullPath) {
+  try {
+    const stats = await fs.stat(fullPath);
+    return {mtimeMs: evidenceOfUse(stats.mtimeMs), size: stats.size};
+  } catch {
+    run.unmeasured.add(fullPath);
+    return {mtimeMs: Date.now(), size: 0};
   }
+}
+
+// The test file a result under .tap/test-results belongs to, or null.
+function tapResultSourceFile(relativePath) {
+  for (const suffix of TAP_RESULT_SUFFIXES) {
+    if (relativePath.endsWith(suffix)) return relativePath.slice(0, -suffix.length);
+  }
+  return null;
+}
+
+// The keep keys of the newest `count` reports the harness history reads.
+// Entries arrive newest first, so this parses only until the floor is met.
+async function newestHarnessReportKeys(entries, count) {
+  const keys = new Set();
+  for (const entry of entries) {
+    if (keys.size >= count) break;
+    if (!entry.name.endsWith(HARNESS_REPORT_SUFFIX)) continue;
+    try {
+      const parsed = JSON.parse(await fs.readFile(entry.path, HARNESS_REPORT_ENCODING));
+      if (parsed && Array.isArray(parsed[HARNESS_REPORT_SCENARIOS])) {
+        keys.add(getEntryKeepKey(entry));
+      }
+    } catch {
+      // Unreadable or not JSON: not a report the harness can read either.
+    }
+  }
+  return keys;
+}
+
+// Every entry is attempted: one that cannot be removed is recorded and the
+// rest still go, rather than stopping every later delete (verifier round 2).
+async function deleteEntries(run, entries) {
+  const removed = [];
+  for (const entry of entries) {
+    try {
+      await fs.rm(entry.path, TEST_OUTPUT_PRUNE_DELETE_OPTIONS);
+      removed.push(entry);
+    } catch (error) {
+      run.failedDeletes.push({path: entry.path, code: error?.code || error?.message});
+    }
+  }
+  return removed;
 }
 
 function summarizeCategory(entries) {
@@ -444,6 +560,7 @@ async function main(argv) {
   const rootPath = path.resolve(options.root);
   const workspaceRoot = path.dirname(rootPath);
   const cutoffMs = Date.now() - (options.keepDays * TEST_OUTPUT_PRUNE_MS_PER_DAY);
+  const run = {unmeasured: new Set(), failedDeletes: []};
 
   const reportsDir = path.join(rootPath, TEST_OUTPUT_PATH.REPORTS_DIR);
   const reportPlaybackDir = path.join(reportsDir, TEST_OUTPUT_PATH.PLAYBACK_DIR);
@@ -459,7 +576,7 @@ async function main(argv) {
   );
 
   const reportFiles =
-    await listDirectoryEntries(reportsDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.FILE);
+    await listDirectoryEntries(run, reportsDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.FILE);
   // Gate AGGREGATES (stat-gate-<TS>.json, a few KB each) are the cross-gate
   // trend ledger read by scripts/query-gate-trends.js — deleting them erases
   // signature history for no meaningful disk win, so they are exempt from the
@@ -469,17 +586,27 @@ async function main(argv) {
     entry.name.endsWith(TEST_OUTPUT_SUFFIX.JSON) &&
     !TEST_OUTPUT_PRUNE_GATE_AGGREGATE_PATTERN.test(entry.name),
   );
+  // The report floor exists to keep the harness's history window, which reads
+  // only *.report.json files that carry a `scenarios` array (the 20 newest,
+  // test/distributed/run.js). A floor counted over every json was spent on
+  // model reports - fixed-name TLC/Alloy files rewritten in place on every
+  // corpus run - so the first routine prune deleted all 213 harness reports
+  // (verifier round 1). The newest harness reports are therefore pinned by
+  // what they ARE, and the general floor still applies on top.
+  const harnessHistory = await newestHarnessReportKeys(
+    reportJsonFiles, options.keepReports);
   const reportPlan = buildCategoryPlan(
     reportJsonFiles,
     options.keepReports,
     cutoffMs,
+    harnessHistory,
   );
   const preservedPlaybackNames = new Set(
     [...reportPlan.keepKeys].map((name) => reportBasenameToPlaybackName(name)),
   );
 
   const reportPlaybackEntries =
-    await listDirectoryEntries(reportPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
+    await listDirectoryEntries(run, reportPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
   const reportPlaybackPlan = buildCategoryPlan(
     reportPlaybackEntries,
     options.keepReportPlaybacks,
@@ -488,14 +615,14 @@ async function main(argv) {
   );
 
   const legacyPlaybackEntries =
-    await listDirectoryEntries(legacyPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
+    await listDirectoryEntries(run, legacyPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
   const legacyPlaybackPlan = buildCategoryPlan(
     legacyPlaybackEntries,
     options.keepLegacyPlaybacks,
     cutoffMs,
   );
 
-  const topLevelEntries = await listTopLevelEntries(rootPath);
+  const topLevelEntries = await listTopLevelEntries(run, rootPath);
   const topLevelPlan = buildCategoryPlan(
     topLevelEntries,
     options.keepTopLevel,
@@ -503,6 +630,7 @@ async function main(argv) {
   );
 
   const tmpTopLevelEntries = await listTopLevelEntries(
+    run,
     tmpDir,
     TEST_OUTPUT_PRUNE_TMP_RESERVED_TOP_LEVEL,
   );
@@ -513,7 +641,7 @@ async function main(argv) {
   );
 
   const tmpPlaybackEntries =
-    await listDirectoryEntries(tmpPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
+    await listDirectoryEntries(run, tmpPlaybackDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
   const tmpPlaybackPlan = buildCategoryPlan(
     tmpPlaybackEntries,
     options.keepLegacyPlaybacks,
@@ -521,6 +649,7 @@ async function main(argv) {
   );
 
   const playbackTopLevelEntries = await listTopLevelEntries(
+    run,
     playbackDir,
     TEST_OUTPUT_PRUNE_PLAYBACK_RESERVED_TOP_LEVEL,
   );
@@ -531,18 +660,32 @@ async function main(argv) {
   );
 
   const playbackArchiveEntries =
-    await listDirectoryEntries(playbackArchiveDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
+    await listDirectoryEntries(run, playbackArchiveDir, TEST_OUTPUT_PRUNE_ENTRY_TYPE.DIR);
   const playbackArchivePlan = buildCategoryPlan(
     playbackArchiveEntries,
     options.keepLegacyPlaybacks,
     cutoffMs,
   );
 
-  const tapResultEntries = await listRecursiveFileEntries(tapResultsDir);
+  const tapResultEntries = await listRecursiveFileEntries(run, tapResultsDir);
+  // A result whose test file still exists is one file per test, overwritten
+  // in place on every run, so it never accumulates - and it is the last
+  // duration the lane planner dispatches longest-first by. Pruning it by age
+  // saved 64 MB and cost the ordering after any week without a full run in
+  // this checkout (verifier round 1). Only results whose test is GONE pile
+  // up, so only those age out.
+  const liveTapResults = new Set();
+  for (const entry of tapResultEntries) {
+    const source = tapResultSourceFile(entry.name);
+    if (source && await mayExist(path.join(workspaceRoot, source))) {
+      liveTapResults.add(getEntryKeepKey(entry));
+    }
+  }
   const tapResultsPlan = buildCategoryPlan(
     tapResultEntries,
     options.keepTopLevel,
     cutoffMs,
+    liveTapResults,
   );
 
   const categoryPlans = {
@@ -561,6 +704,7 @@ async function main(argv) {
 
   for (const spec of TEST_OUTPUT_PRUNE_PARTITION_LOG_SPECS) {
     const entries = await listDirectoryEntries(
+      run,
       path.join(workspaceRoot, ...spec.segments),
       TEST_OUTPUT_PRUNE_ENTRY_TYPE.FILE,
       partitionLogNameToKeepKey,
@@ -573,8 +717,8 @@ async function main(argv) {
   }
 
   if (options.apply) {
-    for (const entries of Object.values(categoryPlans)) {
-      await deleteEntries(entries);
+    for (const [category, entries] of Object.entries(categoryPlans)) {
+      categoryPlans[category] = await deleteEntries(run, entries);
     }
   }
 
@@ -592,6 +736,9 @@ async function main(argv) {
     },
     categories: {},
     deletedPaths: {},
+    unmeasured: [...run.unmeasured].map((entry) => path.relative(workspaceRoot, entry)),
+    failedDeletes: run.failedDeletes.map((entry) =>
+      ({path: path.relative(workspaceRoot, entry.path), code: entry.code})),
   };
 
   for (const [category, deletePlan] of Object.entries(categoryPlans)) {
@@ -623,11 +770,19 @@ async function main(argv) {
   const verb =
     options.apply ? TEST_OUTPUT_PRUNE_VERB.APPLY : TEST_OUTPUT_PRUNE_VERB.DRY_RUN;
 
+  // The first line is what the publisher prints, so what was NOT done is on it.
   process.stdout.write(
     `${verb} ${totalEntries} artifact entries across ${affectedCategories} ` +
     `categories (${formatBytes(totalBytes)} total by file stat).` +
+    unfinishedWork(summary) +
     FILE_TEXT.NEWLINE,
   );
+  for (const entry of summary.failedDeletes.slice(0, REPORT_LIST_LIMIT)) {
+    process.stdout.write(`Could not delete: ${entry.path} (${entry.code})${FILE_TEXT.NEWLINE}`);
+  }
+  for (const entry of summary.unmeasured.slice(0, REPORT_LIST_LIMIT)) {
+    process.stdout.write(`Kept, could not be measured: ${entry}${FILE_TEXT.NEWLINE}`);
+  }
   process.stdout.write(
     `Policy: keep pinned names, keep items newer than ${options.keepDays} days, ` +
     `and keep at least ${options.keepReports}/${options.keepReportPlaybacks}/` +
@@ -635,6 +790,13 @@ async function main(argv) {
     PRUNE_TARGET_SUMMARY_TEXT +
     FILE_TEXT.NEWLINE,
   );
+}
+
+function unfinishedWork(summary) {
+  const failed = summary.failedDeletes.length;
+  const unmeasured = summary.unmeasured.length;
+  return (failed > 0 ? ` ${failed} could not be deleted.` : '') +
+    (unmeasured > 0 ? ` ${unmeasured} kept because they could not be measured.` : '');
 }
 
 async function runCli() {
