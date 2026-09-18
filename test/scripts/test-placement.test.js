@@ -437,6 +437,115 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   assert.equal(slowAlive, false, 'and the controller\'s own runner group is gone');
 });
 
+test('a hang-up stops a placed run like an interrupt', async () => {
+  // Closing the terminal: the controller child and the lab wrappers are
+  // detached, so nothing but this handler would stop them.
+  const signals = new EventEmitter();
+  const aborted = [];
+  let exited = null;
+  let started = false;
+  const run = fakeDeps({
+    signals,
+    exit: (code) => {
+      exited = code;
+    },
+    runLocalChild: () => {
+      started = true;
+      return {done: new Promise(() => {}), abort: () => aborted.push('controller')};
+    },
+    runRemote: () => ({done: new Promise(() => {}), abort: () => aborted.push('lab')}),
+  });
+  runPlacedTestFiles(MANY, run.deps);
+  for (let tick = 0; tick < 20 && !started; tick += 1) await new Promise(setImmediate);
+  signals.emit('SIGHUP');
+  assert.deepEqual(aborted.sort(), ['controller', 'lab']);
+  assert.equal(exited, 130);
+});
+
+test('a second hang-up during the abort neither kills it nor repeats it', async () => {
+  // A real hang-up arrives twice - the shell resends it, then the kernel -
+  // and the second lands while the first is still aborting. The handler must
+  // still be installed then, or the default action kills the controller and
+  // leaves the detached shards running. Every lab shell is asked to stop
+  // before any is cut, so all of them share one grace.
+  const signals = new EventEmitter();
+  const order = [];
+  const exits = [];
+  let started = false;
+  let installed = null;
+  const run = fakeDeps({
+    signals,
+    exit: (code) => exits.push(code),
+    discover: async () => ({machines: [lab('lab1', 1), lab('lab2', 1)],
+      record: async () => {}}),
+    runLocalChild: () => {
+      started = true;
+      return {done: new Promise(() => {}), abort: () => order.push('controller')};
+    },
+    runRemote: (shard) => ({done: new Promise(() => {}), interrupt: () => {
+      installed = signals.listenerCount('SIGHUP');
+      signals.emit('SIGHUP');
+      order.push(`ask ${shard.machine.name}`);
+      return {pid: null, cut: () => order.push(`cut ${shard.machine.name}`)};
+    }}),
+  });
+  runPlacedTestFiles(MANY, run.deps);
+  for (let tick = 0; tick < 20 && !started; tick += 1) await new Promise(setImmediate);
+  assert.ok(started, 'the controller\'s files are running');
+  signals.emit('SIGHUP');
+  assert.ok(installed > 0, 'the handler is still installed while it aborts');
+  assert.deepEqual(order, ['controller', 'ask lab1', 'ask lab2', 'cut lab1', 'cut lab2'],
+    'once each: the controller child first, then every lab shell asked before any is cut');
+  assert.deepEqual(exits, [130]);
+});
+
+// The runner's pid once the lab shard's log names it.
+async function runnerPidFrom(logFile) {
+  for (let poll = 0; poll < 1200; poll += 1) {
+    const pid = /^placement-pid=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))?.[1];
+    if (pid) return Number(pid);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return assert.fail('the runner never started');
+}
+
+test('an aborted lab shard cleans up before it is cut', async (t) => {
+  const {node, controller, start} = labFixture(t);
+  const running = start([SLOW_TEST], {runId: 'aborted'});
+  const runner = await runnerPidFrom(
+    path.join(controller, 'test-output', 'placement', 'aborted-lab.log'));
+  running.abort();
+  const outcome = await running.done;
+  assert.equal(outcome.reason, 'interrupted');
+  assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
+    'the lab shell removed its worktree, ref, bundle and file list before being cut');
+  let alive = true;
+  for (let poll = 0; poll < 100 && alive; poll += 1) {
+    try {
+      process.kill(-runner, 0);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } catch {
+      alive = false;
+    }
+  }
+  assert.equal(alive, false, 'and its runner group is gone');
+});
+
+test('the controller child runs with placement switched off', async (t) => {
+  // Its own files are the controller's shard: placing them again would
+  // rediscover a fleet that is busy with this very run.
+  const local = placementDeps({root: process.cwd(), env: gitProcessEnvironment()})
+    .runLocalChild([SLOW_TEST]);
+  t.after(() => local.abort());
+  assert.doesNotThrow(() => process.kill(-local.group, 0), 'it leads its own group');
+  if (fs.existsSync(`/proc/${local.group}/environ`)) {
+    const environ = fs.readFileSync(`/proc/${local.group}/environ`, 'utf8').split('\0');
+    assert.ok(environ.includes('LAGRANGE_PLACEMENT=local'), 'placement is off in it');
+  }
+  local.abort();
+  assert.notEqual(await local.done, 0, 'and an abort ends it');
+});
+
 function git(cwd, ...args) {
   const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
     {cwd, encoding: 'utf8', env: gitProcessEnvironment()});
@@ -494,43 +603,48 @@ function leftovers(repo) {
   };
 }
 
+// A lab machine's checkout at this commit, and a controller one commit on,
+// in scratch repositories; `start` places files there in local-sh mode.
+function labFixture(t) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-remote-'));
+  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
+  const node = path.join(scratch, 'node');
+  const controller = path.join(scratch, 'controller');
+  git(scratch, 'clone', '-q', '--shared', process.cwd(), node);
+  git(scratch, 'clone', '-q', '--shared', process.cwd(), controller);
+  fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(node, 'node_modules'));
+  // An ignored workspace entry the worktree should get, and a tracked one
+  // the placed commit deletes, which it must not get back from the lab's
+  // older checkout.
+  fs.mkdirSync(path.join(node, 'data', 'examples'), {recursive: true});
+  fs.writeFileSync(path.join(node, 'data', 'examples', 'witness.txt'), 'x');
+  // What an earlier, interrupted run left behind.
+  const parent = path.join(node, 'test-output', 'placement-worktrees');
+  fs.mkdirSync(path.join(parent, 'old-run'), {recursive: true});
+  fs.writeFileSync(path.join(parent, 'old-run.bundle'), 'x');
+  fs.writeFileSync(path.join(parent, 'old-run.files'), 'x');
+  const basis = git(node, 'rev-parse', 'HEAD');
+  git(node, 'update-ref', 'refs/lagrange-placement/old-run', basis);
+  fs.appendFileSync(path.join(controller, 'README.md'), '\nplacement witness\n');
+  git(controller, 'rm', '-q', '-r', 'data/storage-load');
+  git(controller, 'commit', '-qam', 'placement witness');
+  const sha = git(controller, 'rev-parse', 'HEAD');
+  const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
+    nodeMajor: '', factor: 1.5};
+  // Run from inside node:test, the shell here would hand its runner
+  // NODE_TEST_CONTEXT and switch tap to the serialized stream, and inside a
+  // push hook a GIT_DIR naming the pusher's repository; a lab machine's ssh
+  // session carries neither.
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  const start = (files, options = {}) => startRemoteShard({machine, files},
+    {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
+  return {node, controller, parent, machine, sha, env, start};
+}
+
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
   async (t) => {
-    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-remote-'));
-    t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
-    // A lab machine's checkout at this commit, and a controller one commit on.
-    const node = path.join(scratch, 'node');
-    const controller = path.join(scratch, 'controller');
-    git(scratch, 'clone', '-q', '--shared', process.cwd(), node);
-    git(scratch, 'clone', '-q', '--shared', process.cwd(), controller);
-    fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(node, 'node_modules'));
-    // An ignored workspace entry the worktree should get, and a tracked one
-    // the placed commit deletes, which it must not get back from the lab's
-    // older checkout.
-    fs.mkdirSync(path.join(node, 'data', 'examples'), {recursive: true});
-    fs.writeFileSync(path.join(node, 'data', 'examples', 'witness.txt'), 'x');
-    // What an earlier, interrupted run left behind.
-    const parent = path.join(node, 'test-output', 'placement-worktrees');
-    fs.mkdirSync(path.join(parent, 'old-run'), {recursive: true});
-    fs.writeFileSync(path.join(parent, 'old-run.bundle'), 'x');
-    fs.writeFileSync(path.join(parent, 'old-run.files'), 'x');
-    const basis = git(node, 'rev-parse', 'HEAD');
-    git(node, 'update-ref', 'refs/lagrange-placement/old-run', basis);
-    fs.appendFileSync(path.join(controller, 'README.md'), '\nplacement witness\n');
-    git(controller, 'rm', '-q', '-r', 'data/storage-load');
-    git(controller, 'commit', '-qam', 'placement witness');
-    const sha = git(controller, 'rev-parse', 'HEAD');
-    const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
-      nodeMajor: '', factor: 1.5};
-    // Run from inside node:test, the shell here would hand its runner
-    // NODE_TEST_CONTEXT and switch tap to the serialized stream, and inside a
-    // push hook a GIT_DIR naming the pusher's repository; a lab machine's ssh
-    // session carries neither.
-    const env = gitProcessEnvironment();
-    delete env.NODE_TEST_CONTEXT;
-    const start = (files, options = {}) => startRemoteShard({machine, files},
-      {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
-
+    const {node, controller, parent, machine, sha, env, start} = labFixture(t);
     const started = start([FAST_TEST], {forward: {retry: '1', tapTimeout: '900'}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
     const green = await started.done;

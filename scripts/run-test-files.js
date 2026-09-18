@@ -11,6 +11,7 @@ import {
   statSync,
 } from 'node:fs';
 import {spawn, spawnSync} from 'node:child_process';
+import {gitProcessEnvironment} from './checks/git-process-environment.js';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Parser} from 'tap-parser';
@@ -259,9 +260,13 @@ function prepareTestRun(file, options) {
   mkdirSync(path.dirname(outputFile), {recursive: true});
   const stdoutFd = openSync(outputFile, 'w');
   const stderrFd = openSync(stderrFile, 'w');
+  // No test process inherits a git repository pointer: a push from a linked
+  // worktree runs the gate with git's GIT_DIR exported, and a fixture that
+  // commits, configures or resets would reach the pusher's repository
+  // (2026-09-13) - while a test that reads the repository must read the
+  // checkout it runs in. One owner here, for every test file.
   const env = {
-    ...process.env,
-    ...options.env,
+    ...gitProcessEnvironment({...process.env, ...options.env}),
     TAP_ALLOW_INCOMPLETE_COVERAGE: '1',
     TAP_FAIL_SKIP: '1',
     TAP_FAIL_TODO: '1',

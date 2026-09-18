@@ -271,3 +271,25 @@ test('working-tree-not-proof: a defect that exists only in the working tree is i
     restore();
   }
 });
+
+test('the gate reads its own checkout under a push hook\'s GIT_DIR', () => {
+  // git exports GIT_DIR into pre-push when the push comes from a linked
+  // worktree. The gate's command must still read the checkout of the sha it
+  // proves, not the pusher's.
+  const other = path.join(workspace, 'linked');
+  git(['worktree', 'add', '--detach', '--quiet', other, baseSha]);
+  try {
+    git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--allow-empty',
+      '--quiet', '-m', 'the pusher moved on'], other);
+    const pusherGitDir = git(['rev-parse', '--absolute-git-dir'], other);
+    const gated = run([MATERIALIZER, '--gate', baseSha, '--run', 'sh', '-c',
+      'echo "pointer=${GIT_DIR-none}"; git rev-parse HEAD'],
+    {env: {...env(), GIT_DIR: pusherGitDir}});
+    assert.equal(gated.status, 0, `${gated.stdout}${gated.stderr}`);
+    assert.match(gated.stdout, /^pointer=none$/mu, 'no repository pointer reaches the command');
+    assert.match(gated.stdout, new RegExp(`^${baseSha}$`, 'mu'),
+      'and git there answers for the gated sha');
+  } finally {
+    git(['worktree', 'remove', '--force', other]);
+  }
+});

@@ -1,0 +1,40 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "placement-fixture-followups",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/run-test-files.test.js": "4f44efae685aee855e711007110e76c56dcb4ed73983b0f132c6b54629291b95",
+    "test/scripts/test-placement.test.js": "54347f66ab9d1f940d360301c02dbeb095adb98bcf21618e649a9ad0c65dcc06"
+  },
+  "generatedAt": "2026-09-18T16:13:42.948Z",
+  "receipts": [
+    {
+      "id": "test-processes-never-inherit-a-repository",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a test process never inherits a git repository pointer$\" test/scripts/run-test-files.test.js",
+      "detail": "GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE never reach a test file",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "hang-up-stops-a-placed-run",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a hang-up stops a placed run like an interrupt$\" test/scripts/test-placement.test.js",
+      "detail": "closing the terminal aborts every machine",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "aborted-shard-cleans-up-first",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an aborted lab shard cleans up before it is cut$\" test/scripts/test-placement.test.js",
+      "detail": "no worktree, ref, bundle or runner is left behind",
+      "testFile": "test/scripts/test-placement.test.js"
+    },
+    {
+      "id": "controller-child-never-places-again",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the controller child runs with placement switched off$\" test/scripts/test-placement.test.js",
+      "detail": "LAGRANGE_PLACEMENT=local reaches the controller child",
+      "testFile": "test/scripts/test-placement.test.js"
+    }
+  ]
+}

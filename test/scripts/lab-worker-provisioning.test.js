@@ -96,6 +96,11 @@ test('the worker setup installs the canary toolchain as the canary does', () => 
   const jobVariable = withStep((step) => (step.run += '\necho "${JOB_ONLY}"'));
   for (const job of Object.values(jobVariable.jobs)) job.env = {...job.env, JOB_ONLY: '1'};
   assert.throws(() => workerSetupScript({workflow: jobVariable, ...INPUT}), /uses JOB_ONLY/u);
+  // And one the whole workflow defines.
+  const workflowVariable = withStep((step) => (step.run += '\necho "$WORKFLOW_ONLY"'));
+  workflowVariable.env = {...workflowVariable.env, WORKFLOW_ONLY: '1'};
+  assert.throws(() => workerSetupScript({workflow: workflowVariable, ...INPUT}),
+    /uses WORKFLOW_ONLY/u);
 });
 
 test('every tool discovery checks is provisioned', () => {
@@ -218,6 +223,17 @@ test('the worker setup moves a checkout to main only when nothing is lost', (t) 
   // GIT_DIR for (verifier round 2).
   const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
     ...args], {cwd, encoding: 'utf8', env: gitProcessEnvironment()}).stdout.trim();
+  // Inside a push hook git exports GIT_DIR for the pusher's repository: this
+  // decoy stands in for it and must see nothing, from the first git on (verifier round 2).
+  const decoy = path.join(scratch, 'decoy');
+  fs.mkdirSync(decoy);
+  git(decoy, 'init', '-q', '-b', 'main');
+  const savedGitDir = process.env.GIT_DIR;
+  process.env.GIT_DIR = path.join(decoy, '.git');
+  t.after(() => {
+    if (savedGitDir === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = savedGitDir;
+  });
   const upstream = path.join(scratch, 'upstream');
   fs.mkdirSync(upstream);
   git(upstream, 'init', '-q', '-b', 'main');
@@ -231,17 +247,6 @@ test('the worker setup moves a checkout to main only when nothing is lost', (t) 
     prepare(repo);
     return repo;
   };
-  // Inside a push hook git exports GIT_DIR for the pusher's repository: this
-  // decoy stands in for it and must see nothing (verifier round 2).
-  const decoy = path.join(scratch, 'decoy');
-  fs.mkdirSync(decoy);
-  git(decoy, 'init', '-q', '-b', 'main');
-  const savedGitDir = process.env.GIT_DIR;
-  process.env.GIT_DIR = path.join(decoy, '.git');
-  t.after(() => {
-    if (savedGitDir === undefined) delete process.env.GIT_DIR;
-    else process.env.GIT_DIR = savedGitDir;
-  });
   const cases = {
     behind: worker('behind', () => {}),
     dirty: worker('dirty', (repo) => fs.writeFileSync(path.join(repo, 'local.txt'), 'x')),

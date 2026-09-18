@@ -23,6 +23,7 @@ const NODE_TEST_PASS_FIXTURE = `${FIXTURE_DIRECTORY}/node-test-pass.fixture.mjs`
 const NODE_TEST_SKIP_FIXTURE = `${FIXTURE_DIRECTORY}/node-test-skip.fixture.mjs`;
 const NODE_TEST_FAILURE_FIXTURE = `${FIXTURE_DIRECTORY}/node-test-failure.fixture.mjs`;
 const EMPTY_FIXTURE = `${FIXTURE_DIRECTORY}/empty.fixture.mjs`;
+const GIT_ENVIRONMENT_FIXTURE = `${FIXTURE_DIRECTORY}/git-environment.fixture.mjs`;
 const RUNAWAY_DIRECTIVE_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-runaway-directive.fixture.mjs`;
 
@@ -43,6 +44,26 @@ describe('run-test-files', () => {
       resultsDirectory,
     });
   }
+
+  it('a test process never inherits a git repository pointer', async () => {
+    // As inside a pre-push hook run from a linked worktree, where git exports
+    // an absolute GIT_DIR (2026-09-13).
+    const saved = {};
+    for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) {
+      saved[name] = process.env[name];
+      process.env[name] = `/nonexistent/${name}`;
+    }
+    try {
+      const summary = await runFixtures([GIT_ENVIRONMENT_FIXTURE]);
+      assert.equal(summary.ok, true, JSON.stringify(summary.results?.[0]?.reasons));
+      assert.equal(summary.passed, 1);
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
 
   it('parses explicit concurrency and timeout options', () => {
     assert.deepEqual(parseOptions([

@@ -869,7 +869,19 @@ const PLACEMENT_FORWARDED_ENV = Object.freeze({
   RETRY: 'LAGRANGE_RETRY_FAILED_ONCE',
   TAP_TIMEOUT: 'TAP_TIMEOUT',
 });
-const PLACEMENT_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM']);
+// A closed terminal (SIGHUP) stops a placed run like an interrupt: the
+// controller child and the lab wrappers are detached, so nothing else would.
+const PLACEMENT_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
+// How long an aborted shard's lab shell is given to clean up before it is cut.
+const PLACEMENT_ABORT_GRACE_MS = 5000;
+const PLACEMENT_ABORT_POLL_MS = 100;
+// Waits, in a shell, for every pid after $1 to end - a zombie has ended - for
+// at most $1 polls: the caller is a signal handler with no event loop left to
+// wait in.
+const PLACEMENT_WAIT_SCRIPT =
+  'n=$1; shift; i=0; while [ "$i" -lt "$n" ]; do alive=; for p in "$@"; do ' +
+  's=$(ps -o stat= -p "$p" 2>/dev/null); case "$s" in ""|Z*) ;; *) alive=1;; esac; ' +
+  'done; [ -z "$alive" ] && exit 0; sleep 0.1; i=$((i+1)); done';
 const PLACEMENT_WORD_SEPARATOR = ' ';
 const PLACEMENT_RUNNER = 'scripts/run-classified-test-files.js';
 const PLACEMENT_RUNNER_STDIN = '--stdin';
@@ -1115,10 +1127,11 @@ function shardVerdicts(shard, outcome) {
  * @param {Function} deps.lastGreen file -> whether its controller result is green
  * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
  * @param {Function} deps.discover async () -> {machines, record(name, key, files)}
- * @param {Function} deps.runRemote (shard, {sha, deadlineMs, forward}) -> {done, stop, abort}
+ * @param {Function} deps.runRemote (shard, {sha, deadlineMs, forward}) ->
+ *   {done, stop, interrupt, abort}
  * @param {Function} [deps.runLocalChild] files -> {done, abort}: the controller's
  *   files while lab shards run, without blocking this process
- * @param {Object} [deps.signals] where SIGINT and SIGTERM arrive (process)
+ * @param {Object} [deps.signals] where SIGINT, SIGTERM and SIGHUP arrive (process)
  * @param {Function} [deps.exit] process.exit
  * @param {boolean} [deps.keepGoing]
  * @param {Object} [deps.env]
@@ -1167,20 +1180,29 @@ export async function runPlacedTestFiles(files, deps) {
   // of their own group, never in this process's blocking lanes: a signal
   // handler here could not run until those lanes finished, so a Ctrl-C or a
   // SIGTERM would be held for the whole shard (verifier round 2). Interrupted,
-  // every lab shard and the local child are aborted at once, synchronously.
+  // the local child is cut first and every lab shard is aborted together,
+  // synchronously.
   let here = null;
   const runHere = (planned) => {
     here = deps.runLocalChild ? deps.runLocalChild(planned) :
       {done: Promise.resolve(deps.runLocal(planned, {keepGoing: true}))};
     return here.done;
   };
+  // The handler stays installed and runs once: a hang-up arrives twice (the
+  // shell resends it, then the kernel), and a second Ctrl-C can come during
+  // the lab shells' grace. A listener removed on first use handed either back
+  // to the default action, which killed this process mid-abort and left the
+  // detached shards running (verifier, placement-fixture-followups round 1).
+  let aborting = false;
   const interrupted = () => {
-    for (const run of runs) run.abort?.();
+    if (aborting) return;
+    aborting = true;
     here?.abort?.();
+    abortTogether(runs);
     (deps.exit || process.exit)(PLACEMENT_EXIT.INTERRUPTED);
   };
   const signals = deps.signals || process;
-  for (const signal of PLACEMENT_SIGNALS) signals.once(signal, interrupted);
+  for (const signal of PLACEMENT_SIGNALS) signals.on(signal, interrupted);
   try {
     const controllerShard = shards.find((shard) => shard.machine.controller);
     const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
@@ -1473,7 +1495,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     bundleFile = bundleFor(machine, {root, sha, local});
   } catch (error) {
     return {done: Promise.resolve({status: PLACEMENT_EXIT.SETUP, log: EMPTY,
-      reason: error.message}), stop: () => {}, abort: () => {}};
+      reason: error.message}), stop: () => {}, interrupt: () => null, abort: () => {}};
   }
   const remoteBundle = bundleFile ?
     `${machine.repoPath}/${PLACEMENT_PARENT}/${runId}.bundle` : EMPTY;
@@ -1517,15 +1539,33 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     };
     return stopped ? {...outcome, reason: stopped} : outcome;
   });
-  // Interrupted: stop the lab shell, and cut the local side now rather than
-  // after a grace this process will not live to see.
-  const abort = () => {
-    if (hasExited(child)) return;
+  // Interrupted: ask the lab shell to stop, and hand back what to wait for
+  // and how to cut the local side - abortTogether does both for every shard.
+  const interrupt = () => {
+    if (hasExited(child)) return null;
     stopped = PLACEMENT_TEXT.INTERRUPTED;
-    signalLabShell(machine, logFile);
-    killGroup(child);
+    return {pid: signalLabShell(machine, logFile) ? child.pid : null,
+      cut: () => killGroup(child)};
   };
-  return {done, stop: () => stop(PLACEMENT_TEXT.INTERRUPTED), abort};
+  return {done, stop: () => stop(PLACEMENT_TEXT.INTERRUPTED), interrupt,
+    abort: () => abortTogether([{interrupt}])};
+}
+
+// Every lab shell is asked to stop first, then all of them share one bounded
+// grace for their traps - which stop the runner and remove the worktree, ref
+// and bundle; a wrapper cut at once killed a local-mode shell before its trap
+// ran (verifier, test-placement round 3) - then whatever is left is cut. Any
+// number of shards costs one grace, not one each.
+function abortTogether(runs) {
+  const pending = runs.map((run) => (run.interrupt ? run.interrupt() : run.abort?.()))
+    .filter((one) => one?.cut);
+  const waiting = pending.map((one) => one.pid).filter(Boolean).map(String);
+  if (waiting.length > 0) {
+    spawnSync(PLACEMENT_SHELL, [PLACEMENT_SHELL_COMMAND, PLACEMENT_WAIT_SCRIPT,
+      PLACEMENT_SHELL, String(PLACEMENT_ABORT_GRACE_MS / PLACEMENT_ABORT_POLL_MS), ...waiting],
+    {stdio: PLACEMENT_STDIO_IGNORE, timeout: 2 * PLACEMENT_ABORT_GRACE_MS});
+  }
+  for (const one of pending) one.cut();
 }
 
 /**

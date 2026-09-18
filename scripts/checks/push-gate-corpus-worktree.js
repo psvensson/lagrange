@@ -55,6 +55,7 @@ import {
 import {
   WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
+import {gitProcessEnvironment} from './git-process-environment.js';
 
 const TEXT_ENCODING = 'utf8';
 const REF_FLAG = '--ref';
@@ -247,8 +248,11 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
   const releaseSignals = removeWorktreeOnSignal(root, worktreePath);
   try {
     const links = linkWorkspaceDependencies(root, worktreePath);
+    // A push from a linked worktree exports that worktree's GIT_DIR into the
+    // hook; inherited, it would make the gate's own git reads - HEAD, status,
+    // the lint range - answer for the pusher's checkout, not this one.
     const env = {
-      ...process.env,
+      ...gitProcessEnvironment(),
       [WORKSPACE_INJECTION_ENV]:
         GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR),
       [GATE_PUSHED_SHA_ENV]: sha,

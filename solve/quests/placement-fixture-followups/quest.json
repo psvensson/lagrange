@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "placement-fixture-followups",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Follow-ups the test-placement and lab-worker-provisioning verifiers recorded, finished at the owner's request (2026-09-18). (1) A push from a linked worktree runs the pre-push test stage with git's GIT_DIR exported, and twelve test files still spawn committing, configuring or resetting git with the inherited environment - the 2026-09-13 incident that wrote fixture identity and core.bare into the real repository. Instead of twelve per-file repairs, the test runner now removes inherited git repository pointers from every test process it starts, so no fixture can reach the pusher's repository and a test in the gate reads the checkout it runs in. (2) Closing the terminal (SIGHUP) during a placed run left the detached controller child and the lab wrappers running: SIGHUP now stops them like SIGINT and SIGTERM. (3) An interrupted lab shard killed its wrapper group at once, so in local mode the lab shell died before its trap cleaned up; abort now lets the shell finish, bounded, before cutting it. (4) The controller child's LAGRANGE_PLACEMENT=local, unwitnessed so far, gets a witness.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/placement-fixture-followups/evidence/receipt.json",
+      "requiredReceipts": [
+        "test-processes-never-inherit-a-repository",
+        "hang-up-stops-a-placed-run",
+        "aborted-shard-cleans-up-first",
+        "controller-child-never-places-again"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner-for-test-environments",
+      "statement": "The runner that starts every test file is the one place inherited git pointers are removed; no per-file repair is needed or relied on."
+    },
+    {
+      "id": "bounded-abort",
+      "statement": "An interrupt still ends a placed run within seconds: the lab shell is given a bounded grace to clean up, then cut."
+    }
+  ],
+  "sealedAt": "1db6bf6899e1c8674a426bc872c9037dc4440ff5"
+}
