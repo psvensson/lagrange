@@ -21,7 +21,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 | Nightly / manual | `.github/workflows/formation-health.yml` | `npm run health:formation -- --gcp`: the MovieLens formation-only phase with one node per GCP VM, its formation verdict appended to the trend and uploaded with the node logs. A standing signal, never a gate. |
 | Push of `release-publishability/**` | `.github/workflows/release.yml` | Fast GitHub-hosted, non-publishing preflight. It checks current npm package/version state, GitHub OIDC claims for npm trusted publishing, and the current Docker Hub pull+push credential scope. These are freshness-bound external facts and are deliberately **not** permanent proof receipts. |
 | Manual / `release-proof/**` branch | `.github/workflows/full-gate.yml` | First asks the durable proof authority whether `release-full-v1` already proves this exact SHA. If yes, GCP is not woken and the proof is reused. If not, the controlled GCP runner executes the complete release proof once; after success a separate GitHub-hosted recorder persists the proof receipt. |
-| Push of a `v*` tag | `.github/workflows/release.yml` | Rechecks freshness-bound publication prerequisites → requires the durable `release-full-v1` receipt for the tagged SHA → builds and publishes the npm package **first** → builds SEA/Helm/Docker artifacts and smoke-tests the image → pushes Docker tags → updates the Docker Hub overview (best-effort) → publishes release assets and notes. The application proof is never rerun by the tag workflow. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | Rechecks freshness-bound publication prerequisites → requires the durable `release-full-v1` receipt for the tagged SHA → builds and publishes the npm package **first** → builds SEA/Helm/Docker artifacts and smoke-tests the image → pushes Docker tags → publishes the tagged root `README.md` as the Docker Hub overview and verifies Docker Hub reports equivalent content → publishes release assets and notes. The application proof is never rerun by the tag workflow. |
 
 The durable proof design is specified in
 [`docs/development/durable-proof-receipts.md`](docs/development/durable-proof-receipts.md).
@@ -92,16 +92,18 @@ instead of frozen. A patch release for one fix follows the same steps.
    tag after a newer `v*` tag exists, preventing a rerun from moving `latest`
    backward. A partial-channel failure is repaired forward with a new patch
    version; a tag is never moved.
-6. **Docker Hub overview updates itself.**
-   [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
-   `release.yml` renders it with a generated per-release "Release notes"
-   section (from `CHANGELOG.md`) and updates the repository description
-   best-effort. A failed description update never sinks a release. Manual
-   fallback if the step warns:
-   `npm run release:notes -- --mode overview --version x.y.z` and paste the
-   output. Edit the template whenever user-facing container behavior changes;
-   never hand-edit between the `RELEASE-NOTES` markers.
-
+6. **Docker Hub is another verified release surface.** The repository root
+   `README.md` is the single authored owner for the Docker Hub overview.
+   `release.yml` checks out the exact annotated tag, gives that tag's README to
+   the pinned Docker Hub description action, and enables relative-link
+   completion so links resolve against the same immutable tag. It then reads
+   Docker Hub's namespace-scoped repository metadata back and compares
+   `full_description` with the released README, canonicalizing only markdown
+   link destinations because URL completion changes those targets. A stale,
+   truncated, rejected, or otherwise different overview fails the release;
+   this is no longer best-effort. `docs/dockerhub-overview.md` and
+   `release-notes.js --mode overview` are retired from the publication path and
+   must not be reintroduced as a second user-facing owner.
 
 The release owner's one post-publish action: after a release publishes under
 `latest`, move `next` onto it by hand so `lagrange-server@next` never installs
@@ -178,7 +180,8 @@ remain freshness-bound checks and may legitimately run more than once:
 
 - npm registry reachability and candidate-version availability;
 - npm trusted-publisher/OIDC configuration;
-- Docker Hub credential validity and push scope;
+- Docker Hub credential validity, push scope, repository-metadata update, and
+  read-back state;
 - current availability or policy of another external service.
 
 This distinction is deliberate. "Proof once" must not become "a credential
@@ -234,8 +237,10 @@ Configure these values under **Settings → Secrets and variables → Actions**:
 
 - repository variable `DOCKERHUB_USERNAME`: the Docker Hub account that owns
   `psvensson/lagrange`;
-- repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with
-  Read/Write permission.
+- repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token that
+  can both push `psvensson/lagrange` images and update that repository's Hub
+  metadata. The tag workflow treats both capabilities as required publication
+  state and verifies the resulting overview by reading Docker Hub back.
 
 The npm package is public and named `lagrange-server`. npm trusted publishing is
 bound to owner `psvensson`, repository `lagrange`, and workflow `release.yml`.
