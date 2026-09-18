@@ -1,0 +1,95 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "runner-output-bound",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/run-test-files.test.js": "a145565eea6b4517ac30c1665e9a3644380dafcfe80612e3320248df229d9b1d"
+  },
+  "generatedAt": "2026-09-18T08:32:52.744Z",
+  "receipts": [
+    {
+      "id": "past-the-string-cap",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^analyses an output far past the string cap that readFileSync cannot hold$\" test/scripts/run-test-files.test.js",
+      "detail": "a 520 MiB output, which readFileSync still cannot hold, is read whole into the analysis at bounded memory",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "every-byte-reaches-the-analysis",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^feeds every byte to the consumer while keeping only the edges$\" test/scripts/run-test-files.test.js",
+      "detail": "the verdict is computed from the whole file while only the head, the tail and a named elision are kept",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "lines-survive-chunk-boundaries",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^offers a bounded prefix of every line, whatever the line length$\" test/scripts/run-test-files.test.js",
+      "detail": "a line larger than the read buffer is offered as a bounded prefix, so the top-level time tail is never missed and nothing accumulates",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "bytes-reach-the-consumer-raw",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^hands the consumer raw bytes, so a character split across chunks survives$\" test/scripts/run-test-files.test.js",
+      "detail": "chunks are forwarded as bytes, so a multibyte character on a read seam is never mangled",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "newline-free-output-survives",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^survives an output past the cap that has no newline at all$\" test/scripts/run-test-files.test.js",
+      "detail": "the shape that defeats a whole-line accumulator and the tap parser alike: one line, no terminator, past the string cap",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "runaway-line-capped-in-place",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^caps one runaway line without touching the lines around it$\" test/scripts/run-test-files.test.js",
+      "detail": "the cap is per line: the lines before and after a runaway one reach the parser whole",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "excerpt-is-bytes-not-lengths",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^returns any output within the two edges byte for byte$\" test/scripts/run-test-files.test.js",
+      "detail": "ASCII and multibyte alike are verbatim within the edges, at every size around the threshold",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "line-ends-at-carriage-return",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^ends a line at a carriage return, as the pattern it replaced did$\" test/scripts/run-test-files.test.js",
+      "detail": "the multiline anchor it replaced matched after CR too",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "last-line-without-newline",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^offers the last line when the file does not end in a newline$\" test/scripts/run-test-files.test.js",
+      "detail": "the time tail is found with no trailing newline",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "unanalysable-output-fails-the-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^fails a file whose runaway line hid its directive$\" test/scripts/run-test-files.test.js",
+      "detail": "a line the parser never saw whole can move the verdict, so the file is red by construction rather than reported as a pass",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "ordinary-output-unflagged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^leaves an ordinary output unflagged$\" test/scripts/run-test-files.test.js",
+      "detail": "and nothing is dropped or flagged for a normal file",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "small-output-is-verbatim",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^returns a small output verbatim, with its byte count$\" test/scripts/run-test-files.test.js",
+      "detail": "an ordinary output is unchanged by the bound",
+      "testFile": "test/scripts/run-test-files.test.js"
+    }
+  ]
+}

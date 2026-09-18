@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runner-output-bound",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "finalizeTestRun in scripts/run-test-files.js read each test's whole stdout AND stderr into strings. On 2026-09-17 test/integration/message-group-multi-join-formation.integration.test.js wrote 608,651,868 bytes under lane contention, past V8's string cap, so readFileSync threw ERR_STRING_TOO_LONG and killed the runner mid-lane: 220 of 262 exclusive files had passed and their results died with it - an unhandled crash, not a test failure. The same unbounded text was also echoed to the console for any failed file. readBoundedOutput now reads in 1 MiB chunks and bounds three things in BYTES: the retained excerpt (first and last 64 KiB, with an elision naming the file by a repository-relative path), the per-line prefix offered for finding the top-level time tail, and - the part two earlier shapes of this fix got wrong - what reaches the TAP parser. The parser accumulates until a line ends (this.buffer += chunk), so a newline-free 520 MiB output overflows INSIDE it however carefully the file is streamed; a whole-line accumulator has the same defect (verifier round 1 reproduced the lane death against it, and an uncatchable OOM at a 256 MB heap). TAP semantics live at the start of a line, so each line's first 1 MiB reaches the parser intact, the terminator always does, and only the runaway tail of that same line is dropped and counted in `dropped`. Measured: a 545 MB newline-free spew now leaves the lane alive with its other results intact and the spewer reported as an ordinary failure, at a 256 MB heap as well; a 520 MiB line-structured output is analysed in 0.5 s at ~95 MB RSS with the same verdict the whole-string analysis gave. Verifier round 2 found the one case where a capped line changes a verdict silently - a trailing directive past the cap turning a skipped assertion into a plain pass - so an incomplete analysis now fails the file and reports how many bytes of how many went unanalysed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runner-output-bound/evidence/receipt.json",
+      "requiredReceipts": [
+        "past-the-string-cap",
+        "every-byte-reaches-the-analysis",
+        "lines-survive-chunk-boundaries",
+        "small-output-is-verbatim"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "verdict-unchanged",
+      "statement": "The verdict is either exactly what the whole-string analysis produced, or the file is FAILED because its output could not be analysed whole. Every line's head and its terminator reach the parser, so any output whose lines are within the analysis cap gives the identical verdict; when a line is capped the dropped bytes are counted and the file is red by construction, because a cut can move the verdict (ok 1 - <runaway> # SKIP loses its skip)."
+    },
+    {
+      "id": "time-tail-still-found",
+      "statement": "The top-level time line is detected line-wise on LF or CR, exactly as the /^# time=/m it replaced, so it is found wherever it lies and no duplicate is appended."
+    },
+    {
+      "id": "no-lane-dies-for-output",
+      "statement": "No output can throw out of finalizeTestRun: not a file past the string cap, not one without a single newline, and not under a constrained heap. A pathological file is read, reported, capped and elided, never fatal to the lane's other results."
+    },
+    {
+      "id": "excerpt-is-bytes",
+      "statement": "The excerpt is computed in bytes: a file within the two edges is returned verbatim whatever its encoding, and a truncated one reports exactly the bytes it dropped."
+    }
+  ],
+  "sealedAt": "d1a111cbf69ee1065e4f8113092da6bb56dd160e"
+}
