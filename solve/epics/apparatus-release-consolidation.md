@@ -31,7 +31,8 @@ quests:
   - wait-definite-negative
   - static-test-hygiene
   - lane-parallelism-measurement
-  - canary-on-lab-node
+  - fleet-capability-discovery
+  - test-placement
 authorizes:
   - scripts
   - test
@@ -437,11 +438,33 @@ discipline forbids two heavy runs, so nothing becomes a local default
 without the measurement. Potential: 3 min (bootstrap) to 12-20 min
 (overlap) on branch plans.
 
-**canary-on-lab-node** - the full-corpus canary runs on the home-lab runner
-(`runs-on` edit, push-to-main only; `ci.yml` already reasons the
-public-repo self-hosted rule), once `scripts/lab.js` is on this line.
-Post-push corpus ~75 min to ~30 min; it is what makes the delta-only land
-comfortable.
+**fleet-capability-discovery** and **test-placement** - replacing what this
+epic first called `canary-on-lab-node`, on the owner's direction
+(2026-09-18): the hosted canary stays the right place for a RELEASE, an
+ordinary push should prove itself locally and in parallel, and **no host name
+belongs in any setup** because the registered lab machines will change. Two
+owners, deliberately apart:
+
+- *discovery + measurement*: what machines exist and what each can actually
+  do - node version, docker, helm, wasm-tools, a psql client, the pinned
+  MovieLens dataset, cores, RAM, measured per-file speed - recorded as
+  observations, extending `scripts/lab.js node probe` / `harness doctor` and
+  the out-of-repo inventory. A machine missing a prerequisite is a machine
+  that reds five files for setup reasons (measured 2026-09-17), so capability
+  is part of the record, not an assumption.
+- *placement*: at test time, distribute a plan over whatever was discovered,
+  with an explicit fallback when nothing is available. Shard BY FILE SET, one
+  machine's own serial lanes each: overlapping the exclusive and ordinary
+  lanes on a single host is measured to red five contention-sensitive
+  integration SLOs, while sharding across hosts adds no contention.
+
+Capability data, not a host choice: a 12-thread lab node ran the whole corpus
+in 46 min and an 8-thread one in 64 min, against ~74 min hosted at
+`LAGRANGE_TEST_MACHINE_FACTOR=3`. Registering any self-hosted runner on a
+PUBLIC repository is an owner decision (`ci.yml` already reasons that fork
+code must never reach one), so neither owner starts without that go-ahead.
+With `canary-proof-reuse` landed, reuse removes the redundant runs first and
+placement then shortens the runs that genuinely remain.
 
 ### Measured 2026-09-17 (lane-parallelism-measurement, first half)
 
