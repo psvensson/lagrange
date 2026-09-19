@@ -16,6 +16,9 @@ quests:
   - formation-sim
   - seed-formation-decoupling
   - five-node-cold-formation-certification
+  - seed-replica-production-scheduling-defaults
+  - learner-promotion-guard-inputs-observed
+  - critical-spread-overflow-disagreement-replay
 authorizes:
   - examples/service-data-affinity
   - scripts/checks/formation-health.js
@@ -54,6 +57,20 @@ authorizes:
   - test/control-plane/core-system-logic-runtime-witness.test.js
   - test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js
   - docs
+  - src/partition
+  - src/service
+  - src/node
+  - test/partition
+  - test/service
+  - test/node
+  - test/bootstrap
+  - test/raft
+  - test/message-group
+  - test/workflow
+  - test/control-plane
+  - scripts/quest-evidence/seed-replica-production-scheduling-defaults.js
+  - scripts/quest-evidence/learner-promotion-guard-inputs-observed.js
+  - scripts/quest-evidence/critical-spread-overflow-disagreement-replay.js
 ---
 
 # Formation without seed starvation
@@ -171,6 +188,30 @@ to signal. This epic restores a proof before the claim.
 fresh-container five-node runs, priority metric. Confirm the scenario id
 against the harness before sealing. Live runs are terminal evidence only
 here; every child quest is deterministic or simulation.
+
+**Scope widening (2026-09-19, R16).** Three quests follow from the amendment,
+and the paths they need are authorized above.
+
+- **`seed-replica-production-scheduling-defaults`** restores the two
+  production defaults that the retrospective verification of
+  `formation-sim-production-replica-composition` found changed. Seed-hosted
+  replicas are treated as owning a clock although none was supplied, and
+  `ServiceReconciler`'s yield was changed. The quest also owes the two
+  reconcile-queue witnesses named on
+  `formation-sim-rebalancer-current-work-completion`.
+  Paths: `src/node`, `src/service`, `src/partition`, and their test trees.
+- **`learner-promotion-guard-inputs-observed`** logs, without changing any
+  decision, the inputs the learner-side count check decided on, so the next
+  failing nightly shows which input zeroes the overflow budget.
+  Paths: `src/partition`, `test/partition`, `test/control-plane`.
+- **`critical-spread-overflow-disagreement-replay`** replays the 2026-09-16
+  operation sequence on the simulator's node hosts. It is test-only.
+
+Each quest gets its receipt harness under `scripts/quest-evidence/`. The
+static snapshot reproduction of 2026-09-18 is a candidate mechanism only. Its
+trigger (a joiner status the live logs do not show) is not the demonstrated
+live input, and the view the live logs do show grants the promotion in the
+same harness.
 
 ## Binding constraints
 
