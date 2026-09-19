@@ -454,3 +454,71 @@ Consumed as permission, that withdraws the allowance the operation needs.
 - The provenance test builds its closure summary by hand.
 - The simulator's node hosts never run the ADD workflow that writes those
   rows.
+
+## Fifth addendum (2026-09-19): the recorded refusal is not one consistent row snapshot
+
+The characterization implementer stopped before sealing. It ran the whole
+candidate derivation from constructed rows into the real promotion check,
+and reported the following. I checked the fixture fields it cites.
+
+**What reproduces.**
+- The passing reading reproduces on every decisive field. The whole
+  membership block matches byte for byte.
+- The refusal reading reproduces on every decisive field **except one**.
+  This covers the summary, source, planner, completion, budget, max and
+  reason.
+- One in-flight ADD going terminal releases the node's other learners.
+- No operation rows means no witness.
+- Operation status and step do not enter any rule for the recorded pair.
+
+**What does not.**
+- The guard's voter census (`isActiveVoterServiceRowForPromotion`) and the
+  target index (`resolvePriorityRecoveryTargetServiceRowVisibilityState`)
+  read the same services rows with the same voter-role set.
+- So any row that makes the ADD's target voter-visible must appear in that
+  refusal's own `voterReplicas` as a fifth voter on a third node.
+- The recorded refusal shows four voters on two nodes and **no row for the
+  learner at all** (`learnerReplicaIds: []`, `observedLearnerCount: 0`).
+- The passing reading 58 s later shows the learner's row as a learner.
+- The witness being satisfied and the census seeing neither a voter nor a
+  learner on the third node cannot both come from one services snapshot
+  through the locally built route.
+
+**Candidates, none demonstrated.**
+- **(a) A retained witness.**
+  - `buildPriorityRecoveryClosureEvidence` returns
+    `priorityRecoveryPlanningSnapshot.priorityRecoveryClosureWitness`
+    outright when one is present.
+  - That happens before it builds anything from local rows.
+  - The fourth addendum treated the locally built route as the live one
+    without showing which route ran.
+- **(b) Two readers on different snapshots.**
+  - The candidate derivation has its own per-publisher memo
+    (`control-plane-readiness-publication-diagnostics.js:281-320`), beneath
+    the layer that states the planning answer's origin.
+  - So `origin: fresh` does not exclude an older candidate.
+- **(c) A row the census misses but the index accepts.**
+  - Four asymmetries exist on main: an absent `service_type`, camelCase
+    keys, an absent `partition_id` (a node-wide wildcard), and upper-case
+    roles.
+  - Each reproduces the record, but no live writer is known to produce such
+    rows, so none is used.
+- A further asymmetry was read from code and not measured. The satisfying
+  rule never requires the target node to lie outside the current holder
+  set.
+
+**Consequence.**
+- The characterization is **not sealed**. Sealing it on a constructed row
+  that no evidence supports would force the match.
+- The owner's rule applies: find the first live input the reproduction
+  lacks.
+- That input is which route produced the witness, and why it read
+  satisfied.
+- A small log-only quest, `closure-witness-route-observed`, adds that to the
+  guard-input payload:
+  - the route (retained, built or none);
+  - the witness state and its unresolved ids;
+  - this partition's semantic state and spread-completion reason;
+  - each satisfying operation's target visibility;
+  - the base summary before the closure choice.
+- The characterization is sealed after lab formations show the route.

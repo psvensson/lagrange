@@ -76,6 +76,7 @@ authorizes:
   - scripts/quest-evidence/critical-spread-learner-ring-characterization.js
   - scripts/quest-evidence/readiness-admission-freeze-observed.js
   - scripts/quest-evidence/lease-liveness-watermark-observed.js
+  - scripts/quest-evidence/closure-witness-route-observed.js
 ---
 
 # Formation without seed starvation
