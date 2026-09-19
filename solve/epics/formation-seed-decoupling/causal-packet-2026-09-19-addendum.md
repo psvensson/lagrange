@@ -522,3 +522,73 @@ and reported the following. I checked the fixture fields it cites.
   - each satisfying operation's target visibility;
   - the base summary before the closure choice.
 - The characterization is sealed after lab formations show the route.
+
+## Sixth addendum (2026-09-19): the double count - the satisfying operation targets a node that already holds a voter
+
+**Runs.**
+- Six lab formations ran on the staged `closure-witness-route-observed`
+  tree (scratch commit ab5e9dbfd).
+- Three machines gave 4 PASS and 2 FAIL.
+- The closure block in the guard payload is from code that is staged and
+  under independent verification, not yet landed. The reading below is
+  MEASURED through it.
+
+**Every refusal at required 3 (1091 of 1091)** states:
+- route `built`; witness `closure_satisfied_stale_publication`;
+  `witnessMatchesAnswer: true`;
+- this partition `spread_satisfied_in_flight`, reason
+  `operational_target_visible_on_eligible_node`;
+- a base summary that is `derived`, not satisfied, with this partition
+  blocked;
+- exactly one satisfying operation, `active_operational`, whose target node
+  has these properties:
+  - it is **not** the learner's node (0 of 1091);
+  - it is **already one of the partition's voter nodes** (1091 of 1091),
+    and it is the node holding the single voter outside the seed.
+
+Example: adam-laptop, 09:49:04, `schema_operations-p1-r5`.
+- The voters are 3 on node 015619 and 1 on node 71c759.
+- The satisfying operation is 49f173b0, targeting 71c759.
+- The learner's own ADD is 1b872ca1, to node 1c7769, status pending.
+
+**What this means.**
+- The earlier spread ADD placed the fourth voter on the second node. It is
+  still in flight after its target has become a voter.
+- The spread gap of 1 was computed from a census that already counts that
+  second node: ready distinct nodes 2 of 3.
+- `buildPriorityRecoverySpreadCompletion` then counts the same node again as
+  the in-flight cure for the **remaining** gap.
+  - Its satisfying rule (`isPriorityRecoverySpreadSatisfyingOperationContext`)
+    requires an eligible, voter-visible target.
+  - It never requires that the target add a holder node the census has not
+    already counted.
+- One node is counted twice. The partition reads
+  `spread_satisfied_in_flight` with nothing on a third node.
+- The witness closes and the chosen summary reads satisfied.
+- The budget goes to 0. The learner that would actually close the gap is
+  refused.
+
+**This resolves the fifth addendum.**
+- The refusal IS one consistent snapshot.
+- No voter-visible row on the third node is involved, so the census
+  correctly shows none.
+- Candidate (a), a retained witness, is falsified: 0 of 1091.
+- Candidates (b) and (c) are not needed.
+- The fourth addendum's minimal pair is the wrong pair. It constructed a
+  voter-visible row on the learner's node, which is a state the live system
+  was not in.
+- The release events it measured are consistent with the earlier operation
+  leaving the active set. Why that operation stays in flight for about a
+  minute after its target is a voter is not yet traced.
+
+**Two distinct defects, then.**
+1. **The projection gives a wrong answer.**
+   - "Spread satisfied in flight" double counts a holder.
+   - Its consumers are the closure witness, the chosen priority summary and
+     everything that reads it.
+   - Whether the early "satisfied" also feeds node readiness or
+     publication, and so the second mechanism, is not traced.
+2. **The promotion guard treats that projection as placement permission.**
+   This is the split authority of the owner's decision of 2026-09-18.
+   Repairing (2) cuts the ring even while (1) stands. Repairing (1) removes
+   this refusal even while (2) stands. They are separate owners.
