@@ -241,6 +241,10 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     const calculatedMoves = this.movePlanner.calculateMoves(
       currentReplicas,
       targetState,
+      // The SAME epoch this cycle stamps on every planned move below, read
+      // once: an authorization minted under one epoch and a row fenced at
+      // another would be two observations of one fact.
+      {membershipPublicationEpoch: planningMembershipPublicationEpoch},
     );
     const priorityRecoveryAwareMoves =
       await this.augmentMovesWithPriorityRecoveryFollowUp(calculatedMoves, {

@@ -26,6 +26,9 @@ import {
   applyPrioritySpreadExpandCure,
   evaluatePriorityStandaloneRemoveSafety,
 } from './move-planner-priority-spread-cure.js';
+import {
+  getPartitionRowFromCache,
+} from '../bootstrap/system-partition-classification.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -41,6 +44,24 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
   UNKNOWN: 'unknown',
 });
 const MoveType = REBALANCER_MOVE_TYPE;
+// The named "this plan states no cycle facts" context.
+const EMPTY_PLANNING_CONTEXT = Object.freeze({});
+
+// The partition policy row, resolved at most once per plan and only when a
+// cure asks for it. `planningContext` reaches this module as a pass-through
+// of the rebalance cycle's own membership publication epoch; nothing here
+// interprets that value.
+function createEntityPartitionRowResolver(systemTableCache, entityId) {
+  let resolved = false;
+  let partitionRow = null;
+  return () => {
+    if (!resolved) {
+      partitionRow = getPartitionRowFromCache(systemTableCache, entityId);
+      resolved = true;
+    }
+    return partitionRow;
+  };
+}
 
 function countDistinctActiveReplicaNodes(replicas) {
   return new Set(
@@ -80,9 +101,20 @@ class MovePlannerMoveCalculationMethods {
    * Calculate moves needed to reach target state.
    * @param {Array<Object>} currentReplicas - Current replicas.
    * @param {Object} targetState - Target state.
+   * @param {Object} [planningContext] - Facts of the planning cycle that are
+   *   not derived from the replicas: the membership publication epoch this
+   *   cycle read once, which the spread-cure authorization states as the
+   *   membership it was decided under. Threaded rather than re-read so the
+   *   authorization and the operation row's own
+   *   membership_publication_epoch can never disagree.
    * @return {Array<Object>} Array of move operations.
    */
-  calculateMoves(currentReplicas, targetState) {
+  calculateMoves(currentReplicas, targetState, planningContextArgument) {
+    // A default parameter only covers `undefined`; an explicit null is a
+    // caller saying "no planning facts", and must behave as main's
+    // two-argument call rather than throw.
+    const planningContext =
+      planningContextArgument || EMPTY_PLANNING_CONTEXT;
     const moves = [];
     const healthyReplicas =
       this.moveStateProvider.getHealthyReplicas(currentReplicas);
@@ -327,6 +359,18 @@ class MovePlannerMoveCalculationMethods {
       }
     }
     const targetReplicaCount = targetState.targetReplicaCount;
+    // The partition's OWN policy row, resolved LAZILY and at most once per
+    // plan: the cure policy owner decodes its desired replication factor
+    // from this row and never from targetReplicaCount above, and it calls
+    // this only once its own cure condition has already held. Main reads no
+    // partition row at all for a message group or a runtime service, and a
+    // plan that mints nothing must keep costing exactly what main's costs.
+    const resolvePartitionRow = createEntityPartitionRowResolver(
+      this.moveStateProvider.systemTableCache,
+      this.entityId,
+    );
+    const observedMembershipEpoch =
+      planningContext.membershipPublicationEpoch;
     const buildPriorityStandaloneRemoveSafety = (replicaId) => {
       return evaluatePriorityStandaloneRemoveSafety({
         replicaId,
@@ -417,6 +461,8 @@ class MovePlannerMoveCalculationMethods {
         surplusVoterCount,
         targetNodeIds,
         targetReplicaCount,
+        resolvePartitionRow,
+        observedMembershipEpoch,
       });
       this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
         entityId: this.entityId,
@@ -659,6 +705,8 @@ class MovePlannerMoveCalculationMethods {
         replaceCount,
         addMoves,
         candidateRemoves,
+        resolvePartitionRow,
+        observedMembershipEpoch,
       });
       const consumedRemoveReplicaIds = new Set();
       const relocationCure = resolvePlacementCure(

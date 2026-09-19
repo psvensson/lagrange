@@ -46,7 +46,10 @@ const TARGET_THRESHOLD = 12;
 // tightening hint).
 // 2026-09-19: tightened 1818 -> 1817 after the lease sweeper's disconnect loop
 // became its own method (sweepExpiredLeases 13 -> 4), measured with the hint.
-const BASELINE_COUNT = 1817;
+// 2026-09-19: tightened 1817 -> 1816 after the learner promotion's in-flight
+// operation read lost its over-threshold method (spread-cure authorization
+// carrier), measured with the hint.
+const BASELINE_COUNT = 1816;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

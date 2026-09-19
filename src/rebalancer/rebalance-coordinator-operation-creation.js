@@ -21,6 +21,10 @@ import {
   assertCanonicalRebalancerEntityIdentity,
   normalizeRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
+  stampSpreadCureTransitionAuthorization,
+} from './spread-cure-transition-authorization.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
@@ -784,6 +788,16 @@ class RebalanceCoordinatorOperationCreation {
         OPERATION_METADATA_KEY.READINESS_SNAPSHOT
       ] = readinessSnapshot;
     }
+
+    // The cure policy owner's authorization, completed with the two
+    // identities only this path knows: the canonical replica id allocated
+    // above, and the operation id. The stamp owner adds nothing else and
+    // stamps nothing at all for a move that carries no sanctioned record.
+    stampSpreadCureTransitionAuthorization(operation, {
+      authorization: move[SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD],
+      destinationReplicaId: operationReplicaId,
+      operationId,
+    });
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.CREATE_OPERATION, {
       operationId,

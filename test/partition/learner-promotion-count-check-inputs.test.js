@@ -21,6 +21,12 @@ import {
   createPartitionServiceLearnerPromotionMethods,
 } from '../../src/partition/partition-service-learner-promotion-methods.js';
 import {
+  createPartitionServiceLearnerPromotionProofMethods,
+} from '../../src/partition/partition-service-learner-promotion-proof-methods.js';
+import {
+  registerSpreadCureTransitionAuthorizationCases,
+} from './learner-promotion-count-check-authorization-cases.js';
+import {
   LEARNER_PROMOTION_COUNT_CHECK_REFUSAL,
   evaluateLearnerPromotionCountCheck,
 } from '../../src/partition/learner-promotion-count-check.js';
@@ -73,8 +79,16 @@ const FOLLOWER_ROLE = 'follower';
 const LEADER_ROLE = 'leader';
 const IN_PROGRESS = 'in_progress';
 const ADD_REPLICA_STEP = 'ADD_REPLICA';
+const STEPS_HISTORY_READ = 'read:steps_history';
 // Main's ORDERED per-check source-read trace, measured by running HEAD's own
 // copy of the guard over this fixture (see the read-order section below).
+// The two trailing steps_history reads are MAIN's own: the priority-recovery
+// operation context normalises and then parses the in-flight operation row's
+// steps_history once each per check. Quest
+// critical-spread-transition-authority-carry measured them at f2fed102a by
+// installing the accessor in createGuardContext, before it edited any src
+// file; the pin got longer because the accessor made an existing read
+// visible, not because a read was added.
 const MAIN_READ_ORDER = Object.freeze([
   'filter:replica_operations',
   'filter:services', 'filter:services', 'filter:services', 'filter:services',
@@ -84,9 +98,19 @@ const MAIN_READ_ORDER = Object.freeze([
   'filter:services',
   `nodeReadiness:${LEARNER_NODE_ID}`,
   'filter:replica_operations',
+  STEPS_HISTORY_READ, STEPS_HISTORY_READ,
+]);
+// The ONE read the carrier quest adds, and the whole of its read-order delta:
+// the memoised steps_history parse that decodes the spread-cure transition
+// authorization off the operation row the guard has already read. It runs
+// where the payload is built - on a refusal, and on the first pass - so a
+// later pass adds nothing at all.
+const CARRIED_READ_ORDER = Object.freeze([
+  ...MAIN_READ_ORDER, STEPS_HISTORY_READ,
 ]);
 
 const methods = createPartitionServiceLearnerPromotionMethods();
+const proofMethods = createPartitionServiceLearnerPromotionProofMethods();
 
 function voterRow(index, nodeId) {
   const replicaId = `${CRITICAL_PARTITION_ID}-r${index}`;
@@ -113,8 +137,8 @@ function learnerRow(replicaId = LEARNER_REPLICA_ID, nodeId = LEARNER_NODE_ID) {
   };
 }
 
-function spreadCureOperationRow() {
-  return {
+function spreadCureOperationRow(stepsHistory) {
+  const row = {
     operation_id: SPREAD_CURE_OPERATION_ID,
     id: SPREAD_CURE_OPERATION_ID,
     partition_id: CRITICAL_PARTITION_ID,
@@ -124,6 +148,9 @@ function spreadCureOperationRow() {
     replica_id: LEARNER_REPLICA_ID,
     target_node_id: LEARNER_NODE_ID,
   };
+  return stepsHistory === undefined ?
+    row :
+    {...row, steps_history: JSON.stringify(stepsHistory)};
 }
 
 // The 09-16 refusal view: spread satisfied, no blocked partition.
@@ -138,13 +165,13 @@ function satisfiedSummary() {
 }
 
 // The 09-15 grant view: this partition sits on 2 of the 3 required nodes.
-function spreadGapSummary() {
+function spreadGapSummary(partitionId = CRITICAL_PARTITION_ID) {
   return Object.freeze({
     satisfied: false,
     requiredDistinctNodeCount: 3,
     readyEligibleNodeCount: 3,
     blockedPartitions: Object.freeze([Object.freeze({
-      partitionId: CRITICAL_PARTITION_ID,
+      partitionId,
       requiredDistinctNodeCount: 3,
       readyDistinctNodeCount: 2,
       spreadGap: 1,
@@ -199,15 +226,28 @@ function createCountingCache(fixture) {
   };
   const rowsFor = (tableName) => tableName === TABLES.SERVICES ?
     servicesFor() :
-    tableName === TABLES.REPLICA_OPERATIONS ? fixture.operationRows : null;
+    tableName === TABLES.REPLICA_OPERATIONS ? fixture.operationRows :
+      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ?
+        fixture.publicationRows :
+        null;
   const poisoned = (key, rows) => {
     const limit = poison[key];
     if (!Number.isFinite(limit) || counts[key] <= limit) return rows;
     return poison.rows === undefined ? [] : poison.rows;
   };
   const partitionRows = () => (partitionRow ? [partitionRow] : []);
-  return {
+  // A table this cache FAULTS on. The guard must survive a source it never
+  // reads being broken, exactly as main survives it: main reads neither the
+  // publications nor the config table on the promotion path.
+  const faultOn = new Set(fixture.faultOnTables || []);
+  const faultIfAsked = (key) => {
+    if (faultOn.has(key)) {
+      throw new Error(`cache read failed: ${key}`);
+    }
+  };
+  const cache = {
     get(tableName, key) {
+      faultIfAsked(`get:${tableName}`);
       const reads = bump(`get:${tableName}`);
       trace.push(`get:${tableName}`);
       const beyondBudget = reads > (poison[`get:${tableName}`] ?? Infinity);
@@ -216,6 +256,7 @@ function createCountingCache(fixture) {
     },
     filter(tableName, predicate) {
       const key = `filter:${tableName}`;
+      faultIfAsked(key);
       bump(key);
       trace.push(key);
       const rows = rowsFor(tableName);
@@ -223,6 +264,19 @@ function createCountingCache(fixture) {
         .filter(predicate);
     },
   };
+  if (fixture.withGetAll !== true) {
+    return cache;
+  }
+  // The other cache surface a publication reader may prefer. Opt-in, so the
+  // pinned read order of every other fixture is untouched.
+  cache.getAll = (tableName) => {
+    const key = `getAll:${tableName}`;
+    faultIfAsked(key);
+    bump(key);
+    trace.push(key);
+    return rowsFor(tableName) || partitionRows();
+  };
+  return cache;
 }
 
 // The readiness owner double: it answers once per call from a script, so a
@@ -267,6 +321,27 @@ function createCountingReadinessState(options, bump, trace) {
   };
 }
 
+// An operation row whose steps_history is read through a counting accessor,
+// so a parse of the row's metadata is as visible in the trace as a cache read
+// is. The value is captured once and the accessor is pure, so a memoised
+// parse and a raw one are told apart by the COUNT, not by the value.
+function traceStepsHistoryReads(operationRows, bump, trace) {
+  return operationRows.map((row) => {
+    const value = row.steps_history;
+    const traced = {...row};
+    delete traced.steps_history;
+    Object.defineProperty(traced, 'steps_history', {
+      enumerable: true,
+      get() {
+        bump(STEPS_HISTORY_READ);
+        trace.push(STEPS_HISTORY_READ);
+        return value;
+      },
+    });
+    return traced;
+  });
+}
+
 /**
  * Build a learner-side guard context whose every source read is counted.
  * @param {Object} options fixture declaration
@@ -288,7 +363,11 @@ function createGuardContext(options = {}) {
     return counts[key];
   };
   const cache = createCountingCache({
-    partitionId, partitionRow, serviceRows, operationRows,
+    partitionId, partitionRow, serviceRows,
+    operationRows: traceStepsHistoryReads(operationRows, bump, trace),
+    publicationRows: options.publicationRows || [],
+    faultOnTables: options.faultOnTables,
+    withGetAll: options.withGetAll,
     serviceRowsByRead: options.serviceRowsByRead,
     poison: options.poison || {}, counts, bump, trace,
   });
@@ -296,6 +375,11 @@ function createGuardContext(options = {}) {
     createCountingReadinessService(options, bump, trace);
   const context = {
     ...methods,
+    // The promotion-proof bag is composed here exactly as
+    // partition-service-assembly.js composes it, so the partition's own
+    // membership epoch comes from its production reader over this same
+    // counted cache rather than from a double.
+    ...proofMethods,
     role: options.role || LEARNER_ROLE,
     leaderId: options.leaderId === undefined ? LEADER_REPLICA_ID : options.leaderId,
     partitionId,
@@ -753,6 +837,13 @@ test('the logged inputs come from the one evaluation that decided', async () => 
     'readinessSnapshot': 1,
     'planningAnswer': 1,
     [`nodeReadiness:${LEARNER_NODE_ID}`]: 1,
+    [STEPS_HISTORY_READ]: 2,
+  });
+  // The carrier's whole read budget: main's reads, plus ONE memoised parse of
+  // the steps_history the guard's own in-flight add-like row already carried.
+  const CARRIED_READS = Object.freeze({
+    ...MAIN_READS,
+    [STEPS_HISTORY_READ]: MAIN_READS[STEPS_HISTORY_READ] + 1,
   });
 
   // Every double changes its answer after the read the decision used: a value
@@ -790,8 +881,9 @@ test('the logged inputs come from the one evaluation that decided', async () => 
   });
   await context.runLearnerPromotionCheck();
 
-  assert.deepEqual(counts, {...MAIN_READS},
-    'each source is read exactly as often per check as on main');
+  assert.deepEqual(counts, {...CARRIED_READS},
+    'each source is read exactly as often per check as on main, and the ' +
+      'steps_history of the row the guard already read once more');
 
   const fields = linesFor(logLines, REFUSAL_MESSAGE)[0].fields;
   const inputs = fields.countCheckInputs;
@@ -864,8 +956,9 @@ test('the logged inputs come from the one evaluation that decided', async () => 
     serviceRowsByRead: [firstSet, secondSet, firstSet, firstSet, firstSet],
   });
   await ordered.context.runLearnerPromotionCheck();
-  assert.deepEqual(ordered.trace, [...MAIN_READ_ORDER],
-    'every source is read in main\'s order');
+  assert.deepEqual(ordered.trace, [...CARRIED_READ_ORDER],
+    'every source is read in main\'s order, with exactly one memoised ' +
+      'steps_history parse appended');
   const orderedFields = linesFor(ordered.logLines, REFUSAL_MESSAGE)[0].fields;
   assert.equal(orderedFields.reason, WOULD_EXCEED,
     'the outcome is the one main reaches in this order');
@@ -916,7 +1009,8 @@ const ARITHMETIC_GRID = Object.freeze(
 const GUARD_GRID = Object.freeze([
   {
     name: '09-16 refusal: satisfied summary, no recovery-pending bit',
-    fixture: () => refusalFixture(),
+    authorizable: true,
+    fixture: (overrides) => refusalFixture(overrides),
     activeVoterCount: 4, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
     isCriticalSystemPartition: true,
@@ -925,7 +1019,8 @@ const GUARD_GRID = Object.freeze([
   },
   {
     name: '09-15 grant: recovery-pending bit and an open spread gap',
-    fixture: () => grantFixture(),
+    authorizable: true,
+    fixture: (overrides) => grantFixture(overrides),
     activeVoterCount: 4, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
     isCriticalSystemPartition: true,
@@ -934,8 +1029,10 @@ const GUARD_GRID = Object.freeze([
   },
   {
     name: 'critical: spread gap alone activates recovery without the bit',
-    fixture: () => refusalFixture({
+    authorizable: true,
+    fixture: (overrides) => refusalFixture({
       planningAnswer: planningAnswer(spreadGapSummary()),
+      ...overrides,
     }),
     activeVoterCount: 4, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
@@ -945,11 +1042,13 @@ const GUARD_GRID = Object.freeze([
   },
   {
     name: 'critical: no planning answer leaves the planner unresolved',
-    fixture: () => refusalFixture({
+    authorizable: true,
+    fixture: (overrides) => refusalFixture({
       planningAnswer: null,
       readinessReasons: [
         LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
       ],
+      ...overrides,
     }),
     activeVoterCount: 4, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
@@ -959,12 +1058,14 @@ const GUARD_GRID = Object.freeze([
   },
   {
     name: 'critical: a draining node is never recovery-pending',
-    fixture: () => refusalFixture({
+    authorizable: true,
+    fixture: (overrides) => refusalFixture({
       readinessReasons: [
         LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
       ],
       readinessDraining: true,
       planningAnswer: planningAnswer(satisfiedSummary()),
+      ...overrides,
     }),
     activeVoterCount: 4, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
@@ -994,7 +1095,8 @@ const GUARD_GRID = Object.freeze([
   },
   {
     name: 'critical: voters below target earn no overflow budget',
-    fixture: () => createGuardContext({
+    authorizable: true,
+    fixture: (overrides) => createGuardContext({
       serviceRows: [
         voterRow(1, 'node-0'), voterRow(2, 'node-1'),
         learnerRow(),
@@ -1004,6 +1106,7 @@ const GUARD_GRID = Object.freeze([
       readinessReasons: [
         LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
       ],
+      ...overrides,
     }),
     activeVoterCount: 2, learnerCount: 1, targetReplicaCount: 3,
     isJoiningExistingGroup: false, hasOwnedAddLikeOperation: true,
@@ -1141,3 +1244,33 @@ test('every count-check decision matches the frozen copy of main\'s arithmetic',
       }
     }
   });
+
+// The carrier's learner-side witnesses (quest
+// critical-spread-transition-authority-carry) run against THIS host: the same
+// fixtures, the same frozen oracle, the same read counters. They are
+// registered from beside it because this file is close to the test
+// file-size threshold.
+registerSpreadCureTransitionAuthorizationCases(Object.freeze({
+  ARITHMETIC_GRID,
+  CARRIED_READ_ORDER,
+  CRITICAL_PARTITION_ID,
+  DEFERRED_RECHECK,
+  GUARD_GRID,
+  INPUTS_MESSAGE,
+  LEARNER_NODE_ID,
+  LEARNER_REPLICA_ID,
+  REFUSAL_MESSAGE,
+  SPREAD_CURE_OPERATION_ID,
+  STEPS_HISTORY_READ,
+  WOULD_EXCEED,
+  createGuardContext,
+  grantFixture,
+  learnerRow,
+  linesFor,
+  planningAnswer,
+  refusalFixture,
+  satisfiedSummary,
+  spreadCureOperationRow,
+  spreadGapSummary,
+  voterRow,
+}));

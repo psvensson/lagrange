@@ -28,6 +28,11 @@ import {
 import {
   buildLearnerPromotionCountCheckInputs,
 } from './learner-promotion-count-check-evidence.js';
+import {
+  SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+  decodeSpreadCureTransitionAuthorizationFromOperationRow,
+  evaluateSpreadCureTransitionAuthorization,
+} from '../rebalancer/spread-cure-transition-authorization.js';
 
 const {
   COLUMN,
@@ -187,8 +192,9 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
    * @private
    */
   observeLearnerPromotionCountCheck() {
-    const inFlightAddLikeReplicaIds =
-      this.getInFlightAddLikeOperationReplicaIds();
+    const inFlightAddLike =
+      this.collectInFlightAddLikeOperationsForPromotion();
+    const inFlightAddLikeReplicaIds = inFlightAddLike.replicaIds;
     const voterCensus = this.collectActiveVoterCensusForPromotion();
     const learnerCensus = this.collectPendingLearnerCensusForPromotion();
     const promotionCounts = this.resolveLearnerPromotionCounts({
@@ -227,7 +233,74 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
       observedActiveVoterCount: voterCensus.count,
       observedLearnerCount: learnerCensus.count,
       inFlightAddLikeReplicaIds,
+      // The row the authorization rides on, captured by the traversal above
+      // and NOT read here: only the payload builder reads its steps history,
+      // and only when a payload is actually built.
+      ownedAddLikeOperationRow: inFlightAddLike.ownedOperationRow,
       priorityRecovery,
+    });
+  }
+  /**
+   * The spread-cure transition authorization this operation carried, decoded
+   * from the row the in-flight add-like check already read, and evaluated
+   * against this replica's own operation, node, replica and declared
+   * replication factor.
+   *
+   * It decides NOTHING: the count check's grant, deferral, reason, cap,
+   * allowances and recheck are already settled when this runs, and the
+   * result is stated in the log payload only (quest
+   * critical-spread-transition-authority-carry).
+   *
+   * It READS nothing either. Every value it evaluates against is one the
+   * count check already held: the operation row from the in-flight add-like
+   * traversal, this replica's own identity, and the target the count check
+   * decided on. In particular it supplies NO membership publication epoch
+   * (lead ruling 2026-09-19 on the sealed one-evaluation constraint), so the
+   * binding owner's membership fence is not evaluated at this stage and says
+   * so as its own named outcome. On no path does this add a read.
+   * @param {Object} observation the one evaluation's inputs
+   * @param {Object} decision the count check's own outcome record
+   * @return {Object} frozen {binding, partitionMembershipEpoch, evaluation}
+   * @private
+   */
+  resolveSpreadCureTransitionAuthorizationForPromotion(observation, decision) {
+    const operationRow = observation.ownedAddLikeOperationRow;
+    const binding =
+      decodeSpreadCureTransitionAuthorizationFromOperationRow(operationRow);
+    return Object.freeze({
+      binding,
+      partitionMembershipEpoch: SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+      evaluation: evaluateSpreadCureTransitionAuthorization({
+        binding,
+        // The ROW's own id, not the record's: a record naming a different
+        // operation than the row it rides on is exactly what the
+        // operation-mismatch reason exists to catch.
+        operationId: operationRow?.[COLUMN.OPERATION_ID] ?? null,
+        localNodeId: this.nodeId,
+        localReplicaId: this.replicaId,
+        partitionDesiredReplicationFactor: observation.targetReplicaCount,
+        votersAfterPromotion: decision?.votersAfterPromotion,
+      }),
+    });
+  }
+  /**
+   * The one log payload of one count check, built where it is logged: on a
+   * refusal, and on the first pass of a learner. A later pass builds none,
+   * so it costs nothing at all.
+   * @param {Object} observation the one evaluation's inputs
+   * @param {Object} decision the count check's own outcome record
+   * @return {Object} frozen log payload
+   * @private
+   */
+  buildLearnerPromotionCountCheckPayload(observation, decision) {
+    return buildLearnerPromotionCountCheckInputs({
+      ...observation,
+      decision,
+      authorization:
+        this.resolveSpreadCureTransitionAuthorizationForPromotion(
+          observation,
+          decision,
+        ),
     });
   }
   /**
@@ -254,10 +327,8 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
       {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        countCheckInputs: buildLearnerPromotionCountCheckInputs({
-          ...observation,
-          decision,
-        }),
+        countCheckInputs:
+          this.buildLearnerPromotionCountCheckPayload(observation, decision),
       },
     );
   }

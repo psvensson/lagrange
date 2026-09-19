@@ -116,6 +116,12 @@ const DECODE_CONSUMERS = Object.freeze([
 // Encode, SQL-text, schema, and pass-through sites: they mention the field
 // but never interpret its value.
 const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
+  // The move planner names the field once, to read the rebalance cycle's
+  // already-resolved planning epoch off its planning context and hand it,
+  // untouched, to the cure policy owner. It performs no coercion, no
+  // predicate and no zero-sentinel on the value (quest
+  // critical-spread-transition-authority-carry).
+  'src/rebalancer/move-planner-move-calculation-methods.js',
   'src/rebalancer/replica-operation-constants.js',
   'src/rebalancer/replica-operation-repository.js',
   'src/rebalancer/rebalance-coordinator-shared.js',

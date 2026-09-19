@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 237,
+    "placement-rebalance": 240,
     "query-sql": 159,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2133,
-  "digest": "fnv1a32-e3404567",
+  "censusSize": 2136,
+  "digest": "fnv1a32-8586926a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b6ba5fbc",
+  "observationDigest": "fnv1a32-bd5a7bdd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1641,6 +1641,9 @@
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": "placement-rebalance",
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "placement-rebalance",
+    "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "placement-rebalance",
+    "test/rebalancer/spread-cure-transition-authorization-row.test.js": "placement-rebalance",
+    "test/rebalancer/spread-cure-transition-authorization.test.js": "placement-rebalance",
     "test/rebalancer/stabilization-period-bounds.property.test.js": "placement-rebalance",
     "test/rebalancer/stabilization-reset.property.test.js": "placement-rebalance",
     "test/rebalancer/stabilization-timer-reset.property.test.js": "placement-rebalance",
@@ -6050,6 +6053,11 @@
         "src/rebalancer/operation-ledger-quorum-concentration.js"
       ]
     },
+    "test/partition/learner-promotion-count-check-inputs.test.js": {
+      "files": [
+        "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
+      ]
+    },
     "test/partition/partition-coordinator.test.js": {
       "files": [
         "src/partition/partition-coordinator.js"
@@ -6739,6 +6747,7 @@
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-service.js",
+        "src/rebalancer/move-planner-move-calculation-methods.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
@@ -6846,6 +6855,22 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
         "src/rebalancer/replica-status.js"
+      ]
+    },
+    "test/rebalancer/spread-cure-transition-authorization.test.js": {
+      "files": [
+        "src/partition/learner-promotion-count-check-evidence.js",
+        "src/partition/partition-service-learner-promotion-count-check-methods.js",
+        "src/rebalancer/move-planner-priority-spread-cure.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/replica-placement-cure-policy.js",
+        "src/rebalancer/spread-cure-transition-authorization.js",
+        "src/rebalancer/unified-rebalancer-move-execution.js",
+        "test/partition/learner-promotion-count-check-inputs.test.js",
+        "test/shards/impact-contracts.json"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/rebalancer/stabilization-timer-reset.property.test.js": {

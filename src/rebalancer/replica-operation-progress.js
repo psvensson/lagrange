@@ -356,6 +356,10 @@ const OPERATION_METADATA_KEY = Object.freeze({
   BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
   BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED:
     'bootstrapTopologyDispatchDeferred',
+  // The one exact membership transition a critical spread cure authorized.
+  // Decoded, evaluated and stamped by
+  // spread-cure-transition-authorization.js.
+  CURE_TRANSITION_AUTHORIZATION: 'cureTransitionAuthorization',
 });
 
 function quoteSqlValue(value) {

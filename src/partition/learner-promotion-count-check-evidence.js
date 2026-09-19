@@ -19,6 +19,12 @@ import {
 import {
   readPriorityPartitionSummarySource,
 } from '../control-plane/priority-partition-summary-source.js';
+import {
+  SPREAD_CURE_AUTHORIZATION_BINDING_STATE,
+  SPREAD_CURE_AUTHORIZATION_OUTCOME,
+  SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+  SPREAD_CURE_UNREADABLE_VALUE_DESCRIPTION,
+} from '../rebalancer/spread-cure-transition-authorization.js';
 
 // Bound for every list in the payload. Five-node formation carries 4 to 6
 // replicas and 1 to 3 in-flight operations per critical partition, so this
@@ -158,6 +164,123 @@ function buildPriorityRecoveryEvidence(priorityRecovery) {
   });
 }
 
+// The spread-cure transition authorization the guard decoded, evaluated and
+// is about to state (quest critical-spread-transition-authority-carry). It is
+// FIXED-ARITY: every field is either the authorization's own value or an
+// explicit absent one, and a malformed durable value is named by its type and
+// a bounded size rather than echoed, so a corrupt row cannot grow this line.
+// `partitionMembershipEpoch` is this partition's own reading of the published
+// membership generation, absent when no record was present to judge.
+//
+// The three absent shapes below are named records rather than a chain of
+// optional reads: a missing half of the evidence is one substitution, not a
+// question asked once per field.
+const ABSENT_AUTHORIZATION_BINDING = Object.freeze({
+  state: SPREAD_CURE_AUTHORIZATION_BINDING_STATE.ABSENT,
+  authorization: null,
+  raw: null,
+});
+const ABSENT_AUTHORIZATION_EVALUATION = Object.freeze({
+  outcome: SPREAD_CURE_AUTHORIZATION_OUTCOME.NOT_HONOURED,
+  honoured: false,
+  reason: null,
+  authorizedResultingVoterCount: null,
+  wouldBeWithinAuthorizedBound: null,
+});
+const ABSENT_AUTHORIZATION_RECORD = Object.freeze({
+  intent: null,
+  desiredReplicationFactor: null,
+  observedMembershipEpoch: null,
+  observedVoterCount: null,
+  destinationNodeId: null,
+  destinationReplicaId: null,
+  operationId: null,
+});
+const ABSENT_TRANSITION_AUTHORIZATION = Object.freeze({
+  binding: ABSENT_AUTHORIZATION_BINDING,
+  evaluation: ABSENT_AUTHORIZATION_EVALUATION,
+  partitionMembershipEpoch: SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+});
+
+function readEvidenceRecord(value, absentRecord) {
+  return value && typeof value === EVIDENCE_OBJECT_TYPE ? value : absentRecord;
+}
+
+function renderTransitionAuthorizationEvidence(authorization) {
+  const source = readEvidenceRecord(
+    authorization, ABSENT_TRANSITION_AUTHORIZATION);
+  const binding = readEvidenceRecord(
+    source.binding, ABSENT_AUTHORIZATION_BINDING);
+  const evaluation = readEvidenceRecord(
+    source.evaluation, ABSENT_AUTHORIZATION_EVALUATION);
+  const record = readEvidenceRecord(
+    binding.authorization, ABSENT_AUTHORIZATION_RECORD);
+  const state = binding.state ?? ABSENT_AUTHORIZATION_BINDING.state;
+  return Object.freeze({
+    state,
+    present: state === SPREAD_CURE_AUTHORIZATION_BINDING_STATE.PRESENT,
+    // Three named outcomes, not two: honoured, refused, and "every other
+    // criterion passed and nobody applied the membership fence". The carry
+    // stage reads no epoch, so the third is what a valid record gets here.
+    outcome: evaluation.outcome ?? ABSENT_AUTHORIZATION_EVALUATION.outcome,
+    honoured: evaluation.honoured === true,
+    reason: evaluation.reason ?? null,
+    intent: record.intent,
+    desiredReplicationFactor: record.desiredReplicationFactor,
+    observedMembershipEpoch: record.observedMembershipEpoch,
+    // Not a number and not absent: this stage never read one, and the
+    // payload names that rather than printing a zero somebody could mistake
+    // for a bootstrap epoch.
+    partitionMembershipEpoch: source.partitionMembershipEpoch ??
+      SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+    observedVoterCount: record.observedVoterCount,
+    authorizedResultingVoterCount:
+      evaluation.authorizedResultingVoterCount ?? null,
+    destinationNodeId: record.destinationNodeId,
+    destinationReplicaId: record.destinationReplicaId,
+    operationId: record.operationId,
+    // ONLY the arithmetic votersAfterPromotion <= authorizedResultingVoterCount,
+    // stated so a lab run can count the refusals the successor quest flips
+    // without changing one of them here. A lab count must AND it with
+    // `outcome === 'honoured'`: a refused or unfenced authorization can still
+    // be within its own bound.
+    wouldBeWithinAuthorizedBound:
+      evaluation.wouldBeWithinAuthorizedBound ?? null,
+    malformedValue: binding.raw ?? null,
+  });
+}
+
+// The record this renderer states when it cannot read what it was handed at
+// all - a revoked Proxy, a trap that throws. The payload is a log line on the
+// promotion recheck path: a hostile or corrupt value must become a named,
+// bounded statement here, never an exception out of the guard.
+const UNREADABLE_TRANSITION_AUTHORIZATION = Object.freeze({
+  state: SPREAD_CURE_AUTHORIZATION_BINDING_STATE.MALFORMED,
+  present: false,
+  outcome: SPREAD_CURE_AUTHORIZATION_OUTCOME.NOT_HONOURED,
+  honoured: false,
+  reason: null,
+  intent: null,
+  desiredReplicationFactor: null,
+  observedMembershipEpoch: null,
+  partitionMembershipEpoch: SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
+  observedVoterCount: null,
+  authorizedResultingVoterCount: null,
+  destinationNodeId: null,
+  destinationReplicaId: null,
+  operationId: null,
+  wouldBeWithinAuthorizedBound: null,
+  malformedValue: SPREAD_CURE_UNREADABLE_VALUE_DESCRIPTION,
+});
+
+function buildTransitionAuthorizationEvidence(authorization) {
+  try {
+    return renderTransitionAuthorizationEvidence(authorization);
+  } catch (_error) {
+    return UNREADABLE_TRANSITION_AUTHORIZATION;
+  }
+}
+
 /**
  * Render the decided-on inputs of one count check as a bounded log payload.
  *
@@ -196,6 +319,9 @@ function buildLearnerPromotionCountCheckInputs(observation = {}) {
     }),
     priorityRecovery: buildPriorityRecoveryEvidence(
       observation.priorityRecovery,
+    ),
+    authorization: buildTransitionAuthorizationEvidence(
+      observation.authorization,
     ),
   });
 }

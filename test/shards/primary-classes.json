@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1869,
+    "unit": 1872,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2133,
-  "digest": "fnv1a32-9af3df9f",
+  "censusSize": 2136,
+  "digest": "fnv1a32-9e178bd5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1622,6 +1622,9 @@
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": "unit",
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "unit",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "unit",
+    "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "unit",
+    "test/rebalancer/spread-cure-transition-authorization-row.test.js": "unit",
+    "test/rebalancer/spread-cure-transition-authorization.test.js": "unit",
     "test/rebalancer/stabilization-period-bounds.property.test.js": "unit",
     "test/rebalancer/stabilization-reset.property.test.js": "unit",
     "test/rebalancer/stabilization-timer-reset.property.test.js": "unit",
