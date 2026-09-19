@@ -199,3 +199,58 @@ The 30 s veto is not a budget to raise. The defect is that expiry yields a
 confident denial carrying a stale timestamp rather than an explicit
 "unknown", and that the refresh path is gated by the verdict it would
 refresh.
+
+## Addendum (2026-09-19): what building the observability taught, independently verified
+
+Two log-only quests were built against this packet
+(`readiness-admission-freeze-observed` and
+`lease-liveness-watermark-observed`). Both were rejected in round 1 for
+defects in the observables themselves. Neither changed a decision. While
+attacking them, the independent verifiers confirmed the following about
+**main**. Labels are CODE-verified or MEASURED on main's sources.
+
+**The planning owner.**
+- The "reuse decision" is two decision points.
+  - A transport-topology-invalid token never reaches the reuse check from a
+    read. The read barrier catches it first.
+  - The barrier has a second arm this packet did not name: an unclassified
+    source change.
+- "Build options key changed" cannot fire from a read (CODE-verified).
+  - The completed record is looked up by that same key.
+  - A search for it in a failing run will find nothing.
+- The terms are not independent. A saturated planning identity or
+  generation also fails the freshness term in the same evaluation.
+- **The 30 s live-evidence veto does not by itself hold a freeze open.**
+  - Past the veto, the next read defers **and** enqueues a build, and one
+    drain returns the owner to an admitted record (MEASURED on the real
+    owner).
+  - A quiet cluster cycles through this about every 30 s.
+  - A 173 s freeze therefore means builds kept failing to publish.
+  - "Not demonstrated 1" above narrows to the publish decision's refusals:
+    - completion token not current;
+    - planning identity not current;
+    - publication guard changed;
+    - transport topology invalid;
+    - unclassified source change.
+
+**The stale watermark.** The predicate is wider than "a lapsed ready lease".
+- It also sets for a row whose `connection_state` is `connected`, not only
+  `ready`.
+- It also sets for a row with **no** lease evidence.
+- It **stays set indefinitely** for a row the lease sweeper has already
+  disconnected (`status` active, `disconnected`, lease null).
+- It sets for `status: 'ACTIVE'` with a live lease. The predicate lowercases
+  the status while `isNodeRecordReady` compares the raw value (MEASURED).
+- The third case means the sweeper's own reconciliation does not clear the
+  observer's blindness. That matters for owner (B): bounding the grace
+  would not, alone, restore a usable snapshot.
+
+**The observer.** It already carried the ready-lease witness on every
+classified snapshot; only its transition record dropped it.
+
+**The caller's error.**
+- A query filtered entirely by readiness surfaces to its caller as
+  `DISTRIBUTED_PARTICIPANT_FAILURE` with a participant failure reading
+  "Partition service not found".
+- The cause is dropped at four places between the routing layer and the
+  caller.
