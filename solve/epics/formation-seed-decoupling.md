@@ -932,6 +932,23 @@ The guard never reconstructs why an operation ought to be legal.
 6. Re-run the read-only audit against the repaired owners.
 7. Only then author enforcement.
 
+## Architectural guidance (owner, 2026-09-19)
+
+[architectural-guidance-membership-transitions-2026-09-19.md](formation-seed-decoupling/architectural-guidance-membership-transitions-2026-09-19.md).
+- It states the preferred direction:
+  - explicit membership transitions, not overflow numbers;
+  - serialized transitions;
+  - one semantic owner across mechanisms;
+  - explicit monotonic generations;
+  - bootstrap as its own transition type;
+  - one typed carrier for failure evidence;
+  - explicitly bound authorization identity.
+- It is guidance for classifying findings and designing the next quests.
+- It widens no scope and does not retrofit the running audit.
+- During the epoch, membership and identity steps, test whether an explicit
+  transition object makes the membership ceiling unnecessary or merely
+  derived. If it does, prefer it.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to
