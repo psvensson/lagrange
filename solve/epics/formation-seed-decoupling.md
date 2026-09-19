@@ -278,6 +278,15 @@ receipt harness of `lease-liveness-watermark-observed`.
     watermark, the lease sweeper's skip, and the observer's witness.
 - Both are log-only.
 
+Later the same day the owner also superseded two simulator quests that were
+never sealed:
+- `formation-sim-cold-process-production-state-isolation`. Its cause was
+  closed by `formation-sim-production-time-authority-closure`.
+- `formation-sim-priority-recovery-drive-order-authority`. It was refuted by
+  its own finding.
+`formation-sim-calibrated` and `formation-sim-production-replica-composition`
+stay open and are not touched.
+
 The second concurrent add-first move on user-table partitions stays a
 separate planner-dispatch question.
 
