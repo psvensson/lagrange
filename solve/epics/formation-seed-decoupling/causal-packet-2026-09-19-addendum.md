@@ -153,6 +153,128 @@ counted as having closed it.
   and its own service row becoming visible as active.
 - This explains both the intermittency and the dependence on machine speed.
 
+**Corrections to the first addendum.** WITHDRAWN 2026-09-19.
+- This paragraph said the closure-refreshed preference is not the cause,
+  citing 13 refusals with `source: derived`.
+- Those 13 are the collapsed-cohort signature (required 1, eligible 1), not
+  this shape.
+- See the third addendum below.
+
+**Classification.** This input is duplicated placement policy, not a Raft
+  or local safety check.
+- **Earlier candidate withdrawn.** The eligible-set explanation offered on
+  2026-09-18 is not the main cause. The collapsed cohort (1 required, 1
+  eligible, on a node whose readiness phase is degraded) exists as a rare
+  second signature (13 lines).
+- **User-table partitions too.** About 200 refusals in one run are on the two
+  MovieLens table partitions. The planner sends a fifth voter at RF 3 there
+  as well. The learner evaluates no overflow budget at all for an ordinary
+  partition, so it always refuses until the 60 s timeout.
+- **Consequence for the repair.** The authority disagreement is not confined
+  to critical partitions. The operation-carried authorization must cover
+  every over-target ADD the planner sanctions, and "an ordinary ADD cannot
+  use the overflow authority" needs a definition that accounts for the
+  planner's own ordinary-partition cures.
+
+## Correction: the refusal is not what decides PASS or FAIL
+
+The 2026-09-18 packet left open (its gap 2) whether the admission observer's
+`observation_unavailable` ending was independent of the promotion stall. It
+is. Of the 31 local runs, 16 had their reports pulled and classified:
+
+| | refusals in the run | `observation_unavailable` observations |
+| --- | --- | --- |
+| PASS (6 runs) | 0, 0, 0, 70, 120, 242 | 0 to 4 |
+| FAIL (10 runs) | 0, 1, 39 ... 418 | 8 to 64 |
+
+- One run passed with 242 refusals, and one failed with none. In that run
+  the operations drained within seconds and the observer then failed 53
+  times in a row.
+- The GCP nightlies split the same way: all four failures have 5 to 37
+  `observation_unavailable` observations, and all three passes have none.
+- The final reasons are `Authoritative control snapshot repair failed:
+  nodes:authoritative_observation_read_incomplete`, `control snapshot
+  observation failed (stale_usable): cache_stale_watermark`, and timeouts
+  opening or awaiting the seed's admin websocket.
+
+So two mechanisms act on formation:
+
+1. **The promotion refusal.** This is the authority disagreement above, worth
+   60 to 110 s per occurrence. 09-16 looks dominated by it.
+2. **The admission observer cannot obtain an authoritative control
+   snapshot.** That alone denies admission. 09-13, 09-18, 09-19 and the local
+   zero-refusal failure look dominated by it.
+
+Like seed starvation before it, the refusal is neither necessary nor
+sufficient for the observed failure. Repairing the authority boundary is
+still right, but it will not by itself make formation green. The second
+mechanism needs its own causal packet, written the same way as the first:
+- start at the terminal symptom on the observer;
+- trace back through the admin control snapshot and the authoritative node
+  observation read to the first PASS/FAIL divergence;
+- use lab formations as the measurement loop.
+
+## What is not yet known
+
+- Whether the second mechanism has one cause or several behind its three
+  final reasons.
+- Whether local five-process formations and one-node-per-VM GCP formations
+  fail for the same reason in the same proportion. The signatures match; the
+  rates differ.
+- Whether restoring E's scheduling defaults changes either rate. The first
+  five runs of `seed-replica-production-scheduling-defaults` on one machine
+  show no obvious change. An interleaved comparison is running.
+
+## Second addendum (2026-09-19, later): why the summary reads "satisfied"
+
+This was a read-only analysis of the recorded guard inputs from the lab
+formations (about 690 records across five runs), plus a scratch call of one
+production function. No behaviour was changed.
+
+**The dominant refusal.**
+- 454 of about 470 critical-partition refusals share one shape:
+  - 4 voters on **2** distinct nodes and 1 learner on a third node;
+  - the learner node's summary shows `satisfied: true`, required 3,
+    eligible 5;
+  - this partition is **not** in `blockedPartitionIds`;
+  - budget 0, max 4.
+- Voters cover only two nodes. For the summary to call the partition
+  unblocked at required 3, it must be counting a non-voter as the third
+  holder.
+
+**The derivation counts the learner.** `buildDerivedPriorityPartitionSummary`
+(`src/control-plane/membership-publication-priority-partition-summary.js`)
+counts a service row as a ready holder when all of these hold:
+- the row is `active`;
+- it has a raft role;
+- it has an address;
+- if the role is a catch-up learner, its node's readiness is promotable
+  (`resolvePrioritySpreadReplicaExclusionReason`, `learner_not_promotable`).
+
+So a learner on a healthy node is a distinct holder.
+
+**Scratch call.** The production function was called with four voter rows on
+two nodes:
+
+| input | result |
+| --- | --- |
+| no learner row | partition blocked, `readyDistinctNodeCount: 2` |
+| learner row with status `joining` | blocked, `status_joining: 1` |
+| `active` learner row on a third node | partition no longer blocked |
+
+**The ring.** The learner whose promotion would close the spread gap is
+counted as having closed it.
+- That withdraws `priorityRecoveryActive` and the overflow budget.
+- The promotion needs that budget to take the partition from 4 voters to 5.
+- The promotion is refused until the 60 s voter-ready timeout undoes the
+  operation, and the gap re-opens.
+- The grants in the same runs are first-pass checks where the learner's own
+  row was not yet counted: `satisfied: false`, this partition blocked,
+  budget 2.
+- PASS or FAIL on this mechanism is a race between the learner's catch-up
+  and its own service row becoming visible as active.
+- This explains both the intermittency and the dependence on machine speed.
+
 **Corrections to the first addendum.**
 - The closure-refreshed preference (`chooseMoreAdvanced`) is not the cause.
   The freshly derived summary reads satisfied in the same state (13
@@ -177,3 +299,52 @@ distinct nodes, target 3, and a fifth voter arriving.
 - The question belongs to the planner's dispatch: why two concurrent moves
   on one partition?
 - It is separate from the cure authorization.
+
+## Third addendum (2026-09-19): the refusals read the closure witness, not the row derivation
+
+Nine more lab formations ran on the landed guard-input logging (bb529c57c,
+three machines, 2 PASS and 7 FAIL). The final log format separates what the
+second addendum merged.
+
+**Measured.**
+- At required 3 and eligible 5, **every** refusal reads a
+  `closure_refreshed` summary (1253 of 1253):
+  - satisfied;
+  - planner ready with no entry for the partition;
+  - completion `converged`, budget 0, max 4;
+  - four voters on two nodes and one learner.
+- No refusal at required 3 reads a `derived` summary that says satisfied.
+- The first-pass grants on the same membership shape read `derived`: not
+  satisfied, this partition blocked, planner spread gap 1 with ready distinct
+  nodes 2, budget 2, max 6.
+- 15 learners in these runs show both readings: a first pass with budget 2,
+  then 5 to 60 refusals with budget 0.
+
+**Code.**
+- `buildPriorityRecoveryClosureWitness`
+  (`src/control-plane/priority-recovery-snapshot-active-gate.js`) returns a
+  synthesized `satisfied: true` summary when no tracked partition's decision
+  is in an unresolved semantic state.
+  - `converged` and `spread_satisfied_in_flight` are satisfied states.
+  - `recovering_in_flight` is not.
+- The candidate derivation then takes that summary over the derived one, even
+  when the derived one still shows the gap. This is the witness state
+  `satisfied_stale_publication`.
+
+**What this changes.**
+- The second addendum's scratch call stands as a fact about the row
+  derivation: it counts an active catch-up learner on a promotable node as a
+  holder.
+- It is **not** the measured route. The measured route is the closure
+  witness overriding a derived summary that still shows the gap.
+- Why the decision snapshots at the learner's node hold no unresolved
+  partition while the partition has two holder nodes is **not yet
+  demonstrated**. The candidates are:
+  - spread completion counted with the learner;
+  - a planner-ready bit from another source;
+  - a decision set that does not track the partition.
+- The ring shape is the same either way. "An operation is in flight, so the
+  cure is complete" withdraws the allowance that the operation needs.
+- The second addendum's closing classification (one projection serving the
+  planner and the guard) holds. Its stated cause is superseded by this
+  section.
