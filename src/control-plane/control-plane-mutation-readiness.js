@@ -29,7 +29,7 @@ import {
   buildOwnerContractOutcome,
 } from './owner-contract-outcome.js';
 import {
-  TOKEN_STATUS,
+  isDeferredReadinessPlanningSnapshot,
   readOwnDataValue,
 } from './readiness-planning-version-contract.js';
 
@@ -216,10 +216,6 @@ const PRIORITY_RECOVERY_BYPASS_RELAXABLE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
   CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
 ]);
-
-function isDeferredReadinessPlanningSnapshot(readiness = null) {
-  return readiness?.readinessPlanningTokenStatus === TOKEN_STATUS.STALE;
-}
 
 function isPriorityRecoveryWriteLaneOpen(
   readiness = null,

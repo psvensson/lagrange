@@ -40,6 +40,11 @@ const HEARTBEAT_STATE = Object.freeze({
   STOPPED: 'stopped',
 });
 
+// The named absent value for the routing denial cause a heartbeat failure
+// reports. A failure that came from somewhere other than a routing denial
+// says so explicitly rather than carrying a raw null.
+const HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED = 'unstated';
+
 const HEARTBEAT_LOG_MSG = Object.freeze({
   INITIALIZED: 'HeartbeatService initialized',
   STARTED: 'HeartbeatService started',
@@ -91,4 +96,5 @@ export {
   HEARTBEAT_ERROR_MSG,
   HEARTBEAT_EVENT,
   HEARTBEAT_QUIET_MODE_BYPASS_REASON,
+  HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED,
 };

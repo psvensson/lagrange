@@ -44,7 +44,11 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-19: tightened 1819 -> 1818 after the learner-promotion count check
 // moved its arithmetic into its own owner (measured with the checker's
 // tightening hint).
-const BASELINE_COUNT = 1818;
+// 2026-09-19: tightened 1818 -> 1817 after the readiness reuse decision
+// moved its freshness arm into isCompletedFreshnessCurrent and its cheap
+// terms into collectCheapReuseTermFailures (measured with the checker's
+// tightening hint).
+const BASELINE_COUNT = 1817;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

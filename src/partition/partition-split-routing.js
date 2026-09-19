@@ -17,6 +17,9 @@ import {
   resolveSplitTargetPartitionId,
 } from './split-key-comparator.js';
 import {
+  attachRoutingDenialCause,
+} from '../query/query-execution-budget.js';
+import {
   extractDataFromParameterizedSQL,
   extractDeleteDataFromSQL,
   extractInsertDataFromSQL,
@@ -240,8 +243,14 @@ export async function routeSplitMirroredWrite(
     executionOptions,
   );
   if (!result?.success) {
-    throw new Error(
-      result?.error || PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,
+    // Same message and class; the routing denial that stopped the mirrored
+    // write travels with it as an own property.
+    throw attachRoutingDenialCause(
+      new Error(
+        result?.error ||
+          PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,
+      ),
+      result,
     );
   }
 }

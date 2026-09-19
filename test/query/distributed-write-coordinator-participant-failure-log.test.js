@@ -119,6 +119,10 @@ async (t) => {
     partitionId: FAILING_PARTITION_ID,
     participantNodeId: FAILING_NODE_ID,
     participantAddress: FAILING_ADDRESS,
+    // This failure did not come out of a routing denial, so the line says so
+    // rather than leaving the field absent (quest
+    // readiness-admission-freeze-observed).
+    routingDenialCause: null,
     errorCode: FAILING_ERROR_CODE,
     error: FAILING_ERROR,
     failedTable: FAILED_TABLE,

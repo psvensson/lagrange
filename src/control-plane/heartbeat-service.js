@@ -12,6 +12,7 @@ import {
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
   HEARTBEAT_MEMORY_TREND,
+  HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED,
   HEARTBEAT_STATE,
   HEARTBEAT_SUBSYSTEM,
 } from './heartbeat-service-constants.js';
@@ -139,6 +140,12 @@ class HeartbeatService extends EventEmitter {
       lastFailureAtMs: null,
       lastFailureStage: null,
       lastFailureReason: null,
+      // Which routing denial the last failure came out of, when it came out
+      // of one. Additive and read by nobody who decides: the positive-
+      // decision live veto pins the publication fields it signs by name
+      // (readiness-planning-publication-contract), and this is not one.
+      lastFailureRoutingDenialCause:
+        HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED,
       publicationPath: null,
       targetAddress: null,
       targetNodeId: null,

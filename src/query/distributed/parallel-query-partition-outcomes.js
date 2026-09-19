@@ -52,6 +52,10 @@ function normalizePartitionExecutionFailureSnapshot(
     participantAddress:
       normalizeFailureString(failure?.participantAddress),
     backpressured: resolveFailureBackpressureState(failure),
+    // The routing denial this partition's failure came out of, carried across
+    // the coordinator's own projection so the participant failure entry the
+    // caller finally sees can still name it.
+    routingDenialCause: normalizeFailureString(failure?.routingDenialCause),
     failedTable: normalizeFailureString(failure?.failedTable),
     durationMs: partitionMetrics.latencyMs,
     rows: failure?.rows || [],
@@ -75,6 +79,7 @@ function buildPartitionExecutionFailureOutcome(snapshot) {
     participantNodeId: snapshot.participantNodeId,
     participantAddress: snapshot.participantAddress,
     backpressured: snapshot.backpressured,
+    routingDenialCause: snapshot.routingDenialCause,
     failedTable: snapshot.failedTable,
     durationMs: snapshot.durationMs,
     rows: snapshot.rows,

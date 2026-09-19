@@ -1,4 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {readRoutingDenialCause} from './query-execution-budget.js';
 import {
   projectRuntimeReplicaServicesRow,
 } from './runtime-replica-state-projection.js';
@@ -69,6 +70,13 @@ function buildPartitionCallbackReadFailureResult(dispatchResult) {
       dispatchResult.failedPartitions,
     ),
   };
+  // The routing denial the dispatch died on, when it died on one: this
+  // projection is otherwise where the cause stops for a partition-callback
+  // read.
+  const routingDenialCause = readRoutingDenialCause(dispatchResult);
+  if (routingDenialCause !== null) {
+    result.routingDenialCause = routingDenialCause;
+  }
   if (dispatchResult.deferRetry === true) {
     result.deferRetry = true;
   }

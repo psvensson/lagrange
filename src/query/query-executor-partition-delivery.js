@@ -67,12 +67,20 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       waitForRetryBudget,
     } = attemptBudget;
     this.throwIfCancelled(cancellationToken);
+    // The typed reason of the resolution that produced no candidate, while
+    // that is still what the execution is stuck on. The write lane's only
+    // retry authority is its absolute deadline, so the caller's terminal
+    // error is frequently built long after that resolution and must still
+    // name it; but a resolution that does find candidates clears it, so the
+    // cause can never outlive the state it describes.
+    let routingDenialCause = null;
     const buildFailureResult = (errorMessage, details = {}) =>
       buildPartitionExecutionFailureResult({
         partitionId,
         failedTable,
         errorMessage,
         details,
+        routingDenialCause,
       });
 
     // Validate dependencies
@@ -184,6 +192,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         );
       }
       if (serviceCandidates.length === 0) {
+        routingDenialCause = routingSnapshot?.reasonCode || null;
         const hasRoutableService =
           routingSnapshot.routableServiceCount > 0;
         const hasPartitionRecord = this.hasPartitionRecord(partitionId);
@@ -245,6 +254,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           };
         }
       }
+      // This resolution found candidates, so the last denial's cause no
+      // longer describes anything: a delivery failure from here is a
+      // participant failure, not a routing denial.
+      routingDenialCause = null;
       const candidateState = createPartitionCandidateDeliveryState({
         allowReadinessAuthoritativeRefresh,
         candidateQueue: [...serviceCandidates],

@@ -3,6 +3,10 @@ import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
+import {
+  attachRoutingDenialCause,
+  readRoutingDenialCause,
+} from './query-execution-budget.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
@@ -578,16 +582,20 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       executionOptions,
     );
     if (!result.success) {
+      // Same message, same class, one additive own property: which routing
+      // denial the transaction operation died on, when it died on one.
+      const fail = (message) =>
+        attachRoutingDenialCause(new Error(result.error || message), result);
       if (operation === QUERY_OPERATION.BEGIN) {
-        throw new Error(result.error || QUERY_ERROR_MSG.BEGIN_FAILED);
+        throw fail(QUERY_ERROR_MSG.BEGIN_FAILED);
       }
       if (operation === QUERY_OPERATION.PREPARE) {
-        throw new Error(result.error || QUERY_ERROR_MSG.PREPARE_FAILED);
+        throw fail(QUERY_ERROR_MSG.PREPARE_FAILED);
       }
       if (operation === QUERY_OPERATION.COMMIT) {
-        throw new Error(result.error || QUERY_ERROR_MSG.COMMIT_FAILED);
+        throw fail(QUERY_ERROR_MSG.COMMIT_FAILED);
       }
-      throw new Error(result.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
+      throw fail(QUERY_ERROR_MSG.ROLLBACK_FAILED);
     }
     return result;
   }
@@ -635,6 +643,17 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       error: error?.message || 'Query execution failed',
       errorCode: this.getErrorCode(error),
     };
+    // The routing denial the thrown error came out of, when it came out of
+    // one. Without it this projection is where the cause dies for every
+    // statement inside a transaction: the caller of executeQuery receives
+    // `Partition service not found` with nothing to tell a readiness freeze
+    // from a partition whose service rows are genuinely absent. Additive and
+    // only when there is one, so a failure with no routing denial behind it
+    // keeps main's exact shape.
+    const routingDenialCause = readRoutingDenialCause(error);
+    if (routingDenialCause !== null) {
+      result.routingDenialCause = routingDenialCause;
+    }
     if (error?.deferRetry === true) {
       result.deferRetry = true;
     }
