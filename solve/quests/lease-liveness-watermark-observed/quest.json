@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lease-liveness-watermark-observed",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "In the failing formation traced in the second causal packet of 2026-09-19, the seed's admin control snapshot stays stale_usable for 167 s because some active or ready node's ready lease has lapsed, a fact about the cluster that the cache repair it triggers can never clear, and the seed's lease sweeper declines on every sweep to reconcile that node while its transport is connected. Neither says which node, how far past expiry its lease is or for how long this has held, the admin control snapshot has no logger at all, and the admission observer carries the ready-lease witness only on its final snapshot. This quest makes those observable without changing them. The control snapshot's stale watermark logs each transition - set, naming the node, its status, its connection state and how far past expiry its ready lease is; a change of the named node; cleared, with how long it was set - and never each evaluation. The existing line for a skipped lease disconnect of a transport-connected node states how far past expiry the lease is and for how long that node has been skipped consecutively. The admission observer records the ready-lease witness on every transition of its observation state. No decision, schedule, retry cadence, repair trigger, log message text or existing log field changes.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lease-liveness-watermark-observed/evidence/receipt.json",
+      "requiredReceipts": [
+        "watermark-transition-names-node-and-lease-age",
+        "watermark-steady-state-logs-nothing",
+        "lease-skip-states-lease-age-and-skip-duration",
+        "observer-transition-carries-ready-lease-witness",
+        "decisions-unchanged"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "decision-neutral",
+      "statement": "For every input, the watermark value, the snapshot observation state, the repair trigger and table set, the lease sweeper's skip and disconnect decisions and the observer's classification are identical to main's; a frozen copy of main's predicate or a differential against main is the witness."
+    },
+    {
+      "id": "one-evaluation",
+      "statement": "The logged node and lease age are those of the evaluation that decided; the nodes rows are read exactly as often per evaluation as on main."
+    },
+    {
+      "id": "transition-bounded",
+      "statement": "A steady state logs nothing new; added lines are bounded by state changes, not by evaluations or sweeps. The existing skip line keeps its existing cadence."
+    },
+    {
+      "id": "owner-clock",
+      "statement": "Ages and durations come from the owner's supplied time source, never from an ambient clock."
+    },
+    {
+      "id": "diagnostics-never-decide",
+      "statement": "No added field or state enters a decision, memo key or comparison."
+    },
+    {
+      "id": "bounded-payload",
+      "statement": "Every logged list is capped and says how many entries it withheld."
+    }
+  ],
+  "sealedAt": "f9d388499608794bded49b9b7bc3843560331322"
+}

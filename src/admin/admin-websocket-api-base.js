@@ -212,6 +212,7 @@ class AdminWebSocketAPIBase {
     this.controlSnapshot = new AdminControlSnapshot({
       [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
+      logger: this.logger,
       [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,
       messageRouter: this.messageRouter,

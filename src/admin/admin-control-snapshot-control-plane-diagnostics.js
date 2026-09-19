@@ -24,6 +24,9 @@ import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/public
 import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../control-plane/priority-recovery-snapshot.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
 import {AdminControlSnapshotCoverageGapEvaluation} from './admin-control-snapshot-coverage-gap-evaluation.js';
+import {
+  noteControlSnapshotStaleWatermark,
+} from './admin-control-snapshot-stale-watermark-record.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../control-plane/membership-publication-row-contract.js';
 // ── file-local constants ────────────────────────────────────────────────────
@@ -440,7 +443,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         now: observedAtMs,
         requireActiveStatus: status === STATUS_ACTIVE,
       })) {
-        return Object.freeze({
+        return noteControlSnapshotStaleWatermark(this, Object.freeze({
           cacheStaleWatermark: true,
           readyLeaseAgeWitness: buildReadyLeaseAgeWitness(
             this.systemTableCache,
@@ -449,13 +452,13 @@ class AdminControlSnapshotControlPlaneDiagnostics
             status,
             connectionState,
           ),
-        });
+        }), observedAtMs);
       }
     }
-    return Object.freeze({
+    return noteControlSnapshotStaleWatermark(this, Object.freeze({
       cacheStaleWatermark: false,
       readyLeaseAgeWitness: buildUnavailableReadyLeaseAgeWitness(),
-    });
+    }), observedAtMs);
   }
   /**
    * Build structured control-plane diagnostics for admin snapshots.

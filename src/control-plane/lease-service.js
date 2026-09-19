@@ -41,8 +41,88 @@ import {
 
 const LOCAL_STR_LEASESERVICE_REQUIRES_CONTROLPLANESYSTEM = 'LeaseService requires controlPlaneSystemTableGateway';
 const LOCAL_STR_UNHEALTHY = 'unhealthy';
+const LEASE_SKIP_FIRST_OBSERVATION_MS = 0;
 
 const createDefaultMessageGroupServices = () => new Set();
+
+/**
+ * How far past expiry the skipped node's lease is, and for how long this
+ * sweep's decision has been taken consecutively for that node - the two
+ * facts the existing skip line never carried (the traced seed skipped the
+ * same node 33 times while its lease went 166 s past expiry).
+ *
+ * A RUN IS A RUN OF SKIPS, and it is broken by anything else this sweep
+ * observed: a renewal (the lease expiry this sweep read differs from the one
+ * the run started on - even a renewal to a time already past), a disconnect,
+ * a row that disappeared, or simply a sweep that did not skip this node.
+ * That holds whether the sweep completes or a guarded write rejects it,
+ * because the reconcile below runs in a `finally`. A sweep whose nodes READ
+ * throws is different: it never reaches that `finally`, and it observed
+ * nothing, so it leaves every run exactly as it found it. The consequence a
+ * test can check on every emitted line:
+ * `0 <= skippedForMs <= leaseExpiredForMs`, because the run starts on a sweep
+ * that already saw the lease expired, at a time no later than this one.
+ *
+ * `skippedNodeId` names the node with a role key: the logging service
+ * rewrites a top-level `nodeId` to the EMITTING node, and the line's
+ * pre-existing `nodeId` field is left exactly as main wrote it.
+ *
+ * Diagnosis only: nothing read or written here reaches the skip decision,
+ * which is still `isNodeTransportConnected` alone.
+ * @param {Map<string, Object>} observations - Per-node run state.
+ * @param {Object} node - The nodes row the sweep just skipped.
+ * @param {number} now - The sweep's own time, from the service's clock.
+ * @return {{skippedNodeId: string, leaseExpiredForMs: number|null,
+ *   skippedForMs: number}}
+ */
+function noteLeaseSkipObservation(observations, node, now) {
+  const leaseExpiry = Number(node.ready_lease_expires_at);
+  const leaseExpiredForMs = Number.isFinite(leaseExpiry) ?
+    now - leaseExpiry :
+    null;
+  const observation = observations.get(node.node_id);
+  const continuingRun = observation !== undefined &&
+    observation.leaseExpiresAtMs === leaseExpiry;
+  if (!continuingRun) {
+    observations.set(node.node_id, {
+      sinceMs: now,
+      leaseExpiresAtMs: leaseExpiry,
+    });
+    return {
+      skippedNodeId: node.node_id,
+      leaseExpiredForMs,
+      skippedForMs: LEASE_SKIP_FIRST_OBSERVATION_MS,
+    };
+  }
+  return {
+    skippedNodeId: node.node_id,
+    leaseExpiredForMs,
+    // A sweep observed at a time earlier than the run's own start cannot
+    // measure that run - the service's clock is the owner's, and a virtual or
+    // re-anchored one can step backwards. The run is not restarted by that;
+    // this one observation simply reports nothing rather than a negative age.
+    skippedForMs: Math.max(
+      LEASE_SKIP_FIRST_OBSERVATION_MS,
+      now - observation.sinceMs,
+    ),
+  };
+}
+
+/**
+ * Forget every node this sweep did not skip. Called from a `finally`, so a
+ * sweep that rejects part-way still forgets the nodes it had already stopped
+ * skipping, and the map stays bounded by the nodes actually being skipped.
+ * @param {Map<string, Object>} observations - Per-node run state.
+ * @param {Set<string>} skippedNodeIds - Nodes skipped by the sweep just run.
+ * @return {void}
+ */
+function pruneLeaseSkipObservations(observations, skippedNodeIds) {
+  for (const nodeId of observations.keys()) {
+    if (!skippedNodeIds.has(nodeId)) {
+      observations.delete(nodeId);
+    }
+  }
+}
 
 class LeaseService extends EventEmitter {
   /**
@@ -100,6 +180,9 @@ class LeaseService extends EventEmitter {
     this.sweepTimer = null;
     this.sweepInFlight = false;
     this.state = LEASE_STATE.CREATED;
+    // Diagnosis only: when each currently-skipped node was first skipped.
+    // Pruned to the nodes the last sweep skipped, so it cannot grow.
+    this.leaseSkipObservations = new Map();
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(LEASE_SUBSYSTEM);
@@ -175,6 +258,7 @@ class LeaseService extends EventEmitter {
     }
     this.sweepInFlight = false;
     this.state = LEASE_STATE.STOPPED;
+    this.leaseSkipObservations.clear();
     this.logger.info(LEASE_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
 
@@ -187,6 +271,7 @@ class LeaseService extends EventEmitter {
     const hasLeader = Array.from(this.messageGroupServices.values())
       .some((svc) => svc.isLeaderReplica && svc.isLeaderReplica());
     if (!hasLeader) {
+      this.leaseSkipObservations.clear();
       return [];
     }
 
@@ -205,11 +290,70 @@ class LeaseService extends EventEmitter {
     });
 
     const expiredIds = [];
+    const skippedNodeIds = new Set();
+    try {
+      await this.disconnectExpiredLeaseHolders(
+        expired,
+        now,
+        expiredIds,
+        skippedNodeIds,
+      );
+    } finally {
+      // Whether this sweep completed or a guarded write rejected it, every
+      // node it did not skip stops being consecutively skipped. A sweep whose
+      // nodes read threw never got here, and observed nothing to reconcile.
+      pruneLeaseSkipObservations(this.leaseSkipObservations, skippedNodeIds);
+    }
+
+    if (expiredIds.length > 0) {
+      this.logger.info(LEASE_LOG_MSG.SWEEP_EXPIRED, {
+        count: expiredIds.length,
+        nodeIds: expiredIds,
+      });
+    }
+
+    const reapedIds = await this.reapStrandedJoiningRows(nodes, now);
+
+    this.emit(LEASE_EVENT.SWEEP_COMPLETE, {
+      expired: expiredIds.length,
+      staleRowsReaped: reapedIds.length,
+    });
+
+    return expiredIds;
+  }
+
+  /**
+   * Reconcile every expired lease this sweep read: skip the ones whose
+   * transport is up (the unchanged §1.4.12 decision) and disconnect the
+   * rest. Extracted verbatim from `sweepExpiredLeases` so the caller can put
+   * the skip bookkeeping in a `finally`; the decisions, their order and the
+   * writes and events they produce are unchanged.
+   * @param {Object[]} expired - Rows whose ready lease has expired.
+   * @param {number} now - The sweep's own time.
+   * @param {string[]} expiredIds - Out: node ids actually disconnected.
+   * @param {Set<string>} skippedNodeIds - Out: node ids skipped.
+   * @return {Promise<void>}
+   * @private
+   */
+  async disconnectExpiredLeaseHolders(
+    expired,
+    now,
+    expiredIds,
+    skippedNodeIds,
+  ) {
     for (const node of expired) {
       if (this.isNodeTransportConnected(node.node_id)) {
+        skippedNodeIds.add(node.node_id);
         this.logger.info(
           LEASE_LOG_MSG.SWEEP_SKIPPED_TRANSPORT_CONNECTED,
-          {nodeId: node.node_id},
+          {
+            nodeId: node.node_id,
+            ...noteLeaseSkipObservation(
+              this.leaseSkipObservations,
+              node,
+              now,
+            ),
+          },
         );
         continue;
       }
@@ -250,22 +394,6 @@ class LeaseService extends EventEmitter {
       });
       this.emit(LEASE_EVENT.LEASE_EXPIRED, {nodeId: node.node_id});
     }
-
-    if (expiredIds.length > 0) {
-      this.logger.info(LEASE_LOG_MSG.SWEEP_EXPIRED, {
-        count: expiredIds.length,
-        nodeIds: expiredIds,
-      });
-    }
-
-    const reapedIds = await this.reapStrandedJoiningRows(nodes, now);
-
-    this.emit(LEASE_EVENT.SWEEP_COMPLETE, {
-      expired: expiredIds.length,
-      staleRowsReaped: reapedIds.length,
-    });
-
-    return expiredIds;
   }
 
   /**

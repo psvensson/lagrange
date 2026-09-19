@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 110,
+    "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 252,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 191,
+    "control-plane": 192,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2129,
-  "digest": "fnv1a32-5b7793ab",
+  "censusSize": 2133,
+  "digest": "fnv1a32-e3404567",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ae8dac22",
+  "observationDigest": "fnv1a32-b6ba5fbc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -91,6 +91,7 @@
     "test/admin/admin-websocket-payload-size-attribution.test.js": "admin-diagnostics",
     "test/admin/admin-websocket-service-dispatcher.test.js": "admin-diagnostics",
     "test/admin/cache-dump-completeness.property.test.js": "admin-diagnostics",
+    "test/admin/control-snapshot-stale-watermark-transitions.test.js": "admin-diagnostics",
     "test/admin/standalone-test-run-server.test.js": "admin-diagnostics",
     "test/admin/test-run-dashboard-trace-panel.test.js": "admin-diagnostics",
     "test/admin/wasm-meta-serviceized-routing.test.js": "admin-diagnostics",
@@ -528,6 +529,7 @@
     "test/control-plane/invariant-engine.test.js": "control-plane",
     "test/control-plane/lease-sweep-expired.property.test.js": "control-plane",
     "test/control-plane/lease-sweep-serialization.test.js": "control-plane",
+    "test/control-plane/lease-sweep-skip-observability.test.js": "control-plane",
     "test/control-plane/lease-sweep-stale-row-reaper.test.js": "control-plane",
     "test/control-plane/lease-sweep-transport-guard.test.js": "control-plane",
     "test/control-plane/live-transport-evidence-parity.characterization.test.js": "control-plane",
@@ -739,6 +741,7 @@
     "test/debug/trace-collector-multi-node.integration.test.js": "admin-diagnostics",
     "test/debug/trace-collector.property.test.js": "admin-diagnostics",
     "test/debug/trace-collector.test.js": "admin-diagnostics",
+    "test/diagnostics/admission-observer-ready-lease-witness.test.js": "admin-diagnostics",
     "test/diagnostics/budget-timeout-accounting.test.js": "admin-diagnostics",
     "test/diagnostics/causal-analysis-schema.test.js": "admin-diagnostics",
     "test/diagnostics/causal-graph-builder.test.js": "admin-diagnostics",
@@ -749,6 +752,7 @@
     "test/diagnostics/formation-attribution-window.test.js": "admin-diagnostics",
     "test/diagnostics/formation-turn-attribution.test.js": "admin-diagnostics",
     "test/diagnostics/invariant-review.test.js": "admin-diagnostics",
+    "test/diagnostics/lease-liveness-decision-neutrality.test.js": "admin-diagnostics",
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": "admin-diagnostics",
     "test/diagnostics/resource-diagnostics-sampler.test.js": "admin-diagnostics",
     "test/diagnostics/source-fingerprint.test.js": "admin-diagnostics",
@@ -3840,6 +3844,11 @@
     "test/diagnostics/invariant-review.test.js": {
       "directories": [
         "test/scripts/__fixtures__/topology-convergence"
+      ]
+    },
+    "test/diagnostics/lease-liveness-decision-neutrality.test.js": {
+      "files": [
+        "test/diagnostics/lease-liveness-decision-grid.golden.json"
       ]
     },
     "test/diagnostics/raft-churn-sync-section-attribution.test.js": {

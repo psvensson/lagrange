@@ -44,7 +44,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-19: tightened 1819 -> 1818 after the learner-promotion count check
 // moved its arithmetic into its own owner (measured with the checker's
 // tightening hint).
-const BASELINE_COUNT = 1818;
+// 2026-09-19: tightened 1818 -> 1817 after the lease sweeper's disconnect loop
+// became its own method (sweepExpiredLeases 13 -> 4), measured with the hint.
+const BASELINE_COUNT = 1817;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

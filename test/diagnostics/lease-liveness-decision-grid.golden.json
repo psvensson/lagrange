@@ -1,0 +1,5306 @@
+{
+  "controlSnapshot": [
+    {
+      "name": "no rows at all",
+      "cacheStaleWatermark": false,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "unavailable",
+        "reason": "no_stale_active_node"
+      },
+      "shouldRepair": false,
+      "triggerCodes": [],
+      "repairTablesNarrowedToNodes": [
+        "nodes",
+        "partitions",
+        "services",
+        "tables",
+        "control_plane_publications",
+        "node_endpoints",
+        "service_definitions",
+        "service_endpoints",
+        "replica_operations"
+      ],
+      "snapshotObservationState": "fresh",
+      "snapshotObservationReasonCodes": [],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "one active node inside its lease",
+      "cacheStaleWatermark": false,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "unavailable",
+        "reason": "no_stale_active_node"
+      },
+      "shouldRepair": false,
+      "triggerCodes": [],
+      "repairTablesNarrowedToNodes": [
+        "nodes",
+        "partitions",
+        "services",
+        "tables",
+        "control_plane_publications",
+        "node_endpoints",
+        "service_definitions",
+        "service_endpoints",
+        "replica_operations"
+      ],
+      "snapshotObservationState": "fresh",
+      "snapshotObservationReasonCodes": [],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "one active node five seconds past expiry",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "active",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 995000,
+          "ageMs": 5000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "the traced case: active and ready, lease 166 s past expiry",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "active",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 822000,
+          "ageMs": 178000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 834000,
+          "ageMs": 166000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "ready but not active, lease past expiry",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "joining",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 999000,
+          "ageMs": 1000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "connected rather than ready, lease past expiry",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "joining",
+        "connectionState": "connected",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 999000,
+          "ageMs": 1000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "active node with no lease evidence at all",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "active",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "unavailable",
+          "reason": "ready_lease_expiry_unavailable"
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "stopped and disconnected node past expiry is not considered",
+      "cacheStaleWatermark": false,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "unavailable",
+        "reason": "no_stale_active_node"
+      },
+      "shouldRepair": false,
+      "triggerCodes": [],
+      "repairTablesNarrowedToNodes": [
+        "nodes",
+        "partitions",
+        "services",
+        "tables",
+        "control_plane_publications",
+        "node_endpoints",
+        "service_definitions",
+        "service_endpoints",
+        "replica_operations"
+      ],
+      "snapshotObservationState": "fresh",
+      "snapshotObservationReasonCodes": [],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "two stale nodes: the first row decides",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-1",
+        "status": "active",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 980000,
+          "ageMs": 20000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-1",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    },
+    {
+      "name": "the second row is the only stale one",
+      "cacheStaleWatermark": true,
+      "readyLeaseAgeWitness": {
+        "schemaVersion": 1,
+        "state": "available",
+        "nodeId": "node-2",
+        "status": "active",
+        "connectionState": "ready",
+        "snapshotObservedAtMs": 1000000,
+        "heartbeat": {
+          "state": "available",
+          "atMs": 999000,
+          "ageMs": 1000
+        },
+        "readyLease": {
+          "state": "available",
+          "expiresAtMs": 960000,
+          "ageMs": 40000
+        },
+        "ownerWrite": {
+          "state": "available",
+          "originHlc": "998000-4-node-2",
+          "atMs": 998000,
+          "ageMs": 2000
+        },
+        "cdcObservation": {
+          "state": "unavailable",
+          "reason": "per_key_cdc_observation_unavailable"
+        }
+      },
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "repairTablesNarrowedToNodes": [
+        "nodes"
+      ],
+      "snapshotObservationState": "stale_usable",
+      "snapshotObservationReasonCodes": [
+        "cache_stale_watermark"
+      ],
+      "watermarkNodesReads": 0,
+      "repairEvaluationNodesReads": 1,
+      "resolveSnapshotNodesReads": 1
+    }
+  ],
+  "leaseSweeps": [
+    {
+      "name": "expired lease, transport connected: skipped on every sweep",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        }
+      ]
+    },
+    {
+      "name": "expired lease, transport disconnected: swept",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "expired lease, no transport evidence: swept",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "live lease, transport connected: untouched",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        }
+      ]
+    },
+    {
+      "name": "one skipped, one swept, one stranded joining row",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [
+            "node-2",
+            "node-0"
+          ],
+          "disconnectedThisSweep": [
+            "node-2",
+            "node-0"
+          ],
+          "updateTables": [
+            "nodes",
+            "node_endpoints",
+            "service_endpoints"
+          ],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": [
+            "Swept expired leases",
+            "Reaped stale failed-join node row: status driven to STOPPED",
+            "Reaped stale failed-join rows"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "the node renews its lease between sweeps",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": []
+        }
+      ]
+    },
+    {
+      "name": "transport drops on the third sweep and returns on the fourth",
+      "sweeps": [
+        {
+          "atMs": 100000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 105000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 110000,
+          "expiredIds": [
+            "node-1"
+          ],
+          "disconnectedThisSweep": [
+            "node-1"
+          ],
+          "updateTables": [],
+          "skipLines": [],
+          "otherLineMessages": [
+            "Swept expired leases"
+          ]
+        },
+        {
+          "atMs": 115000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 120000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 125000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 130000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 135000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 140000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 145000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 150000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 155000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 160000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 165000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 170000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 175000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 180000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 185000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 190000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 195000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 200000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 205000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 210000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 215000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 220000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 225000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 230000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 235000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 240000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 245000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 250000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 255000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 260000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 265000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        },
+        {
+          "atMs": 270000,
+          "expiredIds": [],
+          "disconnectedThisSweep": [],
+          "updateTables": [],
+          "skipLines": [
+            {
+              "level": "info",
+              "message": "Skipped lease disconnect for transport-connected node",
+              "fields": {
+                "nodeId": "node-1"
+              }
+            }
+          ],
+          "otherLineMessages": []
+        }
+      ]
+    }
+  ],
+  "observer": {
+    "admitted": false,
+    "state": "denied",
+    "finalSnapshotState": "quiescence_candidate",
+    "finalSnapshotReasonCodes": [],
+    "finalReadyLeaseAgeWitness": {
+      "schemaVersion": 1,
+      "state": "unavailable",
+      "reason": "no_stale_active_node"
+    },
+    "droppedTransitionCount": 0,
+    "transitions": [
+      {
+        "firstObservedAtMs": 500000,
+        "lastObservedAtMs": 500000,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "started",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500000,
+        "lastQuiescentObservationAtMs": 500000,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500001,
+        "lastObservedAtMs": 500001,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": true,
+        "stableElapsedMs": 1,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "held",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500000,
+        "lastQuiescentObservationAtMs": 500000,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500002,
+        "lastObservedAtMs": 500002,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "reset",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500003,
+        "lastObservedAtMs": 500005,
+        "observationCount": 3,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500006,
+        "lastObservedAtMs": 500006,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 1,
+          "prioritySpreadGap": 1,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500007,
+        "lastObservedAtMs": 500007,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500008,
+        "lastObservedAtMs": 500008,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "started",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500008,
+        "lastQuiescentObservationAtMs": 500008,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500009,
+        "lastObservedAtMs": 500010,
+        "observationCount": 2,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 2,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "observing",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500008,
+        "lastQuiescentObservationAtMs": 500010,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500011,
+        "lastObservedAtMs": 500011,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": true,
+        "stableElapsedMs": 3,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "held",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500008,
+        "lastQuiescentObservationAtMs": 500010,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500012,
+        "lastObservedAtMs": 500012,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "reset",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500013,
+        "lastObservedAtMs": 500015,
+        "observationCount": 3,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500016,
+        "lastObservedAtMs": 500016,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 1,
+          "prioritySpreadGap": 1,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500017,
+        "lastObservedAtMs": 500017,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500018,
+        "lastObservedAtMs": 500018,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "started",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500018,
+        "lastQuiescentObservationAtMs": 500018,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500019,
+        "lastObservedAtMs": 500020,
+        "observationCount": 2,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 2,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "observing",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500018,
+        "lastQuiescentObservationAtMs": 500020,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500021,
+        "lastObservedAtMs": 500021,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": true,
+        "stableElapsedMs": 3,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "held",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500018,
+        "lastQuiescentObservationAtMs": 500020,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500022,
+        "lastObservedAtMs": 500022,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "reset",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500023,
+        "lastObservedAtMs": 500025,
+        "observationCount": 3,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500026,
+        "lastObservedAtMs": 500026,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 1,
+          "prioritySpreadGap": 1,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500027,
+        "lastObservedAtMs": 500027,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500028,
+        "lastObservedAtMs": 500028,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "started",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500028,
+        "lastQuiescentObservationAtMs": 500028,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500029,
+        "lastObservedAtMs": 500030,
+        "observationCount": 2,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 2,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "observing",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500028,
+        "lastQuiescentObservationAtMs": 500030,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500031,
+        "lastObservedAtMs": 500031,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": true,
+        "stableElapsedMs": 3,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "held",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500028,
+        "lastQuiescentObservationAtMs": 500030,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500032,
+        "lastObservedAtMs": 500032,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "reset",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500033,
+        "lastObservedAtMs": 500035,
+        "observationCount": 3,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 2,
+          "prioritySpreadGap": 2,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500036,
+        "lastObservedAtMs": 500036,
+        "observationCount": 1,
+        "state": "critical_spread_open",
+        "canonicalBlocker": "critical_system_spread_open",
+        "reasonCodes": [
+          "critical_system_spread_open"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "available",
+          "totalSpreadGap": 1,
+          "prioritySpreadGap": 1,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500037,
+        "lastObservedAtMs": 500037,
+        "observationCount": 1,
+        "state": "control_plane_pressure",
+        "canonicalBlocker": "control_plane_pressure",
+        "reasonCodes": [
+          "control_plane_pressure",
+          "snapshot_query_error"
+        ],
+        "ready": false,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": null,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": false,
+          "observationState": "snapshot_lane_unavailable",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": null,
+          "missingLeaderPartitionCount": null
+        },
+        "windowTransition": "inactive",
+        "windowPhase": "inactive",
+        "windowStartedAtMs": 0,
+        "lastQuiescentObservationAtMs": null,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500038,
+        "lastObservedAtMs": 500038,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 0,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "started",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500038,
+        "lastQuiescentObservationAtMs": 500038,
+        "stableConfirmationCount": 0
+      },
+      {
+        "firstObservedAtMs": 500039,
+        "lastObservedAtMs": 500039,
+        "observationCount": 1,
+        "state": "quiescence_candidate",
+        "canonicalBlocker": null,
+        "reasonCodes": [],
+        "ready": true,
+        "stabilityWindowHeld": false,
+        "stableElapsedMs": 1,
+        "effectiveInFlightCount": 0,
+        "controlPlanePressureReasonCodes": [],
+        "criticalSystemTopology": {
+          "ready": true,
+          "observationState": "available",
+          "totalSpreadGap": 0,
+          "prioritySpreadGap": 0,
+          "missingLeaderPartitionCount": 0
+        },
+        "windowTransition": "observing",
+        "windowPhase": "observing",
+        "windowStartedAtMs": 500038,
+        "lastQuiescentObservationAtMs": 500039,
+        "stableConfirmationCount": 0
+      }
+    ]
+  },
+  "hostileLoggers": [
+    {
+      "name": "no logger at all",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "info throws",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "info getter throws",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "logger is a string",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "logger is a function",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "info is not a function",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    },
+    {
+      "name": "every get throws",
+      "thrown": null,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ],
+      "snapshotObservationState": "stale_usable"
+    }
+  ],
+  "outOfOrder": [
+    {
+      "capturedAt": 1000000,
+      "shouldRepair": false,
+      "triggerCodes": []
+    },
+    {
+      "capturedAt": 1005000,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ]
+    },
+    {
+      "capturedAt": 996000,
+      "shouldRepair": false,
+      "triggerCodes": []
+    },
+    {
+      "capturedAt": 1009000,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ]
+    },
+    {
+      "capturedAt": 991000,
+      "shouldRepair": false,
+      "triggerCodes": []
+    },
+    {
+      "capturedAt": 1001000,
+      "shouldRepair": false,
+      "triggerCodes": []
+    },
+    {
+      "capturedAt": 1020000,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ]
+    },
+    {
+      "capturedAt": 999999,
+      "shouldRepair": false,
+      "triggerCodes": []
+    },
+    {
+      "capturedAt": 1020000,
+      "shouldRepair": true,
+      "triggerCodes": [
+        "cache_stale_watermark"
+      ]
+    }
+  ]
+}

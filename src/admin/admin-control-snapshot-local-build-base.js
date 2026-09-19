@@ -376,6 +376,14 @@ function attachControlSnapshotObservationMode(snapshot, options = {}) {
       buildControlSnapshotAdminObservation(snapshot, mode, options),
   };
 }
+/**
+ * The diagnostics logger the admin API injects, or an explicit absence.
+ * @param {Object|null|undefined} logger
+ * @return {Object|null}
+ */
+function resolveInjectedControlSnapshotLogger(logger) {
+  return logger || null;
+}
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 /**
  * Control snapshot builder.
@@ -423,6 +431,12 @@ class AdminControlSnapshotLocalBuildBase extends AdminCacheOwnerState {
         null;
     this.nowFn =
       typeof deps.nowFn === 'function' ? deps.nowFn : () => Date.now();
+    // Diagnostics only, injected exactly as the sibling admin owners
+    // (AdminServiceDiscovery, AdminDebugHandlers) receive theirs. Absent it
+    // the control snapshot behaves as before and simply says nothing. The
+    // defaulting sits in its own function so this already-over-threshold
+    // constructor does not get one branch worse for a diagnostic.
+    this.logger = resolveInjectedControlSnapshotLogger(deps.logger);
   }
 
   /**
