@@ -608,3 +608,48 @@ Example: adam-laptop, 09:49:04, `schema_operations-p1-r5`.
   retained witness.
 - The quest is superseded without landing. The authority repair removes the
   guard's summary read, and with it the payload block that quest added.
+
+## Seventh addendum (2026-09-19): what the carry stage's logging shows in the lab - evidence, not proof
+
+Eight lab formations ran on the staged carry stage (scratch commit
+ca8e7fa67).
+- Three machines gave 2 PASS and 6 FAIL.
+- The four-core machine is not included.
+- The carry stage changes no decision; it logs the authorization the guard
+  decoded.
+- Everything below is MEASURED through logging that is staged and under
+  independent verification.
+- Per the owner's direction it is formation evidence only. Nothing here
+  shows that a path is unneeded.
+- The logs are archived at
+  `~/.local/share/lagrange/evidence/formation-health/lab-2026-09-19/lab-authority-carry-logs.tar.gz`.
+
+**The refusals enforcement is meant to flip.**
+- There were 976 promotion refusals on critical partitions.
+- 967 carry a present authorization that would be honoured, with the
+  promotion inside the authorized bound: 4 voters observed, 5 authorized.
+
+**The epoch disagreement occurs live.**
+- 4 refusal lines on one node carry a valid authorization that reads
+  `authorization_membership_generation_stale`. The authorization observed
+  epoch 5 while the partition read epoch 6.
+- The lines are at 11:03:15-17, for `sql_transaction_participants-p1` and
+  `sql_write_operations-p1`.
+- Under enforcement these would be refusals with nothing behind them.
+
+**Promotions that pass today only because of the overflow budget:** 37.
+- 33 carry an honoured authorization.
+- **4 do not:**
+  - 2 on the **operation ledger** (`replica_operations-p1`).
+    - Each is a **REPLACE** target (`replace-replica-…`, REPLACE
+      pending/SENDING) with 4 voters on 2 nodes.
+    - This is one live witness covering two of the owner's classes at once:
+      an unmintable partition and an over-target REPLACE. It is admitted
+      today by the budget and by nothing else.
+  - 2 on `control_plane_publications-p1` with **no counted in-flight
+    operation at all**.
+    - One has 3 voters on 1 node and the other 4 voters on 2 nodes.
+    - This is an admission class nobody has described yet.
+
+These are inputs to `critical-spread-overflow-budget-audit`: two witnessed
+budget-dependent classes that the spread-cure authorization does not cover.
