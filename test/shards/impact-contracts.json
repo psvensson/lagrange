@@ -458,6 +458,22 @@
       "tests": [
         "test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js"
       ]
+    },
+    "spread-cure-transition-authorization": {
+      "description": "The cure policy owner mints one exact-transition spread-cure authorization; the receiving learner decodes and states exactly that record.",
+      "owners": [
+        "src/rebalancer/replica-placement-cure-policy.js",
+        "src/rebalancer/move-planner-priority-spread-cure.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/spread-cure-transition-authorization.js",
+        "src/partition/partition-service-learner-promotion-count-check-methods.js",
+        "src/partition/learner-promotion-count-check-evidence.js"
+      ],
+      "tests": [
+        "test/rebalancer/spread-cure-transition-authorization.test.js",
+        "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+        "test/partition/learner-promotion-count-check-inputs.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -773,6 +789,33 @@
         "conformanceTest": "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
         "realTest": "test/integration/message-group-multi-join-formation.integration.test.js"
       }
+    },
+    "spread-cure-transition-authorization": {
+      "description": "The mint and the receiving guard must agree on one authorization record: what the policy owner states, the learner decodes, evaluates and logs.",
+      "endpoints": [
+        {
+          "id": "cure-authorization-mint",
+          "owners": [
+            "src/rebalancer/replica-placement-cure-policy.js",
+            "src/rebalancer/move-planner-priority-spread-cure.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js"
+          ]
+        },
+        {
+          "id": "cure-authorization-consumer",
+          "owners": [
+            "src/rebalancer/spread-cure-transition-authorization.js",
+            "src/partition/partition-service-learner-promotion-count-check-methods.js",
+            "src/partition/learner-promotion-count-check-evidence.js"
+          ]
+        }
+      ],
+      "contract": "spread-cure-transition-authorization",
+      "witnessTests": [
+        "test/rebalancer/spread-cure-transition-authorization.test.js",
+        "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+        "test/partition/learner-promotion-count-check-inputs.test.js"
+      ]
     }
   }
 }

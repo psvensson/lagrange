@@ -7,6 +7,9 @@ import {
   isBoundMembershipPublicationEpoch,
 } from './replica-operation-membership-epoch-binding.js';
 import {
+  SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
+} from './spread-cure-transition-authorization.js';
+import {
   CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
   hasPriorityRecoveryOperationCreationAuthority,
 } from '../control-plane/control-plane-mutation-readiness.js';
@@ -71,8 +74,9 @@ function resolveMoveMembershipPublicationEpoch(rebalancer, move) {
 /**
  * Decorate a coordinator operation request with the move's mutation context:
  * the membership-publication fencing epoch (when one is known), the explicit
- * control-plane mutation work class, and the priority-recovery creation
- * authority marker. Fields absent from the move stay absent on the request.
+ * control-plane mutation work class, the priority-recovery creation
+ * authority marker, and the cure policy owner's spread-cure transition
+ * authorization. Fields absent from the move stay absent on the request.
  *
  * @param {Object} rebalancer
  * @param {Object} operationRequest mutated in place
@@ -97,6 +101,12 @@ function applyCoordinatorOperationRequestMutationContext(
     operationRequest[
       CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD
     ] = true;
+  }
+  // Copied verbatim, never amended: the policy owner minted it and the
+  // coordinator completes it. This module only moves it across the boundary.
+  if (move?.[SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD] !== undefined) {
+    operationRequest[SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD] =
+      move[SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD];
   }
   return operationRequest;
 }

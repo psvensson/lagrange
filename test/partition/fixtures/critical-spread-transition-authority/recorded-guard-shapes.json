@@ -1,0 +1,123 @@
+{
+ "schema": "recorded-guard-shapes/1",
+ "provenance": {
+  "what": "The membership and in-flight operation SHAPES of two verbatim countCheckInputs payloads of one learner in one local five-process formation (health:formation) on a lab machine, copied for the critical-spread-transition-authority-carry quest.",
+  "copiedFrom": "worktree ring-contract, test/partition/fixtures/critical-spread-learner-ring/recorded-guard-inputs.json (not on main)",
+  "commit": "bb529c57c",
+  "date": "2026-09-19",
+  "machineClass": "8-thread laptop",
+  "runLabel": "gi-final/adam-laptop/logs-1",
+  "nodeLog": "node-4.log",
+  "runVerdict": "FAIL node_ready_lease_incomplete",
+  "archive": "~/.local/share/lagrange/evidence/formation-health/lab-2026-09-19/lab-gi-final-logs.tar.gz",
+  "note": "The refusal is chronologically first (08:10:28.458Z); the passing reading is the first PASSING check of the same learner (08:11:26.743Z), after one tracked partition's ADD went terminal. Node and operation ids are the run's own. Only the membership, operation and decision facts are copied here; the lineSha256 of each source line is retained so the copy can be traced back to it."
+ },
+ "refusal": {
+  "time": "2026-09-19T08:10:28.458Z",
+  "lineSha256": "865f7bcfd593f7805bed8a2698d7b3f918ec649d4ff36aacca5ab7efccdeb667",
+  "msg": "Learner promotion deferred",
+  "nodeId": "2af84441-0e3c-41f3-9baf-606cfa5755e2",
+  "partitionId": "sql_transactions-p1",
+  "replicaId": "sql_transactions-p1-r5",
+  "joining": true,
+  "membership": {
+   "voterReplicas": [
+    {
+     "replicaId": "sql_transactions-p1-r1",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r2",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r3",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r4",
+     "nodeId": "e534e1fb-a02e-4741-80a7-8ed0cb284f78"
+    }
+   ],
+   "learnerReplicaIds": [],
+   "activeVoterCount": 4,
+   "learnerCount": 1,
+   "observedActiveVoterCount": 4,
+   "observedLearnerCount": 0,
+   "targetReplicaCount": 3
+  },
+  "operations": [
+   {
+    "operationId": "1eeaf3e4-d12c-4e52-8325-4d2cebd9e3b7",
+    "type": "ADD",
+    "status": "pending",
+    "workflowStep": "SENDING"
+   }
+  ],
+  "decision": {
+   "reason": "would_exceed_target_replica_count",
+   "allowances": {
+    "replacement": true,
+    "singleVoterExpansion": false,
+    "priorityRecoveryOverflow": false
+   },
+   "maxAllowedVotersAfterPromotion": 4,
+   "temporaryOverflowVoterBudget": 0
+  }
+ },
+ "passing": {
+  "time": "2026-09-19T08:11:26.743Z",
+  "lineSha256": "5c03421d5f386ee9484602e9670ed53774a444f532a7b6e4d987c5fd79026b31",
+  "msg": "Learner promotion count check inputs",
+  "nodeId": "2af84441-0e3c-41f3-9baf-606cfa5755e2",
+  "partitionId": "sql_transactions-p1",
+  "replicaId": "sql_transactions-p1-r5",
+  "joining": true,
+  "membership": {
+   "voterReplicas": [
+    {
+     "replicaId": "sql_transactions-p1-r1",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r2",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r3",
+     "nodeId": "97148fb8-9986-43ba-9409-ea4d4dd43a60"
+    },
+    {
+     "replicaId": "sql_transactions-p1-r4",
+     "nodeId": "e534e1fb-a02e-4741-80a7-8ed0cb284f78"
+    }
+   ],
+   "learnerReplicaIds": [
+    "sql_transactions-p1-r5"
+   ],
+   "activeVoterCount": 4,
+   "learnerCount": 1,
+   "observedActiveVoterCount": 4,
+   "observedLearnerCount": 1,
+   "targetReplicaCount": 3
+  },
+  "operations": [
+   {
+    "operationId": "1eeaf3e4-d12c-4e52-8325-4d2cebd9e3b7",
+    "type": "ADD",
+    "status": "syncing",
+    "workflowStep": "SYNCING"
+   }
+  ],
+  "decision": {
+   "reason": null,
+   "allowances": {
+    "replacement": true,
+    "singleVoterExpansion": false,
+    "priorityRecoveryOverflow": true
+   },
+   "maxAllowedVotersAfterPromotion": 6,
+   "temporaryOverflowVoterBudget": 2
+  }
+ }
+}

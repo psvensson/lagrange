@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "critical-spread-transition-authority-carry",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "During a critical spread cure the placement planner, from a direct census, retains or dispatches an ADD that takes a partition one voter over its replica target, and the receiving partition independently re-derives whether that overflow is allowed from its own priority-recovery view and may refuse the same transition; the owner decided on 2026-09-18 that replica-placement-cure-policy is the single authority for that overflow, that it authorizes one exact membership transition, and that the decision travels with the operation. Today nothing that says an ADD is a spread cure reaches the receiver: the move reason is never persisted. This quest builds the carrier and changes no decision. For exactly the priority over-target spread-cure condition the cure policy owner mints an authorization stating the intent critical_spread_cure, the desired replication factor read from the partition row's own authority, the membership publication epoch and voter count it observed, the authorized resulting voter count - the observed count plus one, never a blanket allowance - and the destination node; the coordinator completes it with the destination replica and the operation id and stamps it on the operation's existing first steps-history metadata record, with no schema change and no second record keyed off the operation; a binding owner decodes it as present, absent or malformed and never throws, and evaluates it against the receiving replica's own operation, node, replica, partition desired replication factor and current membership publication epoch; and the learner's count check, on every refusal and on its first passing check, states the decoded authorization, whether it would be honoured and why not, from the operation row it already read. An ADD for any other condition, a REPLACE and any operation on an ordinary partition carry no authorization. Every grant, deferral, refusal, reason, cap and scheduled recheck is identical to main's for every input, and a field absent from the move stays absent on the request and on the row.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/critical-spread-transition-authority-carry/evidence/receipt.json",
+      "requiredReceipts": [
+        "policy-mints-one-exact-transition",
+        "only-the-over-target-spread-cure-mints",
+        "authorization-rides-the-operation-row",
+        "binding-decodes-present-absent-malformed-and-never-throws",
+        "evaluation-names-each-refusal-reason",
+        "guard-states-the-authorization-it-read",
+        "decisions-unchanged",
+        "owner-interaction-registered"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "decision-neutral",
+      "statement": "For every input - with a valid, absent, stale, mismatched or malformed authorization on the row - the count check's grant, deferral and refusal, its reason, its cap, its allowances and its scheduled recheck equal main's; the existing frozen oracle over the whole arithmetic grid and the guard grid is the witness, extended with authorization-bearing rows."
+    },
+    {
+      "id": "one-evaluation",
+      "statement": "The authorization is decoded from the operation row the guard already reads for its in-flight add-like check; no table, row, snapshot or answer is read more often per check than on main, and the pinned read order changes by at most a memoised parse of steps_history."
+    },
+    {
+      "id": "single-mint",
+      "statement": "The authorization is minted only inside replica-placement-cure-policy.js, from the evidence of the one condition it authorizes; no other module constructs or amends its policy fields, and the coordinator adds only the destination replica and the operation id."
+    },
+    {
+      "id": "fail-closed-decode",
+      "statement": "Absent is never coerced to present, a malformed value is never repaired, and decoding or evaluating never throws into the planner, the coordinator or the promotion recheck loop."
+    },
+    {
+      "id": "no-parallel-record",
+      "statement": "No schema, column, table or side channel is added; the authorization is one key of the operation's existing first steps-history metadata record, and rows written without it are byte-identical to main's."
+    },
+    {
+      "id": "diagnostics-never-decide",
+      "statement": "Nothing this quest adds enters a memo key, identity, equality, admission, budget or dispatch decision; the move, the request and the row gain one field and nothing reads it except the binding owner and the guard's evidence."
+    },
+    {
+      "id": "bounded-payload",
+      "statement": "The logged authorization is fixed-arity; a malformed value is described by type and size, never echoed unbounded."
+    }
+  ],
+  "sealedAt": "f2fed102a5174a806d63392eb3ad15cc9fd04e44"
+}

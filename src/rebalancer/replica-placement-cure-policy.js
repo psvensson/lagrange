@@ -41,6 +41,13 @@ import {
   classifySystemPartition,
   isOperationLedgerPartition,
 } from '../bootstrap/system-partition-classification.js';
+import {
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
+import {
+  SPREAD_CURE_TRANSITION_INTENT,
+  readSanctionedSpreadCureTransitionPolicy,
+} from './spread-cure-transition-authorization.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -374,6 +381,62 @@ function classifyPriorityOverTargetSpreadCureCondition(evidence = {}) {
 }
 
 /**
+ * Authorize ONE exact membership transition for exactly the condition above
+ * (owner decision 2026-09-18: this module is the single authority for whether
+ * a spread cure may temporarily exceed the replica target, and it authorizes
+ * one transition rather than a rule).
+ *
+ * The record states the membership it was decided FROM and the resulting
+ * count it allows — the observed count plus exactly one, never a blanket
+ * target + 2. `desiredReplicationFactor` is read from the partition row's own
+ * authority and NOT from the planner's `targetState.targetReplicaCount`,
+ * which is a state-dependent derivation (healthy-count clamps, odd
+ * adjustment): comparing the planner's number against the receiver's row
+ * decode would compare two different things.
+ *
+ * The partition row arrives as a RESOLVER, not a value, and it is called
+ * only after the condition has already held. A plan that mints nothing must
+ * cost exactly the cache reads main's plan cost, and most plans — every
+ * message group, every runtime service, every non-cure partition — mint
+ * nothing.
+ *
+ * Fail closed: any condition other than the one row, any input this owner
+ * cannot state exactly, and any resolver that throws, mint NOTHING. Minting
+ * a record the binding owner would call malformed is the same defect as
+ * minting a wrong one, so the record is handed through that owner's own
+ * validation before it leaves.
+ *
+ * @param {Object} evidence the same placement evidence the condition above
+ *   is classified from
+ * @param {Object} context {destinationNodeId, resolvePartitionRow,
+ *   observedMembershipEpoch}
+ * @return {Object|null} the frozen authorization, or null
+ */
+function authorizeSpreadCureTransition(evidence = {}, context = {}) {
+  try {
+    // Inside the guard on purpose: the classifier is main's and coerces its
+    // evidence, so a Symbol or an exotic count throws there. That is not a
+    // reason to mint, and it is not a reason to fail a plan either.
+    if (classifyPriorityOverTargetSpreadCureCondition(evidence) === null) {
+      return null;
+    }
+    const observedVoterCount = Number(evidence.voterReplicaCount);
+    return readSanctionedSpreadCureTransitionPolicy({
+      intent: SPREAD_CURE_TRANSITION_INTENT,
+      desiredReplicationFactor: resolveDesiredReplicationFactor(
+        context.resolvePartitionRow(),
+      ).replicationFactor,
+      observedMembershipEpoch: context.observedMembershipEpoch,
+      observedVoterCount,
+      authorizedResultingVoterCount: observedVoterCount + 1,
+      destinationNodeId: context.destinationNodeId,
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
  * Once a healthy priority partition is at target count and satisfies its
  * distinct-node spread floor, exact suitability is not a recovery cure.
  * Suppressing that relocation preserves the current leader and prevents
@@ -557,6 +620,7 @@ export {
   // Re-exported lane vocabulary: consumers of the classifier read its result
   // against these values without re-importing the control-plane home.
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  authorizeSpreadCureTransition,
   classifyLedgerExpandForSpreadCureCondition,
   classifyLedgerSpreadSurplusDrainCureCondition,
   classifyPriorityExpandForSpreadCureCondition,

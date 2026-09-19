@@ -12,9 +12,6 @@ import {
   evaluateLearnerPromotionCountCheck,
 } from './learner-promotion-count-check.js';
 import {
-  buildLearnerPromotionCountCheckInputs,
-} from './learner-promotion-count-check-evidence.js';
-import {
   createPartitionServiceLearnerPromotionCountCheckMethods,
 } from './partition-service-learner-promotion-count-check-methods.js';
 
@@ -38,6 +35,60 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const UNDECLARED_PROMOTION_TARGET_REPLICA_COUNT = 0;
+
+// The two identities one in-flight add-like row states, read once per row so
+// the traversal below asks each question a single time.
+function readAddLikeOperationRowIdentity(operationRow) {
+  return {
+    replicaId: String(
+      operationRow?.[COLUMN.REPLICA_ID] || STRING.EMPTY,
+    ).trim(),
+    targetNodeId: String(
+      operationRow?.[COLUMN.TARGET_NODE_ID] || STRING.EMPTY,
+    ).trim(),
+  };
+}
+
+// The replica identities one row contributes to the set the count check has
+// always decided on: the row's own replica, and - unchanged from main - this
+// replica when the row targets this node.
+function collectAddLikeOperationReplicaIds(replicaIds, identity, local) {
+  if (identity.replicaId.length > 0) {
+    replicaIds.add(identity.replicaId);
+  }
+  if (
+    identity.targetNodeId.length > 0 &&
+    local.localReplicaId.length > 0 &&
+    identity.targetNodeId === local.localNodeId
+  ) {
+    replicaIds.add(local.localReplicaId);
+  }
+}
+
+// How one in-flight add-like row can be THIS replica's own. A row that NAMES
+// this replica is the answer whenever one exists, whatever the row order: an
+// unnamed row that merely targets this node is the coordinator's
+// not-yet-named intent, and it stands in only while nothing names us.
+const OWNED_ADD_LIKE_MATCH = Object.freeze({
+  NONE: 'none',
+  NAMES_THIS_REPLICA: 'names_this_replica',
+  TARGETS_THIS_NODE: 'targets_this_node',
+});
+
+function classifyOwnedAddLikeOperationRow(row, local) {
+  if (local.localReplicaId.length === 0) {
+    return OWNED_ADD_LIKE_MATCH.NONE;
+  }
+  if (row.replicaId.length > 0) {
+    return row.replicaId === local.localReplicaId ?
+      OWNED_ADD_LIKE_MATCH.NAMES_THIS_REPLICA :
+      OWNED_ADD_LIKE_MATCH.NONE;
+  }
+  return local.localNodeId.length > 0 &&
+    row.targetNodeId === local.localNodeId ?
+    OWNED_ADD_LIKE_MATCH.TARGETS_THIS_NODE :
+    OWNED_ADD_LIKE_MATCH.NONE;
+}
 
 // Desired RF is decoded by the single policy authority from the persisted
 // partitions row. An undeclared policy returns 0 and DEFERS promotion (fail
@@ -439,10 +490,8 @@ class PartitionServiceLearnerPromotionMethods {
         partitionId: this.partitionId,
         reason: decision.refusalReason,
         ...countFields,
-        countCheckInputs: buildLearnerPromotionCountCheckInputs({
-          ...observation,
-          decision,
-        }),
+        countCheckInputs:
+          this.buildLearnerPromotionCountCheckPayload(observation, decision),
       });
       this.scheduleLearnerPromotion(
         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
@@ -509,50 +558,62 @@ class PartitionServiceLearnerPromotionMethods {
     });
     this.becomeFollower();
   }
-  getInFlightAddLikeOperationReplicaIds() {
-    const operationRows =
-      this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION ?
-        this.systemTableCache.filter(
-          TABLES.REPLICA_OPERATIONS,
-          (operationRow) => {
-            return (
-              operationRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
-                ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationRow?.type) &&
-                !TERMINAL_STATUSES.includes(
-                  String(
-                    operationRow?.[COLUMN.STATUS] ??
-                      operationRow?.operation_status ??
-                      operationRow?.operationStatus ??
-                      STRING.EMPTY,
-                  ).toLowerCase(),
-                )
-            );
-          },
-        ) :
-        [];
+  readInFlightAddLikeOperationRowsForPromotion() {
+    if (
+      !this.systemTableCache ||
+      typeof this.systemTableCache.filter !== PARTITION_SERVICE_TYPE.FUNCTION
+    ) {
+      return [];
+    }
+    return this.systemTableCache.filter(
+      TABLES.REPLICA_OPERATIONS,
+      (operationRow) => {
+        return (
+          operationRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
+            ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationRow?.type) &&
+            !TERMINAL_STATUSES.includes(
+              String(
+                operationRow?.[COLUMN.STATUS] ??
+                  operationRow?.operation_status ??
+                  operationRow?.operationStatus ??
+                  STRING.EMPTY,
+              ).toLowerCase(),
+            )
+        );
+      },
+    );
+  }
+  /**
+   * ONE traversal of this partition's non-terminal add-like operation rows,
+   * yielding both the replica-id set the count check has always decided on
+   * and THE row this replica owns. The set is unchanged, member for member:
+   * the owned row is selected from the same rows in the same order, so
+   * describing the operation the planner authorized costs no second read
+   * (quest critical-spread-transition-authority-carry).
+   * @return {{replicaIds: Set<string>, ownedOperationRow: Object|null}}
+   * @private
+   */
+  collectInFlightAddLikeOperationsForPromotion() {
+    const operationRows = this.readInFlightAddLikeOperationRowsForPromotion();
+    const local = {
+      localNodeId: String(this.nodeId || STRING.EMPTY).trim(),
+      localReplicaId: String(this.replicaId || STRING.EMPTY).trim(),
+    };
     const replicaIds = new Set();
+    let namedRow = null;
+    let targetedRow = null;
     for (const operationRow of operationRows) {
-      const replicaId = String(
-        operationRow?.[COLUMN.REPLICA_ID] || STRING.EMPTY,
-      ).trim();
-      if (replicaId.length > 0) {
-        replicaIds.add(replicaId);
+      const identity = readAddLikeOperationRowIdentity(operationRow);
+      collectAddLikeOperationReplicaIds(replicaIds, identity, local);
+      const match = classifyOwnedAddLikeOperationRow(identity, local);
+      if (match === OWNED_ADD_LIKE_MATCH.NAMES_THIS_REPLICA && !namedRow) {
+        namedRow = operationRow;
       }
-      const targetNodeId = String(
-        operationRow?.[COLUMN.TARGET_NODE_ID] || STRING.EMPTY,
-      ).trim();
-      const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
-      const localReplicaId = String(this.replicaId || STRING.EMPTY).trim();
-      if (
-        targetNodeId.length > 0 &&
-        localReplicaId.length > 0 &&
-        targetNodeId === localNodeId
-      ) {
-        replicaIds.add(localReplicaId);
+      if (match === OWNED_ADD_LIKE_MATCH.TARGETS_THIS_NODE && !targetedRow) {
+        targetedRow = operationRow;
       }
     }
-    return replicaIds;
+    return {replicaIds, ownedOperationRow: namedRow || targetedRow};
   }
   // ONE traversal of the services rows, yielding both the count the decision
   // uses and the replica identities the refusal logs, so describing the

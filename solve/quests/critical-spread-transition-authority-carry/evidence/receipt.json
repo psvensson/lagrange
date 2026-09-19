@@ -1,0 +1,84 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "critical-spread-transition-authority-carry",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/spread-cure-transition-authorization.test.js": "361f5374e224edd9202cab50534ad5d7c0cb67e13709458c5445900bffeeac2d",
+    "test/rebalancer/spread-cure-transition-authorization-row.test.js": "130ca077555ff57ee75f741451f4593926d556e8061ffffdca5538f45fe8f1e5",
+    "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "6487e757885afe48e33cb5b508665deed5041b499a1642243b0ce42c4a55953b",
+    "test/partition/learner-promotion-count-check-inputs.test.js": "b89350a3182dfb1e5761fa7bbcb90d0241eead08a3652a69c50d93a1fbd6717d"
+  },
+  "generatedAt": "2026-09-19T15:24:29.625Z",
+  "receipts": [
+    {
+      "id": "policy-mints-one-exact-transition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the cure policy mints one exact transition authorization$\" test/rebalancer/spread-cure-transition-authorization.test.js",
+      "detail": "the mint states intent, row-decoded RF, observed epoch and voter count, the observed count plus one, and the destination node",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization.test.js"
+    },
+    {
+      "id": "only-the-over-target-spread-cure-mints",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^only the priority over-target spread cure mints an authorization$\" test/rebalancer/spread-cure-transition-authorization.test.js",
+      "detail": "expand, ledger expand, drain, REPLACE, follow-up and ordinary partitions carry no authorization",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization.test.js"
+    },
+    {
+      "id": "authorization-rides-the-operation-row",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the authorization rides the operation row and rows without it stay byte-identical to main$\" test/rebalancer/spread-cure-transition-authorization-row.test.js",
+      "detail": "end to end through the real coordinator creation path, against frozen digests captured from main before any src edit",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization-row.test.js"
+    },
+    {
+      "id": "authorization-rides-the-production-path",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one authorization travels the real planner, coordinator and row$\" test/rebalancer/spread-cure-transition-authorization-production-path.test.js",
+      "detail": "the same clause through the real rebalance cycle: one authorized move, request and row, and Object.hasOwn on every unauthorized one",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization-production-path.test.js"
+    },
+    {
+      "id": "a-plan-that-reaches-no-cure-costs-mains-reads",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a plan that reaches no cure costs exactly main's cache reads$\" test/rebalancer/spread-cure-transition-authorization-production-path.test.js",
+      "detail": "per entity class, against main's own measured per-plan cache reads; only a plan that reaches the cure reads the policy row, once",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization-production-path.test.js"
+    },
+    {
+      "id": "binding-decodes-present-absent-malformed-and-never-throws",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the binding decodes present, absent and malformed and never throws$\" test/rebalancer/spread-cure-transition-authorization.test.js",
+      "detail": "every malformed shape is named by type and bounded size, and nothing throws",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization.test.js"
+    },
+    {
+      "id": "evaluation-names-each-refusal-reason",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the evaluation names each refusal reason$\" test/rebalancer/spread-cure-transition-authorization.test.js",
+      "detail": "absent, malformed, intent, operation, destination, desired RF, stale generation and honoured, one row each",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization.test.js"
+    },
+    {
+      "id": "guard-states-the-authorization-it-read",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the guard states the authorization it read$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "countCheckInputs.authorization on the refusal line and the first-pass line",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "decisions-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an authorization on the row changes no count-check decision$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "the frozen oracle and the frozen guard-grid digest hold with valid, absent, stale, mismatched and malformed authorizations on the row",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "owner-interaction-registered",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the spread-cure transition authorization has a registered owner-interaction contract$\" test/rebalancer/spread-cure-transition-authorization.test.js",
+      "detail": "the mint and consumer endpoints are a registered coupled pair",
+      "testFile": "test/rebalancer/spread-cure-transition-authorization.test.js"
+    }
+  ]
+}

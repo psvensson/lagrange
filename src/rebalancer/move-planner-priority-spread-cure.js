@@ -1,5 +1,6 @@
 import {MOVE_REASON} from './rebalancer-constants.js';
 import {
+  authorizeSpreadCureTransition,
   classifyLedgerExpandForSpreadCureCondition,
   classifyLedgerSpreadSurplusDrainCureCondition,
   classifyPriorityExpandForSpreadCureCondition,
@@ -8,6 +9,9 @@ import {
   isPrioritySpreadSatisfiedAtTarget,
   resolvePlacementCure,
 } from './replica-placement-cure-policy.js';
+import {
+  SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
+} from './spread-cure-transition-authorization.js';
 
 // The over-creation cap's single canonical ADD outcome (decision-table rows,
 // first classifier match wins; refuse-all is the fail-closed floor).
@@ -15,6 +19,29 @@ const OVER_TARGET_CAP_ADD_DECISION = Object.freeze({
   REFUSE_ALL_ADDS: 'refuse_all_adds',
   RETAIN_SPREAD_CURE_ADDS: 'retain_spread_cure_adds',
 });
+
+// The cure policy owner mints; this module only carries. A move the owner did
+// not authorize gains NO field at all, so an absent authorization stays
+// absent on the coordinator request and on the row.
+function withSpreadCureTransitionAuthorization(move, authorization) {
+  return authorization === null || authorization === undefined ?
+    move :
+    {...move, [SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD]: authorization};
+}
+
+// The mint inputs this module carries from the planner to the policy owner:
+// a RESOLVER for the partition's own policy row, and the membership
+// publication epoch the planning cycle observed. Never the planner's own
+// target derivation, and never the row itself: the policy owner calls the
+// resolver only after its own condition has held, so a plan that mints
+// nothing reads nothing.
+function mintSpreadCureTransitionAuthorization(evidence, options, nodeId) {
+  return authorizeSpreadCureTransition(evidence, {
+    destinationNodeId: nodeId,
+    resolvePartitionRow: options.resolvePartitionRow,
+    observedMembershipEpoch: options.observedMembershipEpoch,
+  });
+}
 
 function countDistinctReplicaNodes(replicas) {
   return new Set(
@@ -74,11 +101,12 @@ function selectSpreadCureAddMoves(options) {
       retainedAddMoves.length < spreadGapSize;
     if (curesSpread) {
       claimedNodeIds.add(nodeId);
-      retainedAddMoves.push({
+      retainedAddMoves.push(withSpreadCureTransitionAuthorization({
         ...move,
         type: cure.moveType,
         reason: cure.moveReason,
-      });
+      }, mintSpreadCureTransitionAuthorization(
+        options.cureEvidence, options, nodeId)));
     }
   }
   return retainedAddMoves;
@@ -114,7 +142,7 @@ function applyOverTargetCapAddRetention(options = {}) {
     targetReplicaCount,
     targetDistinctNodeCount,
   );
-  const cureCondition = classifyPriorityOverTargetSpreadCureCondition({
+  const cureEvidence = {
     partitionId,
     voterReplicaCount: surplusVoterCount,
     activeDistinctNodeCount,
@@ -122,18 +150,23 @@ function applyOverTargetCapAddRetention(options = {}) {
     targetDistinctNodeCount,
     addMoveCount: addMoves.length,
     inFlightReplaceCount,
-  });
+  };
+  const cureCondition =
+    classifyPriorityOverTargetSpreadCureCondition(cureEvidence);
   const retainedAddMoves = cureCondition === null ?
     [] :
     selectSpreadCureAddMoves({
       addMoves,
       cure: resolvePlacementCure(cureCondition),
+      cureEvidence,
       hostingNodeIds: new Set(
         activePlacementReplicas
           .map((replica) => replica?.node_id)
           .filter(Boolean),
       ),
       spreadGapSize: requiredDistinctNodeCount - activeDistinctNodeCount,
+      resolvePartitionRow: options.resolvePartitionRow,
+      observedMembershipEpoch: options.observedMembershipEpoch,
     });
   // Log honesty: the retain decision is reported only when a cure ADD
   // actually survived (the classifier can fire while every candidate ADD
@@ -277,11 +310,25 @@ function applyPrioritySpreadExpandCure(options = {}) {
     return replaceCount;
   }
   const expandCure = resolvePlacementCure(spreadExpandCureCondition);
-  addMoves[0] = {
-    ...addMoves[0],
+  const destinationNodeId = addMoves[0]?.nodeId;
+  // This site RE-TYPES the move under its own cure row, so it also re-states
+  // the authorization under that row: any record an earlier site attached is
+  // dropped first and only this site's own mint is carried forward. Carrying
+  // a stale record past a mint that has just refused would be exactly the
+  // "absent coerced to present" hazard, one hop later.
+  const {
+    [SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD]: _previousAuthorization,
+    ...retypedMove
+  } = addMoves[0];
+  // The mint refuses every condition but its own, so the ledger and
+  // at-target expand rows above carry nothing: those states already promote
+  // on the replacement allowance alone and are not this owner's to authorize.
+  addMoves[0] = withSpreadCureTransitionAuthorization({
+    ...retypedMove,
     type: expandCure.moveType,
     reason: expandCure.moveReason,
-  };
+  }, mintSpreadCureTransitionAuthorization(
+    sharedEvidence, options, destinationNodeId));
   // Physical spread must settle before its surplus source can drain. A
   // NODE_NOT_IN_TARGET source must not escape as a same-batch REMOVE.
   candidateRemoves.length = 0;
