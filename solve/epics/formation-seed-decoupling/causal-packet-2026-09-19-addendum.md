@@ -102,3 +102,78 @@ mechanism needs its own causal packet, written the same way as the first:
 - Whether restoring E's scheduling defaults changes either rate. The first
   five runs of `seed-replica-production-scheduling-defaults` on one machine
   show no obvious change. An interleaved comparison is running.
+
+## Second addendum (2026-09-19, later): why the summary reads "satisfied"
+
+This was a read-only analysis of the recorded guard inputs from the lab
+formations (about 690 records across five runs), plus a scratch call of one
+production function. No behaviour was changed.
+
+**The dominant refusal.**
+- 454 of about 470 critical-partition refusals share one shape:
+  - 4 voters on **2** distinct nodes and 1 learner on a third node;
+  - the learner node's summary shows `satisfied: true`, required 3,
+    eligible 5;
+  - this partition is **not** in `blockedPartitionIds`;
+  - budget 0, max 4.
+- Voters cover only two nodes. For the summary to call the partition
+  unblocked at required 3, it must be counting a non-voter as the third
+  holder.
+
+**The derivation counts the learner.** `buildDerivedPriorityPartitionSummary`
+(`src/control-plane/membership-publication-priority-partition-summary.js`)
+counts a service row as a ready holder when all of these hold:
+- the row is `active`;
+- it has a raft role;
+- it has an address;
+- if the role is a catch-up learner, its node's readiness is promotable
+  (`resolvePrioritySpreadReplicaExclusionReason`, `learner_not_promotable`).
+
+So a learner on a healthy node is a distinct holder.
+
+**Scratch call.** The production function was called with four voter rows on
+two nodes:
+
+| input | result |
+| --- | --- |
+| no learner row | partition blocked, `readyDistinctNodeCount: 2` |
+| learner row with status `joining` | blocked, `status_joining: 1` |
+| `active` learner row on a third node | partition no longer blocked |
+
+**The ring.** The learner whose promotion would close the spread gap is
+counted as having closed it.
+- That withdraws `priorityRecoveryActive` and the overflow budget.
+- The promotion needs that budget to take the partition from 4 voters to 5.
+- The promotion is refused until the 60 s voter-ready timeout undoes the
+  operation, and the gap re-opens.
+- The grants in the same runs are first-pass checks where the learner's own
+  row was not yet counted: `satisfied: false`, this partition blocked,
+  budget 2.
+- PASS or FAIL on this mechanism is a race between the learner's catch-up
+  and its own service row becoming visible as active.
+- This explains both the intermittency and the dependence on machine speed.
+
+**Corrections to the first addendum.**
+- The closure-refreshed preference (`chooseMoreAdvanced`) is not the cause.
+  The freshly derived summary reads satisfied in the same state (13
+  refusals with `source: derived`).
+- The preference only lengthens how long the verdict is held.
+
+**Classification.** One projection serves two consumers with opposite needs.
+- The planner asks "is coverage already planned?". Counting the learner
+  there is right: it stops a second ADD.
+- The promotion guard uses the same answer as "is the cure complete?". That
+  is circular for the very replica being promoted.
+- This is the owner's Decision 1 seen from the inside. The guard should not
+  derive placement permission from a local projection at all; the operation
+  should carry it.
+
+**The other refusal shape, on user tables** (204 records): 4 voters on 4
+distinct nodes, target 3, and a fifth voter arriving.
+- No spread gap is involved.
+- It is a second add-first move dispatched while the first holds the single
+  replacement allowance.
+- The guard is doing its mechanical job there.
+- The question belongs to the planner's dispatch: why two concurrent moves
+  on one partition?
+- It is separate from the cure authorization.
