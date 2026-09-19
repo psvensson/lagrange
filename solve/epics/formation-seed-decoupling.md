@@ -80,6 +80,7 @@ authorizes:
   - scripts/quest-evidence/critical-spread-transition-authority-carry.js
   - scripts/quest-evidence/critical-spread-transition-authority.js
   - scripts/check-guideline-deferred-outcomes.js
+  - scripts/check-complexity.js
   - test/rebalancer
 ---
 
