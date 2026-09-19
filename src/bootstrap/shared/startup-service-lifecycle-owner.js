@@ -63,8 +63,12 @@ class StartupServiceLifecycleOwner {
       checkIntervalMs: delegates.getCheckIntervalMs?.(),
       maxConcurrentServiceActions:
         delegates.getMaxConcurrentServiceActions?.(),
-      // The reconciler's cadence belongs to the node it reconciles for.
-      timeSource: delegates.getTimeSource?.(),
+      // The reconciler schedules for the node it reconciles for: its
+      // cadence, and the macrotask turn it takes between actions. Both move
+      // to the node's clock only when that runtime was SUPPLIED one; a node
+      // that resolved its own leaves the reconciler on the mechanisms it
+      // has always used.
+      timeSource: delegates.getSuppliedTimeSource?.(),
     });
     await serviceReconciler.start();
     delegates.setServiceReconciler?.(serviceReconciler);

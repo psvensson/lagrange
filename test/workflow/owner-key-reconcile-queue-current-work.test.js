@@ -25,6 +25,8 @@ import {heldPromise, isPending} from '../helpers/promise-settlement.js';
 
 const OWNER_A = 'partition/a';
 const OWNER_B = 'partition/b';
+const RETRYABLE_FAILURE_MESSAGE = 'retryable_drain_failure';
+const RETRY_AFTER_MS = 1000;
 
 test('Q1. an in-flight reconcile keeps the queue busy until it finishes',
   async (t) => {
@@ -138,3 +140,86 @@ test('Q5. a future retry is future work, not current work', async (t) => {
   queue.shutdown();
   t.end();
 });
+
+test('Q6. a drain that has been scheduled but not run is still current work',
+  async (t) => {
+    // The `draining` clause, in the one state that isolates it: a drain
+    // scheduled with nothing pending and nothing in flight. A reconcile that
+    // fails retryably absorbs the item enqueued while it ran INTO its retry
+    // item, which empties pending; the drain that enqueue scheduled has not
+    // run yet. Q2 cannot pin this clause, because there the item the enqueue
+    // admitted is still pending and pending alone answers.
+    const drains = [];
+    const entered = heldPromise();
+    const failing = heldPromise();
+    const retryArmed = heldPromise();
+    const queue = new OwnerKeyReconcileQueue({
+      reconcileFn: async () => {
+        entered.release();
+        await failing.promise;
+        throw new Error(RETRYABLE_FAILURE_MESSAGE);
+      },
+      // The queue's own drain seam, held so the scheduled drain runs when
+      // this witness says so rather than on a host turn.
+      scheduleDrainFn: (drain) => {
+        drains.push(drain);
+      },
+      // The retry timer is armed and never fires: the item it owns is
+      // future work, which is what leaves pending and inFlight empty.
+      setTimeoutFn: (_callback, delayMs) => {
+        retryArmed.release();
+        return {delayMs};
+      },
+      clearTimeoutFn: () => {},
+      retryPolicy: {
+        isRetryableError: () => true,
+        getRetryAfterMs: () => RETRY_AFTER_MS,
+      },
+    });
+    queue.enqueue(OWNER_A, RECONCILE_REASON.PERIODIC_CHECK);
+    drains.shift()();
+    await entered.promise;
+    queue.enqueue(OWNER_A, RECONCILE_REASON.PERIODIC_CHECK);
+    t.equal(drains.length, 1, 'the second enqueue scheduled a drain');
+    const idle = queue.awaitCurrentWorkIdle();
+    failing.release();
+    await retryArmed.promise;
+
+    t.equal(queue.pending.size, 0, 'the retry item absorbed the pending one');
+    t.equal(queue.inFlight.size, 0, 'and the failed reconcile has finished');
+    t.equal(queue.draining, true, 'while the scheduled drain has not run');
+    t.equal(queue.isCurrentWorkIdle(), false,
+      'a drain the queue has accepted but not run is still current work');
+    t.equal(await isPending(idle), true, 'so idle waits for it');
+    drains.shift()();
+    await idle;
+    t.equal(queue.isCurrentWorkIdle(), true,
+      'and resolves once that drain has run');
+    queue.shutdown();
+    t.end();
+  });
+
+test('Q7. shutdown clears draining and releases current-work waiters',
+  async (t) => {
+    // A shut-down queue has no current work by definition. Before this,
+    // draining stayed true until the scheduled drain ran - and for ever
+    // under a drain seam that never fires - so a caller waiting on the
+    // queue held a promise nothing could settle.
+    const drains = [];
+    const queue = new OwnerKeyReconcileQueue({
+      reconcileFn: async () => {},
+      scheduleDrainFn: (drain) => {
+        drains.push(drain);
+      },
+    });
+    queue.enqueue(OWNER_A, RECONCILE_REASON.PERIODIC_CHECK);
+    const idle = queue.awaitCurrentWorkIdle();
+    t.equal(await isPending(idle), true,
+      'work admitted and not yet drained is current work');
+    queue.shutdown();
+    t.equal(queue.draining, false, 'shutdown clears draining synchronously');
+    t.equal(await isPending(idle), false,
+      'and releases the waiter rather than leaving it unsettleable');
+    t.equal(drains.length, 1, 'the drain it scheduled was never run');
+    t.end();
+  });

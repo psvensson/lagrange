@@ -12,6 +12,9 @@ import {
 } from './shared/message-group-service-activation.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  readNodeRuntimeSuppliedTimeSource,
+} from '../node/node-runtime-local-authorities.js';
+import {
   createBootstrapServiceControlPlaneRuntimeMethods,
 } from './bootstrap-service-control-plane-runtime-methods.js';
 import {
@@ -358,7 +361,7 @@ function createBootstrapServiceRuntimeMethods() {
       return new Promise((resolve) => timeSource.setTimeout(resolve, ms));
     },
     yieldEventLoopTurn() {
-      const ownedClock = this.nodeService?.providedTimeSource || null;
+      const ownedClock = readNodeRuntimeSuppliedTimeSource(this.nodeService);
       if (ownedClock) {
         return new Promise((resolve) => ownedClock.setTimeout(resolve, 0));
       }

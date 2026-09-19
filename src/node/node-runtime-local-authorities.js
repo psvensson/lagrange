@@ -62,6 +62,25 @@ function resolveNodeRuntimeTimeSource(providedTimeSource) {
 }
 
 /**
+ * Whether this runtime was SUPPLIED a clock, answered as that clock or null.
+ *
+ * Resolving a real clock is not the same as being given one. A runtime that
+ * resolved its own may stamp on it, because a real source answers exactly as
+ * the host clock did. But only a clock that was actually GIVEN may be handed
+ * to a collaborator that would otherwise schedule for itself - a replica's
+ * consensus timers, a coalescing hop, a reconciler's per-action turn -
+ * because substituting a real TimeSource there changes which mechanism
+ * schedules, not just which clock it reads. This is the one place that
+ * question is answered; no consumer infers it from a TimeSource's type or
+ * identity.
+ * @param {Object} runtime - the NodeService.
+ * @return {Object|null} the supplied clock, or null.
+ */
+function readNodeRuntimeSuppliedTimeSource(runtime) {
+  return runtime?.providedTimeSource || null;
+}
+
+/**
  * This node's own system-table cache. It reads this node's clock, and its
  * diagnostic identity names the node rather than the instant it happened to
  * be constructed at - one cache per node, so the name is unique wherever the
@@ -99,7 +118,7 @@ function ensureNodeLocalSystemTableCache(runtime) {
   const cache = createNodeLocalSystemTableCache({
     nodeId: runtime.nodeId,
     timeSource: runtime.getTimeSource(),
-    ownsClock: Boolean(runtime.providedTimeSource),
+    ownsClock: Boolean(readNodeRuntimeSuppliedTimeSource(runtime)),
   });
   runtime._systemTableCache = cache;
   runtime._readOnlyCache = createReadOnlyCache(cache);
@@ -108,6 +127,7 @@ function ensureNodeLocalSystemTableCache(runtime) {
 
 export {
   ensureNodeLocalSystemTableCache,
+  readNodeRuntimeSuppliedTimeSource,
   resolveNodeRuntimeTimeSource,
   resolveNodeServiceClock,
   resolveNodeServiceThreadManager,

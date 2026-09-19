@@ -8,6 +8,9 @@ import {
 import {
   detachServiceInstallationReconcilerOwner,
 } from './shared/service-installation-reconciler-setup.js';
+import {
+  readNodeRuntimeSuppliedTimeSource,
+} from '../node/node-runtime-local-authorities.js';
 
 function createBootstrapServiceSeedDelegateMethods() {
   return {
@@ -229,6 +232,11 @@ function buildPhaseExecutionDelegates(service) {
             serviceType, serviceId,
           ),
     getTimeSource: () => self.nodeService.getTimeSource(),
+    // What the runtime was GIVEN, which is a different question from what
+    // it reads: only a given clock may take over a collaborator's own
+    // scheduling. The node runtime owns the answer.
+    getSuppliedTimeSource: () =>
+      readNodeRuntimeSuppliedTimeSource(self.nodeService),
     getNodeService: () => self.nodeService,
     getRandomSource: () => self.randomSource,
     queueBootstrapServiceReplica: (descriptor, options) =>

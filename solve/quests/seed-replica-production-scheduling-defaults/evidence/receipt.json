@@ -1,0 +1,47 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-replica-production-scheduling-defaults",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/production-scheduling-defaults.test.js": "382bfd1119380febb8c04bac5d8ec067dff67f1dfc953454d6daafde1f05a5d7",
+    "test/workflow/owner-key-reconcile-queue-current-work.test.js": "52648bdb9e6e3ddd884da9c955bbf6641f278c6c55be661a474aafc172fe18f1"
+  },
+  "generatedAt": "2026-09-19T06:04:44.925Z",
+  "receipts": [
+    {
+      "id": "seed-hosted-replicas-schedule-like-production",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a seed-hosted replica schedules like a production replica$\" test/bootstrap/production-scheduling-defaults.test.js",
+      "detail": "tick-tock timers and setImmediate hops on a seed-hosted replica",
+      "testFile": "test/bootstrap/production-scheduling-defaults.test.js"
+    },
+    {
+      "id": "seed-and-joiner-replicas-schedule-alike",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a seed-hosted and a joiner-hosted replica schedule alike$\" test/bootstrap/production-scheduling-defaults.test.js",
+      "detail": "one node schedules its replicas the same way however it hosts them",
+      "testFile": "test/bootstrap/production-scheduling-defaults.test.js"
+    },
+    {
+      "id": "reconciler-yields-on-setimmediate-in-production",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a production reconciler takes each per-action turn on setImmediate$\" test/bootstrap/production-scheduling-defaults.test.js",
+      "detail": "the per-action turn is a setImmediate with no clock supplied",
+      "testFile": "test/bootstrap/production-scheduling-defaults.test.js"
+    },
+    {
+      "id": "supplied-clock-still-owns-scheduling",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a supplied clock still owns hosted replica and reconciler scheduling$\" test/bootstrap/production-scheduling-defaults.test.js",
+      "detail": "a supplied clock still owns every hop, timer and turn",
+      "testFile": "test/bootstrap/production-scheduling-defaults.test.js"
+    },
+    {
+      "id": "reconcile-queue-idle-and-shutdown-witnessed",
+      "passed": true,
+      "command": "npm run test:file -- test/workflow/owner-key-reconcile-queue-current-work.test.js",
+      "detail": "the draining clause of the idle predicate, and shutdown clearing draining and releasing current-work waiters",
+      "testFile": "test/workflow/owner-key-reconcile-queue-current-work.test.js"
+    }
+  ]
+}

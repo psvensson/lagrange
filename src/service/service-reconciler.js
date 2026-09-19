@@ -9,7 +9,7 @@ import {
   SUBSYSTEM,
 } from '../constants/index.js';
 import {ServiceLifecycleManager} from './service-lifecycle-manager.js';
-import {resolveTimeSource} from '../time/time-source.js';
+import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 import {
   DEFAULT_DECISION_HISTORY_LIMIT,
@@ -33,6 +33,23 @@ import {
   resolveServiceType,
 } from './service-reconciler-contract.js';
 import {planReconcilerActions} from './service-reconciler-planner.js';
+
+/**
+ * The macrotask boundary between two actions. It belongs to the node this
+ * reconciler acts for, so a node that was SUPPLIED a clock takes the turn
+ * there; otherwise setImmediate stays, because a zero-delay timer is a
+ * different event-loop phase and swapping one for the other would change
+ * production's ordering rather than its substrate.
+ * @param {Object|null} providedTimeSource - the node's supplied clock.
+ * @return {Promise<void>}
+ */
+function yieldPerActionTurn(providedTimeSource) {
+  if (providedTimeSource) {
+    return new Promise((resolve) =>
+      providedTimeSource.setTimeout(resolve, LOCAL_NUM_ZERO));
+  }
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 /**
  * ServiceReconciler computes drift and converges state using one lifecycle owner.
@@ -107,8 +124,12 @@ class ServiceReconciler extends EventEmitter {
 
     // The reconciler's cadence and its cycle timings are one node's, so they
     // come from one clock. Unsupplied, that is the host clock exactly as
-    // every site below read it before.
-    this._timeSource = resolveTimeSource(options);
+    // every site below read it before. The per-action turn reads the second
+    // half: a clock that was actually GIVEN may take that turn, a resolved
+    // one may not - see yieldPerActionTurn below.
+    const clocks = resolveOwnedTimeSource(options);
+    this._timeSource = clocks.timeSource;
+    this._providedTimeSource = clocks.providedTimeSource;
 
     /** @type {number} */
     this._maxConcurrentServiceActions = Math.floor(maxConcurrentServiceActions);
@@ -467,12 +488,8 @@ class ServiceReconciler extends EventEmitter {
             // back-to-back, starving timers (heartbeats, the gap watchdog)
             // for the whole batch — round-10: 7-8s unexplained ELU-1.0
             // gaps wedging the lone seed out of serve eligibility. Per-
-            // queue action order is unchanged. The turn belongs to the node
-            // this reconciler acts for, so it is taken from that node's
-            // clock: a zero-delay timer is the same macrotask boundary, on
-            // the substrate that owns the node's scheduling.
-            await new Promise((resolve) =>
-              this._timeSource.setTimeout(resolve, LOCAL_NUM_ZERO));
+            // queue action order is unchanged.
+            await yieldPerActionTurn(this._providedTimeSource);
           }
         }
       })());

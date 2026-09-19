@@ -22,6 +22,9 @@ import {
 } from '../bootstrap-constants.js';
 import {NODE_CONFIG_KEY} from '../../node/node-constants.js';
 import {
+  readNodeRuntimeSuppliedTimeSource,
+} from '../../node/node-runtime-local-authorities.js';
+import {
   SERVICE_DESCRIPTOR_FIELD,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
@@ -76,8 +79,12 @@ class SeedInfrastructurePhase {
           getNodeId: () => this.delegates.getNodeId(),
           getPhase: () => this.delegates.getPhase(),
           // The node runtime is the clock authority for everything this
-          // phase starts on its behalf.
+          // phase starts on its behalf - what it stamps with, and
+          // separately whether it was GIVEN a clock, which is what decides
+          // if an owner's own scheduling may be taken over.
           getTimeSource: () => this.nodeService.getTimeSource(),
+          getSuppliedTimeSource: () =>
+            readNodeRuntimeSuppliedTimeSource(this.nodeService),
           getServiceLifecycleManager: () =>
             this.delegates.getServiceLifecycleManager(),
           setServiceLifecycleManager: (value) =>

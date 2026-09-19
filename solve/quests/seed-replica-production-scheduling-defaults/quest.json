@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-replica-production-scheduling-defaults",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The retrospective verification of formation-sim-production-replica-composition (2026-09-18, reject) found its claim of unchanged production defaults false on two production paths. (1) Since 35992c315, extended in 3f953614a and 6c8b4a841 and copied into the size-update hop by 9a39af51b, every replica the seed hosts during bootstrap is handed the node runtime's TimeSource, which is a RealTimeSource when none was supplied, so in production all seed-hosted message-group and partition replicas behave as if they owned a clock: LifeRaft runs on VirtualTick instead of tick-tock, and the commit-apply yield, the peer-reconciliation hop and the size-update hop run as setTimeout(0) instead of setImmediate, while joiner-hosted replicas do not. (2) Since 35992c315 ServiceReconciler's per-action yield is setTimeout(0) on every node where it was setImmediate. This quest restores production scheduling: a replica and the reconciler take their scheduling from a clock only when the node runtime was explicitly supplied one, and a production node, whose runtime resolved its own real clock, schedules exactly as before E - tick-tock timers and setImmediate hops, identically for seed-hosted and joiner-hosted replicas. Stamps may keep reading the node's TimeSource, whose real now() is the host clock. The simulator keeps what E built: with a supplied clock every hosted replica and the reconciler still schedule on it and the deterministic guard still reports no ambient read. It also adds the two reconcile-queue witnesses owed by formation-sim-rebalancer-current-work-completion: the draining clause of the idle predicate, and shutdown() clearing draining synchronously and releasing current-work waiters.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-replica-production-scheduling-defaults/evidence/receipt.json",
+      "requiredReceipts": [
+        "seed-hosted-replicas-schedule-like-production",
+        "seed-and-joiner-replicas-schedule-alike",
+        "reconciler-yields-on-setimmediate-in-production",
+        "supplied-clock-still-owns-scheduling",
+        "reconcile-queue-idle-and-shutdown-witnessed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner-of-the-supplied-clock-fact",
+      "statement": "Whether a node runtime was supplied a clock is answered by the node runtime (the NodeService / node-runtime-local-authorities owner) in one place; no consumer infers it from the type or identity of a TimeSource."
+    },
+    {
+      "id": "simulator-unchanged",
+      "statement": "E's simulator witnesses and the probes formation-sim-charged-seed-host, formation-sim-production-time-authority, formation-sim-attribution-isolation and formation-sim-peer-raft-authority read what they read before this change."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Every receipt's witness goes red when the repair it covers is reverted."
+    },
+    {
+      "id": "no-timing-constant-changes",
+      "statement": "No timeout, delay, interval, retry or budget value changes."
+    }
+  ],
+  "sealedAt": "3e186639dafb8711db018bf286dd8b69fc48520a"
+}

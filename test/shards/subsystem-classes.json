@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 110,
     "architecture-governance": 19,
-    "bootstrap-membership": 251,
+    "bootstrap-membership": 252,
     "cdc-metadata": 56,
     "cli-tooling": 96,
     "control-plane": 190,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2126,
-  "digest": "fnv1a32-3b40788f",
+  "censusSize": 2127,
+  "digest": "fnv1a32-5cf35990",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-be06516a",
+  "observationDigest": "fnv1a32-01f1c9e0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -239,6 +239,7 @@
     "test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js": "bootstrap-membership",
     "test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js": "bootstrap-membership",
     "test/bootstrap/pipeline/startup-pipeline-runner.test.js": "bootstrap-membership",
+    "test/bootstrap/production-scheduling-defaults.test.js": "bootstrap-membership",
     "test/bootstrap/query-state-single-owner.test.js": "bootstrap-membership",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
@@ -2529,6 +2530,13 @@
     "test/bootstrap/phase-event-ordering-characterization.test.js": {
       "files": [
         "src/bootstrap/pipeline/join-startup-plan.js"
+      ]
+    },
+    "test/bootstrap/production-scheduling-defaults.test.js": {
+      "files": [
+        "src/bootstrap/shared/hosted-replica-authorities.js",
+        "src/message-group/message-group-service.js",
+        "src/raft/liferaft-commit-scheduler.js"
       ]
     },
     "test/bootstrap/query-state-single-owner.test.js": {

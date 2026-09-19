@@ -1,13 +1,21 @@
 /**
  * The node-local authorities a replica hosted on this node inherits.
  *
- * A replica is not a free-standing thing: it reads a node's cache, stamps on a
- * node's clock, and - when that node owns one - hosts its consensus timers
- * there too, and draws its election timing from that node's randomness. Both seed phases resolve the same two authorities the same way,
- * so the rule lives in one place rather than in each phase.
+ * A replica is not a free-standing thing: it reads a node's cache, and - when
+ * that node was SUPPLIED a clock and a randomness source - hosts its
+ * consensus timers on that clock and draws its election timing from that
+ * randomness. Both seed phases resolve the same authorities the same way, so
+ * the rule lives in one place rather than in each phase.
  *
- * Both default to undefined, which is what every caller that does not host
- * several node runtimes in one process has always passed.
+ * The clock here is the one the node runtime was given, never the one it
+ * resolved for itself: a replica handed a resolved real clock would run
+ * LifeRaft on VirtualTick and take its hops as zero-delay timers, which is a
+ * different event-loop phase from the setImmediate production runs - and a
+ * different one from the replicas the same node hosts as joiner. The node
+ * runtime owns that question and answers it here.
+ *
+ * All three default to undefined, which is what every caller that does not
+ * host several node runtimes in one process has always passed.
  *
  * @module bootstrap/shared/hosted-replica-authorities
  */
@@ -18,7 +26,9 @@
  */
 function resolveHostedReplicaAuthorities(delegates) {
   return {
-    timeSource: delegates.getTimeSource ? delegates.getTimeSource() : undefined,
+    timeSource: (delegates.getSuppliedTimeSource ?
+      delegates.getSuppliedTimeSource() :
+      null) || undefined,
     nodeService: delegates.getNodeService ?
       delegates.getNodeService() :
       undefined,
