@@ -348,3 +348,109 @@ second addendum merged.
 - The second addendum's closing classification (one projection serving the
   planner and the guard) holds. Its stated cause is superseded by this
   section.
+
+## Fourth addendum (2026-09-19): the closure route, traced
+
+This was a read-only trace over the nine final-format runs, by an analyst.
+- The logs are 45 node logs, holding 1291 refusals with inputs.
+- I checked the trace against the code lines cited and by re-running the
+  scratch reproduction, kept as
+  [evidence/closure-witness-repro-2026-09-19.mjs.txt](evidence/closure-witness-repro-2026-09-19.mjs.txt).
+  - It imports production modules.
+  - Only rows are constructed.
+- Labels: MEASURED, CODE, SCRATCH, INFERRED.
+
+**The chain on the learner's node** (CODE). The decision snapshots are built
+locally from the node's own replicated rows.
+1. `membership-publication-candidate-derivation.js:658` calls
+   `buildPriorityRecoveryClosureEvidence`, which calls
+   `buildPriorityRecoveryDecisionSnapshots`. With no `replica_operations`
+   rows there is no witness at all.
+2. `buildPriorityRecoverySpreadCompletion`
+   (`priority-recovery-snapshot-ingress.js:206-217`) sets `satisfied: true`
+   when the in-flight operations with a **satisfying target** cover the
+   planner's spread gap. With gap 1, one ADD suffices.
+3. A target is satisfying when two conditions hold
+   (`ingress.js:108-124`, `priority-recovery-snapshot-rebalancer.js:386-411`):
+   - its node is in the eligible cohort;
+   - its service row is voter-visible, meaning `active` with a voter role,
+     or `syncing` with a voter role and an address.
+   A REPLACE in its remove-dispatch phase also certifies while it is not
+   stalled.
+4. `resolvePriorityRecoverySemanticState` returns
+   `spread_satisfied_in_flight`, which the contract classes as
+   closure-satisfied.
+5. With no tracked partition unresolved, `buildPriorityRecoveryClosureWitness`
+   synthesizes a satisfied summary (state `satisfied_stale_publication`). Its
+   satisfied rank wins the comparison over the derived summary that still
+   shows the gap.
+6. The guard's planner entry falls through to ready with no entry for the
+   partition, and the completion is `converged` with budget 0.
+
+**The learner's row is not what is counted** (corrects the second addendum).
+- The in-flight ADD operation is counted, through its target row's
+  visibility.
+- The partition is tracked, not dropped.
+
+**SCRATCH, minimal pair.** The rows are identical except for the ADD's
+target service row.
+
+| variant | target row | derived summary | witness | chosen source | budget |
+| --- | --- | --- | --- | --- | --- |
+| C | not voter-visible | blocked, gap 1, ready distinct nodes 2 | `closure_pending`, all `recovering_in_flight` | derived | 2 |
+| F/H | voter role and `syncing` on the third node | the same | `satisfied_stale_publication` | closure_refreshed | 0 |
+
+- C matches the recorded passing reading on every logged field.
+- F/H matches the recorded refusal reading on every logged field.
+- A third variant, an active learner-role row, makes the derived summary
+  itself satisfied. That reading does not occur in the recorded refusals.
+
+**MEASURED sequence.**
+- The "count check inputs" line is the first **passing** check, not the
+  first check. In 10 of 15 learners the refusals come first.
+- The order is:
+  1. refusals with budget 0, for about 60 s;
+  2. one tracked partition's ADD times out and goes terminal;
+  3. the witness falls back to pending;
+  4. **every** learner on that node regains budget 2 within 0.02 to 1.8 s
+     and passes.
+- This held in the three timelines traced, on all three machines.
+- The partitions are coupled through the witness: one timeout releases the
+  others.
+- The publication epoch and node readiness did not change across any flip.
+- The refusal is therefore a stall of one voter-ready timeout per wave, not
+  a permanent block. It occurs in passing runs too.
+
+**The seed asks a different question** (MEASURED and CODE).
+- The seed's retain decision reads a direct census of the partition's active
+  replicas' nodes: 2 of 3, so the gap is open.
+- The learner's node asks whether any tracked partition is unresolved, and an
+  in-flight ADD counts as resolution.
+- The learner's verdict is a projection about the operation the seed just
+  dispatched. That is why it is circular for the replica being promoted.
+
+**The boundary.** Two rules together say "an operation is in flight, so the
+cure is complete":
+- `spread_satisfied_in_flight` classed as closure
+  (`priority-recovery-snapshot-contract.js:268-271`);
+- the unconditional satisfied-rank preference
+  (`membership-publication-priority-partition-summary.js:355-357`).
+Consumed as permission, that withdraws the allowance the operation needs.
+
+**Still unobservable** (INFERRED).
+- Which live row state makes the target voter-visible: a voter role while
+  syncing, a predecessor row, or the REPLACE grace.
+- The witness state itself. The guard payload names which summary won, never
+  why.
+- The witness state, its unresolved ids, the base summary and each counted
+  operation's target visibility would settle it.
+- The planning-answer memo is not necessary (162 refusals read a fresh
+  answer). Its contribution to duration is unmeasured.
+
+**Why no existing host shows it.**
+- `closure_refreshed` needs `replica_operations` rows and an under-spread
+  service census in one planning snapshot, passed through
+  `buildPriorityRecoveryClosureEvidence`.
+- The provenance test builds its closure summary by hand.
+- The simulator's node hosts never run the ADD workflow that writes those
+  rows.

@@ -1,0 +1,82 @@
+// Read-only reproduction of the recorded flip with production owners.
+// HAND-BUILT: service rows, partition rows, replica_operations rows, readiness
+// entries, the publication row. PRODUCTION: everything downstream of them.
+const S='/mnt/data/peter/projects/lagrange/src/control-plane/';
+const {buildDerivedPriorityPartitionSummary, chooseMoreAdvancedPriorityPartitionSummary} =
+  await import(S+'membership-publication-priority-partition-summary.js');
+const {buildPriorityRecoveryClosureEvidence} = await import(S+'membership-publication-readiness-repair.js');
+const {chooseClosureRefreshedPriorityPartitionSummary, readPriorityPartitionSummarySource} =
+  await import(S+'priority-partition-summary-source.js');
+const {MEMBERSHIP_PUBLICATION_PLANNING_HELPERS: H} = await import(S+'membership-publication-planning-evidence.js');
+const {buildPriorityRecoveryPartitionAssessment} = await import(S+'priority-recovery-partition-assessment.js');
+const {buildPriorityRecoveryCompletion} = await import(S+'priority-recovery-completion.js');
+const {buildPriorityRecoveryLearnerPromotion} = await import(S+'priority-recovery-snapshot-burndown.js');
+const {hasPriorityRecoverySpreadGap} = await import(S+'priority-recovery-planning-intent.js');
+
+let LEARNER_ROLE='LEARNER', LEARNER_STATUS='active';
+const NOW = Date.parse('2026-09-19T08:10:28.458Z');
+const NODES=['n0','n1','n2','n3','n4'];
+const CRIT=['schema_operations-p1','sql_transactions-p1','sql_write_operations-p1','sql_transaction_participants-p1','replica_operations-p1','control_plane_publications-p1'];
+const svc=(p,r,node,role,status='active')=>({service_id:`${p}-${r}`,service_type:'partition',partition_id:p,node_id:node,status,raft_role:role,address:`ws://${node}:1`,updated_at:NOW-1000});
+const partitionRows=CRIT.map(p=>({partition_id:p,table_id:p.split('-')[0],replica_count:3}));
+// 4 voters on TWO nodes (n0,n1) for every critical partition; learner on n2.
+function rows({learner}) {
+  const out=[];
+  for (const p of CRIT) {
+    out.push(svc(p,'r1','n0','LEADER'),svc(p,'r2','n0','FOLLOWER'),svc(p,'r3','n1','FOLLOWER'),svc(p,'r4','n1','FOLLOWER'));
+    if (learner) out.push(svc(p,'r5','n2',LEARNER_ROLE,LEARNER_STATUS));
+  }
+  return out;
+}
+const ops=(present)=>present?CRIT.map((p,i)=>({operation_id:`op-${i}`,entity_type:'partition',entity_id:p,partition_id:p,type:'ADD',status:'syncing',workflow_step:'SYNCING',target_node_id:'n2',replica_id:`${p}-r5`,created_at:NOW-5000,updated_at:NOW-1000})):[];
+const readinessByNodeId=Object.fromEntries(NODES.map(n=>[n,{nodeId:n,phase:'TRAFFIC_READY',ready:true,reasons:[],draining:false}]));
+const pubRow={publicationEpoch:4,status:'PUBLISHED',publishedActiveNodeIds:NODES};
+
+function variant(label,{learner,opsPresent,baseSummary}) {
+  const serviceRows=rows({learner});
+  const derived=buildDerivedPriorityPartitionSummary({serviceRows,partitionRows,readinessByNodeId,
+    projectedServingNodeIds:NODES,locallyEligibleNodeIds:NODES,publishedActiveNodeIds:NODES},H);
+  const base=chooseMoreAdvancedPriorityPartitionSummary(baseSummary,derived,H);
+  const ev=buildPriorityRecoveryClosureEvidence({
+    latestPublicationRow:pubRow,latestPublishedPublicationRow:pubRow,
+    publishedActiveNodeIds:NODES,pendingAckNodeIds:[],
+    priorityPartitionSummary:base,membershipLifecycleSummary:null,
+    recoveryActiveNodeIds:NODES,recoveryActiveNodeSource:'test',
+    missingPublishedRecoveryActiveNodeIds:[],
+    readinessByNodeId,replicaOperationRows:ops(opsPresent),serviceRows,
+    priorityRecoveryPlanningSnapshot:null,nowMs:NOW},H);
+  const chosen=chooseClosureRefreshedPriorityPartitionSummary(base,ev.priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,H);
+  // the guard's own read of the chosen summary
+  const P=CRIT[1];
+  const lp=buildPriorityRecoveryLearnerPromotion({activeLearnerNodeIds:learner?['n2']:[],readinessByNodeId,recoveryActiveNodeIds:NODES});
+  const a=buildPriorityRecoveryPartitionAssessment({partitionId:P,priorityPartitionSummary:chosen,
+    admission:{effectiveEligibleNodeIds:NODES,effectiveEligibleNodeCount:5,ineligibleNodes:[]},
+    learnerPromotion:lp,operationContexts:[],nowMs:NOW});
+  const comp=buildPriorityRecoveryCompletion({assessment:a,targetReplicaCount:3,activeVoterCount:4,learnerCount:1,
+    priorityRecoveryActive: hasPriorityRecoverySpreadGap(chosen)});
+  console.log(`\n### ${label}`);
+  console.log(' derived   :',JSON.stringify({sat:derived?.satisfied,blocked:derived?.blockedPartitions?.length,gap:derived?.largestSpreadGap,rdn:derived?.blockedPartitions?.[0]?.readyDistinctNodeCount}));
+  console.log(' witness   :',JSON.stringify({state:ev.priorityRecoveryClosureWitness?.state,blockedIds:ev.priorityRecoveryClosureWitness?.blockedPartitionIds?.length,unresolved:ev.priorityRecoveryClosureWitness?.unresolvedSemanticStateIds,summarySpreadPending:ev.priorityRecoveryClosureWitness?.summarySpreadPending}));
+  console.log(' semantic  :',JSON.stringify(ev.priorityRecoveryDecisionSnapshots?.partitionIdsBySemanticState));
+  console.log(' CHOSEN    :',readPriorityPartitionSummarySource(chosen),JSON.stringify({sat:chosen?.satisfied,blocked:chosen?.blockedPartitions?.length,req:chosen?.requiredDistinctNodeCount,elig:chosen?.readyEligibleNodeCount}));
+  console.log(' guard read:',JSON.stringify({plannerReady:a.planner.ready,gap:a.planner.spreadGap,rdn:a.planner.readyDistinctNodeCount,state:comp.state,budget:comp.temporaryOverflowVoterBudget}));
+  return chosen;
+}
+globalThis.setLearner=(r,st)=>{LEARNER_ROLE=r;LEARNER_STATUS=st;};
+variant('A: learner row present, ADD ops visible, no prior published summary',{learner:true,opsPresent:true,baseSummary:null});
+variant('B: learner row present, NO operation rows visible',{learner:true,opsPresent:false,baseSummary:null});
+variant('C: no learner row, ADD ops visible',{learner:false,opsPresent:true,baseSummary:null});
+const satisfiedPrior={satisfied:true,requiredDistinctNodeCount:3,readyEligibleNodeCount:5,missingPartitionIds:[],blockedPartitions:[],blockedPartitionCount:0,largestSpreadGap:0,totalSpreadGap:0};
+variant('D: learner+ops, prior PUBLISHED summary already satisfied',{learner:true,opsPresent:true,baseSummary:satisfiedPrior});
+
+setLearner('LEARNER','active');
+variant('E: learner ACTIVE learner-role + ops',{learner:true,opsPresent:true,baseSummary:null});
+setLearner('FOLLOWER','syncing');
+variant('F: target row FOLLOWER/syncing (voter role) + ops',{learner:true,opsPresent:true,baseSummary:null});
+setLearner('FOLLOWER','active');
+variant('G: target row FOLLOWER/active + ops',{learner:true,opsPresent:true,baseSummary:null});
+
+setLearner('FOLLOWER','syncing');
+variant('H: ALL six tracked partitions have 4 voters on 2 nodes, a syncing target row on n3 and one in-flight ADD each',{learner:true,opsPresent:true,baseSummary:null});
+setLearner('LEARNER','active');
+variant('I: same, but the target row is an ACTIVE catch-up LEARNER',{learner:true,opsPresent:true,baseSummary:null});

@@ -212,11 +212,13 @@ and the paths they need are authorized above.
 - **`critical-spread-overflow-disagreement-replay`** replays the 2026-09-16
   operation sequence on the simulator's node hosts. It is test-only.
   Superseded 2026-09-19 by the owner's decision below; nothing of it landed.
-- **`critical-spread-learner-ring-characterization`** composes the production
-  summary derivation, the overflow budget and the count check on recorded
-  guard inputs. It pins both orders of the race between a learner's catch-up
-  and its own service row turning active. It is test-only and makes no
-  simulator change.
+- **`critical-spread-learner-ring-characterization`** runs the production
+  chain over rows: summary derivation, closure evidence, decision snapshots,
+  closure witness, summary choice, completion and count check. It pins the
+  two recorded readings as one minimal pair: an in-flight spread-cure ADD
+  whose target row is voter-visible (refused, budget 0) or not (granted,
+  budget 2). It is test-only and makes no simulator change. The route is in
+  the fourth addendum.
 
 Each quest gets its receipt harness under `scripts/quest-evidence/`. The
 static snapshot reproduction of 2026-09-18 is a candidate mechanism only. Its
@@ -240,10 +242,10 @@ The owner decided the following.
    - `critical-spread-overflow-disagreement-replay` needed a virtual-time
      anchoring seam and a wider SQL engine seam.
    - Its reproduction also refused promotions the live run granted.
-   - A narrow characterization replaces it: the production summary
-     derivation, the overflow budget and the count check, composed on a
-     fixture taken from the recorded guard inputs, for both orders of the
-     race.
+   - A narrow characterization replaces it: the production chain from
+     rows to the count check (summary derivation, closure evidence and
+     witness, summary choice, completion). Its outputs are held to the
+     recorded guard inputs, for the two readings of the minimal pair.
    - It makes no simulator change.
 2. **Simulator quests may not touch `src/`.**
    - A seam the simulator lacks becomes its own production quest.
