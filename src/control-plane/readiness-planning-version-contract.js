@@ -90,6 +90,20 @@ const READINESS_PLANNING_REASON = objectFreeze({
   BUILD_FAILED: 'readiness_planning_build_failed',
 });
 const TOKEN_STATUS = objectFreeze({CURRENT: 'current', STALE: 'stale'});
+
+/**
+ * Whether a readiness snapshot is the planning owner's deferred contract
+ * rather than a built record. Only `buildDeferredSnapshot` stamps this field,
+ * so it is the marker's one authority; consumers ask here instead of
+ * restating the comparison (R03).
+ *
+ * @param {Object|null} readiness - A readiness snapshot.
+ * @return {boolean} True when the snapshot is a deferred one.
+ */
+function isDeferredReadinessPlanningSnapshot(readiness = null) {
+  return readiness?.readinessPlanningTokenStatus === TOKEN_STATUS.STALE;
+}
+
 const NODE_TABLE_STABLE_TOKEN_FIELDS = objectFreeze([
   'cacheGeneration',
   'membershipOwnerGeneration',
@@ -361,6 +375,7 @@ export {
   appendArrayValue,
   buildQueueOwnerKey,
   canRebaseStoredSnapshot,
+  isDeferredReadinessPlanningSnapshot,
   isNodeTableOnlyTokenAdvance,
   isTokenCurrentExceptNodeTable,
   defaultMacrotaskScheduler,

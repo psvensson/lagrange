@@ -15,6 +15,7 @@ const {
   SERVICE_STATUS,
   TABLES,
   resolveCanonicalLeaderRoutingGapState,
+  resolveReadinessObservedAgeMs,
 } = QUERY_EXECUTOR_SHARED;
 
 const queryExecutorPartitionRoutingSnapshotMethods = {
@@ -254,6 +255,19 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
   },
 
   /**
+   * The executing node's own clock, for diagnostics only. An executor that
+   * was given no time source states no age rather than reading an ambient
+   * clock the node does not own.
+   * @return {number|null}
+   * @private
+   */
+  readRoutingDecisionNowMs() {
+    return typeof this.nowFn === QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
+      this.nowFn() :
+      null;
+  },
+
+  /**
    * Build per-node denial summaries for one routing snapshot.
    * @param {Array<Object>} evaluatedServices
    * @param {string} routingReadinessDimension
@@ -279,6 +293,11 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       const existing = deniedByNodeId[nodeId] || {
         decisionDimension: routingReadinessDimension,
         observedAt: routing.readinessSummary.observedAt || null,
+        // Whether the record this denial was made on was the planning
+        // owner's deferred contract: an inherited verdict looked exactly
+        // like a current one. Its AGE is added where the line is built, so
+        // no clock is read per denied node per snapshot.
+        deferred: routing.readinessSummary.deferred === true,
         lifecycleState: routing.readinessSummary.lifecycleState || null,
         reasonCodes: [],
         failedDimensions: [],
@@ -325,6 +344,30 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
    * @return {Object|null}
    * @private
    */
+  /**
+   * Add the age of each denied candidate's readiness record. Reached only
+   * from a line that is actually being emitted, so exactly one clock read
+   * happens per line rather than one per denied node per routing snapshot.
+   * @param {Object} deniedByNodeId
+   * @return {Object}
+   * @private
+   */
+  buildDeniedNodeSummaryWithAges(deniedByNodeId) {
+    const nowMs = this.readRoutingDecisionNowMs();
+    const aged = {};
+    for (const nodeId of Object.keys(deniedByNodeId)) {
+      const entry = deniedByNodeId[nodeId];
+      aged[nodeId] = {
+        ...entry,
+        observedAgeMs: resolveReadinessObservedAgeMs(
+          entry?.observedAt ?? null,
+          nowMs,
+        ),
+      };
+    }
+    return aged;
+  },
+
   summarizePartitionRoutingSnapshot(routingSnapshot) {
     if (
       !routingSnapshot ||
@@ -348,7 +391,9 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       ),
       leaderKnown: routingSnapshot.leaderKnown === true,
       canonicalLeaderNodeId: routingSnapshot.canonicalLeaderNodeId || null,
-      deniedByNodeId: routingSnapshot.deniedByNodeId || {},
+      deniedByNodeId: this.buildDeniedNodeSummaryWithAges(
+        routingSnapshot.deniedByNodeId || {},
+      ),
     };
   },
 

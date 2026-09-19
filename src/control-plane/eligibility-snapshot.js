@@ -29,10 +29,31 @@ const PROJECTION_READINESS_CONTRACT_RULES = Object.freeze([
   }),
 ]);
 
+const OBSERVED_AT_STRING_TYPE = 'string';
+
 function freezeObject(value) {
   return value && typeof value === 'object' ?
     Object.freeze({...value}) :
     null;
+}
+
+/**
+ * How old the readiness evidence a decision was made on is, on the clock the
+ * deciding owner supplied. `observedAt` is this module's own field, so the
+ * age of it is stated here rather than re-derived by every consumer (R03).
+ * An unparseable stamp or a caller with no clock states no age instead of
+ * guessing one.
+ *
+ * @param {string|null} observedAt - The summary's ISO observation stamp.
+ * @param {number|null} nowMs - The deciding owner's current time.
+ * @return {number|null} Age in milliseconds, or null when it cannot be told.
+ */
+function resolveReadinessObservedAgeMs(observedAt, nowMs) {
+  if (!Number.isFinite(nowMs) || typeof observedAt !== OBSERVED_AT_STRING_TYPE) {
+    return null;
+  }
+  const observedAtMs = Date.parse(observedAt);
+  return Number.isFinite(observedAtMs) ? nowMs - observedAtMs : null;
 }
 
 function normalizeReasons(reasons) {
@@ -341,4 +362,5 @@ export {
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,
+  resolveReadinessObservedAgeMs,
 };

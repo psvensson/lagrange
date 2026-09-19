@@ -73,6 +73,12 @@ const ALL_FILTERED = 'all_services_filtered_by_readiness';
 // future amplification visible instead of preserving the superseded pre-Q2
 // write-driven baseline.
 const SEALED_RIG_HEAVY_BUILDS = 585;
+// The number of serve admissions this audit OBSERVES on this drive, sealed so
+// a read path that stops reaching the decision through
+// canReuseCompletedSnapshot cannot quietly shrink the audit's coverage while
+// every assertion still passes. Measured at 646 on main, on the superseded
+// readiness-admission-freeze-observed tree and on this one.
+const SEALED_SERVE_ADMISSION_OBSERVATIONS = 646;
 const SEALED_RIG_PUBLICATION_WINNER_READS = 0;
 
 // The reconcile queue falls back to `console` when no logging service is
@@ -338,6 +344,8 @@ test('witness-deterministic', async () => {
     'two runs stamp identical completed token statuses');
   assert.equal(second.servedCount, first.servedCount,
     'two runs admit identical numbers of completed snapshots');
+  assert.equal(first.servedCount, SEALED_SERVE_ADMISSION_OBSERVATIONS,
+    'the audit observes every serve admission the read path makes');
 });
 
 // The live-lock precondition: under a token that rotates on every capture no

@@ -28,6 +28,7 @@ const {
   TABLES,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  isDeferredReadinessPlanningSnapshot,
   resolveBootstrapLeaderSelection,
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
@@ -318,6 +319,10 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
           decisionDimension:
               compactSnapshot.decisionDimension || routingReadinessDimension,
           observedAt: compactSnapshot.observedAt || null,
+          // Whether the record this verdict rests on is the planning owner's
+          // deferred contract, stated by the owner of that marker. The
+          // denial summary carries it; nothing routes on it.
+          deferred: isDeferredReadinessPlanningSnapshot(readiness),
           lifecycleState: compactSnapshot.lifecycleState || null,
           reasonCodes: compactSnapshot.reasonCodes || Object.freeze([]),
           failedDimensions: decision.failedDimensions || Object.freeze([]),

@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "readiness-admission-transitions-observed",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "In the failing formation traced in the second causal packet of 2026-09-19, a joiner's planning owner serves a deferred readiness snapshot of the seed for 173 s - every dimension false, the previous reasons inherited, the old observedAt carried over - and routing denies on it without regard to its age. Which condition keeps a new build from being admitted cannot be observed: every term of the planning owner's reuse decision and every refusal of its publish decision is silent, and the routing denial does not say how old the record it trusted is or that it was deferred. This quest makes those observable without changing them; it is the verified part of the superseded quest readiness-admission-freeze-observed, whose error-cause clause is carried separately. The planning owner logs, per owner key, build variant and participation kind, each transition between serving an admitted record and serving a deferred one and each change of the failing terms while deferred, naming the terms of the reuse decision that failed from the one evaluation that decided, the age of the record whose verdict is being inherited, and on return to an admitted record the time spent deferred; a refused publish is logged with its refusal reason under the same once-per-change rule, and the return to a published state states how many refusals were suppressed and for how long publishes were refused. The routing denial line states, for each denied candidate it already lists, the age of the readiness record the denial was made on and whether that record was deferred. No decision, schedule, retry cadence, error, log message text or existing log field changes.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/readiness-admission-transitions-observed/evidence/receipt.json",
+      "requiredReceipts": [
+        "deferral-transition-names-the-failing-terms",
+        "steady-state-logs-nothing",
+        "refused-publish-names-its-reason",
+        "routing-denial-states-record-age-and-deferral",
+        "decisions-unchanged"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "decision-neutral",
+      "statement": "For every input, the planning owner serves the same record object sequence, makes the same reuse and publish decisions and the same memo hits, misses and stores as main's, and routing admits and denies the same candidates with the same reasons; a differential against main's owners is the witness."
+    },
+    {
+      "id": "one-evaluation",
+      "statement": "The logged terms are the values the decision used. No token, planning identity, source observation or live-evidence read happens more often per decision than on main."
+    },
+    {
+      "id": "transition-bounded",
+      "statement": "A steady state logs nothing. Log volume is bounded by the number of state changes per owner key, not by the number of reads; a line emitted after suppressed repeats states how many were suppressed."
+    },
+    {
+      "id": "diagnostics-never-decide",
+      "statement": "No field added for diagnosis enters a memo key, identity, generation, token, equality or comparison that decides reuse or behaviour, and the deferred snapshot's content and object identity are unchanged."
+    },
+    {
+      "id": "owner-clock",
+      "statement": "Ages and durations are computed from the owner's supplied time source, never from an ambient clock."
+    },
+    {
+      "id": "bounded-payload",
+      "statement": "Every logged list is capped and says how many entries it withheld."
+    }
+  ],
+  "sealedAt": "9be40a517ecdf78acc9b2ab9f2106d6938f0529d"
+}

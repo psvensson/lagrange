@@ -36,6 +36,13 @@ import {installReadinessPlanningCompletionAdmissionMethods} from './readiness-pl
 import {
   runReadinessActivity,
 } from '../diagnostics/formation-owner-attribution.js';
+import {
+  READINESS_ADMISSION_TERM_BIT,
+  beginReadinessAdmissionRead,
+  forgetReadinessAdmissionOwner,
+  forgetReadinessAdmissionVariant,
+  readReadinessAdmissionEvaluatedTerms,
+} from './readiness-admission-transition-record.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -62,6 +69,7 @@ const stringConstructor = String;
 const READINESS_PLANNING_QUEUE_NAME = 'readiness-planning-snapshot-owner';
 const READINESS_PLANNING_MAX_RETRY_ATTEMPTS = 3;
 const READINESS_PLANNING_MAX_OPTION_VARIANTS_PER_OWNER = 16;
+const NO_ADMISSION_TERMS = 0;
 
 function initializeBuildVariantState(owner) {
   owner.completedSnapshotsByOwnerAndBuildKey = new MapConstructor();
@@ -267,6 +275,9 @@ class ReadinessPlanningSnapshotOwner {
       });
       if (oldestKey === null) break;
       mapDelete(variants, oldestKey);
+      // The transition record has no eviction policy of its own: it forgets
+      // a variant exactly when the owner forgets it.
+      forgetReadinessAdmissionVariant(this, ownerKey, oldestKey);
       const completedVariants = mapGet(
         this.completedSnapshotsByOwnerAndBuildKey,
         ownerKey,
@@ -502,28 +513,54 @@ class ReadinessPlanningSnapshotOwner {
   }
 
   readSync(ownerKey, options, buildSnapshot) {
-    const currentSource = this.captureCurrentPlanningSource(ownerKey);
+    // The one clock read this read already made, handed to the transition
+    // record rather than read again: the diagnostic adds no clock read of its
+    // own, under any clock.
+    const observedAtMs = this.now();
+    const currentSource = this.captureCurrentPlanningSource(
+      ownerKey,
+      observedAtMs,
+    );
     const currentToken = currentSource.token;
     const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
     const currentQueueOwnerKey = buildQueueOwnerKey(ownerKey, buildOptionsKey);
     this.rememberBuildOptions(ownerKey, buildOptionsKey, options);
     const completed = this.readCompleted(ownerKey, buildOptionsKey);
+    // One owner key is read as several build variants, each with its own
+    // served state; the record this read reports against is that variant's.
+    const admission = beginReadinessAdmissionRead(
+      this,
+      ownerKey,
+      buildOptionsKey,
+      options?.participationKind,
+    );
     if (!this.hasUnclassifiedSourceChange(currentSource.observation)) {
       this.wakeBarrierBlockedVariants(currentQueueOwnerKey);
     }
     this.flushLazyGlobalImpact(currentQueueOwnerKey);
-    if (currentToken.transportTopologyValid === false ||
-        this.hasUnclassifiedSourceChange(currentSource.observation)) {
-      return this.serveBarrierBlockedRead({
-        ownerKey, completed, currentToken, buildOptionsKey, options,
-        buildSnapshot, currentSource,
-      });
+    // The barrier decides on the same two values in the same order, and the
+    // unclassified-source read still happens only when transport is valid.
+    // The term the barrier stopped on is the term it decided on.
+    const barrierTerms = currentToken.transportTopologyValid === false ?
+      READINESS_ADMISSION_TERM_BIT.transport_topology_invalid :
+      (this.hasUnclassifiedSourceChange(currentSource.observation) ?
+        READINESS_ADMISSION_TERM_BIT.source_change_unclassified :
+        NO_ADMISSION_TERMS);
+    if (barrierTerms !== NO_ADMISSION_TERMS) {
+      return this.noteAdmissionRead(admission, observedAtMs, barrierTerms, completed,
+        this.serveBarrierBlockedRead({
+          ownerKey, completed, currentToken, buildOptionsKey, options,
+          buildSnapshot, currentSource,
+        }));
     }
     if (!completed) {
+      const absentTerms =
+        READINESS_ADMISSION_TERM_BIT.completed_record_absent;
       if (this.canConsumeInitialBootstrap(ownerKey)) {
-        return this.serveInitialBootstrap(
-          ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
-          currentSource);
+        return this.noteAdmissionRead(admission, observedAtMs, absentTerms, completed,
+          this.serveInitialBootstrap(
+            ownerKey, buildSnapshot, currentToken, buildOptionsKey, options,
+            currentSource));
       }
       this.enqueueBuild(
         ownerKey,
@@ -531,21 +568,29 @@ class ReadinessPlanningSnapshotOwner {
         options,
         currentToken,
       );
-      return this.buildMemoizedDeferredSnapshot(null, currentToken, ownerKey);
+      return this.noteAdmissionRead(admission, observedAtMs, absentTerms, completed,
+        this.buildMemoizedDeferredSnapshot(null, currentToken, ownerKey));
     }
-    if (this.canReuseCompletedSnapshot(
+    // The audit in readiness-planning-deferral-bounded observes every serve
+    // admission by spying on this method, so the read path must reach the
+    // decision through it. It deposits the terms it failed on the variant's
+    // record, which the next statement reads back.
+    const reusable = this.canReuseCompletedSnapshot(
       ownerKey,
       completed,
       currentToken,
       buildOptionsKey,
-    )) {
+    );
+    const reuseTerms = readReadinessAdmissionEvaluatedTerms(admission);
+    if (reusable) {
       // A current but ineligible completed snapshot may be a lagged-row
       // projection (planning builds project the visible row by contract);
       // a routed read bridges it through the fresher stored evidence.
-      return (this.isCompletedSnapshotEligibleFor(completed, options) ? null :
-        this.bridgeRoutedReadSnapshot(ownerKey, completed, currentToken,
-          buildOptionsKey, currentSource.observation, options)) ||
-        completed.snapshot;
+      return this.noteAdmissionRead(admission, observedAtMs, reuseTerms, completed,
+        (this.isCompletedSnapshotEligibleFor(completed, options) ? null :
+          this.bridgeRoutedReadSnapshot(ownerKey, completed, currentToken,
+            buildOptionsKey, currentSource.observation, options)) ||
+          completed.snapshot);
     }
     this.enqueueBuild(
       ownerKey,
@@ -556,14 +601,15 @@ class ReadinessPlanningSnapshotOwner {
     // The same routed-read bridge for a classified node-table-only advance
     // that rotated the planning identity: the replacement build is queued,
     // and the read is served from evidence the change does not refute.
-    return this.bridgeRoutedReadSnapshot(
-      ownerKey, completed, currentToken, buildOptionsKey,
-      currentSource.observation, options) ||
-      this.buildMemoizedDeferredSnapshot(
-        completed.snapshot,
-        currentToken,
-        ownerKey,
-      );
+    return this.noteAdmissionRead(admission, observedAtMs, reuseTerms, completed,
+      this.bridgeRoutedReadSnapshot(
+        ownerKey, completed, currentToken, buildOptionsKey,
+        currentSource.observation, options) ||
+        this.buildMemoizedDeferredSnapshot(
+          completed.snapshot,
+          currentToken,
+          ownerKey,
+        ));
   }
 
   // A read while a source change is unclassified (or transport topology is
@@ -731,6 +777,7 @@ class ReadinessPlanningSnapshotOwner {
     }
     setClear(this.prioritizedFormationOwnerKeys);
     this.diagnosticRetention.clear();
+    forgetReadinessAdmissionOwner(this);
   }
 }
 

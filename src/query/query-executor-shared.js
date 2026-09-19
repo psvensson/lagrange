@@ -53,7 +53,10 @@ import {
 import {
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  resolveReadinessObservedAgeMs,
 } from '../control-plane/eligibility-snapshot.js';
+import {isDeferredReadinessPlanningSnapshot} from
+  '../control-plane/readiness-planning-version-contract.js';
 import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
 import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
@@ -326,6 +329,7 @@ export const QUERY_EXECUTOR_SHARED = {
   buildPartitionServiceWitnessFingerprint,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  isDeferredReadinessPlanningSnapshot,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   normalizeParticipantFailureString,
@@ -335,4 +339,5 @@ export const QUERY_EXECUTOR_SHARED = {
   resolveCanonicalPartitionLeaderObservation,
   resolveBootstrapLeaderSelection,
   resolveParticipantBackpressureState,
+  resolveReadinessObservedAgeMs,
 };
