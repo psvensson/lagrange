@@ -71,6 +71,8 @@ authorizes:
   - scripts/quest-evidence/seed-replica-production-scheduling-defaults.js
   - scripts/quest-evidence/learner-promotion-guard-inputs-observed.js
   - scripts/quest-evidence/critical-spread-overflow-disagreement-replay.js
+  - scripts/quest-evidence/critical-spread-learner-ring-characterization.js
+  - scripts/quest-evidence/readiness-admission-freeze-observed.js
 ---
 
 # Formation without seed starvation
@@ -206,12 +208,63 @@ and the paths they need are authorized above.
   Paths: `src/partition`, `test/partition`, `test/control-plane`.
 - **`critical-spread-overflow-disagreement-replay`** replays the 2026-09-16
   operation sequence on the simulator's node hosts. It is test-only.
+  Superseded 2026-09-19 by the owner's decision below; nothing of it landed.
+- **`critical-spread-learner-ring-characterization`** composes the production
+  summary derivation, the overflow budget and the count check on recorded
+  guard inputs. It pins both orders of the race between a learner's catch-up
+  and its own service row turning active. It is test-only and makes no
+  simulator change.
 
 Each quest gets its receipt harness under `scripts/quest-evidence/`. The
 static snapshot reproduction of 2026-09-18 is a candidate mechanism only. Its
 trigger (a joiner status the live logs do not show) is not the demonstrated
 live input, and the view the live logs do show grants the promotion in the
 same harness.
+
+## Owner decisions (2026-09-19)
+
+Context:
+- The measured guard inputs and the second causal packet are recorded under
+  `formation-seed-decoupling/`.
+- A verifying agent cautioned that the proof apparatus is becoming a
+  subsystem able to introduce errors.
+- Quest `formation-sim-production-replica-composition` changed production
+  defaults across 84 `src` files while claiming it had not.
+
+The owner decided the following.
+
+1. **The broad sequence replay is superseded.**
+   - `critical-spread-overflow-disagreement-replay` needed a virtual-time
+     anchoring seam and a wider SQL engine seam.
+   - Its reproduction also refused promotions the live run granted.
+   - A narrow characterization replaces it: the production summary
+     derivation, the overflow budget and the count check, composed on a
+     fixture taken from the recorded guard inputs, for both orders of the
+     race.
+   - It makes no simulator change.
+2. **Simulator quests may not touch `src/`.**
+   - A seam the simulator lacks becomes its own production quest.
+   - That quest gets its own independent verifier and a probe that
+     production defaults are unchanged. The pin is
+     `test/bootstrap/production-scheduling-defaults.test.js`.
+   - Simulator work is justified only by a named live interaction the
+     simulator lacks, one seam per quest. It narrows; it does not broaden.
+3. **The planner keeps counting an active catch-up learner as planned
+   coverage.**
+   - The promotion guard stops reading the priority summary once the
+     operation carries the authorization (the ownership decision of
+     2026-09-18).
+   - The projection keeps one consumer and the ring closes.
+4. **For the second mechanism, observability comes first.**
+   - The six additions listed in the packet land first, with no behaviour
+     change.
+   - The step that stops readiness builds being admitted is unobservable
+     today.
+   - The three owners named there are decided after the next failing run
+     shows which silent condition holds.
+
+The second concurrent add-first move on user-table partitions stays a
+separate planner-dispatch question.
 
 ## Binding constraints
 
@@ -391,3 +444,5 @@ those paths are authorized above.
 - Every cited artifact is immutable. No mechanism claim rests on a
   statistical run.
 - Independent verification before landing any `src/` change.
+- A simulator quest never changes `src/` (owner decision 2026-09-19). A seam
+  it needs is a production quest of its own.
