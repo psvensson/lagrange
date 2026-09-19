@@ -291,6 +291,66 @@ stay open and are not touched.
 The second concurrent add-first move on user-table partitions stays a
 separate planner-dispatch question.
 
+## Simulator frozen (2026-09-19)
+
+The owner decided to freeze the simulator as a bounded instrument and not to
+finish it. This section amends the gates below; their original wording stays
+where it was, marked.
+
+**Why.**
+- The simulator was built to reproduce a seed-starvation signature. The
+  amendment of 2026-09-18 shows that signature is neither necessary nor
+  sufficient for the failure.
+- The two measured mechanisms are a logic ring and a routing and lease
+  freeze. Neither is a cost-model effect.
+- The node hosts never run the ADD workflow. Bootstrap, apply, transport and
+  admin owners never run in it either, so neither mechanism can occur in
+  the simulator.
+- Closing that gap is broad realism work. The owner declined it, because a
+  simulator quest has already changed production defaults once
+  (`formation-sim-production-replica-composition`, repaired by
+  `seed-replica-production-scheduling-defaults`).
+
+**What stays on main and stays tested.**
+- The deterministic substrate with byte-identical reports and the strict
+  ambient-seam guard.
+- The production time-authority closure and the mixed-clock repairs.
+- Runner isolation.
+- The charged seed host and the calibration lineage
+  `formation-seed-2026-09-17`.
+- The contract-derived harness model.
+- The pin on production scheduling defaults
+  (`test/bootstrap/production-scheduling-defaults.test.js`).
+
+**What changes.**
+- `formation-sim-calibrated` is superseded with a closing account.
+- `formation-sim-production-replica-composition` closes after one bounded,
+  file-by-file audit of its production delta. Anything the audit finds
+  changed in production gets a pin or a repair quest of its own.
+- `scripts/checks/formation-sim-reproduces.js` stays as the historical probe
+  of closed quests.
+  - It reads 3 unmet by design.
+  - It is **not** a gate for anything that follows.
+  - It is not converted into a regression guard.
+- `scripts/checks/formation-budget.js` was never written. The numeric
+  budgets under "Binding constraints" have no checker and are not gates
+  until one exists.
+  - They remain the owner's stated targets.
+  - The nightly verdict (`scripts/checks/formation-health.js`) is the only
+    implemented judgment.
+- The repair quests are proven as follows:
+  - owner-level red tests;
+  - narrow characterizations on production owners held to recorded live
+    inputs;
+  - interleaved lab formations (five local processes, about four minutes
+    each, compared per machine).
+  The simulator is not used for this.
+- A failed certification run is retained and ingested as **recorded
+  evidence**, meaning logs, the guard-input and admission records, and a
+  fixture where one is needed. It is not ingested as a simulator scenario.
+  The rule that no further live certification run happens until the failure
+  is explained and the explanation has a test stays.
+
 ## Binding constraints
 
 - **No caching or memoising of readiness as the mechanism.** The sealed
@@ -298,7 +358,9 @@ separate planner-dispatch question.
   mechanism is a cache is rejected.
 - **GCP is never the iteration loop.** One authorized calibration run, then
   nothing live until certification.
-- **Budgets** in `scripts/checks/formation-budget.js`, read from the same
+- **Budgets** (amended 2026-09-19: the checker was never written and the
+  simulator is frozen, so these are stated targets, not gates - see
+  "Simulator frozen") in `scripts/checks/formation-budget.js`, read from the same
   report schema the live harness writes and the simulator must emit: seed
   event-loop gap total < 10 % of the formation window and max gap < 500 ms;
   all five nodes lease-complete within 45 s of the fifth join;
@@ -403,12 +465,26 @@ no budget improvement in the simulator, the next entry is an altitude-check.
 Probe: script `formation-budget.js` against the simulator scenario — 0 when
 every budget holds and `formation-sim-reproduces.js` has been converted into a
 regression guard that injects the removed condition and still reproduces.
+*Amended 2026-09-19 ("Simulator frozen"):*
+- this probe and the simulator scenario are no longer the gate;
+- the three mechanisms listed here came from the falsified starvation
+  ranking;
+- the repairs now follow the causal packets, under the successor quests
+  named in the amendment of 2026-09-18 and the owner decisions of
+  2026-09-19.
 
 **five-node-cold-formation-certification** — three fresh-container runs,
 `gate:preflight` with the exact question. A failed run is ingested into the
 simulator as a scenario and the work returns to `seed-formation-decoupling`;
 no further live run until the simulator passes the new scenario. Probe: the
 epic's scenario-harness streak.
+*Amended 2026-09-19 ("Simulator frozen"):*
+- a failed run is retained and ingested as recorded evidence, not as a
+  simulator scenario;
+- no further live certification run happens until the failure is explained
+  and the explanation has a test;
+- three consecutive live PASS runs with the trend persisted remain the
+  certification.
 
 ## Relation to other epics
 
