@@ -82,6 +82,8 @@ authorizes:
   - scripts/check-guideline-deferred-outcomes.js
   - scripts/check-complexity.js
   - scripts/quest-evidence/critical-spread-overflow-budget-audit.js
+  - scripts/quest-evidence/readiness-admission-transitions-observed.js
+  - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
 ---
 
