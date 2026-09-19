@@ -653,3 +653,128 @@ ca8e7fa67).
 
 These are inputs to `critical-spread-overflow-budget-audit`: two witnessed
 budget-dependent classes that the spread-cure authorization does not cover.
+
+## Eighth addendum (2026-09-19): the double count's consumers - it is decision input, and it is persisted
+
+**Method.** An analyst did a read-only trace, answering the owner's
+question before any repair quest is authored. The method was an identifier
+census over `src`, `test`, `examples` and `scripts`, with every reader
+classified.
+
+**Bounds.**
+- The internals of six diagnostic emitters were not opened.
+- 66 of the 68 test files that touch these identifiers were not opened.
+- Log evidence comes from one run (adam-laptop, witness-route series,
+  run 1).
+
+**What I checked.** The two facts marked MEASURED below, and a re-run of
+the scratch pair.
+
+**Correction to the sixth addendum.** The double-counted operation is not
+"still in flight".
+- MEASURED:
+  - Operation 49f173b0 (schema_operations-p1, target = the second holder
+    node) was created at 09:48:19.062.
+  - It logged `Operation completed` on the seed at 09:48:26.571.
+  - The learner's node counted it as the satisfying operation from
+    09:49:04.816 to 09:50:04.117, which is 38 to 98 s after it completed.
+- CODE and SCRATCH:
+  - A completed placement operation is **deliberately retained** as
+    spread-relevant (`buildPriorityRecoverySpreadRelevantOperationContexts`,
+    `isPriorityRecoveryCompletedPlacementOperationContext`).
+  - The assessment passes that retained list, not the active list, to the
+    spread completion.
+  - A completed ADD and a syncing ADD give byte-identical output:
+    - `satisfied: true`;
+    - `operational_target_visible_on_eligible_node`;
+    - `spread_satisfied_in_flight`.
+  - Nothing about the operation's progress ends the window. It ends when
+    the operation leaves the spread-relevant set, by supersession through a
+    newer terminal operation of the partition, or by a row refresh.
+- That matches the measured release when a tracked ADD goes terminal at
+  its 60 s voter-ready timeout. Which of the two exits occurs is
+  unobserved.
+- The analyst also proposed that the learner's row is stale because the
+  second mechanism's readiness filter denies its ledger reads. I do **not**
+  adopt that.
+  - Only one of the six failed operation reads on that node falls inside
+    the window.
+  - Staleness is not needed to explain the double count.
+
+**The rule's gap, stated narrowly.** A satisfying operation must add a
+holder node that the gap's own census has not already counted.
+- The rule dedupes targets within the operation set. It never dedupes
+  against the census.
+- The needed input does not reach it. The derived summary builds the holder
+  node set and discards it. The planner entry carries only a count.
+- The REPLACE remove-dispatch grace targets a node that is deliberately not
+  yet counted, so it survives the narrow rule.
+
+**Consumers of the inflated "satisfied" (CODE).** It is not
+presentation-only.
+
+*Decision inputs:*
+1. The follow-up planner. `unresolvedSemanticState` goes false, so the
+   scheduled follow-up rebalance for the partition is **withheld**. Creation
+   of a recovery operation is unaffected.
+2. The serial-wait release fires
+   (`hasPriorityRecoveryReleasedSerialWaitCompletion`).
+3. The ADD drain declares source evidence not required.
+4. The concurrent-ADD budget and the priority-readiness blocking set ignore
+   the operation. This is permissive: more ADDs are allowed, none withheld.
+5. The publication-recovery gate drops `PRIORITY_PARTITIONS_NOT_SPREAD`.
+   That sets off a chain:
+   - startup authority goes READY;
+   - `priorityControlPlaneRecovery.active` goes false;
+   - the `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` readiness reason is
+     **removed**;
+   - the publication owner's freshness fence and outcome go READY;
+   - the recovery protocol state leaves `priority_spread_pending`.
+6. Drain-completion acceptance in the operation workflow's
+   recovery-reconcile paths.
+
+*Persisted and replicated:*
+- `priorityPartitionSummaryChanged` is computed against the chosen summary.
+  It triggers a publication metadata refresh that writes
+  `control_plane_publications.priority_partition_summary` with
+  `satisfied: true`.
+- On receiving nodes it feeds three readers:
+  - the available-node membership constraint
+    (`unified-rebalancer-available-nodes.js`);
+  - the joiner's control-plane recovery health;
+  - the demo's formation gate (`prioritySpread.ready`).
+
+*Inert:* `publicationRefreshRequired` has no consumer outside its two
+producer files.
+
+*Presentation only:* the admin snapshot, the topology-convergence
+constants, and the residual and liveness scripts.
+
+**What it does not do.**
+- It does not stop the cure on the seed. The seed's planner uses its own
+  census, and every seed-side budget path it touches is permissive.
+- It cannot explain the second mechanism's open question, a seed that
+  stays `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`. The one readiness chain
+  it reaches is cleared, not held.
+- MEASURED corroboration:
+  - 14 consecutive seed convergence-trace lines across the refusal window
+    read `prioritySpreadPending: false`.
+  - 11 read true outside the window.
+  - `false` is also the no-evidence default, so this is corroboration, not
+    proof.
+
+**Tests that pin today's rule.** A repair would turn these red:
+- `priority-recovery-spread-stall-unmask.test.js` (distinct targets suffice,
+  with no notion of census holders);
+- the terminal-placement spread-closure cases (a completed placement still
+  certifies closure);
+- four serial-wait spread-satisfied files;
+- `priority-recovery-spread-satisfied-stall-reentry-test-cases.js`.
+- The REPLACE grace tests in the first file must stay green.
+
+**Unobservable.**
+- Whether the seed's own derivation took the closure summary.
+- Whether the inflated summary reached a persisted publication row in a
+  measured run.
+- Which exit ends the window.
+- The counted operation's status as the learner saw it.
