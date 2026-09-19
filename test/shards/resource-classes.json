@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2119,
+    "ordinary": 2121,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2136,
-  "digest": "fnv1a32-85bd1553",
+  "censusSize": 2138,
+  "digest": "fnv1a32-0a1eac74",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -581,6 +581,7 @@
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "ordinary",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "ordinary",
     "test/control-plane/read-model-contract.test.js": "ordinary",
+    "test/control-plane/readiness-admission-transitions-observed.test.js": "ordinary",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "ordinary",
     "test/control-plane/readiness-owner-authority-contract.test.js": "ordinary",
     "test/control-plane/readiness-per-change-reuse.test.js": "ordinary",
@@ -1307,6 +1308,7 @@
     "test/query/query-executor-system-table-leader-fail-open.test.js": "ordinary",
     "test/query/query-executor-warn-throttle.test.js": "ordinary",
     "test/query/query-executor.test.js": "ordinary",
+    "test/query/readiness-routing-denial-observability.test.js": "ordinary",
     "test/query/reduce-by-key.test.js": "ordinary",
     "test/query/reduce-continuation.test.js": "ordinary",
     "test/query/result-stream.test.js": "ordinary",
