@@ -81,6 +81,7 @@ authorizes:
   - scripts/quest-evidence/critical-spread-transition-authority.js
   - scripts/check-guideline-deferred-outcomes.js
   - scripts/check-complexity.js
+  - scripts/quest-evidence/critical-spread-overflow-budget-audit.js
   - test/rebalancer
 ---
 
@@ -349,6 +350,107 @@ It lands as two quests:
   does. Its observability quests continue in parallel:
   `readiness-admission-freeze-observed` and
   `lease-liveness-watermark-observed`.
+
+## Owner direction before enforcement (2026-09-19, evening)
+
+**The order is binding:** carry verification -> land the carry stage if
+green -> `critical-spread-overflow-budget-audit` -> resolve the seven
+partitions, the unhealthy-source REPLACE and the epoch ownership -> the
+enforce stage -> certification.
+
+**The carry stage.**
+- It is verified exactly as staged and is not broadened while verification
+  runs.
+- It lands only if the verifier confirms four things:
+  - decision neutrality;
+  - byte-identical behaviour for rows without an authorization;
+  - minting from the partition row's declared replication authority;
+  - no hidden new decision owner.
+- If any of these fails, it goes back to its implementer. Nothing
+  compensates elsewhere.
+
+**Clean carry-stage lab runs do not start the enforce stage.**
+- Enforcement begins only when every admission that depends on the old
+  overflow budget today meets one of two conditions:
+  - it is backed by an explicit authorization owner;
+  - it is independently proved unnecessary.
+- "Not observed in these formations" is evidence, never a semantic
+  invariant. A branch with no witness stays **unproven**.
+
+**`critical-spread-overflow-budget-audit`** is a read-only evidence quest
+placed in front of enforcement. Its question is: for every path the guard's
+bootstrap overflow budget can admit today, what semantic condition makes
+that admission legitimate, and which authority owns that condition? It is
+not answered from lab frequency alone.
+
+Its output is a decision matrix, not a repair. There is one row per
+admission class, with these columns: current predicate -> current budget
+dependence -> minting owner -> canonical authority -> reachable witness ->
+intended post-enforcement rule.
+
+It covers at least three classes.
+
+1. **The seven partitions** the guard treats as bootstrap-critical and the
+   cure policy cannot authorize: ledger, services, nodes, partitions,
+   message_groups, tables and config.
+   - For each, establish whether an over-target promotion is reachable and
+     legitimate. The methods are:
+     - code-path tracing;
+     - an exhaustive or synthetic state grid where practical;
+     - production-shaped replay;
+     - the existing formation evidence.
+   - The mint is **not** widened to reproduce the old allowlist.
+   - A legitimate transition gets its authorization from the owner of the
+     semantic condition that makes it legitimate.
+   - An unreachable or obsolete path is proved so independently before its
+     admission is deleted.
+   - Partitions with genuinely different semantics are modelled explicitly.
+2. **Unhealthy-source REPLACE.** The question is whether an over-target
+   REPLACE is an intentional safety mechanism, or one that merely survives
+   on the old budget.
+   - If it is intentional, it gets its own bounded authorization, minted by
+     the owner of the replacement workflow.
+   - It never gets a spread-cure authorization reused because the
+     arithmetic happens to match.
+3. **Epoch disagreement** is an enforcement blocker.
+   - The planner reads the active publication's epoch. The partition reads
+     the highest published epoch.
+   - This is resolved at the authority boundary, not with tolerance in the
+     guard. There are two acceptable shapes:
+     - one canonical publication and epoch interpretation for both minting
+       and validation;
+     - an authorization that names a stable publication object which both
+       sides resolve through the same owner.
+   - A permanent false-refusal mode is not acceptable after enforcement.
+
+**The two observability quests stay separate from the authority work and
+land independently once their own verification is green.**
+- `readiness-admission-freeze-observed` must carry the actual freeze or
+  refusal cause through the four places where it is dropped today.
+  "Partition service not found" is not sufficient where readiness admission
+  is the responsible owner.
+- `lease-liveness-watermark-observed` has its four previous failures
+  re-proved by the independent verifier:
+  - a logger failure cannot affect the decision;
+  - durations stay truthful after partial sweeps;
+  - overlapping snapshots cannot invent transitions;
+  - the production API and logging wiring is exercised and not bypassable.
+- The lease quest is observability only and acquires no authority over
+  readiness or repair decisions.
+
+**Lab evidence.** The four-core machine added on 2026-09-19 is a deliberate
+slow-machine, adversarial sample. It is never pooled into A/B conclusions,
+and its failures are stress evidence, not evidence for or against a staged
+repair.
+
+**Also decided.**
+- The spread-completion double count gets a read-only trace of **all**
+  consumers before any repair quest is authored. The trace asks whether the
+  count is duplicated presentation and accounting only, or whether anyone
+  consumes the inflated value as a decision input.
+- Simulator commit `22420f874` is audited file by file and the seven
+  proposed pins are added. This happens after the carry verification, or in
+  parallel only where it cannot interfere with the current lab evidence.
 
 ## Simulator frozen (2026-09-19)
 
