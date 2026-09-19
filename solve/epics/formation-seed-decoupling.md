@@ -483,6 +483,17 @@ where it was, marked.
 - The pin on production scheduling defaults
   (`test/bootstrap/production-scheduling-defaults.test.js`).
 
+**The production footprint.** It was audited on 2026-09-19 in
+[simulator-production-footprint-audit-2026-09-19.md](formation-seed-decoupling/simulator-production-footprint-audit-2026-09-19.md).
+- E's 84 files are classified, with six listed exceptions.
+- Outside E, 67 files are classified.
+  - The largest commit of the lineage (5da0d7348, 35 src files) deliberately
+    changed production planning and remove-safety behaviour. It also
+    swallows Raft rejections. It has no independent verification on record.
+  - Three commits are still unopened.
+- Closing the freeze needs those read, that delta verified retrospectively,
+  and the pins.
+
 **What changes.**
 - `formation-sim-calibrated` is superseded with a closing account.
 - `formation-sim-production-replica-composition` closes after one bounded,
