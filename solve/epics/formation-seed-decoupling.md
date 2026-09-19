@@ -68,11 +68,14 @@ authorizes:
   - test/message-group
   - test/workflow
   - test/control-plane
+  - test/query
+  - test/admin
   - scripts/quest-evidence/seed-replica-production-scheduling-defaults.js
   - scripts/quest-evidence/learner-promotion-guard-inputs-observed.js
   - scripts/quest-evidence/critical-spread-overflow-disagreement-replay.js
   - scripts/quest-evidence/critical-spread-learner-ring-characterization.js
   - scripts/quest-evidence/readiness-admission-freeze-observed.js
+  - scripts/quest-evidence/lease-liveness-watermark-observed.js
 ---
 
 # Formation without seed starvation
@@ -262,6 +265,16 @@ The owner decided the following.
      today.
    - The three owners named there are decided after the next failing run
      shows which silent condition holds.
+
+Scope widening for decision 4 (R16): `test/query` and `test/admin`, and the
+receipt harness of `lease-liveness-watermark-observed`.
+- The observability is split by owner into two quests:
+  - `readiness-admission-freeze-observed`: the planning owner's reuse and
+    publish decisions, the routing denial's record age, and the
+    filtered-by-readiness cause.
+  - `lease-liveness-watermark-observed`: the control snapshot's stale
+    watermark, the lease sweeper's skip, and the observer's witness.
+- Both are log-only.
 
 The second concurrent add-first move on user-table partitions stays a
 separate planner-dispatch question.
