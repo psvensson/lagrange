@@ -321,6 +321,12 @@ It lands as two quests:
     add-like operation on a critical partition to promotion while over
     target.
 
+**`closure-witness-route-observed` is superseded without landing.**
+- The lab formations on its staged tree answered its question (sixth
+  addendum).
+- Its verifier rejected round 1 on a field outside that answer.
+- The enforce quest deletes the payload block it adds.
+
 **The separate characterization quest is folded in.**
 - The separate quest `critical-spread-learner-ring-characterization` is not
   started.

@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "closure-witness-route-observed",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "Every promotion refusal measured on 2026-09-19 at four voters on two nodes reads a closure-refreshed priority summary that says satisfied, and the guard-input payload names which summary won but never why: the closure evidence owner can take a retained witness from the priority-recovery planning snapshot outright, build one from the node's own replica-operation and service rows through the decision snapshots, or produce none, and neither the route nor the reason the witness read satisfied is observable. The recorded refusal cannot be explained through the built route by one consistent services snapshot - a target row that made the in-flight ADD satisfying would appear in the same refusal's voter census, and it does not - so the route is the first live input a reproduction lacks. This quest makes it observable without changing it. The count-check payload, on every refusal and on the first passing check, states from the one evaluation that decided: the closure evidence route (retained, built or none); the witness state, whether the summary's spread was still pending, and the witness's unresolved semantic state ids and blocked partition ids; for this partition, where the decision snapshots exist, its semantic state, its spread-completion reason code and each satisfying operation's id, target node and target visibility state; and the base summary the closure choice was made against - its satisfied flag, its source and whether this partition was blocked in it. Where a value does not exist on the route taken, the payload says so rather than omitting it. No decision, schedule, retry cadence, log message text or existing log field changes.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/closure-witness-route-observed/evidence/receipt.json",
+      "requiredReceipts": [
+        "route-retained-built-none-stated",
+        "witness-state-and-unresolved-ids-stated",
+        "this-partitions-semantic-state-and-satisfying-operations-stated",
+        "base-summary-before-the-closure-choice-stated",
+        "absent-values-are-stated-as-absent",
+        "decisions-unchanged"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "decision-neutral",
+      "statement": "For every input, the candidate derivation's output other than the added diagnostic provenance, the summary choice, the witness, the planning answer served, every memo hit, miss and store, and the guard's grant, deferral and refusal are identical to main's; a differential against main's owners or a frozen oracle is the witness."
+    },
+    {
+      "id": "one-evaluation",
+      "statement": "The stated route, witness, semantic state, satisfying operations and base summary are those of the evaluation that produced the answer the guard decided on; nothing is re-derived for logging, and rows, snapshots and answers are read exactly as often per check as on main."
+    },
+    {
+      "id": "diagnostics-never-decide",
+      "statement": "No added field enters a memo key, identity, generation, equality, publication comparison or persisted row; in particular the publication row written from a candidate is byte-identical to main's."
+    },
+    {
+      "id": "owner-scoped-state",
+      "statement": "Any diagnostic state is carried on the value produced by the evaluation or held per owner call, never attached to an object another consumer can be handed."
+    },
+    {
+      "id": "bounded-payload",
+      "statement": "Every logged list is capped and says how many entries it withheld."
+    }
+  ],
+  "sealedAt": "f9d388499608794bded49b9b7bc3843560331322"
+}

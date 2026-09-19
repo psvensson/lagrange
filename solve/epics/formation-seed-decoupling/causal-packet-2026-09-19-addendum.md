@@ -592,3 +592,19 @@ Example: adam-laptop, 09:49:04, `schema_operations-p1-r5`.
    This is the split authority of the owner's decision of 2026-09-18.
    Repairing (2) cuts the ring even while (1) stands. Repairing (1) removes
    this refusal even while (2) stands. They are separate owners.
+
+**Note on the sixth addendum's instrument (2026-09-19).**
+- The independent verifier rejected `closure-witness-route-observed` on one
+  field.
+  - The payload's per-partition semantic state can be misattributed when a
+    partition has two operations.
+  - It measured that the readings used above are unaffected: the route, the
+    witness state, the satisfying operations with their target node and
+    visibility, and the base summary. That held over 60,000 partition
+    reads.
+  - It also measured that the error never crosses the
+    satisfied/unresolved boundary.
+- It confirmed in code that the guard's synchronous path can never read a
+  retained witness.
+- The quest is superseded without landing. The authority repair removes the
+  guard's summary read, and with it the payload block that quest added.
