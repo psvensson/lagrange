@@ -77,6 +77,10 @@ authorizes:
   - scripts/quest-evidence/readiness-admission-freeze-observed.js
   - scripts/quest-evidence/lease-liveness-watermark-observed.js
   - scripts/quest-evidence/closure-witness-route-observed.js
+  - scripts/quest-evidence/critical-spread-transition-authority-carry.js
+  - scripts/quest-evidence/critical-spread-transition-authority.js
+  - scripts/check-guideline-deferred-outcomes.js
+  - test/rebalancer
 ---
 
 # Formation without seed starvation
@@ -290,6 +294,54 @@ stay open and are not touched.
 
 The second concurrent add-first move on user-table partitions stays a
 separate planner-dispatch question.
+
+## The authority repair, staged (2026-09-19)
+
+**The owner's priority.** The owner named `critical-spread-transition-authority`
+plus three consecutive cold five-node certifications as the first priority
+(2026-09-19).
+
+**Staging.** The design is in
+[design-critical-spread-transition-authority.md](formation-seed-decoupling/design-critical-spread-transition-authority.md).
+It lands as two quests:
+- **`critical-spread-transition-authority-carry`.**
+  - The cure policy mints one exact-transition authorization.
+  - It rides on the operation's existing metadata.
+  - The learner's guard decodes and logs it.
+  - No decision changes.
+  - Lab formations on it measure which promotions would have carried a valid
+    authorization, before anything is removed.
+- **`critical-spread-transition-authority`.**
+  - The guard's cap becomes the authorized bound.
+  - The priority-summary and overflow-budget read is deleted from the
+    promotion path.
+  - The budget and its completion state are deleted as obsolete duplicate
+    authority.
+  - Precondition: the inventory of every production path that can bring an
+    add-like operation on a critical partition to promotion while over
+    target.
+
+**The separate characterization quest is folded in.**
+- The separate quest `critical-spread-learner-ring-characterization` is not
+  started.
+- Its content becomes the red tests of these quests, on the recorded
+  fixture.
+- The sixth addendum showed the minimal pair it was briefed on was the wrong
+  pair.
+
+**A second, separate defect (sixth addendum).**
+- The spread completion counts a holder node twice.
+- So the closure witness reads satisfied while a third holder is still
+  missing.
+- That is the projection's owner, not the guard's.
+- Whether and when it is repaired is the owner's decision.
+- It is not needed for the authority repair.
+
+**Certification needs more than this repair.**
+- The second mechanism separates PASS from FAIL better than the refusal
+  does. Its observability quests continue in parallel:
+  `readiness-admission-freeze-observed` and
+  `lease-liveness-watermark-observed`.
 
 ## Simulator frozen (2026-09-19)
 
