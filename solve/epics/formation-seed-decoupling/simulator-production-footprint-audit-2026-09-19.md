@@ -117,6 +117,71 @@ file-by-file audits of what its quests put into `src/`.
   2026-09-13 shows it. So A did not cause it. Whether A aggravates it is
   not known.
 
+## Audit 2, completion pass (same day)
+
+The three unopened commits were read, together with two adjacent attribution
+commits the brief had not listed: 3b27482c6 and 79b00aa0f. That is 23
+distinct src files and 71 hunks. **Nothing in the lineage outside E remains
+unclassified.**
+
+**Attribution.**
+- All 23 files are inert or clock-equivalent in production.
+- Every attribution bracket is a strict pass-through when
+  `LAGRANGE_FORMATION_ATTRIBUTION` is unset.
+  - Scratch-proven on all 9 wrappers and 7 hot-path sites: the same return
+    value, the same thrown object, the same promise object and `this`, and
+    no async resource created.
+  - Not executed: three worker brackets, and the Raft patched listener on a
+    live LifeRaft.
+  - The cost is one arrow-closure allocation per bracket call, including
+    per inbound message and per Raft packet.
+- With the flag set:
+  - the seed runs `async_hooks` on every async resource;
+  - it logs a snapshot every 10 s;
+  - it installs a `SIGUSR2` listener;
+  - it can run the CPU profiler.
+  Any such run is a measured-seed run.
+- **The nightly does not set the flag.** The workflow, `formation-health.js`
+  and the demo only forward or read it.
+  - The calibration runs of 2026-09-13 and 2026-09-17 had it on.
+
+**The three product changes of 5da0d7348, and what pins them.**
+- **B (remove-safety reads the authoritative owner surface): pinned.** All
+  seven tests of `test/rebalancer/priority-recovery-planning-read-scope.test.js`
+  pin it, plus one in `readiness-planning-consistency-mode.test.js`.
+- **A (the AVAILABLE answer is sync-only): pinned only at the best-effort
+  surface.**
+  - Two tests in `readiness-planning-consistency-mode.test.js` pin it there.
+  - The commit removed the two tests that pinned the old preference for the
+    async answer.
+  - No test names the async `resolveNodeMembershipPublicationPlanningAnswer`,
+    so the node-readiness path of A is unpinned.
+  - `membershipPublicationPlanningSnapshotRefreshTimeoutMs` is a dead
+    option. It is assigned once and read nowhere.
+- **C (`track()` swallows Raft rejections): unpinned.**
+
+**A's call graph (CODE).**
+- Callers of the best-effort surface:
+  - every AVAILABLE read of the rebalancer (narration, recovery drain,
+    follow-up, priority readiness, budget admission);
+  - the repository's visibility reads;
+  - `getStartupAuthoritySnapshot`;
+  - the coordinator's candidate planning evidence.
+- Callers of the async resolve:
+  - `evaluateNodeReadiness`;
+  - the priority control-plane recovery health.
+- The formation-release startup authority uses the owner read and is not
+  exposed to A.
+- No caller inspects staleness, waits or retries on its own.
+- INFERRED, not a finding:
+  - On a node whose local cache lags the authority, these callers can now
+    see a stale planning answer for as long as the lag lasts.
+  - Before the change, an owner-capable derivation could correct it within
+    about a second.
+  - Whether that async derivation reads past the local cache in production
+    was not confirmed.
+  - No formation effect is claimed.
+
 ## Pins
 
 All seven pins proposed by audit 1 are true on main today. P1 is
@@ -147,7 +212,11 @@ New from audit 2:
 
 ## What closing the freeze still needs
 
-1. A hunk read of the three unclassified commits.
+1. ~~A hunk read of the three unclassified commits.~~ Done in the completion
+   pass.
+   - Still to settle is the one code read that decides whether A's async
+     derivation reaches past the local cache.
+   - Also a pin for A on `evaluateNodeReadiness`.
 2. A retrospective independent verification of 5da0d7348's items A, B and C
    as product changes. The model is the retrospective verification of E on
    2026-09-18.
