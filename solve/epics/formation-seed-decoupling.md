@@ -423,6 +423,23 @@ It covers at least three classes.
        sides resolve through the same owner.
    - A permanent false-refusal mode is not acceptable after enforcement.
 
+**Lead's note on the audit's scope (2026-09-19, from the carry stage's
+verification).**
+- The guard's bootstrap-critical predicate is true for all 45 system
+  partitions at this head, not 12.
+  - The cure policy can mint for 5 of them, so 40 cannot carry an
+    authorization.
+  - The seven the owner named keep one row each.
+  - The other 33 appear too. They are grouped only where producers,
+    predicates and reachability are demonstrably identical.
+- Two further corrections feed the audit:
+  - The over-target unhealthy-source REPLACE is suppressed by its only
+    caller when the inventory's active count exceeds the target. The
+    residual risk is two different censuses.
+  - The planner's epoch is null while any newer publication is
+    ESTABLISHING, so no authorization is minted in that window. A
+    promotion-time stale fence would read stale after every later join.
+
 **The two observability quests stay separate from the authority work and
 land independently once their own verification is green.**
 - `readiness-admission-freeze-observed` must carry the actual freeze or
