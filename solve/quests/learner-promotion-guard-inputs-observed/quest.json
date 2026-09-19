@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "learner-promotion-guard-inputs-observed",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The learner-side count check of a critical system partition refuses a spread-cure ADD's promotion in every failing nightly to 2026-09-19 (would_exceed_target_replica_count, maxAllowedVotersAfterPromotion 4): the priority-recovery overflow budget evaluated on the learner's node is 0 where the grants had 2. The refusal logs only the result, so which input zeroes the budget cannot be observed, and the static reproduction of 2026-09-18 could only offer a candidate. This quest makes the decision observable without changing it. Every count-check refusal, and the first count-check pass of each learner, logs the inputs the decision was actually made on, taken from the one evaluation that decided and never from a second read: the node readiness phase, reasons and the recovery-pending bit; whether a planning answer was present, its publication epoch and status, and its origin (fresh, memoized or retained) where its owner can state it; the priority summary's presence, satisfied flag, required distinct node count, ready eligible node count, blocked partition ids, this partition's ready distinct node count and spread gap, and which summary was chosen (derived or closure-refreshed); the planner entry for this partition (ready, spread gap, reasons); the active operation count with each counted operation's id, type, status and workflow step, the in-flight add-like replica ids and whether this learner owns one; the joining flag and the three promotion allowances; the completion state, reason code and temporary overflow voter budget; and the membership view - voter replica ids with their node ids, learner replica ids, the raw counts before the local-row correction, and the target replica count with its source. No decision, schedule, retry cadence, log message text or existing log field changes.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/learner-promotion-guard-inputs-observed/evidence/receipt.json",
+      "requiredReceipts": [
+        "refusal-logs-the-decided-inputs",
+        "first-pass-logs-the-decided-inputs-once",
+        "inputs-come-from-the-one-evaluation",
+        "summary-source-and-answer-origin-named",
+        "decisions-unchanged"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "decision-neutral",
+      "statement": "For every input the guard can see, the grant, deferral and refusal outcome, the reason, and the scheduled recheck are identical to main's; a frozen copy of main's arithmetic is the oracle the witnesses compare against."
+    },
+    {
+      "id": "one-evaluation",
+      "statement": "The logged values are the values the decision used: the planning answer, the readiness snapshot, the services rows and the operation rows are each read exactly as often per check as on main."
+    },
+    {
+      "id": "diagnostics-never-decide",
+      "statement": "A field added to a planning answer or snapshot for diagnosis enters no memo key, identity, generation, equality or comparison that decides reuse or behaviour."
+    },
+    {
+      "id": "bounded-payload",
+      "statement": "Every logged list is capped, and a capped list says how many entries it withheld."
+    }
+  ],
+  "sealedAt": "3e186639dafb8711db018bf286dd8b69fc48520a"
+}

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "e02c774e9ed586a5012f01c29d6a1661606b75cbec9848e5f4bc19afad513669"
+    "sourceSha256": "9efd97b479007f63db80b2bb0ffc8a54711bd6024ff3c194f0534a35f9f04a8b"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,9 +17,9 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 67,
-    "publicExportCount": 748,
-    "importEdgeCount": 311,
+    "moduleCount": 68,
+    "publicExportCount": 755,
+    "importEdgeCount": 312,
     "crossLayerEdgeCount": 93,
     "layerDirectionViolationCount": 45,
     "largestStronglyConnectedComponent": 1,
@@ -28,7 +28,7 @@
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 67,
+    "uniquelyClassifiedModules": 68,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -546,6 +546,30 @@
       ],
       "localExports": [
         "buildPriorityRecoveryPartitionAssessment"
+      ]
+    },
+    {
+      "path": "src/control-plane/priority-recovery-planning-answer-origin.js",
+      "owner": "control-plane",
+      "layer": "owner_decision",
+      "rationale": "owner policy or actuation surface",
+      "exports": [
+        "PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN",
+        "beginPriorityRecoveryPlanningAnswer",
+        "notePriorityRecoveryPlanningAnswerRetention",
+        "readPriorityRecoveryPlanningAnswerCallRetention",
+        "readPriorityRecoveryPlanningAnswerOrigin",
+        "recordPriorityRecoveryPlanningProjectionReuse",
+        "statePriorityRecoveryPlanningAnswerOrigin"
+      ],
+      "localExports": [
+        "PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN",
+        "beginPriorityRecoveryPlanningAnswer",
+        "notePriorityRecoveryPlanningAnswerRetention",
+        "readPriorityRecoveryPlanningAnswerCallRetention",
+        "readPriorityRecoveryPlanningAnswerOrigin",
+        "recordPriorityRecoveryPlanningProjectionReuse",
+        "statePriorityRecoveryPlanningAnswerOrigin"
       ]
     },
     {
@@ -2061,6 +2085,16 @@
       "targetLayer": null,
       "crossLayer": false,
       "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "./priority-recovery-planning-answer-origin.js",
+      "to": "src/control-plane/priority-recovery-planning-answer-origin.js",
+      "targetModule": true,
+      "sourceLayer": "owner_decision",
+      "targetLayer": "owner_decision",
+      "crossLayer": false,
+      "conformsToLayerDirection": true
     },
     {
       "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
@@ -5187,6 +5221,9 @@
     ],
     [
       "src/control-plane/priority-recovery-partition-assessment.js"
+    ],
+    [
+      "src/control-plane/priority-recovery-planning-answer-origin.js"
     ],
     [
       "src/control-plane/priority-recovery-planning-intent.js"

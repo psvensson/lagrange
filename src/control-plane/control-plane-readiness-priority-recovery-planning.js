@@ -6,6 +6,10 @@ import {
 } from './control-plane-readiness-constants.js';
 import {planningIdentitiesEqual} from
   './readiness-planning-semantic-generation.js';
+import {
+  notePriorityRecoveryPlanningAnswerRetention,
+  readPriorityRecoveryPlanningAnswerCallRetention,
+} from './priority-recovery-planning-answer-origin.js';
 
 const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
   'priority_recovery_planning_projection_build';
@@ -159,7 +163,8 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
       retainedAtEntry,
     );
     if (cached) {
-      return cached.answer;
+      return notePriorityRecoveryPlanningAnswerRetention(
+        this, nodeId, cached.answer, cached.retained === true);
     }
     const answer = this.resolvePriorityRecoveryPlanningAnswerUncached(
       nodeId,
@@ -214,7 +219,10 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
       byNode = new Map();
       this.planningAnswerMemoByInputSnapshot.set(planningSnapshot, byNode);
     }
-    byNode.set(nodeId, {generation, retainedAtEntry, answer});
+    // `retained` rides in the VALUE, never the key: readMemoizedPlanningAnswer
+    // still matches on the generation and the retained witness alone.
+    byNode.set(nodeId, {generation, retainedAtEntry, answer,
+      retained: readPriorityRecoveryPlanningAnswerCallRetention(this, nodeId)});
   }
 
   resolvePriorityRecoveryPlanningAnswerUncached(
@@ -239,6 +247,9 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
       nodeId,
       observedAt,
     );
+    // Retention is noted against THIS CALL, never onto the answer object: the
+    // object handed back is the node's active snapshot, which every other
+    // reader of the projection memo also holds.
     if (
       !this.isPriorityRecoveryPlanningSnapshotIncomplete(resolvedPlanningSnapshot)
     ) {
@@ -246,7 +257,8 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
         resolvedPlanningSnapshot,
         retainedSnapshot,
       ) ?
-        retainedSnapshot :
+        notePriorityRecoveryPlanningAnswerRetention(
+          this, nodeId, retainedSnapshot) :
         resolvedPlanningSnapshot;
     }
     if (!retainedSnapshot) {
@@ -256,15 +268,18 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
       !resolvedPlanningSnapshot ||
       typeof resolvedPlanningSnapshot !== 'object'
     ) {
-      return retainedSnapshot;
+      return notePriorityRecoveryPlanningAnswerRetention(
+        this, nodeId, retainedSnapshot);
     }
-    return this.buildPriorityRecoveryPlanningProjection({
-      ...resolvedPlanningSnapshot,
-      publicationRecoveryGate: this.buildRetainedPriorityRecoveryPlanningGate(
-        resolvedPlanningSnapshot,
-        retainedSnapshot,
-      ),
-    });
+    return notePriorityRecoveryPlanningAnswerRetention(
+      this, nodeId, this.buildPriorityRecoveryPlanningProjection({
+        ...resolvedPlanningSnapshot,
+        publicationRecoveryGate: this.buildRetainedPriorityRecoveryPlanningGate(
+          resolvedPlanningSnapshot,
+          retainedSnapshot,
+        ),
+      }),
+    );
   }
 
   isPriorityRecoveryPlanningSnapshotIncomplete(planningSnapshot = null) {

@@ -308,6 +308,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
   LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
   LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred',
+  LEARNER_PROMOTION_COUNT_CHECK_INPUTS:
+    'Learner promotion count check inputs',
   LEARNER_PROMOTION_PROOF_GRANTED:
     'Learner promotion proof granted by leader',
   LEARNER_PROMOTION_PROGRESS_PROBE_FAILED:

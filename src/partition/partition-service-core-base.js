@@ -294,6 +294,10 @@ class PartitionServiceCoreBase extends EventEmitter {
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
     this.learnerPromotionTimer = null;
+    // One count-check inputs line per learner: the first PASS states the
+    // inputs the decision was made on, and the pass path then stays quiet
+    // (quest learner-promotion-guard-inputs-observed).
+    this.learnerPromotionCountCheckInputsLogged = false;
     this.learnerPromotionWake = createLearnerPromotionWakeState();
     this.splitReplication = null;
     this.splitReplicationRun = null;

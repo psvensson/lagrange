@@ -389,7 +389,13 @@ function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, h
   return decisiveComparison;
 }
 
-function chooseMoreAdvancedPriorityPartitionSummary(
+// The choice, with the winner named. A caller that must record WHICH of the
+// two summaries a downstream decision was made on reads `chosenFromCandidate`
+// and records it beside the summary (priority-partition-summary-source.js);
+// the label never becomes a field of the summary, because every field of a
+// summary reaches the publication row, the planning memo keys and the
+// equality comparisons that decide reuse.
+function chooseMoreAdvancedPriorityPartitionSummaryWithProvenance(
   baselineSummary,
   candidateSummary,
   helperFns = {},
@@ -405,10 +411,10 @@ function chooseMoreAdvancedPriorityPartitionSummary(
     helperFns,
   );
   if (normalizedBaselineSummary === null) {
-    return normalizedCandidateSummary;
+    return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
   }
   if (normalizedCandidateSummary === null) {
-    return normalizedBaselineSummary;
+    return {summary: normalizedBaselineSummary, chosenFromCandidate: false};
   }
   const advancement = comparePriorityPartitionSummaryAdvancement(
     normalizedCandidateSummary,
@@ -416,15 +422,27 @@ function chooseMoreAdvancedPriorityPartitionSummary(
     helperFns,
   );
   if (advancement > 0) {
-    return normalizedCandidateSummary;
+    return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
   }
   if (advancement < 0 || priorityPartitionDiagnosticsEqual(
     normalizedCandidateSummary,
     normalizedBaselineSummary,
   )) {
-    return normalizedBaselineSummary;
+    return {summary: normalizedBaselineSummary, chosenFromCandidate: false};
   }
-  return normalizedCandidateSummary;
+  return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
+}
+
+function chooseMoreAdvancedPriorityPartitionSummary(
+  baselineSummary,
+  candidateSummary,
+  helperFns = {},
+) {
+  return chooseMoreAdvancedPriorityPartitionSummaryWithProvenance(
+    baselineSummary,
+    candidateSummary,
+    helperFns,
+  ).summary;
 }
 
 function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns = {}) {
@@ -762,6 +780,7 @@ export {
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
   chooseMoreAdvancedPriorityPartitionSummary,
+  chooseMoreAdvancedPriorityPartitionSummaryWithProvenance,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 };

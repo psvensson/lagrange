@@ -1,0 +1,47 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "learner-promotion-guard-inputs-observed",
+  "status": "pass",
+  "testFileDigests": {
+    "test/partition/learner-promotion-count-check-inputs.test.js": "5546b5dda7e9997cdd20ac677c11a93c8d21487ef0c014f935880965dad59ac2",
+    "test/control-plane/priority-recovery-decision-provenance.test.js": "1e976902c67bef9486b63b834c86d4d544fb872b971caecceebc5ee659668581"
+  },
+  "generatedAt": "2026-09-19T07:23:27.426Z",
+  "receipts": [
+    {
+      "id": "refusal-logs-the-decided-inputs",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a count-check refusal logs the inputs the decision was made on$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "the would_exceed_target_replica_count line carries every decided input",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "first-pass-logs-the-decided-inputs-once",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the first count-check pass of a learner logs its inputs exactly once$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "one inputs line per learner on the pass path, refusals unthrottled",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "inputs-come-from-the-one-evaluation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the logged inputs come from the one evaluation that decided$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "per-check source reads are unchanged and no logged value is a re-read",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "summary-source-and-answer-origin-named",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the summary source and the planning answer origin are named by their owners$\" test/control-plane/priority-recovery-decision-provenance.test.js",
+      "detail": "derived/closure-refreshed and fresh/memoized/retained come from the owner",
+      "testFile": "test/control-plane/priority-recovery-decision-provenance.test.js"
+    },
+    {
+      "id": "decisions-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every count-check decision matches the frozen copy of main's arithmetic$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "outcome, reason, cap and recheck match the frozen oracle on every row",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    }
+  ]
+}

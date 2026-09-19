@@ -7,7 +7,7 @@
     "bootstrap-membership": 252,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 190,
+    "control-plane": 191,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 145,
+    "storage-partition": 146,
     "storage-raft": 80,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2127,
-  "digest": "fnv1a32-5cf35990",
+  "censusSize": 2129,
+  "digest": "fnv1a32-5b7793ab",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-01f1c9e0",
+  "observationDigest": "fnv1a32-ae8dac22",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -571,6 +571,7 @@
     "test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js": "control-plane",
     "test/control-plane/priority-recovery-cohort-baseline-floor.test.js": "control-plane",
     "test/control-plane/priority-recovery-completion.test.js": "control-plane",
+    "test/control-plane/priority-recovery-decision-provenance.test.js": "control-plane",
     "test/control-plane/priority-recovery-op-retire-on-timeline-removed.test.js": "control-plane",
     "test/control-plane/priority-recovery-projection-brand-short-circuit.test.js": "control-plane",
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js": "control-plane",
@@ -1136,6 +1137,7 @@
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
     "test/partition/extracted-module-api-equivalence.property.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
+    "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "storage-partition",
@@ -3267,6 +3269,17 @@
         "src/query/query-executor-partition-service-resolution.js",
         "src/rebalancer/operation-workflow-recovery-timeout.js",
         "src/rebalancer/operation-workflow-remove-safety-evaluator.js"
+      ]
+    },
+    "test/control-plane/priority-recovery-decision-provenance.test.js": {
+      "files": [
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
       ]
     },
     "test/control-plane/priority-recovery-snapshot.test.js": {

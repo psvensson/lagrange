@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2110,
+    "ordinary": 2112,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2127,
-  "digest": "fnv1a32-0c580010",
+  "censusSize": 2129,
+  "digest": "fnv1a32-e96262d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -551,6 +551,7 @@
     "test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js": "ordinary",
     "test/control-plane/priority-recovery-cohort-baseline-floor.test.js": "ordinary",
     "test/control-plane/priority-recovery-completion.test.js": "ordinary",
+    "test/control-plane/priority-recovery-decision-provenance.test.js": "ordinary",
     "test/control-plane/priority-recovery-op-retire-on-timeline-removed.test.js": "ordinary",
     "test/control-plane/priority-recovery-projection-brand-short-circuit.test.js": "ordinary",
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js": "ordinary",
@@ -1116,6 +1117,7 @@
     "test/partition/durable-voter-visibility-role-write.test.js": "ordinary",
     "test/partition/extracted-module-api-equivalence.property.test.js": "ordinary",
     "test/partition/key-range-manager.test.js": "ordinary",
+    "test/partition/learner-promotion-count-check-inputs.test.js": "ordinary",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "ordinary",
     "test/partition/managed-merge-workflow.test.js": "ordinary",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "ordinary",

@@ -50,6 +50,9 @@ import {
   normalizePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
 import {
+  chooseClosureRefreshedPriorityPartitionSummary,
+} from './priority-partition-summary-source.js';
+import {
   buildMembershipPublicationAckCompletionSnapshot,
   buildMembershipPublicationRecoveryCohortSnapshot,
   buildMembershipPublicationTargetSnapshot,
@@ -675,11 +678,15 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityPartitionSummary = chooseMoreAdvancedPriorityPartitionSummary(
-    priorityPartitionSummaryBase,
-    priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-    helperFns,
-  );
+  // The final summary choice, made by the owner that also records which of
+  // the two it took, so a downstream decision can name the summary it read
+  // (quest learner-promotion-guard-inputs-observed).
+  const priorityPartitionSummary =
+    chooseClosureRefreshedPriorityPartitionSummary(
+      priorityPartitionSummaryBase,
+      priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
+      helperFns,
+    );
   const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
     latestPublicationRow?.priorityPartitionSummary,
     priorityPartitionSummary,

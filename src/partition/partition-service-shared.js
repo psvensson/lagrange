@@ -159,6 +159,9 @@ import {
   CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
   resolveCanonicalPartitionLeaderObservation,
 } from '../query/canonical-leader-routing.js';
+import {
+  LEARNER_PROMOTION_COUNT_CHECK_REFUSAL,
+} from './learner-promotion-count-check.js';
 const PARTITION_SERVICE_LITERAL = Object.freeze({
   BOOLEAN: 'boolean',
   VALUE_250: 250,
@@ -203,8 +206,12 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
   PROMOTION_CHECK_FAILED: 'promotion_check_failed',
-  WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',
-  WOULD_CAUSE_EVEN_VOTER_COUNT: 'would_cause_even_voter_count',
+  // Consumed from the count-check owner, never restated: the deferral-counter
+  // drift guard binds the harvested counter strings to these spellings.
+  WOULD_EXCEED_TARGET_REPLICA_COUNT:
+    LEARNER_PROMOTION_COUNT_CHECK_REFUSAL.WOULD_EXCEED_TARGET_REPLICA_COUNT,
+  WOULD_CAUSE_EVEN_VOTER_COUNT:
+    LEARNER_PROMOTION_COUNT_CHECK_REFUSAL.WOULD_CAUSE_EVEN_VOTER_COUNT,
   PARTITION_SERVICE_SHUTDOWN: 'Partition service shutdown',
 });
 const PartitionState = PARTITION_STATE;

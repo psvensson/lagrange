@@ -6,6 +6,11 @@ import {
 } from './control-plane-readiness-constants.js';
 import {planningIdentitiesEqual} from
   './readiness-planning-semantic-generation.js';
+import {
+  beginPriorityRecoveryPlanningAnswer,
+  recordPriorityRecoveryPlanningProjectionReuse,
+  statePriorityRecoveryPlanningAnswerOrigin,
+} from './priority-recovery-planning-answer-origin.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -402,6 +407,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
           planningIdentity,
         )
       ) {
+        recordPriorityRecoveryPlanningProjectionReuse(this, memoKey, true);
         return cached.projection;
       }
     }
@@ -415,6 +421,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
     );
+    recordPriorityRecoveryPlanningProjectionReuse(this, memoKey, false);
     if (memo && memoKey) {
       memo.set(memoKey, {
         projection,
@@ -429,7 +436,13 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     return projection;
   }
 
+  // The origin is composed PER CALL and stated at every return: the call
+  // begins by forgetting what any earlier answer observed, so the early
+  // return below - which never reaches the retention layer - can only ever
+  // state fresh or memoized (quest learner-promotion-guard-inputs-observed).
   getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) {
+    const originNodeId = nodeId || this.nodeId;
+    beginPriorityRecoveryPlanningAnswer(this, originNodeId);
     const planningSnapshot =
       this.resolveMemoizedPriorityRecoveryPlanningProjectionSync(
         nodeId,
@@ -441,7 +454,11 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
         planningSnapshot,
         observedAt,
       );
-      return planningSnapshot;
+      return statePriorityRecoveryPlanningAnswerOrigin(
+        this,
+        originNodeId,
+        planningSnapshot,
+      );
     }
     const resolvedPlanningSnapshot = this.resolvePriorityRecoveryPlanningAnswer(
       nodeId,
@@ -457,7 +474,11 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     ) {
       this.clearActivePriorityRecoveryPlanningSnapshot(nodeId);
     }
-    return resolvedPlanningSnapshot;
+    return statePriorityRecoveryPlanningAnswerOrigin(
+      this,
+      originNodeId,
+      resolvedPlanningSnapshot,
+    );
   }
 
   /**

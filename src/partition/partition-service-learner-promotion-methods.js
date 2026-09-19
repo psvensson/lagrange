@@ -1,8 +1,4 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {
-  classifySystemPartition,
-  isBootstrapCriticalSystemPartitionId,
-} from '../bootstrap/system-partition-classification.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   validateLearnerPromotionProofResponse,
@@ -12,12 +8,20 @@ import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
 } from '../bootstrap/replication-target-authority.js';
+import {
+  evaluateLearnerPromotionCountCheck,
+} from './learner-promotion-count-check.js';
+import {
+  buildLearnerPromotionCountCheckInputs,
+} from './learner-promotion-count-check-evidence.js';
+import {
+  createPartitionServiceLearnerPromotionCountCheckMethods,
+} from './partition-service-learner-promotion-count-check-methods.js';
 
 const {
   ACTIVE_VOTER_ROLES,
   ADD_LIKE_REPLICA_OPERATION_TYPES,
   COLUMN,
-  LIFECYCLE_REASON,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
@@ -30,14 +34,33 @@ const {
   STRING,
   TABLES,
   TERMINAL_STATUSES,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = PARTITION_SERVICE_SHARED;
+
+const UNDECLARED_PROMOTION_TARGET_REPLICA_COUNT = 0;
+
+// Desired RF is decoded by the single policy authority from the persisted
+// partitions row. An undeclared policy returns 0 and DEFERS promotion (fail
+// closed): the removed ladder fell back to this.replicaCount, an
+// identity-derived count, and then to a restated default, so a promotion
+// could be admitted against a target no declaration ever stated. The source
+// travels with the count so a refusal can name which declaration — or the
+// absence of one — the cap was built from.
+function resolvePromotionReplicationTarget(systemTableCache, partitionId) {
+  const partitionRow =
+    systemTableCache &&
+    typeof systemTableCache.get === PARTITION_SERVICE_TYPE.FUNCTION ?
+      systemTableCache.get(TABLES.PARTITIONS, partitionId) :
+      null;
+  const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
+  return {
+    replicaCount:
+      desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED ?
+        UNDECLARED_PROMOTION_TARGET_REPLICA_COUNT :
+        desiredTarget.replicationFactor,
+    source: desiredTarget.source,
+  };
+}
 
 class PartitionServiceLearnerPromotionMethods {
   /**
@@ -94,27 +117,13 @@ class PartitionServiceLearnerPromotionMethods {
       });
     }, delayMs);
   }
-  isPriorityRecoveryPendingForLearnerPromotion() {
-    if (!classifySystemPartition({
-      partitionId: this.partitionId,
-    }).priorityControlPlane) {
-      return false;
-    }
-    const readinessSnapshot = getTrafficReadinessSnapshot(
-      this.metadataPublicationReadinessState,
-    );
-    if (!readinessSnapshot || readinessSnapshot.draining === true) {
-      return false;
-    }
-    const reasons = Array.isArray(readinessSnapshot.reasons) ?
-      readinessSnapshot.reasons :
-      [];
-    return reasons.includes(
-      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-    );
-  }
-  getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
-    const readinessService = this.controlPlaneReadinessService;
+  // The readiness service is passed in by the one caller that also reads the
+  // origin off it, so the answer and its stated origin come from the SAME
+  // instance rather than from two reads of the property (quest
+  // learner-promotion-guard-inputs-observed).
+  getPriorityRecoveryPlanningSnapshotForLearnerPromotion(
+    readinessService = this.controlPlaneReadinessService,
+  ) {
     if (!readinessService) {
       return null;
     }
@@ -353,77 +362,6 @@ class PartitionServiceLearnerPromotionMethods {
     }
     return [...learnerNodeIds, localNodeId];
   }
-  resolvePriorityRecoveryCompletionForLearnerPromotion(options = {}) {
-    const priorityRecoveryActive =
-      this.isPriorityRecoveryPendingForLearnerPromotion();
-    if (
-      !classifySystemPartition({
-        partitionId: this.partitionId,
-      }).priorityControlPlane &&
-      priorityRecoveryActive !== true
-    ) {
-      return null;
-    }
-    const planningSnapshot =
-      this.getPriorityRecoveryPlanningSnapshotForLearnerPromotion();
-    const priorityPartitionSummary =
-      planningSnapshot?.priorityPartitionSummary || null;
-    const effectiveEligibleNodeIds = planningSnapshot ?
-      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds :
-      [];
-    const services = this.getPartitionServiceRowsForPromotion();
-    const readinessService = this.controlPlaneReadinessService;
-    const serviceLearnerNodeIds = Array.isArray(services) ?
-      services
-        .filter((serviceRow) =>
-          this.isLearnerServiceRowForPromotion(serviceRow),
-        )
-        .map((serviceRow) =>
-          String(serviceRow?.[COLUMN.NODE_ID] || STRING.EMPTY).trim(),
-        )
-        .filter((nodeId) => nodeId.length > 0) :
-      [];
-    const activeLearnerNodeIds =
-      this.resolveActiveLearnerNodeIdsForPromotion(serviceLearnerNodeIds);
-    const readinessByNodeId = {};
-    for (const nodeId of activeLearnerNodeIds) {
-      const readiness =
-        readinessService &&
-        typeof readinessService.getNodeReadinessSync ===
-          PARTITION_SERVICE_TYPE.FUNCTION ?
-          readinessService.getNodeReadinessSync(nodeId) :
-          null;
-      if (readiness && typeof readiness === PARTITION_SERVICE_TYPE.OBJECT) {
-        readinessByNodeId[nodeId] = readiness;
-      }
-    }
-    const learnerPromotion = buildPriorityRecoveryLearnerPromotion({
-      activeLearnerNodeIds,
-      readinessByNodeId,
-      recoveryActiveNodeIds: effectiveEligibleNodeIds,
-    });
-    const assessment = buildPriorityRecoveryPartitionAssessment({
-      partitionId: this.partitionId,
-      priorityPartitionSummary,
-      admission: {
-        effectiveEligibleNodeIds,
-        effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,
-        ineligibleNodes: [],
-      },
-      learnerPromotion,
-      operationContexts:
-        this.getPriorityRecoveryOperationContextsForLearnerPromotion(),
-    });
-    return buildPriorityRecoveryCompletion({
-      assessment,
-      targetReplicaCount: options.targetReplicaCount,
-      activeVoterCount: options.activeVoterCount,
-      learnerCount: options.learnerCount,
-      priorityRecoveryActive:
-        priorityRecoveryActive ||
-        hasPriorityRecoverySpreadGap(priorityPartitionSummary),
-    });
-  }
   becomeFollower() {
     this.role = RaftRole.FOLLOWER;
     this.isLeader = false;
@@ -486,91 +424,32 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
-    const inFlightAddLikeReplicaIds =
-      this.getInFlightAddLikeOperationReplicaIds();
-    const promotionCounts = this.resolveLearnerPromotionCounts({
-      activeVoterCount: this.countActiveVoters(),
-      learnerCount: this.countPendingLearners(),
-      inFlightAddLikeReplicaIds,
-    });
-    const activeVoterCount = promotionCounts.activeVoterCount;
-    const learnerCount = promotionCounts.learnerCount;
-    const hasOwnedAddLikeOperation = Boolean(
-      inFlightAddLikeReplicaIds &&
-      inFlightAddLikeReplicaIds.size > 0 &&
-      inFlightAddLikeReplicaIds.has(this.replicaId),
-    );
-    const targetReplicaCount = this.getTargetReplicaCountForPromotion();
-    const isCriticalSystemPartition = isBootstrapCriticalSystemPartitionId(
-      this.partitionId,
-    );
-    const singleReplacementPromotionAllowed =
-      (this.isJoiningExistingGroup === true || hasOwnedAddLikeOperation) &&
-      learnerCount === 1 &&
-      activeVoterCount >= targetReplicaCount;
-    const operationOwnedCriticalReplacementPromotionAllowed =
-      isCriticalSystemPartition &&
-      hasOwnedAddLikeOperation &&
-      activeVoterCount >= targetReplicaCount;
-    const replacementPromotionAllowed =
-      singleReplacementPromotionAllowed ||
-      operationOwnedCriticalReplacementPromotionAllowed;
-    const singleVoterExpansionPromotionAllowed =
-      this.isJoiningExistingGroup === true &&
-      learnerCount === 1 &&
-      activeVoterCount === 1;
-    const priorityRecoveryCompletion = isCriticalSystemPartition ?
-      this.resolvePriorityRecoveryCompletionForLearnerPromotion({
-        targetReplicaCount,
-        activeVoterCount,
-        learnerCount,
-      }) :
-      null;
-    const priorityRecoveryAdditionalVotersAllowed =
-      isCriticalSystemPartition &&
-      Number.isFinite(priorityRecoveryCompletion?.temporaryOverflowVoterBudget) ?
-        priorityRecoveryCompletion.temporaryOverflowVoterBudget :
-        0;
-    const priorityRecoveryOverflowPromotionAllowed =
-      priorityRecoveryAdditionalVotersAllowed > 0;
-    const maxAllowedVotersAfterPromotion =
-      targetReplicaCount +
-      (replacementPromotionAllowed || singleVoterExpansionPromotionAllowed ?
-        1 :
-        0) +
-      priorityRecoveryAdditionalVotersAllowed;
-    const votersAfterPromotion = activeVoterCount + 1;
-    const wouldExceedTargetReplicaCount =
-      votersAfterPromotion > maxAllowedVotersAfterPromotion;
-    const wouldBeEven = votersAfterPromotion % 2 === 0;
-    const votersAfterAllLearners = activeVoterCount + learnerCount;
-    const allLearnersWouldBeOdd = votersAfterAllLearners % 2 === 1;
-    const allLearnersWithinTarget =
-      votersAfterAllLearners <= targetReplicaCount;
-    if (
-      wouldExceedTargetReplicaCount ||
-      (wouldBeEven &&
-        !replacementPromotionAllowed &&
-        !singleVoterExpansionPromotionAllowed &&
-        !priorityRecoveryOverflowPromotionAllowed &&
-        !(allLearnersWouldBeOdd && allLearnersWithinTarget))
-    ) {
+    const observation = this.observeLearnerPromotionCountCheck();
+    const decision = evaluateLearnerPromotionCountCheck(observation);
+    const countFields = {
+      activeVoterCount: observation.activeVoterCount,
+      learnerCount: observation.learnerCount,
+      targetReplicaCount: observation.targetReplicaCount,
+      maxAllowedVotersAfterPromotion:
+        decision.maxAllowedVotersAfterPromotion,
+    };
+    if (decision.refused) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        reason: wouldExceedTargetReplicaCount ?
-          PARTITION_SERVICE_LITERAL.WOULD_EXCEED_TARGET_REPLICA_COUNT :
-          PARTITION_SERVICE_LITERAL.WOULD_CAUSE_EVEN_VOTER_COUNT,
-        activeVoterCount,
-        learnerCount,
-        targetReplicaCount,
-        maxAllowedVotersAfterPromotion,
+        reason: decision.refusalReason,
+        ...countFields,
+        countCheckInputs: buildLearnerPromotionCountCheckInputs({
+          ...observation,
+          decision,
+        }),
       });
       this.scheduleLearnerPromotion(
         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
       );
       return;
     }
+    this.logFirstLearnerPromotionCountCheckPass(observation, decision);
     // Progress proof: the current leader must prove this learner applied
     // through the safe promotion index for the current term and membership
     // epoch. Runs LAST so the cheap local quorum-shape gates above never pay
@@ -675,47 +554,58 @@ class PartitionServiceLearnerPromotionMethods {
     }
     return replicaIds;
   }
-  countPendingLearners() {
-    const services = this.getPartitionServiceRowsForPromotion();
-    let learnerCount = 0;
-    for (const service of services) {
+  // ONE traversal of the services rows, yielding both the count the decision
+  // uses and the replica identities the refusal logs, so describing the
+  // membership never costs a second read of the rows the decision counted.
+  collectPendingLearnerCensusForPromotion() {
+    const learnerReplicaIds = [];
+    for (const service of this.getPartitionServiceRowsForPromotion()) {
       if (this.isLearnerServiceRowForPromotion(service)) {
-        learnerCount++;
+        learnerReplicaIds.push(
+          this.getReplicaServiceRowReplicaIdForPromotion(service),
+        );
       }
     }
-    return learnerCount;
+    return {count: learnerReplicaIds.length, learnerReplicaIds};
+  }
+  countPendingLearners() {
+    return this.collectPendingLearnerCensusForPromotion().count;
+  }
+  resolveTargetReplicaCountForPromotion() {
+    return resolvePromotionReplicationTarget(
+      this.systemTableCache,
+      this.partitionId,
+    );
   }
   getTargetReplicaCountForPromotion() {
-    const partitionRow =
-      this.systemTableCache &&
-      typeof this.systemTableCache.get === PARTITION_SERVICE_TYPE.FUNCTION ?
-        this.systemTableCache.get(TABLES.PARTITIONS, this.partitionId) :
-        null;
-    // Desired RF is decoded by the single policy authority from the persisted
-    // partitions row. An undeclared policy returns 0 and DEFERS promotion
-    // (fail closed): the removed ladder fell back to this.replicaCount, an
-    // identity-derived count, and then to a restated default, so a promotion
-    // could be admitted against a target no declaration ever stated.
-    const desiredTarget = resolveDesiredReplicationFactor(partitionRow);
-    if (desiredTarget.source === REPLICATION_TARGET_SOURCE.UNDECLARED) {
-      return 0;
-    }
-    return desiredTarget.replicationFactor;
+    return resolvePromotionReplicationTarget(
+      this.systemTableCache,
+      this.partitionId,
+    ).replicaCount;
   }
-  countActiveVoters() {
-    const services = this.getPartitionServiceRowsForPromotion();
-    let voterCount = 0;
-    for (const service of services) {
+  collectActiveVoterCensusForPromotion() {
+    const voterReplicas = [];
+    for (const service of this.getPartitionServiceRowsForPromotion()) {
       if (this.isActiveVoterServiceRowForPromotion(service)) {
-        voterCount++;
+        voterReplicas.push({
+          replicaId: this.getReplicaServiceRowReplicaIdForPromotion(service),
+          nodeId: String(
+            service?.[COLUMN.NODE_ID] || STRING.EMPTY,
+          ).trim(),
+        });
       }
     }
-    return voterCount;
+    return {count: voterReplicas.length, voterReplicas};
+  }
+  countActiveVoters() {
+    return this.collectActiveVoterCensusForPromotion().count;
   }
 }
 
 function createPartitionServiceLearnerPromotionMethods() {
-  const methods = {};
+  // The count-check input owner is composed in here, so the promotion bag a
+  // consumer installs stays one bag.
+  const methods = createPartitionServiceLearnerPromotionCountCheckMethods();
   const prototypeNames =
     Object.getOwnPropertyNames(PartitionServiceLearnerPromotionMethods.prototype);
   for (const name of prototypeNames) {
