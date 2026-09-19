@@ -469,6 +469,161 @@ repair.
   proposed pins are added. This happens after the carry verification, or in
   parallel only where it cannot interfere with the current lab evidence.
 
+## Owner direction for the overflow-budget audit (2026-09-19, late)
+
+The carry stage is sealed. Its semantics are not modified during the audit
+unless a new falsifier proves one of its sealed claims false. The enforce
+stage is not started.
+
+**The audit's purpose, narrowed and strengthened.**
+- Enumerate every production path whose success can currently depend on the
+  bootstrap overflow budget.
+- Determine what explicit authority would have to replace that budget before
+  enforcement can remove it.
+- Frequency of observation is not a proof criterion. Formation evidence
+  produces witnesses and falsifiers. An unobserved recovery path stays
+  unclassified, never unnecessary.
+
+**One row per budget-admitted case**, with these columns:
+path / partition class / triggering state / current guard reason / current
+budget dependency / semantic owner / proposed authorization kind / minting
+evidence available / validation evidence available / reachable witness /
+enforcement disposition.
+
+The disposition is one of:
+- `explicit-authority-required`;
+- `proved-unreachable`;
+- `proved-obsolete`;
+- `still-unclassified`.
+
+Nothing becomes "no authority needed" because it did not occur in the lab.
+
+1. **The bootstrap-critical partitions.**
+   - For the five the spread-cure policy can mint for, confirm that every
+     legitimate over-target transition is covered by the carried
+     authorization. Those five are:
+     - schema_operations;
+     - sql_transactions;
+     - sql_transaction_participants;
+     - sql_write_operations;
+     - control_plane_publications.
+   - Look for ways to reach the guard without passing the minting owner:
+     alternate planners, follow-up operations, recovery paths and direct
+     coordinator entry points.
+   - Separately audit the partitions the guard's budget covers but this
+     authority cannot mint for. The owner names the ledger, services,
+     nodes, partitions, message_groups, tables and config.
+   - The mint is not widened to match the old budget.
+   - Six questions for each such partition:
+     - can an over-target promotion or replacement reach the guard;
+     - under what semantic condition is it legitimate;
+     - which component owns that condition;
+     - is it really the spread-cure semantic or a different authority;
+     - can a production-shaped witness be constructed;
+     - what fails today if the budget is removed.
+   - Different authorities are modelled explicitly.
+2. **Unhealthy-source REPLACE is audited independently.** It is not
+   classified as a spread cure until proven.
+   - Trace it from the decision that a source is unhealthy, through planner
+     and coordinator construction, to the guard.
+   - Classify the temporary over-replication as one of:
+     - required for safety;
+     - required for availability;
+     - an implementation artifact;
+     - accidental reliance on the budget.
+   - If it is legitimate, the owner that knows why the replacement is
+     authorized eventually mints its own bounded authorization.
+   - The guard never infers replacement legitimacy from topology.
+3. **The epoch domain is closed before enforcement.** The alias
+   `observedMembershipEpoch` escaped the inventory.
+   - The inventory covers every reader, writer, alias, projection and
+     serialized representation of the epoch concept.
+   - It establishes:
+     - the canonical meaning;
+     - the authoritative writer;
+     - every reader and every alias;
+     - whether readers observe the same publication object or state;
+     - whether one reader can legitimately lag another;
+     - exactly what makes an authorization stale.
+   - The end state is one predicate owned in one place.
+   - No tolerance such as "current or previous epoch" is added unless the
+     authority model itself proves that window meaningful.
+   - Reader disagreement is never solved inside the guard.
+   - The carry stage's invariants are preserved if possible: the guard reads
+     no epoch tables, and the evaluation has one reader.
+   - The future transition is tested explicitly:
+     - an authorization that is present, from the correct authority, with a
+       matching epoch, is honoured;
+     - the falsifiers are a wrong, future, stale or missing epoch, a wrong
+       partition, an altered authorized voter bound, and an authorization
+       from the wrong semantic authority.
+4. **Four carried-forward details are investigated before enforcement.**
+   - **The partition-row read's timing.** Trace the lifetime of the declared
+     replication authority across planning and execution. Move the read only
+     if a real inconsistency exists.
+   - **The row type ignored by the evaluation.** Could an authorization
+     valid for one operation or record type be interpreted as another?
+     - If type is part of authority identity, bind it.
+     - If it is irrelevant, prove it.
+   - **The authorized voter count**, `max(in-flight active count, active voter count)`.
+     - It is not silently renamed a voter census.
+     - Trace why each term is needed, and construct cases where they differ.
+     - Decide which quantity is bounded:
+       - voters;
+       - active holders;
+       - effective membership during transition;
+       - another defined quantity.
+     - Give it one name and one owner.
+   - **`honoured` is the only grant outcome.**
+     - A valid, decoded or bound-matching authorization never grants by
+       itself.
+     - A mutant mapping every other outcome to grant must die.
+5. **Observability stays independent.**
+   - `readiness-admission-freeze-observed` continues on its own.
+   - Enforcement does not wait for it unless it uncovers evidence that
+     changes the admission semantics.
+   - Observability never becomes a repair owner.
+6. **The slow four-core host stays an adversarial class.** It is kept out of
+   homogeneous A/B comparisons, and its failures are never normalized out of
+   the corpus.
+
+**Enforcement entry gate.** The enforce quest is not begun until the audit
+demonstrates all nine:
+1. every current budget admission path is classified;
+2. every legitimate reachable path has an identified semantic owner;
+3. every such owner either already mints the required authority or has a
+   precisely scoped repair quest to do so;
+4. REPLACE semantics are classified;
+5. the complete epoch domain, including `observedMembershipEpoch`, is
+   inventoried and has one canonical predicate;
+6. the meaning of the authorized count is defined;
+7. authorization identity and type binding is settled;
+8. only `honoured` can grant;
+9. there is a falsifier for each authority boundary, not merely happy-path
+   formation evidence.
+
+The enforcement quest is then authored from the audit result, not from the
+existing guard. The shape is:
+- the semantic owner decides;
+- the owner mints a bounded authority;
+- the operation carries it unchanged;
+- the guard validates through one canonical authority predicate;
+- only honoured replaces the compatibility budget.
+
+The guard never reconstructs why an operation ought to be legal.
+
+**Lead's note on the partition count.**
+- The owner's text speaks of twelve bootstrap-critical partitions, five
+  plus seven.
+- The carry stage's verifier measured the guard's predicate
+  (`isBootstrapCriticalSystemPartitionId`) as true for all 45 system
+  partitions at this head. Five are mintable and 40 are not.
+- The audit re-measures this first.
+- The owner's seven keep one row each.
+- Every other partition the predicate admits is audited too. It is never
+  assumed equivalent without a demonstrated identity of producers,
+  predicates and reachability.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to
