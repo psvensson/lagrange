@@ -626,6 +626,167 @@ The guard never reconstructs why an operation ought to be legal.
   assumed equivalent without a demonstrated identity of producers,
   predicates and reachability.
 
+## Owner's architectural decisions for the authority model (2026-09-19, night)
+
+**Standing rules.**
+- The audit is verified exactly as submitted, and no matrix row is
+  repaired, narrowed or reinterpreted while verification runs.
+- The enforce stage remains closed.
+- The compatibility budget is not the specification.
+- The purpose is to discover the legitimate transitions and give each one an
+  explicit owner. It is not to recreate every behaviour the budget happened
+  to permit.
+
+1. **`honoured` becomes the complete authorization result.**
+   - The guard never grants on `honoured && withinAuthorizedBound` as two
+     independently interpreted conditions.
+   - The bound belongs inside the canonical evaluation predicate, so a
+     record authorizing 5 and presented for a transition to 8 is not
+     `honoured`.
+   - The target is `evaluation.outcome === honoured`, and nothing else
+     grants.
+   - This is done in a separate pre-enforcement quest. It changes
+     evaluation and diagnostics, and it changes no production admission
+     decision.
+   - Its mutants cover:
+     - bound exceeded;
+     - bound exactly reached;
+     - malformed bound;
+     - absent bound;
+     - valid record with the wrong partition;
+     - valid record with the wrong semantic authority;
+     - valid record with the wrong epoch.
+   - Enforcement may consume `honoured` only after that evaluation is
+     independently sealed.
+2. **No `priority_recovery_relocation` kind merely because REPLACE lives in
+   another module.** Mechanism is not authority.
+   - If verification confirms that the follow-up move decides the same
+     distinct-node spread gap the cure policy owns for ADD, that is a split
+     owner to be unified, not institutionalized.
+   - There is one semantic owner of "this partition has insufficient
+     distinct-node spread and this transition is an authorized step toward
+     repairing it".
+   - That owner may authorize different operation shapes.
+   - The follow-up move obtains the decision from it.
+   - A separate kind exists only for a demonstrably different semantic
+     reason.
+3. **The cross-partition budget coupling is legacy, not contract.**
+   - No replacement authorization may let partition A exceed its bound
+     because partition B has a spread problem.
+   - Every authorization is attributable to its own partition and
+     transition.
+   - For the ledger, first determine why the ledger itself legitimately
+     needs the over-target transition.
+   - If the only explanation is spillover from the old summary, it is not
+     reproduced.
+   - If there is a ledger-local availability or recovery need, its owner
+     gets an authority scoped to that reason.
+4. **The establishing-window and undeclared-row cases are findings, not
+   automatically missing authorities.**
+   - No authorization is minted merely to keep today's admission alive.
+   - For each case the audit determines which of these it is:
+     - a legitimate bootstrap transition with some other explicit owner;
+     - an old fail-open path that enforcement should intentionally
+       eliminate.
+   - For the establishing window, the publication or formation owner
+     actually knows why the transition is safe. The spread-cure owner never
+     infers it.
+   - Until that is answered, both rows stay `still-unclassified`.
+5. **The canonical epoch reader is not selected while the census has
+   `unknown_not_traced` entries.**
+   - Finish those traces first, or remove entries from the domain with
+     evidence.
+   - Then define one concept. The owner's expectation is "the
+     topology/publication version whose membership state the authority
+     owner used when authorizing this transition".
+   - The exact definition is derived from the existing owner. The
+     authorization binds to it explicitly. The predicate is owned in one
+     place.
+   - The guard never decides what "current epoch" means, and never queries
+     another table to reconstruct it.
+   - Three edge cases are unacceptable:
+     - a future epoch is honoured;
+     - an invalid supplied epoch reads not-evaluated;
+     - epoch zero honours arbitrary records.
+   - An explicitly supplied bad epoch must fail evaluation.
+   - The default is exact semantic match, unless the completed domain audit
+     establishes a legitimate multi-epoch window.
+   - No "current or previous" tolerance is added to make tests pass.
+6. **The authorized count needs a definition, not a better name.**
+   - Prove why `max(in-flight active count, active voter count)` safely
+     represents what is bounded.
+   - Construct adversarial cases where the two views disagree in membership
+     identity, not only in count.
+   - Determine whether an invariant guarantees that one view subsumes the
+     other. Otherwise the max may undercount the union.
+   - A name such as `authorizedMembershipCeiling` is used only with a
+     precise population and a proof.
+   - `authorizedVoterCount` is not exposed as protocol terminology if that
+     is not what it means.
+7. **Authorization identity is bound explicitly before multiple kinds
+   exist.**
+   - The identity is never left to partition-scoped replica ids.
+   - The audit covers at least:
+     - partition identity;
+     - semantic kind;
+     - operation class, if it changes what is authorized;
+     - topology/publication epoch;
+     - membership ceiling;
+     - destination and replica identity where relevant.
+   - The row's `type` is not bound merely because it exists.
+   - The test is: could the same otherwise-valid authorization be replayed
+     through another operation class and acquire authority it was not
+     intended to have? If yes, bind the class. If no, prove why.
+8. **Initial provisioning stays its own semantic question.**
+   - Formation and bootstrap are not spread recovery.
+   - If provisioning needs over-target transitions, the formation owner gets
+     an explicit bootstrap authority.
+   - If it does not, the compatibility admission is proved unnecessary.
+   - The rows stay unclassified until known.
+9. **Gate item 3 authorizes quest design, not implementation.**
+   - After round 2, narrowly scoped repair quests are authored for the
+     surviving explicit-authority rows.
+   - They are grouped by semantic owner, not by row and not by ADD or
+     REPLACE.
+   - They are not all started automatically.
+   - The likely decomposition, to be derived from the verified matrix:
+     - complete the evaluation semantics;
+     - unify the spread-recovery decision owner across mechanisms;
+     - publication and establishing authority, if legitimate;
+     - ledger overflow, only if a ledger-local need is shown;
+     - formation and bootstrap authority;
+     - the guard-invisible-operation and rematerialization classes.
+10. **`readiness-routing-denial-cause-carried` stays parked.**
+    - When resumed, it is scoped structurally:
+      - one owner of the failure-entry or envelope shape, or a carrier that
+        does not rely on hand-maintained field lists;
+      - the transaction protocol included;
+      - mixed-participant attribution defined;
+      - a typed preservation test, not a text heuristic;
+      - all explicit-list projections covered by one contract.
+    - It stays behind the authority path, unless nightly evidence makes the
+      cause necessary to diagnose formation.
+11. **The four nightly instruments are falsifiers, not authorities.**
+    - They challenge rows and produce witnesses.
+    - They never promote a `still-unclassified` row because something was
+      not observed.
+    - A transition outside the matrix is an audit failure. The missing
+      admission class is added before proceeding.
+
+**Order.**
+1. Round-2 verification.
+2. Correct only verifier-proven audit defects.
+3. Freeze the verified matrix and gate document.
+4. Close the epoch census.
+5. Define the membership-ceiling invariant.
+6. Complete authorization identity and evaluation, so that `honoured` is the
+   whole result.
+7. Repair the missing semantic owners, grouped by authority.
+8. Re-run the audit against those repairs.
+9. Author the enforce quest from the resulting authority model.
+10. Enforcement.
+11. Certification.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to
