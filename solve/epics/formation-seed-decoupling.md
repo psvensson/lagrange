@@ -787,6 +787,151 @@ The guard never reconstructs why an operation ought to be legal.
 10. Enforcement.
 11. Certification.
 
+## Owner's rules for the audit's final attempt (2026-09-19, night)
+
+**Scope of the attempt.**
+- Attempt 3 is the final attempt at the read-only altitude.
+- Its job is a matrix we can trust, not the legitimation of every current
+  behaviour.
+- The enforce stage and every production repair stay closed.
+
+**The rules.**
+
+1. **Chained REPLACE is a consistency finding, not an authority
+   requirement.**
+   - The move owner serializes REPLACE to one in flight.
+   - The real builder suppresses a second REPLACE at four ACTIVE voters.
+   - A second REPLACE appears only when the prior target is still SYNCING
+     in one membership view.
+   - The admission class splits in two:
+     - the ordinary overlap of one promote-then-remove hand-off, which may
+       be legitimate replacement semantics;
+     - additional overlap caused by disagreement between the membership and
+       census views.
+   - The second part is `still-unclassified`. Its requirement is to
+     determine whether the two membership views are allowed to disagree in
+     that state. If they are not, the owner/census boundary is repaired,
+     rather than the resulting second transition being authorized.
+   - Authorization never legalizes a state created by inconsistent
+     observations.
+   - The same rule applies to `replacement_handoff_overlap`.
+2. **Producer-backed reachability comes only from the real chain.**
+   - The chain is: real producer -> real operation representation -> real
+     coordinator and repository path -> real guard.
+   - Nothing is replaced by hand in between.
+   - Hand-built grids prove guard behaviour only.
+   - The evidence schema separates guard-reachable from producer-reachable.
+   - A row may be guard-reachable yes and producer-reachable unproven.
+3. **Lab attribution is explicit, or the witness stays unattributed.**
+   - Timing is never attribution.
+   - Attribution needs one of:
+     - an operation or producer id correlation;
+     - a payload uniquely attributable to a producer;
+     - a trace naming the producing owner;
+     - a structural proof excluding the other producers.
+   - Otherwise the entry reads "lab witness: transition observed; producer
+     unattributed". Such an entry upgrades nothing.
+4. **Dependency is mechanically falsifiable.**
+   - `does_not_depend` needs a named differential witness at budget = actual
+     and budget = 0. The witness proves an identical admission boundary over
+     the complete stated domain.
+   - `depends` needs at least one state where changing only the budget
+     changes the result.
+   - The validator rejects either claim without its receipt.
+5. **Gate status is derived from evidence and is monotonic.**
+   - Removing a row, finding, test or requirement never makes an item
+     demonstrated.
+   - Item 8 is not-yet.
+   - Item 8 ultimately depends on the sealed identity and evaluation quest.
+6. **Grant-rule falsifiers.**
+   - `honoured && withinAuthorizedBound` is the interim pin, for this audit
+     only.
+   - Boundary cases are added:
+     - at the bound;
+     - one above and one below the bound;
+     - unreadable, missing, zero and very small bounds.
+   - Mutants are added for `within !== false`, for ignoring small bounds,
+     and for off-by-one.
+   - The inherited requirement is recorded: after the identity and
+     evaluation quest, the only consumer rule is `outcome === honoured`.
+     Every bound and identity failure produces a non-honoured outcome.
+   - Today's `honoured` is never described as complete.
+7. **No claim of epoch-census completeness.**
+   - Attempt 3 does not close the domain.
+   - The inventory distinguishes three kinds of entry:
+     - traced members of the suspected topology/publication-version domain;
+     - aliases reached through data flow;
+     - unresolved version-like values of unknown semantic relationship.
+   - The validator rejects "complete", "closed" and their equivalents while
+     unresolved entries remain.
+8. **Confirmed semantic corrections.**
+   - ADD and the follow-up REPLACE are two mechanisms of one distinct-node
+     spread-recovery semantic, which means a split decision owner.
+     - No second authority kind is proposed.
+     - The future proposal is one spread-recovery decision owner, with both
+       mechanisms consuming its bounded authorization.
+     - Operation shape is bound strongly enough that an ADD authorization
+       cannot authorize an unrelated REPLACE.
+   - The establishing-window and undeclared-row rows are still-unclassified.
+     Each states what would distinguish a legitimate transitional authority
+     from a fail-open path.
+   - No ledger authority is proposed.
+     - The ordinary +1 is covered by the replacement allowance.
+     - The extra overlap is the chained/census-disagreement condition.
+     - Residual ledger overflow stays unclassified until a ledger-local need
+       is shown.
+9. **Gate items 3, 5 and 6 stay blocked or not-yet.**
+   - Item 3 needs every legitimate reachable admission class associated with
+     exactly one semantic owner, or a defined repair establishing one. That
+     comes after the matrix is frozen.
+   - Item 5 chooses no canonical reader in this attempt.
+   - Item 6 records what must be established. The later membership-ceiling
+     work tests identities as sets, over these cases:
+     - status as a subset of raft;
+     - raft as a subset of status;
+     - overlapping non-subset sets;
+     - disjoint differences with equal counts;
+     - a stale member in one view and a newly admitted one in the other.
+   - For item 6, the containment invariant is either proved, or it is
+     recorded that `max(|A|, |B|)` does not bound `|A ∪ B|`. No formula is
+     chosen in the audit.
+10. **The repair-quest proposal is grouped by semantic cause, and nothing
+    is started.**
+    - Expected categories, if the evidence survives:
+      - unify spread-recovery authority across ADD and REPLACE;
+      - resolve the membership/census disagreement that can expose an
+        otherwise-suppressed second REPLACE;
+      - establishing-publication semantics;
+      - undeclared-row and cache-disagreement semantics;
+      - initial-provisioning semantics;
+      - guard-invisible operation state;
+      - operation-row re-materialization;
+      - close topology/publication version identity;
+      - define authorization identity and the membership ceiling.
+    - No ledger-authority quest is proposed.
+11. **Stopping condition.**
+    - The attempt-3 result goes unchanged to independent verification.
+    - If it fails on another ordinary audit defect, the audit is stopped.
+      - No attempt 4 at this altitude.
+      - The surviving evidence is recorded.
+      - A narrower successor targets the unresolved structural problem.
+      - Ordinary defects are: a missing row, false reachability, an
+        incorrect classification, or a non-structural validator.
+    - If it fails because a requested proof is impossible from guard-visible
+      state, that is recorded as an architectural result. It is not encoded
+      into the matrix.
+
+**After approval.**
+1. Freeze the matrix and the gate document.
+2. Close the version and epoch domain, including aliases that do not
+   contain the word epoch.
+3. Define and prove the membership-ceiling invariant.
+4. Build the identity and evaluation quest, so that the whole contract
+   collapses into one `honoured` outcome.
+5. Design semantic-owner repairs from the frozen matrix.
+6. Re-run the read-only audit against the repaired owners.
+7. Only then author enforcement.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to
