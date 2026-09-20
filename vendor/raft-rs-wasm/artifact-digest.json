@@ -1,0 +1,73 @@
+{
+  "note": "The artifact the raft-rs-wasm backend loads, how it was built, and the raft-rs 0.7 sources the host contract is cited against. Integrity is required; reproducibility is measured and reported as found.",
+  "wasmSha256": "ae5b180354f7e7aaf4c7e5c49c2c45d3f8fbb11479c7e32d405a501563e4d33b",
+  "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
+  "wasmBytes": 680192,
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+  "wasmPack": "wasm-pack 0.13.1",
+  "wasmBindgen": "0.2.104",
+  "raftCrate": "raft",
+  "raftCrateVersion": "0.7.0",
+  "raftCrateChecksum": "f12688b23a649902762d4c11d854d73c49c9b93138f2de16403ef9f571ad5bae",
+  "raftProtoVersion": "0.7.0",
+  "raftProtoChecksum": "fb6884896294f553e8d5cfbdb55080b9f5f2f43394afff59c9f077e0f4b46d6b",
+  "buildCommand": "wasm-pack build --release --target nodejs",
+  "target": "wasm32-unknown-unknown",
+  "forkedFrom": "raft-logic 0.3.14 native/raft-wasm (repository head 918d481)",
+  "upstreamed": false,
+  "reproducibility": {
+    "attempts": 3,
+    "method": "the recorded build command run twice on one machine with `cargo clean` between them (attempts 1 and 2, one source); attempt 3 is the checked-in artifact after the fork fixes and is a DIFFERENT source, so it is not part of the reproducibility comparison",
+    "builds": [
+      {
+        "attempt": 1,
+        "wasmSha256": "e9e31ba98098c6aa66179110c65adfab2ca22cfba0b346cbc465d37e4c83e415",
+        "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+      },
+      {
+        "attempt": 2,
+        "wasmSha256": "6043f9ba68f44dac5e4562fd6bd29ad88aef77ccf117bc953e6e1e4b0d31086d",
+        "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+      },
+      {
+        "attempt": 3,
+        "wasmSha256": "ae5b180354f7e7aaf4c7e5c49c2c45d3f8fbb11479c7e32d405a501563e4d33b",
+        "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
+        "note": "after the three fork fixes; not comparable to the earlier attempts, which were a different source"
+      }
+    ],
+    "checkedInArtifactIsAttempt": 3,
+    "glueIdentical": true,
+    "wasmIdentical": false,
+    "result": "differs",
+    "observation": "the generated JavaScript glue is byte-identical across both builds; the .wasm is not. Reported as measured; byte-for-byte reproducibility is not a requirement of this quest.",
+    "note": "attempts 1-3 measured the reproducibility of ONE source; attempt 4 is a different source (the fork fixes) and is the checked-in artifact. The reproducibility verdict below refers to attempts 1 and 2."
+  },
+  "forkFixes": [
+    {
+      "fix": "with_node takes the node out of the handle table for the duration of the call",
+      "why": "a raft-rs fatal! inside the closure left the NODES RefCell borrowed for ever (panic=abort on wasm32, so no unwinding and no catch_unwind); every later call on EVERY handle then trapped \"RefCell already borrowed\", including create_node and free. Measured before and after."
+    },
+    {
+      "fix": "decode_conf_change_entry returns an error on undecodable base64",
+      "why": "upstream unwrap_or_default() turned corrupt data into an EMPTY change list, which is a valid request to leave a joint configuration"
+    },
+    {
+      "fix": "pending_conf_index crosses as a decimal string",
+      "why": "it was the one u64 crossing as a JS number"
+    }
+  ],
+  "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the experimental raft-rs-wasm backend the provider seam selects. It lives outside src/ because wasm-pack output is nobody's source: keeping it out of the source tree is what lets every repository checker stay on its own default walk with no exclusion for it. Moved here from the exhausted raft-backend-evaluation test tree (tag raft-backend-evaluation/round-3-rejected-tree); the .wasm and the glue are byte-identical to the tagged tree, which the two digests above prove.",
+  "citationSources": {
+    "note": "The raft-rs 0.7.0 sources the host contract cites, vendored so a citation resolves without a cargo registry. The chain is: the crates.io checksum recorded as raftCrateChecksum is the sha256 of the published .crate tarball; these files were extracted from that tarball and their own digests recorded here.",
+    "crateTarballSha256": "f12688b23a649902762d4c11d854d73c49c9b93138f2de16403ef9f571ad5bae",
+    "files": {
+      "src/lib.rs": "2d46291e5c0e11a575610756abfba97827abadba9e11b985b907d44b75aeca7e",
+      "src/raw_node.rs": "92cbca1fa82288ad8ccecbc74066bb766ea38b5ffce4ed89a0d1e0f174ddb057",
+      "src/raft_log.rs": "2de371ef878538c215782e8f8ed987e3ed4b1bda966f0c5f5da91d1cea6c42a4",
+      "examples/five_mem_node/main.rs": "c2c17c69c6e3ba12cd5120ac70746e1398305cf6e5348cd8aae46aab30342d6f",
+      "LICENSE": "c52cf83bf02deb33ef952e2808e3d0b3916d532805d865880ba9bdf8f2c0c93c"
+    }
+  }
+}

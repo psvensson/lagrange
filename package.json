@@ -23,6 +23,7 @@
   "files": [
     "src/",
     "!src/test-helpers/",
+    "vendor/raft-rs-wasm/",
     "CHANGELOG.md"
   ],
   "scripts": {

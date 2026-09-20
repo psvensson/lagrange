@@ -15,6 +15,9 @@
     "test/integration/cdc-debug-test.js",
     "test/distributed/scenarios/*.js",
     "test/runtime/pgwire-test-matrix.js",
+    // Spawned one process per hostile shape by the ingress receipt, because a
+    // raft-rs trap makes the runtime it happened in unusable.
+    "test/raft/raft-rs-backend/hostile-message-probe.js",
     "scripts/**/*.js",
     "examples/**/*.js"
   ],
