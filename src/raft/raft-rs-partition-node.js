@@ -44,7 +44,6 @@ import {
 import {
   RAFT_RS_ENTRY_DATA_ENCODING,
   RAFT_RS_PARTITION_ERROR_MSG,
-  RAFT_RS_PARTITION_KEY_SEPARATOR,
   RAFT_RS_TICK_FLOOR_MS,
   RAFT_RS_TICK_SCHEDULING,
 } from './raft-rs-partition-node-constants.js';
@@ -286,19 +285,7 @@ function buildRaftRsPartitionNode(request) {
   return control;
 }
 
-/**
- * The key the shared runtime holds one partition replica under.
- * @param {string} groupId - The group.
- * @param {string} peerId - The raft peer id.
- * @return {string} The key.
- */
-function raftRsPartitionKey(groupId, peerId) {
-  return `${groupId}${RAFT_RS_PARTITION_KEY_SEPARATOR}${peerId}`;
-}
-
 export {
   RAFT_RS_TICK_SCHEDULING,
   buildRaftRsPartitionNode,
-  raftRsPartitionKey,
-  sharedRuntimeHost,
 };

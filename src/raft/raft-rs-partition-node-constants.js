@@ -8,12 +8,6 @@
 // anything ticks. Each of those is named here so no use site writes one
 // inline.
 
-// The one WASM runtime this process holds its raft-rs groups in (§9: start
-// with the simplest Multi-Raft host - one runtime, many RawNodes). A partition
-// node joins it rather than instantiating a runtime of its own, so a trap is
-// a property of the runtime and a replacement restores every group in it.
-const RAFT_RS_PARTITION_KEY_SEPARATOR = '/';
-
 // How often the host ticks the core when the group's timing does not say. A
 // raft-rs tick is a logical unit and the core counts heartbeats in ticks, so
 // the wall-clock period is DERIVED from the group's own heartbeat interval
@@ -52,7 +46,6 @@ const RAFT_RS_PARTITION_ERROR_MSG = Object.freeze({
 export {
   RAFT_RS_ENTRY_DATA_ENCODING,
   RAFT_RS_PARTITION_ERROR_MSG,
-  RAFT_RS_PARTITION_KEY_SEPARATOR,
   RAFT_RS_TICK_FLOOR_MS,
   RAFT_RS_TICK_SCHEDULING,
 };
