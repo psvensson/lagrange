@@ -84,6 +84,8 @@ authorizes:
   - scripts/quest-evidence/critical-spread-overflow-budget-audit.js
   - scripts/quest-evidence/overflow-budget-audit-evidence-binding.js
   - scripts/quest-evidence/replica-membership-model-reduction.js
+  - scripts/quest-evidence/raft-backend-evaluation.js
+  - test/raft
   - scripts/quest-evidence/readiness-admission-transitions-observed.js
   - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
@@ -1020,6 +1022,28 @@ step list and the transition-identity candidate in the section above included.
   implementation quest carries a complexity ledger.
 - Stop conditions are listed in the document; on any of them, bring back the
   falsifier and the smallest additional concept, never Model B directly.
+
+## Raft backend evaluation comes first (owner, 2026-09-20)
+
+[owner-decision-raft-backend-evaluation-2026-09-20.md](formation-seed-decoupling/owner-decision-raft-backend-evaluation-2026-09-20.md).
+- Verified: Lagrange has no committed Raft membership. liferaft's join/leave
+  edit a local peer array that each node reconciles from cached service rows.
+  Model A's third element does not exist today.
+- No Lagrange-owned committed-membership protocol is built on liferaft. First
+  prove whether the TiKV raft-rs core, through the existing raft-logic WASM
+  work, provides committed membership cleanly. The core is the asset under
+  evaluation, not the raft-logic JS convenience API.
+- Established before the evaluation: raft-logic 0.3.14 exposes a RawNode-shaped
+  binding but NO configuration-change proposal or application; the binding must
+  be extended first (raft 0.7 has ConfChangeV2; the toolchain is local). An
+  earlier spike already sits in `src/raft/spike/`.
+- The quest `raft-backend-evaluation`: (A) drive liferaft's divergent quorums;
+  (B) state the minimum contract Lagrange needs; (C) five decisive scenarios on
+  the raft-rs core. Main is not switched. `replica-membership-model-reduction`
+  stays written and unsealed until this decides what committed membership is.
+- If it succeeds: provider interface, experimental backend, formation
+  comparison, ConfState authoritative with service rows as its projection,
+  liferaft removed.
 
 ## Simulator frozen (2026-09-19)
 
