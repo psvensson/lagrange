@@ -1,0 +1,105 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "critical-spread-overflow-budget-audit",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/overflow-budget-partition-sets.test.js": "a4afe2bfb2196df19f90bea8efb58b48d11e06590ca600cd4017caf34ec194ae",
+    "test/partition/overflow-budget-admitted-case-grid.test.js": "3b9976db92f71e9a40975c73b4a3a56abdbd2953d70d696be0c75935f5539119",
+    "test/rebalancer/overflow-budget-add-like-producer-census.test.js": "28728231efb485896a6949833019de6a23f1bf83f1356d61ffd82ac70a52314d",
+    "test/rebalancer/overflow-budget-mintable-five-routes.test.js": "3bef4438fe9e19d5daaa353f6f8a10791e933949ea55d95e93c99264c777dbcf",
+    "test/partition/overflow-budget-unmintable-partitions.test.js": "5125f381e5801750c12761b34392f295023dd4ebb3a083caa7758220c7d2c909",
+    "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js": "a2336b21eb7dd1ad9e668b02400b056ffaa5f3f196ea05605c327331a6424a1b",
+    "test/rebalancer/membership-epoch-domain-census.test.js": "dfe0dc0328cb33e63e582e1ec39c065c7e3d57c95c360b09202e387e9e521c3f",
+    "test/control-plane/membership-epoch-reader-divergence.test.js": "4cf34aa7c7e04c9cd9b4e74c51756ff1322b66cc73b34a25b9a25a4b72e44679",
+    "test/rebalancer/spread-cure-authorization-future-transition.test.js": "a8d89c6c6d5ba934a1c234acea90cdec3b67df5bf64d7440f4fff14ef05e35a1",
+    "test/rebalancer/overflow-budget-carried-forward-details.test.js": "91515bde5c6b80ada00db0728d9feb92cddf4033801bc3dde1be26867c0e3a7d",
+    "test/rebalancer/overflow-budget-matrix-validator.test.js": "6b35a38e3510d35cc69d57cc90ed8fe6d2a344821a05397ea17e318be7873a51"
+  },
+  "generatedAt": "2026-09-19T19:34:47.876Z",
+  "receipts": [
+    {
+      "id": "critical-and-mintable-partition-sets-measured",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the guard's bootstrap-critical set and the mintable subset are measured$\" test/rebalancer/overflow-budget-partition-sets.test.js",
+      "detail": "both predicates over every system-table partition, the owner's seven and the measured remainder, pinned so a change turns this red",
+      "testFile": "test/rebalancer/overflow-budget-partition-sets.test.js"
+    },
+    {
+      "id": "budget-admitted-cases-enumerated-by-state-grid",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every budget-admitted state grid row maps to exactly one admission class$\" test/partition/overflow-budget-admitted-case-grid.test.js",
+      "detail": "the real count check and the real priority-recovery completion owner over an exhaustive grid; admitted with the budget, refused without it",
+      "testFile": "test/partition/overflow-budget-admitted-case-grid.test.js"
+    },
+    {
+      "id": "every-add-like-producer-is-in-the-matrix",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every production producer of an add-like operation is in the matrix$\" test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+      "detail": "a census of the createOperation callers, the move producers and the provisioning path, crossed with the partition classes",
+      "testFile": "test/rebalancer/overflow-budget-add-like-producer-census.test.js"
+    },
+    {
+      "id": "mintable-five-have-no-unminted-route-or-it-is-a-row",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every alternate route to the five carries the mint or is a matrix row$\" test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+      "detail": "alternate planners, follow-ups, recovery and coordinator entry points, the ESTABLISHING window and the operation-less promotion",
+      "testFile": "test/rebalancer/overflow-budget-mintable-five-routes.test.js"
+    },
+    {
+      "id": "every-unmintable-partition-is-audited",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every unmintable admitted partition is audited on the real guard$\" test/partition/overflow-budget-unmintable-partitions.test.js",
+      "detail": "the owner's seven one row each and the remainder by demonstrated identity, with the budget forced to zero in a completion-owner double",
+      "testFile": "test/partition/overflow-budget-unmintable-partitions.test.js"
+    },
+    {
+      "id": "unhealthy-source-replace-traced-and-classified",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the priority-recovery relocation REPLACE is traced end to end and classified$\" test/rebalancer/overflow-budget-unhealthy-source-replace.test.js",
+      "detail": "the real follow-up builder, the real coordinator creation and the real guard; the condition named truthfully, the chain, the censuses and the classification",
+      "testFile": "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+    },
+    {
+      "id": "epoch-domain-inventory-is-complete-by-census",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the membership-publication-epoch census matches the inventory exactly$\" test/rebalancer/membership-epoch-domain-census.test.js",
+      "detail": "a pattern that matches observedMembershipEpoch and every other alias, failing on any src entry the inventory does not carry",
+      "testFile": "test/rebalancer/membership-epoch-domain-census.test.js"
+    },
+    {
+      "id": "epoch-reader-divergence-reproduced-on-real-owners",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the two epoch readers diverge on real owners over the stated row sets$\" test/control-plane/membership-epoch-reader-divergence.test.js",
+      "detail": "the readiness service and the publication coordinator reads, each returned value asserted",
+      "testFile": "test/control-plane/membership-epoch-reader-divergence.test.js"
+    },
+    {
+      "id": "future-honoured-transition-and-its-falsifiers-pinned",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the future honoured transition and its seven falsifiers are pinned$\" test/rebalancer/spread-cure-authorization-future-transition.test.js",
+      "detail": "against the landed evaluation with a supplied epoch; a falsifier the evaluation does not refuse is recorded as a gate finding",
+      "testFile": "test/rebalancer/spread-cure-authorization-future-transition.test.js"
+    },
+    {
+      "id": "only-honoured-can-grant",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a grant rule that maps any outcome but honoured to grant is caught$\" test/rebalancer/spread-cure-authorization-future-transition.test.js",
+      "detail": "the mutant-style falsifier the enforce quest inherits",
+      "testFile": "test/rebalancer/spread-cure-authorization-future-transition.test.js"
+    },
+    {
+      "id": "carried-forward-details-settled-as-findings",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the partition-row read, the row type and the authorized count are settled$\" test/rebalancer/overflow-budget-carried-forward-details.test.js",
+      "detail": "one test-backed finding each, on the real mint, planner and evaluation",
+      "testFile": "test/rebalancer/overflow-budget-carried-forward-details.test.js"
+    },
+    {
+      "id": "matrix-and-gate-are-complete-and-in-sync",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the matrix, the inventory and the gate are complete and in sync$\" test/rebalancer/overflow-budget-matrix-validator.test.js",
+      "detail": "fields, enums, witness forms, no frequency language, generated markdown, and gate items citing existing rows and tests",
+      "testFile": "test/rebalancer/overflow-budget-matrix-validator.test.js"
+    }
+  ]
+}
