@@ -213,3 +213,112 @@ operation having occurred probably closes the architectural question about
 liferaft. Then term/vote before a crash and after a restart from the actual
 production persistence path: absent term persistence would be an independent
 reason not to keep investing in that backend.
+
+## Second addendum (owner, 2026-09-20): the restart/persistence matrix is the acceptance surface
+
+The lead found the first phase-2 result vacuous on the restart boundaries (six
+named boundaries were one host state: the stop fired on the first Ready cycle,
+not the cycle carrying the configuration entry). The owner: continue the
+repair, do not broaden the quest, do not begin backend integration; treat the
+previous all-green result as invalid until these receipts are repaired and
+independently verified.
+
+1. **Boundaries relative to the actual configuration-change entry**, its index
+   discovered from the core's own Ready. Per boundary: configuration entry
+   index; durable last log index, commit index, applied index; durable
+   HardState term/vote/commit; durable ConfState; in-memory ConfState before
+   the stop where meaningful; Ready/LightReady phase reached; whether
+   `apply_conf_change`, append advancement and apply advancement have run. Each
+   named boundary is proved a distinct host state; two that serialize to the
+   same relevant durable state keep the receipt red unless the raft-rs contract
+   proves them intentionally indistinguishable.
+2. **Recovery without network repair.** The victim restarts isolated; the first
+   assertions come only from the persisted log, HardState, applied position,
+   ConfState/snapshot and the restored RawNode. `local restore correctness` and
+   `eventual cluster convergence` are separate claims; convergence never
+   satisfies the restore receipt.
+3. **Follower and leader victims**, measured not prescribed.
+
+   > After restart, the node's state is exactly explainable by what was durably
+   > persisted, and it never invents a configuration change that durable Raft
+   > state does not justify.
+
+   A leader crash before persistence may legitimately lose the proposal.
+4. **Persistence-order violations are explicit mutants**: advance append before
+   persisting entries; persist HardState but omit the entries; apply a committed
+   configuration change before its entry is durable; update in-memory ConfState
+   without persisting it; persist ConfState but leave the applied index behind;
+   advance application before persisting applied progress; restore an applied
+   index ahead of the durable log; restore a new ConfState with an old applied
+   index; restore an old ConfState with an applied index beyond the
+   configuration entry. Each is refused, fails restart equivalence, or produces
+   an explicit unsafe result. raft-rs need not detect them all; the adapter
+   must be unable to implement one by accident.
+5. **Raft's contract separated from Lagrange's host obligations.** The
+   evaluation ends with a small host contract - the operations around a Ready
+   cycle, in the order derived from raft-rs 0.7 and proved followed by the
+   adapter - distinguishing `raft-rs guarantees` from `host must guarantee`.
+6. **Joint-consensus restart proves both configurations**: the complete
+   ConfState (voters, outgoing voters, learners, learners-next, auto-leave),
+   never reduced to "current voters"; then, separately, departure from the
+   joint state. Auto-leave needing a tick is a measured behavioural property
+   the future host must know, not necessarily a blocker.
+7. **Re-application, precisely.** Record only:
+
+   > For the specific idempotent configuration-change case measured here,
+   > re-applying that change produced the same ConfState.
+
+   An applied index also matters for state-machine command re-application,
+   snapshot restore, compaction, which committed entries still require host
+   application, and exactly-once side effects above Raft.
+8. **Sequential and joint replacement stay separate**, each reported on its own
+   terms (entries, catch-up criterion, learner death, old-voter death at each
+   phase, quorum per phase, restart; joint-enter configuration, joint quorum,
+   leave behaviour, auto against manual leave, peer failure while joint,
+   restart). The integration stage chooses; this quest does not.
+9. **The backend-contract census has four categories**: MUST SERVE;
+   MEMBERSHIP-LOCAL DELETE CANDIDATE (narrow: local join, local leave, mutable
+   local nodes list, `joinPeer`, peer-cache reconciliation as Raft membership
+   authority); DIFFERENT IMPLEMENTATION (not an architectural deletion);
+   PRODUCTION GAP (for example the Ready persistence protocol, ConfState
+   persistence, membership generation/projection, stable peer-id ownership).
+   The deletion forecast counts only the second.
+10. **Multi-Raft numbers are promising and preliminary.** They do not
+    extrapolate to 1,000 real partition groups under real traffic, SQLite
+    persistence, Ready processing, snapshots and entry delivery. The question
+    here is only whether the RawNode/WASM hosting model creates an obvious
+    blocker; current evidence appears to say no.
+11. **WASM build reproducibility is not a backend blocker.** Artifact integrity
+    and byte-reproducible build stay separate; identify the likely toolchain
+    nondeterminism; full reproducibility is a later supply-chain improvement
+    unless the difference shows uncontrolled source or build inputs.
+12. **Verdict derivation.** Consensus core: replicated membership;
+    learner/promotion; replacement; pending-change semantics; restart
+    correctness; stable peer identity; convergence independent of service
+    caches. WASM/backend boundary: full RawNode lifecycle exposure; correct
+    persistence/restore; ConfState restore; correct u64 identity; acceptable
+    handle hosting; no missing primitive forcing consensus semantics back into
+    JavaScript. Lagrange migration: `undetermined - requires integration stage`
+    unless a decisive incompatibility appears. Part A defects are reasons to
+    replace the current backend, not evidence that integration will succeed.
+13. **Independent verification** attacks the harness before trusting the
+    outcomes: move each crash trigger one Ready earlier/later; prove every
+    boundary is tied to the configuration entry; permit network delivery during
+    isolated restore and see it caught; corrupt durable ConfState only; corrupt
+    applied index only; omit HardState persistence; reuse a removed peer id;
+    mutate a learner into a voter on restore; attempt a second pending
+    ConfChange; alter service caches during raft-rs scenarios; replace a core
+    membership read with a test-declared set and require the receipt to fail.
+    Performance figures are re-measured as sanity checks; most effort goes to
+    persistence and membership safety.
+14. **Decision after this quest.** If independently approved with the core and
+    the WASM RawNode boundary viable and migration undetermined: stop investing
+    in a Lagrange-owned committed-membership protocol above liferaft. The next
+    quest is a minimal **experimental raft-rs partition backend integration** -
+    behind the existing provider seam; fresh clusters only; the existing
+    Lagrange transport; real durable storage; Raft ConfState as consensus
+    membership; membership projected outward rather than derived from
+    service-cache rows; the formation and failure corpus run side by side
+    against liferaft. No migration of old logs, no removal of liferaft, and the
+    membership-model-reduction implementation does not resume until the
+    integration experiment says which concepts raft-rs makes unnecessary.
