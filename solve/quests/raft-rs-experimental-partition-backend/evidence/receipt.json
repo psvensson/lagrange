@@ -4,20 +4,20 @@
   "status": "fail",
   "testFileDigests": {
     "test/raft/raft-rs-backend/backend-seam.test.js": "04be6eeb8543ec6cc0621ab4db107f24245894adc4f8ff42e40b6370b04c0f27",
-    "test/raft/raft-rs-backend/durable-ready-loop.test.js": "51f2e010319c175c38cbe43e7acba5cb42fad3bc29dd08b0e5ba603480316ff0",
+    "test/raft/raft-rs-backend/durable-ready-loop.test.js": "e90174335f51252bcf72f2f70f27e7ffd19b81385feaf1e5dc571582d3dbe345",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "b8389f4731538e57f63d28f26529116f76c8271be6050056ac36ea05303374f5",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "893409e416f6cac5f86b2fe2292e79fea7e901975f5af1ecdf412e394f728f64",
-    "test/raft/raft-rs-backend/ingress-safety-boundary.test.js": "6b4e206d4907767d982db8b5941ff24776bafc581a96177693b6d99cc35a5ba3",
+    "test/raft/raft-rs-backend/ingress-safety-boundary.test.js": "4376502a47cf4ff5f9446ff34e7cc36c64b0efcc3feeee7b1c28e39b6851b77f",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "c1d4fe37e2dbd7d972a17ff0387749ab839710efde152bc432292e5b321b1b2e",
     "test/raft/raft-rs-backend/multi-raft-scale.test.js": null,
     "test/raft/raft-rs-backend/peer-identity.test.js": "1646f07c9a69fefc0c73030e08a46e44654f83498e1c61a60239b98f324bc035",
-    "test/raft/raft-rs-backend/election-safety.test.js": "34ca43fc2e86af2c0d22c02d38f5ba31a3c74697f91c776920f02497ab8e92f5",
+    "test/raft/raft-rs-backend/election-safety.test.js": "059a5186a748d204bf7505789e077c666734dee2718b832222333564f5b17e0b",
     "test/raft/raft-rs-backend/sequential-membership-workflow.test.js": null,
     "test/raft/raft-rs-backend/snapshot-and-compaction.test.js": null,
     "test/raft/raft-rs-backend/side-by-side-scenarios.test.js": null,
     "test/raft/raft-rs-backend/complexity-ledger.test.js": null
   },
-  "generatedAt": "2026-09-20T18:24:51.957Z",
+  "generatedAt": "2026-09-20T19:54:02.567Z",
   "receipts": [
     {
       "id": "backend-seam-selects-explicitly-and-liferaft-behaviour-is-unchanged",
