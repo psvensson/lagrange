@@ -1,0 +1,38 @@
+import {attack,run,readM} from './h.mjs'; import {after} from './r3a.mjs'; import {toHandoff,declareVacuous} from './a2.mjs';
+const row=(d,id)=>d.matrix.rows.find(r=>r.id===id); const prod=(d,id)=>d.matrix.producers.find(p=>p.id===id);
+const RP='follow-up-unhealthy-source-replace';
+const typesOf=(d,r)=>[...new Set(r.producers.flatMap(p=>prod(d,p).addLikeTypes))].sort();
+const A={
+ // ---- Q2: are the anchors measured? ----
+ anchorTypes:d=>{ prod(d,'provisioning-create-operation').addLikeTypes=['REPLACE']; for(const r of d.matrix.rows) r.producerOperationTypes=typesOf(d,r); },
+ anchorTypesBogus:d=>{ prod(d,'provisioning-create-operation').addLikeTypes=['REMOVE','BANANA']; for(const r of d.matrix.rows) r.producerOperationTypes=typesOf(d,r); },
+ anchorScopeShrink:d=>{ prod(d,'planner-paired-relocation-replace').partitionScope.partitionIds=['services-p1']; // producer no longer "reaches" any budget-evaluated partition
+    for(const id of ['five-paired-relocation-replace','ledger-paired-relocation-replace']){const r=row(d,id); r.producers=[RP,'follow-up-deficit-add']; r.producerOperationTypes=typesOf(d,r);} },
+ anchorScopeGrow:d=>{ prod(d,'planner-ledger-expand-for-spread-add').partitionScope.partitionIds=[...d.matrix.partitionSets.budgetEvaluated]; },
+ psetsOwnerSevenGrow:d=>{ d.matrix.partitionSets.ownerNamedSeven.push('indices-p1'); const c=structuredClone(row(d,'owner-partition-services')); c.id='owner-partition-indices'; c.ownerNamedPartition='indices-p1'; c.partitionClass=['indices-p1']; c.provedUnreachableDomain.partitionIds=['indices-p1']; c.receipts=['guard-unreachability/whole-stated-grid/indices-p1']; d.matrix.rows.push(c); },
+ psetsRemainderEdit:d=>{ d.matrix.partitionSets.remainder=d.matrix.partitionSets.remainder.slice(1); },
+ psetsMintableEdit:d=>{ d.matrix.partitionSets.mintable=d.matrix.partitionSets.mintable.slice(1); },
+ // ---- Q3 ----
+ // uniqueness evasion by the one free named set: census-disagreement row states the hand-off proposition over budgetEvaluated (six)
+ sixSetHandoff:d=>{ const r=row(d,'five-relocation-census-disagreement-overlap'); r.partitionClass=[...d.matrix.partitionSets.budgetEvaluated]; toHandoff(d,r.id); declareVacuous(d); },
+ // dependency flipped among enum values, disposition unchanged (still-unclassified): key differs from the D3 row by subject=null
+ depFlipKeepDisposition:d=>{ const r=row(d,'five-relocation-census-disagreement-overlap'), src=row(d,'five-relocation-handoff-overlap'); r.currentBudgetDependency='does_not_depend'; r.budgetDifferentialWitness=null; r.budgetIndependenceMeasurement=structuredClone(src.budgetIndependenceMeasurement); if(r.sixAnswers) r.sixAnswers.budgetRemovalChangesTheDecision=false;
+    r.receipts=[...r.receipts.filter(i=>!i.startsWith('budget-dependence/')),...r.partitionClass.map(p=>'budget-independence-differential/relocation-handoff/'+p),'slice-provenance/relocation-handoff/'+RP].sort(); },
+ // disposition flipped still-unclassified -> explicit-authority-required on a row with a unique key
+ dispFlipAuthority:d=>{ const r=row(d,'five-expand-for-spread-add'); r.enforcementDisposition='explicit-authority-required'; delete r.stillUnclassifiedBecause; delete r.requirementToClassify; },
+ // admission classes: shrink and empty on a depends row
+ acShrink:d=>{ const r=row(d,'five-minted-spread-cure-add'); const drop=r.admissionClasses[0]; r.admissionClasses=r.admissionClasses.slice(1); r.receipts=r.receipts.filter(i=>!i.endsWith('/'+drop)); },
+ acEmptyDepends:d=>{ const r=row(d,'five-minted-spread-cure-add'); r.receipts=r.receipts.filter(i=>!i.startsWith('arithmetic-admission-class/')); r.admissionClasses=[]; declareVacuous(d); },
+ acEmptyEverywhere:d=>{ for(const r of d.matrix.rows){ r.receipts=r.receipts.filter(i=>!i.startsWith('arithmetic-admission-class/')); r.admissionClasses=[]; } declareVacuous(d); },
+ // semanticOwner self-declared: item 2's everySupportingRowHasAnOwner
+ ownersDeclared:d=>{ for(const r of d.matrix.rows) if(r.semanticOwner==='none_identified') r.semanticOwner='src/rebalancer/unified-rebalancer-follow-up-move.js'; },
+ // ---- item 1 AND item 4: delete the still-unclassified rows, two authority rows absorb every producer, owner-named set grown to keep 27 rows ----
+ item1:d=>{ const m=d.matrix; const all=m.producers.map(p=>p.id);
+    const led=row(d,'ledger-under-representation-add'); led.enforcementDisposition='explicit-authority-required'; delete led.stillUnclassifiedBecause; delete led.requirementToClassify;
+    for(const r of [row(d,'five-minted-spread-cure-add'),led]){ r.producers=all.filter(p=>p!==RP||true); r.producerOperationTypes=typesOf(d,r); if(r.semanticOwner.endsWith('replica-placement-cure-policy.js')){ r.semanticOwner='src/rebalancer/unified-rebalancer-follow-up-move.js'; delete r.policyCureCondition; } }
+    m.rows=m.rows.filter(r=>r.enforcementDisposition!=='still-unclassified');
+    const tmpl=row(d,'owner-partition-services'); const rem=row(d,'remainder-non-priority-critical-partitions').partitionClass; let i=0;
+    while(m.rows.length<27){ const p=rem[i++]; const c=structuredClone(tmpl); c.id='owner-partition-x-'+p; c.ownerNamedPartition=p; c.partitionClass=[p]; c.provedUnreachableDomain.partitionIds=[p]; c.receipts=['guard-unreachability/whole-stated-grid/'+p]; c.producers=['planner-paired-relocation-replace']; c.producerOperationTypes=['REPLACE']; m.rows.push(c); m.partitionSets.ownerNamedSeven.push(p); }
+    declareVacuous(d); m.correctionToRound3.witnessDiscrepancies=m.correctionToRound3.witnessDiscrepancies.filter(e=>m.rows.some(r=>r.id===e.row)); },
+};
+for(const k of (process.argv[2]?process.argv[2].split(','):Object.keys(A))){ const {dir,r}=attack('R3-'+k,A[k]); after(dir,r); }

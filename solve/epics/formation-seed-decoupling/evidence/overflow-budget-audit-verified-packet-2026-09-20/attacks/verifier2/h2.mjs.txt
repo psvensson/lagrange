@@ -1,0 +1,10 @@
+import {readM,readS,S} from './h.mjs';
+const pb=await import(S+'/test/rebalancer/overflow-budget-prose-blind.js'); const em=await import(S+'/test/rebalancer/overflow-budget-receipt-emission.js');
+const {matrix,store}=pb.proseBlindProjection(readM(),readS());
+const groups=new Map();
+for(const r of matrix.rows){ const {id,...rest}=r; const k=em.canonicalJson(rest); groups.set(k,[...(groups.get(k)||[]),id]); }
+console.log('rows identical to a prose-blind reader (everything but the id):'); for(const v of groups.values()) if(v.length>1) console.log('  ',v.join(' == '));
+// looser: which structural fields differ within the same (producers,partitions,dependency) tuple
+const g2=new Map(); for(const r of matrix.rows){const k=JSON.stringify([r.producers,r.partitionClass,r.currentBudgetDependency,r.enforcementDisposition]); g2.set(k,[...(g2.get(k)||[]),r]);}
+for(const v of g2.values()) if(v.length>1){ console.log('same producers/partitions/dependency/disposition:',v.map(r=>r.id).join(', ')); const keys=new Set(v.flatMap(r=>Object.keys(r))); for(const k of keys){ if(k==='id')continue; const vals=new Set(v.map(r=>JSON.stringify(r[k]))); if(vals.size>1) console.log('     differs structurally in:',k,[...vals].map(x=>String(x).slice(0,70)).join(' | ')); } }
+const m=readM(); for(const r of m.rows.filter(r=>r.currentBudgetDependency==='depends_only_when_census_moved')){console.log('\n',r.id,'\n  censusMovementCondition:',r.censusMovementCondition,'\n  differential state:',r.budgetDifferentialWitness.state.slice(0,500));}

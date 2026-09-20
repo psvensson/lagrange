@@ -1,0 +1,5 @@
+import {attack} from './h.mjs'; import {after} from './r3a.mjs'; import {declareVacuous} from './a2.mjs';
+const P='sql_write_operations-p1';
+const {dir,r}=attack('R3-psetsConsistentShrink',d=>{ const s=d.matrix.partitionSets; s.mintable=s.mintable.filter(p=>p!==P); s.budgetEvaluated=s.budgetEvaluated.filter(p=>p!==P); s.counts.mintable=4; s.counts.budgetEvaluated=5;
+  for(const row of d.matrix.rows){ if(row.partitionClass.includes(P)&&row.partitionClass.length===5){ row.partitionClass=row.partitionClass.filter(p=>p!==P); row.receipts=row.receipts.filter(i=>!i.endsWith('/'+P)); } } declareVacuous(d); });
+after(dir,r);

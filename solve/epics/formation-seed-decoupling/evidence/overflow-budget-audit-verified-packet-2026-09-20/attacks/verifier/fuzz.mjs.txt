@@ -1,0 +1,14 @@
+import {readM,ren,V} from './h.mjs'; import fs from 'node:fs';
+const root=V+'/fx/baseline';
+const base=readM(); const before=new Map(base.gate.map(g=>[g.item,ren.deriveGateStatus(base,g,root)]));
+console.log('derived by me:',[...before].map(([i,s])=>i+':'+s).join(' '));
+console.log('recorded     :',base.gate.map(g=>g.item+':'+g.status).join(' '));
+const paths=[];(function walk(v,p){ if(v&&typeof v==='object'){for(const k of Object.keys(v)){paths.push([...p,k]);walk(v[k],[...p,k]);}}})(base,[]);
+console.log('paths',paths.length);
+const vals=['__delete__',null,[],{},true,false,'yes','no','none',0,1,'proved-unreachable','proved-obsolete','explicit-authority-required','does_not_depend','REPLACE','x'];
+let n=0,imp=0,thrown=0;
+for(const p of paths){ for(const val of vals){ const m=structuredClone(base); let o=m; for(const k of p.slice(0,-1))o=o[k]; const last=p[p.length-1];
+  if(val==='__delete__'){ if(Array.isArray(o))o.splice(Number(last),1); else delete o[last]; } else o[last]=val; n++;
+  for(const g of (Array.isArray(m.gate)?m.gate:[])){ let s; try{ s=ren.deriveGateStatus(m,g,root);}catch(e){thrown++;continue;}
+    const b=before.get(g.item); if(s==='demonstrated'&&b!=='demonstrated'){imp++; if(imp<25)console.log('IMPROVED',p.join('.'),JSON.stringify(val),'item',g.item,b,'->',s);} } } }
+console.log({mutants:n,improved:imp,thrown});

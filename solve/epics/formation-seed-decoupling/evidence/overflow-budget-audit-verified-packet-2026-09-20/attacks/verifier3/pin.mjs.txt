@@ -1,0 +1,28 @@
+import {sup,S,attack,run} from './h.mjs'; import fs from 'node:fs';
+const pin=JSON.parse(fs.readFileSync(S+'/test/rebalancer/overflow-budget-round3-pin.json','utf8'));
+const inh=JSON.parse(fs.readFileSync(new URL('./inh/matrix.json',import.meta.url),'utf8'));
+const d=sup.round3PinDigests(inh,pin.exclusions); let bad=0;
+for(const [k,v] of Object.entries(pin.rows)) if(d.rows[k]!==v){bad++;console.log('ROW MISMATCH vs inherited',k);}
+for(const [k,v] of Object.entries(pin.sections)) if(d.sections[k]!==v){bad++;console.log('SECTION MISMATCH vs inherited',k);}
+console.log('pin vs MY digests of the INHERITED matrix: mismatches',bad,'of',Object.keys(pin.rows).length,'rows +',Object.keys(pin.sections).length,'sections; inherited sections not pinned:',Object.keys(d.sections).filter(k=>!(k in pin.sections)));
+for(const g of inh.gate){const p=pin.roundThreeGate[g.item];for(const f of ['status','rows','whatIsMissing','openFindings']) if(JSON.stringify(g[f])!==JSON.stringify(p[f])) console.log('GATE PIN != inherited',g.item,f);}
+for(const f of inh.findings) if(f.open!==pin.roundThreeFindingOpen[f.id]) console.log('FINDING PIN != inherited',f.id);
+for(const f of Object.keys(pin.files)){console.log(f.split('/').pop(), sup.digestOfFile(S+'/'+f)===pin.files[f]?'matches pin':'DIFFERS');}
+// pin test source: does it write the pin?
+const src=fs.readFileSync(S+'/test/rebalancer/overflow-budget-round3-pin.test.js','utf8'); console.log('pin test writes files:',/writeFileSync/.test(src));
+// alter a pinned value in a copy
+const PIN='test/rebalancer/overflow-budget-round3-pin.test.js';
+for(const [n,mut] of Object.entries({
+  pinned_prose:d=>{d.matrix.rows[0].triggeringState+=' x';},
+  pinned_method:d=>{d.matrix.method.ownerNamedPartitionCount=6;},
+  excluded_receipts_only:d=>{/* no change */},
+  gate_note:d=>{d.matrix.gate[0].note+=' x';},
+  add_row_field:d=>{d.matrix.rows[3].newField=1;},
+  add_row:d=>{d.matrix.rows.push({...structuredClone(d.matrix.rows[20]),id:'owner-partition-extra'});},
+  remove_row:d=>{d.matrix.rows=d.matrix.rows.filter(r=>r.id!=='five-initial-provisioning-add');},
+  d3_row_other_field:d=>{d.matrix.rows.find(r=>r.id==='five-relocation-handoff-overlap').repairGroup=null;},
+  d3_row_third_disposition:d=>{d.matrix.rows.find(r=>r.id==='five-relocation-handoff-overlap').enforcementDisposition='proved-obsolete';},
+  subject_on_inherited_changed:d=>{d.matrix.rows.find(r=>r.id==='owner-partition-services').unreachableSubject='budget-dependent-authority-requirement';},
+  finding_gateItems:d=>{d.matrix.findings[0].gateItems=[];},
+  new_section:d=>{d.matrix.extraSection={x:1};},
+})){ const d={}; const {dir}=attack('PIN-'+n,mut,{}); const p=run(dir,PIN,null); console.log('   pin test:',p.pass?'GREEN':'RED :: '+(p.err||'').slice(0,160)); }

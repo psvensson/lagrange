@@ -966,6 +966,29 @@ The guard never reconstructs why an operation ought to be legal.
 - The order after the freeze is unchanged, with step 2 opening on membership
   identities and explicit transitions rather than a count formula.
 
+## The matrix is stopped; identity comes from production transitions (owner, 2026-09-20)
+
+[owner-decision-transition-identity-2026-09-20.md](formation-seed-decoupling/owner-decision-transition-identity-2026-09-20.md).
+- `overflow-budget-audit-evidence-binding` is exhausted: rejected-by-architecture
+  after three independent rounds. A matrix row's identity has no mechanical
+  source; for the seventeen still-unclassified rows it is prose. The 27-row
+  matrix is not frozen and is not repaired further.
+- What the verifiers established is sealed as historical evidence in the
+  [verified evidence packet](formation-seed-decoupling/evidence/overflow-budget-audit-verified-packet-2026-09-20/README.md)
+  (packet digest `deb8b8d10c8c4527…`, in its MANIFEST). It is not a complete
+  classification and not an authority specification; its row ids are not
+  canonical identities and carry no gate weight.
+- This supersedes the order in the sections above. From here: (1) seal the
+  packet; (2) close topology/publication version domains; (3) establish
+  production-derived membership-transition identity and roles; (4) decide
+  whether counts/ceilings are derived or authoritative; (5) complete
+  authorization evaluation around that identity, `honoured` the whole result;
+  (6) design semantic-owner repairs; (7) a new read-only audit whose classes
+  derive from production transition state; (8) verify it adversarially; (9)
+  author enforcement; (10) certification.
+- Owner repairs and enforcement stay closed. The membership ceiling is a
+  hypothesis to test against explicit identities and roles, not a goal.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to

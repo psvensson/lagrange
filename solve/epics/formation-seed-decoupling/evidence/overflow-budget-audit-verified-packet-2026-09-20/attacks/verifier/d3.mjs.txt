@@ -1,0 +1,31 @@
+import {attack} from './h.mjs';
+const R=(d,id)=>d.store.receipts.find(r=>r.id===id), ROW=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+const H='five-relocation-handoff-overlap',L='ledger-relocation-handoff-overlap',I='owner-partition-nodes';
+const NEW='budget-dependent-authority-requirement',OLD='guard-admission-state';
+const A={
+ o1_inherited_to_new_subject:d=>{ROW(d,I).unreachableSubject=NEW;},
+ o1b_inherited_to_new_subject_with_qualification:d=>{const r=ROW(d,I);r.unreachableSubject=NEW;r.domainQualification=structuredClone(ROW(d,H).domainQualification);},
+ o2_handoff_to_old_subject:d=>{ROW(d,H).unreachableSubject=OLD;},
+ o2b_handoff_to_old_subject_consistently:d=>{const r=ROW(d,H);r.unreachableSubject=OLD;delete r.domainQualification;},
+ o3_guard_unreach_receipt_on_authority_row:d=>{const f=R(d,'budget-independence-differential/'+H);f.kind='guard-unreachability';f.result.consultedStates=0;f.result.budgetNonZeroStates=0;},
+ o4_independence_receipt_on_guard_row:d=>{const f=R(d,'guard-unreachability/'+I);f.kind='budget-independence-differential';},
+ o5_guard_yes_under_old:d=>{const r=ROW(d,I);r.guardReachable={value:'yes',witness:ROW(d,H).guardReachable.witness};},
+ o6_guard_no_under_new:d=>{ROW(d,H).guardReachable={value:'no',witness:'none'};},
+ o7_ledger_authority_required:d=>{ROW(d,L).enforcementDisposition='explicit-authority-required';},
+ o7b_ledger_authority_required_strip_subject:d=>{const r=ROW(d,L);r.enforcementDisposition='explicit-authority-required';delete r.unreachableSubject;delete r.domainQualification;},
+ o7c_ledger_proposes_kind:d=>{ROW(d,L).proposedAuthorizationKind='ledger_overflow_authority';},
+ m1_subject_missing:d=>{delete ROW(d,H).unreachableSubject;},
+ m2_unknown_subject:d=>{ROW(d,H).unreachableSubject='operation';ROW(d,H).domainQualification.unreachable='operation';},
+ m3_subject_on_unclassified_row:d=>{ROW(d,'five-row-rematerialization').unreachableSubject=NEW;},
+ m4_qualification_disagrees:d=>{ROW(d,H).domainQualification.unreachable=OLD;},
+ m5_remains_reachable_drops_operation:d=>{ROW(d,H).domainQualification.remainsReachable=['guard-state'];},
+ m6_prose_says_operation_unreachable_in_other_words:d=>{ROW(d,H).domainQualification.statement='This relocation can never happen; the REPLACE is dead code.';},
+ m7_vacuous_receipt:d=>{const f=R(d,'budget-independence-differential/'+H);f.result.statesEnumerated=f.result.evaluationsWithActualBudget=f.result.evaluationsWithBudgetForcedToZero=0;},
+ m8_new_subject_partitions_not_budget_evaluated:d=>{ROW(d,H).partitionClass=['nodes-p1'];},
+ m9_handoff_claims_admission_class:d=>{ROW(d,H).admissionClasses=[d.matrix.admissionClasses[0].id];},
+ m10_handoff_depends:d=>{ROW(d,H).currentBudgetDependency='depends';},
+ m11_drop_correction_section:d=>{delete d.matrix.correctionToRound3;},
+ m12_ledger_sentence_changed:d=>{ROW(d,L).ledgerAuthorityResult='the ledger requires its own overflow authority';},
+};
+const pick=process.argv[2]?process.argv[2].split(','):Object.keys(A);
+for(const k of pick) attack('d3-'+k,A[k]);

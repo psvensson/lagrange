@@ -1,0 +1,22 @@
+import {fixture,readM,readS,S,V} from './h.mjs'; import fs from 'node:fs'; import path from 'node:path';
+const dir=fixture('freeze',readM(),readS(),{}); process.chdir(dir);
+const sup=await import(S+'/test/rebalancer/overflow-budget-evidence-support.js');
+const log=path.join(V,'fx','freeze-log.ndjson'), out=path.join(V,'fx','freeze-manifest.json');
+const w=(es)=>fs.writeFileSync(log,es.map(e=>JSON.stringify(e)).join('\n')+'\n');
+const ver=(ts,verdict,verifier='subagent:v1')=>({ts,type:'verification',verifier,verdict,text:'x'});
+const tryW=(label)=>{fs.rmSync(out,{force:true});try{sup.writeFreezeManifest({logPath:log,outPath:out});console.log(label,'=> WRITTEN');return JSON.parse(fs.readFileSync(out,'utf8'));}catch(e){console.log(label,'=> refused:',e.message);return null;}};
+w([{ts:'1',type:'finding'}]); tryW('no approval');
+w([ver('2026-09-20T10:00:00Z','approve'),ver('2026-09-20T11:00:00Z','reject')]); tryW('approve then reject');
+w([ver('2026-09-20T10:00:00Z','approve'),{type:'verification',verdict:'reject',verifier:'subagent:v2'}]); tryW('approve then reject WITHOUT ts');
+w([ver('2026-09-20T10:00:00Z','approve'),ver('2026-09-20T09:00:00Z','reject','subagent:v2')]); tryW('approve then (later in file) reject with EARLIER ts');
+w([ver('2026-09-20T09:00:00Z','reject'),ver('2026-09-20T10:00:00Z','approve')]); const m=tryW('reject then approve');
+console.log('manifest keys:',Object.keys(m),'files:',Object.keys(m.files).map(f=>path.basename(f)));
+console.log('check genuine:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log})));
+console.log('check unknown verifier:',JSON.stringify(sup.checkFreezeManifest({...m,verification:{verifier:'subagent:nobody',ts:m.verification.ts}},{logPath:log})));
+const mj='solve/epics/formation-seed-decoupling/overflow-budget-decision-matrix.json'; fs.appendFileSync(mj,' ');
+console.log('check after one byte appended to matrix json:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log})));
+// prose-bound binding: break the structure so the invariant fails, writer must refuse
+const mm=readM(); mm.rows.find(r=>r.id==='five-relocation-handoff-overlap').unreachableSubject='guard-admission-state'; fs.writeFileSync(mj,JSON.stringify(mm,null,2)+'\n'); tryW('approved, but matrix fails the validator');
+// what the writer does NOT check: a matrix that fails ONLY the pin / emission / d3 tests
+const m2=readM(); m2.rows.find(r=>r.id==='five-relocation-handoff-overlap').domainQualification.statement='The relocation can never happen.';
+const d2=fixture('freeze2',m2,readS(),{}); process.chdir(d2); tryW('approved, statement prose rewritten (validator-green, regenerated md)');

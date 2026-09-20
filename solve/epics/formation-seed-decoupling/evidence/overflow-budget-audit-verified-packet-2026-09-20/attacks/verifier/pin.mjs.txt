@@ -1,0 +1,13 @@
+import {sup,S,readM} from './h.mjs'; import fs from 'node:fs';
+const pin=JSON.parse(fs.readFileSync(S+'/test/rebalancer/overflow-budget-round3-pin.json','utf8'));
+const inh=JSON.parse(fs.readFileSync('/tmp/claude-1000/-mnt-data-peter-projects-lagrange/eec76931-4041-4700-81cb-660d8de0790d/scratchpad/verifier/inh/overflow-budget-decision-matrix.json','utf8'));
+const d=sup.round3PinDigests(inh,pin.exclusions);
+let bad=0; for(const [k,v] of Object.entries(pin.rows)) if(d.rows[k]!==v){bad++;console.log('ROW MISMATCH vs inherited',k);}
+for(const [k,v] of Object.entries(pin.sections)) if(d.sections[k]!==v){bad++;console.log('SECTION MISMATCH vs inherited',k);}
+console.log('inherited-vs-pin mismatches:',bad,'rows',Object.keys(pin.rows).length,'sections',Object.keys(pin.sections).length, 'inh sections not pinned:',Object.keys(d.sections).filter(k=>!(k in pin.sections)));
+// inherited gate/finding values vs pin's by-value records
+for(const g of inh.gate){const p=pin.roundThreeGate[g.item];for(const f of ['status','rows','whatIsMissing','openFindings']) if(JSON.stringify(g[f])!==JSON.stringify(p[f])){console.log('GATE PIN != inherited',g.item,f);} }
+for(const f of inh.findings) if(f.open!==pin.roundThreeFindingOpen[f.id]) console.log('FINDING PIN != inherited',f.id);
+console.log('ext',JSON.stringify(pin.roundThreeExternalArtifactSatisfied), JSON.stringify(pin.declaredGateDifferences));
+console.log('inherited statuses:',inh.gate.map(g=>g.item+':'+g.status).join(' '));
+for(const f of Object.keys(pin.files)){const a=fs.readFileSync('/mnt/data/peter/projects/lagrange/.claude/worktrees/budget-audit/'+f);console.log(f.split('/').pop(), sup.digestOfFile('/mnt/data/peter/projects/lagrange/.claude/worktrees/budget-audit/'+f)===pin.files[f]?'working-copy matches pin':'WORKING COPY DIFFERS');}

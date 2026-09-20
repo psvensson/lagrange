@@ -1,0 +1,4 @@
+import {run,V} from './h.mjs'; import {BIND,PIN} from './emit.mjs'; import path from 'node:path';
+const dir=path.join(V,'fx','PH-correction-field-deleted');
+const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('pin:',p.pass?'GREEN':'RED :: '+p.err);
+const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('emission:',e.pass?'GREEN':'RED :: '+e.err);

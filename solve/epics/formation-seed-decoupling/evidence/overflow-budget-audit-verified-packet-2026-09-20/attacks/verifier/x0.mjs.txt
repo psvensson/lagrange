@@ -1,0 +1,4 @@
+import {regenerate} from './emit.mjs';
+import {readS} from './h.mjs';
+const {store}=regenerate('x0-noop',()=>{});
+console.log('fresh emission equals committed store:', JSON.stringify(store)===JSON.stringify(readS()));

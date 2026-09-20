@@ -1,0 +1,2 @@
+import {attack,run} from './h.mjs'; import {BIND,PIN} from './emit.mjs';
+const {dir}=attack('baseline',()=>{});

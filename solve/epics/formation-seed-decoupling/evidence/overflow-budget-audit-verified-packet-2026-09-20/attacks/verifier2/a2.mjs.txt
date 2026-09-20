@@ -1,0 +1,19 @@
+import {attack,readM,run} from './h.mjs'; import fs from 'node:fs';
+const FIVE_H='five-relocation-handoff-overlap', LED_H='ledger-relocation-handoff-overlap', RP='follow-up-unhealthy-source-replace';
+const row=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+export function declareVacuous(d){ const st=d.store.receipts; const e=d.matrix.correctionToRound3.inheritedWeaknesses.find(w=>w.id==='arithmetic-witness-measures-nothing-row-specific');
+  e.rows=d.matrix.rows.filter(r=>r.guardReachable.value==='yes'&&r.admissionClasses.length===0&&st.some(x=>x.witness.file===r.guardReachable.witness.split(':')[0]&&x.dimension==='arithmetic')).map(r=>r.id);}
+export function toHandoff(d,id,{addProducer=true}={}){ const r=row(d,id); const src=row(d,r.partitionClass.length===1?LED_H:FIVE_H);
+  r.currentBudgetDependency='does_not_depend'; r.budgetDifferentialWitness=null; r.budgetIndependenceMeasurement=structuredClone(src.budgetIndependenceMeasurement);
+  r.censusMovementCondition=null; r.dependencyUnknownBecause=null; r.enforcementDisposition='proved-unreachable'; r.unreachableSubject=src.unreachableSubject;
+  r.domainQualification=structuredClone(src.domainQualification); r.admissionClasses=[]; r.proposedAuthorizationKind='none'; r.formationEvidence=structuredClone(src.formationEvidence);
+  delete r.stillUnclassifiedBecause; delete r.requirementToClassify; if(r.sixAnswers) r.sixAnswers.budgetRemovalChangesTheDecision=false;
+  if(r.semanticOwner==='src/rebalancer/replica-placement-cure-policy.js'){r.semanticOwner=src.semanticOwner; delete r.policyCureCondition;}
+  if(addProducer){ if(!r.producers.includes(RP)) r.producers=[...r.producers,RP]; if(!r.producerOperationTypes.includes('REPLACE')) r.producerOperationTypes=[...r.producerOperationTypes,'REPLACE']; }
+  const keep=r.receipts.filter(i=>i.startsWith('guard-reachability/')||i.startsWith('producer-reachability/')||i.startsWith('guard-state-drive/'));
+  r.receipts=[...new Set([...r.partitionClass.map(p=>'budget-independence-differential/relocation-handoff/'+p),'slice-provenance/relocation-handoff/'+RP,...r.partitionClass.map(p=>'guard-reachability/'+p),...keep])].sort();
+}
+if(process.argv[1].endsWith('a2.mjs')){
+ const ids=readM().rows.filter(r=>r.enforcementDisposition!=='proved-unreachable').map(r=>r.id);
+ for(const id of ids){ attack('A2-'+id,d=>{toHandoff(d,id);declareVacuous(d);}); }
+}

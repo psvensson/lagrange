@@ -1,0 +1,22 @@
+import fs from 'node:fs'; import path from 'node:path';
+const S='/mnt/data/peter/projects/lagrange/.claude/worktrees/audit-evidence-binding'; process.chdir(S);
+const s=await import(S+'/test/rebalancer/overflow-budget-evidence-support.js');
+const V=path.dirname(new URL(import.meta.url).pathname); const out=path.join(V,'freeze-out.json'); fs.rmSync(out,{force:true});
+const d=s.freezeDigest(); console.log('audit-freeze-digest:'+d.digest); console.log('paths digested:',Object.keys(d.files).length); for(const f of Object.keys(d.files)) console.log('  ',f);
+const log=(name,entries)=>{const p=path.join(V,'log-'+name+'.ndjson'); fs.writeFileSync(p,entries.map(e=>JSON.stringify(e)).join('\n')+'\n'); return p;};
+const ok=(ts,text)=>({ts,type:'verification',verifier:'subagent:v3',verdict:'approve',text}); const tok='audit-freeze-digest:'+d.digest;
+const T='2026-09-20T10:00:00.000Z';
+const cases={
+ no_approval:[{ts:T,type:'finding',text:'x'}],
+ reject_earlier_ts:[ok(T,tok),{ts:'2020-01-01T00:00:00.000Z',type:'verification',verifier:'subagent:w',verdict:'reject',text:'r'}],
+ reject_no_ts:[ok(T,tok),{type:'verification',verifier:'subagent:w',verdict:'reject',text:'r'}],
+ reject_same_ts:[ok(T,tok),{ts:T,type:'verification',verifier:'subagent:w',verdict:'reject',text:'r'}],
+ reject_then_later_approve_earlier_ts:[{ts:T,type:'verification',verifier:'subagent:w',verdict:'reject',text:'r'},ok('2020-01-01T00:00:00.000Z',tok+'x'.repeat(0))],
+ verdict_weird_value_after:[ok(T,tok),{ts:T,type:'verification',verifier:'subagent:w',verdict:'Approve ',text:'r'}],
+ no_token:[ok(T,'approved, looks fine')],
+ token_other_bytes:[ok(T,'audit-freeze-digest:'+'0'.repeat(64))],
+ two_tokens_first_wrong:[ok(T,'audit-freeze-digest:'+'0'.repeat(64)+' '+tok)],
+ rejection_text_quoting_token_then_approval_without:[{ts:T,type:'verification',verifier:'subagent:w',verdict:'reject',text:tok},ok(T,'fine')],
+};
+const only=process.argv[2];
+for(const [n,e] of Object.entries(cases)){ if(only&&only!==n) continue; try{ const p=s.writeFreezeManifest({logPath:log(n,e),outPath:out,gatesHold:true,skipGates:true,force:true}); console.log(n,'=> WROTE',p); fs.rmSync(out,{force:true}); }catch(err){ console.log(n,'=> refused:',err.message); } }

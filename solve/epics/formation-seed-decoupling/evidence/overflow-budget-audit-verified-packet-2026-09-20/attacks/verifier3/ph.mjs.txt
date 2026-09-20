@@ -1,0 +1,8 @@
+import {readM,ren,S} from './h.mjs'; const em=await import(S+'/test/rebalancer/overflow-budget-receipt-emission.js');
+const base=readM(); const baseMd=ren.renderDecisionMatrixMarkdown(base,undefined,em.STATE_SLICES)+ren.renderEnforcementGateMarkdown(base);
+const count=s=>(s.match(/undefined|\[object Object\]|NaN/g)||[]).length; const b0=count(baseMd);
+const paths=[];(function walk(v,p){ if(v&&typeof v==='object'){for(const k of Object.keys(v)){paths.push([...p,k]);walk(v[k],[...p,k]);}}})(base,[]);
+let n=0,threw=0,leaked=0,silent=0; const leaks={};
+for(const p of paths){ const m=structuredClone(base); let o=m; for(const k of p.slice(0,-1))o=o[k]; delete o[p[p.length-1]]; n++;
+  try{ const md=ren.renderDecisionMatrixMarkdown(m,undefined,em.STATE_SLICES)+ren.renderEnforcementGateMarkdown(m); if(count(md)>b0){leaked++; const k=p.map(x=>/^\d+$/.test(x)?'#':x).join('.'); leaks[k]=(leaks[k]||0)+1;} else silent++; }catch(e){threw++;} }
+console.log({deletions:n,rendererThrew:threw,placeholderLeakedIntoDocument:leaked,renderedWithoutPlaceholder:silent}); console.log(Object.entries(leaks).filter(([k])=>/correction|resolution|unreachableSubject|ledgerAuthority|requiredExternal|justification|doesNotImply/.test(k)));

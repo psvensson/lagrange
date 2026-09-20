@@ -1,0 +1,24 @@
+import {fixture,run,readM,readS,S,V,VAL,VALP,MJ,SJ} from './h.mjs'; import fs from 'node:fs'; import path from 'node:path';
+const em=await import(S+'/test/rebalancer/overflow-budget-receipt-emission.js');
+const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+export const WITNESSES=[...new Map(readS().receipts.map(r=>[r.witness.file+'\0'+r.witness.test,[r.witness.file,r.witness.test]])).values()];
+export const PIN='test/rebalancer/overflow-budget-round3-pin.test.js', BIND='test/rebalancer/overflow-budget-evidence-binding.test.js';
+// attacker who edits the matrix, then REGENERATES the store by running the measuring tests in the fixture, re-renders, re-derives.
+export function regenerate(name,mut,{checkEmission=true,checkPin=true}={}){
+  const d={matrix:readM(),store:readS(),extra:{}}; mut(d);
+  const dir=fixture(name,d.matrix,d.store,d.extra);
+  const ed=path.join(V,'fx',name+'-emit'); fs.rmSync(ed,{recursive:true,force:true});
+  const runs={};
+  for(const [f,t] of WITNESSES){const r=run(dir,f,'^'+esc(t)+'$',{LAGRANGE_AUDIT_RECEIPT_EMIT_DIR:ed}); runs[f.split('/').pop()]=r.pass?'pass':'FAIL :: '+r.err;}
+  const emitted=[]; if(fs.existsSync(ed)) for(const n of fs.readdirSync(ed)) emitted.push(...JSON.parse(fs.readFileSync(path.join(ed,n),'utf8')));
+  const store=em.buildReceiptStore(emitted);
+  fs.writeFileSync(path.join(dir,SJ),JSON.stringify(store,null,2)+'\n');
+  console.log(`\n[${name}] measuring runs in fixture:`,JSON.stringify(runs));
+  const same=em.canonicalJson(store)===em.canonicalJson(readS());
+  console.log('  regenerated store: '+emitted.length+' receipts; identical to committed store: '+same);
+  const v=run(dir,VAL,VALP); console.log('  VALIDATOR:',v.pass?'GREEN (not refused)':'RED :: '+v.err);
+  const st=JSON.parse(fs.readFileSync(path.join(dir,MJ),'utf8')).gate.map(g=>g.item+':'+g.status).join(' '); console.log('  gate:',st);
+  if(checkEmission){const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('  EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+e.err);}
+  if(checkPin){const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('  (pin, out of the picture):',p.pass?'GREEN':'RED :: '+p.err);}
+  return {dir,store,v};
+}

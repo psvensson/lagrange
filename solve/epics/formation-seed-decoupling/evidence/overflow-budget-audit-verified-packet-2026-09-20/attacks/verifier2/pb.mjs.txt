@@ -1,0 +1,6 @@
+import {fixture,run,readM,readS,S,VAL,VALP} from './h.mjs';
+const pb=await import(S+'/test/rebalancer/overflow-budget-prose-blind.js');
+const p=pb.proseBlindProjection(readM(),readS());
+const dir=fixture('proseblind',p.matrix,p.store,{}); const r=run(dir,VAL,VALP); console.log('validator over the prose-blind projection:',r.pass?'GREEN':'RED :: '+r.err);
+// stronger: DELETE rather than neutralise, field by field, report which deletions the validator notices
+for(const name of pb.ROW_FREE_TEXT){ const m=readM(); let n=0; for(const row of m.rows){ if(typeof row[name]==='string'){delete row[name];n++;} } if(!n)continue; const d=fixture('pb-del',m,readS(),{}); const x=run(d,VAL,VALP); console.log('  delete',name,'('+n+' rows):',x.pass?'unnoticed':'presence-bound :: '+(x.err||'').slice(0,110)); }
