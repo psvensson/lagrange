@@ -1,0 +1,6 @@
+import {runHostOrderMutants} from './core-scenarios.js';
+import {HOST_MUTANT, HOST_MUTANT_CONTROLS} from './forked-core-harness.js';
+for (const m of Object.values(HOST_MUTANT).filter(x=>!HOST_MUTANT_CONTROLS.includes(x))) {
+  process.env.NEUTER = m; const all = runHostOrderMutants(); const r = all.mutants.find(x=>x.mutant===m);
+  console.log(m.padEnd(46),'neutered ->',r.outcome, JSON.stringify(r.attempts.map(a=>a.outcome)), 'survivors', JSON.stringify(all.survivors));
+}

@@ -1,0 +1,11 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+import {setRestoreFaultForNegativeControl} from './forked-core-harness.js';
+import {localRestoreViolations, restoreOutcomeFingerprint} from './restore-oracle.js';
+const OLD={voters:['1','2','3'],votersOutgoing:[],learners:['4'],learnersNext:[],autoLeave:false};
+const F={ 'old ConfState, applied kept (applied may be past the entry)':(r)=>{r.confState={...OLD};},
+ 'new ConfState kept, applied rewound to confIndex-1':(r)=>{ const c=r.entries.find(e=>Number(e.entryType)!==0); if(c) r.appliedIndex=String(Number(c.index)-1); },
+ 'old ConfState AND applied rewound (consistent rewind)':(r)=>{ const c=r.entries.find(e=>Number(e.entryType)!==0); r.confState={...OLD}; if(c) r.appliedIndex=String(Number(c.index)-1); } };
+const E=console.error; console.error=()=>{};
+for(const [name,fn] of Object.entries(F)){ const res={caught:0,inert:0,missed:[],by:{}}; for(const spec of boundaryMatrixSpecs()){ setRestoreFaultForNegativeControl(null); const honest=runRestartBoundary(spec.boundary,spec.role,spec.batch,spec.options); setRestoreFaultForNegativeControl({why:name,corruptRecord:fn}); let row=null; try{ row=runRestartBoundary(spec.boundary,spec.role,spec.batch,spec.options);}catch(e){ res.caught++; res.by['core refused']=(res.by['core refused']||0)+1; continue;} finally{ setRestoreFaultForNegativeControl(null);} const v=localRestoreViolations(row); if(v.length){res.caught++; for(const x of new Set(v.map(y=>y.check))) res.by[x]=(res.by[x]||0)+1;} else if(restoreOutcomeFingerprint(row)===restoreOutcomeFingerprint(honest)) res.inert++; else res.missed.push(JSON.stringify(row.localRestoreCorrectness.restoredConfState)===JSON.stringify(honest.localRestoreCorrectness.restoredConfState)?"same-conf":"DIFFERENT-CONF:"+row.id); }
+  console.log(name,'->',JSON.stringify(res)); }
+console.error=E;

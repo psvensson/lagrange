@@ -1,0 +1,12 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+const panics=[]; const E=console.error; console.error=(...a)=>panics.push(a.map(String).join(' ').split('\n').slice(0,2).join(' '));
+const st=(c,id)=>{const s=c.core.status(c.handleOf(id)); return `${id}:t${s.term}/s${s.raftState}/v${s.vote}/lead${s.lead}`;};
+{ const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.campaignOn('1'); c.settle(400);
+  c.core.campaign(c.handleOf('4')); try{c.settle(400);}catch(e){console.log('threw',e.message);} console.log('LEARNER campaign:', ['1','2','3','4'].map(i=>st(c,i)).join(' '), 'conf on 4', JSON.stringify(c.core.conf_state(c.handleOf('4'))));
+  c.core.propose(c.handleOf('4'),Buffer.from('z')); c.settle(400); console.log('   learner-leader proposal: commit on 1 =', c.core.status(c.handleOf('1')).commit); }
+{ const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.campaignOn('1'); c.settle(400);
+  c.proposeConfChangeV2('1', confChangeV2([{type:1,nodeId:'2'}])); c.settle(400); console.log('REMOVED peer 2 own conf', c.core.conf_state(c.handleOf('2')).voters.join(), 'promotable', c.core.status(c.handleOf('2')).promotable);
+  for(let i=0;i<400;i++){ c.core.tick(c.handleOf('2')); } c.settle(400); console.log('   after 400 ticks on removed peer:', st(c,'2'), st(c,'1'));
+  let r; try{ c.core.campaign(c.handleOf('2')); c.settle(400); r='no throw'; }catch(e){ r='threw '+e.message; } console.log('   host campaign on removed peer:', r, '| panics:', panics.filter(p=>/panicked/.test(p)).slice(-1)[0]); 
+  try{ console.log('   others:', ['1','3'].map(i=>st(c,i)).join(' ')); }catch(e){ console.log('   others unreadable', e.message);} }
+console.error=E;

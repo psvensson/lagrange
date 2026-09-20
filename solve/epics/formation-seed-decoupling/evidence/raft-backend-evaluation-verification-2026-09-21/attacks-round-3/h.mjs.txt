@@ -1,0 +1,19 @@
+import fs from 'node:fs'; import {execSync} from 'node:child_process';
+const J='solve/epics/formation-seed-decoupling/raft-backend-evaluation.json', M='solve/epics/formation-seed-decoupling/raft-backend-evaluation.md';
+const j0=fs.readFileSync(J,'utf8'), m0=fs.readFileSync(M,'utf8');
+const run=()=>{ try{ execSync('timeout 300 node --test test/raft/backend-evaluation/evaluation-derivation.test.js',{stdio:'pipe'}); return 'GREEN'; }catch(e){ const o=String(e.stdout); const m=o.match(/error: \|?-?\n?\s*'?([^\n]{0,160})/); return 'red: '+(m?m[1]:'?'); } };
+const tryJ=(name,f)=>{ const a=JSON.parse(j0); f(a); fs.writeFileSync(J,JSON.stringify(a,null,2)+'\n'); console.log(name.padEnd(70),run()); fs.writeFileSync(J,j0); };
+console.log('control'.padEnd(70),run());
+const a0=JSON.parse(j0);
+for (const v of ['consensusCore','wasmBoundary']) for (const k of Object.keys(a0.verdicts[v].inputs)) tryJ(`${v}.${k}=false (value untouched)`,a=>{a.verdicts[v].inputs[k]=false;});
+tryJ('wasmBoundary.value=viable',a=>{a.verdicts.wasmBoundary.value='viable';});
+tryJ('lagrangeMigration.value=viable',a=>{a.verdicts.lagrangeMigration.value='viable';});
+tryJ('lagrangeMigration.value=not-viable',a=>{a.verdicts.lagrangeMigration.value='not-viable';});
+tryJ('remove required gap from openBindingGaps',a=>{a.verdicts.wasmBoundary.openBindingGaps=a.verdicts.wasmBoundary.openBindingGaps.slice(1);});
+tryJ('remove required gap from namedGaps',a=>{a.namedGaps=a.namedGaps.filter(g=>g.id!=='snapshot-and-compaction-surface-is-incomplete');});
+tryJ('close a required gap (status found-and-fixed)',a=>{a.namedGaps.find(g=>g.id==='runtime-recovery-after-a-fatal-or-trap').status='found-and-fixed-in-this-fork';});
+tryJ('flip scenario fact (host-order control safe=false)',a=>{a.scenarios.find(s=>s.id==='host-order-mutants').control.everyControlSafe=false;});
+tryJ('redacted: fatalsBeforeTheRuntimeDied=5',a=>{a.scenarios.find(s=>s.id==='runtime-trap-recovery').budget.fatalsBeforeTheRuntimeDied=5;});
+tryJ('redacted: recovery groupsRestored=3 of 1000',a=>{a.scenarios.find(s=>s.id==='runtime-trap-recovery').recovery[1].groupsRestored=3;});
+tryJ('redacted: recoveryNanos=9e12',a=>{a.scenarios.find(s=>s.id==='runtime-trap-recovery').recovery[1].recoveryNanos=9e12;});
+for (const [n,f] of [['md: PRELIMINARY->FINAL',s=>s.replace('PRELIMINARY','FINAL')],['md: withdraw sentence removed',s=>s.replace(/^Withdrawn:.*$/m,'')],['md: recovery time figure',s=>s.replace(/\| 99 of 100 \| [0-9.]+ \|/,'| 99 of 100 | 0.001 |')]]) { fs.writeFileSync(M,f(m0)); console.log(n.padEnd(70),run()); fs.writeFileSync(M,m0); }

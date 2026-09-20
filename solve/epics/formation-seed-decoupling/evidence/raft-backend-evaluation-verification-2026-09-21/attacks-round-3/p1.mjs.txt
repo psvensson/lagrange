@@ -1,0 +1,22 @@
+import {createDeterministicCluster, membershipArray, assertMembershipEqual, derivedMembership, changedNodeIds, confChangeV2, selectMembers, auditMembershipProvenance, auditAgainstLedger, fullMembershipFromCore} from './forked-core-harness.js';
+const c=createDeterministicCluster({voters:['1','2','3'],learners:[]}); c.campaignOn('1'); c.settle(400);
+const cs=c.coreConfStateOf('1'); const v=membershipArray(cs,'voters');
+const audit=(x)=>{const a=auditAgainstLedger({voters:x}); if(a.violations.length||!a.everyCitedProposalWasProposed) throw new Error('AUDIT: '+a.violations.join(';')+' cited='+a.everyCitedProposalWasProposed); return a;};
+const t=(n,f)=>{try{const r=f();console.log(n,'-> ACCEPTED', r?JSON.stringify(r):'');}catch(e){console.log(n,'-> refused:',String(e.message).slice(0,140));}};
+const add=(ids)=>confChangeV2(ids.map(i=>({type:0,nodeId:i})));
+console.log('frozen?',Object.isFrozen(v), Object.isFrozen(cs));
+t('1 empty+refill',()=>{const f=membershipArray(cs,'voters'); f.length=0; f.push('7','8','9'); assertMembershipEqual(f,f,'x');});
+t('2 push into expectation',()=>{const e=membershipArray(cs,'voters'); e.push('9'); return audit(e);});
+t('3 spread clone',()=>assertMembershipEqual(v,[...v],'x'));
+t('4 invented change via changedNodeIds',()=>assertMembershipEqual(v,changedNodeIds(add(['1','2','3'])),'x'));
+t('5 derived over invented change',()=>derivedMembership(v,{adding:changedNodeIds(add(['5','6','7']))},'inv'));
+t('6 mutate core read in place',()=>{cs.voters=['4','5','6']; const m=membershipArray(cs,'voters'); if(m.join()!=='4,5,6') throw new Error('frozen: still '+m.join()); return audit(m);});
+// NEW
+t('7a durableSnapshotOf copy mutated -> membershipArray -> assert+audit',()=>{const s=c.durableSnapshotOf('1'); s.confState.voters=['7','8','9']; const m=membershipArray(s.confState,'voters'); assertMembershipEqual(m,m,'x'); return [m.join(), audit(m).byOrigin];});
+t('7b corruptDurableRecord on a throwaway cluster',()=>{const k=createDeterministicCluster({voters:['1'],learners:[]}); const r=k.corruptDurableRecord('1','nothing',(rec)=>{rec.confState={voters:['7','8','9'],votersOutgoing:[],learners:[],learnersNext:[]};}); const m=membershipArray(r.confState,'voters'); return [m.join(), audit(m).byOrigin];});
+t('7c durableRecordOf live record confState mutated',()=>{const k=createDeterministicCluster({voters:['1'],learners:[]}); const r=k.durableRecordOf('1'); try{r.confState.voters=['7','8','9'];}catch(e){} const m=membershipArray(r.confState,'voters'); if(m.join()!=='7,8,9') throw new Error('frozen '+m.join()); return [m.join(), audit(m).byOrigin];});
+t('8a proposal recorded though core REFUSES it (proposed on a follower / never-elected peer)',()=>{const k=createDeterministicCluster({voters:['1','2','3'],learners:[]}); const ch=add(['1','2','3']); let threw=null; try{k.proposeConfChangeV2('2',ch);}catch(e){threw=String(e.message).slice(0,60);} const m=changedNodeIds(ch); assertMembershipEqual(v,m,'x'); return [threw, m.join(), audit(m)];});
+t('8b same canonical change rebuilt as a fresh literal, cited in another cluster',()=>{const m=changedNodeIds(add(['1','2','3'])); return [m.join(), audit(m).byOrigin];});
+t('9 witness.tag forgery -> assert helper',()=>{const o=c.witness.tag({voters:['7','8','9']},'1','conf_state'); const m=membershipArray(o,'voters'); assertMembershipEqual(m,m,'x'); return ['assert ok; audit:', (()=>{try{return audit(m)}catch(e){return String(e.message).slice(0,80)}})()];});
+t('10 derived launders 7a',()=>{const s=c.durableSnapshotOf('1'); s.confState.voters=['7','8','9']; const lit=membershipArray(s.confState,'voters'); const d=derivedMembership(membershipArray(c.coreConfStateOf('1'),'learners'),{adding:lit},'launder'); return [d.join(), audit(d).byOrigin];});
+t('11 fullMembershipFromCore over tagged literal',()=>{const o=c.witness.tag({voters:['7'],votersOutgoing:[],learners:[],learnersNext:[]},'1','conf_state'); const f=fullMembershipFromCore(o,c.witness); return audit(f.voters);});

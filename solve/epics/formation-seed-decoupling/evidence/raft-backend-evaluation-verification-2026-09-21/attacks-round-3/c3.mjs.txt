@@ -1,0 +1,6 @@
+import {createDeterministicCluster} from './forked-core-harness.js';
+const HOSTILE={from:'1',to:'2',term:'1',logTerm:'1',index:'4',msgType:3,commit:'4',entries:[{term:'1',index:'5',entryType:0,data:''},{term:'1',index:'9',entryType:0,data:''}]};
+const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.campaignOn('1'); c.settle(400);
+console.log('follower 2 status before', JSON.stringify(c.core.status(c.handleOf('2'))).slice(0,120), 'last durable', c.durableRecordOf('2').entries.at(-1)?.index);
+try{ c.core.step(c.handleOf('2'),HOSTILE); console.log('artifact shape: step accepted'); }catch(e){ console.log('artifact shape: step threw',e.message); }
+try{ c.settle(400); console.log('settle ok; last durable', c.durableRecordOf('2').entries.at(-1)?.index); }catch(e){ console.log('settle threw', e.message); }

@@ -1,0 +1,5 @@
+import {runHostOrderMutants, runHostOrderControl} from './core-scenarios.js';
+const c=runHostOrderControl(); for (const k of c.controls) for (const a of k.attempts) console.log('CONTROL',k.control.padEnd(36),a.stopAt.padEnd(42),a.outcome,'|',a.message);
+console.log('everyControlSafe',c.everyControlSafe);
+const all=runHostOrderMutants(); for(const r of all.mutants){ console.log(r.mutant.padEnd(45),r.outcome); for (const a of r.attempts) console.log('      ',a.stopAt.padEnd(42),a.outcome.padEnd(28),'|',String(a.message).slice(0,230)); }
+console.log(JSON.stringify({killed:all.killed,total:all.total,survivors:all.survivors,classifierCanFail:all.classifierCanFail}));
