@@ -322,3 +322,110 @@ independently verified.
     against liferaft. No migration of old logs, no removal of liferaft, and the
     membership-model-reduction implementation does not resume until the
     integration experiment says which concepts raft-rs makes unnecessary.
+
+## Third addendum (owner, 2026-09-21): one final bounded repair round
+
+Approved after the second independent rejection. **This is the last repair
+round.** The architectural decision no longer depends on perfecting this quest:
+two independent adversarial verifiers measured the raft-rs consensus core
+viable, the WASM RawNode boundary viable with named gaps, and migration
+undetermined with no decisive incompatibility. The round exists only to make
+the evaluation artifact and receipts trustworthy enough to preserve as
+certified evidence. No backend integration; no new scenarios except to close
+one of the four blocking defects; no redesign of the fork; the
+membership-model-reduction work does not resume.
+
+1. **An independent restore oracle.** The proof stops using `create_node` for
+   both the system under test and its expectation. The core state captured
+   immediately before the crash is the semantic oracle where applicable; for
+   every boundary, independently: expected term; vote; membership/ConfState;
+   committed/applied relation; presence or absence of the configuration change.
+   The prior exploit - a service-row/cache-derived learner injected into restore
+   - must fail locally, before network convergence. Corruptions of term, vote,
+   ConfState, applied index and commit index are retained; one undetectable from
+   durable data alone stays a named host-integrity obligation, never a fake
+   detection.
+2. **Provenance, not a brand.**
+
+   > Membership evidence used by a receipt must be demonstrably produced by a
+   > core read or by a directly recorded proposed configuration change.
+
+   Freezing is useful and insufficient. A requested change is tied to the actual
+   bytes/configuration passed to `propose_conf_change_v2`; a core read to the
+   actual return from `conf_state`, `apply_conf_change` or another named path; no
+   test-created literal acquires trusted provenance by passing through a helper.
+   Closed: mutation after branding; cloning/laundering; invented requested
+   changes; destructuring; if/throw comparisons; JSON serialization paths. A
+   narrow evidence object `{sourceKind, sourceOperationId/configEntryIndex,
+   value}` is preferred. The test proves provenance, not object shape.
+3. **A host-mutant classifier that can fail.** No unconditional acceptance. An
+   honest control (correct ordering, durable writes and restore) must classify
+   safe; then all eleven mutants run through the same classifier and end
+   refused, restart-equivalence failure, or explicit unsafe. Other receipts
+   catching them is not relied on.
+4. **Panic-isolation and hosting claims corrected.** Withdrawn: that a raft-rs
+   fatal affects exactly one group indefinitely. Measured: the handle-table
+   poisoning is fixed; one fatal no longer immediately poisons other handles;
+   repeated fatals eventually exhaust/corrupt the runtime; remote Raft messages
+   can trigger them.
+
+   > Multi-Raft in one WASM instance is viable only if a trap/fatal is treated
+   > as a runtime-health event with bounded recovery, and the host validates
+   > inbound messages before `step`.
+
+   Minimum recovery facts: detect the trap; stop using the runtime; instantiate
+   a fresh WASM runtime; restore a representative set of groups from durable
+   state; recovery time and memory at 100 and 1,000 groups, without elaborate
+   optimization. Ingress validation tested for group id; recipient id; sender
+   id/member status; message type/required fields; obviously impossible
+   commit/log indexes where the host can safely reject. Routing/envelope
+   invariants only - Raft protocol validation is not duplicated in the host.
+5. **Backend obligations recorded prominently**: inbound message safety; runtime
+   trap recovery (re-instantiation plus durable restoration, not continued
+   use); membership and elections (never `campaign()` learners, removed peers,
+   or peers absent from their own committed ConfState; separately, a removed
+   peer was observed ticking/campaigning and affecting leadership); `pre_vote`
+   and `check_quorum` (state their evaluation status; no silent assumption; if
+   not evaluated, marked for the integration stage); promotion policy (raft-rs
+   permits promotion without catch-up; gating is Lagrange's); peer-id reuse (a
+   host obligation); snapshot/configuration atomicity (applied state and
+   ConfState advance consistently; the binding lacks snapshot/compaction
+   primitives - a named integration gap); joint consensus (re-applying
+   enter/leave is not idempotent; the host persists enough application progress;
+   the raft-rs auto-leave TODO is upstream behaviour needing integration
+   testing, not a reason to reject the core).
+6. **Conservative verdict ceilings.** Consensus core: `viable` only if no new
+   core-level blocker appears. WASM RawNode boundary: `viable-with-named-gaps`,
+   never plain viable in this quest, the gaps including at least runtime
+   recovery after fatal/trap, the unseedable election RNG, the unexposed
+   unstable log, the incomplete snapshot/compaction surface and any remaining
+   restore/persistence limitation. Migration:
+   `undetermined-needs-integration-stage`; this quest may not upgrade it.
+7. **Final verification** by a fresh independent adversarial verifier, which
+   first re-runs the four blocking attacks literally and verifies: cache or
+   service-row injection cannot alter restored membership without failing a
+   receipt; trusted membership evidence cannot be forged through a literal or an
+   invented requested change; the correct host loop passes the classifier while
+   all eleven mutants are caught; the artifact no longer claims an indefinite
+   single-group blast radius and the re-instantiation measurement is genuine.
+   Then: provenance laundering; runtime recovery with a damaged group among
+   healthy ones; hostile cross-group routing; learner/removed-peer campaigning;
+   omitted term/vote persistence; ConfState/applied mismatch; snapshot gap
+   representation; verdict input falsification.
+8. **Stop condition.** If the verifier rejects because one of the same four
+   receipt/harness defects remains: stop. A new ordinary wording/rendering
+   defect does not start another implementation round - record it and package
+   the evidence unless it invalidates a substantive conclusion. A new
+   substantive incompatibility in raft-rs, WASM hosting, persistent-state
+   recovery, configuration membership or Multi-Raft viability: stop immediately
+   and bring it back for architectural decision. **No fourth repair round.**
+9. **If approved**: land the evaluation locally as certified evidence; no
+   publication outside the existing authorization policy; then create
+   `raft-rs-experimental-partition-backend` - fresh clusters only; behind the
+   existing provider seam; the current Lagrange transport; real durable storage;
+   raft-rs ConfState owns consensus membership; service/system rows become
+   projections/observations, never membership authority; stable peer-id mapping;
+   a proper Ready/persistence/apply loop; a trap/re-instantiation strategy; the
+   formation/failure corpus side by side against liferaft. No migration of
+   liferaft logs; liferaft is not removed yet; no Lagrange committed-membership
+   layer is invented before that experiment reports.
